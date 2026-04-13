@@ -11,16 +11,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 vi.mock('@/queries/commits', () => ({
-  createCommitApi: vi.fn(),
   fetchCommits: vi.fn(),
+}));
+
+vi.mock('@/commands/commits', () => ({
+  createCommit: vi.fn(),
 }));
 
 vi.mock('@/domain/enrichSourceRefs', () => ({
   enrichTreesWithSourceRefs: vi.fn((trees: TreeNode[]) => trees),
 }));
 
+import { createCommit } from '@/commands/commits';
 import { useCommitActions } from '@/hooks/useCommitActions';
-import { createCommitApi, fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/queries/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -68,7 +72,7 @@ describe('useCommitActions.commit', () => {
       tree: { trees: [tree('budget')], relations: [] },
       conversationId: 'conv_1',
     });
-    vi.mocked(createCommitApi).mockResolvedValueOnce({
+    vi.mocked(createCommit).mockResolvedValueOnce({
       commit: { hash: 'sha256:new' },
     } as never);
 
@@ -77,7 +81,7 @@ describe('useCommitActions.commit', () => {
     await waitForHook();
 
     expect(out.hash).toBe('sha256:new');
-    expect(createCommitApi).toHaveBeenCalledWith(
+    expect(createCommit).toHaveBeenCalledWith(
       'proj_1',
       expect.objectContaining({ trees: expect.any(Array), relations: [] }),
       expect.objectContaining({
@@ -101,7 +105,7 @@ describe('useCommitActions.commit', () => {
     useWorkspaceStore.setState({
       tree: { trees: [tree('budget')], relations: [] },
     });
-    vi.mocked(createCommitApi).mockRejectedValueOnce(new Error('500'));
+    vi.mocked(createCommit).mockRejectedValueOnce(new Error('500'));
 
     const { result } = renderHook(() => useCommitActions());
     await expect(result.current.commit('msg')).rejects.toThrow('500');

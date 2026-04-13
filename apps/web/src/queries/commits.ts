@@ -1,22 +1,17 @@
 /**
- * L3 — commits read/write pass-through for slices and canvas components.
+ * L3 — commits read pass-through (read-only per v2 §2.3).
  *
- * `fetchCommits` is a list variant (different from `fetchCommitByHash` in
- * `queries/commitByHash.ts` which loads one commit by hash). `persistCommitPosition`
- * is a thin write wrapper used by the canvas drag layer.
+ * Writes (createCommit, persistCommitPosition, renameCommit) live in
+ * @/commands/commits per v2 §2.4.
  *
- * Re-exports two pure helpers from the L1 commits module so slices and
- * components can format commit content without crossing the `@/lib/api/**`
- * biome ban: `getSemanticContent`, `parseApiCommitAnchors`.
+ * Re-exports two pure helpers from @/infrastructure/* so slices and
+ * components can format commit content without crossing infra
+ * boundaries: `getSemanticContent`, `parseApiCommitAnchors`. (These
+ * are pure functions, not I/O; they are eligible to move to @/domain/
+ * in a follow-up cleanup.)
  */
 
-import {
-  createCommit,
-  getSemanticContent,
-  listCommits,
-  updateCommitMessage,
-  updateCommitPosition,
-} from '@/infrastructure/commits';
+import { getSemanticContent, listCommits } from '@/infrastructure/commits';
 import { parseApiCommitAnchors } from '@/infrastructure/leaves';
 import type { ApiCommit } from '@/types/api';
 
@@ -26,28 +21,6 @@ export function fetchCommits(
   limit = 100
 ): Promise<ApiCommit[]> {
   return listCommits(projectId, branch, limit);
-}
-
-export function persistCommitPosition(
-  commitHash: string,
-  x: number,
-  y: number
-): Promise<ApiCommit> {
-  return updateCommitPosition(commitHash, x, y);
-}
-
-export function renameCommit(commitHash: string, message: string): Promise<ApiCommit> {
-  return updateCommitMessage(commitHash, message);
-}
-
-export type CreateCommitOptions = Parameters<typeof createCommit>[2];
-
-export function createCommitApi(
-  projectId: string,
-  content: { trees: unknown[]; relations: unknown[] },
-  options?: CreateCommitOptions
-): Promise<{ commit: { hash: string } }> {
-  return createCommit(projectId, content, options);
 }
 
 export { getSemanticContent, parseApiCommitAnchors };

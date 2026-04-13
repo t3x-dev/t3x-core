@@ -101,7 +101,8 @@
       "includes": [
         "apps/web/src/commands/**",
         "apps/web/src/queries/**",
-        "apps/web/src/infrastructure/**"
+        "apps/web/src/infrastructure/**",
+        "apps/web/src/__tests__/**"
       ],
       "linter": {
         "rules": {

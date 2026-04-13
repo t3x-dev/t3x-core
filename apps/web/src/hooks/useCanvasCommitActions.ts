@@ -13,6 +13,7 @@
 
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
+import { renameCommit as renameCommitCommand } from '@/commands/commits';
 import { createConversationIn } from '@/queries/conversations';
 import { createMergeDraft } from '@/queries/mergeApi';
 import { fetchTurns } from '@/queries/turns';
@@ -249,5 +250,16 @@ export function useCanvasCommitActions() {
     }
   }, []);
 
-  return { addFromConversation, addConversationFromCommit, startMerge };
+  /**
+   * Rename a committed commit's display message. Components used to
+   * dynamic-import this; the hook lifts it to a stable React surface
+   * so views can call it without crossing the components -> commands
+   * biome ban.
+   */
+  const renameCommit = useCallback(
+    async (commitHash: string, newTitle: string) => renameCommitCommand(commitHash, newTitle),
+    []
+  );
+
+  return { addFromConversation, addConversationFromCommit, startMerge, renameCommit };
 }

@@ -92,7 +92,11 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   const { t } = useTerminology();
   const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const { addConversationFromCommit, startMerge: startMergeFromCommit } = useCanvasCommitActions();
+  const {
+    addConversationFromCommit,
+    startMerge: startMergeFromCommit,
+    renameCommit,
+  } = useCanvasCommitActions();
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
@@ -232,13 +236,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
     setIsEditingTitle(false);
     if (data.commitHash) {
       try {
-        const { renameCommit } = await import('@/queries/commits');
         await renameCommit(data.commitHash, newTitle);
       } catch {
         updateNode(id, { title: data.title });
       }
     }
-  }, [editTitle, data.title, data.commitHash, id, updateNode]);
+  }, [editTitle, data.title, data.commitHash, id, updateNode, renameCommit]);
 
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
