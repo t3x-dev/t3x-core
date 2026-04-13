@@ -216,11 +216,7 @@
     },
     {
       "includes": [
-        "apps/web/src/store/canvasStore.ts",
         "apps/web/src/store/canvasStoreUtils.ts",
-        "apps/web/src/store/commitStore.ts",
-        "apps/web/src/store/draftWorkspaceStore.ts",
-        "apps/web/src/store/mergeWorkspaceStore.ts",
         "apps/web/src/store/searchStore.ts",
         "apps/web/src/store/knowledgeGraphStore.ts"
       ],

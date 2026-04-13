@@ -3,6 +3,7 @@
 import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useCommitActions } from '@/hooks/useCommitActions';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chatStore';
@@ -24,14 +25,17 @@ interface ChatHeaderProps {
   onModelChange?: (provider: string, model: string) => void;
 }
 
-export function ChatHeader({
-  conversationTitle,
-  projectName,
-  conversationId,
-}: ChatHeaderProps) {
-  const { activeProjectId, activeBranch, setActiveBranch, sidebarCollapsed, toggleSidebar, conversationTitle: storeTitle } = useChatStore();
+export function ChatHeader({ conversationTitle, projectName, conversationId }: ChatHeaderProps) {
+  const {
+    activeProjectId,
+    activeBranch,
+    setActiveBranch,
+    sidebarCollapsed,
+    toggleSidebar,
+    conversationTitle: storeTitle,
+  } = useChatStore();
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
-  const initCommitState = useCommitStore((s) => s.initCommitState);
+  const { init: initCommitState } = useCommitActions();
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
@@ -97,73 +101,79 @@ export function ChatHeader({
       )}
 
       {/* Extract split button — only visible when YOps panel is expanded */}
-      {panelExpanded && !isCommitted && <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
-        <button
-          type="button"
-          data-testid="extract-button"
-          onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
-          disabled={isExtracting}
-          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isExtracting ? (
-            <Loader2 className="h-2.5 w-2.5 animate-spin" />
-          ) : (
-            <Hexagon className="h-2.5 w-2.5" />
-          )}
-          {isExtracting ? 'Extracting...' : 'Extract'}
-          {!isExtracting && (
-            <span className="text-[8px] opacity-70">
-              {PRESET_LABELS[extractionPreset].label}
-            </span>
-          )}
-        </button>
-        <button
-          ref={chevronRef}
-          type="button"
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          disabled={isExtracting}
-          className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronDown className="h-2.5 w-2.5" />
-        </button>
+      {panelExpanded && !isCommitted && (
+        <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
+          <button
+            type="button"
+            data-testid="extract-button"
+            onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
+            disabled={isExtracting}
+            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isExtracting ? (
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            ) : (
+              <Hexagon className="h-2.5 w-2.5" />
+            )}
+            {isExtracting ? 'Extracting...' : 'Extract'}
+            {!isExtracting && (
+              <span className="text-[8px] opacity-70">{PRESET_LABELS[extractionPreset].label}</span>
+            )}
+          </button>
+          <button
+            ref={chevronRef}
+            type="button"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            disabled={isExtracting}
+            className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronDown className="h-2.5 w-2.5" />
+          </button>
 
-        {dropdownOpen && createPortal(
-          <div
-            className="w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
-            style={{
-              position: 'fixed',
-              top: chevronRef.current ? chevronRef.current.getBoundingClientRect().bottom + 4 : 0,
-              left: chevronRef.current ? chevronRef.current.getBoundingClientRect().right - 224 : 0,
-              zIndex: 9999,
-            }}>
-            {(['concise', 'balanced', 'detailed'] as const).map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => {
-                  setExtractionPreset(preset);
-                  setDropdownOpen(false);
+          {dropdownOpen &&
+            createPortal(
+              <div
+                className="w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
+                style={{
+                  position: 'fixed',
+                  top: chevronRef.current
+                    ? chevronRef.current.getBoundingClientRect().bottom + 4
+                    : 0,
+                  left: chevronRef.current
+                    ? chevronRef.current.getBoundingClientRect().right - 224
+                    : 0,
+                  zIndex: 9999,
                 }}
-                className={cn(
-                  'flex flex-col w-full px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors',
-                  preset === extractionPreset && 'bg-[var(--source)]/10'
-                )}
               >
-                <span className="text-xs font-medium text-[var(--text-primary)]">
-                  {PRESET_LABELS[preset].label}
-                  {preset === extractionPreset && (
-                    <span className="ml-1.5 text-[8px] text-[var(--source)]">current</span>
-                  )}
-                </span>
-                <span className="text-[10px] text-[var(--text-tertiary)]">
-                  {PRESET_LABELS[preset].desc}
-                </span>
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
-      </div>}
+                {(['concise', 'balanced', 'detailed'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setExtractionPreset(preset);
+                      setDropdownOpen(false);
+                    }}
+                    className={cn(
+                      'flex flex-col w-full px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors',
+                      preset === extractionPreset && 'bg-[var(--source)]/10'
+                    )}
+                  >
+                    <span className="text-xs font-medium text-[var(--text-primary)]">
+                      {PRESET_LABELS[preset].label}
+                      {preset === extractionPreset && (
+                        <span className="ml-1.5 text-[8px] text-[var(--source)]">current</span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-tertiary)]">
+                      {PRESET_LABELS[preset].desc}
+                    </span>
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
+        </div>
+      )}
     </header>
   );
 }

@@ -97,6 +97,10 @@ export type CanvasState = MergeSlice &
     // Notification callback
     notifyCallback: NotifyCallback | null;
     setNotifyCallback: (cb: NotifyCallback | null) => void;
+    // Side-effect callback for conversation deletion (wired by useCanvasDeletionWiring).
+    // Per v2 §2.5, the store doesn't import @/queries — it emits, the hook calls.
+    deleteConversationCallback: ((conversationId: string) => void) | null;
+    setDeleteConversationCallback: (cb: ((conversationId: string) => void) | null) => void;
     // Node modal state
     openNodeId: string | null;
     modalViewMode: 'conversation' | 'commit' | null;

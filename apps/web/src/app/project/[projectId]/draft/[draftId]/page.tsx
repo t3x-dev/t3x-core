@@ -10,6 +10,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { DraftWorkspace } from '@/components/draft/DraftWorkspace';
+import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export default function DraftPage() {
@@ -18,7 +19,8 @@ export default function DraftPage() {
   const projectId = params.projectId as string;
   const draftId = params.draftId as string;
 
-  const { loadDraft, loading, error, reset } = useDraftWorkspaceStore();
+  const { loading, error, reset } = useDraftWorkspaceStore();
+  const { load: loadDraft } = useDraftWorkspaceActions();
 
   useEffect(() => {
     if (draftId) {

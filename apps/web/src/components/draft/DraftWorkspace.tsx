@@ -18,10 +18,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
+import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
-import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { setAutoPreviewCallback, useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
@@ -32,9 +32,9 @@ import { DraftSplitPane } from './DraftSplitPane';
 import { DraftWorkbenchLLM } from './DraftWorkbenchLLM';
 import { ExtractConversationDialog } from './ExtractConversationDialog';
 import { InstructionEditor } from './InstructionEditor';
+import { NodeList } from './NodeList';
 import { PreviewPanel } from './PreviewPanel';
 import { PromotePreviewDialog } from './PromotePreviewDialog';
-import { NodeList } from './NodeList';
 
 interface DraftWorkspaceProps {
   projectId: string;
@@ -42,18 +42,23 @@ interface DraftWorkspaceProps {
 }
 
 export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
+  const { draft, isDirty, conflictError, getIncludedCount, draftId, reset } =
+    useDraftWorkspaceStore();
   const {
-    draft,
-    isDirty,
-    conflictError,
-    saveDraft,
-    commitDraft,
-    getIncludedCount,
-    loadDraft,
-    draftId,
+    save: saveDraft,
+    commit: commitDraft,
+    load: loadDraft,
     generatePreview,
-    reset,
-  } = useDraftWorkspaceStore();
+  } = useDraftWorkspaceActions();
+
+  // Wire the store's debounced auto-preview callback to the hook's
+  // generatePreview so the store stays passive but the timer keeps working.
+  useEffect(() => {
+    setAutoPreviewCallback(() => {
+      void generatePreview();
+    });
+    return () => setAutoPreviewCallback(null);
+  }, [generatePreview]);
 
   const prefersReducedMotion = useReducedMotion();
   const readyCountRef = useRef(0);
