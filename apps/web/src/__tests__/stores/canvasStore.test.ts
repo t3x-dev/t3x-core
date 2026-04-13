@@ -25,6 +25,8 @@ vi.mock('@/queries/conversations', () => ({
 vi.mock('@/queries/commits', () => ({
   fetchCommits: vi.fn().mockResolvedValue([]),
   getSemanticContent: vi.fn(),
+}));
+vi.mock('@/domain/commitAnchors', () => ({
   parseApiCommitAnchors: vi.fn().mockReturnValue(null),
 }));
 
