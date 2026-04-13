@@ -6,7 +6,7 @@
  * directly (v2 §1).
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchCommitHistory } from '@/queries/commitHistory';
 import type { ApiCommit } from '@/types/api';
 
@@ -14,6 +14,7 @@ export interface UseCommitHistoryResult {
   history: ApiCommit[];
   loading: boolean;
   error: string | null;
+  loadHistory: (commitHash: string, limit?: number) => Promise<ApiCommit[]>;
 }
 
 export function useCommitHistory(
@@ -25,6 +26,11 @@ export function useCommitHistory(
   const [history, setHistory] = useState<ApiCommit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadHistory = useCallback(
+    async (hash: string, lim?: number) => fetchCommitHistory(hash, lim ?? 100),
+    []
+  );
 
   useEffect(() => {
     if (!enabled || !commitHash) {
@@ -51,5 +57,5 @@ export function useCommitHistory(
     };
   }, [enabled, commitHash, limit]);
 
-  return { history, loading, error };
+  return { history, loading, error, loadHistory };
 }
