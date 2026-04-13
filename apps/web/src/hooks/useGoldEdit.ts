@@ -1,6 +1,5 @@
 /**
- * Authorized adapter hook — only file in components/ allowed (alongside
- * useExtraction) to import from @/commands/yops.
+ * useGoldEdit — adapter hook for human-authored YOps edits.
  *
  * Wraps gold-edit YOps with optimistic update semantics: applies the op
  * locally via appendOpsAndReplay, then commits to server via commitGoldEdit.
@@ -12,8 +11,8 @@
 import type { YOp } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { buildHumanSource, commitGoldEdit } from '@/commands/yops/goldEditBuilder';
-import { appendOpsAndReplay } from '@/queries/loadConversation';
 import { replay } from '@/domain/replay';
+import { appendOpsAndReplay } from '@/queries/loadConversation';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function useGoldEdit() {
