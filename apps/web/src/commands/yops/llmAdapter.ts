@@ -10,8 +10,7 @@
 import type { FailingOp, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 
 const API_BASE =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
-  'http://localhost:8000';
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) || 'http://localhost:8000';
 
 export interface CallExtractionLLMInput {
   conversationId: string;

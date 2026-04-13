@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildHumanSource, commitGoldEdit } from '../goldEditBuilder';
-import { SourceValidationError } from '../errors';
-import * as yopsService from '../yopsService';
 import * as session from '@/lib/session';
+import { SourceValidationError } from '../errors';
+import { buildHumanSource, commitGoldEdit } from '../goldEditBuilder';
+import * as yopsService from '../yopsService';
 
-beforeEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('buildHumanSource', () => {
   it('uses username when present', () => {
     vi.spyOn(session, 'getSessionUser').mockReturnValue({
-      id: 'u1', name: 'Ethan Example', username: 'ethan', avatar_url: null,
+      id: 'u1',
+      name: 'Ethan Example',
+      username: 'ethan',
+      avatar_url: null,
     });
     const src = buildHumanSource();
     expect(src.type).toBe('human');
@@ -19,7 +24,10 @@ describe('buildHumanSource', () => {
 
   it('falls back to name when username is null', () => {
     vi.spyOn(session, 'getSessionUser').mockReturnValue({
-      id: 'u1', name: 'Ethan', username: null, avatar_url: null,
+      id: 'u1',
+      name: 'Ethan',
+      username: null,
+      avatar_url: null,
     });
     expect(buildHumanSource().author).toBe('Ethan');
   });
@@ -31,7 +39,10 @@ describe('buildHumanSource', () => {
 
   it('throws SourceValidationError when both name and username are null', () => {
     vi.spyOn(session, 'getSessionUser').mockReturnValue({
-      id: 'u1', name: null, username: null, avatar_url: null,
+      id: 'u1',
+      name: null,
+      username: null,
+      avatar_url: null,
     });
     expect(() => buildHumanSource()).toThrow(SourceValidationError);
   });
@@ -40,7 +51,10 @@ describe('buildHumanSource', () => {
 describe('commitGoldEdit', () => {
   it('attaches HumanSource to op and delegates to yopsService.commitOps', async () => {
     vi.spyOn(session, 'getSessionUser').mockReturnValue({
-      id: 'u1', name: null, username: 'ethan', avatar_url: null,
+      id: 'u1',
+      name: null,
+      username: 'ethan',
+      avatar_url: null,
     });
     const spy = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
     await commitGoldEdit('c1', { unset: { path: 'x/y' } });
@@ -54,7 +68,10 @@ describe('commitGoldEdit', () => {
 
   it('propagates errors from commitOps', async () => {
     vi.spyOn(session, 'getSessionUser').mockReturnValue({
-      id: 'u1', name: null, username: 'ethan', avatar_url: null,
+      id: 'u1',
+      name: null,
+      username: 'ethan',
+      avatar_url: null,
     });
     vi.spyOn(yopsService, 'commitOps').mockRejectedValue(new Error('persist fail'));
     await expect(commitGoldEdit('c1', { unset: { path: 'x' } })).rejects.toThrow('persist fail');

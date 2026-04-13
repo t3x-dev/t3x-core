@@ -1,13 +1,10 @@
 /**
- * L3 — imperative template-list fetcher.
+ * L3 — imperative template-list fetcher (read-only).
+ *
+ * Writes (create, delete) live in @/commands/templates per v2 §2.4.
  */
 
-import {
-  type CreateTemplateInput,
-  createTemplate,
-  deleteTemplate,
-  listTemplates,
-} from '@/infrastructure/misc';
+import { listTemplates } from '@/infrastructure/misc';
 import type { Template } from '@/types/api';
 
 export interface FetchTemplatesOptions {
@@ -21,13 +18,3 @@ export interface FetchTemplatesOptions {
 export function fetchTemplates(options?: FetchTemplatesOptions): Promise<Template[]> {
   return listTemplates(options);
 }
-
-export function createTemplateApi(input: CreateTemplateInput): Promise<Template> {
-  return createTemplate(input);
-}
-
-export function deleteTemplateById(id: string): Promise<{ deleted: true }> {
-  return deleteTemplate(id);
-}
-
-export type { CreateTemplateInput };
