@@ -116,6 +116,54 @@
       }
     },
     {
+      "includes": ["apps/web/src/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "react",
+                    "message": "domain/ is L2 (pure). No React allowed. Move React-bound code to hooks/ or components/."
+                  },
+                  {
+                    "group": "@/components/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (components)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (hooks)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (store)."
+                  },
+                  {
+                    "group": "@/queries/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (queries)."
+                  },
+                  {
+                    "group": "@/commands/**",
+                    "message": "domain/ is L2 (pure). No upstream imports (commands)."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "domain/ is L2 (pure). No I/O (infrastructure is L1)."
+                  },
+                  {
+                    "group": "@/lib/api/**",
+                    "message": "domain/ is L2 (pure). No I/O (lib/api is L1)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "apps/web/src/components/canvas/**",
         "apps/web/src/components/chat/**",
