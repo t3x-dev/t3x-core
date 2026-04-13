@@ -15,13 +15,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLeafOperations } from '@/hooks/useLeafOperations';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
-import { fetchTemplates } from '@/queries/templates';
-import type { Template } from '@/types/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { fetchTemplates } from '@/queries/templates';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { Template } from '@/types/api';
 import type { LeafType } from '@/types/nodes';
 import { LEAF_TYPES } from './CanvasNodes';
 
@@ -31,10 +32,9 @@ export function LeafPanel() {
   const router = useRouter();
   const leafPanelOpen = useCanvasStore((state) => state.leafPanelOpen);
   const closeLeafPanel = useCanvasStore((state) => state.closeLeafPanel);
-  const addLeafNode = useCanvasStore((state) => state.addLeafNode);
-  const addLeafFromTemplate = useCanvasStore((state) => state.addLeafFromTemplate);
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
+  const { addLeafNode, addLeafFromTemplate } = useLeafOperations();
   const prefersReducedMotion = useReducedMotion();
 
   const [activeTab, setActiveTab] = useState<'type' | 'template'>('type');

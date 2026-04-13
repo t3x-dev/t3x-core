@@ -35,18 +35,6 @@ vi.mock('@/queries/commits', () => ({
 
 vi.mock('@/queries/leaves', () => ({
   fetchLeavesByProject: vi.fn().mockResolvedValue([]),
-  createLeafInProject: vi.fn().mockResolvedValue({
-    id: 'leaf_mock123',
-    commit_hash: 'sha256:abc123',
-    type: 'tweet',
-    title: 'Twitter',
-    constraints: [],
-    config: {},
-    output: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }),
-  deleteLeafById: vi.fn(),
 }));
 
 vi.mock('@/queries/turns', () => ({
@@ -354,49 +342,9 @@ describe('Canvas Store - Unit Node Model', () => {
     });
   });
 
-  // ===========================================================================
-  // addLeafNode Tests
-  // ===========================================================================
-  describe('addLeafNode', () => {
-    it('embeds a leaf into the parent commit node data.leaves', async () => {
-      const committedUnit = createCommittedUnitNode('unit-1', 'sha256:abc123');
-      useCanvasStore.setState({
-        nodes: [committedUnit],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: 'unit-1',
-        projectId: 'proj_test123',
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      // No new node created — leaf is embedded
-      expect(state.nodes.length).toBe(1);
-      // No edge created
-      expect(state.edges.length).toBe(0);
-      // Leaf embedded in parent node's data.leaves
-      const unitNode = state.nodes[0];
-      expect(unitNode.data.leaves).toBeDefined();
-      expect(unitNode.data.leaves!.length).toBe(1);
-      expect(unitNode.data.leaves![0].type).toBe('tweet');
-      expect(unitNode.data.leaves![0].title).toBe('Twitter');
-    });
-
-    it('does nothing when leafPanelCommitId is not set', async () => {
-      useCanvasStore.setState({
-        nodes: [],
-        edges: [],
-        leafPanelOpen: true,
-        leafPanelCommitId: undefined,
-      });
-
-      await useCanvasStore.getState().addLeafNode('tweet');
-
-      const state = useCanvasStore.getState();
-      expect(state.nodes).toEqual([]);
-    });
-  });
+  // NB: leaf add/remove I/O orchestration moved to hooks/useLeafOperations
+  // (v2 Bundle 4). Store now only exposes setters (embedLeafInCommit /
+  // removeLeafFromCommit), covered in canvasStoreSlices.test.ts.
 
   // ===========================================================================
   // updateNode Tests

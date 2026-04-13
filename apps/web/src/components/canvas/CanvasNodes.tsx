@@ -22,16 +22,17 @@ import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
+import { useLeafOperations } from '@/hooks/useLeafOperations';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { nodeEnter, reducedMotion } from '@/lib/motion';
-import { fetchConversationContext } from '@/queries/conversationContext';
-import type { ConversationContext } from '@/types/api';
 import { glass, toneAccent, toneGlow } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { fetchConversationContext } from '@/queries/conversationContext';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { ConversationContext } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
@@ -93,7 +94,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const startMergeFromCommit = useCanvasStore((state) => state.createMergePendingCommit);
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
-  const removeLeafFromNode = useCanvasStore((state) => state.removeLeafFromNode);
+  const { removeLeafFromNode } = useLeafOperations();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);

@@ -37,7 +37,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
     | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
     | null
     | undefined;
-  removeLeafFromNode: (nodeId: string, leafId: string) => void;
+  removeLeafFromNode: (nodeId: string, leafId: string) => Promise<void> | void;
 }) {
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
