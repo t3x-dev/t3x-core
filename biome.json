@@ -248,33 +248,6 @@
     },
     {
       "includes": [
-        "apps/web/src/store/canvasStoreUtils.ts",
-        "apps/web/src/store/knowledgeGraphStore.ts"
-      ],
-      "linter": {
-        "rules": {
-          "style": {
-            "noRestrictedImports": {
-              "level": "error",
-              "options": {
-                "patterns": [
-                  {
-                    "group": "@/commands/**",
-                    "message": "Stores must not import from the commands layer."
-                  },
-                  {
-                    "group": "@/infrastructure/**",
-                    "message": "Stores must not import from the infrastructure layer."
-                  }
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "includes": [
         "apps/web/src/components/chat/useExtraction.ts",
         "apps/web/src/components/chat/useGoldEdit.ts"
       ],
