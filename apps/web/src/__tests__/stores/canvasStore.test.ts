@@ -529,8 +529,20 @@ describe('Canvas Store - Unit Node Model', () => {
       vi.clearAllMocks();
     });
 
-    it('startMerge sets mergeState', async () => {
-      await useCanvasStore.getState().startMerge('sha256:a', 'sha256:b');
+    it('setMergePrepared sets mergeState', () => {
+      useCanvasStore.getState().setMergePrepared({
+        sourceHash: 'sha256:a',
+        targetHash: 'sha256:b',
+        prepared: {
+          autoKept: [],
+          conflicts: [],
+          onlyInSource: [],
+          onlyInTarget: [],
+          relationsOnlyInSource: [],
+          relationsOnlyInTarget: [],
+          relationsInBoth: [],
+        },
+      });
 
       expect(useCanvasStore.getState().mergeState).not.toBeNull();
       expect(useCanvasStore.getState().mergeState?.sourceHash).toBe('sha256:a');
