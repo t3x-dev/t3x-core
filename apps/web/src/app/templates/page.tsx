@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import type { Template } from '@/infrastructure';
 import { cn } from '@/lib/utils';
-import { useTemplateStore } from '@/store/templateStore';
+import { useTemplates } from '@/hooks/useTemplates';
 
 const CATEGORIES = [
   { value: null, label: 'All' },
@@ -44,7 +44,7 @@ export default function TemplatesPage() {
     setLeafType,
     setSearch,
     deleteTemplate,
-  } = useTemplateStore();
+  } = useTemplates();
 
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);

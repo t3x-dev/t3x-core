@@ -12,10 +12,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { Project } from '@/infrastructure';
+import { useSearch } from '@/hooks/useSearch';
 import { listProjects } from '@/infrastructure';
-import type { SearchMode } from '@/queries/search';
 import { cn } from '@/lib/utils';
-import { useSearchStore } from '@/store/searchStore';
+import type { SearchMode } from '@/queries/search';
 
 const MODES: { value: SearchMode; label: string }[] = [
   { value: 'hybrid', label: 'Hybrid' },
@@ -73,7 +73,7 @@ export function SearchPage() {
     setProjectId,
     search,
     reset,
-  } = useSearchStore();
+  } = useSearch();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

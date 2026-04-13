@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { CreateTemplateInput, Template, TemplateVariable } from '@/infrastructure';
-import { useTemplateStore } from '@/store/templateStore';
+import { useTemplates } from '@/hooks/useTemplates';
 
 const CATEGORIES = ['social', 'business', 'technical', 'creative'] as const;
 const LEAF_TYPES = ['tweet', 'article', 'email', 'weibo', 'wechat', 'slack'] as const;
@@ -29,7 +29,7 @@ interface CreateTemplateDialogProps {
 }
 
 export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTemplateDialogProps) {
-  const { createTemplate } = useTemplateStore();
+  const { createTemplate } = useTemplates();
   const [isCreating, setIsCreating] = useState(false);
   const [syntaxErrors, setSyntaxErrors] = useState<string[]>([]);
 
