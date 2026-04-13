@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useConversationsList } from '@/hooks/useConversationsList';
-import { extractToDraft } from '@/infrastructure';
+import { useExtractFromConversation } from '@/hooks/useExtractFromConversation';
 import { cn } from '@/lib/utils';
 import type { Conversation } from '@/types/api';
 
@@ -45,6 +45,7 @@ export function ExtractConversationDialog({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const { loadConversations } = useConversationsList();
+  const { extract: extractFromConversation } = useExtractFromConversation();
 
   // Load conversations when dialog opens
   useEffect(() => {
@@ -74,7 +75,7 @@ export function ExtractConversationDialog({
     if (!selectedId) return;
     setExtracting(true);
     try {
-      const result = await extractToDraft(draftId, selectedId);
+      const result = await extractFromConversation(draftId, selectedId);
       toast.success(`Added ${result.added_count} nodes to draft`);
       onExtracted();
       onOpenChange(false);
@@ -83,7 +84,7 @@ export function ExtractConversationDialog({
     } finally {
       setExtracting(false);
     }
-  }, [draftId, selectedId, onExtracted, onOpenChange]);
+  }, [draftId, selectedId, onExtracted, onOpenChange, extractFromConversation]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

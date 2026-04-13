@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { createEngineRun } from '@/infrastructure';
+import { useCreateEngineRun } from '@/hooks/useCreateEngineRun';
 import { cn } from '@/lib/utils';
 import type { DeployAgent } from '@/types/api';
 
@@ -63,6 +63,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
     timestamp: Date;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { create: createRun } = useCreateEngineRun();
 
   const selectedAgent = agents.find((a) => a.deploy_agent_id === selectedAgentId);
   const canRun = runnerHealthy && selectedAgentId && !isRunning;
@@ -76,7 +77,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
     const promptConfig = PROMPT_VERSIONS[selectedVersion];
 
     try {
-      const result = await createEngineRun({
+      const result = await createRun({
         leaf: {
           id: `e2e-test-${selectedVersion}`,
           type: 'eval',
