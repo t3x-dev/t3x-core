@@ -22,14 +22,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
+import { useProjectOperations } from '@/hooks/useProjectOperations';
 import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/infrastructure';
 import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from '@/infrastructure';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function RecipesPage() {
   const projects = useProjectStore((s) => s.projects);
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const initialized = useProjectStore((s) => s.initialized);
+  const { fetchProjects } = useProjectOperations();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);

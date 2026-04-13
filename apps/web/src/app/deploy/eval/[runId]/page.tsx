@@ -42,6 +42,7 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useProjectOperations } from '@/hooks/useProjectOperations';
 import {
   type ApiCommit,
   type EngineRun,
@@ -229,8 +230,8 @@ export default function RunDetailPage() {
   const [retuning, setRetuning] = useState(false);
   const { fetchPins, addPin, updatePinAssertions, isPinned, getPinByRef } = usePinsStore();
   const getProject = useProjectStore((s) => s.getProject);
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
+  const { fetchProjects } = useProjectOperations();
 
   // Ensure project store is initialized (for breadcrumb project name)
   useEffect(() => {
@@ -283,12 +284,19 @@ export default function RunDetailPage() {
 
     // Derive nodes from tree nodes for source_ref lookup
     const content = commit.content as import('@t3x-dev/core').SemanticContent;
-    type SourceRef = { conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number };
-    const nodes: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map((node, idx) => {
-      const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
-      const source_ref: SourceRef | undefined = undefined;
-      return { id, source_ref };
-    });
+    type SourceRef = {
+      conversation_id?: string;
+      turn_hash?: string;
+      start_char?: number;
+      end_char?: number;
+    };
+    const nodes: Array<{ id: string; source_ref: SourceRef | undefined }> = content.trees.map(
+      (node, idx) => {
+        const id = node.key.startsWith('s_') ? node.key : `s_${node.key}_${idx}`;
+        const source_ref: SourceRef | undefined = undefined;
+        return { id, source_ref };
+      }
+    );
 
     // Index nodes by ID for fast lookup, mapping to NodeSourceRef
     const nodeMap = new Map<string, NodeSourceRef>();

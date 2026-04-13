@@ -1,23 +1,16 @@
 /**
- * Project Store Tests
+ * Project Store Tests (passive, v2 §2.5)
  *
- * Tests for the Zustand project store that manages project CRUD operations.
+ * Store is now pure state + setters + pure selectors. I/O moved to
+ * hooks/useProjectOperations. Former tests for addProject / deleteProject /
+ * fetchProjects store actions were removed when their I/O migrated;
+ * addProject and deleteProject store methods were dead code (no callers)
+ * and are deleted, not relocated.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '@/store/projectStore';
 
-// projectStore now routes through @/queries/projects (doc-aligned L3).
-vi.mock('@/queries/projects', () => ({
-  fetchProjects: vi.fn(),
-  createProjectApi: vi.fn(),
-  deleteProjectById: vi.fn(),
-  updateProjectById: vi.fn(),
-}));
-
-import * as api from '@/queries/projects';
-
-// Helper to reset store between tests
 const resetStore = () => {
   useProjectStore.setState({
     projects: [],
@@ -31,11 +24,6 @@ const resetStore = () => {
 describe('Project Store', () => {
   beforeEach(() => {
     resetStore();
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   describe('Initial State', () => {
@@ -77,271 +65,61 @@ describe('Project Store', () => {
     });
   });
 
-  describe('fetchProjects', () => {
-    it('fetches projects from API', async () => {
-      const mockProjects = {
-        projects: [
-          {
-            project_id: 'proj_123',
-            name: 'Test Project',
-            metadata: { description: 'Test description' },
-            created_at: new Date().toISOString(),
-            turns_count: 5,
-            conversations_count: 2,
-          },
-        ],
-        limit: 100,
-        offset: 0,
-      };
-
-      vi.mocked(api.fetchProjects).mockResolvedValueOnce(mockProjects);
-
-      await useProjectStore.getState().fetchProjects();
-
-      const state = useProjectStore.getState();
-      expect(state.projects).toHaveLength(1);
-      expect(state.projects[0].id).toBe('proj_123');
-      expect(state.projects[0].name).toBe('Test Project');
-      expect(state.initialized).toBe(true);
-      expect(state.loading).toBe(false);
+  describe('setters', () => {
+    it('setProjects replaces the array', () => {
+      const projects = [
+        {
+          id: 'proj_1',
+          name: 'A',
+          description: '',
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'active' as const,
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+        },
+      ];
+      useProjectStore.getState().setProjects(projects);
+      expect(useProjectStore.getState().projects).toEqual(projects);
     });
 
-    it('sets loading state during fetch', async () => {
-      vi.mocked(api.fetchProjects).mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(() => resolve({ projects: [], limit: 100, offset: 0 }), 100)
-          )
-      );
-
-      const fetchPromise = useProjectStore.getState().fetchProjects();
-
-      // Check loading state immediately
-      expect(useProjectStore.getState().loading).toBe(true);
-
-      await fetchPromise;
-
-      expect(useProjectStore.getState().loading).toBe(false);
+    it('patchProject merges fields for the matching id', () => {
+      useProjectStore.getState().setProjects([
+        {
+          id: 'proj_1',
+          name: 'A',
+          description: '',
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'draft',
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+          defaultProvider: null,
+          defaultModel: null,
+        },
+      ]);
+      useProjectStore
+        .getState()
+        .patchProject('proj_1', { defaultProvider: 'anthropic', defaultModel: 'sonnet' });
+      expect(useProjectStore.getState().projects[0].defaultProvider).toBe('anthropic');
+      expect(useProjectStore.getState().projects[0].defaultModel).toBe('sonnet');
+      // unrelated fields untouched
+      expect(useProjectStore.getState().projects[0].name).toBe('A');
     });
 
-    it('handles API errors', async () => {
-      const error = new Error('Network error');
-      vi.mocked(api.fetchProjects).mockRejectedValueOnce(error);
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      await useProjectStore.getState().fetchProjects();
-
-      const state = useProjectStore.getState();
-      expect(state.error).toEqual(error);
-      expect(state.loading).toBe(false);
-      expect(state.initialized).toBe(true);
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to load projects'),
-        'error'
-      );
-    });
-
-    it('skips fetch if already loading', async () => {
-      useProjectStore.setState({ loading: true });
-
-      await useProjectStore.getState().fetchProjects();
-
-      expect(api.fetchProjects).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('addProject', () => {
-    it('creates project via API', async () => {
-      const mockProject = {
-        project_id: 'proj_new',
-        name: 'New Project',
-        metadata: { description: 'Fresh project awaiting conversations.' },
-        created_at: new Date().toISOString(),
-        turns_count: 0,
-        conversations_count: 0,
-      };
-
-      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
-
-      const result = await useProjectStore.getState().addProject('New Project');
-
-      expect(result.id).toBe('proj_new');
-      expect(result.name).toBe('New Project');
-      expect(useProjectStore.getState().projects).toHaveLength(1);
-    });
-
-    it('notifies on successful creation', async () => {
-      const mockProject = {
-        project_id: 'proj_new',
-        name: 'Test',
-        metadata: {},
-        created_at: new Date().toISOString(),
-        turns_count: 0,
-        conversations_count: 0,
-      };
-
-      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      await useProjectStore.getState().addProject('Test');
-
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('Created project'),
-        'success'
-      );
-    });
-
-    it('trims whitespace from project name', async () => {
-      const mockProject = {
-        project_id: 'proj_123',
-        name: 'Trimmed Name',
-        metadata: {},
-        created_at: new Date().toISOString(),
-        turns_count: 0,
-        conversations_count: 0,
-      };
-
-      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
-
-      await useProjectStore.getState().addProject('  Trimmed Name  ');
-
-      expect(api.createProjectApi).toHaveBeenCalledWith('Trimmed Name', expect.any(Object));
-    });
-
-    it('uses default name if empty', async () => {
-      const mockProject = {
-        project_id: 'proj_123',
-        name: 'Untitled Project',
-        metadata: {},
-        created_at: new Date().toISOString(),
-        turns_count: 0,
-        conversations_count: 0,
-      };
-
-      vi.mocked(api.createProjectApi).mockResolvedValueOnce(mockProject);
-
-      await useProjectStore.getState().addProject('   ');
-
-      expect(api.createProjectApi).toHaveBeenCalledWith('Untitled Project', expect.any(Object));
-    });
-
-    it('creates offline project when API fails', async () => {
-      // addProject only falls back to an offline project on TypeError (network failure).
-      // Generic Error instances are re-thrown so the UI can display them. Simulate a
-      // network-level failure with TypeError (the error fetch() itself throws).
-      vi.mocked(api.createProjectApi).mockRejectedValueOnce(new TypeError('Failed to fetch'));
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      const result = await useProjectStore.getState().addProject('Offline Project');
-
-      expect(result.id).toMatch(/^local-/);
-      expect(result.name).toContain('offline');
-      expect(result.status).toBe('draft');
-      expect(notifyCallback).toHaveBeenCalledWith(expect.stringContaining('offline'), 'warning');
-    });
-  });
-
-  describe('deleteProject', () => {
-    beforeEach(() => {
-      // Set up initial projects
-      useProjectStore.setState({
-        projects: [
-          {
-            id: 'proj_123',
-            name: 'Test Project',
-            description: 'Test',
-            updatedAt: 'just now',
-            owner: 'You',
-            status: 'active',
-            nodes: 0,
-            drafts: 0,
-            commitsCount: 0,
-            branchesCount: 0,
-          },
-        ],
-      });
-    });
-
-    it('removes project from state and calls API', async () => {
-      vi.mocked(api.deleteProjectById).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
-
-      await useProjectStore.getState().deleteProject('proj_123');
-
-      expect(useProjectStore.getState().projects).toHaveLength(0);
-      expect(api.deleteProjectById).toHaveBeenCalledWith('proj_123');
-    });
-
-    it('notifies on successful deletion', async () => {
-      vi.mocked(api.deleteProjectById).mockResolvedValueOnce({ deleted: true, project_id: 'proj_123' });
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      await useProjectStore.getState().deleteProject('proj_123');
-
-      expect(notifyCallback).toHaveBeenCalledWith(expect.stringContaining('Deleted'), 'success');
-    });
-
-    it('restores project on API failure', async () => {
-      vi.mocked(api.deleteProjectById).mockRejectedValueOnce(new Error('Server error'));
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      await useProjectStore.getState().deleteProject('proj_123');
-
-      // Project should be restored
-      expect(useProjectStore.getState().projects).toHaveLength(1);
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to delete'),
-        'error'
-      );
-    });
-
-    it('handles 404 with warning notification', async () => {
-      vi.mocked(api.deleteProjectById).mockRejectedValueOnce(new Error('404 not found'));
-
-      const notifyCallback = vi.fn();
-      useProjectStore.getState().setNotifyCallback(notifyCallback);
-
-      await useProjectStore.getState().deleteProject('proj_123');
-
-      // Project is NOT restored on 404 — it was already deleted server-side
-      expect(useProjectStore.getState().projects).toHaveLength(0);
-      expect(notifyCallback).toHaveBeenCalledWith(
-        expect.stringContaining('already deleted'),
-        'warning'
-      );
-    });
-
-    it('skips API call for local projects', async () => {
-      useProjectStore.setState({
-        projects: [
-          {
-            id: 'local-123456',
-            name: 'Local Project',
-            description: 'Test',
-            updatedAt: 'just now',
-            owner: 'You',
-            status: 'draft',
-            nodes: 0,
-            drafts: 0,
-            commitsCount: 0,
-            branchesCount: 0,
-          },
-        ],
-      });
-
-      await useProjectStore.getState().deleteProject('local-123456');
-
-      expect(api.deleteProjectById).not.toHaveBeenCalled();
-      expect(useProjectStore.getState().projects).toHaveLength(0);
+    it('setLoading / setError / setInitialized flip flags', () => {
+      const err = new Error('x');
+      useProjectStore.getState().setLoading(true);
+      useProjectStore.getState().setError(err);
+      useProjectStore.getState().setInitialized(true);
+      const s = useProjectStore.getState();
+      expect(s.loading).toBe(true);
+      expect(s.error).toBe(err);
+      expect(s.initialized).toBe(true);
     });
   });
 

@@ -23,6 +23,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { useProjectOperations } from '@/hooks/useProjectOperations';
 import {
   getProjectProviderConfig,
   getProviderRoles,
@@ -212,7 +213,7 @@ export default function ProjectSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
-  const updateProjectModel = useProjectStore((state) => state.updateProjectModel);
+  const { updateProjectModel } = useProjectOperations();
 
   const handleModelChange = async (provider: string | null, model: string | null) => {
     try {
@@ -427,7 +428,6 @@ export default function ProjectSettingsPage() {
         </p>
         <AutopilotSettings projectId={projectId} />
       </div>
-
     </div>
   );
 }
