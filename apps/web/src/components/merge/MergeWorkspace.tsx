@@ -15,6 +15,7 @@ import { MergeIllustration } from '@/components/illustrations/MergeIllustration'
 import { EmptyState } from '@/components/ui/empty-state';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { fullScreenEnter, reducedMotion } from '@/lib/motion';
@@ -47,8 +48,6 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     targetBranch,
     sourceHash,
     targetHash,
-    saveDraft,
-    cancelMerge,
     setMessage,
     previewExpanded,
     togglePreview,
@@ -66,6 +65,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     getTreeMergeChecks,
     getPreviewPaths,
   } = useMergeWorkspaceStore();
+  const { save: saveDraft, cancel: cancelMerge } = useMergeWorkspaceActions();
 
   const prefersReducedMotion = useReducedMotion();
   const { t } = useTerminology();

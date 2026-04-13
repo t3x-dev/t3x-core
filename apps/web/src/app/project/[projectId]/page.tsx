@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { useCanvasDeletionWiring } from '@/hooks/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
@@ -31,6 +32,7 @@ function ProjectDetailPageContent() {
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
+  useCanvasDeletionWiring();
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);

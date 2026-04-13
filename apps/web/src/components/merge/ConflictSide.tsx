@@ -6,6 +6,7 @@
 
 import { useEffect } from 'react';
 import { SourceContextView } from '@/components/source-context/SourceContextView';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { cn } from '@/lib/utils';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ContentNode, WordDiffSegment } from '@/types/merge';
@@ -49,7 +50,8 @@ export function ConflictSide({
   const turnHash = node.source?.turn_hash;
 
   // Access store for context fetching
-  const { contextCache, contextLoadingStates, fetchSourceContext } = useMergeWorkspaceStore();
+  const { contextCache, contextLoadingStates } = useMergeWorkspaceStore();
+  const { fetchSourceContext } = useMergeWorkspaceActions();
 
   // Memoize node source info to avoid unnecessary refetches
   const startChar = node.source?.start_char;
