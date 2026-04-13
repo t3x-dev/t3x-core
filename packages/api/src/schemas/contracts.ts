@@ -13,7 +13,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, LEAF_TYPES } from '@t3x-dev/core';
+import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Local SemanticContent Schema (mirrors @t3x-dev/core SemanticContentSchema)
@@ -120,7 +120,7 @@ export const AssertionSchema = z.object({
 // Use passthrough() to preserve unknown fields for invalid field detection
 //
 // Validation Rules:
-// 1. If `schema` provided, must be 't3x/commit/v4'
+// 1. If `schema` provided, must equal COMMIT_SCHEMA ('t3x/commit')
 // 2. `content` required with trees (SemanticContent)
 // 3. `author` required with type ('human' | 'agent')
 // 4. `constraints` NOT allowed at commit level (use Leaves instead)
@@ -147,15 +147,15 @@ export const CreateCommitRequest = z
     message: z.string().max(2000).optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
 
-    // V3/V4 detection fields (for validation error handling)
-    schema: z.string().optional().describe('If provided, must be t3x/commit/v4'),
+    // Optional self-identifier; if present it must match COMMIT_SCHEMA.
+    schema: z.string().optional().describe(`If provided, must equal '${COMMIT_SCHEMA}'`),
     constraints: z.unknown().optional().describe('Not allowed at commit level - use Leaves'),
   })
   .passthrough();
 
 export const CommitResponse = z.object({
   hash: z.string(),
-  schema: z.literal('t3x/commit/v4'),
+  schema: z.literal(COMMIT_SCHEMA),
   parents: z.array(z.string()),
   author: z.object({
     type: z.enum(['human', 'agent']),

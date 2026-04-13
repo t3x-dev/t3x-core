@@ -140,7 +140,7 @@ describe('Hash Chain Verification', () => {
     it('fails for tampered commit', () => {
       const commit = {
         hash: 'sha256:fake',
-        schema: 't3x/commit/1' as const,
+        schema: 't3x/commit' as const,
         parents: [] as string[],
         author: testAuthor,
         committed_at: new Date().toISOString(),

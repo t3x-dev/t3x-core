@@ -6,7 +6,6 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  computeCommitHash,
   computeJCSHash,
   computeTextHash,
   computeTurnHash,
@@ -205,63 +204,6 @@ describe('Storage Utils', () => {
 
         const hash1 = computeTurnHash({ ...base, parent_turn_hash: null });
         const hash2 = computeTurnHash({ ...base, parent_turn_hash: 'sha256:abc' });
-        expect(hash1).not.toBe(hash2);
-      });
-    });
-
-    describe('computeCommitHash', () => {
-      it('computes hash for commit data', () => {
-        const commitData = {
-          project_id: 'proj_12345678',
-          branch: 'main',
-          parents_json: '[]',
-          turn_window_json: '{"start":"sha256:abc","end":"sha256:def"}',
-          facet_snapshot_json: '[]',
-          pipeline_config_json: null,
-          draft_id: null,
-          draft_text_hash: null,
-          signature_json: null,
-          created_at: '2024-01-01T00:00:00.000Z',
-        };
-
-        const hash = computeCommitHash(commitData);
-        expect(hash).toMatch(/^sha256:[a-f0-9]{64}$/);
-      });
-
-      it('produces same hash for identical commit data', () => {
-        const commitData = {
-          project_id: 'proj_12345678',
-          branch: 'main',
-          parents_json: '[]',
-          turn_window_json: '{}',
-          facet_snapshot_json: '[]',
-          pipeline_config_json: null,
-          draft_id: null,
-          draft_text_hash: null,
-          signature_json: null,
-          created_at: '2024-01-01T00:00:00.000Z',
-        };
-
-        const hash1 = computeCommitHash(commitData);
-        const hash2 = computeCommitHash(commitData);
-        expect(hash1).toBe(hash2);
-      });
-
-      it('produces different hash for different branch', () => {
-        const base = {
-          project_id: 'proj_12345678',
-          parents_json: '[]',
-          turn_window_json: '{}',
-          facet_snapshot_json: '[]',
-          pipeline_config_json: null,
-          draft_id: null,
-          draft_text_hash: null,
-          signature_json: null,
-          created_at: '2024-01-01T00:00:00.000Z',
-        };
-
-        const hash1 = computeCommitHash({ ...base, branch: 'main' });
-        const hash2 = computeCommitHash({ ...base, branch: 'feature' });
         expect(hash1).not.toBe(hash2);
       });
     });

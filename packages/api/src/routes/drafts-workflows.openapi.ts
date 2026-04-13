@@ -277,7 +277,7 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
     // 7. Build virtual commit + leaf for generation
     const virtualCommit = {
       hash: 'virtual:preview',
-      schema: 't3x/commit/v4' as const,
+      schema: 't3x/commit' as const,
       parents: [],
       author: { type: 'human' as const, name: 'preview' },
       committed_at: new Date().toISOString(),

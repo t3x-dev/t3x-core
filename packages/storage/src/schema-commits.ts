@@ -9,6 +9,7 @@
  * @see packages/core/src/semantic/types.ts
  */
 
+import { COMMIT_SCHEMA } from '@t3x-dev/core';
 import { index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 import { projects } from './schema';
 
@@ -38,8 +39,8 @@ export const commits = pgTable(
     /** Content hash: "sha256:" + hex */
     hash: text('hash').primaryKey(),
 
-    /** Schema version */
-    schema: text('schema').notNull().default('t3x/commit/5'),
+    /** Schema tag (self-identifier; unversioned) */
+    schema: text('schema').notNull().default(COMMIT_SCHEMA),
 
     /** Parent commit hashes (DAG) */
     parents: jsonb('parents').notNull().$type<string[]>().default([]),

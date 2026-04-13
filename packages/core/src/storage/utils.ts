@@ -126,36 +126,6 @@ export function computeTurnHash(data: {
 }
 
 /**
- * Compute commit hash from commit data (excludes message)
- */
-export function computeCommitHash(data: {
-  project_id: string;
-  branch: string;
-  parents_json: string;
-  turn_window_json: string;
-  facet_snapshot_json: string;
-  pipeline_config_json: string | null;
-  draft_id: string | null;
-  draft_text_hash: string | null;
-  signature_json: string | null;
-  created_at: string;
-}): string {
-  return computeJCSHash({
-    project_id: data.project_id,
-    branch: data.branch,
-    parents_json: data.parents_json,
-    turn_window_json: data.turn_window_json,
-    facet_snapshot_json: data.facet_snapshot_json,
-    pipeline_config_json: data.pipeline_config_json,
-    draft_id: data.draft_id,
-    draft_text_hash: data.draft_text_hash,
-    signature_json: data.signature_json,
-    created_at: data.created_at,
-    schema_version: 'commit_v1',
-  });
-}
-
-/**
  * Compute text hash for draft verification
  */
 export function computeTextHash(text: string): string {
