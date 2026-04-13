@@ -10,12 +10,8 @@
 
 import type { Pin, PinType } from '@t3x-dev/core';
 import { useCallback } from 'react';
-import {
-  createPin,
-  deletePin,
-  fetchPins,
-  updatePinAssertions,
-} from '@/queries/pins';
+import { createPin, deletePin, updatePinAssertions } from '@/commands/pins';
+import { fetchPins } from '@/queries/pins';
 import { usePinsStore } from '@/store/pinsStore';
 
 // Module-level flag to prevent concurrent fetchPins calls for the same project.
