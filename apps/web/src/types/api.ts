@@ -50,6 +50,7 @@ export type { NodeRelation, RelationType } from '@/infrastructure/relations';
 export type { EngineRun } from '@/infrastructure/runner';
 export type { CommitMeta } from '@/infrastructure/treeDiff';
 export type { TurnContextData } from '@/infrastructure/turns';
+export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
 export type {
   Branch,
   Commit,

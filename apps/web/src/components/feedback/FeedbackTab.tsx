@@ -9,12 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useFeedbackStats } from '@/hooks/useFeedbackStats';
 import { useLeavesByProject } from '@/hooks/useLeavesByProject';
 import { useProjectsList } from '@/hooks/useProjectsList';
-import {
-  getExtractionFeedbackStats,
-  getFeedbackCosineBuckets,
-} from '@/infrastructure/extraction-feedback';
 import type { CosineBucket, FeedbackStats, Project } from '@/types/api';
 import { ConfidenceBucketChart } from './ConfidenceBucketChart';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';
@@ -28,6 +25,7 @@ export function FeedbackTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { loadProjects } = useProjectsList();
+  const { loadStats, loadCosineBuckets } = useFeedbackStats();
 
   // Load projects on mount
   useEffect(() => {
@@ -56,8 +54,8 @@ export function FeedbackTab() {
       setError(null);
       try {
         const [statsData, bucketsData] = await Promise.all([
-          getExtractionFeedbackStats(selectedProjectId!),
-          getFeedbackCosineBuckets(selectedProjectId!),
+          loadStats(selectedProjectId!),
+          loadCosineBuckets(selectedProjectId!),
         ]);
         if (!cancelled) {
           setStats(statsData);
@@ -77,7 +75,7 @@ export function FeedbackTab() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, loadStats, loadCosineBuckets]);
 
   return (
     <div className="space-y-6">

@@ -13,14 +13,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  type QuickVerifyResult,
-  type VerifyResult,
-  verifyProjectHashChain,
-} from '@/infrastructure';
+import { useVerifyProjectHashChain } from '@/hooks/useVerifyProjectHashChain';
 import { formatTimeAgo } from '@/lib/timeUtils';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/store/settingsStore';
+import type { QuickVerifyResult, VerifyResult } from '@/types/api';
 
 type VerificationState = 'idle' | 'loading' | 'verified' | 'failed';
 
@@ -62,6 +59,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
   const [fullResult, setFullResult] = useState<VerifyResult | null>(null);
   const [showTechDetails, setShowTechDetails] = useState(false);
   const developerMode = useSettingsStore((s) => s.developerMode);
+  const { verify } = useVerifyProjectHashChain();
 
   // Auto quick-verify on mount (with cache)
   useEffect(() => {
@@ -73,7 +71,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     }
 
     let cancelled = false;
-    verifyProjectHashChain(projectId)
+    verify(projectId)
       .then((r) => {
         if (cancelled) return;
         const quick: QuickVerifyResult = {
@@ -94,25 +92,25 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, verify]);
 
   const handleFullVerify = useCallback(async () => {
     setState('loading');
     sessionStorage.removeItem(`verify:${projectId}`);
     try {
-      const r = await verifyProjectHashChain(projectId);
+      const r = await verify(projectId);
       setFullResult(r);
       setState(r.valid ? 'verified' : 'failed');
     } catch {
       setState('failed');
       setFullResult(null);
     }
-  }, [projectId]);
+  }, [projectId, verify]);
 
   const handleQuickVerify = useCallback(async () => {
     setState('loading');
     try {
-      const r = await verifyProjectHashChain(projectId);
+      const r = await verify(projectId);
       const quick: QuickVerifyResult = {
         valid: r.valid,
         checked: r.verified_depth,
@@ -126,7 +124,7 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
     } catch {
       setState('failed');
     }
-  }, [projectId]);
+  }, [projectId, verify]);
 
   const badgeConfig = useMemo(
     () => ({
