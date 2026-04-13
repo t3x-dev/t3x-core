@@ -201,7 +201,43 @@
                   },
                   {
                     "group": "@/infrastructure/**",
-                    "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Route through a query in @/queries/."
+                    "message": "Stores must not import from the infrastructure layer (doc §2 L3: store 不得调用 infrastructure). Move the call to a hook in @/hooks/."
+                  },
+                  {
+                    "group": "@/queries/**",
+                    "message": "Stores must be passive per doc §2.5. Async I/O lives in hooks; the hook calls the query and writes results back via a store setter. Stores that still need types from queries are temporarily exempted in biome.json — add to that list only if there's no alternative."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/store/canvasStore.ts",
+        "apps/web/src/store/canvasStoreUtils.ts",
+        "apps/web/src/store/commitStore.ts",
+        "apps/web/src/store/draftWorkspaceStore.ts",
+        "apps/web/src/store/mergeWorkspaceStore.ts",
+        "apps/web/src/store/searchStore.ts",
+        "apps/web/src/store/knowledgeGraphStore.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/commands/**",
+                    "message": "Stores must not import from the commands layer."
+                  },
+                  {
+                    "group": "@/infrastructure/**",
+                    "message": "Stores must not import from the infrastructure layer."
                   }
                 ]
               }
