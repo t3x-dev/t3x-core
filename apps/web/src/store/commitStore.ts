@@ -1,15 +1,16 @@
 /**
- * commitStore — Commit preparation + tracking
+ * commitStore — Commit preparation + tracking (passive).
  *
- * Split from extractionPanelStore.ts (Task 4).
- * Owns: confirmed nodes/slots, commit state, commit actions.
- * Cross-store reads: useWorkspaceStore (tree, conversationId).
+ * Per docs/frontend-architecture-v2-zh.md §2.5, async actions
+ * (commit, init) live in `hooks/useCommitActions`. This store only
+ * holds state + state-only setters.
+ *
+ * Cross-store reads still happen at the hook boundary, not here.
  */
 
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
-import { createCommitApi, fetchCommits } from '@/queries/commits';
 import { useWorkspaceStore } from './workspaceStore';
 
 interface CommitState {
@@ -28,18 +29,32 @@ interface CommitState {
   isCommitting: boolean;
   commitError: string | null;
 
-  // Methods
+  // Pure state mutation
   confirmNode: (treeId: string) => void;
   unconfirmNode: (treeId: string) => void;
   confirmSlot: (treeId: string, slotKey: string) => void;
   unconfirmSlot: (treeId: string, slotKey: string) => void;
   selectPendingNodes: () => TreeNode[];
-  commitNodes: (message: string) => Promise<{ hash: string }>;
+
+  // Config
   setCommitBranch: (branch: string) => void;
   setProjectId: (id: string | null) => void;
   setConversationTitle: (title: string | null) => void;
-  initCommitState: (projectId: string) => Promise<void>;
   clearCommitError: () => void;
+
+  // Setters used by useCommitActions after the API resolves
+  setIsCommitting: (isCommitting: boolean) => void;
+  setCommitError: (error: string | null) => void;
+  setCommitSuccess: (result: {
+    lastCommitHash: string;
+    committedNodeIds: Record<string, boolean>;
+    committedNodeSnapshot: Record<string, TreeNode>;
+  }) => void;
+  setInitialCommit: (
+    hash: string,
+    committedNodeIds: Record<string, boolean>,
+    committedNodeSnapshot: Record<string, TreeNode>
+  ) => void;
 }
 
 export const useCommitStore = create<CommitState>((set, get) => ({
@@ -68,7 +83,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
 
   confirmSlot: (treeId, slotKey) =>
     set((s) => ({
-      // Confirming a slot auto-confirms the parent node
       confirmedNodeIds: { ...s.confirmedNodeIds, [treeId]: true },
       confirmedSlotKeys: {
         ...s.confirmedSlotKeys,
@@ -88,7 +102,6 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     }),
 
   selectPendingNodes: () => {
-    // Cross-store read: tree from workspaceStore
     const { tree } = useWorkspaceStore.getState();
     const { committedNodeIds, committedNodeSnapshot } = get();
     const flatNodes = flattenTrees(tree.trees);
@@ -99,133 +112,8 @@ export const useCommitStore = create<CommitState>((set, get) => ({
       if (!committedNodeIds[nodeId]) return true;
       const snap = committedNodeSnapshot[nodeId];
       if (!snap) return true;
-      return false; // committed and unchanged
+      return false;
     });
-  },
-
-  commitNodes: async (message) => {
-    // Cross-store reads — workspace tree is source of truth
-    const { tree, sourceIndex, conversationId } = useWorkspaceStore.getState();
-    const draft = tree;
-    const { projectId, lastCommitHash, commitBranch, conversationTitle } = get();
-
-    if (!projectId) throw new Error('No project ID');
-
-    set({ isCommitting: true, commitError: null });
-    try {
-      // Enrich trees with source_ref derived from sourceIndex (replayed ops).
-      // No network call or slot_quotes walk needed — the extraction pipeline
-      // already records turn_hash + char offsets on every LLMSource.
-      let enrichedTrees = draft.trees;
-      if (conversationId && sourceIndex.size > 0) {
-        try {
-          const { enrichTreesWithSourceRefs } = await import('@/domain/enrichSourceRefs');
-          enrichedTrees = enrichTreesWithSourceRefs(draft.trees, conversationId, sourceIndex);
-        } catch {
-          // Silent fallback — commit without source_ref enrichment
-        }
-      }
-
-      // Sanitize slot values: API only accepts string | number | SlotRef | Array.
-      // Nested objects from LLM extraction must be stringified.
-      function sanitizeSlots(slots: Record<string, unknown>): Record<string, unknown> {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(slots)) {
-          if (v !== null && typeof v === 'object' && !Array.isArray(v) && !('ref' in v)) {
-            out[k] = JSON.stringify(v);
-          } else {
-            out[k] = v;
-          }
-        }
-        return out;
-      }
-      function sanitizeTrees(trees: TreeNode[]): TreeNode[] {
-        return trees.map(
-          (t) =>
-            Object.assign({}, t, {
-              slots: sanitizeSlots(t.slots),
-              children: sanitizeTrees(t.children),
-            }) as TreeNode
-        );
-      }
-
-      const sanitizedTrees = sanitizeTrees(enrichedTrees);
-
-      // Build sources array: active conversation + selected pins
-      const sources: Array<{
-        type: string;
-        id: string;
-        title?: string;
-        assertion_lessons?: string[];
-      }> = [];
-
-      if (conversationId) {
-        sources.push({
-          type: 'conversation',
-          id: conversationId,
-          title: conversationTitle ?? undefined,
-        });
-      }
-
-      // Add pinned sources that were actually selected during extraction
-      const { usePinsStore } = await import('@/store/pinsStore');
-      const selectedPinIds = useWorkspaceStore.getState().lastExtractionPinIds;
-      if (selectedPinIds.length > 0) {
-        const allPins = usePinsStore.getState().pins;
-        const selectedPins = allPins.filter((p) => selectedPinIds.includes(p.id));
-        for (const pin of selectedPins) {
-          if (pin.type === 'conversation' && pin.ref_id !== conversationId) {
-            sources.push({ type: 'conversation', id: pin.ref_id });
-          } else if (pin.type === 'leaf') {
-            sources.push({ type: 'leaf', id: pin.ref_id });
-          }
-        }
-      }
-
-      const result = await createCommitApi(
-        projectId,
-        {
-          trees: sanitizedTrees,
-          relations: draft.relations,
-        },
-        {
-          parents: lastCommitHash ? [lastCommitHash] : [],
-          branch: commitBranch,
-          message: message || undefined,
-          sources: sources.length > 0 ? sources : undefined,
-          provenance: { method: 'llm_extraction' },
-        }
-      );
-
-      const newCommittedIds: Record<string, boolean> = {};
-      const newSnapshot: Record<string, TreeNode> = {};
-      const flat = flattenTrees(draft.trees);
-      for (const f of flat) {
-        newCommittedIds[f.id] = true;
-      }
-      for (const t of draft.trees) {
-        newSnapshot[t.key] = { ...t, slots: { ...t.slots } };
-      }
-
-      set({
-        lastCommitHash: result.commit.hash,
-        committedNodeIds: newCommittedIds,
-        committedNodeSnapshot: newSnapshot,
-        isCommitting: false,
-        manualEditedNodeIds: new Set(),
-      });
-
-      // TODO(undo-redo): commandStore.clearPending() removed — yops_log is append-only;
-      // undo/redo stack management is deferred to a future PR.
-
-      return { hash: result.commit.hash };
-    } catch (err) {
-      set({
-        isCommitting: false,
-        commitError: err instanceof Error ? err.message : 'Commit failed',
-      });
-      throw err;
-    }
   },
 
   setCommitBranch: (branch) => set({ commitBranch: branch }),
@@ -233,29 +121,18 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   setConversationTitle: (title) => set({ conversationTitle: title }),
   clearCommitError: () => set({ commitError: null }),
 
-  initCommitState: async (projectId) => {
-    try {
-      // Try to load the latest commit
-      const recentCommits = await fetchCommits(projectId, 'main', 1).catch(() => []);
-      if (recentCommits.length > 0) {
-        const head = recentCommits[0];
-        set({ lastCommitHash: head.hash });
-        const trees = (head.content?.trees ?? []) as TreeNode[];
-        if (trees.length > 0) {
-          const flat = flattenTrees(trees);
-          const ids: Record<string, boolean> = {};
-          const snapshot: Record<string, TreeNode> = {};
-          for (const f of flat) {
-            ids[f.id] = true;
-          }
-          for (const t of trees) {
-            snapshot[t.key] = t;
-          }
-          set({ committedNodeIds: ids, committedNodeSnapshot: snapshot });
-        }
-      }
-    } catch {
-      // Silent fallback — treat as no prior commits
-    }
-  },
+  setIsCommitting: (isCommitting) => set({ isCommitting }),
+  setCommitError: (error) => set({ commitError: error }),
+
+  setCommitSuccess: ({ lastCommitHash, committedNodeIds, committedNodeSnapshot }) =>
+    set({
+      lastCommitHash,
+      committedNodeIds,
+      committedNodeSnapshot,
+      isCommitting: false,
+      manualEditedNodeIds: new Set(),
+    }),
+
+  setInitialCommit: (hash, committedNodeIds, committedNodeSnapshot) =>
+    set({ lastCommitHash: hash, committedNodeIds, committedNodeSnapshot }),
 }));
