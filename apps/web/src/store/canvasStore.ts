@@ -20,9 +20,9 @@ import {
   isUpstreamOfStagingUnit,
   nextEdgeId,
   resetCounters,
-  saveNodePosition,
   snapPosition,
 } from './canvasStoreUtils';
+import { saveNodePosition } from '@/lib/nodePositionSaver';
 
 export {
   selectCanExecuteMerge,

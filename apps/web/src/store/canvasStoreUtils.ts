@@ -1,6 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
-import { parseApiCommitAnchors, persistCommitPosition } from '@/queries/commits';
-import { updateConversationById } from '@/queries/conversations';
+import { parseApiCommitAnchors } from '@/queries/commits';
 import type { ApiCommit, Commit, Conversation } from '@/types/api';
 import type { CanvasNodeData, NodeKind } from '../types/nodes';
 import type { CanvasState, CommitTone, DraftBranchMode } from './canvasStoreTypes';
@@ -441,61 +440,9 @@ const LAYOUT = {
   COMMIT_SPACING_Y: 150,
 };
 
-// Debounced position save - collect position changes and save after 500ms of no changes
-const positionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const pendingPositionSaves = new Map<
-  string,
-  { kind: NodeKind; position: { x: number; y: number } }
->();
-
-export function saveNodePosition(
-  nodeId: string,
-  kind: NodeKind,
-  position: { x: number; y: number }
-) {
-  // Cancel existing timer for this node
-  const existingTimer = positionSaveTimers.get(nodeId);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-  }
-
-  // Store the pending position
-  pendingPositionSaves.set(nodeId, { kind, position });
-
-  // Set a new timer
-  const timer = setTimeout(() => {
-    const pending = pendingPositionSaves.get(nodeId);
-    if (!pending) return;
-
-    pendingPositionSaves.delete(nodeId);
-    positionSaveTimers.delete(nodeId);
-
-    // Call appropriate API based on node kind
-    // For unit nodes, determine if staging (conversationId) or committed (commit hash)
-    if (pending.kind === 'unit') {
-      // Staging units have conversationId as nodeId (e.g., conv_xxx)
-      // Committed units have commit hash as nodeId (e.g., sha256:xxx)
-      const isStagingUnit = nodeId.startsWith('conv_');
-
-      if (isStagingUnit) {
-        // Save position to conversation
-        updateConversationById(nodeId, {
-          position_x: pending.position.x,
-          position_y: pending.position.y,
-        }).catch(() => {
-          // Error handled silently
-        });
-      } else {
-        // Committed unit - save position to commit via API
-        persistCommitPosition(nodeId, pending.position.x, pending.position.y).catch(() => {
-          // Error handled silently
-        });
-      }
-    }
-  }, 500);
-
-  positionSaveTimers.set(nodeId, timer);
-}
+// saveNodePosition moved to @/lib/nodePositionSaver (v2 Phase 1.3).
+// It's a debounced I/O batching utility, not UI state — doesn't belong
+// under store/. Import from '@/lib/nodePositionSaver' instead.
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
 export const unitToNode = (
