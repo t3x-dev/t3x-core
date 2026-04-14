@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { usePlatformImport } from '@/hooks/usePlatformImport';
+import { usePlatformImport } from '@/hooks/imports/usePlatformImport';
 import { cn } from '@/utils/cn';
 import {
   ApiError,

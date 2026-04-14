@@ -4,7 +4,7 @@ import { Globe, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useUrlImport } from '@/hooks/useUrlImport';
+import { useUrlImport } from '@/hooks/imports/useUrlImport';
 import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
