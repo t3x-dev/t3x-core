@@ -20,8 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useConversationsList } from '@/hooks/useConversationsList';
-import { useExtractFromConversation } from '@/hooks/useExtractFromConversation';
+import { useConversationsList } from '@/hooks/conversations/useConversationsList';
+import { useExtractFromConversation } from '@/hooks/conversations/useExtractFromConversation';
 import { cn } from '@/utils/cn';
 import type { Conversation } from '@/types/api';
 

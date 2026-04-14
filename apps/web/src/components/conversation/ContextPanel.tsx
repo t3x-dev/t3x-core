@@ -19,8 +19,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useConversationContextExport } from '@/hooks/useConversationContextExport';
-import { useConversationMemory } from '@/hooks/useConversationMemory';
+import { useConversationContextExport } from '@/hooks/conversations/useConversationContextExport';
+import { useConversationMemory } from '@/hooks/conversations/useConversationMemory';
 import { usePinsStore } from '@/store/pinsStore';
 import { EditContextDialog } from './EditContextDialog';
 

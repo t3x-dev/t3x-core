@@ -44,7 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
-import { useRetuneSession } from '@/hooks/useRetuneSession';
+import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';
 import {
   type ApiCommit,
   type EngineRun,

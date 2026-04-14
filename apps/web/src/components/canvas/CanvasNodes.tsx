@@ -25,7 +25,7 @@ import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { leafContextMenuHandlerRef } from '@/hooks/useContextMenu';
-import { useConversationContext } from '@/hooks/useConversationContext';
+import { useConversationContext } from '@/hooks/conversations/useConversationContext';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
 import { nodeEnter, reducedMotion } from '@/utils/motion';

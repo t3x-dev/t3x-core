@@ -3,11 +3,11 @@ import type { AttachedImage } from '@/components/chat/ChatInput';
 import * as api from '@/infrastructure';
 import type { Citation } from '@/infrastructure/chat';
 import { useChatSessionStore } from '@/store/chatSessionStore';
-import { type ChatMessage, useChatHistory } from './useChatHistory';
-import { useChatStreamState } from './useChatStreamState';
-import { useChatWarnings } from './useChatWarnings';
+import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
+import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
+import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
 
-export type { ChatMessage } from './useChatHistory';
+export type { ChatMessage } from '@/hooks/conversations/useChatHistory';
 
 interface SendMessageOptions {
   historyOverride?: Array<{ role: string; content: string }>;

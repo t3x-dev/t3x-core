@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from 'react';
-import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { extractNodes } from '@/infrastructure/trees';
 
 export interface DriftDecision {
