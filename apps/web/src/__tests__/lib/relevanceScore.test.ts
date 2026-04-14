@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type RelevanceContext, relevanceScore } from '@/lib/relevanceScore';
+import { type RelevanceContext, relevanceScore } from '@/domain/leaf/relevanceScore';
 
 const makeNode = (id: string) => ({
   id,

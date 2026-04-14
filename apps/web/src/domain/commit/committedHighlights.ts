@@ -2,7 +2,7 @@
  * Build committed highlight ranges from commit tree source_refs.
  * Used to show persistent green underlines on conversation text.
  */
-import type { ApiCommit } from '@/infrastructure/commits';
+import type { ApiCommit } from '@/types/api';
 
 export interface CommittedHighlight {
   /** Character start position in turn content */
