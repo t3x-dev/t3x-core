@@ -13,14 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  createEngineRun,
-  type DeployAgent,
-  getLeaf,
-  type Leaf as LeafData,
-  listLeavesByProject,
-  listProjects,
-} from '@/infrastructure';
+import { useCreateEngineRun } from '@/hooks/useCreateEngineRun';
+import { useLeafById } from '@/hooks/useLeafById';
+import { useLeavesByProject } from '@/hooks/useLeavesByProject';
+import { useProjectsList } from '@/hooks/useProjectsList';
+import type { DeployAgent, Leaf as LeafData } from '@/types/api';
 
 interface LeafSelectorProps {
   agents: DeployAgent[];
@@ -55,21 +52,27 @@ export function LeafSelector({
   // Run state
   const [isRunning, setIsRunning] = useState(false);
 
+  // Data hooks (v2 §2.6 — view-facing API layer)
+  const { loadProjects } = useProjectsList();
+  const { loadLeaf } = useLeafById();
+  const { loadLeaves: loadLeavesByProject } = useLeavesByProject();
+  const { create: createRun } = useCreateEngineRun();
+
   // Resolved leaf for preview
   const selectedLeaf = leaves.find((l) => l.id === selectedLeafId);
 
   // Load projects on mount
   useEffect(() => {
-    async function loadProjects() {
+    async function load() {
       try {
-        const data = await listProjects();
+        const data = await loadProjects();
         setProjects(data.projects);
       } catch (_err) {
         showToast('Failed to load projects', 'error');
       }
     }
-    loadProjects();
-  }, []);
+    load();
+  }, [loadProjects]);
 
   // Pre-fill from initialLeafId
   useEffect(() => {
@@ -77,7 +80,7 @@ export function LeafSelector({
 
     async function prefill() {
       try {
-        const leaf = await getLeaf(initialLeafId!);
+        const leaf = await loadLeaf(initialLeafId!);
         if (leaf) {
           setSelectedProjectId(leaf.project_id);
           setSelectedLeafId(leaf.id);
@@ -87,27 +90,30 @@ export function LeafSelector({
       }
     }
     prefill();
-  }, [initialLeafId]);
+  }, [initialLeafId, loadLeaf]);
 
   // Load leaves when project changes
-  const loadLeaves = useCallback(async (projectId: string) => {
-    if (!projectId) {
-      setLeaves([]);
-      return;
-    }
-    setLoadingLeaves(true);
-    try {
-      const allLeaves = await listLeavesByProject(projectId);
-      // Filter to deploy_agent type only
-      const deployLeaves = allLeaves.filter((l) => l.type === 'deploy_agent');
-      setLeaves(deployLeaves);
-    } catch (_err) {
-      showToast('Failed to load leaves', 'error');
-      setLeaves([]);
-    } finally {
-      setLoadingLeaves(false);
-    }
-  }, []);
+  const loadLeaves = useCallback(
+    async (projectId: string) => {
+      if (!projectId) {
+        setLeaves([]);
+        return;
+      }
+      setLoadingLeaves(true);
+      try {
+        const allLeaves = await loadLeavesByProject(projectId);
+        // Filter to deploy_agent type only
+        const deployLeaves = allLeaves.filter((l) => l.type === 'deploy_agent');
+        setLeaves(deployLeaves);
+      } catch (_err) {
+        showToast('Failed to load leaves', 'error');
+        setLeaves([]);
+      } finally {
+        setLoadingLeaves(false);
+      }
+    },
+    [loadLeavesByProject]
+  );
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -139,7 +145,7 @@ export function LeafSelector({
 
     setIsRunning(true);
     try {
-      const result = await createEngineRun({
+      const result = await createRun({
         project_id: selectedProjectId || undefined,
         leaf_id: leaf.id,
         leaf: rulesRef ? { id: leaf.id, type: 'deploy_agent', rules_ref: rulesRef } : undefined,
