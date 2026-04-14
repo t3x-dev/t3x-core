@@ -230,6 +230,7 @@ export function CommitOperationsSidebar({
       try {
         const label = LEAF_TYPE_OPTIONS.find((o) => o.type === leafType)?.label ?? leafType;
         const leaf = await createLeaf({
+        source: { type: 'user' },
           commit_hash: commit.hash,
           type: leafType,
           title: label,

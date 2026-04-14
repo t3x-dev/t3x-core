@@ -1,3 +1,5 @@
+import { LeafSourceValidationError } from './errors';
+
 /**
  * LeafSource — provenance for leaf creation (v2 §2.4).
  *
@@ -32,9 +34,32 @@ export type LeafSource = UserSource | AgentSource;
  * Runtime assertion that `source` conforms to LeafSource. Throws
  * LeafSourceValidationError on any structural defect.
  *
- * PR20 stub: always throws. PR21 will implement per-shape checks.
+ * Rules:
+ *   - source must be a non-null object
+ *   - source.type must be `'user'` or `'agent'`
+ *   - when type === 'agent', both `model` and `timestamp` must be
+ *     non-empty strings (medium-strength defence-in-depth)
+ *   - user source has no required fields beyond the discriminator
  */
-export function assertLeafSource(_source: unknown): asserts _source is LeafSource {
-  // Stub — PR21 replaces this with the real assertion.
-  throw new Error('assertLeafSource not yet implemented (PR20 stub)');
+export function assertLeafSource(source: unknown): asserts source is LeafSource {
+  if (source === null || source === undefined || typeof source !== 'object') {
+    throw new LeafSourceValidationError('source', 'source must be a non-null object');
+  }
+  const s = source as Record<string, unknown>;
+  if (s.type === 'user') {
+    return;
+  }
+  if (s.type === 'agent') {
+    if (typeof s.model !== 'string' || s.model.length === 0) {
+      throw new LeafSourceValidationError('source.model');
+    }
+    if (typeof s.timestamp !== 'string' || s.timestamp.length === 0) {
+      throw new LeafSourceValidationError('source.timestamp');
+    }
+    return;
+  }
+  throw new LeafSourceValidationError(
+    'source.type',
+    `source.type must be 'user' or 'agent' (got ${String(s.type)})`
+  );
 }
