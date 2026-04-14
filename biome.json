@@ -196,20 +196,20 @@
         "rules": {
           "style": {
             "noRestrictedImports": {
-              "level": "warn",
+              "level": "error",
               "options": {
                 "patterns": [
                   {
                     "group": "@/queries/**",
-                    "message": "Components must not import queries directly (v2 §1 table). Route through a hook in @/hooks/. Currently warn — Phase F flips to error after the 26 known offenders migrate to hooks."
+                    "message": "Components must not import queries directly (v2 §1 table). Route through a hook in @/hooks/."
                   },
                   {
                     "group": "@/infrastructure/**",
-                    "message": "Components must not import infrastructure directly (v2 §1 table). Route through a hook. Currently warn — Phase F flips to error."
+                    "message": "Components must not import infrastructure directly (v2 §1 table). Route through a hook."
                   },
                   {
                     "group": "@/commands/**",
-                    "message": "Components must not import commands directly (v2 §1 table). Route through a hook (see useExtraction/useGoldEdit pattern). Currently warn — Phase F flips to error."
+                    "message": "Components must not import commands directly (v2 §1 table). Route through a hook (see useExtraction/useGoldEdit pattern)."
                   }
                 ]
               }

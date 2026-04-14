@@ -80,12 +80,14 @@ next-env.d.ts
 .worktrees/
 .superpowers/
 
-# Local-only directories (not for git)
+# Local-only directories (not for git) — root-level scratch only;
+# nested package scripts (apps/web/scripts, packages/yops/scripts,
+# apps/api/src/scripts) are tracked.
 scratchpad/
 preview/
 docs/
 specs/
-scripts/
+/scripts/
 .claude/
 .gitmodules
 
