@@ -438,6 +438,39 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
           }
         }
       }
+
+      // ref_must_exist: each value in a slot must be a key under in_path
+      if (rule.ref_must_exist) {
+        const { slot, in_path } = rule.ref_must_exist;
+        const nodeValue = resolvePath(doc, path);
+        if (isMapping(nodeValue)) {
+          const slotValue = (nodeValue as Record<string, YValue>)[slot];
+          if (slotValue !== undefined) {
+            // Resolve the set of valid keys from in_path (top-level)
+            const target = resolvePath(doc, in_path);
+            const validKeys: Set<string> = isMapping(target)
+              ? new Set(Object.keys(target as Record<string, YValue>))
+              : new Set();
+
+            // Accept scalar or list
+            const refs: YValue[] = Array.isArray(slotValue)
+              ? (slotValue as YValue[])
+              : [slotValue];
+
+            for (const ref of refs) {
+              if (typeof ref === 'string' && !validKeys.has(ref)) {
+                push(
+                  violations,
+                  'REF_NOT_FOUND',
+                  path,
+                  severity,
+                  `'${ref}' (referenced from ${path}/${slot}) is not a key under ${in_path}`
+                );
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

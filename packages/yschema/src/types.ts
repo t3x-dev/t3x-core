@@ -50,6 +50,8 @@ export interface RuleDef {
   not_empty?: boolean;
   max_children?: number;
   requires?: string[];
+  // Cross-node reference check:
+  ref_must_exist?: { slot: string; in_path: string };
   // Auto-fix:
   fix?: YOp[];
 }
