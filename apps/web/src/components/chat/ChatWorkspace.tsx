@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { buildSourceMap } from '@/domain/sourceMap';
-import { useAutoProject } from '@/hooks/useAutoProject';
+import { useAutoProject } from '@/hooks/projects/useAutoProject';
 import { useChatInit } from '@/hooks/useChatInit';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';

@@ -42,7 +42,7 @@ import {
   listEngineRuns,
   updateDeployAgent,
 } from '@/infrastructure';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {

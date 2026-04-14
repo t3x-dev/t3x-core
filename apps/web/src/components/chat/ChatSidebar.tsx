@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNewProjectChat } from '@/hooks/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/useProjectConversations';
-import { useProjects } from '@/hooks/useProjects';
+import { useProjects } from '@/hooks/projects/useProjects';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';

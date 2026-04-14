@@ -15,8 +15,8 @@ import {
 } from '@/components/ui/select';
 import { useCreateEngineRun } from '@/hooks/useCreateEngineRun';
 import { useLeafById } from '@/hooks/useLeafById';
-import { useLeavesByProject } from '@/hooks/useLeavesByProject';
-import { useProjectsList } from '@/hooks/useProjectsList';
+import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
+import { useProjectsList } from '@/hooks/projects/useProjectsList';
 import type { DeployAgent, Leaf as LeafData } from '@/types/api';
 
 interface LeafSelectorProps {

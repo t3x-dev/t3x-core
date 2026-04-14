@@ -44,7 +44,7 @@ import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeavesByCommit } from '@/hooks/useLeavesByCommit';
-import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';

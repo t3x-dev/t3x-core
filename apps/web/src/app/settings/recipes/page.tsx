@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/infrastructure';
 import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from '@/infrastructure';
 import { useProjectStore } from '@/store/projectStore';

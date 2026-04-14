@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useVerifyProjectHashChain } from '@/hooks/useVerifyProjectHashChain';
+import { useVerifyProjectHashChain } from '@/hooks/projects/useVerifyProjectHashChain';
 import { formatTimeAgo } from '@/domain/format/timeUtils';
 import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useProjectsList } from '@/hooks/useProjectsList';
+import { useProjectsList } from '@/hooks/projects/useProjectsList';
 import { useSearch } from '@/hooks/useSearch';
 import { cn } from '@/utils/cn';
 import type { Project } from '@/types/api';

@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCommitsList } from '@/hooks/useCommitsList';
 import { useCreateLeaf } from '@/hooks/useCreateLeaf';
-import { useProjectsList } from '@/hooks/useProjectsList';
+import { useProjectsList } from '@/hooks/projects/useProjectsList';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, LeafType, Project, Template } from '@/types/api';
 
