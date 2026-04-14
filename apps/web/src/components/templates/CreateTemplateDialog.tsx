@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useTemplates } from '@/hooks/useTemplates';
+import { useTemplates } from '@/hooks/templates/useTemplates';
 import type { CreateTemplateInput, Template, TemplateVariable } from '@/types/api';
 
 const CATEGORIES = ['social', 'business', 'technical', 'creative'] as const;

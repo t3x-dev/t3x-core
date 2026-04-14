@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useTemplatesList } from '@/hooks/useTemplatesList';
+import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
 import { reducedMotion, staggerContainer, staggerItem } from '@/utils/motion';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
