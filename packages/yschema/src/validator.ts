@@ -217,6 +217,36 @@ function validateSlots(
         );
       }
     }
+
+    // Pattern check (scalar slots only)
+    if (slotDef.pattern && slotDef.type !== 'list' && typeof value === 'string') {
+      if (!new RegExp(slotDef.pattern).test(value)) {
+        push(
+          violations,
+          'INVALID_PATTERN',
+          slotPath,
+          'error',
+          slotDef.pattern_message ?? `value '${value}' does not match pattern ${slotDef.pattern}`
+        );
+      }
+    }
+
+    // Item pattern check (list slots only)
+    if (slotDef.item_pattern && Array.isArray(value)) {
+      const re = new RegExp(slotDef.item_pattern);
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === 'string' && !re.test(item)) {
+          push(
+            violations,
+            'INVALID_ITEM_PATTERN',
+            `${slotPath}/[${i}]`,
+            'error',
+            `item '${item}' at index ${i} does not match pattern ${slotDef.item_pattern}`
+          );
+        }
+      }
+    }
   }
 }
 

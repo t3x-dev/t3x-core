@@ -17,6 +17,9 @@ export interface SlotFull {
   min?: number;
   max?: number;
   default?: YValue;
+  pattern?: string;
+  pattern_message?: string;
+  item_pattern?: string;
 }
 
 export type SlotDef = SlotShorthand | SlotFull;
@@ -71,8 +74,12 @@ export type ViolationCode =
   | 'INVALID_ENUM'
   | 'INVALID_TYPE'
   | 'INVALID_RANGE'
+  | 'INVALID_PATTERN'
+  | 'INVALID_ITEM_PATTERN'
   | 'CHILD_MISMATCH'
-  | 'RULE_VIOLATION';
+  | 'RULE_VIOLATION'
+  | 'REF_NOT_FOUND'
+  | 'UNEXPECTED_SLOT';
 
 export interface Violation {
   code: ViolationCode;

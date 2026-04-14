@@ -32,6 +32,9 @@ export function normalizeSlot(def: SlotDef): SlotFull {
     min: def.min,
     max: def.max,
     default: def.default,
+    pattern: def.pattern,
+    pattern_message: def.pattern_message,
+    item_pattern: def.item_pattern,
   };
 }
 
