@@ -9,7 +9,7 @@
  * - Valid API key → sets apiKey in Hono context variables
  * - Invalid/missing key → 401 Unauthorized
  *
- * @see apps/api/src/lib/errors.ts for error codes
+ * @see packages/api/src/lib/errors.ts for error codes
  */
 
 import type { AnyDB } from '@t3x-dev/storage';

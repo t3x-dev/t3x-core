@@ -2,7 +2,7 @@
 
 Web frontend for T3X, a canvas-based semantic version control interface built with Next.js.
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-04-14
 
 ## Tech Stack
 
@@ -17,112 +17,32 @@ Web frontend for T3X, a canvas-based semantic version control interface built wi
 
 ## Directory Structure
 
-```
-src/
-├── app/                      # Next.js App Router
-│   ├── page.tsx              # Home page (project list)
-│   ├── layout.tsx            # Root layout
-│   ├── project/[projectId]/  # Project canvas page
-│   │   ├── leaf/[leafId]/    # Leaf detail page
-│   │   ├── merge/[mergeId]/  # Merge Workspace page
-│   │   └── conversation/[conversationId]/  # Conversation page
-│   ├── agent-demo/           # Agent Demo page
-│   ├── api/                  # API proxy routes
-│   ├── deploy/               # Deploy page (A/B Test Compare)
-│   ├── dev/                  # Development debug routes
-│   ├── eval/                 # Evaluation page
-│   ├── health/               # Health check page
-│   └── insights/             # Insights page
-├── components/
-│   ├── canvas/               # Canvas related components
-│   │   ├── CanvasWorkspace.tsx   # Main canvas container
-│   │   ├── CanvasNodes.tsx       # Node renderer
-│   │   ├── NodeModal/            # Node detail modal (split into sub-components)
-│   │   │   ├── NodeModal.tsx         # Shell: routing by node kind/status
-│   │   │   ├── ConversationView.tsx  # Conversation (staging unit) view
-│   │   │   ├── PendingCommitView.tsx # Pending commit editing view
-│   │   │   ├── CommittedCommitView.tsx # Committed commit read-only view
-│   │   │   ├── shared.tsx            # Shared sections (source context, leaves, etc.)
-│   │   │   └── helpers.tsx           # Utility functions
-│   │   ├── AnimatedEdge.tsx      # Animated edge
-│   │   └── ...
-│   ├── merge/                # Merge UI components
-│   │   ├── MergeWorkspace.tsx        # Main merge workspace
-│   │   ├── MergePanel.tsx            # Decision panel
-│   │   ├── MergeActionBar.tsx        # Action bar
-│   │   ├── MergeCandidateList.tsx    # Candidate list
-│   │   ├── MergeConflictView.tsx     # Conflict view
-│   │   ├── MergeDiffSection.tsx      # Diff section
-│   │   ├── MergeDiffLine.tsx         # Diff line
-│   │   ├── MergeIdenticalSection.tsx # Identical section
-│   │   ├── MergePreview.tsx          # Preview panel
-│   │   ├── ConflictHeader.tsx        # Conflict header
-│   │   ├── ConflictSide.tsx          # Conflict side panel
-│   │   ├── ConflictEditPanel.tsx     # Conflict edit panel
-│   │   ├── ConflictResolutionButtons.tsx # Resolution buttons
-│   │   ├── UnifiedDiffView.tsx       # Unified diff view
-│   │   └── WordDiffDisplay.tsx       # Word-level diff display
-│   ├── optimiser/            # Agent Optimiser components
-│   │   ├── RunsTable.tsx             # Runs list
-│   │   ├── E2ETestCard.tsx           # E2E test card
-│   │   ├── AssertionsSection.tsx     # Assertions section
-│   │   ├── LeafSelector.tsx          # Leaf selector
-│   │   ├── charts/                   # Chart components
-│   │   │   ├── BarChart.tsx          # Bar chart
-│   │   │   ├── RadarChart.tsx        # Radar chart
-│   │   │   ├── DualChart.tsx         # Dual chart
-│   │   │   └── ChartToggle.tsx       # Chart toggle
-│   │   ├── metrics/                  # Metrics components
-│   │   │   ├── DimensionScoreCard.tsx # Dimension score card
-│   │   │   ├── MetricsDelta.tsx      # Metrics delta
-│   │   │   └── QuickStatsBar.tsx     # Quick stats bar
-│   │   └── trace/                    # Trace components
-│   │       ├── SpanCard.tsx          # Span card
-│   │       └── TraceTimeline.tsx     # Trace timeline
-│   ├── ui/                   # shadcn/ui components
-│   ├── Sidebar.tsx           # Sidebar
-│   └── CommandPalette.tsx    # Command palette
-├── store/
-│   ├── canvasStore.ts        # Canvas store (core state + slice composition)
-│   ├── canvasStoreTypes.ts   # Shared CanvasState type + slice interfaces
-│   ├── canvasStoreUtils.ts   # Pure utility functions (layout, position, graph)
-│   ├── canvasMergeSlice.ts   # Merge domain slice (state + methods + selectors)
-│   ├── canvasLeafSlice.ts    # Leaf panel domain slice
-│   ├── projectStore.ts       # Project state (list, current project)
-│   ├── pinsStore.ts          # Pin state management (V4)
-│   ├── agentDemoStore.ts     # Agent Demo state
-│   ├── mergeWorkspaceStore.ts # Merge Workspace state
-│   └── optimiserStore.ts     # Agent Optimiser state
-├── lib/
-│   ├── api.ts                # API client
-│   ├── bridgeQueries.ts      # Bridge template query definitions
-│   ├── db.ts                 # Database utilities
-│   ├── diffUtils.ts          # Diff algorithm (Jaccard + LCS)
-│   ├── elkLayout.ts          # ELK auto layout
-│   ├── export.ts             # Export utilities
-│   ├── highlightUtils.ts     # Text highlighting
-│   ├── motion.ts             # Animation config
-│   ├── seedData.ts           # Seed data utilities
-│   ├── theme.ts              # Theme utilities
-│   ├── truncationUtils.ts    # Text truncation utilities
-│   ├── utils.ts              # General utilities
-│   └── providers/            # Provider wrappers
-├── utils/
-│   └── tokenizer.ts          # Text tokenizer utilities
-├── hooks/
-│   ├── useApi.ts             # Data fetching hook
-│   ├── useBranchCommits.ts   # Branch commit data hook
-│   └── useReducedMotion.ts   # Animation preference hook
-└── types/
-    ├── nodes.ts              # Node type definitions
-    ├── display-spec.ts       # Display spec types
-    ├── semantic.ts           # Semantic data types
-    └── merge.ts              # Merge type definitions (NEW)
-```
+The source tree follows a four-layer v2 architecture (L1 infrastructure /
+L2 domain / L3 composition / L4 view) enforced by Biome. See the
+**"WebUI Architecture"** section of the repo root `CLAUDE.md` for the
+canonical folder map and import rules — that is the single source of truth.
+
+Top-level layout under `src/`:
+
+- `app/` — Next.js App Router pages
+- `components/` — L4 view (canvas, leaf, merge, diff, shared, ui…)
+- `hooks/` — L3 composition, organised by aggregate (canvas, commits,
+  conversations, drafts, feedback, imports, knowledge-graph, leaves,
+  merge, pins, projects, shared, shares, templates)
+- `store/` — L3 Zustand containers (passive: state + setters only)
+- `queries/` — L3 reads (async fetch per aggregate)
+- `commands/` — L3 writes (yops/ + 9 other aggregates)
+- `domain/` — L2 pure functions (commit, diff, draft, format, leaf, tree,
+  yops, …). No React, no I/O.
+- `infrastructure/` — L1 I/O adapters (the only layer that calls `fetch()`)
+- `utils/` — cross-layer view helpers (cn, theme, motion, microcopy, …)
+- `types/`, `data/` — shared type re-exports / static data
+- `__tests__/` — mirrors the src layout above
 
 ## API Connection
 
-WebUI calls the standalone Hono API service via `lib/api.ts`:
+WebUI calls the standalone Hono API service via the
+`@/infrastructure/*` adapters (the only layer that may call `fetch()`):
 
 | Environment | API Address |
 |-------------|-------------|
@@ -155,49 +75,23 @@ pnpm --filter t3x-webui test
 
 ## Module Boundaries
 
-Evaluate impact before modifying the following exported interfaces:
+This app follows the v2 four-layer architecture (L1 infrastructure /
+L2 domain / L3 composition / L4 view) enforced by Biome
+`noRestrictedImports`. See repo-root `CLAUDE.md` → "WebUI Architecture"
+for the canonical rules.
 
-### lib/api.ts (High Stability)
-- **Type definitions**: `Project`, `Conversation`, `Turn`, `Commit`, `Branch`, `Draft`, `DiffResult`, `MergeResult`
-- **CommitV3 API types**: `CommitV3`, `CommitV3Sentence`, `CommitV3Constraint`, `CommitV3Author`, `CommitV3ListData`
-- **CommitV3 API functions**: `listCommitsV3()`, `getCommitV3()`
-- **Anchor API types**: `ApiAnchorCandidate`, `ApiConfirmedAnchor`, `ApiSentenceWithAnchors`, `ApiCommitAnchors`
-- **Transform functions**: `parseApiAnchorCandidates()`, `parseApiConfirmedAnchor()`, `parseApiSentenceWithAnchors()`, `parseApiCommitAnchors()`
-- **API function signatures**: All `export async function xxx()` parameters and return types
+Sources of truth for stable interfaces (don't change casually):
 
-### store/canvasStore.ts (Medium Stability)
-- **State fields**: `nodes`, `edges`, `projectId`, `loading`, `openNodeId`, `modalViewMode`
-- **Public Actions**: `loadProjectData`, `addNode`, `updateNode`, `onNodesChange`, `onEdgesChange`, `onConnect`, `openNodeModal`, `closeNodeModal`
-- **Slice architecture**: Core state in `canvasStore.ts`, merge domain in `canvasMergeSlice.ts`, leaf domain in `canvasLeafSlice.ts`, shared types in `canvasStoreTypes.ts`, utilities in `canvasStoreUtils.ts`
-- **Selectors** (re-exported from slices): `selectIsMerging`, `selectCanExecuteMerge`, `selectUnresolvedCount`, `selectMergeCounts`
+- **Wire types** — `src/types/api.ts` (re-export surface) and the API's
+  OpenAPI schema in `apps/api/docs/openapi-summary.md`.
+- **Infrastructure adapters** — `src/infrastructure/*.ts` (only layer
+  that calls `fetch()`; renaming or removing exports breaks callers in
+  `queries/`, `commands/`, and `hooks/`).
+- **Canvas store shape** — `src/store/canvasStore.ts` + slice files
+  (`canvasStoreTypes.ts`, `canvasMergeSlice.ts`, `canvasLeafSlice.ts`,
+  `canvasCommitSlice.ts`, `canvasNodeSlice.ts`).
+- **Domain primitives** — `src/domain/**` pure functions consumed by
+  hooks and stores; changing signatures here ripples upward.
 
-### store/projectStore.ts (Medium Stability)
-- **State fields**: `projects`, `loading`
-- **Public Actions**: `fetchProjects`, `addProject`, `deleteProject`
-
-### store/mergeWorkspaceStore.ts (Medium Stability) (NEW)
-- **State fields**: `draftId`, `prepared`, `decisions`, `preview`
-- **Public Actions**: `loadMergeDraft`, `setDecision`, `updatePreview`, `commitMerge`
-
-### store/optimiserStore.ts (Medium Stability)
-- **State fields**: `runs`, `filters`, `configurations`
-- **Public Actions**: `fetchRuns`, `setFilter`, `compareConfigurations`
-
-### store/pinsStore.ts (Medium Stability)
-- **State fields**: `pins`, `loading`
-- **Public Actions**: `fetchPins`, `addPin`, `removePin`, `updatePinAssertions`
-- **Selectors**: `isPinned()`, `getPinByRef()`
-
-### types/nodes.ts (High Stability)
-- **Node types**: `NodeKind`, `CanvasNodeData`, `LeafType`, `BranchType`
-- **CommitV3 types**: `CommitV3Display`, `SentenceDisplay`, `ConstraintDisplay`, `AuthorDisplay`
-- **Anchor types**: `AnchorType`, `AnchorConstraint`, `AnchorCandidate`, `ConfirmedAnchor`, `SentenceWithAnchors`, `CommitAnchors`
-- **Pending types**: `PendingCommitSource`, `PendingCommitSentence`
-
-### types/merge.ts (High Stability) (NEW)
-- **Merge types**: `MergeDraft`, `MergeSimilarPair`, `MergeDecision`, `MergePreview`
-- **Word Diff types**: `WordDiffSegment`, `WordDiffType`
-
----
-
-Internal implementations (non-exported functions, private helpers) can be refactored freely.
+Internal implementations (non-exported helpers, intra-layer utilities)
+can be refactored freely.

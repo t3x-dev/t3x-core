@@ -6,7 +6,7 @@
  *
  * IMPORTANT: If these tests fail, it means a critical route was removed or renamed.
  * Before removing a route, ensure:
- * 1. apps/web/src/lib/api.ts - frontend API client is updated
+ * 1. apps/web/src/infrastructure/*.ts - frontend API adapters are updated
  * 2. apps/runner/src/*.ts - runner code is updated
  * 3. Any n8n workflows are updated
  */

@@ -5,7 +5,7 @@
  * Deploy agents use snake_case (different from runs which use camelCase).
  *
  * IMPORTANT: If these tests fail after a refactor, you need to update:
- * 1. apps/web/src/lib/api.ts - DeployAgent interface
+ * 1. apps/web/src/infrastructure/deploy.ts - DeployAgent interface
  * 2. apps/web/src/app/deploy/page.tsx - if field names change
  */
 

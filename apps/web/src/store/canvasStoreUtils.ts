@@ -440,9 +440,9 @@ const LAYOUT = {
   COMMIT_SPACING_Y: 150,
 };
 
-// saveNodePosition moved to @/lib/nodePositionSaver (v2 Phase 1.3).
+// saveNodePosition lives at @/infrastructure/nodePositionSaver.
 // It's a debounced I/O batching utility, not UI state — doesn't belong
-// under store/. Import from '@/infrastructure/nodePositionSaver' instead.
+// under store/.
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
 export const unitToNode = (
