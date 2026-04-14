@@ -12,28 +12,42 @@
 import { Command } from 'commander';
 
 // Action-group handlers (refactored from resource-first)
-import { registerListBranches, registerCreateBranch, registerSwitchBranch, registerCurrentBranch } from './commands/branches.js';
-import { registerListCommits, registerShowCommit } from './commands/commits.js';
-import { registerListLeaves, registerShowLeaf, registerCreateLeaf, registerGenerateLeaf, registerDeleteLeaf } from './commands/leaves.js';
-import { registerListProjects, registerShowProject, registerCreateProject, registerDeleteProject, registerRestoreProject } from './commands/projects.js';
-import { registerShowContent } from './commands/show.js';
-
+import {
+  registerCreateBranch,
+  registerCurrentBranch,
+  registerListBranches,
+  registerSwitchBranch,
+} from './commands/branches.js';
 // New commit command
 import { registerCommitCommand } from './commands/commit.js';
-
+import { registerListCommits, registerShowCommit } from './commands/commits.js';
 // Diff command
 import { registerDiffCommand } from './commands/diff.js';
-
-// Merge commands
-import { registerMergeCommands } from './commands/merge.js';
-
+import { registerDeleteDraft, registerListDrafts, registerShowDraft } from './commands/drafts.js';
 // Independent commands (unchanged)
 import { registerExportCommands } from './commands/export.js';
 import { registerExtractCommands } from './commands/extract.js';
 import { registerGateCommands } from './commands/gate.js';
 import { registerImportCommands } from './commands/import.js';
-import { registerShareCommands } from './commands/share.js';
+import {
+  registerCreateLeaf,
+  registerDeleteLeaf,
+  registerGenerateLeaf,
+  registerListLeaves,
+  registerShowLeaf,
+} from './commands/leaves.js';
+// Merge commands
+import { registerMergeCommands } from './commands/merge.js';
+import {
+  registerCreateProject,
+  registerDeleteProject,
+  registerListProjects,
+  registerRestoreProject,
+  registerShowProject,
+} from './commands/projects.js';
 import { registerSchemaCommands } from './commands/schema.js';
+import { registerShareCommands } from './commands/share.js';
+import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
@@ -55,12 +69,14 @@ registerListProjects(listCmd);
 registerListCommits(listCmd);
 registerListBranches(listCmd);
 registerListLeaves(listCmd);
+registerListDrafts(listCmd);
 
 // t3x show <resource>
 const showCmd = program.command('show').description('Show resource details');
 registerShowProject(showCmd);
 registerShowCommit(showCmd);
 registerShowLeaf(showCmd);
+registerShowDraft(showCmd);
 registerShowContent(showCmd);
 
 // t3x create <resource>
@@ -73,6 +89,7 @@ registerCreateLeaf(createCmd);
 const deleteCmd = program.command('delete').description('Delete a resource');
 registerDeleteProject(deleteCmd);
 registerDeleteLeaf(deleteCmd);
+registerDeleteDraft(deleteCmd);
 
 // t3x restore <resource>
 const restoreCmd = program.command('restore').description('Restore a deleted resource');

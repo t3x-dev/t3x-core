@@ -92,3 +92,4 @@ scripts/
 # Generated files
 packages/yops/src/specData.ts
 
+demo/

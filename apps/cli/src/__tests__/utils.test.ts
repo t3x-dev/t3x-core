@@ -8,6 +8,7 @@ import {
   error,
   formatDate,
   getApiUrl,
+  getDraftId,
   info,
   printTable,
   success,
@@ -176,6 +177,47 @@ describe('CLI Utils', () => {
       expect(spinner).toBeDefined();
       expect(typeof spinner.start).toBe('function');
       expect(typeof spinner.stop).toBe('function');
+    });
+  });
+
+  // =========================================================================
+  // getDraftId
+  // =========================================================================
+  describe('getDraftId', () => {
+    const originalEnv = process.env.T3X_DRAFT;
+    let mockExit: ReturnType<typeof vi.spyOn>;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      delete process.env.T3X_DRAFT;
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
+    });
+
+    afterEach(() => {
+      if (originalEnv === undefined) delete process.env.T3X_DRAFT;
+      else process.env.T3X_DRAFT = originalEnv;
+      errorSpy.mockRestore();
+      mockExit.mockRestore();
+    });
+
+    it('returns the positional arg when provided', () => {
+      expect(getDraftId('draft_abc')).toBe('draft_abc');
+    });
+
+    it('falls back to T3X_DRAFT env when positional is undefined', () => {
+      process.env.T3X_DRAFT = 'draft_from_env';
+      expect(getDraftId(undefined)).toBe('draft_from_env');
+    });
+
+    it('prefers positional arg over env', () => {
+      process.env.T3X_DRAFT = 'draft_from_env';
+      expect(getDraftId('draft_explicit')).toBe('draft_explicit');
+    });
+
+    it('exits with code 1 when neither is set', () => {
+      getDraftId(undefined);
+      expect(mockExit).toHaveBeenCalledWith(1);
     });
   });
 });

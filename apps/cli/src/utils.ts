@@ -106,3 +106,16 @@ export async function readStdin(): Promise<string> {
   }
   return Buffer.concat(chunks).toString('utf-8').trim();
 }
+
+/**
+ * Resolve a draft ID from a positional argument or the T3X_DRAFT environment variable.
+ * Exits with code 1 if neither is provided.
+ */
+export function getDraftId(positional: string | undefined): string {
+  const draftId = positional ?? process.env.T3X_DRAFT;
+  if (!draftId) {
+    error('Provide a draft ID or set T3X_DRAFT');
+    process.exit(1);
+  }
+  return draftId;
+}
