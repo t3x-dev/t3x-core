@@ -44,6 +44,8 @@ export type {
   CreateWebhookInput,
   ImportParagraph,
   ImportPreviewResult,
+  ImportResult,
+  ImportStreamEvent,
   NotificationItem,
   PlatformImportResult,
   PlatformPreviewResult,
