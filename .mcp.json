@@ -4,8 +4,7 @@
       "command": "node",
       "args": ["apps/mcp/dist/index.js"],
       "env": {
-        "T3X_API_URL": "http://localhost:8000/api",
-        "T3X_WEB_URL": "http://localhost:3000"
+        "T3X_TOOLSETS": "core,advanced"
       }
     }
   }

@@ -47,7 +47,7 @@ export const generateDef: ToolDef = {
     '',
     'A leaf is a constrained output target attached to a commit. This tool:',
     '  1. Loads the leaf and its linked commit knowledge',
-    '  2. Runs LLM generation respecting the leaf\'s require/exclude constraints',
+    "  2. Runs LLM generation respecting the leaf's require/exclude constraints",
     '  3. Validates the output against constraints (auto-retry up to 3x on failure)',
     '  4. Persists output + assertion results to the leaf record',
     '  5. Returns output, per-constraint assertions, and a pass/fail score summary',
@@ -68,8 +68,7 @@ export const generateDef: ToolDef = {
       model: {
         type: 'string',
         description:
-          'Optional. LLM model to use for generation. ' +
-          'Defaults to "claude-sonnet-4-20250514".',
+          'Optional. LLM model to use for generation. ' + 'Defaults to "claude-sonnet-4-20250514".',
       },
       max_tokens: {
         type: 'number',
@@ -146,8 +145,7 @@ export const generateHandler: ToolHandler = async (args) => {
   const unifiedCommit = await getCommitUnified(db, leaf.commit_hash);
   if (!unifiedCommit) {
     return fail(
-      `Source commit not found for leaf ${leafId}.\n` +
-        `Commit hash: ${leaf.commit_hash}`
+      `Source commit not found for leaf ${leafId}.\n` + `Commit hash: ${leaf.commit_hash}`
     );
   }
   const knowledge = unifiedCommit.content;
@@ -171,17 +169,18 @@ export const generateHandler: ToolHandler = async (args) => {
   let result: Awaited<ReturnType<typeof generateLeafOutput>>;
 
   try {
-    result = await registry.tryWithFallback<LLMProvider, Awaited<ReturnType<typeof generateLeafOutput>>>(
-      'generation',
-      (provider) =>
-        generateLeafOutput({
-          knowledge,
-          leaf,
-          provider,
-          lessons,
-          ...(model ? { model } : {}),
-          ...(maxTokens ? { maxTokens } : {}),
-        })
+    result = await registry.tryWithFallback<
+      LLMProvider,
+      Awaited<ReturnType<typeof generateLeafOutput>>
+    >('generation', (provider) =>
+      generateLeafOutput({
+        knowledge,
+        leaf,
+        provider,
+        lessons,
+        ...(model ? { model } : {}),
+        ...(maxTokens ? { maxTokens } : {}),
+      })
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

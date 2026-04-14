@@ -115,21 +115,21 @@ export function createMcpServer(options: McpServerOptions) {
     const { name, arguments: args } = request.params;
     const handler = handlers.get(name);
 
+    const errorResult = (text: string) =>
+      ({ content: [{ type: 'text' as const, text }], isError: true }) as unknown as Record<
+        string,
+        unknown
+      >;
+
     if (!handler) {
-      return {
-        content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
-        isError: true,
-      };
+      return errorResult(`Unknown tool: ${name}`);
     }
 
     try {
-      return await handler(args ?? {});
+      return (await handler(args ?? {})) as unknown as Record<string, unknown>;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
-        content: [{ type: 'text' as const, text: `Error: ${message}` }],
-        isError: true,
-      };
+      return errorResult(`Error: ${message}`);
     }
   });
 

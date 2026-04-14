@@ -1,205 +1,22 @@
 #!/usr/bin/env node
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { browserAuth, clearStoredToken, ensureAuth } from './auth.js';
-import { getBaseUrl, getClient, updateToken } from './client.js';
-import { applyYopsTool, handleApplyYops } from './tools/apply-yops.js';
-import { checkTool, handleCheck } from './tools/check.js';
-import { commitTool, handleCommit } from './tools/commit.js';
-import { createBranchTool, handleCreateBranch } from './tools/create-branch.js';
-import { createConversationTool, handleCreateConversation } from './tools/create-conversation.js';
-import { createLeafTool, handleCreateLeaf } from './tools/create-leaf.js';
-import { createPinTool, handleCreatePin } from './tools/create-pin.js';
-import { createProjectTool, handleCreateProject } from './tools/create-project.js';
-import { deleteDraftTool, handleDeleteDraft } from './tools/delete-draft.js';
-import { deleteLeafTool, handleDeleteLeaf } from './tools/delete-leaf.js';
-import { deletePinTool, handleDeletePin } from './tools/delete-pin.js';
-import { deleteProjectTool, handleDeleteProject } from './tools/delete-project.js';
-import { diffTool, handleDiff } from './tools/diff.js';
-import { extractTool, handleExtract } from './tools/extract.js';
-import { generateTool, handleGenerate } from './tools/generate.js';
-import { handleListBranches, listBranchesTool } from './tools/list-branches.js';
-import { handleListCommits, listCommitsTool } from './tools/list-commits.js';
-import { handleListConversations, listConversationsTool } from './tools/list-conversations.js';
-import { handleListDrafts, listDraftsTool } from './tools/list-drafts.js';
-import { handleListLeaves, listLeavesTool } from './tools/list-leaves.js';
-import { handleListPins, listPinsTool } from './tools/list-pins.js';
-import { handleListProjects, listProjectsTool } from './tools/list-projects.js';
-import { handleMergeAbort, mergeAbortTool } from './tools/merge-abort.js';
-import { handleMergeExecute, mergeExecuteTool } from './tools/merge-execute.js';
-import { handleMergePrepare, mergePrepareTool } from './tools/merge-prepare.js';
-import { handleMergeResolve, mergeResolveTool } from './tools/merge-resolve.js';
-import { handleMergeShowConflict, mergeShowConflictTool } from './tools/merge-show-conflict.js';
-import { handleRenameConversation, renameConversationTool } from './tools/rename-conversation.js';
-import { handleSchema, schemaTool } from './tools/schema.js';
-import { handleShow, showTool } from './tools/show.js';
-import { handleShowCommit, showCommitTool } from './tools/show-commit.js';
-import { handleShowDraft, showDraftTool } from './tools/show-draft.js';
-import { handleShowLeaf, showLeafTool } from './tools/show-leaf.js';
-import { handleShowProject, showProjectTool } from './tools/show-project.js';
-import { handleUpdateProject, updateProjectTool } from './tools/update-project.js';
-import { handleValidate, validateTool } from './tools/validate.js';
+import { createMcpServer } from '@t3x-dev/mcp-lib';
 
-const tools = [
-  extractTool,
-  commitTool,
-  checkTool,
-  generateTool,
-  showTool,
-  schemaTool,
-  validateTool,
-  listProjectsTool,
-  createProjectTool,
-  deleteProjectTool,
-  showDraftTool,
-  applyYopsTool,
-  listCommitsTool,
-  diffTool,
-  createBranchTool,
-  listBranchesTool,
-  listLeavesTool,
-  createLeafTool,
-  showCommitTool,
-  mergePrepareTool,
-  mergeShowConflictTool,
-  mergeResolveTool,
-  mergeExecuteTool,
-  mergeAbortTool,
-  listConversationsTool,
-  createConversationTool,
-  renameConversationTool,
-  showLeafTool,
-  deleteLeafTool,
-  showProjectTool,
-  listDraftsTool,
-  deleteDraftTool,
-  updateProjectTool,
-  listPinsTool,
-  createPinTool,
-  deletePinTool,
-];
+const toolsetEnv = process.env.T3X_TOOLSETS ?? 'core';
+const toolsets = toolsetEnv.split(',').map((s) => s.trim()) as Array<'core' | 'advanced'>;
 
-const handlers: Record<
-  string,
-  (args: Record<string, unknown>) => Promise<{ content: { type: 'text'; text: string }[] }>
-> = {
-  [extractTool.name]: handleExtract,
-  [commitTool.name]: handleCommit,
-  [checkTool.name]: handleCheck,
-  [generateTool.name]: handleGenerate,
-  [showTool.name]: handleShow,
-  [schemaTool.name]: handleSchema,
-  [validateTool.name]: handleValidate,
-  [listProjectsTool.name]: handleListProjects,
-  [createProjectTool.name]: handleCreateProject,
-  [showDraftTool.name]: handleShowDraft,
-  [applyYopsTool.name]: handleApplyYops,
-  [listCommitsTool.name]: handleListCommits,
-  [diffTool.name]: handleDiff,
-  [createBranchTool.name]: handleCreateBranch,
-  [listBranchesTool.name]: handleListBranches,
-  [deleteProjectTool.name]: handleDeleteProject,
-  [listLeavesTool.name]: handleListLeaves,
-  [createLeafTool.name]: handleCreateLeaf,
-  [showCommitTool.name]: handleShowCommit,
-  [mergePrepareTool.name]: handleMergePrepare,
-  [mergeShowConflictTool.name]: handleMergeShowConflict,
-  [mergeResolveTool.name]: handleMergeResolve,
-  [mergeExecuteTool.name]: handleMergeExecute,
-  [mergeAbortTool.name]: handleMergeAbort,
-  [listConversationsTool.name]: handleListConversations,
-  [createConversationTool.name]: handleCreateConversation,
-  [renameConversationTool.name]: handleRenameConversation,
-  [showLeafTool.name]: handleShowLeaf,
-  [deleteLeafTool.name]: handleDeleteLeaf,
-  [showProjectTool.name]: handleShowProject,
-  [listDraftsTool.name]: handleListDrafts,
-  [deleteDraftTool.name]: handleDeleteDraft,
-  [updateProjectTool.name]: handleUpdateProject,
-  [listPinsTool.name]: handleListPins,
-  [createPinTool.name]: handleCreatePin,
-  [deletePinTool.name]: handleDeletePin,
-};
+const transport = process.env.T3X_TRANSPORT ?? 'stdio';
 
-const server = new Server({ name: 't3x-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
+const { server } = createMcpServer({ toolsets });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools,
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  const handler = handlers[name];
-
-  if (!handler) {
-    return {
-      content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
-      isError: true,
-    };
-  }
-
-  const baseUrl = getBaseUrl();
-
-  // Ensure auth token is available before calling
-  let token = ensureAuth(baseUrl);
-  if (!token) {
-    try {
-      token = await browserAuth(baseUrl);
-      updateToken(token);
-    } catch (authErr) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Authentication failed: ${authErr instanceof Error ? authErr.message : String(authErr)}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  } else {
-    getClient(token);
-  }
-
-  try {
-    return await handler(args ?? {});
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    // If 401, token may be expired/revoked — re-auth and retry once
-    if (message.includes('401') || message.includes('Unauthorized')) {
-      try {
-        clearStoredToken();
-        const newToken = await browserAuth(baseUrl);
-        updateToken(newToken);
-        return await handler(args ?? {});
-      } catch (retryErr) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Authentication failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
-
-    return {
-      content: [{ type: 'text' as const, text: `Error: ${message}` }],
-      isError: true,
-    };
-  }
-});
-
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
-
-main().catch((error) => {
-  process.stderr.write(`Fatal: ${error}\n`);
+if (transport === 'stdio') {
+  const stdioTransport = new StdioServerTransport();
+  await server.connect(stdioTransport);
+} else if (transport === 'http') {
+  console.error('HTTP transport not yet implemented. Use stdio.');
   process.exit(1);
-});
+} else {
+  console.error(`Unknown transport: ${transport}. Use "stdio" or "http".`);
+  process.exit(1);
+}

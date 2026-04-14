@@ -40,9 +40,7 @@ const MOCK_LEAF_NO_CONSTRAINTS = {
 const MOCK_COMMIT = {
   hash: 'sha256:commit1',
   content: {
-    trees: [
-      { key: 's_1', slots: { text: 'User prefers dark mode' }, children: [] },
-    ],
+    trees: [{ key: 's_1', slots: { text: 'User prefers dark mode' }, children: [] }],
     relations: [],
   },
   message: 'Test commit',

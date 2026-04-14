@@ -17,6 +17,7 @@
     "@t3x-dev/storage": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "vitest": "^2.1.0",
     "tsup": "^8.5.0",
     "typescript": "^5.7.0"
