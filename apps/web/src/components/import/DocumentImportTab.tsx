@@ -4,7 +4,7 @@ import { FileText, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import * as api from '@/infrastructure';
+import { useDocumentImport } from '@/hooks/useDocumentImport';
 import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';
@@ -30,6 +30,8 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
     null
   );
 
+  const { preview: fetchPreview, stream, run } = useDocumentImport();
+
   const handleFile = useCallback(
     async (f: File) => {
       setFile(f);
@@ -37,7 +39,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
       setImportStatus('idle');
       setPreviewLoading(true);
       try {
-        const result = await api.previewDocumentImport(f, projectId);
+        const result = await fetchPreview(f, projectId);
         setPreview(result);
       } catch (err) {
         setImportStatus('error');
@@ -61,7 +63,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         let lastConversationId: string | undefined;
         let lastTurnsImported = 0;
 
-        for await (const event of api.streamDocumentImport(file, projectId)) {
+        for await (const event of stream(file, projectId)) {
           if (event.type === 'status') {
             setStatusMessage(event.message);
           } else if (event.type === 'progress') {
@@ -89,7 +91,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
       setImportStatus('loading');
       setStatusMessage('Importing...');
       try {
-        const result = await api.importDocument(file, projectId);
+        const result = await run(file, projectId);
         setImportStatus('success');
         setStatusMessage('Import complete');
         setTurnsImported(result.turns_imported);

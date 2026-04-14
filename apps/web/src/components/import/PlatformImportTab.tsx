@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import * as api from '@/infrastructure';
+import { usePlatformImport } from '@/hooks/usePlatformImport';
 import { cn } from '@/lib/utils';
 import {
   ApiError,
@@ -43,6 +43,8 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
     null
   );
 
+  const { preview: fetchPreview, stream, run } = usePlatformImport();
+
   const handleFile = useCallback(async (file: File) => {
     setPreview(null);
     setSelectedIds(new Set());
@@ -53,7 +55,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
     try {
       const text = await file.text();
       setRawData(text);
-      const result = await api.previewPlatformImport(file);
+      const result = await fetchPreview(file);
       setPreview(result);
       // Select all by default
       const convos = result.conversations ?? [];
@@ -103,7 +105,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
       try {
         let lastResult: PlatformImportResult | null = null;
 
-        for await (const event of api.streamPlatformImport(projectId, rawData, Array.from(ids))) {
+        for await (const event of stream(projectId, rawData, Array.from(ids))) {
           if (event.type === 'status') {
             setStatusMessage(event.message);
           } else if (event.type === 'progress') {
@@ -136,7 +138,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
       setImportStatus('loading');
       setStatusMessage('Importing conversations...');
       try {
-        const result = await api.importFromPlatform(projectId, rawData, Array.from(ids));
+        const result = await run(projectId, rawData, Array.from(ids));
         setImportStatus('success');
         setStatusMessage(`Imported ${result.total_conversations} conversations`);
         setImportResult(result);
