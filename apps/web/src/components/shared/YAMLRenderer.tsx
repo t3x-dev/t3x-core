@@ -2,7 +2,7 @@
 
 import type { TreeNode, SlotValue } from '@t3x-dev/core';
 import type { ReactNode } from 'react';
-import type { CompatNode } from '@/lib/treeCompat';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 
 // ── Public Types ─────────────────────────────────────────────────────────────
 

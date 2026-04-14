@@ -3,7 +3,7 @@
 import type { TreeNode, SlotDiff, SlotValue } from '@t3x-dev/core';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import { YAMLLine, type YAMLLineStatus } from './YAMLLine';
-import type { CompatNode } from '@/lib/treeCompat';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 
 interface YAMLNodeRendererProps {
   node: TreeNode;

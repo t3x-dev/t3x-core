@@ -8,7 +8,7 @@ import {
   type SemanticContent,
   type SlotValue,
 } from '@t3x-dev/core';
-import { treesToNodes } from '@/lib/treeCompat';
+import { treesToNodes } from '@/domain/tree/treeCompat';
 
 type SemanticRelationType = (typeof RELATION_TYPES)[number];
 import type { Connection, Edge, Node } from '@xyflow/react';

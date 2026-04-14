@@ -13,7 +13,7 @@
  */
 
 import type { TreeNode } from '@t3x-dev/core';
-import { treesToNodes } from '@/lib/treeCompat';
+import { treesToNodes } from '@/domain/tree/treeCompat';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { fetchCommitForInheritance } from './chatInitFetch';

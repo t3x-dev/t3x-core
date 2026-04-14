@@ -16,7 +16,7 @@ import {
   diffCommits,
   EQUIVALENT_THRESHOLD,
   type NodePair,
-} from '@/lib/diffUtils';
+} from '@/domain/diff/diffUtils';
 
 describe('FourColorDiff - Classification Logic', () => {
   test('identical nodes are classified correctly', () => {

@@ -3,9 +3,9 @@
 import type { SemanticContent, TreeNode, WordDiffFn } from '@t3x-dev/core';
 import { diffCommits, flattenTrees } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
-import { wordDiff } from '@/lib/diffUtils';
+import { wordDiff } from '@/domain/diff/diffUtils';
 import { TreeGraphView } from './TreeGraphView';
-import { treesToNodes } from '@/lib/treeCompat';
+import { treesToNodes } from '@/domain/tree/treeCompat';
 
 // ── Props ──
 

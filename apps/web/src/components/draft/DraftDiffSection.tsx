@@ -16,8 +16,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
 import { useCommitByHash } from '@/hooks/useCommitByHash';
-import type { DiffableNode, DiffCache } from '@/lib/diffUtils';
-import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/lib/diffUtils';
+import type { DiffableNode, DiffCache } from '@/domain/diff/diffUtils';
+import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/domain/diff/diffUtils';
 import { cn } from '@/lib/utils';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
@@ -56,9 +56,9 @@ export function DraftDiffSection() {
       .then((parentCommit) => {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
-        const { treesToNodes } = require('@/lib/treeCompat') as typeof import('@/lib/treeCompat');
+        const { treesToNodes } = require('@/domain/tree/treeCompat') as typeof import('@/domain/tree/treeCompat');
         const compatNodes = treesToNodes(content.trees);
-        const nodes: import('@/lib/diffUtils').DiffableNode[] = compatNodes.map((node) => ({
+        const nodes: import('@/domain/diff/diffUtils').DiffableNode[] = compatNodes.map((node) => ({
           id: node.id,
           text: `[${node.type}] ${Object.entries(node.slots)
             .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : String(v)}`)

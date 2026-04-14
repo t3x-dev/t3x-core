@@ -15,7 +15,7 @@
 import type { SlotConflict, SlotValue, TreeNode } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
-import type { CompatNode } from '@/lib/treeCompat';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 import { cn } from '@/lib/utils';
 
 // ============================================================================

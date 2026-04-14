@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DiffableNode } from '@/lib/diffUtils';
+import type { DiffableNode } from '@/domain/diff/diffUtils';
 import {
   diffCommits,
   JACCARD_THRESHOLD,
@@ -9,7 +9,7 @@ import {
   splitWords,
   tokenize,
   wordDiff,
-} from '@/lib/diffUtils';
+} from '@/domain/diff/diffUtils';
 
 describe('diffUtils', () => {
   // =========================================================================

@@ -15,7 +15,7 @@
  */
 
 import type { TreeNode, TreeDiff, Relation, SemanticContent, SlotDiff, SlotValue } from '@t3x-dev/core';
-import { type CompatNode, treesToNodes } from '@/lib/treeCompat';
+import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';

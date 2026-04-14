@@ -109,7 +109,7 @@ export function useLeafCommit(leaf: Leaf | null): UseLeafCommitReturn {
     if (!semanticContent) return [];
     // Dynamic require used to avoid pulling the tree-compat module into
     // the initial bundle; behaviour preserved from useLeafPageData.
-    const { treesToNodes } = require('@/lib/treeCompat');
+    const { treesToNodes } = require('@/domain/tree/treeCompat');
     const raw = treesToNodes(semanticContent.trees);
     return raw.map((f: { id: string; type: string; slots: Record<string, unknown> }) => ({
       id: f.id,
