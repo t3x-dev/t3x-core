@@ -11,7 +11,7 @@ import { Lightbulb, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSuggestForDraft } from '@/hooks/useSuggestForDraft';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import type { SuggestResult } from '@/types/api';
 

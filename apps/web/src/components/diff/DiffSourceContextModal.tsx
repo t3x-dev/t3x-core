@@ -23,8 +23,8 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import type { ContentNode, TurnContextData, TurnWithContext, WordDiffSegment } from '@/types/merge';
 
 const roleIcons: Record<string, React.ReactNode> = {

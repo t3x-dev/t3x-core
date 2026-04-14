@@ -4,7 +4,7 @@ import { MessageSquare } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatTimeAgo } from '@/domain/format/timeUtils';
 import type { Conversation } from '@/types/api';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export interface ConversationItemProps {
   conversation: Conversation;

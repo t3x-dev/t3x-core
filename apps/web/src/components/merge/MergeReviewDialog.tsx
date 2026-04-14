@@ -20,11 +20,11 @@ import {
   formatReleaseNoteAsMarkdown,
   generateMergeReleaseNote,
   type MergeReleaseNote,
-} from '@/lib/mergeReleaseNote';
-import type { MergeSummary } from '@/lib/mergeSummary';
-import { useMicrocopy } from '@/lib/microcopy';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+} from '@/components/merge/mergeReleaseNote';
+import type { MergeSummary } from '@/components/merge/mergeSummary';
+import { useMicrocopy } from '@/utils/microcopy';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
 

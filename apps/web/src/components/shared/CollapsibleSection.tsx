@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { typo } from '@/domain/format/typography';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 /**
  * CollapsibleSection — standard component for Layer 2 (collapsed by default) content.

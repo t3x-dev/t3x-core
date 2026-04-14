@@ -23,8 +23,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getLayoutedElements } from '@/lib/elkLayout';
-import { cn } from '@/lib/utils';
+import { getLayoutedElements } from '@/components/canvas/elkLayout';
+import { cn } from '@/utils/cn';
 import { TreeGraphToolbar } from './TreeGraphToolbar';
 import { TreeNodeView } from './TreeNodeView';
 import {

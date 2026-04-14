@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateEngineRun } from '@/hooks/useCreateEngineRun';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { DeployAgent } from '@/types/api';
 
 /**

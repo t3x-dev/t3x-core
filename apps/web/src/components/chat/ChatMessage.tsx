@@ -10,7 +10,7 @@ import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';
 import { traceYamlToChat } from '@/domain/hoverTrace';
 import type { SourceMapping } from '@/domain/sourceMap';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';

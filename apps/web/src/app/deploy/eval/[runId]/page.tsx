@@ -56,7 +56,7 @@ import {
   updateEngineRun,
 } from '@/infrastructure';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/infrastructure/export/report';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 

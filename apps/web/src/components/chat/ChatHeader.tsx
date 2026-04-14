@@ -4,8 +4,8 @@ import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lu
 import { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/useCommitActions';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';

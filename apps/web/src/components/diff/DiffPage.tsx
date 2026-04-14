@@ -21,7 +21,7 @@ import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useTreeDiff } from '@/hooks/useTreeDiff';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
-import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
+import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
 import { DiffTreeOverview } from './DiffTreeOverview';

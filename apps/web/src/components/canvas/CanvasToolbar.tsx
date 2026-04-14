@@ -2,8 +2,8 @@
 
 import { Maximize } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 
 interface CanvasToolbarProps {
   projectName: string;

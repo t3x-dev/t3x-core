@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useShareTokens } from '@/hooks/useShareTokens';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { ShareLink } from '@/types/api';
 
 interface ShareLinkButtonProps {

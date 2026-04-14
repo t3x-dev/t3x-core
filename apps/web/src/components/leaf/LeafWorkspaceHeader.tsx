@@ -16,7 +16,7 @@ import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { Leaf } from '@/types/api';
 import type { ExportFormat } from '@/types/api';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 interface LeafWorkspaceHeaderProps {
   leaf: Leaf;

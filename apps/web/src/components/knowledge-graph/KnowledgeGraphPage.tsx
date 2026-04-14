@@ -3,7 +3,7 @@
 import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
 import { KGCanvas } from './KGCanvas';
 import { KGDetailPanel } from './KGDetailPanel';

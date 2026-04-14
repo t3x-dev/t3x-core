@@ -3,7 +3,7 @@
 import type { Relation, TreeDiff } from '@t3x-dev/core';
 import { useEffect, useState } from 'react';
 import type { CompatNode } from '@/domain/tree/treeCompat';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { AlignedNode } from './DiffYAMLUtils';
 
 // ── CSS custom properties for diff colors ──

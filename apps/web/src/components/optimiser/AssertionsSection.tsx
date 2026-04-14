@@ -3,7 +3,7 @@
 import { AlertTriangle, Lightbulb, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export interface Violation {
   rule_id: string;

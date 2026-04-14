@@ -16,7 +16,7 @@ import {
 import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useTreeDiff } from '@/hooks/useTreeDiff';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { ApiCommit } from '@/types/api';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)

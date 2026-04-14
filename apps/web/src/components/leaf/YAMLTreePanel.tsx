@@ -17,7 +17,7 @@ import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import { nestNodes } from '@/domain/tree/treeNesting';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 // ============================================================================
 // Types

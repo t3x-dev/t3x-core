@@ -16,7 +16,7 @@ import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useNodePositionSaver } from '@/hooks/useNodePositionSaver';
-import { getLayoutedElements } from '@/lib/elkLayout';
+import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -37,8 +37,8 @@ const edgeTypes = {
 
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';

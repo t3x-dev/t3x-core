@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useSuggestConstraints } from '@/hooks/useSuggestConstraints';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { SuggestedConstraint } from '@/types/api';
 
 interface SuggestConstraintsDialogProps {

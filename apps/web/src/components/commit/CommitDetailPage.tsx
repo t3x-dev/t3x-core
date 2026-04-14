@@ -46,7 +46,7 @@ import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeavesByCommit } from '@/hooks/useLeavesByCommit';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
-import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
+import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, Leaf } from '@/types/api';

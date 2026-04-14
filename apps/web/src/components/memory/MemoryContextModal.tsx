@@ -28,8 +28,8 @@ import { useConversationsList } from '@/hooks/useConversationsList';
 import { useLeavesByProject } from '@/hooks/useLeavesByProject';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useTurnsList } from '@/hooks/useTurnsList';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Conversation, Leaf, Turn } from '@/types/api';
 

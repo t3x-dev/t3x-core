@@ -19,7 +19,7 @@ vi.mock('@/store/settingsStore', () => {
   return { useSettingsStore: store };
 });
 
-import { getMicrocopy, type MicrocopyScenario, useMicrocopy } from '@/lib/microcopy';
+import { getMicrocopy, type MicrocopyScenario, useMicrocopy } from '@/utils/microcopy';
 import { useSettingsStore } from '@/store/settingsStore';
 
 // ---------------------------------------------------------------------------

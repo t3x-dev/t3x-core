@@ -2,7 +2,7 @@
 
 import type { SlotConflict, SlotValue } from '@t3x-dev/core';
 import { AlertTriangle, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { type SlotChoice, formatSlotValue } from './mergeViewHelpers';
 
 export function SlotConflictRow({

@@ -4,9 +4,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { reducedMotion, scaleIn } from '@/lib/motion';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { reducedMotion, scaleIn } from '@/utils/motion';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
 const mod = isMac ? '\u2318' : 'Ctrl';

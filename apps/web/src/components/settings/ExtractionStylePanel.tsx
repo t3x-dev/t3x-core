@@ -11,7 +11,7 @@ import type {
 import { matchPreset, PRESETS } from '@t3x-dev/core';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 const PRESET_DESCRIPTIONS: Record<PresetName, string> = {
   concise: 'Key points from user + LLM (~30%). Quick summary.',

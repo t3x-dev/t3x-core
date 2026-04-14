@@ -3,7 +3,7 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
 import { useMemo } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { TreeGraphView } from './TreeGraphView';
 
 // ── Props ──

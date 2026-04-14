@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { useCommitByHash } from '@/hooks/useCommitByHash';
 import type { DiffableNode, DiffCache } from '@/domain/diff/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/domain/diff/diffUtils';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export function DraftDiffSection() {

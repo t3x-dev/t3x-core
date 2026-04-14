@@ -6,7 +6,7 @@
 
 import type { Edge, Node } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
-import { getLayoutedElements } from '@/lib/elkLayout';
+import { getLayoutedElements } from '@/components/canvas/elkLayout';
 
 // Helper: create minimal Node
 const createNode = (id: string, overrides: Partial<Node> = {}): Node => ({

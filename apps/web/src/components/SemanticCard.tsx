@@ -2,7 +2,7 @@ import { GitBranch, GitCommit, MessageSquare, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { useTerminology } from '@/hooks/useTerminology';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { SemanticEntry } from '../types/semantic';
 
 const stageConfig = {

@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { SourceContextView } from '@/components/source-context/SourceContextView';
 import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ContentNode, WordDiffSegment } from '@/types/merge';
 import { WordDiffDisplay } from './WordDiffDisplay';

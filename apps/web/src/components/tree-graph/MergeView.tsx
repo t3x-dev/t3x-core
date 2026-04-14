@@ -17,7 +17,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 import { ConflictCard } from './merge-view/ConflictCard';
 import { RelationSideSection } from './merge-view/RelationSideSection';
