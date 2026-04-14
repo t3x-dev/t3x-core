@@ -2,7 +2,7 @@
 
 import { Eye, Leaf, MessageSquarePlus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export interface CommitAction {
   label: string;

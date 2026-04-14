@@ -10,8 +10,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNewProjectChat } from '@/hooks/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/useProjectConversations';
 import { useProjects } from '@/hooks/useProjects';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
 import { LogoIcon } from './sidebar/LogoIcon';

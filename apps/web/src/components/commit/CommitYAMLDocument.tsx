@@ -11,7 +11,7 @@
 
 import type { SemanticContent, SlotValue } from '@t3x-dev/core';
 import { useCallback, useMemo } from 'react';
-import { type CompatNode, treesToNodes } from '@/lib/treeCompat';
+import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
 
 // ============================================================================
 // Props

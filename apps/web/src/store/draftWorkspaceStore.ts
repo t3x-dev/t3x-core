@@ -7,13 +7,16 @@
  *  - state for the draft workspace (draft data, save/preview/commit status)
  *  - pure local mutations (toggleNode, updateTitle, addConstraint, ...)
  *  - passive setters the hook calls after each I/O resolves
- *  - module-level auto-preview debounce timer (cleaned up via reset())
+ *
+ * Browser timers (auto-preview debounce, saveStatus->idle reset) live
+ * in `@/hooks/useDraftAutoPreview` and `@/hooks/useSaveStatusAutoIdle`;
+ * the store only exposes pure state + setters (`setSaveStatusIdle` etc.).
  */
 
 import { create } from 'zustand';
-import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
+import { type ValidationResult, validateConstraintsLocally } from '@/domain/draft/validation';
 import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/types/api';
-import { createSaveStatusTimer, type SaveStatus } from './saveStatus';
+import type { SaveStatus } from './saveStatus';
 
 type PreviewStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
@@ -76,6 +79,8 @@ interface DraftWorkspaceState {
   setSaveStarted: () => void;
   setSaveSucceeded: (updated: WorkbenchDraft) => void;
   setSaveFailed: (isConflict: boolean) => void;
+  /** Reset saveStatus to 'idle' — driven by useSaveStatusAutoIdle. */
+  setSaveStatusIdle: () => void;
   setPreviewLoading: () => void;
   setPreviewSucceeded: (result: {
     output: string;
@@ -115,30 +120,6 @@ function nextId(prefix: string): string {
 
 function staleIfReady(currentStatus: PreviewStatus): PreviewStatus {
   return currentStatus === 'ready' ? 'stale' : currentStatus;
-}
-
-/** Auto-preview debounce timer (module-level for cleanup across remounts) */
-let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
-let autoPreviewCallback: (() => void) | null = null;
-
-const saveTimer = createSaveStatusTimer();
-
-function scheduleAutoPreview(get: () => DraftWorkspaceState, newPreviewStatus: PreviewStatus) {
-  if (!get().autoPreview || newPreviewStatus !== 'stale') return;
-  if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
-  autoPreviewTimer = setTimeout(() => {
-    autoPreviewTimer = null;
-    autoPreviewCallback?.();
-  }, 2000);
-}
-
-/**
- * Wire the auto-preview callback once at app/workspace mount. The store
- * fires this callback when the debounce timer expires and a preview is
- * currently 'stale'. The callback should call useDraftWorkspaceActions.
- */
-export function setAutoPreviewCallback(cb: (() => void) | null): void {
-  autoPreviewCallback = cb;
 }
 
 const initialState = {
@@ -194,7 +175,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   removeNode: (nodeId) => {
@@ -209,7 +189,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   reorderNodes: (fromIndex, toIndex) => {
@@ -227,7 +206,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   addManualNode: (text) => {
@@ -248,7 +226,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   addConstraint: (type, matchMode, value, reason) => {
@@ -269,7 +246,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   removeConstraint: (constraintId) => {
@@ -286,7 +262,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       validationResults: recomputeValidation(updated),
       previewStatus: newPreviewStatus,
     });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   updateInstructions: (instructions) => {
@@ -295,7 +270,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     const updated = { ...draft, instructions: instructions || null };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({ draft: updated, isDirty: true, previewStatus: newPreviewStatus });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   updatePreviewType: (previewType) => {
@@ -304,7 +278,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
     const updated = { ...draft, preview_type: previewType || null };
     const newPreviewStatus = staleIfReady(previewStatus);
     set({ draft: updated, isDirty: true, previewStatus: newPreviewStatus });
-    scheduleAutoPreview(get, newPreviewStatus);
   },
 
   clearPreview: () => {
@@ -322,10 +295,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
 
   setAutoPreview: (enabled) => {
     set({ autoPreview: enabled });
-    if (!enabled && autoPreviewTimer) {
-      clearTimeout(autoPreviewTimer);
-      autoPreviewTimer = null;
-    }
   },
 
   setPreviewModel: (model) => {
@@ -373,9 +342,9 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
       conflictError: false,
       validationResults: recomputeValidation(updated),
     });
-    saveTimer.scheduleReset(get, set);
   },
   setSaveFailed: (isConflict) => set({ saveStatus: 'error', conflictError: isConflict }),
+  setSaveStatusIdle: () => set({ saveStatus: 'idle' }),
 
   setPreviewLoading: () => set({ previewStatus: 'loading', previewError: null }),
   setPreviewSucceeded: ({ output, tokenCount, modelUsed, cached, includedCount }) =>
@@ -414,11 +383,6 @@ export const useDraftWorkspaceStore = create<DraftWorkspaceState>((set, get) => 
 
   // Lifecycle
   reset: () => {
-    if (autoPreviewTimer) {
-      clearTimeout(autoPreviewTimer);
-      autoPreviewTimer = null;
-    }
-    saveTimer.cancel();
     set(initialState);
   },
 }));

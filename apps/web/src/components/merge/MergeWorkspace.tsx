@@ -18,8 +18,9 @@ import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
 import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/useTerminology';
-import { fullScreenEnter, reducedMotion } from '@/lib/motion';
+import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
@@ -44,6 +45,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     message,
     isDirty,
     saveStatus,
+    setSaveStatusIdle,
     sourceBranch,
     targetBranch,
     sourceHash,
@@ -67,6 +69,9 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   } = useMergeWorkspaceStore();
   const { save: saveDraft, cancel: cancelMerge } = useMergeWorkspaceActions();
   const { loadCommit } = useCommitByHash();
+
+  // Timer-driven saveStatus->idle transition (v2 §2.5 — store pure).
+  useSaveStatusAutoIdle(saveStatus, setSaveStatusIdle);
 
   const prefersReducedMotion = useReducedMotion();
   const { t } = useTerminology();

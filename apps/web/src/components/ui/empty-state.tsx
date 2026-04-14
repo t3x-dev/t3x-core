@@ -3,8 +3,8 @@
 import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { fadeIn, reducedMotion } from '@/lib/motion';
-import { cn } from '@/lib/utils';
+import { fadeIn, reducedMotion } from '@/utils/motion';
+import { cn } from '@/utils/cn';
 import { Button } from './button';
 
 interface EmptyStateProps {

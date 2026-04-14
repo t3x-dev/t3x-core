@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { deriveSourceTags } from '@/lib/sourceTag';
+import { deriveSourceTags } from '@/domain/format/sourceTag';
 import type { YOp } from '@t3x-dev/core';
 
 describe('deriveSourceTags', () => {

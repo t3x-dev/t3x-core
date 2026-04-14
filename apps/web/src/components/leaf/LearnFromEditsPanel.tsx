@@ -9,7 +9,7 @@ import { Edit3, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useLearnFromEdits } from '@/hooks/useLearnFromEdits';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { EditLearnedConstraint } from '@/types/api';
 
 const DIMENSION_LABELS: Record<string, { label: string; bg: string; text: string }> = {

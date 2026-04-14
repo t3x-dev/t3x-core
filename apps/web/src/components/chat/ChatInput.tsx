@@ -3,7 +3,7 @@
 import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { ChatModelSelector } from './ChatModelSelector';
 

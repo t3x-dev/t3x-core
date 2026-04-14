@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '@t3x-dev/core';
 import type { SemanticContent } from '@t3x-dev/core';
-import { parseYOpsScript, opsToYaml } from '@/lib/scriptParser';
-import { computeTreeDiff } from '@/lib/treeDiff';
+import { parseYOpsScript, opsToYaml } from '@/domain/yops/scriptParser';
+import { computeTreeDiff } from '@/domain/diff/treeDiff';
 
 describe('YOps Pipeline E2E', () => {
   const EMPTY_BASE: SemanticContent = { trees: [], relations: [] };

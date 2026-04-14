@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 /**
  * StatusBadge — unified status indicator for project/runner states.

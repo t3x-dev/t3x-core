@@ -31,10 +31,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSemanticContent } from '@/domain/commitContent';
+import { useExportCommit } from '@/hooks/useExportCommit';
 import { useTerminology } from '@/hooks/useTerminology';
-import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
-import { glass, toneAccent } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import type { CommitExportFormat } from '@/types/api';
+import { glass, toneAccent } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit } from '@/types/api';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
@@ -66,6 +67,7 @@ export function CommittedCommitView({
   quickActions: _quickActions,
 }: CommittedCommitViewProps) {
   const { t } = useTerminology();
+  const { run: exportCommit } = useExportCommit();
   const router = useRouter();
   const data = node.data;
 
@@ -126,7 +128,7 @@ export function CommittedCommitView({
       if (!commit) return;
       await exportCommit(commit, format);
     },
-    [data.commit]
+    [data.commit, exportCommit]
   );
 
   // B-15: Navigate to full-screen diff page

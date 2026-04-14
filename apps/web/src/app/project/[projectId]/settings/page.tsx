@@ -33,7 +33,7 @@ import {
   updateProjectProviderConfig,
 } from '@/infrastructure';
 import { updateProject } from '@/infrastructure/projects';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useProjectStore } from '@/store/projectStore';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';

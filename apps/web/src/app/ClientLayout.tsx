@@ -11,7 +11,7 @@ import { NotificationBell } from '@/components/shared/NotificationBell';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
 import { showToast } from '@/components/layout/Toast';
 import { Toaster } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';

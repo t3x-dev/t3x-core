@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import type { CompatNode } from '@/lib/treeCompat';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 import {
   buildYAMLLines,
   YAMLRenderer,

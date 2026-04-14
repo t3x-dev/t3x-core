@@ -4,7 +4,7 @@ import { Panel, type PanelProps, useReactFlow, useStore, useViewport } from '@xy
 import { Maximize, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export function ZoomSlider({
   className,

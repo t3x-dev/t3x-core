@@ -97,13 +97,100 @@
     }
   },
   "overrides": [
+  {
+      "includes": ["apps/web/src/commands/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/components/**",
+                    "message": "commands/ is L3; cannot import components (L4)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "commands/ is L3; cannot import hooks (same-level upstream)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "commands/ is L3; cannot import store directly — return values via hooks."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     {
-      "includes": [
-        "apps/web/src/commands/**",
-        "apps/web/src/queries/**",
-        "apps/web/src/infrastructure/**",
-        "apps/web/src/__tests__/**"
-      ],
+      "includes": ["apps/web/src/queries/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/components/**",
+                    "message": "queries/ is L3; cannot import components (L4)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "queries/ is L3; cannot import hooks (same-level upstream)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "queries/ is L3; cannot import store — return data, let the calling hook write."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/infrastructure/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/queries/**",
+                    "message": "infrastructure/ is L1; cannot import queries (L3)."
+                  },
+                  {
+                    "group": "@/commands/**",
+                    "message": "infrastructure/ is L1; cannot import commands (L3)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "infrastructure/ is L1; cannot import store (L3)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "infrastructure/ is L1; cannot import hooks (L3)."
+                  },
+                  {
+                    "group": "@/components/**",
+                    "message": "infrastructure/ is L1; cannot import components (L4)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/**/__tests__/**"],
       "linter": {
         "rules": {
           "style": {
@@ -196,20 +283,20 @@
         "rules": {
           "style": {
             "noRestrictedImports": {
-              "level": "warn",
+              "level": "error",
               "options": {
                 "patterns": [
                   {
                     "group": "@/queries/**",
-                    "message": "Components must not import queries directly (v2 §1 table). Route through a hook in @/hooks/. Currently warn — Phase F flips to error after the 26 known offenders migrate to hooks."
+                    "message": "Components must not import queries directly (v2 §1 table). Route through a hook in @/hooks/."
                   },
                   {
                     "group": "@/infrastructure/**",
-                    "message": "Components must not import infrastructure directly (v2 §1 table). Route through a hook. Currently warn — Phase F flips to error."
+                    "message": "Components must not import infrastructure directly (v2 §1 table). Route through a hook."
                   },
                   {
                     "group": "@/commands/**",
-                    "message": "Components must not import commands directly (v2 §1 table). Route through a hook (see useExtraction/useGoldEdit pattern). Currently warn — Phase F flips to error."
+                    "message": "Components must not import commands directly (v2 §1 table). Route through a hook (see useExtraction/useGoldEdit pattern)."
                   }
                 ]
               }

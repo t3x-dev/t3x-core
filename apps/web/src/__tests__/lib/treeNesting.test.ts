@@ -1,6 +1,6 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { nestNodes } from '@/lib/treeNesting';
+import { nestNodes } from '@/domain/tree/treeNesting';
 
 describe('nestNodes', () => {
   it('returns trees as-is when no relations', () => {

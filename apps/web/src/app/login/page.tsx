@@ -9,7 +9,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { setSessionKey, setSessionUser } from '@/lib/session';
+import { setSessionKey, setSessionUser } from '@/infrastructure/session';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 

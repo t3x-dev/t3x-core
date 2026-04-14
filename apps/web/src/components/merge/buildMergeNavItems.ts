@@ -4,7 +4,7 @@
  */
 
 import type { MergeResult } from '@t3x-dev/core';
-import { truncate } from '@/lib/truncate';
+import { truncate } from '@/domain/format/truncate';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 import { isConflictResolved } from '@/store/mergeWorkspaceStore';
 

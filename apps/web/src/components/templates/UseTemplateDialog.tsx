@@ -103,6 +103,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
 
     try {
       const leaf = await createLeaf({
+        source: { type: 'user' },
         commit_hash: selectedCommitHash,
         type: template.leaf_type as LeafType,
         title: title || undefined,

@@ -11,7 +11,7 @@
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useScrollSync } from '@/hooks/useScrollSync';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 const STORAGE_KEY = 'draft-preview-panel-height';

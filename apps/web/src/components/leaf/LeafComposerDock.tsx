@@ -6,7 +6,7 @@ import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProvidersList } from '@/hooks/useProvidersList';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 interface LeafComposerDockProps {
   leafId: string;

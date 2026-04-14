@@ -1,31 +1,34 @@
 /**
- * L3 — hydrate workspace + commit stores from a parent commit hash.
+ * L3 read — fetch a parent commit and derive the data a chat
+ * inheritance flow needs to seed commit + workspace stores.
  *
- * Bridge query used on the "Create Unit" inheritance flow: a new
- * conversation is mounted with `inheritFromCommitHash`, and this query
- * fetches that commit, pins it as the workspace's logical parent, and
- * expands the YOps panel.
- *
- * React state (the parent-conversation banner + the inheritedRef + the
- * onInheritComplete callback) stays in the component; this function
- * returns the data the component needs and performs only store-side
- * mutations.
+ * Per v2 §2.3, this query returns data only; the caller
+ * (useChatInit) owns the store writes.
  */
 
 import type { TreeNode } from '@t3x-dev/core';
-import { treesToNodes } from '@/lib/treeCompat';
-import { useCommitStore } from '@/store/commitStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { treesToNodes } from '@/domain/tree/treeCompat';
 import { fetchCommitForInheritance } from './chatInitFetch';
 
-export interface ParentHydrationResult {
+export interface ParentCommitData {
   /** Commit's parent conversation (if any) — for the "View parent" banner. */
   parentConversationId: string | null;
-  /** True if the parent commit was fetched successfully. */
-  inherited: boolean;
+  /**
+   * The fetched commit's own hash, surfaced so the caller can pin it
+   * as the workspace's logical parent (commitStore.lastCommitHash).
+   * `null` when the fetch succeeded but the commit had no trees, or
+   * when the fetch failed.
+   */
+  lastCommitHash: string | null;
+  /** Map of node-id -> true for every tree node on the parent commit. */
+  confirmedNodeIds: Record<string, boolean>;
+  /** True iff the parent commit had non-empty trees. */
+  hasTrees: boolean;
+  /** True iff the fetch succeeded. */
+  fetched: boolean;
 }
 
-export async function hydrateFromParent(hash: string): Promise<ParentHydrationResult> {
+export async function fetchParentCommitData(hash: string): Promise<ParentCommitData> {
   try {
     const parentCommit = await fetchCommitForInheritance(hash);
 
@@ -34,25 +37,35 @@ export async function hydrateFromParent(hash: string): Promise<ParentHydrationRe
     const parentConversationId = parentConvSource?.id ?? null;
 
     const trees = (parentCommit.content?.trees as TreeNode[]) ?? [];
-    if (trees.length > 0) {
-      // Pin the parent commit so:
-      //  - commit B gets the correct parent_hashes at commit time
-      //  - BeforePanel's useParentCommit query fetches the frozen tree
-      useCommitStore.setState({ lastCommitHash: hash });
-
-      const confirmed: Record<string, boolean> = {};
-      for (const f of treesToNodes(trees)) {
-        confirmed[f.id] = true;
-      }
-      useCommitStore.setState({ confirmedNodeIds: confirmed });
-
-      if (!useWorkspaceStore.getState().panelExpanded) {
-        useWorkspaceStore.getState().setPanelExpanded(true);
-      }
+    if (trees.length === 0) {
+      return {
+        parentConversationId,
+        lastCommitHash: null,
+        confirmedNodeIds: {},
+        hasTrees: false,
+        fetched: true,
+      };
     }
 
-    return { parentConversationId, inherited: true };
+    const confirmed: Record<string, boolean> = {};
+    for (const f of treesToNodes(trees)) {
+      confirmed[f.id] = true;
+    }
+
+    return {
+      parentConversationId,
+      lastCommitHash: hash,
+      confirmedNodeIds: confirmed,
+      hasTrees: true,
+      fetched: true,
+    };
   } catch {
-    return { parentConversationId: null, inherited: false };
+    return {
+      parentConversationId: null,
+      lastCommitHash: null,
+      confirmedNodeIds: {},
+      hasTrees: false,
+      fetched: false,
+    };
   }
 }

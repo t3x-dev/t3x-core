@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { useConversationsList } from '@/hooks/useConversationsList';
 import { useExtractFromConversation } from '@/hooks/useExtractFromConversation';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { Conversation } from '@/types/api';
 
 interface ExtractConversationDialogProps {

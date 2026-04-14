@@ -15,9 +15,9 @@ import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
-import { contentToNodes } from '@/lib/treeCompat';
-import { nestNodes } from '@/lib/treeNesting';
-import { cn } from '@/lib/utils';
+import { contentToNodes } from '@/domain/tree/treeCompat';
+import { nestNodes } from '@/domain/tree/treeNesting';
+import { cn } from '@/utils/cn';
 
 // ============================================================================
 // Types

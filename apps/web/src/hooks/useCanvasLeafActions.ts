@@ -72,6 +72,7 @@ export function useCanvasLeafActions() {
 
     try {
       const leaf = await createLeaf({
+        source: { type: 'user' },
         commit_hash: ctx.commitHash,
         type: leafType,
         title: LEAF_TYPE_LABELS[leafType],
@@ -117,6 +118,7 @@ export function useCanvasLeafActions() {
     try {
       const leafType = template.leaf_type as LeafType;
       const leaf = await createLeaf({
+        source: { type: 'user' },
         commit_hash: ctx.commitHash,
         type: leafType,
         title: template.title,

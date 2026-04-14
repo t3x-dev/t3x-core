@@ -28,7 +28,7 @@ import {
   testProvider,
   updateProviderRoles,
 } from '@/infrastructure';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
 

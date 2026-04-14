@@ -12,19 +12,19 @@ import { CheckCircle2, Circle, ClipboardCopy, GitMerge, Loader2, X } from 'lucid
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useClipboard } from '@/hooks/useClipboard';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { copyToClipboard } from '@/lib/export';
 import {
   formatReleaseNoteAsMarkdown,
   generateMergeReleaseNote,
   type MergeReleaseNote,
-} from '@/lib/mergeReleaseNote';
-import type { MergeSummary } from '@/lib/mergeSummary';
-import { useMicrocopy } from '@/lib/microcopy';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+} from '@/components/merge/mergeReleaseNote';
+import type { MergeSummary } from '@/components/merge/mergeSummary';
+import { useMicrocopy } from '@/utils/microcopy';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
 
@@ -67,6 +67,7 @@ export function MergeReviewDialog({
   prepared,
   extendedResolutions,
 }: MergeReviewDialogProps) {
+  const { copy: copyToClipboard } = useClipboard();
   const { t } = useTerminology();
   const mc = useMicrocopy();
   const prefersReducedMotion = useReducedMotion();

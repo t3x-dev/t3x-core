@@ -5,8 +5,8 @@ import { X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,

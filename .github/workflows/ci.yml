@@ -107,6 +107,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check webui v2 boundaries
+        run: pnpm --filter t3x-webui check:boundaries
+
   # ===========================================
   # FULL TESTS - Run on PRs and main
   # ===========================================

@@ -4,7 +4,7 @@
 
 import type { MergeResult } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { computeMergeSummary } from '@/lib/mergeSummary';
+import { computeMergeSummary } from '@/components/merge/mergeSummary';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
 // ---------------------------------------------------------------------------

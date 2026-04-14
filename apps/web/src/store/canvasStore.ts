@@ -1,7 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
-import { saveNodePosition } from '@/lib/nodePositionSaver';
 import type { CanvasNodeData } from '../types/nodes';
 import { createCommitSlice } from './canvasCommitSlice';
 import { createLeafSlice } from './canvasLeafSlice';
@@ -70,19 +69,11 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         const nodeMap = new Map(state.nodes.map((n) => [n.id, n]));
         const lockedNodes = getLockedNodeIds(state.nodes, state.edges);
 
-        // Handle position changes - save to database (debounced)
-        const positionChanges = changes.filter((c) => c.type === 'position' && c.position);
-        if (positionChanges.length > 0) {
-          positionChanges.forEach((change) => {
-            if (change.type !== 'position' || !change.position) return;
-            const node = nodeMap.get(change.id);
-            if (!node) return;
-
-            const snappedPos = snapPosition(change.position);
-            // Save position to database (fire and forget, debounced internally)
-            saveNodePosition(node.id, node.data.kind, snappedPos);
-          });
-        }
+        // Position-change persistence was a side effect here (calling
+        // `saveNodePosition`) until P4-remaining PR-α. It is now driven
+        // by `useCanvasPositionPersist` — a subscribe-based hook that
+        // diffs store updates and fires the debounced saver. The store
+        // stays a pure state container per v2 §2.5.
 
         // If a deletion confirmation dialog is already open, suppress new delete requests
         // to prevent silently replacing the pending confirmation

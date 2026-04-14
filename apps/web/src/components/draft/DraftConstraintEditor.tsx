@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { ValidationResult } from '@/lib/draftValidation';
+import type { ValidationResult } from '@/domain/draft/validation';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import type { DraftConstraint } from '@/types/api';
 

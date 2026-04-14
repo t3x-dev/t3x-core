@@ -19,12 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useConversationContextExport } from '@/hooks/useConversationContextExport';
+import { useConversationMemory } from '@/hooks/useConversationMemory';
 import { usePinsStore } from '@/store/pinsStore';
 import { EditContextDialog } from './EditContextDialog';
-
-// Use standalone API if configured, otherwise fall back to embedded routes
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-const API_V1 = `${API_BASE}/api/v1`;
 
 interface ContextPanelProps {
   conversationId: string;
@@ -43,27 +41,16 @@ export function ContextPanel({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { pins } = usePinsStore();
+  const { exportContext } = useConversationContextExport();
+  const { loadMemory } = useConversationMemory();
 
   // Export context as file (JSON or Markdown)
   const handleExport = async (format: 'json' | 'markdown') => {
     setIsExporting(true);
     try {
-      const response = await fetch(
-        `${API_V1}/conversations/${conversationId}/context-export?format=${format}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
-
-      // Get filename from Content-Disposition header or generate one
-      const disposition = response.headers.get('Content-Disposition');
-      const filenameMatch = disposition?.match(/filename="(.+)"/);
-      const filename =
-        filenameMatch?.[1] ?? `${conversationId}-context.${format === 'markdown' ? 'md' : 'json'}`;
+      const { blob, filename } = await exportContext(conversationId, format);
 
       // Download the file
-      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -85,15 +72,9 @@ export function ContextPanel({
   const handleCopyToClipboard = async () => {
     setIsExporting(true);
     try {
-      const response = await fetch(`${API_V1}/conversations/${conversationId}/memory`);
-
-      if (!response.ok) {
-        throw new Error('Failed to get context');
-      }
-
-      const data = await response.json();
-      if (data.success && data.data?.text) {
-        await navigator.clipboard.writeText(data.data.text);
+      const data = await loadMemory(conversationId);
+      if (data?.text) {
+        await navigator.clipboard.writeText(data.text);
         toast.success('Context copied to clipboard');
       } else {
         throw new Error('Invalid response');

@@ -18,10 +18,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
+import { useDraftAutoPreview } from '@/hooks/useDraftAutoPreview';
 import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { fullScreenEnter, reducedMotion } from '@/lib/motion';
-import { setAutoPreviewCallback, useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
+import { fullScreenEnter, reducedMotion } from '@/utils/motion';
+import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
@@ -42,8 +44,18 @@ interface DraftWorkspaceProps {
 }
 
 export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
-  const { draft, isDirty, conflictError, getIncludedCount, draftId, reset } =
-    useDraftWorkspaceStore();
+  const {
+    draft,
+    isDirty,
+    conflictError,
+    getIncludedCount,
+    draftId,
+    reset,
+    autoPreview,
+    previewStatus,
+    saveStatus,
+    setSaveStatusIdle,
+  } = useDraftWorkspaceStore();
   const {
     save: saveDraft,
     commit: commitDraft,
@@ -51,14 +63,11 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     generatePreview,
   } = useDraftWorkspaceActions();
 
-  // Wire the store's debounced auto-preview callback to the hook's
-  // generatePreview so the store stays passive but the timer keeps working.
-  useEffect(() => {
-    setAutoPreviewCallback(() => {
-      void generatePreview();
-    });
-    return () => setAutoPreviewCallback(null);
-  }, [generatePreview]);
+  // Timer-driven state transitions (v2 §2.5 — store stays pure).
+  useDraftAutoPreview(autoPreview, previewStatus, () => {
+    void generatePreview();
+  });
+  useSaveStatusAutoIdle(saveStatus, setSaveStatusIdle);
 
   const prefersReducedMotion = useReducedMotion();
   const readyCountRef = useRef(0);

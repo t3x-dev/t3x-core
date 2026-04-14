@@ -1,7 +1,7 @@
 'use client';
 
 import type { SemanticContent, SlotDiff, SlotValue, TreeDiff } from '@t3x-dev/core';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
   getTreeRelations,

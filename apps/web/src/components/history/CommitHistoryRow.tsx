@@ -9,8 +9,8 @@
 
 import { Minus, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { formatDate, relativeTime, shortHash } from '@/lib/formatters';
-import { cn } from '@/lib/utils';
+import { formatDate, relativeTime, shortHash } from '@/domain/format/formatters';
+import { cn } from '@/utils/cn';
 
 // ============================================================================
 // Types

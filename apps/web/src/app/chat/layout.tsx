@@ -1,7 +1,7 @@
 'use client';
 
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {

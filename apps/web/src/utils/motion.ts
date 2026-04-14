@@ -15,7 +15,7 @@
  *   const variants = prefersReducedMotion ? reducedMotion.fadeIn : fadeIn
  *
  * Usage:
- *   import { fadeIn, scaleIn, springConfig } from '@/lib/motion'
+ *   import { fadeIn, scaleIn, springConfig } from '@/utils/motion'
  *   <motion.div variants={fadeIn} initial="initial" animate="animate" />
  */
 

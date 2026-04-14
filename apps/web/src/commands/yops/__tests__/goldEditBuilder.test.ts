@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as session from '@/lib/session';
+import * as session from '@/infrastructure/session';
 import { SourceValidationError } from '../errors';
 import { buildHumanSource, commitGoldEdit } from '../goldEditBuilder';
 import * as yopsService from '../yopsService';

@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useOptimiserStore } from '@/store/optimiserStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { DeployAgent, EngineRun } from '@/types/api';
