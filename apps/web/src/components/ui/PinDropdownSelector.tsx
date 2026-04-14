@@ -16,7 +16,7 @@ import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
 import { useTerminology } from '@/hooks/useTerminology';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Assertion, Leaf } from '@/types/api';
 

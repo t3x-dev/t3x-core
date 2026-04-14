@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { getSlotSource } from '@/domain/source';
 import { useCommitActions } from '@/hooks/useCommitActions';
 import { useGoldEdit } from '@/hooks/useGoldEdit';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 

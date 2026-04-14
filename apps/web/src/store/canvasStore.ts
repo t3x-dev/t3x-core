@@ -1,7 +1,8 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
-import { saveNodePosition } from '@/lib/nodePositionSaver';
+// biome-ignore lint/style/noRestrictedImports: saveNodePosition is called inside onNodesChange as a fire-and-forget debounce; refactor to a subscribe() hook in a follow-up (pre-existing coupling from Phase 1.3).
+import { saveNodePosition } from '@/infrastructure/nodePositionSaver';
 import type { CanvasNodeData } from '../types/nodes';
 import { createCommitSlice } from './canvasCommitSlice';
 import { createLeafSlice } from './canvasLeafSlice';

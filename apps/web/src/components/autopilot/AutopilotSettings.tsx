@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAutopilot } from '@/hooks/useAutopilot';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { AdaptiveResult, AutopilotConfig } from '@/types/api';
 
 export function AutopilotSettings({ projectId }: { projectId: string }) {

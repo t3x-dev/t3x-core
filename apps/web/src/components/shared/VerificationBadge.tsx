@@ -14,8 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useVerifyProjectHashChain } from '@/hooks/useVerifyProjectHashChain';
-import { formatTimeAgo } from '@/lib/timeUtils';
-import { cn } from '@/lib/utils';
+import { formatTimeAgo } from '@/domain/format/timeUtils';
+import { cn } from '@/utils/cn';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { QuickVerifyResult, VerifyResult } from '@/types/api';
 

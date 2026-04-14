@@ -1,6 +1,6 @@
 import type { YOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { compactYOps } from '@/lib/compactYOps';
+import { compactYOps } from '@/domain/yops/compactYOps';
 
 describe('compactYOps', () => {
   describe('set/unset state machine', () => {

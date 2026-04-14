@@ -54,12 +54,10 @@ export interface NodeWithSource {
  * Highlight range within text content.
  * Uses character offsets.
  */
-export interface HighlightRange {
-  /** Start position (0-indexed, inclusive) */
-  start: number;
-  /** End position (0-indexed, exclusive) */
-  end: number;
-}
+// Single source of truth is `@/domain/format/highlightUtils` so this
+// type can be safely consumed from L2 (domain) utilities.
+export type { HighlightRange } from '@/domain/format/highlightUtils';
+import type { HighlightRange } from '@/domain/format/highlightUtils';
 
 /**
  * Highlight range with per-range color.

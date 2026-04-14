@@ -5,8 +5,8 @@ import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Link as LinkIcon, Paperclip } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
-import { truncate } from '@/lib/truncate';
-import { cn } from '@/lib/utils';
+import { truncate } from '@/domain/format/truncate';
+import { cn } from '@/utils/cn';
 import type { TreeNodeData } from './treeGraphUtils';
 
 // ── Extended node data with delta state markers + edit callbacks ──

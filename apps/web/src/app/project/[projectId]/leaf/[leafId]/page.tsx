@@ -18,8 +18,8 @@ import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import { useLeafPageData } from '@/hooks/useLeafPageData';
 import type { Constraint, SuggestedConstraint } from '@/infrastructure';
-import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
-import { cn } from '@/lib/utils';
+import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
+import { cn } from '@/utils/cn';
 import { useProjectStore } from '@/store/projectStore';
 
 function getGenerateErrorMessage(error: string): {

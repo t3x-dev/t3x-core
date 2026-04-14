@@ -8,7 +8,7 @@ import {
   offsetHighlightRanges,
   rangesAdjacent,
   rangesOverlap,
-} from '@/lib/highlightUtils';
+} from '@/domain/format/highlightUtils';
 
 describe('highlightUtils', () => {
   describe('mergeHighlightRanges', () => {

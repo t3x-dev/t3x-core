@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export interface VirtualListProps<T> {
   /** All items to render */

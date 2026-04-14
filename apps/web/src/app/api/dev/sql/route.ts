@@ -7,7 +7,7 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { executeRawSQL } from '@/lib/db';
+import { executeRawSQL } from '@/infrastructure/db';
 
 export async function POST(request: NextRequest) {
   // Only allow in development

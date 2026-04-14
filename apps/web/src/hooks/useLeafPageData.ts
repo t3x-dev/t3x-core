@@ -39,7 +39,7 @@ export { computeNodeCoverage } from './useLeafCommit';
 import type { ApiCommit, Leaf } from '@/infrastructure';
 import type { SemanticContent } from '@t3x-dev/core';
 import type { NodeWithSource } from '@/types/sourceContext';
-import type { ExportFormat } from '@/lib/export';
+import type { ExportFormat } from '@/infrastructure/export/core';
 import type { Constraint } from '@/types/api';
 
 export interface UseLeafPageDataReturn {

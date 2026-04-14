@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { useCompareModels } from '@/hooks/useCompareModels';
 import { useProvidersList } from '@/hooks/useProvidersList';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { CompareModelsResult } from '@/types/api';
 
 interface CompareModelsDialogProps {

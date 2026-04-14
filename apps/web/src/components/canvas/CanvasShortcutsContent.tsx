@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 
 interface CanvasShortcutsDialogProps {
   open: boolean;

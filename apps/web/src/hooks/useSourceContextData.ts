@@ -11,7 +11,7 @@ import type {
 } from '@/components/source-context/SourceConversationPanel';
 import type { Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
-import { checkContentIntegrity } from '@/lib/truncationUtils';
+import { checkContentIntegrity } from '@/domain/format/truncationUtils';
 import type { ContentIntegrityStatus, NodeWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════

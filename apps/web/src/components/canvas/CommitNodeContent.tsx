@@ -1,8 +1,8 @@
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { TreeGraphView } from '@/components/tree-graph';
-import { toneAccent } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { toneAccent } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import type { CommitDisplay } from '@/types/nodes';
 
 // Preview limits for UnitNode display

@@ -3,7 +3,7 @@
 import type { Pin } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Leaf, MessageSquare, Pin as PinIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 export interface EnrichedPin extends Pin {
   title?: string;

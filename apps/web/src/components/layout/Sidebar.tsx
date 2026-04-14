@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { UserMenu } from './UserMenu';
 
 // T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)

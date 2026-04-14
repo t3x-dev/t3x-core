@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { type FlatNode, lookupNode, toTitleCase } from './mergeViewHelpers';
 
 export function SideOnlySection({

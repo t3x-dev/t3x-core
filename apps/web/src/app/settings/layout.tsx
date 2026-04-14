@@ -9,8 +9,8 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { clearSession, getSessionKey } from '@/lib/session';
-import { cn } from '@/lib/utils';
+import { clearSession, getSessionKey } from '@/infrastructure/session';
+import { cn } from '@/utils/cn';
 
 const NAV_ITEMS = [
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },

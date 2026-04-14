@@ -4,7 +4,7 @@ import { CheckCircle, ChevronRight, Loader2, Tag, X, XCircle } from 'lucide-reac
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 interface ReportHeaderProps {
   runId: string;

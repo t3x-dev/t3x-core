@@ -442,7 +442,7 @@ const LAYOUT = {
 
 // saveNodePosition moved to @/lib/nodePositionSaver (v2 Phase 1.3).
 // It's a debounced I/O batching utility, not UI state — doesn't belong
-// under store/. Import from '@/lib/nodePositionSaver' instead.
+// under store/. Import from '@/infrastructure/nodePositionSaver' instead.
 
 // Convert API Conversation + Commit pair to Unit Canvas Node
 export const unitToNode = (

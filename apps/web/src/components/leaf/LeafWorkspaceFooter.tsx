@@ -3,7 +3,7 @@
 import { GitBranch, GitCommit, Server } from 'lucide-react';
 import Link from 'next/link';
 import type { Leaf } from '@/types/api';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 interface LeafWorkspaceFooterProps {
   leaf: Leaf;

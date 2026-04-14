@@ -9,7 +9,7 @@
 
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
-import { relativeTime, shortHash } from '@/lib/formatters';
+import { relativeTime, shortHash } from '@/domain/format/formatters';
 
 export { useCountUp } from '@/hooks/useCountUp';
 export { relativeTime, shortHash };

@@ -19,7 +19,7 @@ export const API_KEY = process.env.NEXT_PUBLIC_T3X_API_KEY;
 async function getSessionApiKey(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const { getSessionKey } = await import('@/lib/session');
+    const { getSessionKey } = await import('@/infrastructure/session');
     return getSessionKey();
   } catch {
     return null;

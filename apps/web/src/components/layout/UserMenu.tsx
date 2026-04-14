@@ -24,8 +24,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthMe } from '@/hooks/useAuthMe';
-import { clearSession, getSessionKey, getSessionUser, setSessionUser } from '@/lib/session';
-import { cn } from '@/lib/utils';
+import { useSession } from '@/hooks/useSession';
+import { cn } from '@/utils/cn';
 
 // ============================================================
 // Avatar Colors — deterministic from string
@@ -97,16 +97,17 @@ export function UserMenu({ collapsed }: UserMenuProps) {
   const [user, setUser] = useState<{ name: string | null; username: string | null } | null>(null);
   const [authEnabled, setAuthEnabled] = useState(false);
   const { loadAuthMe } = useAuthMe();
+  const session = useSession();
 
   useEffect(() => {
     // Check if user has a session (auth is active)
-    const sessionKey = getSessionKey();
+    const sessionKey = session.getKey();
     if (!sessionKey) return;
 
     setAuthEnabled(true);
 
     // Read cached user from localStorage
-    const cached = getSessionUser();
+    const cached = session.getUser();
     if (cached) {
       setUser({ name: cached.name, username: cached.username });
     }
@@ -115,7 +116,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
     loadAuthMe()
       .then((data) => {
         setUser({ name: data.name, username: data.username });
-        setSessionUser({
+        session.setUser({
           id: data.id,
           name: data.name,
           username: data.username,
@@ -125,7 +126,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       .catch(() => {
         // Ignore — we already have cached data or no user
       });
-  }, [loadAuthMe]);
+  }, [loadAuthMe, session]);
 
   if (!authEnabled || !user) return null;
 
@@ -188,7 +189,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => clearSession()}
+          onClick={() => session.clear()}
           className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
         >
           <LogOut className="h-4 w-4" />

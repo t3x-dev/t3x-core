@@ -11,7 +11,7 @@
 import { Bot, Settings, Terminal, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
-import { mergeHighlightRanges } from '@/lib/highlightUtils';
+import { mergeHighlightRanges } from '@/domain/format/highlightUtils';
 import type {
   ColoredHighlightRange,
   HighlightColor,

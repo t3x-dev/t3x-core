@@ -14,7 +14,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import type { ApiCommit, Project } from '@/infrastructure';
 import { listCommits, listProjects } from '@/infrastructure';
 import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { SemanticEntry } from '@/types/semantic';
 
 const stageColors = {

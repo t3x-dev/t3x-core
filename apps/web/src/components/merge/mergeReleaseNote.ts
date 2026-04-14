@@ -6,8 +6,8 @@
  */
 
 import type { MergeResult } from '@t3x-dev/core';
-import type { MergeSummary } from '@/lib/mergeSummary';
-import { truncate } from '@/lib/truncate';
+import type { MergeSummary } from '@/components/merge/mergeSummary';
+import { truncate } from '@/domain/format/truncate';
 import type { ExtendedResolutionData } from '@/store/mergeWorkspaceStore';
 
 // ============================================================================

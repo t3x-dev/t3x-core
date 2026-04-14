@@ -29,7 +29,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useCreateLeaf } from '@/hooks/useCreateLeaf';
-import { shortHash } from '@/lib/formatters';
+import { shortHash } from '@/domain/format/formatters';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { Assertion, Constraint, Leaf, LeafType } from '@/types/api';

@@ -9,7 +9,7 @@ import { Bell, Check, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/hooks/useNotifications';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { NotificationItem } from '@/types/api';
 
 interface NotificationBellProps {

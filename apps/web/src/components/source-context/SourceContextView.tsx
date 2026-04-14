@@ -37,7 +37,7 @@ import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useTurnContext } from '@/hooks/useTurnContext';
-import { truncateWithHighlights } from '@/lib/truncationUtils';
+import { truncateWithHighlights } from '@/domain/format/truncationUtils';
 import type { TurnContextData, WordDiffSegment } from '@/types/merge';
 import type { HighlightColor, HighlightRange } from '@/types/sourceContext';
 

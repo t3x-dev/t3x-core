@@ -55,8 +55,8 @@ import {
   type NodeSourceRef,
   updateEngineRun,
 } from '@/infrastructure';
-import { exportRunAsJSON, exportRunAsMarkdown } from '@/lib/exportReport';
-import { cn } from '@/lib/utils';
+import { exportRunAsJSON, exportRunAsMarkdown } from '@/infrastructure/export/report';
+import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 

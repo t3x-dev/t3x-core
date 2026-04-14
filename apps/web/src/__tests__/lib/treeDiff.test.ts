@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTreeDiff } from '@/lib/treeDiff';
+import { computeTreeDiff } from '@/domain/diff/treeDiff';
 import type { TreeNode } from '@t3x-dev/core';
 
 const makeNode = (key: string, slots: Record<string, string> = {}, children: TreeNode[] = []): TreeNode =>

@@ -15,8 +15,8 @@ import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
-import { getLayoutedElements } from '@/lib/elkLayout';
-import { saveNodePosition } from '@/lib/nodePositionSaver';
+import { useNodePositionSaver } from '@/hooks/useNodePositionSaver';
+import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -37,8 +37,8 @@ const edgeTypes = {
 
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
-import { glass } from '@/lib/theme';
-import { cn } from '@/lib/utils';
+import { glass } from '@/utils/theme';
+import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
@@ -73,6 +73,7 @@ function CanvasWorkspaceInner({
   initialViewport,
   onViewportChange,
 }: CanvasWorkspaceProps) {
+  const { save: saveNodePosition } = useNodePositionSaver();
   const [isPanMode, setIsPanMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);

@@ -1,7 +1,7 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { CommittedHighlight } from '@/lib/committedHighlights';
+import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 
 interface CommittedHighlightTooltipProps {
   highlight: CommittedHighlight;

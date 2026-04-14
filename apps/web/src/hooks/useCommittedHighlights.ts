@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { type ApiCommit, listCommits } from '@/infrastructure/commits';
-import { type CommittedHighlight, buildCommittedHighlights } from '@/lib/committedHighlights';
+import { type CommittedHighlight, buildCommittedHighlights } from '@/domain/commit/committedHighlights';
 import { useCommitStore } from '@/store/commitStore';
 
 /**

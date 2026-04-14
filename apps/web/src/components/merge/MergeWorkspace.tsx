@@ -20,7 +20,7 @@ import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/useTerminology';
-import { fullScreenEnter, reducedMotion } from '@/lib/motion';
+import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';

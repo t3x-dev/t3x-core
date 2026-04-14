@@ -58,7 +58,7 @@ import {
   listSavedComparisons,
   type SavedComparison,
 } from '@/infrastructure';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 /** Format configuration as display string */
 function formatConfig(config: ConfigurationStats): string {

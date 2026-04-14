@@ -22,7 +22,7 @@ import { useDraftAutoPreview } from '@/hooks/useDraftAutoPreview';
 import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
-import { fullScreenEnter, reducedMotion } from '@/lib/motion';
+import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
