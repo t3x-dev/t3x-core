@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/useCommitByHash';
 import { useCreateMergeCommit } from '@/hooks/useCreateMergeCommit';
-import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/useTerminology';

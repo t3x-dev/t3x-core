@@ -10,7 +10,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
-import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useMicrocopy } from '@/utils/microcopy';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 

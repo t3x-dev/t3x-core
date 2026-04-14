@@ -18,7 +18,7 @@ import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { useCommitByHash } from '@/hooks/useCommitByHash';
-import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useTreeDiff } from '@/hooks/useTreeDiff';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';

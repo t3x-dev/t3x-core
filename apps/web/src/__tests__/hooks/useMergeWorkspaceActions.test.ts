@@ -25,7 +25,7 @@ import {
   deleteMergeDraft,
   saveMergeDraft,
 } from '@/commands/merge';
-import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
