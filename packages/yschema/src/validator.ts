@@ -36,7 +36,13 @@ function push(
 
 // ── Node Validation ──
 
-function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: Violation[]) {
+function validateNode(
+  doc: YValue,
+  nodeDef: NodeDef,
+  path: string,
+  violations: Violation[],
+  strict = false
+) {
   const nodeValue = resolvePath(doc, path);
 
   // Check required
@@ -70,7 +76,7 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
   // Validate declared children
   if (nodeDef.children && nodeDef.children !== 'any' && isMapping(nodeValue)) {
     for (const [childKey, childDef] of Object.entries(nodeDef.children)) {
-      validateNode(doc, childDef, `${path}/${childKey}`, violations);
+      validateNode(doc, childDef, `${path}/${childKey}`, violations, strict);
     }
   }
 
@@ -91,6 +97,21 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
             `${path}/${childKey}`,
             violations
           );
+          // Strict mode: reject slots not declared in each_child.slots
+          if (strict) {
+            const declaredSlots = nodeDef.each_child.slots as Record<string, SlotFull>;
+            for (const slotKey of Object.keys(childValue as Record<string, YValue>)) {
+              if (!(slotKey in declaredSlots)) {
+                push(
+                  violations,
+                  'UNEXPECTED_SLOT',
+                  `${path}/${childKey}/${slotKey}`,
+                  'error',
+                  `Slot "${slotKey}" at "${path}/${childKey}" is not declared in schema (strict mode)`
+                );
+              }
+            }
+          }
         } else {
           push(
             violations,
@@ -481,8 +502,9 @@ export function validateSchema(doc: YValue, schema: Schema): SchemaResult {
   const violations: Violation[] = [];
 
   // Validate declared nodes
+  const strict = schema.strict ?? false;
   for (const [nodeKey, nodeDef] of Object.entries(schema.nodes)) {
-    validateNode(doc, nodeDef, nodeKey, violations);
+    validateNode(doc, nodeDef, nodeKey, violations, strict);
   }
 
   // Strict mode: check for undeclared nodes
