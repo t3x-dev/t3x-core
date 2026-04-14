@@ -25,7 +25,7 @@ export function normalizeSlot(def: SlotDef): SlotFull {
     return { type: 'scalar', required: true, enum: def };
   }
   // Full form — fill defaults
-  return {
+  const full: SlotFull = {
     type: def.type ?? 'scalar',
     required: def.required ?? true,
     enum: def.enum,
@@ -36,6 +36,23 @@ export function normalizeSlot(def: SlotDef): SlotFull {
     pattern_message: def.pattern_message,
     item_pattern: def.item_pattern,
   };
+
+  if (full.pattern !== undefined) {
+    try {
+      new RegExp(full.pattern);
+    } catch (e) {
+      throw new Error(`Invalid pattern regex: ${full.pattern} — ${(e as Error).message}`);
+    }
+  }
+  if (full.item_pattern !== undefined) {
+    try {
+      new RegExp(full.item_pattern);
+    } catch (e) {
+      throw new Error(`Invalid item_pattern regex: ${full.item_pattern} — ${(e as Error).message}`);
+    }
+  }
+
+  return full;
 }
 
 /** Normalize all slots in a node definition (recursive). */

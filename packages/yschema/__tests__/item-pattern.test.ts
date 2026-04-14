@@ -23,4 +23,18 @@ describe('item_pattern on list slot', () => {
     expect(v).toBeDefined();
     expect(v?.path).toContain('[1]');
   });
+
+  it('throws at parse time when item_pattern is an invalid regex', () => {
+    expect(() =>
+      parseSchema(`
+name: test
+nodes:
+  svc:
+    slots:
+      ports:
+        type: list
+        item_pattern: "[invalid"
+`),
+    ).toThrow(/Invalid item_pattern regex/);
+  });
 });

@@ -30,4 +30,18 @@ describe('pattern on scalar slot', () => {
     const v = result.violations.find(x => x.code === 'INVALID_PATTERN');
     expect(v?.message).toMatch(/must be tagged/);
   });
+
+  it('throws at parse time when pattern is an invalid regex', () => {
+    expect(() =>
+      parseSchema(`
+name: test
+nodes:
+  app:
+    slots:
+      image:
+        type: scalar
+        pattern: "[invalid"
+`),
+    ).toThrow(/Invalid pattern regex/);
+  });
 });
