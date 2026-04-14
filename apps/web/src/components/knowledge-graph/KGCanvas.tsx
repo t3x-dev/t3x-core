@@ -3,7 +3,7 @@
 import { Background, Controls, type Edge, MiniMap, type Node, ReactFlow } from '@xyflow/react';
 import { useCallback, useMemo } from 'react';
 import '@xyflow/react/dist/style.css';
-import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
+import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
 
 interface KGCanvasProps {
   projectId: string;

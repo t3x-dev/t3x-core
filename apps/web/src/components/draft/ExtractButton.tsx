@@ -4,7 +4,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { useExtractIncremental } from '@/hooks/useExtractIncremental';
+import { useExtractIncremental } from '@/hooks/drafts/useExtractIncremental';
 
 interface ExtractButtonProps {
   draftId: string;

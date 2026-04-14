@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { useProjectStore } from '@/store/projectStore';
 

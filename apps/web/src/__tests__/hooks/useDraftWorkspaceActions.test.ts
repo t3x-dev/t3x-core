@@ -21,7 +21,7 @@ import {
   previewWorkbenchDraft,
   updateWorkbenchDraft,
 } from '@/commands/drafts';
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { fetchWorkbenchDraft } from '@/queries/workbenchDrafts';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 

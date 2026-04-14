@@ -16,10 +16,10 @@ import { ArrowLeft, GitBranch, History, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
-import { useBranchesList } from '@/hooks/useBranchesList';
-import { useCommitsList } from '@/hooks/useCommitsList';
-import { useDiffRaw } from '@/hooks/useDiffRaw';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useBranchesList } from '@/hooks/shared/useBranchesList';
+import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';
 import { CommitHistoryRow } from './CommitHistoryRow';
 

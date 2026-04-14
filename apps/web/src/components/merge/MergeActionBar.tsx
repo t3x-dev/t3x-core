@@ -11,7 +11,7 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 import { useProjectStore } from '@/store/projectStore';

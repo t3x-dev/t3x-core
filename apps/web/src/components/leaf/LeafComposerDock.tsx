@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompareModelsDialog } from '@/components/leaf/CompareModelsDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProvidersList } from '@/hooks/useProvidersList';
+import { useProvidersList } from '@/hooks/shared/useProvidersList';
 import { cn } from '@/utils/cn';
 
 interface LeafComposerDockProps {

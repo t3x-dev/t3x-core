@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
-import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 

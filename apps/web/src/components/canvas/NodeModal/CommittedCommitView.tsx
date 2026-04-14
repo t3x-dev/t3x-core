@@ -31,8 +31,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSemanticContent } from '@/domain/commitContent';
-import { useExportCommit } from '@/hooks/useExportCommit';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useExportCommit } from '@/hooks/commits/useExportCommit';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { CommitExportFormat } from '@/types/api';
 import { glass, toneAccent } from '@/utils/theme';
 import { cn } from '@/utils/cn';

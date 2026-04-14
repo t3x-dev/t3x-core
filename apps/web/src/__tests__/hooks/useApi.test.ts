@@ -31,7 +31,7 @@ import {
   useStatus,
   useTurn,
   useTurns,
-} from '@/hooks/useApi';
+} from '@/hooks/shared/useApi';
 import * as api from '@/infrastructure';
 
 // ---------------------------------------------------------------------------

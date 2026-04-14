@@ -4,7 +4,7 @@ import { Check, CheckCircle, CheckCircle2, Loader2, Play, X } from 'lucide-react
 import { useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/useLeafPageData';
+import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/utils/cn';
 import type { NodeWithSource } from '@/types/sourceContext';

@@ -12,10 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
-import { useBranchCommits } from '@/hooks/useBranchCommits';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
-import { useTerminology } from '@/hooks/useTerminology';
+import type { CommitWithLeaves } from '@/hooks/commits/useBranchCommits';
+import { useBranchCommits } from '@/hooks/commits/useBranchCommits';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Assertion, Leaf } from '@/types/api';

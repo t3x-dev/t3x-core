@@ -23,7 +23,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import {
   getProjectProviderConfig,
   getProviderRoles,

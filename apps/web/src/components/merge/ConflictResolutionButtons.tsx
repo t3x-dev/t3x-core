@@ -15,7 +15,7 @@
 
 import { ArrowLeft, ArrowRight, Layers } from 'lucide-react';
 import { useEffect } from 'react';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { cn } from '@/utils/cn';
 
 type Resolution = 'source' | 'target' | 'both';

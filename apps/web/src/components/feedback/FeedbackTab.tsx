@@ -9,9 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useFeedbackStats } from '@/hooks/useFeedbackStats';
-import { useLeavesByProject } from '@/hooks/useLeavesByProject';
-import { useProjectsList } from '@/hooks/useProjectsList';
+import { useFeedbackStats } from '@/hooks/feedback/useFeedbackStats';
+import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
+import { useProjectsList } from '@/hooks/projects/useProjectsList';
 import type { CosineBucket, FeedbackStats, Project } from '@/types/api';
 import { ConfidenceBucketChart } from './ConfidenceBucketChart';
 import { FeedbackByTypeTable } from './FeedbackByTypeTable';

@@ -18,23 +18,23 @@
  */
 
 import { useState } from 'react';
-import { useLeafAssertions } from './useLeafAssertions';
+import { useLeafAssertions } from '@/hooks/leaves/useLeafAssertions';
 import {
   type NodeCoverageEntry as _NodeCoverageEntry,
   useLeafCommit,
-} from './useLeafCommit';
-import { useLeafConstraintsEdit } from './useLeafConstraintsEdit';
-import { useLeafCore } from './useLeafCore';
-import { useLeafExport } from './useLeafExport';
-import { useLeafGenerate } from './useLeafGenerate';
-import { useLeafValidate } from './useLeafValidate';
+} from '@/hooks/leaves/useLeafCommit';
+import { useLeafConstraintsEdit } from '@/hooks/leaves/useLeafConstraintsEdit';
+import { useLeafCore } from '@/hooks/leaves/useLeafCore';
+import { useLeafExport } from '@/hooks/leaves/useLeafExport';
+import { useLeafGenerate } from '@/hooks/leaves/useLeafGenerate';
+import { useLeafValidate } from '@/hooks/leaves/useLeafValidate';
 
 export type WorkspaceMode = 'generate' | 'display';
 
 // Re-export types so existing component imports of
 // `@/hooks/useLeafPageData` continue to resolve.
 export type NodeCoverageEntry = _NodeCoverageEntry;
-export { computeNodeCoverage } from './useLeafCommit';
+export { computeNodeCoverage } from '@/hooks/leaves/useLeafCommit';
 
 import type { ApiCommit, Leaf } from '@/infrastructure';
 import type { SemanticContent } from '@t3x-dev/core';

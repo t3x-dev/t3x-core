@@ -15,7 +15,7 @@
  */
 
 import type { Edge, Node } from '@xyflow/react';
-import { getTerminology } from '@/hooks/useTerminology';
+import { getTerminology } from '@/hooks/shared/useTerminology';
 import {
   backflowEdgeStyle,
   edgeStyle,
@@ -26,7 +26,7 @@ import {
 } from '@/store/canvasStoreUtils';
 import { isDeveloperMode } from '@/store/shared';
 import type { ApiCommit, Commit, Conversation, Leaf } from '@/types/api';
-import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
+import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 export interface ComposedCanvas {
   nodes: Node<CanvasNodeData>[];

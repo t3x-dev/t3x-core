@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import {
   checkRunnerHealth,
   createDeployAgent,
@@ -42,7 +42,7 @@ import {
   listEngineRuns,
   updateDeployAgent,
 } from '@/infrastructure';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {

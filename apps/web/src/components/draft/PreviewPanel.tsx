@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select';
 import { SkeletonText } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { PreviewTypeSelector } from './PreviewTypeSelector';

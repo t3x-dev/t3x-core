@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';

@@ -23,10 +23,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useCommitDraft } from '@/hooks/useCommitDraft';
-import { usePromoteDraft } from '@/hooks/usePromoteDraft';
-import { useTerminology } from '@/hooks/useTerminology';
-import { useUpdateDraft } from '@/hooks/useUpdateDraft';
+import { useCommitDraft } from '@/hooks/commits/useCommitDraft';
+import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
+import { useTerminology } from '@/hooks/shared/useTerminology';
+import { useUpdateDraft } from '@/hooks/drafts/useUpdateDraft';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { DraftNode, WorkbenchDraft } from '@/types/api';
 

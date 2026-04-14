@@ -23,7 +23,7 @@ vi.mock('@/domain/enrichSourceRefs', () => ({
 }));
 
 import { createCommit } from '@/commands/commits';
-import { useCommitActions } from '@/hooks/useCommitActions';
+import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { fetchCommits } from '@/queries/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';

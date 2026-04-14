@@ -18,7 +18,7 @@ vi.mock('@/commands/leaves', () => ({
 }));
 
 import { createLeaf, deleteLeaf } from '@/commands/leaves';
-import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
+import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 

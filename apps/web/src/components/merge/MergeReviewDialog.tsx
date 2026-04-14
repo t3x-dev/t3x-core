@@ -12,10 +12,10 @@ import { CheckCircle2, Circle, ClipboardCopy, GitMerge, Loader2, X } from 'lucid
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { useClipboard } from '@/hooks/useClipboard';
-import { useCountUp } from '@/hooks/useCountUp';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useClipboard } from '@/hooks/shared/useClipboard';
+import { useCountUp } from '@/hooks/shared/useCountUp';
+import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import {
   formatReleaseNoteAsMarkdown,
   generateMergeReleaseNote,

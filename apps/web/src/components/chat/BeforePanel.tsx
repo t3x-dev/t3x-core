@@ -1,7 +1,7 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
-import { useParentCommit } from '@/hooks/useParentCommit';
+import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {

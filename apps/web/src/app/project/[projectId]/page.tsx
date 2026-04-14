@@ -4,10 +4,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
-import { useCanvasDeletionWiring } from '@/hooks/useCanvasDeletionWiring';
-import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
-import { useProjectCrud } from '@/hooks/useProjectCrud';
+import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 

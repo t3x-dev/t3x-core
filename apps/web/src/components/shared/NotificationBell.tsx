@@ -8,7 +8,7 @@
 import { Bell, Check, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useNotifications } from '@/hooks/shared/useNotifications';
 import { cn } from '@/utils/cn';
 import type { NotificationItem } from '@/types/api';
 

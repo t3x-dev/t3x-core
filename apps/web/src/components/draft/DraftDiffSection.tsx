@@ -15,7 +15,7 @@ import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
-import { useCommitByHash } from '@/hooks/useCommitByHash';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import type { DiffableNode, DiffCache } from '@/domain/diff/diffUtils';
 import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/domain/diff/diffUtils';
 import { cn } from '@/utils/cn';

@@ -19,7 +19,7 @@ vi.mock('@/store/settingsStore', () => {
   return { useSettingsStore: store };
 });
 
-import { getTermItem, getTerminology, useTerminology } from '@/hooks/useTerminology';
+import { getTermItem, getTerminology, useTerminology } from '@/hooks/shared/useTerminology';
 import { useSettingsStore } from '@/store/settingsStore';
 
 // ---------------------------------------------------------------------------

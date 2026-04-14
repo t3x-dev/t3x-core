@@ -22,7 +22,7 @@ vi.mock('@/commands/merge', () => ({
 
 import { createConversation } from '@/commands/conversations';
 import { createMergeDraft } from '@/commands/merge';
-import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
+import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';

@@ -4,7 +4,7 @@ import type { MergeResult, SlotValue } from '@t3x-dev/core';
 import { Check, ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useTreeMergeSuggestion } from '@/hooks/useTreeMergeSuggestion';
+import { useTreeMergeSuggestion } from '@/hooks/merge/useTreeMergeSuggestion';
 import { cn } from '@/utils/cn';
 import type { TreeMergeSuggestion } from '@/types/api';
 import {

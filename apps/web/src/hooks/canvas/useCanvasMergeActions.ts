@@ -13,7 +13,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { executeMerge, prepareMerge } from '@/commands/merge';
 import { computeMergeNodePosition } from '@/domain/canvasLayout';
-import { getTerminology } from '@/hooks/useTerminology';
+import { getTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { edgeStyle, edgeType } from '@/store/canvasStoreUtils';
 import { isDeveloperMode } from '@/store/shared';

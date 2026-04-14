@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import type { Template } from '@/infrastructure';
 import { cn } from '@/utils/cn';
-import { useTemplates } from '@/hooks/useTemplates';
+import { useTemplates } from '@/hooks/templates/useTemplates';
 
 const CATEGORIES = [
   { value: null, label: 'All' },

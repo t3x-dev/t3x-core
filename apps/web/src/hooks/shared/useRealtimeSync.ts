@@ -15,7 +15,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { useAutopilot } from '@/hooks/useAutopilot';
+import { useAutopilot } from '@/hooks/shared/useAutopilot';
 import { cn } from '@/utils/cn';
 import type { AdaptiveResult, AutopilotConfig } from '@/types/api';
 

@@ -17,7 +17,7 @@ vi.mock('@/store/canvasStore', () => ({
 }));
 
 // Mock the merge actions hook
-vi.mock('@/hooks/useCanvasMergeActions', () => ({
+vi.mock('@/hooks/canvas/useCanvasMergeActions', () => ({
   useCanvasMergeActions: () => ({
     prepare: vi.fn(),
     execute: vi.fn(),

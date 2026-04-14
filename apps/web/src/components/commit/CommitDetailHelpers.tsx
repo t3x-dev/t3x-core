@@ -11,7 +11,7 @@ import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 
-export { useCountUp } from '@/hooks/useCountUp';
+export { useCountUp } from '@/hooks/shared/useCountUp';
 export { relativeTime, shortHash };
 
 // ============================================================================

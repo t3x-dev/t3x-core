@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useExportTemplate } from '@/hooks/useExportTemplate';
+import { useExportTemplate } from '@/hooks/templates/useExportTemplate';
 import type { Template, TemplateExportFormat } from '@/types/api';
 
 interface TemplatePreviewDialogProps {

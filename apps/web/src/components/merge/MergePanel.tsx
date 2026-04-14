@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
-import { useCanvasMergeActions } from '@/hooks/useCanvasMergeActions';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useCanvasMergeActions } from '@/hooks/canvas/useCanvasMergeActions';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { selectCanExecuteMerge, selectUnresolvedCount, useCanvasStore } from '@/store/canvasStore';
 
 /**

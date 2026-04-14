@@ -2,7 +2,7 @@
 
 import { GitBranch, X } from 'lucide-react';
 import { useCallback } from 'react';
-import { useDriftResolver } from '@/hooks/useDriftResolver';
+import { useDriftResolver } from '@/hooks/shared/useDriftResolver';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 

@@ -4,7 +4,7 @@ import { FileText, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useDocumentImport } from '@/hooks/useDocumentImport';
+import { useDocumentImport } from '@/hooks/imports/useDocumentImport';
 import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';

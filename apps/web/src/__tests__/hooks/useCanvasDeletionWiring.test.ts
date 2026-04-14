@@ -18,7 +18,7 @@ vi.mock('@/queries/conversations', () => ({
 }));
 
 import { deleteConversation } from '@/commands/conversations';
-import { useCanvasDeletionWiring } from '@/hooks/useCanvasDeletionWiring';
+import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 

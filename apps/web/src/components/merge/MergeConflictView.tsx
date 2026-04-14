@@ -13,8 +13,8 @@
 
 import { useCallback, useState } from 'react';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
-import { useTerminology } from '@/hooks/useTerminology';
-import { useTurnContext } from '@/hooks/useTurnContext';
+import { useTerminology } from '@/hooks/shared/useTerminology';
+import { useTurnContext } from '@/hooks/shared/useTurnContext';
 import { cn } from '@/utils/cn';
 import { isConflictResolved, useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { TurnContextData } from '@/types/api';

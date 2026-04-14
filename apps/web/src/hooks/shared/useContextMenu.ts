@@ -7,11 +7,11 @@ import {
   buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
-} from '@/components/canvas/NodeContextMenu';
+} from '@/utils/canvasMenuBuilders';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
-import { useCanvasCommitActions } from './useCanvasCommitActions';
-import { useCanvasLeafActions } from './useCanvasLeafActions';
+import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
+import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 
 /**
  * Module-level ref for the leaf context menu handler.

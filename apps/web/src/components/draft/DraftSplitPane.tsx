@@ -10,7 +10,7 @@
 
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useScrollSync } from '@/hooks/useScrollSync';
+import { useScrollSync } from '@/hooks/shared/useScrollSync';
 import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 

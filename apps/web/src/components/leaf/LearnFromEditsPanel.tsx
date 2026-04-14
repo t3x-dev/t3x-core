@@ -8,7 +8,7 @@
 import { Edit3, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useLearnFromEdits } from '@/hooks/useLearnFromEdits';
+import { useLearnFromEdits } from '@/hooks/shared/useLearnFromEdits';
 import { cn } from '@/utils/cn';
 import type { EditLearnedConstraint } from '@/types/api';
 

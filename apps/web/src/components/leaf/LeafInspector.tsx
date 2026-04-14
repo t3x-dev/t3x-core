@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { WorkspaceMode } from '@/hooks/useLeafPageData';
+import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint, Leaf } from '@/types/api';
 import { cn } from '@/utils/cn';
 

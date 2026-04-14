@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Leaf } from '@/types/api';
-import { usePinsCrud } from './usePinsCrud';
-import { useRetuneSession } from './useRetuneSession';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
+import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';
 
 export interface UseLeafAssertionsReturn {
   selectedAssertionIds: Set<string>;

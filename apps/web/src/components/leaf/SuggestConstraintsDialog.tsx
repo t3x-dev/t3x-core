@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useSuggestConstraints } from '@/hooks/useSuggestConstraints';
+import { useSuggestConstraints } from '@/hooks/drafts/useSuggestConstraints';
 import { cn } from '@/utils/cn';
 import type { SuggestedConstraint } from '@/types/api';
 

@@ -262,22 +262,7 @@
           }
         }
       }
-    },
-    {
-      "includes": [
-        "apps/web/src/hooks/useConversationChat.ts",
-        "apps/web/src/hooks/useSourceContextData.ts",
-        "apps/web/src/hooks/useContextMenu.ts"
-      ],
-      "linter": {
-        "rules": {
-          "style": {
-            "noRestrictedImports": "off"
-          }
-        }
-      }
-    },
-    {
+    },{
       "includes": ["apps/web/src/components/**"],
       "linter": {
         "rules": {

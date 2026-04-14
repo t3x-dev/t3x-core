@@ -14,7 +14,7 @@
 import type { MergeResult, TreeNode } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { TreeResolution } from '@/components/merge/ConflictCard';
-import { getTerminology, type TermKey } from '@/hooks/useTerminology';
+import { getTerminology, type TermKey } from '@/hooks/shared/useTerminology';
 import { isDeveloperMode } from '@/store/shared';
 import type { MergeDraft, TurnContextData } from '@/types/merge';
 import type { SaveStatus } from './saveStatus';
