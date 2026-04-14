@@ -2,7 +2,7 @@
  * useDriftResolver — apply a drift-decision choice and re-hydrate.
  *
  * Thin wrapper over the drift-aware `extractNodes` call so DriftPopup
- * never imports `@/lib/api/*` directly. Swallows drift-choice failures
+ * never imports `@/infrastructure/*` directly. Swallows drift-choice failures
  * (they are non-critical: the user can re-pick).
  */
 

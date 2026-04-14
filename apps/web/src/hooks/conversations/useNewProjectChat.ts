@@ -4,7 +4,7 @@
  * project's current tip.
  *
  * Wraps the two L1 calls (listCommits + createConversation) so ChatSidebar
- * stops dynamically importing from `@/lib/api/*`.
+ * stops dynamically importing from `@/infrastructure/*`.
  */
 
 import { useCallback } from 'react';

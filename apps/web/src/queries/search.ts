@@ -1,7 +1,7 @@
 /**
  * L3 — search I/O entry point for stores and hooks.
  *
- * Thin wrapper around the raw HTTP adapter in `@/lib/api/search`. Stores
+ * Thin wrapper around the raw HTTP adapter in `@/infrastructure/search`. Stores
  * and components must import search I/O from here so the L3 store layer
  * does not reach into L1 directly (see docs/frontend-architecture-zh.md §2).
  */

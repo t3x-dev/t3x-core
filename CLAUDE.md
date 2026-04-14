@@ -258,17 +258,28 @@ const result = await evalEngine.evaluate({ trace, test_steps: [...] });
 apps/web/src/
 ├── app/                 — Next.js App Router (pages)
 ├── components/          — L4: rendering (ui/ canvas/ leaf/ merge/ diff/ shared/ …)
-├── hooks/               — L3: view-level composition (useApi, useLeafPageData, …)
+├── hooks/               — L3: view-level composition, organised by aggregate:
+│   canvas/ commits/ conversations/ drafts/ feedback/ imports/
+│   knowledge-graph/ leaves/ merge/ pins/ projects/ shared/ shares/ templates/
 ├── store/               — L3: Zustand state containers (passive: state + setters only)
 ├── queries/             — L3 reads: async fetch per aggregate
-├── commands/            — L3 writes: user-intent commands (YOps today; more aggregates coming)
-├── domain/              — L2: pure functions (replay, hoverTrace, tree, source maps). No React, no I/O.
-├── infrastructure/      — L1: the only place fetch() lives (yopsLog, conversationLoader, mergeApi, …)
-├── lib/                 — legacy I/O surface (lib/api/*.ts); new work should use infrastructure/ instead
-├── utils/ / data/ / types/ — shared helpers / static data / shared types
+├── commands/            — L3 writes: user-intent commands (yops/ + 9 other aggregates)
+├── domain/              — L2: pure functions, grouped by topic:
+│   commit/ diff/ draft/ format/ leaf/ tree/ yops/ replay.ts …
+├── infrastructure/      — L1: the only place fetch() lives (export/, plus per-aggregate files)
+├── utils/               — cross-layer view helpers (cn, theme, motion, pageAnimations,
+│                          microcopy, canvasMenuBuilders, tokenizer)
+├── data/ / types/       — static data / shared type re-export surface
 ├── middleware.ts
-└── __tests__/
+└── __tests__/           — mirrors the src layout above (domain/ infrastructure/
+                           components/ hooks/ stores/ utils/ …)
 ```
+
+> Historical note: a flat `lib/` directory used to hold a mix of pure utils,
+> I/O helpers, and view-layer constants. It was retired in 2026-04; every
+> file now lives under one of `domain/` / `infrastructure/` / `utils/` /
+> `components/` / `hooks/` based on its responsibility. Any new file that
+> looks like "utility" should pick a layer up front — don't recreate `lib/`.
 
 ### Four-layer model — enforced by Biome
 
@@ -287,7 +298,7 @@ Violations fail lint. Escape hatches are narrow and listed in `biome.json` `over
 - Component fetches? → hook → query (read) or command (write).
 - Store needs data? → query, never direct fetch.
 - Pure derivation (selectors, replay, tree ops)? → `domain/`.
-- New HTTP endpoint? → add to `infrastructure/<aggregate>.ts`, not `lib/api/`.
+- New HTTP endpoint? → add to `infrastructure/<aggregate>.ts` (the only layer that calls `fetch()`).
 
 ### Canvas store (slice pattern)
 

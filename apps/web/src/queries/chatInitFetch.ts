@@ -3,8 +3,8 @@
  *
  * useChatInit does a few one-shot fetches during mount/conversation-switch
  * (parent commit for inheritance, conversation metadata, topic list). These
- * are thin wrappers over the `lib/api/*` L1 adapters so that `useChatInit`
- * never imports from `@/lib/api/*` directly.
+ * are thin wrappers over the `@/infrastructure/*` L1 adapters so that
+ * `useChatInit` never imports infrastructure directly.
  */
 
 import { type ApiCommit, getApiCommit } from '@/infrastructure/commits';

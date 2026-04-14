@@ -3,7 +3,7 @@
  *
  * Components that need ad-hoc commit lookups (e.g. the merge workspace
  * reading source + target commits) call this instead of reaching into
- * `@/lib/api/commits`. Consolidates what was otherwise a half-dozen
+ * `@/infrastructure/commits`. Consolidates what was otherwise a half-dozen
  * direct `getApiCommit` imports across the codebase.
  */
 

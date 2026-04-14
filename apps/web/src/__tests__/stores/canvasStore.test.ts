@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';
 
-// Canvas slices now route lib/api reads/writes through @/queries/* per the
+// Canvas slices now route infrastructure reads/writes through @/queries/* per the
 // doc-aligned L3 layer. Mock the query modules the slices depend on.
 vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),

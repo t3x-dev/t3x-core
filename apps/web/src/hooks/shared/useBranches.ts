@@ -2,7 +2,7 @@
  * useBranches — branch dropdown data + creation for a project.
  *
  * Consolidates three L1 calls (listBranches, listCommits, createBranch) so
- * components never reach into `@/lib/api/*` directly.
+ * components never reach into `@/infrastructure/*` directly.
  *
  * `refresh()` re-pulls both the branches table and unique branch names from
  * recent commits (so newly-used branches show up even before they are
