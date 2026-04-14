@@ -89,6 +89,7 @@ function validateNode(
       if (nodeDef.children && nodeDef.children !== 'any' && childKey in nodeDef.children) continue;
 
       const childValue = nodeValue[childKey];
+      // No each_child.slots template → nothing to enforce against; pragmatic choice.
       if (nodeDef.each_child.slots) {
         if (isMapping(childValue)) {
           validateSlots(
@@ -463,9 +464,8 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
       // ref_must_exist: each value in a slot must be a key under in_path
       if (rule.ref_must_exist) {
         const { slot, in_path } = rule.ref_must_exist;
-        const nodeValue = resolvePath(doc, path);
-        if (isMapping(nodeValue)) {
-          const slotValue = (nodeValue as Record<string, YValue>)[slot];
+        if (isMapping(value)) {
+          const slotValue = (value as Record<string, YValue>)[slot];
           if (slotValue !== undefined) {
             // Resolve the set of valid keys from in_path (top-level)
             const target = resolvePath(doc, in_path);
