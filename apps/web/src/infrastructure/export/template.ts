@@ -8,7 +8,7 @@
  */
 
 import type { Template } from '@/infrastructure';
-import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
+import { copyToClipboard, downloadAsFile, type ExportResult } from './core';
 
 // ============================================================================
 // Markdown Export

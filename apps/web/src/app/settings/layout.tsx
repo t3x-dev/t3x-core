@@ -9,7 +9,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { clearSession, getSessionKey } from '@/lib/session';
+import { clearSession, getSessionKey } from '@/infrastructure/session';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [

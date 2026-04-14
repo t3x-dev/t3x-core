@@ -14,7 +14,7 @@
  */
 
 import { create } from 'zustand';
-import { type ValidationResult, validateConstraintsLocally } from '@/lib/draftValidation';
+import { type ValidationResult, validateConstraintsLocally } from '@/domain/draft/validation';
 import type { DraftConstraint, DraftNode, WorkbenchDraft } from '@/types/api';
 import type { SaveStatus } from './saveStatus';
 

@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type ExportFormat, exportLeaf } from '@/lib/export';
+import { type ExportFormat, exportLeaf } from '@/infrastructure/export/core';
 import type { Leaf } from '@/types/api';
 
 export interface UseLeafExportReturn {

@@ -164,7 +164,7 @@ export const testData = {
  * Mock the database module
  */
 export function mockDatabaseModule(db: AnyDB) {
-  vi.mock('@/lib/db', () => ({
+  vi.mock('@/infrastructure/db', () => ({
     getDB: vi.fn().mockResolvedValue(db),
   }));
 }

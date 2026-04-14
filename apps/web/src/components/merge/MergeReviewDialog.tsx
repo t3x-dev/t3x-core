@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTerminology } from '@/hooks/useTerminology';
-import { copyToClipboard } from '@/lib/export';
+import { copyToClipboard } from '@/infrastructure/export/core';
 import {
   formatReleaseNoteAsMarkdown,
   generateMergeReleaseNote,

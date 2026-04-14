@@ -5,7 +5,7 @@
  */
 
 import type { HumanSource, SourcedYOp, YOp } from '@t3x-dev/core';
-import { getSessionUser } from '@/lib/session';
+import { getSessionUser } from '@/infrastructure/session';
 import { SourceValidationError } from './errors';
 import { commitOps } from './yopsService';
 

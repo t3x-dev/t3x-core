@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react';
 import { create } from 'zustand';
-import { saveNodePosition } from '@/lib/nodePositionSaver';
+import { saveNodePosition } from '@/infrastructure/nodePositionSaver';
 import type { CanvasNodeData } from '../types/nodes';
 import { createCommitSlice } from './canvasCommitSlice';
 import { createLeafSlice } from './canvasLeafSlice';

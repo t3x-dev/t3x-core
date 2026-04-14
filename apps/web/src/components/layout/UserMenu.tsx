@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthMe } from '@/hooks/useAuthMe';
-import { clearSession, getSessionKey, getSessionUser, setSessionUser } from '@/lib/session';
+import { clearSession, getSessionKey, getSessionUser, setSessionUser } from '@/infrastructure/session';
 import { cn } from '@/lib/utils';
 
 // ============================================================

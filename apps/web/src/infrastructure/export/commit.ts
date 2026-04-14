@@ -9,7 +9,7 @@
 
 import type { ApiCommit } from '@/infrastructure';
 import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
-import { copyToClipboard, downloadAsFile, type ExportResult } from './export';
+import { copyToClipboard, downloadAsFile, type ExportResult } from './core';
 
 // ============================================================================
 // Markdown Export

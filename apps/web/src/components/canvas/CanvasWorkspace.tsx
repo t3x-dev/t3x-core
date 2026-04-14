@@ -16,7 +16,7 @@ import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
 import { getLayoutedElements } from '@/lib/elkLayout';
-import { saveNodePosition } from '@/lib/nodePositionSaver';
+import { saveNodePosition } from '@/infrastructure/nodePositionSaver';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';

@@ -32,7 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSemanticContent } from '@/domain/commitContent';
 import { useTerminology } from '@/hooks/useTerminology';
-import { type CommitExportFormat, exportCommit } from '@/lib/exportCommit';
+import { type CommitExportFormat, exportCommit } from '@/infrastructure/export/commit';
 import { glass, toneAccent } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
