@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { reducedMotion, scaleIn } from '@/utils/motion';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';

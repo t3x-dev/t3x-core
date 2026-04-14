@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useAvailableModels } from '@/hooks/useAvailableModels';
+import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 
 interface ChatModelSelectorProps {
   conversationId: string | null;

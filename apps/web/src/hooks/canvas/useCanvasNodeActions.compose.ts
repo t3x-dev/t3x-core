@@ -15,7 +15,7 @@
  */
 
 import type { Edge, Node } from '@xyflow/react';
-import { getTerminology } from '@/hooks/useTerminology';
+import { getTerminology } from '@/hooks/shared/useTerminology';
 import {
   backflowEdgeStyle,
   edgeStyle,

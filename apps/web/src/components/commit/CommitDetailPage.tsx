@@ -42,7 +42,7 @@ import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { relativeTime, shortHash } from '@/domain/format/formatters';

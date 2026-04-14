@@ -4,7 +4,7 @@ import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useSlotActions } from '@/hooks/useSlotActions';
+import { useSlotActions } from '@/hooks/shared/useSlotActions';
 import type { Citation } from '@/types/api';
 import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';

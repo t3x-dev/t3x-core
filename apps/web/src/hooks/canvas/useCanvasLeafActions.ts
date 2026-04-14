@@ -10,7 +10,7 @@
 
 import { useCallback } from 'react';
 import { createLeaf, deleteLeaf } from '@/commands/leaves';
-import { getTerminology } from '@/hooks/useTerminology';
+import { getTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { isDeveloperMode } from '@/store/shared';
 import type { Template } from '@/types/api';

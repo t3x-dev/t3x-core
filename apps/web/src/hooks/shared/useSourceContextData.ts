@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import type {
   NodeWithHighlight,
   TurnWithHighlights,
-} from '@/components/source-context/SourceConversationPanel';
+} from '@/types/sourceContext';
 import type { Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
 import { checkContentIntegrity } from '@/domain/format/truncationUtils';

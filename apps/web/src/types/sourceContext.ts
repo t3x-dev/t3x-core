@@ -145,6 +145,31 @@ export interface TurnBubbleData {
 export type HighlightColor = 'yellow' | 'green' | 'deepGreen' | 'deepRed' | 'amber' | 'blue';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Turn-with-highlights aggregates (moved from
+// @/components/source-context/SourceConversationPanel so non-component
+// consumers like useSourceContextData can import without breaching v2 §2.6)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A node attached to a specific turn + character range. */
+export interface NodeWithHighlight {
+  node: NodeWithSource;
+  turnHash: string;
+  highlight: HighlightRange;
+}
+
+/** Turn-level aggregate with fetched context + per-turn highlights. */
+export interface TurnWithHighlights {
+  turnHash: string;
+  context: import('@/types/api').TurnContextData | null;
+  highlights: HighlightRange[];
+  nodes: NodeWithHighlight[];
+  loading: boolean;
+  error: string | null;
+  /** Content integrity check results per node */
+  integrityStatus: Map<string, 'valid' | 'mismatch' | 'unknown'>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Context Data Types
 // ═══════════════════════════════════════════════════════════════════════════
 

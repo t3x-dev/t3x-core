@@ -14,8 +14,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
-import { useTerminology } from '@/hooks/useTerminology';
-import { useTreeDiff } from '@/hooks/useTreeDiff';
+import { useTerminology } from '@/hooks/shared/useTerminology';
+import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import { cn } from '@/utils/cn';
 import type { ApiCommit } from '@/types/api';
 

@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAvailableModels } from '@/hooks/useAvailableModels';
+import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import type { LLMProviderInfo } from '@/types/api';
 
 interface ModelSelectorProps {

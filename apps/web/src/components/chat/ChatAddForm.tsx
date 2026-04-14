@@ -12,8 +12,8 @@ import type { YOp } from '@t3x-dev/core';
 import { Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { useGoldEdit } from '@/hooks/useGoldEdit';
-import type { TextSelectionResult } from '@/hooks/useTextSelection';
+import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
+import type { TextSelectionResult } from '@/hooks/shared/useTextSelection';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface ChatAddFormProps {

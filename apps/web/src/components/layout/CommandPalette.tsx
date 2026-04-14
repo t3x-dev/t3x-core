@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { reducedMotion, scaleIn } from '@/utils/motion';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';

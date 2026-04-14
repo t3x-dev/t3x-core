@@ -1,6 +1,6 @@
 'use client';
 
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 
 /**
  * GraphIllustration — conversation → commit → leaf node graph

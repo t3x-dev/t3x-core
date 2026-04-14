@@ -5,7 +5,7 @@
 
 import type { ApiCommit, Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
-import { useQuery } from '@/hooks/useQuery';
+import { useQuery } from '@/hooks/shared/useQuery';
 
 export interface CommitWithLeaves {
   commit: ApiCommit;

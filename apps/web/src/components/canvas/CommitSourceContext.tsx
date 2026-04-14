@@ -36,7 +36,7 @@ import type { NodeWithHighlight } from '@/components/source-context/SourceConver
 import { SourceConversationPanel } from '@/components/source-context/SourceConversationPanel';
 import { LeafOutputWithHighlights } from '@/components/source-context/LeafOutputWithHighlights';
 import { SourceNodeList } from '@/components/source-context/SourceNodeList';
-import { useSourceContextData, type LeafContentNode } from '@/hooks/useSourceContextData';
+import { useSourceContextData, type LeafContentNode } from '@/hooks/shared/useSourceContextData';
 import type {
   ColoredHighlightRange,
   HighlightColor,

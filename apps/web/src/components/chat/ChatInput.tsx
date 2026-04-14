@@ -3,16 +3,14 @@
 import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/utils/cn';
 import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { AttachedImage } from '@/types/chat';
+import { cn } from '@/utils/cn';
 import { ChatModelSelector } from './ChatModelSelector';
 
-export interface AttachedImage {
-  id: string;
-  preview: string;
-  base64: string;
-  mediaType: string;
-}
+// Re-exported for backward compat; canonical definition lives in
+// @/types/chat so non-component consumers (hooks) can import it.
+export type { AttachedImage };
 
 async function resizeImage(file: File, maxDim: number): Promise<Blob> {
   return new Promise((resolve, reject) => {

@@ -9,7 +9,7 @@
  */
 
 import { useMemo } from 'react';
-import type { LeafContentNode } from '@/hooks/useSourceContextData';
+import type { LeafContentNode } from '@/hooks/shared/useSourceContextData';
 
 interface LeafOutputWithHighlightsProps {
   output: string;

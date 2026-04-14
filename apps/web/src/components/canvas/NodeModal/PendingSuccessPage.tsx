@@ -2,7 +2,7 @@
 
 import { ArrowRight, GitCompare, Minus, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTerminology } from '@/hooks/useTerminology';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 

@@ -7,7 +7,7 @@ import {
   buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
-} from '@/components/canvas/NodeContextMenu';
+} from '@/utils/canvasMenuBuilders';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';

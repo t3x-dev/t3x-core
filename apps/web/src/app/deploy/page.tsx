@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import {
   checkRunnerHealth,
   createDeployAgent,

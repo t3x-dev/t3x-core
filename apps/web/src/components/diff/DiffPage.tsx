@@ -19,7 +19,7 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
-import { useTreeDiff } from '@/hooks/useTreeDiff';
+import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { useProjectStore } from '@/store/projectStore';

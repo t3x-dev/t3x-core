@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from './useReducedMotion';
+import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 
 /**
  * useCountUp — animates a number from 0 to target with ease-out curve.

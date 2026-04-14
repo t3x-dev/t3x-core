@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AttachedImage } from '@/components/chat/ChatInput';
+import type { AttachedImage } from '@/types/chat';
 import * as api from '@/infrastructure';
 import type { Citation } from '@/infrastructure/chat';
 import { useChatSessionStore } from '@/store/chatSessionStore';

@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';

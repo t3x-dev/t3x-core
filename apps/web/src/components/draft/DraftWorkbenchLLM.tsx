@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { useReviewAction } from '@/hooks/useReviewAction';
+import { useReviewAction } from '@/hooks/shared/useReviewAction';
 import type { SemanticPointAPI } from '@/types/api';
 import { ExtractButton } from './ExtractButton';
 import { ReadyZone } from './ReadyZone';

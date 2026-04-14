@@ -17,7 +17,13 @@ import {
   truncateLongContent,
 } from '@/domain/format/truncationUtils';
 import type { TurnContextData } from '@/types/api';
-import type { HighlightRange, NodeWithSource, TurnBubbleData } from '@/types/sourceContext';
+import type {
+  HighlightRange,
+  NodeWithHighlight,
+  NodeWithSource,
+  TurnBubbleData,
+  TurnWithHighlights,
+} from '@/types/sourceContext';
 import { SourceNodeList } from './SourceNodeList';
 import { TurnBubble } from './TurnBubble';
 
@@ -38,25 +44,10 @@ const TRUNCATION_CONTEXT = DEFAULT_CONTEXT_CHARS;
  * ContentNode with source info and the expected text at that position.
  * Re-exported for consumers that need to build this data.
  */
-export interface NodeWithHighlight {
-  node: NodeWithSource;
-  turnHash: string;
-  highlight: HighlightRange;
-}
-
-/**
- * Turn data with fetched context and highlights.
- */
-export interface TurnWithHighlights {
-  turnHash: string;
-  context: TurnContextData | null;
-  highlights: HighlightRange[];
-  nodes: NodeWithHighlight[];
-  loading: boolean;
-  error: string | null;
-  /** Content integrity check results per node */
-  integrityStatus: Map<string, 'valid' | 'mismatch' | 'unknown'>;
-}
+// NodeWithHighlight / TurnWithHighlights live in @/types/sourceContext
+// (moved in P5 γ-11 whitelist cleanup). Re-exported here for callers
+// that import these types via SourceConversationPanel.
+export type { NodeWithHighlight, TurnWithHighlights } from '@/types/sourceContext';
 
 export interface SourceConversationPanelProps {
   /** Ordered list of turn hashes to render */

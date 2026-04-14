@@ -23,8 +23,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAuthMe } from '@/hooks/useAuthMe';
-import { useSession } from '@/hooks/useSession';
+import { useAuthMe } from '@/hooks/shared/useAuthMe';
+import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
 
 // ============================================================

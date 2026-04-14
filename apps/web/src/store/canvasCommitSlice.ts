@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
-import { getTerminology } from '@/hooks/useTerminology';
+import { getTerminology } from '@/hooks/shared/useTerminology';
 import { getMicrocopy } from '@/utils/microcopy';
 import { isDeveloperMode } from '@/store/shared';
 import type { BranchType, CanvasNodeData, SourceTextBlock } from '../types/nodes';

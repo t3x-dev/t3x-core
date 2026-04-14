@@ -13,7 +13,7 @@ vi.mock('@/infrastructure', () => ({
 }));
 
 import { useBranchCommits } from '@/hooks/commits/useBranchCommits';
-import { clearQueryCache } from '@/hooks/useQuery';
+import { clearQueryCache } from '@/hooks/shared/useQuery';
 import * as api from '@/infrastructure';
 
 // ---------------------------------------------------------------------------

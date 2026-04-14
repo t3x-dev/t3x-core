@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useConversationsList } from '@/hooks/conversations/useConversationsList';
 import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useTurnsList } from '@/hooks/useTurnsList';
+import { useTurnsList } from '@/hooks/shared/useTurnsList';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';

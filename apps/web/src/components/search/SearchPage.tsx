@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useProjectsList } from '@/hooks/projects/useProjectsList';
-import { useSearch } from '@/hooks/useSearch';
+import { useSearch } from '@/hooks/shared/useSearch';
 import { cn } from '@/utils/cn';
 import type { Project } from '@/types/api';
 import type { SearchMode } from '@/types/search';
