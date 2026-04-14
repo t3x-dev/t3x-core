@@ -1,8 +1,8 @@
 /**
  * useProjects — project list + deletion for the chat sidebar.
  *
- * Thin React wrapper over the L1 `lib/api/projects` adapter so components
- * do not import `@/lib/api/*` directly.
+ * Thin React wrapper over the L1 `@/infrastructure/projects` adapter so
+ * components do not import `@/infrastructure/*` directly.
  */
 
 import { useCallback, useEffect, useState } from 'react';

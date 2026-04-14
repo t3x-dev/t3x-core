@@ -1,7 +1,7 @@
 /**
  * L3 — imperative AI merge-suggestion fetcher for a single conflicting
  * tree node. Wraps the L1 `getTreeMergeSuggestion` call so components
- * never reach into `@/lib/api/diff` directly.
+ * never reach into `@/infrastructure/diff` directly.
  */
 
 import { getTreeMergeSuggestion } from '@/infrastructure/diff';

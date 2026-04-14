@@ -1,7 +1,7 @@
 /**
  * Shared API types — neutral re-export surface so components reference
- * domain types without importing from the L1 adapter layer (`@/lib/api/*`)
- * directly.
+ * domain types without importing from the L1 adapter layer
+ * (`@/infrastructure/*`) directly.
  *
  * Adding new types here is cheap; it keeps the biome-enforced L4→L1 ban
  * strict while still letting components type their props. The per-domain

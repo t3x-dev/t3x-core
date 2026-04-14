@@ -6,7 +6,7 @@ import { TemplateGrid } from '@/components/leaf/TemplateGrid';
 
 // Mock the templates query — default: reject so fallback templates are used.
 // TemplateGrid imports from @/queries/templates (doc §2 L4 routes reads
-// through a query, not @/lib/api directly).
+// through a query, not @/infrastructure directly).
 vi.mock('@/queries/templates', () => ({
   fetchTemplates: vi.fn(() => Promise.reject(new Error('API unavailable'))),
 }));

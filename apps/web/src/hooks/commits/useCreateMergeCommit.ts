@@ -2,7 +2,7 @@
  * useCreateMergeCommit — persists a merged commit via the L1 commits
  * adapter. Used by MergeWorkspace when the user finalizes a tree-merge.
  *
- * Wrapping it in a hook keeps components free of `@/lib/api/*` imports
+ * Wrapping it in a hook keeps components free of `@/infrastructure/*` imports
  * while matching the write-path hook conventions established by
  * `useGoldEdit` / `useNewProjectChat`.
  */

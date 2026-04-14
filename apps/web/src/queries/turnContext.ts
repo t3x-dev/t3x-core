@@ -3,7 +3,7 @@
  *
  * Thin pass-through to the cached L1 adapter. Lives in `queries/` so
  * components (especially under `components/merge/**`) can read turn
- * context without importing `@/lib/api/*` directly.
+ * context without importing `@/infrastructure/*` directly.
  */
 
 import { fetchTurnContextCached } from '@/infrastructure/turns';

@@ -3,7 +3,7 @@
  * for a list of pins by hitting the per-resource API endpoints.
  *
  * Extracted out of ChatWorkspace so the component stops hand-rolling fetch
- * logic with a dynamic `@/lib/api/core` import.
+ * logic with a dynamic `@/infrastructure/core` import.
  */
 
 import { useEffect, useState } from 'react';

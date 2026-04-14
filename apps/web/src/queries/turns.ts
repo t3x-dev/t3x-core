@@ -1,6 +1,6 @@
 /**
  * L3 — imperative turn-list fetcher. Wraps the L1 `listTurns` adapter so
- * components don't import from `@/lib/api/turns` directly.
+ * components don't import from `@/infrastructure/turns` directly.
  */
 
 import { getTurn, listTurns } from '@/infrastructure/turns';
