@@ -31,8 +31,9 @@ import { useLeafValidate } from '@/hooks/leaves/useLeafValidate';
 
 export type WorkspaceMode = 'generate' | 'display';
 
-// Re-export types so existing component imports of
-// `@/hooks/useLeafPageData` continue to resolve.
+// Re-export types so components that import from
+// `@/hooks/leaves/useLeafPageData` (e.g. LeafOutputDisplay) can keep
+// using the facade module as the single public surface.
 export type NodeCoverageEntry = _NodeCoverageEntry;
 export { computeNodeCoverage } from '@/hooks/leaves/useLeafCommit';
 

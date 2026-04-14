@@ -5,7 +5,7 @@
  * This protects the Runner/n8n integration from breaking due to schema changes.
  *
  * IMPORTANT: If these tests fail after a refactor, you need to update:
- * 1. apps/web/src/lib/api.ts - EngineRunRaw interface and parseEngineRun function
+ * 1. apps/web/src/infrastructure/runner.ts - EngineRunRaw interface and parseEngineRun function
  * 2. apps/runner/src/types.ts - if Runner consumes this API
  */
 

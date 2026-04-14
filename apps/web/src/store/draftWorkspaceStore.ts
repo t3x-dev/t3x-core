@@ -3,14 +3,15 @@
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions
  * (load, save, generatePreview, commit) live in
- * `hooks/useDraftWorkspaceActions`. This store owns:
+ * `@/hooks/drafts/useDraftWorkspaceActions`. This store owns:
  *  - state for the draft workspace (draft data, save/preview/commit status)
  *  - pure local mutations (toggleNode, updateTitle, addConstraint, ...)
  *  - passive setters the hook calls after each I/O resolves
  *
  * Browser timers (auto-preview debounce, saveStatus->idle reset) live
- * in `@/hooks/useDraftAutoPreview` and `@/hooks/useSaveStatusAutoIdle`;
- * the store only exposes pure state + setters (`setSaveStatusIdle` etc.).
+ * in `@/hooks/drafts/useDraftAutoPreview` and
+ * `@/hooks/shared/useSaveStatusAutoIdle`; the store only exposes pure
+ * state + setters (`setSaveStatusIdle` etc.).
  */
 
 import { create } from 'zustand';

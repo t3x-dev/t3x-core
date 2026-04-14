@@ -9,7 +9,7 @@
    (See: frontend-art-template.md §1.0)
 
    Priority 1 (Final truth):  globals.css CSS Variables — runtime values, dark mode overrides
-   Priority 2 (Mapping layer): lib/theme.ts TypeScript — glass/toneAccent/toneGlow helpers
+   Priority 2 (Mapping layer): utils/theme.ts TypeScript — glass/toneAccent/toneGlow helpers
                                 MUST only reference CSS variables or Tailwind tokens
    Priority 3 (Consumer layer): Component Tailwind classes — use token classes
 

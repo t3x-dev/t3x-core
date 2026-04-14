@@ -15,7 +15,7 @@
  *     (sync), then this command's call is fire-and-forget through
  *     useCanvasDeletionWiring's handler — failures are silently
  *     swallowed so the canvas stays clean.
- *   - updateConversation: lib/nodePositionSaver fires-and-forgets
+ *   - updateConversation: infrastructure/nodePositionSaver fires-and-forgets
  *     position writes; UI already reflects the drag.
  */
 
