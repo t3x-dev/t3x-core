@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
-import { hydrateConversation } from '@/queries/loadConversation';
+import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -50,7 +50,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         });
 
         // Re-hydrate the conversation to pull newly-committed ops into the store.
-        await hydrateConversation(projectId, extractConvId);
+        await hydrateConversationToStore(projectId, extractConvId);
         useWorkspaceStore.getState().setMode('idle');
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');

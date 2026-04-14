@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCommitActions } from '@/hooks/useCommitActions';
 import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
-import { hydrateFromParent } from '@/queries/hydrateFromParent';
-import { hydrateConversation } from '@/queries/loadConversation';
+import { fetchParentCommitData } from '@/queries/hydrateFromParent';
+import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useSessionStore } from '@/store/sessionStore';
@@ -78,21 +78,30 @@ export function useChatInit({
     }
 
     // ── 3. Hydrate state (regular replay, or parent inheritance as fallback) ──
+    // Pure queries return data; the hook performs the store writes.
     const runInheritance = async (hash: string) => {
-      const { parentConversationId: pid, inherited } = await hydrateFromParent(hash);
-      if (pid) setParentConversationId(pid);
-      if (inherited) {
+      const data = await fetchParentCommitData(hash);
+      if (data.parentConversationId) setParentConversationId(data.parentConversationId);
+      if (data.fetched && data.hasTrees && data.lastCommitHash) {
+        useCommitStore.setState({
+          lastCommitHash: data.lastCommitHash,
+          confirmedNodeIds: data.confirmedNodeIds,
+        });
+        if (!useWorkspaceStore.getState().panelExpanded) {
+          useWorkspaceStore.getState().setPanelExpanded(true);
+        }
+      }
+      if (data.fetched) {
         inheritedRef.current = true;
         onInheritComplete?.();
       }
     };
 
     if (convId && convId !== 'new' && resolvedProjectId) {
-      hydrateConversation(resolvedProjectId, convId)
+      hydrateConversationToStore(resolvedProjectId, convId)
         .then(async () => {
-          if (!useWorkspaceStore.getState().panelExpanded) {
-            useWorkspaceStore.getState().setPanelExpanded(true);
-          }
+          const s = useWorkspaceStore.getState();
+          if (!s.panelExpanded) s.setPanelExpanded(true);
           // Topics are display-only until a workspaceStore slot exists.
           // TODO(topics-state): route through workspaceStore once the schema lands.
           await fetchConversationTopics(convId);

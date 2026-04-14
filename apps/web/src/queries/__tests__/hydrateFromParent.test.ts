@@ -1,18 +1,10 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fetchers from '../chatInitFetch';
-import { hydrateFromParent } from '../hydrateFromParent';
-import { useCommitStore } from '@/store/commitStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
-
-function resetStores() {
-  useCommitStore.setState({ lastCommitHash: null, confirmedNodeIds: {} });
-  useWorkspaceStore.getState().reset();
-}
+import { fetchParentCommitData } from '../hydrateFromParent';
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  resetStores();
 });
 
 const HASH = 'sha256:parent123';
@@ -38,63 +30,59 @@ function mockCommit(overrides: {
   } as never);
 }
 
-describe('hydrateFromParent', () => {
-  it('returns parentConversationId when the commit sources include a conversation', async () => {
+describe('fetchParentCommitData', () => {
+  it('returns parentConversationId when commit sources include a conversation', async () => {
     mockCommit({
       trees: treesWithOneNode,
       sources: [{ type: 'conversation', id: 'conv_xyz' }],
     });
 
-    const result = await hydrateFromParent(HASH);
+    const data = await fetchParentCommitData(HASH);
 
-    expect(result.inherited).toBe(true);
-    expect(result.parentConversationId).toBe('conv_xyz');
+    expect(data.fetched).toBe(true);
+    expect(data.parentConversationId).toBe('conv_xyz');
   });
 
-  it('pins lastCommitHash and marks inherited trees as confirmed when trees exist', async () => {
+  it('surfaces lastCommitHash + confirmedNodeIds when trees exist', async () => {
     mockCommit({ trees: treesWithOneNode });
 
-    await hydrateFromParent(HASH);
+    const data = await fetchParentCommitData(HASH);
 
-    expect(useCommitStore.getState().lastCommitHash).toBe(HASH);
-    expect(useCommitStore.getState().confirmedNodeIds).toMatchObject({ trip: true });
+    expect(data.hasTrees).toBe(true);
+    expect(data.lastCommitHash).toBe(HASH);
+    expect(data.confirmedNodeIds).toMatchObject({ trip: true });
   });
 
-  it('expands the YOps panel only when trees are present', async () => {
-    // trees empty — panel should stay collapsed
+  it('returns hasTrees=false when the parent commit has no trees', async () => {
     mockCommit({ trees: [] });
-    await hydrateFromParent(HASH);
-    expect(useWorkspaceStore.getState().panelExpanded).toBe(false);
-
-    // trees present — panel expands
-    resetStores();
-    mockCommit({ trees: treesWithOneNode });
-    await hydrateFromParent(HASH);
-    expect(useWorkspaceStore.getState().panelExpanded).toBe(true);
+    const data = await fetchParentCommitData(HASH);
+    expect(data.fetched).toBe(true);
+    expect(data.hasTrees).toBe(false);
+    expect(data.lastCommitHash).toBeNull();
+    expect(data.confirmedNodeIds).toEqual({});
   });
 
-  it('does not clobber an already-expanded panel', async () => {
-    useWorkspaceStore.getState().setPanelExpanded(true);
-    mockCommit({ trees: treesWithOneNode });
-    await hydrateFromParent(HASH);
-    expect(useWorkspaceStore.getState().panelExpanded).toBe(true);
-  });
-
-  it('returns inherited=false and leaves stores untouched when the fetch fails', async () => {
+  it('returns fetched=false with default blanks on fetch failure', async () => {
     vi.spyOn(fetchers, 'fetchCommitForInheritance').mockRejectedValue(new Error('boom'));
 
-    const result = await hydrateFromParent(HASH);
+    const data = await fetchParentCommitData(HASH);
 
-    expect(result).toEqual({ parentConversationId: null, inherited: false });
-    expect(useCommitStore.getState().lastCommitHash).toBeNull();
-    expect(useCommitStore.getState().confirmedNodeIds).toEqual({});
+    expect(data).toEqual({
+      parentConversationId: null,
+      lastCommitHash: null,
+      confirmedNodeIds: {},
+      hasTrees: false,
+      fetched: false,
+    });
   });
 
-  it('returns inherited=true with null parentConversationId when sources have no conversation', async () => {
+  it('returns null parentConversationId when sources have no conversation type', async () => {
     mockCommit({ trees: treesWithOneNode, sources: [{ type: 'leaf', id: 'leaf_1' }] });
 
-    const result = await hydrateFromParent(HASH);
+    const data = await fetchParentCommitData(HASH);
 
-    expect(result).toEqual({ parentConversationId: null, inherited: true });
+    expect(data.parentConversationId).toBeNull();
+    expect(data.hasTrees).toBe(true);
+    expect(data.fetched).toBe(true);
   });
 });
