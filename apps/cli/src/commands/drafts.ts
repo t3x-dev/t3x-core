@@ -33,14 +33,7 @@ export function registerShowDraft(parent: Command): void {
 
       try {
         const client = getClientWithAuth();
-        const draft = (await client.getDraft(draftId)) as Record<string, unknown> & {
-          draft_id: string;
-          project_id: string;
-          conversation_id: string;
-          status: string;
-          created_at: string;
-          revision?: number;
-        };
+        const draft = (await client.getDraft(draftId)) as Record<string, unknown>;
 
         spinner?.stop();
 
@@ -49,17 +42,18 @@ export function registerShowDraft(parent: Command): void {
           return;
         }
 
+        const id = String(draft.id ?? draft.draft_id ?? draftId);
         console.log();
-        console.log(`Draft:         ${draft.draft_id}`);
-        console.log(`Project:       ${draft.project_id}`);
-        console.log(`Conversation:  ${draft.conversation_id}`);
-        console.log(`Status:        ${draft.status}`);
+        console.log(`Draft:         ${id}`);
+        if (draft.project_id) console.log(`Project:       ${draft.project_id}`);
+        if (draft.title) console.log(`Title:         ${draft.title}`);
+        if (draft.status) console.log(`Status:        ${draft.status}`);
         if (typeof draft.revision === 'number') {
           console.log(`Revision:      ${draft.revision}`);
         }
-        console.log(`Created:       ${formatDate(draft.created_at)}`);
-        if (Array.isArray(draft.trees)) {
-          console.log(`Trees:         ${draft.trees.length} root nodes`);
+        if (draft.created_at) console.log(`Created:       ${formatDate(String(draft.created_at))}`);
+        if (Array.isArray(draft.nodes)) {
+          console.log(`Nodes:         ${draft.nodes.length}`);
         }
       } catch (err) {
         spinner?.stop();
@@ -143,24 +137,25 @@ export function registerListDrafts(parent: Command): void {
 
         spinner?.stop();
 
+        const drafts = Array.isArray(result) ? result : (result.drafts ?? []);
+
         if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
+          console.log(JSON.stringify(drafts, null, 2));
           return;
         }
 
-        if (result.drafts.length === 0) {
+        if (drafts.length === 0) {
           console.log('No drafts found.');
           return;
         }
 
         printTable({
-          columns: ['Draft ID', 'Conversation', 'Status', 'Intent', 'Created'],
-          rows: result.drafts.map((d) => [
-            d.draft_id,
-            d.conversation_id,
-            d.status,
-            truncate(d.intent ?? '', 30),
-            formatDate(d.created_at),
+          columns: ['Draft ID', 'Status', 'Title', 'Created'],
+          rows: drafts.map((d: Record<string, unknown>) => [
+            String(d.id ?? d.draft_id ?? ''),
+            String(d.status ?? ''),
+            truncate(String(d.title ?? d.intent ?? ''), 30),
+            formatDate(String(d.created_at ?? '')),
           ]),
         });
       } catch (err) {
