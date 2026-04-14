@@ -18,7 +18,11 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerListDrafts, registerShowDraft } from '../../commands/drafts.js';
+import {
+  registerDeleteDraft,
+  registerListDrafts,
+  registerShowDraft,
+} from '../../commands/drafts.js';
 
 function createProgram() {
   const program = new Command();
@@ -115,5 +119,41 @@ describe('show draft', () => {
     await program.parseAsync(['node', 'test', 'show', 'draft']);
 
     expect(mockClient.getDraft).toHaveBeenCalledWith('draft_env');
+  });
+});
+
+describe('delete draft', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.T3X_DRAFT;
+  });
+
+  it('deletes with --force, no prompt', async () => {
+    mockClient.deleteDraft.mockResolvedValue(undefined);
+
+    const program = new Command();
+    program.exitOverride();
+    const deleteCmd = program.command('delete');
+    registerDeleteDraft(deleteCmd);
+
+    await program.parseAsync(['node', 'test', 'delete', 'draft', 'draft_abc', '--force']);
+
+    expect(mockClient.deleteDraft).toHaveBeenCalledWith('draft_abc');
+  });
+
+  it('deletes via --json without prompting', async () => {
+    mockClient.deleteDraft.mockResolvedValue(undefined);
+    const logSpy = vi.spyOn(console, 'log');
+
+    const program = new Command();
+    program.exitOverride();
+    const deleteCmd = program.command('delete');
+    registerDeleteDraft(deleteCmd);
+
+    await program.parseAsync(['node', 'test', 'delete', 'draft', 'draft_abc', '--json']);
+
+    expect(mockClient.deleteDraft).toHaveBeenCalledWith('draft_abc');
+    const calls = logSpy.mock.calls.map((c) => c[0]).filter((v) => typeof v === 'string');
+    expect(calls.some((s) => s.includes('"deleted": true'))).toBe(true);
   });
 });
