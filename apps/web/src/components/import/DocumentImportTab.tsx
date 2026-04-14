@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import * as api from '@/infrastructure';
+import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
@@ -18,7 +19,7 @@ const ACCEPTED_TYPES = '.pdf,.docx,.doc,.md,.txt,.html,.htm';
 
 export function DocumentImportTab({ projectId, onImported }: DocumentImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<api.ImportPreviewResult | null>(null);
+  const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importStatus, setImportStatus] = useState<
     'idle' | 'loading' | 'streaming' | 'success' | 'error'
@@ -40,7 +41,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         setPreview(result);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Failed to parse document');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Failed to parse document');
       } finally {
         setPreviewLoading(false);
       }
@@ -50,7 +51,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
 
   const handleImport = useCallback(async () => {
     if (!file) return;
-    const useStreaming = preview && preview.estimated_turns >= api.STREAMING_IMPORT_THRESHOLD;
+    const useStreaming = preview && preview.estimated_turns >= STREAMING_IMPORT_THRESHOLD;
 
     if (useStreaming) {
       setImportStatus('streaming');
@@ -82,7 +83,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         if (lastConversationId) onImported(lastConversationId);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     } else {
       setImportStatus('loading');
@@ -95,7 +96,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         onImported(result.conversation_id);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     }
   }, [file, projectId, preview, onImported]);

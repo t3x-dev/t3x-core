@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import * as api from '@/infrastructure';
+import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
 
@@ -15,7 +16,7 @@ interface UrlImportTabProps {
 
 export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
   const [url, setUrl] = useState('');
-  const [preview, setPreview] = useState<api.ImportPreviewResult | null>(null);
+  const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importStatus, setImportStatus] = useState<
     'idle' | 'loading' | 'streaming' | 'success' | 'error'
@@ -36,7 +37,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
       setPreview(result);
     } catch (err) {
       setImportStatus('error');
-      setStatusMessage(err instanceof api.ApiError ? err.message : 'Failed to fetch URL');
+      setStatusMessage(err instanceof ApiError ? err.message : 'Failed to fetch URL');
     } finally {
       setPreviewLoading(false);
     }
@@ -44,7 +45,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
 
   const handleImport = useCallback(async () => {
     if (!url.trim()) return;
-    const useStreaming = preview && preview.estimated_turns >= api.STREAMING_IMPORT_THRESHOLD;
+    const useStreaming = preview && preview.estimated_turns >= STREAMING_IMPORT_THRESHOLD;
 
     if (useStreaming) {
       setImportStatus('streaming');
@@ -76,7 +77,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         if (lastConversationId) onImported(lastConversationId);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     } else {
       setImportStatus('loading');
@@ -89,7 +90,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         onImported(result.conversation_id);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     }
   }, [url, projectId, preview, onImported]);
