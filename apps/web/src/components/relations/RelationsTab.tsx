@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCommitRelations } from '@/hooks/useCommitRelations';
+import { useCommitRelations } from '@/hooks/commits/useCommitRelations';
 import { cn } from '@/utils/cn';
 import type { NodeRelation, RelationType } from '@/types/api';
 import { RelationsGraph } from './RelationsGraph';

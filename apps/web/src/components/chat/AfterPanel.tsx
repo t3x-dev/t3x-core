@@ -5,7 +5,7 @@ import { Check, Play, Plus, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getSlotSource } from '@/domain/source';
-import { useCommitActions } from '@/hooks/useCommitActions';
+import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useGoldEdit } from '@/hooks/useGoldEdit';
 import { cn } from '@/utils/cn';
 import { useCommitStore } from '@/store/commitStore';

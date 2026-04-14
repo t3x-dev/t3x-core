@@ -23,7 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { useCommitDraft } from '@/hooks/useCommitDraft';
+import { useCommitDraft } from '@/hooks/commits/useCommitDraft';
 import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useUpdateDraft } from '@/hooks/drafts/useUpdateDraft';

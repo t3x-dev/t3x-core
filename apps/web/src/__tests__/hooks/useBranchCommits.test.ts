@@ -12,7 +12,7 @@ vi.mock('@/infrastructure', () => ({
   listLeavesByCommit: vi.fn(),
 }));
 
-import { useBranchCommits } from '@/hooks/useBranchCommits';
+import { useBranchCommits } from '@/hooks/commits/useBranchCommits';
 import { clearQueryCache } from '@/hooks/useQuery';
 import * as api from '@/infrastructure';
 

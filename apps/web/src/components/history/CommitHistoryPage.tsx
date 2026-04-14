@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useBranchesList } from '@/hooks/useBranchesList';
-import { useCommitsList } from '@/hooks/useCommitsList';
+import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useDiffRaw } from '@/hooks/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
 import type { ApiCommit, Branch } from '@/types/api';

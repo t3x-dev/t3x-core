@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useCommitActions } from '@/hooks/useCommitActions';
+import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
 import { fetchParentCommitData } from '@/queries/hydrateFromParent';
 import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';

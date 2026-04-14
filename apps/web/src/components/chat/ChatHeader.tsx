@@ -3,7 +3,7 @@
 import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCommitActions } from '@/hooks/useCommitActions';
+import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';

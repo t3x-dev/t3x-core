@@ -17,7 +17,7 @@ import { DiffModeToggle } from '@/components/diff/DiffModeToggle';
 import { DiffSourceContextModal } from '@/components/diff/DiffSourceContextModal';
 import { Button } from '@/components/ui/button';
 import { EmptyStateInline } from '@/components/ui/empty-state';
-import { useCommitByHash } from '@/hooks/useCommitByHash';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useTurnContext } from '@/hooks/useTurnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';

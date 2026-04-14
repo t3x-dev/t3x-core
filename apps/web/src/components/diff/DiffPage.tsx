@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
-import { useCommitByHash } from '@/hooks/useCommitByHash';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useTreeDiff } from '@/hooks/useTreeDiff';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';

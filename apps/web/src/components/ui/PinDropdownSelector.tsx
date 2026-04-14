@@ -12,8 +12,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
-import { useBranchCommits } from '@/hooks/useBranchCommits';
+import type { CommitWithLeaves } from '@/hooks/commits/useBranchCommits';
+import { useBranchCommits } from '@/hooks/commits/useBranchCommits';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/utils/cn';
