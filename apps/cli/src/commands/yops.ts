@@ -80,6 +80,59 @@ export function registerYopsCommands(program: Command): void {
     });
 
   yops
+    .command('apply [draft-id]')
+    .description('Apply YOps to a draft (writes to yops_log)')
+    .option('-f, --file <path>', 'YOps YAML file')
+    .option('--stdin', 'Read from stdin')
+    .option('--if-revision <n>', 'Draft revision for optimistic locking (default: auto-fetch)')
+    .option('--json', 'Output as JSON')
+    .action(async (draftIdArg: string | undefined, options) => {
+      const { getClientWithAuth, getDraftId } = await import('../utils.js');
+      const draftId = getDraftId(draftIdArg);
+      if (!draftId) return;
+
+      const yamlText = await readYOpsInput(options);
+      const ops = parseYOps(yamlText);
+      if (!ops) return;
+
+      const client = getClientWithAuth();
+
+      let revision: number;
+      if (options.ifRevision !== undefined) {
+        revision = parseInt(String(options.ifRevision), 10);
+        if (Number.isNaN(revision)) {
+          error('--if-revision must be a number');
+          process.exit(1);
+        }
+      } else {
+        const draft = (await client.getDraft(draftId)) as { revision?: number };
+        if (typeof draft.revision !== 'number') {
+          error('Draft response did not include a revision field');
+          process.exit(1);
+        }
+        revision = draft.revision;
+      }
+
+      try {
+        const result = await client.applyYOps(draftId, ops, revision);
+
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        success(
+          `Applied ${result.applied_count} operation${result.applied_count !== 1 ? 's' : ''}`,
+        );
+        console.log(`  Draft: ${result.draft_id}  (revision ${revision} → ${result.revision})`);
+        console.log(`  Trees: ${result.tree_count} nodes, ${result.slot_count} slots`);
+      } catch (e: unknown) {
+        error(`Apply failed: ${e instanceof Error ? e.message : String(e)}`);
+        process.exit(1);
+      }
+    });
+
+  yops
     .command('log')
     .description('Show YOps history for a conversation')
     .requiredOption('-c, --conversation <id>', 'Conversation ID')
