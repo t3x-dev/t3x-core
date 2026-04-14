@@ -19,8 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { exportTemplate, type TemplateExportFormat } from '@/infrastructure/export/template';
-import type { Template } from '@/types/api';
+import { useExportTemplate } from '@/hooks/useExportTemplate';
+import type { Template, TemplateExportFormat } from '@/types/api';
 
 interface TemplatePreviewDialogProps {
   template: Template | null;
@@ -59,6 +59,7 @@ export function TemplatePreviewDialog({
   onUse,
 }: TemplatePreviewDialogProps) {
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const { run: exportTemplate } = useExportTemplate();
 
   const handleExport = async (format: TemplateExportFormat) => {
     if (!template) return;

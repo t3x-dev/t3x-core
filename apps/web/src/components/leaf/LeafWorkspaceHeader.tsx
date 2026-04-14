@@ -15,7 +15,7 @@ import { PinButton } from '@/components/ui/PinButton';
 import type { WorkspaceMode } from '@/hooks/useLeafPageData';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { Leaf } from '@/types/api';
-import type { ExportFormat } from '@/infrastructure/export/core';
+import type { ExportFormat } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 interface LeafWorkspaceHeaderProps {

@@ -82,3 +82,9 @@ export type {
   Turn,
 } from '@/infrastructure/types';
 export type { NodeMember } from '@/types/knowledgeGraph';
+
+// Export-format unions (re-exported so components consume types
+// without touching @/infrastructure — Phase F boundary).
+export type { ExportFormat } from '@/infrastructure/export/core';
+export type { CommitExportFormat } from '@/infrastructure/export/commit';
+export type { TemplateExportFormat } from '@/infrastructure/export/template';
