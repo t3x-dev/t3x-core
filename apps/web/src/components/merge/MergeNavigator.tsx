@@ -89,9 +89,7 @@ export function MergeNavigator({
   onToggleKeepTarget,
 }: MergeNavigatorProps) {
   const totalConflicts = mergeResult.conflicts.length;
-  const resolvedCountActual = mergeResult.conflicts.filter((c) =>
-    resolutions.has(c.path)
-  ).length;
+  const resolvedCountActual = mergeResult.conflicts.filter((c) => resolutions.has(c.path)).length;
   const progress = totalConflicts > 0 ? (resolvedCountActual / totalConflicts) * 100 : 100;
 
   function handleNodeClick(path: string) {
@@ -189,9 +187,7 @@ export function MergeNavigator({
             >
               <Check size={8} className="shrink-0 rounded-full text-[var(--diff-added-accent)]" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[11px] font-medium">
-                  {formatPath(path)}
-                </div>
+                <div className="truncate text-[11px] font-medium">{formatPath(path)}</div>
                 <div className="truncate font-mono text-[10px]">{path}</div>
               </div>
             </div>
@@ -202,7 +198,11 @@ export function MergeNavigator({
       {/* Source only */}
       {mergeResult.onlyInSource.length > 0 && (
         <>
-          <SectionHeader label="Added in source" count={mergeResult.onlyInSource.length} color="blue" />
+          <SectionHeader
+            label="Added in source"
+            count={mergeResult.onlyInSource.length}
+            color="blue"
+          />
           {mergeResult.onlyInSource.map((path) => {
             const isKept = keepSource.has(path);
             return (
@@ -231,7 +231,11 @@ export function MergeNavigator({
       {/* Target only */}
       {mergeResult.onlyInTarget.length > 0 && (
         <>
-          <SectionHeader label="Added in target" count={mergeResult.onlyInTarget.length} color="blue" />
+          <SectionHeader
+            label="Added in target"
+            count={mergeResult.onlyInTarget.length}
+            color="blue"
+          />
           {mergeResult.onlyInTarget.map((path) => {
             const isKept = keepTarget.has(path);
             return (

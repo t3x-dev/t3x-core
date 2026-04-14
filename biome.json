@@ -101,7 +101,8 @@
       "includes": [
         "apps/web/src/commands/**",
         "apps/web/src/queries/**",
-        "apps/web/src/infrastructure/**"
+        "apps/web/src/infrastructure/**",
+        "apps/web/src/__tests__/**"
       ],
       "linter": {
         "rules": {
@@ -156,14 +157,7 @@
       }
     },
     {
-      "includes": [
-        "apps/web/src/components/canvas/**",
-        "apps/web/src/components/chat/**",
-        "apps/web/src/components/commit/**",
-        "apps/web/src/components/leaf/**",
-        "apps/web/src/components/merge/**",
-        "apps/web/src/components/tree-graph/merge-view/**"
-      ],
+      "includes": ["apps/web/src/hooks/**"],
       "linter": {
         "rules": {
           "style": {
@@ -172,12 +166,50 @@
               "options": {
                 "patterns": [
                   {
-                    "group": "@/commands/**",
-                    "message": "Components must not import from the commands layer directly. Route through useExtraction or a dedicated hook."
+                    "group": "@/components/**",
+                    "message": "Hooks must not depend on components (v2 §2.6: L3 → L4 reverse-dep). Move shared types out of components/ (e.g. into types/) or invert the relationship."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/src/hooks/useConversationChat.ts",
+        "apps/web/src/hooks/useSourceContextData.ts",
+        "apps/web/src/hooks/useContextMenu.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "warn",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/queries/**",
+                    "message": "Components must not import queries directly (v2 §1 table). Route through a hook in @/hooks/. Currently warn — Phase F flips to error after the 26 known offenders migrate to hooks."
                   },
                   {
                     "group": "@/infrastructure/**",
-                    "message": "Components must not import from the infrastructure layer directly. Use queries or the store instead."
+                    "message": "Components must not import infrastructure directly (v2 §1 table). Route through a hook. Currently warn — Phase F flips to error."
+                  },
+                  {
+                    "group": "@/commands/**",
+                    "message": "Components must not import commands directly (v2 §1 table). Route through a hook (see useExtraction/useGoldEdit pattern). Currently warn — Phase F flips to error."
                   }
                 ]
               }
@@ -210,47 +242,6 @@
                 ]
               }
             }
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "apps/web/src/store/canvasStoreUtils.ts",
-        "apps/web/src/store/searchStore.ts",
-        "apps/web/src/store/knowledgeGraphStore.ts"
-      ],
-      "linter": {
-        "rules": {
-          "style": {
-            "noRestrictedImports": {
-              "level": "error",
-              "options": {
-                "patterns": [
-                  {
-                    "group": "@/commands/**",
-                    "message": "Stores must not import from the commands layer."
-                  },
-                  {
-                    "group": "@/infrastructure/**",
-                    "message": "Stores must not import from the infrastructure layer."
-                  }
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "includes": [
-        "apps/web/src/components/chat/useExtraction.ts",
-        "apps/web/src/components/chat/useGoldEdit.ts"
-      ],
-      "linter": {
-        "rules": {
-          "style": {
-            "noRestrictedImports": "off"
           }
         }
       }

@@ -16,8 +16,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { CreateTemplateInput, Template, TemplateVariable } from '@/infrastructure';
 import { useTemplates } from '@/hooks/useTemplates';
+import type { CreateTemplateInput, Template, TemplateVariable } from '@/types/api';
 
 const CATEGORIES = ['social', 'business', 'technical', 'creative'] as const;
 const LEAF_TYPES = ['tweet', 'article', 'email', 'weibo', 'wechat', 'slack'] as const;

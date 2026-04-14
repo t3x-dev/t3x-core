@@ -2,40 +2,11 @@
  * Search API — hybrid (keyword + vector) node search
  */
 
+import type { SearchHit, SearchMode, SearchNodesInput, SearchResult } from '@/types/search';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export type SearchMode = 'hybrid' | 'keyword' | 'semantic';
-
-export interface SearchHit {
-  node_id: string;
-  commit_hash: string;
-  text: string;
-  score: number;
-  keyword_rank: number | null;
-  vector_rank: number | null;
-}
-
-export interface SearchResult {
-  results: SearchHit[];
-  total: number;
-  mode: SearchMode;
-  query_time_ms: number;
-}
-
-// ============================================================================
-// Search
-// ============================================================================
-
-export interface SearchNodesInput {
-  project_id?: string;
-  query: string;
-  mode?: SearchMode;
-  limit?: number;
-}
+// Re-export types for backward compat. Canonical home: @/types/search.
+export type { SearchHit, SearchMode, SearchNodesInput, SearchResult };
 
 /**
  * Search nodes across commits using hybrid (keyword + vector) search.

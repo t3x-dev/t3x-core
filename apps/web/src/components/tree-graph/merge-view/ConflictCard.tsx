@@ -1,27 +1,21 @@
 'use client';
 
 import type { MergeResult, SlotValue } from '@t3x-dev/core';
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Sparkles,
-} from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTreeMergeSuggestion } from '@/hooks/useTreeMergeSuggestion';
 import { cn } from '@/lib/utils';
-import { fetchTreeMergeSuggestion } from '@/queries/treeMergeSuggestion';
 import type { TreeMergeSuggestion } from '@/types/api';
-import { AgreedSlotRow, SlotConflictRow } from './SlotConflictRow';
 import {
   type ConflictResolution,
-  type FlatNode,
-  type SlotChoice,
   canonicalJson,
+  type FlatNode,
   formatSlotValue,
+  type SlotChoice,
   toTitleCase,
 } from './mergeViewHelpers';
+import { AgreedSlotRow, SlotConflictRow } from './SlotConflictRow';
 
 export function ConflictCard({
   conflict,
@@ -47,6 +41,7 @@ export function ConflictCard({
   // AI suggestion state
   const [suggestion, setSuggestion] = useState<TreeMergeSuggestion | null>(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const { loadSuggestion } = useTreeMergeSuggestion();
   const [suggestError, setSuggestError] = useState<string | null>(null);
 
   // Find agreed-upon slots (present in both, not conflicting)
@@ -70,7 +65,7 @@ export function ConflictCard({
     setSuggestLoading(true);
     setSuggestError(null);
     try {
-      const result = await fetchTreeMergeSuggestion(
+      const result = await loadSuggestion(
         mergeId,
         path,
         { type: sourceNode?.type ?? path, slots: sourceSlots },
@@ -82,7 +77,7 @@ export function ConflictCard({
     } finally {
       setSuggestLoading(false);
     }
-  }, [mergeId, path, sourceNode, targetNode, sourceSlots, targetSlots]);
+  }, [mergeId, path, sourceNode, targetNode, sourceSlots, targetSlots, loadSuggestion]);
 
   const handleApplySuggestion = useCallback(() => {
     if (!suggestion) return;
@@ -107,9 +102,7 @@ export function ConflictCard({
     <div
       className={cn(
         'rounded-lg border-2 overflow-hidden',
-        allResolved
-          ? 'border-[var(--status-success)]'
-          : 'border-[var(--status-error)]'
+        allResolved ? 'border-[var(--status-success)]' : 'border-[var(--status-error)]'
       )}
     >
       {/* Header */}
@@ -169,7 +162,9 @@ export function ConflictCard({
                   AI Suggestion
                 </Button>
               )}
-              {suggestError && <p className="text-xs text-[var(--status-error)] mt-1">{suggestError}</p>}
+              {suggestError && (
+                <p className="text-xs text-[var(--status-error)] mt-1">{suggestError}</p>
+              )}
               {suggestion && (
                 <div className="text-xs space-y-2 p-2 rounded bg-[var(--source-dim)] border border-[var(--source)]/30">
                   <div className="font-medium text-[var(--source)] flex items-center gap-1">
@@ -192,10 +187,14 @@ export function ConflictCard({
                           </span>
                           <span>{formatSlotValue(value as SlotValue)}</span>
                           {matchesSource && (
-                            <span className="text-[10px] text-[var(--status-info)] font-sans">(source)</span>
+                            <span className="text-[10px] text-[var(--status-info)] font-sans">
+                              (source)
+                            </span>
                           )}
                           {matchesTarget && (
-                            <span className="text-[10px] text-[var(--status-success)] font-sans">(target)</span>
+                            <span className="text-[10px] text-[var(--status-success)] font-sans">
+                              (target)
+                            </span>
                           )}
                           {isNovel && (
                             <span className="text-[10px] text-[var(--status-warning)] font-sans">

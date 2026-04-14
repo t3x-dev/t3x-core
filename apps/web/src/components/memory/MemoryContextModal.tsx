@@ -24,12 +24,14 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useConversationsList } from '@/hooks/useConversationsList';
+import { useLeavesByProject } from '@/hooks/useLeavesByProject';
 import { usePinsCrud } from '@/hooks/usePinsCrud';
-import type { Conversation, Leaf, Turn } from '@/infrastructure';
-import { listConversations, listLeavesByProject, listTurns } from '@/infrastructure';
+import { useTurnsList } from '@/hooks/useTurnsList';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { usePinsStore } from '@/store/pinsStore';
+import type { Conversation, Leaf, Turn } from '@/types/api';
 
 // Selected item type for detail panel
 type SelectedItem =
@@ -61,6 +63,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
   const isPinned = usePinsStore((s) => s.isPinned);
   const getPinByRef = usePinsStore((s) => s.getPinByRef);
   const { fetch: fetchPins, add: addPin, remove: removePin } = usePinsCrud();
+  const { loadConversations } = useConversationsList();
+  const { loadLeaves } = useLeavesByProject();
+  const { loadTurns } = useTurnsList();
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -75,18 +80,18 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
 
     // Fetch conversations
     setLoadingConversations(true);
-    listConversations(projectId, 100, 0)
+    loadConversations(projectId, 100, 0)
       .then((result) => setConversations(result.conversations))
       .catch(() => setConversations([]))
       .finally(() => setLoadingConversations(false));
 
     // Fetch leaves
     setLoadingLeaves(true);
-    listLeavesByProject(projectId)
+    loadLeaves(projectId)
       .then(setLeaves)
       .catch(() => setLeaves([]))
       .finally(() => setLoadingLeaves(false));
-  }, [open, projectId, fetchPins]);
+  }, [open, projectId, fetchPins, loadConversations, loadLeaves]);
 
   // Load conversation turns when a conversation is selected
   useEffect(() => {
@@ -96,11 +101,11 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
     }
 
     setLoadingDetail(true);
-    listTurns(projectId, selectedItem.id)
+    loadTurns(projectId, selectedItem.id)
       .then((result) => setDetailTurns(result.turns))
       .catch(() => setDetailTurns([]))
       .finally(() => setLoadingDetail(false));
-  }, [selectedItem, projectId]);
+  }, [selectedItem, projectId, loadTurns]);
 
   // Count pinned items
   const pinnedConversations = useMemo(

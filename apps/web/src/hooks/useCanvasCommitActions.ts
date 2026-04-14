@@ -1,6 +1,6 @@
 /**
  * useCanvasCommitActions — view-facing API for canvas commit flows that
- * cross the I/O boundary (fetchTurns, createConversationIn,
+ * cross the I/O boundary (fetchTurns, @/commands/conversations.createConversation,
  * createMergeDraft).
  *
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
@@ -13,8 +13,9 @@
 
 import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
-import { createConversationIn } from '@/queries/conversations';
-import { createMergeDraft } from '@/queries/mergeApi';
+import { renameCommit as renameCommitCommand } from '@/commands/commits';
+import { createConversation } from '@/commands/conversations';
+import { createMergeDraft } from '@/commands/merge';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
 import {
@@ -145,7 +146,7 @@ export function useCanvasCommitActions() {
     const title = 'Untitled Unit';
     const parentCommitHash = source.data.commitHash || source.id;
     const position = computeAttachedPosition(source, 'unit', commitQuickOffset);
-    const conversation = await createConversationIn(state.projectId, title, parentCommitHash, {
+    const conversation = await createConversation(state.projectId, title, parentCommitHash, {
       x: position.x,
       y: position.y,
     });
@@ -249,5 +250,16 @@ export function useCanvasCommitActions() {
     }
   }, []);
 
-  return { addFromConversation, addConversationFromCommit, startMerge };
+  /**
+   * Rename a committed commit's display message. Components used to
+   * dynamic-import this; the hook lifts it to a stable React surface
+   * so views can call it without crossing the components -> commands
+   * biome ban.
+   */
+  const renameCommit = useCallback(
+    async (commitHash: string, newTitle: string) => renameCommitCommand(commitHash, newTitle),
+    []
+  );
+
+  return { addFromConversation, addConversationFromCommit, startMerge, renameCommit };
 }

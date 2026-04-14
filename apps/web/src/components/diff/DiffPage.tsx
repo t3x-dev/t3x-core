@@ -17,9 +17,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
-import { type ApiCommit, type CommitMeta, type DiffResponse, getApiCommit, getTreeDiff } from '@/infrastructure';
+import { useCommitByHash } from '@/hooks/useCommitByHash';
+import { useMergeWorkspaceActions } from '@/hooks/useMergeWorkspaceActions';
+import { useTreeDiff } from '@/hooks/useTreeDiff';
+import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
-import { createMergeDraft } from '@/queries/mergeApi';
 import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
 import { DiffTreeOverview } from './DiffTreeOverview';
@@ -199,6 +201,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [showIdentical, setShowIdentical] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
+  const { loadCommit } = useCommitByHash();
+  const { loadDiff } = useTreeDiff();
 
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
@@ -211,9 +215,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setError(null);
 
     Promise.all([
-      getTreeDiff(baseHash, targetHash),
-      getApiCommit(targetHash),
-      getApiCommit(baseHash),
+      loadDiff(baseHash, targetHash),
+      loadCommit(targetHash),
+      loadCommit(baseHash),
     ])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
@@ -232,7 +236,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [baseHash, targetHash]);
+  }, [baseHash, targetHash, loadCommit, loadDiff]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -249,26 +253,27 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
+  const { create: createMergeDraft } = useMergeWorkspaceActions();
 
   // Start merge from diff page
   const handleStartMerge = useCallback(async () => {
     if (!diffResponse) return;
     setMergeLoading(true);
     try {
-      const data = await createMergeDraft({
-        project_id: projectId,
-        source_hash: baseHash,
-        target_hash: targetHash,
-        source_branch: diffResponse.base.branch || 'source',
-        target_branch: diffResponse.target.branch || 'main',
-      });
-      router.push(`/project/${projectId}/merge/${data.draftId}`);
+      const draftId = await createMergeDraft(
+        projectId,
+        baseHash,
+        targetHash,
+        diffResponse.base.branch || 'source',
+        diffResponse.target.branch || 'main'
+      );
+      router.push(`/project/${projectId}/merge/${draftId}`);
     } catch (err) {
       setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');
     } finally {
       setMergeLoading(false);
     }
-  }, [diffResponse, projectId, baseHash, targetHash, router]);
+  }, [diffResponse, projectId, baseHash, targetHash, router, createMergeDraft]);
 
   // Loading state
   if (loading) {

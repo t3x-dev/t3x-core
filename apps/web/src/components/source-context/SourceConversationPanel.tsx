@@ -10,18 +10,16 @@
 
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
-
-import { TurnBubble } from './TurnBubble';
-import type { TurnContextData } from '@/infrastructure';
 import {
   adjustHighlightsForTruncation,
   DEFAULT_CONTEXT_CHARS,
   DEFAULT_MAX_LENGTH,
   truncateLongContent,
 } from '@/lib/truncationUtils';
+import type { TurnContextData } from '@/types/api';
 import type { HighlightRange, NodeWithSource, TurnBubbleData } from '@/types/sourceContext';
-
 import { SourceNodeList } from './SourceNodeList';
+import { TurnBubble } from './TurnBubble';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -120,10 +118,7 @@ function TurnSection({
         {/* Expanded content - show nodes */}
         {isExpanded && (
           <div className="p-3 bg-[var(--color-bg-white)]">
-            <SourceNodeList
-              nodes={nodesForTurn.map((sg) => sg.node)}
-              variant="highlighted"
-            />
+            <SourceNodeList nodes={nodesForTurn.map((sg) => sg.node)} variant="highlighted" />
           </div>
         )}
       </div>

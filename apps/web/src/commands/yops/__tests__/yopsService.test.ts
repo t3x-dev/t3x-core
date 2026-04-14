@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SourcedYOp } from '@t3x-dev/core';
-import { commitOps } from '../yopsService';
-import { SourceValidationError } from '../errors';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as yopsLogInfra from '@/infrastructure/yopsLog';
+import { SourceValidationError } from '../errors';
+import { commitOps } from '../yopsService';
 
-beforeEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 
 const humanOp: SourcedYOp = {
   set: { path: 'x', value: 'y' },
@@ -14,7 +16,9 @@ const humanOp: SourcedYOp = {
 const llmOp: SourcedYOp = {
   set: { path: 'x', value: 'y' },
   source: {
-    type: 'llm', model: 'm', at: '2026-04-12T00:00:00Z',
+    type: 'llm',
+    model: 'm',
+    at: '2026-04-12T00:00:00Z',
     turn_ref: { turn_hash: 'sha256:a', quote: 'q' },
   },
 };
@@ -27,7 +31,12 @@ describe('commitOps', () => {
   });
 
   it('returns the entry from appendYOps', async () => {
-    const entry = { id: 'yl_1', yops: [humanOp], created_at: '2026-04-12T00:00:00Z', source: 'manual' };
+    const entry = {
+      id: 'yl_1',
+      yops: [humanOp],
+      created_at: '2026-04-12T00:00:00Z',
+      source: 'manual',
+    };
     vi.spyOn(yopsLogInfra, 'appendYOps').mockResolvedValue(entry as never);
     const result = await commitOps('c1', [humanOp]);
     expect(result).toBe(entry);
@@ -70,11 +79,9 @@ describe('commitOps', () => {
 
   it('propagates PersistenceError from infrastructure', async () => {
     vi.spyOn(yopsLogInfra, 'appendYOps').mockRejectedValue(
-      new yopsLogInfra.PersistenceError('append', 'HTTP_500', 'boom'),
+      new yopsLogInfra.PersistenceError('append', 'HTTP_500', 'boom')
     );
-    await expect(commitOps('c1', [humanOp])).rejects.toBeInstanceOf(
-      yopsLogInfra.PersistenceError,
-    );
+    await expect(commitOps('c1', [humanOp])).rejects.toBeInstanceOf(yopsLogInfra.PersistenceError);
   });
 
   it('accepts empty ops array without calling appendYOps', async () => {

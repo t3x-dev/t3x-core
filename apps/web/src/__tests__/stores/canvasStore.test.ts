@@ -20,33 +20,18 @@ import type { CanvasNodeData } from '@/types/nodes';
 // doc-aligned L3 layer. Mock the query modules the slices depend on.
 vi.mock('@/queries/conversations', () => ({
   fetchConversations: vi.fn().mockResolvedValue({ conversations: [], total: 0 }),
-  createConversationIn: vi.fn(),
-  deleteConversationById: vi.fn(),
-  updateConversationById: vi.fn(),
 }));
 
 vi.mock('@/queries/commits', () => ({
   fetchCommits: vi.fn().mockResolvedValue([]),
-  persistCommitPosition: vi.fn(),
-  renameCommit: vi.fn(),
   getSemanticContent: vi.fn(),
+}));
+vi.mock('@/domain/commitAnchors', () => ({
   parseApiCommitAnchors: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@/queries/leaves', () => ({
   fetchLeavesByProject: vi.fn().mockResolvedValue([]),
-  createLeafInProject: vi.fn().mockResolvedValue({
-    id: 'leaf_mock123',
-    commit_hash: 'sha256:abc123',
-    type: 'tweet',
-    title: 'Twitter',
-    constraints: [],
-    config: {},
-    output: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }),
-  deleteLeafById: vi.fn(),
 }));
 
 vi.mock('@/queries/turns', () => ({
@@ -56,21 +41,14 @@ vi.mock('@/queries/turns', () => ({
 
 vi.mock('@/queries/workbenchDrafts', () => ({
   fetchWorkbenchDrafts: vi.fn().mockResolvedValue([]),
-  createWorkbenchDraftFor: vi.fn(),
 }));
 
+// queries/mergeApi is now reads-only; writes live in @/commands/merge.
+// Slice no longer imports either path, but mock kept minimal in case
+// the test suite imports an indirect that resolves the module.
 vi.mock('@/queries/mergeApi', () => ({
-  prepareMergeApi: vi.fn().mockResolvedValue({
-    autoKept: [],
-    conflicts: [],
-    onlyInSource: [],
-    onlyInTarget: [],
-    relationsOnlyInSource: [],
-    relationsOnlyInTarget: [],
-    relationsInBoth: [],
-  }),
-  executeMergeApi: vi.fn(),
-  createMergeDraft: vi.fn().mockResolvedValue({ draftId: 'draft_mock123' }),
+  getMergeDraft: vi.fn(),
+  getMergeDraftChecks: vi.fn(),
 }));
 
 // Helper to create a mock staging unit node

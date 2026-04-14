@@ -7,7 +7,12 @@
  */
 
 import { searchNodes as searchNodesApi } from '@/infrastructure/search';
-import type { SearchHit, SearchMode, SearchNodesInput, SearchResult } from '@/infrastructure/search';
+import type {
+  SearchHit,
+  SearchMode,
+  SearchNodesInput,
+  SearchResult,
+} from '@/types/search';
 
 export type { SearchHit, SearchMode, SearchNodesInput, SearchResult };
 

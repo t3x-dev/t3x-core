@@ -6,16 +6,21 @@
  * picker just shows no options).
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getAvailableModels } from '@/infrastructure/llm';
 import type { LLMProviderInfo } from '@/infrastructure/types';
 
-export function useAvailableModels(): { providers: LLMProviderInfo[] } {
+export function useAvailableModels(): {
+  providers: LLMProviderInfo[];
+  loadModels: () => Promise<{ providers: LLMProviderInfo[] }>;
+} {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
+
+  const loadModels = useCallback(async () => getAvailableModels(), []);
 
   useEffect(() => {
     let cancelled = false;
-    getAvailableModels()
+    loadModels()
       .then((data) => {
         if (!cancelled) setProviders(data.providers.filter((p) => p.available));
       })
@@ -23,7 +28,7 @@ export function useAvailableModels(): { providers: LLMProviderInfo[] } {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadModels]);
 
-  return { providers };
+  return { providers, loadModels };
 }

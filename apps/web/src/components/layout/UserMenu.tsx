@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getAuthMe } from '@/infrastructure/auth';
+import { useAuthMe } from '@/hooks/useAuthMe';
 import { clearSession, getSessionKey, getSessionUser, setSessionUser } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +96,7 @@ interface UserMenuProps {
 export function UserMenu({ collapsed }: UserMenuProps) {
   const [user, setUser] = useState<{ name: string | null; username: string | null } | null>(null);
   const [authEnabled, setAuthEnabled] = useState(false);
+  const { loadAuthMe } = useAuthMe();
 
   useEffect(() => {
     // Check if user has a session (auth is active)
@@ -111,7 +112,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
     }
 
     // Lazy refresh from API in background
-    getAuthMe()
+    loadAuthMe()
       .then((data) => {
         setUser({ name: data.name, username: data.username });
         setSessionUser({
@@ -124,7 +125,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       .catch(() => {
         // Ignore — we already have cached data or no user
       });
-  }, []);
+  }, [loadAuthMe]);
 
   if (!authEnabled || !user) return null;
 

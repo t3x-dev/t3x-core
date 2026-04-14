@@ -17,12 +17,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useTemplatesList } from '@/hooks/useTemplatesList';
 import { reducedMotion, staggerContainer, staggerItem } from '@/lib/motion';
-import { fetchTemplates } from '@/queries/templates';
-import type { Template } from '@/types/api';
 import { glass } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useCanvasStore } from '@/store/canvasStore';
+import type { Template } from '@/types/api';
 import type { LeafType } from '@/types/nodes';
 import { LEAF_TYPES } from './CanvasNodes';
 
@@ -38,34 +38,15 @@ export function LeafPanel() {
   const prefersReducedMotion = useReducedMotion();
 
   const [activeTab, setActiveTab] = useState<'type' | 'template'>('type');
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [templateSearch, setTemplateSearch] = useState('');
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const { templates, loading: loadingTemplates } = useTemplatesList({
+    enabled: activeTab === 'template' && leafPanelOpen,
+  });
 
   const containerVariants = prefersReducedMotion
     ? reducedMotion.staggerContainer
     : staggerContainer;
   const itemVariants = prefersReducedMotion ? reducedMotion.staggerItem : staggerItem;
-
-  // Fetch templates when switching to template tab
-  useEffect(() => {
-    if (activeTab !== 'template' || !leafPanelOpen) return;
-    let cancelled = false;
-    setLoadingTemplates(true);
-    fetchTemplates()
-      .then((data) => {
-        if (!cancelled) setTemplates(data);
-      })
-      .catch(() => {
-        if (!cancelled) setTemplates([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingTemplates(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, leafPanelOpen]);
 
   // Reset tab when panel closes
   useEffect(() => {

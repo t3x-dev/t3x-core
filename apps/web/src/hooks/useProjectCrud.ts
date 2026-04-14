@@ -11,12 +11,13 @@
 
 import { useCallback } from 'react';
 import {
-  createProjectApi,
-  deleteProjectById,
-  fetchProjects,
-  updateProjectById,
-} from '@/queries/projects';
-import { type ProjectSummary, apiProjectToSummary, useProjectStore } from '@/store/projectStore';
+  createProject,
+  deleteProject,
+  ProjectPersistenceError,
+  updateProject as updateProjectCommand,
+} from '@/commands/projects';
+import { fetchProjects } from '@/queries/projects';
+import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 export function useProjectCrud() {
   const list = useCallback(async (): Promise<void> => {
@@ -44,7 +45,7 @@ export function useProjectCrud() {
     const notify = store.notifyCallback;
 
     try {
-      const project = await createProjectApi(name, {
+      const project = await createProject(name, {
         description: 'Fresh project awaiting conversations.',
       });
       const summary = apiProjectToSummary(project);
@@ -52,9 +53,12 @@ export function useProjectCrud() {
       notify?.(`Created project "${name}"`, 'success');
       return summary;
     } catch (err) {
-      // Only create a local offline project for network errors (TypeError from fetch).
-      // HTTP 4xx/5xx errors propagate so the UI can display them properly.
-      if (!(err instanceof TypeError)) {
+      // Only create a local offline project for network errors. The command
+      // wraps everything in ProjectPersistenceError; the underlying TypeError
+      // (fetch network failure) is preserved on `.cause`.
+      const isNetworkError =
+        err instanceof ProjectPersistenceError && err.cause instanceof TypeError;
+      if (!isNetworkError) {
         throw err;
       }
 
@@ -90,7 +94,7 @@ export function useProjectCrud() {
     }
 
     try {
-      await deleteProjectById(id);
+      await deleteProject(id);
       notify?.(`Deleted "${removed?.name || id}"`, 'success');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -111,7 +115,7 @@ export function useProjectCrud() {
       const store = useProjectStore.getState();
       const notify = store.notifyCallback;
       try {
-        await updateProjectById(projectId, {
+        await updateProjectCommand(projectId, {
           default_provider: provider,
           default_model: model,
         });

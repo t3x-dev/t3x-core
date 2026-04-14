@@ -158,10 +158,7 @@ export async function updateCommitPosition(
 /**
  * Update commit message (display name).
  */
-export async function updateCommitMessage(
-  commitHash: string,
-  message: string
-): Promise<ApiCommit> {
+export async function updateCommitMessage(commitHash: string, message: string): Promise<ApiCommit> {
   const res = await fetchWithTimeout(
     `${API_V1}/commits/${encodeURIComponent(commitHash)}/message`,
     {
@@ -186,35 +183,10 @@ export async function getApiCommitHistory(commitHash: string, limit = 50): Promi
 }
 
 // ============================================================================
-// ApiCommit helper functions (tree-based)
+// ApiCommit helper functions
 // ============================================================================
+// Moved to @/domain/commitContent (v2 §2.2 pure functions). Re-export
+// here for backward compat so existing non-component consumers (e.g.
+// app/insights/page.tsx) keep working without a churn PR.
 
-/**
- * Extract SemanticContent from an ApiCommit.
- * Returns the tree-based content, or a default empty SemanticContent if missing.
- */
-export function getSemanticContent(commit: ApiCommit): SemanticContent {
-  return commit.content ?? { trees: [], relations: [] };
-}
-
-/**
- * Generate summary text from trees for display purposes (export, insights).
- * Converts tree structure to human-readable text representation.
- */
-export function treeSummaryText(commit: ApiCommit): string {
-  const { trees } = getSemanticContent(commit);
-  function flattenNodes(nodes: typeof trees): string[] {
-    const result: string[] = [];
-    for (const node of nodes) {
-      const slots = Object.entries(node.slots)
-        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-        .join(', ');
-      result.push(`${node.key}: ${slots}`);
-      if (node.children.length > 0) {
-        result.push(...flattenNodes(node.children));
-      }
-    }
-    return result;
-  }
-  return flattenNodes(trees).join('. ');
-}
+export { getSemanticContent, treeSummaryText } from '@/domain/commitContent';

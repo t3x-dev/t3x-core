@@ -10,10 +10,10 @@
 import { useCallback, useRef } from 'react';
 import {
   type CreateTemplateInput,
-  createTemplateApi,
-  deleteTemplateById,
-  fetchTemplates,
-} from '@/queries/templates';
+  createTemplate as createTemplateCommand,
+  deleteTemplate as deleteTemplateCommand,
+} from '@/commands/templates';
+import { fetchTemplates } from '@/queries/templates';
 import { useTemplateStore } from '@/store/templateStore';
 import type { Template } from '@/types/api';
 
@@ -78,18 +78,15 @@ export function useTemplates() {
   );
 
   const deleteTemplate = useCallback(async (id: string) => {
-    await deleteTemplateById(id);
+    await deleteTemplateCommand(id);
     useTemplateStore.getState().removeTemplate(id);
   }, []);
 
-  const createTemplate = useCallback(
-    async (input: CreateTemplateInput): Promise<Template> => {
-      const template = await createTemplateApi(input);
-      useTemplateStore.getState().addTemplate(template);
-      return template;
-    },
-    []
-  );
+  const createTemplate = useCallback(async (input: CreateTemplateInput): Promise<Template> => {
+    const template = await createTemplateCommand(input);
+    useTemplateStore.getState().addTemplate(template);
+    return template;
+  }, []);
 
   return {
     templates,

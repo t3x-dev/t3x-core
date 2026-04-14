@@ -4,7 +4,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { extractIncremental } from '@/infrastructure';
+import { useExtractIncremental } from '@/hooks/useExtractIncremental';
 
 interface ExtractButtonProps {
   draftId: string;
@@ -22,11 +22,12 @@ export function ExtractButton({
   disabled,
 }: ExtractButtonProps) {
   const [loading, setLoading] = useState(false);
+  const { extract } = useExtractIncremental();
 
   const handleExtract = async () => {
     setLoading(true);
     try {
-      const result = await extractIncremental(projectId, conversationId, draftId);
+      const result = await extract(projectId, conversationId, draftId);
       const total = result.stats.auto_landed + result.stats.needs_review;
       toast.success(`Extracted ${total} point${total !== 1 ? 's' : ''}`);
       onExtracted();

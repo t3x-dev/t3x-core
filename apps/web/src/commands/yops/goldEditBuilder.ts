@@ -25,10 +25,7 @@ export function buildHumanSource(): HumanSource {
 /**
  * Attach a HumanSource to a bare YOp and commit through yopsService.
  */
-export async function commitGoldEdit(
-  conversationId: string,
-  op: YOp,
-): Promise<void> {
+export async function commitGoldEdit(conversationId: string, op: YOp): Promise<void> {
   const sourced = { ...op, source: buildHumanSource() } as SourcedYOp;
   await commitOps(conversationId, [sourced]);
 }

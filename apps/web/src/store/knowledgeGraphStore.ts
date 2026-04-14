@@ -6,8 +6,8 @@
  */
 
 import { create } from 'zustand';
-import type { BuildResult, KnowledgeNode, NeighborNode } from '@/queries/knowledgeGraph';
 import type { NodeMember } from '@/types/api';
+import type { BuildResult, KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
 
 interface KnowledgeGraphState {
   nodes: KnowledgeNode[];

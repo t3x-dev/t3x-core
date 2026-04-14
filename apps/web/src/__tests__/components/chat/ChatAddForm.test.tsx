@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { ChatAddForm } from '@/components/chat/ChatAddForm';
 
 // useGoldEdit reads workspaceStore; stub the hook to avoid mounting the store.
-vi.mock('@/components/chat/useGoldEdit', () => ({
+vi.mock('@/hooks/useGoldEdit', () => ({
   useGoldEdit: () => ({ applyEdit: vi.fn(), enabled: true }),
 }));
 

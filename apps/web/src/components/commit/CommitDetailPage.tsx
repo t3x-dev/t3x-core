@@ -40,16 +40,16 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
+import { useCommitByHash } from '@/hooks/useCommitByHash';
+import { useCommitHistory } from '@/hooks/useCommitHistory';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
+import { useLeavesByCommit } from '@/hooks/useLeavesByCommit';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { relativeTime, shortHash } from '@/lib/formatters';
-import { fetchCommitByHash } from '@/queries/commitByHash';
-import { fetchCommitHistory } from '@/queries/commitHistory';
-import { fetchLeavesByCommit } from '@/queries/leavesByCommit';
-import { fetchProject } from '@/queries/project';
-import type { ApiCommit, Leaf } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/lib/pageAnimations';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { ApiCommit, Leaf } from '@/types/api';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
 import { ProvenanceGraph } from './CommitProvenanceGraph';
@@ -73,6 +73,12 @@ interface CommitDetailPageProps {
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
   const _notify = useProjectStore((state) => state.notifyCallback);
+
+  // ── Hook callbacks (queries via composition layer) ─
+  const { loadCommit } = useCommitByHash();
+  const { loadLeaves } = useLeavesByCommit();
+  const { loadProject } = useProjectDetail();
+  const { loadHistory } = useCommitHistory(null, { enabled: false });
 
   // ── Data state ────────────────────────────────────
   const [commit, setCommitLocal] = useState<ApiCommit | null>(null);
@@ -106,9 +112,9 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       setError(null);
       try {
         const [commitData, leavesData, projectData] = await Promise.all([
-          fetchCommitByHash(commitHash),
-          fetchLeavesByCommit(commitHash).catch(() => [] as Leaf[]),
-          fetchProject(projectId).catch(() => null),
+          loadCommit(commitHash),
+          loadLeaves(commitHash).catch(() => [] as Leaf[]),
+          loadProject(projectId).catch(() => null),
         ]);
         setCommitLocal(commitData);
         setLeaves(leavesData);
@@ -118,7 +124,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         let parentCommit: ApiCommit | null = null;
         if (commitData.parents.length === 1) {
           try {
-            parentCommit = await fetchCommitByHash(commitData.parents[0]);
+            parentCommit = await loadCommit(commitData.parents[0]);
           } catch {
             // Parent fetch failure is non-critical
           }
@@ -129,7 +135,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
         // Fetch commit history
         try {
-          const history = await fetchCommitHistory(commitHash, 10);
+          const history = await loadHistory(commitHash, 10);
           setCommitHistory(history);
         } catch {
           // History fetch failure is non-critical
@@ -141,7 +147,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       }
     };
     load();
-  }, [commitHash, projectId, storeSetCommit]);
+  }, [commitHash, projectId, storeSetCommit, loadCommit, loadLeaves, loadProject, loadHistory]);
 
   // ── Tree stats ─────────────────────────────────
   const frameStats = useMemo(

@@ -8,14 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  type AdaptiveResult,
-  type AutopilotConfig,
-  getAdaptiveThreshold,
-  getAutopilotConfig,
-  updateAutopilotConfig,
-} from '@/infrastructure/autopilot';
+import { useAutopilot } from '@/hooks/useAutopilot';
 import { cn } from '@/lib/utils';
+import type { AdaptiveResult, AutopilotConfig } from '@/types/api';
 
 export function AutopilotSettings({ projectId }: { projectId: string }) {
   const [config, setConfig] = useState<AutopilotConfig | null>(null);
@@ -24,6 +19,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
   const [adaptiveResult, setAdaptiveResult] = useState<AdaptiveResult | null>(null);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { loadConfig, saveConfig, loadAdaptiveThreshold } = useAutopilot();
 
   // Load config and adaptive data on mount
   useEffect(() => {
@@ -32,8 +28,8 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
       try {
         setLoading(true);
         const [cfg, adaptive] = await Promise.all([
-          getAutopilotConfig(projectId),
-          getAdaptiveThreshold(projectId).catch(() => null),
+          loadConfig(projectId),
+          loadAdaptiveThreshold(projectId).catch(() => null),
         ]);
         if (cancelled) return;
         setConfig(cfg);
@@ -48,7 +44,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
       cancelled = true;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [projectId]);
+  }, [projectId, loadConfig, loadAdaptiveThreshold]);
 
   // Debounced save helper
   const debouncedSave = useCallback(
@@ -57,7 +53,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
       saveTimeoutRef.current = setTimeout(async () => {
         try {
           setSaving(true);
-          const saved = await updateAutopilotConfig(projectId, updated);
+          const saved = await saveConfig(projectId, updated);
           setConfig(saved);
           toast.success('Autopilot settings saved');
         } catch (_err) {
@@ -67,7 +63,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
         }
       }, 400);
     },
-    [projectId]
+    [projectId, saveConfig]
   );
 
   const handleChange = useCallback(

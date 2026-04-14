@@ -67,17 +67,13 @@ export function MergeContextPanel({
               }`}
             />
             <span className="text-[var(--text-secondary)]">
-              {unresolvedCount === 0
-                ? 'All conflicts resolved'
-                : `${unresolvedCount} unresolved`}
+              {unresolvedCount === 0 ? 'All conflicts resolved' : `${unresolvedCount} unresolved`}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                message.trim()
-                  ? 'bg-[var(--diff-added-accent)]'
-                  : 'bg-[var(--diff-removed-accent)]'
+                message.trim() ? 'bg-[var(--diff-added-accent)]' : 'bg-[var(--diff-removed-accent)]'
               }`}
             />
             <span className="text-[var(--text-secondary)]">

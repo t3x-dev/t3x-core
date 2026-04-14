@@ -4,7 +4,7 @@
  * Per docs/frontend-architecture-v2-zh.md §2.5, async actions live in
  * hooks. This hook owns the two async flows previously on
  * `commitStore`:
- *   - commit(message)  → createCommitApi, enrich trees with source_ref,
+ *   - commit(message)  → @/commands/commits.createCommit, enrich trees with source_ref,
  *                        sanitize slot values, write result via setters
  *   - init(projectId)  → fetchCommits (HEAD), seed lastCommitHash +
  *                        committedNodeIds/Snapshot for the chat-panel UI
@@ -17,8 +17,9 @@
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
 import { useCallback } from 'react';
+import { createCommit } from '@/commands/commits';
 import { enrichTreesWithSourceRefs } from '@/domain/enrichSourceRefs';
-import { createCommitApi, fetchCommits } from '@/queries/commits';
+import { fetchCommits } from '@/queries/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -97,7 +98,7 @@ export function useCommitActions() {
         }
       }
 
-      const result = await createCommitApi(
+      const result = await createCommit(
         projectId,
         {
           trees: sanitizedTrees,

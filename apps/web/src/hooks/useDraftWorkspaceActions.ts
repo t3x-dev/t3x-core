@@ -6,9 +6,10 @@
  * hooks. This hook owns the four async flows previously on
  * `draftWorkspaceStore`:
  *   - load(draftId)        → fetchWorkbenchDraft + seed all UI state
- *   - save()               → updateWorkbenchDraftById (PATCH w/ optimistic lock)
- *   - generatePreview()    → previewWorkbenchDraftById (auto-save first)
- *   - commit(message?)     → commitWorkbenchDraftById (auto-save first)
+ *   - save()               → @/commands/drafts.updateWorkbenchDraft (PATCH w/ optimistic lock)
+ *   - generatePreview()    → @/commands/drafts.previewWorkbenchDraft (auto-save first)
+ *   - commit(message?)     → @/commands/drafts.commitWorkbenchDraft (auto-save first)
+ *   - fork(sourceDraftId)  → @/commands/drafts.forkWorkbenchDraft (Iterate flow)
  *
  * The store exposes passive setters (setLoading, setLoadError,
  * setLoadedDraft, setSaveStarted, setSaveSucceeded, setSaveFailed,
@@ -18,13 +19,14 @@
  */
 
 import { useCallback } from 'react';
-import { ApiError } from '@/queries/apiErrors';
 import {
-  commitWorkbenchDraftById,
-  fetchWorkbenchDraft,
-  previewWorkbenchDraftById,
-  updateWorkbenchDraftById,
-} from '@/queries/workbenchDrafts';
+  commitWorkbenchDraft,
+  forkWorkbenchDraft,
+  previewWorkbenchDraft,
+  updateWorkbenchDraft,
+} from '@/commands/drafts';
+import { ApiError } from '@/queries/apiErrors';
+import { fetchWorkbenchDraft } from '@/queries/workbenchDrafts';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export function useDraftWorkspaceActions() {
@@ -47,7 +49,7 @@ export function useDraftWorkspaceActions() {
     useDraftWorkspaceStore.getState().setSaveStarted();
 
     try {
-      const updated = await updateWorkbenchDraftById(draftId, {
+      const updated = await updateWorkbenchDraft(draftId, {
         title: draft.title,
         goal: draft.goal ?? undefined,
         nodes: draft.nodes,
@@ -82,7 +84,7 @@ export function useDraftWorkspaceActions() {
     useDraftWorkspaceStore.getState().setPreviewLoading();
 
     try {
-      const result = await previewWorkbenchDraftById(draftId, {
+      const result = await previewWorkbenchDraft(draftId, {
         ...(previewModel ? { model: previewModel } : {}),
       });
       if (gen !== useDraftWorkspaceStore.getState().previewGeneration) return;
@@ -120,7 +122,7 @@ export function useDraftWorkspaceActions() {
           }
         }
 
-        const result = await commitWorkbenchDraftById(draftId, message);
+        const result = await commitWorkbenchDraft(draftId, message);
         useDraftWorkspaceStore.getState().setCommitted();
         return { commit: result.commit, leaf: result.leaf };
       } catch (err) {
@@ -132,5 +134,14 @@ export function useDraftWorkspaceActions() {
     [save]
   );
 
-  return { load, save, generatePreview, commit };
+  /**
+   * Fork a committed draft into a new editable copy. Used by the
+   * "Iterate" affordance on CommitDraftDialog. Components used to
+   * dynamic-import this; the hook lifts it to a stable React surface
+   * so views can call it without crossing the components -> commands
+   * biome ban.
+   */
+  const fork = useCallback(async (sourceDraftId: string) => forkWorkbenchDraft(sourceDraftId), []);
+
+  return { load, save, generatePreview, commit, fork };
 }

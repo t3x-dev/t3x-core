@@ -7,18 +7,22 @@ import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
 vi.mock('@/queries/workbenchDrafts', () => ({
   fetchWorkbenchDraft: vi.fn(),
-  updateWorkbenchDraftById: vi.fn(),
-  previewWorkbenchDraftById: vi.fn(),
-  commitWorkbenchDraftById: vi.fn(),
 }));
 
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+vi.mock('@/commands/drafts', () => ({
+  updateWorkbenchDraft: vi.fn(),
+  previewWorkbenchDraft: vi.fn(),
+  commitWorkbenchDraft: vi.fn(),
+  forkWorkbenchDraft: vi.fn(),
+}));
+
 import {
-  commitWorkbenchDraftById,
-  fetchWorkbenchDraft,
-  previewWorkbenchDraftById,
-  updateWorkbenchDraftById,
-} from '@/queries/workbenchDrafts';
+  commitWorkbenchDraft,
+  previewWorkbenchDraft,
+  updateWorkbenchDraft,
+} from '@/commands/drafts';
+import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { fetchWorkbenchDraft } from '@/queries/workbenchDrafts';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 function makeDraft(overrides: Record<string, unknown> = {}) {
@@ -85,7 +89,7 @@ describe('useDraftWorkspaceActions.save', () => {
     });
     const { result } = renderHook(() => useDraftWorkspaceActions());
     await result.current.save();
-    expect(updateWorkbenchDraftById).not.toHaveBeenCalled();
+    expect(updateWorkbenchDraft).not.toHaveBeenCalled();
   });
 
   it('updates state on success', async () => {
@@ -94,7 +98,7 @@ describe('useDraftWorkspaceActions.save', () => {
       draft: makeDraft() as never,
       isDirty: true,
     });
-    vi.mocked(updateWorkbenchDraftById).mockResolvedValueOnce(makeDraft({ revision: 2 }) as never);
+    vi.mocked(updateWorkbenchDraft).mockResolvedValueOnce(makeDraft({ revision: 2 }) as never);
 
     const { result } = renderHook(() => useDraftWorkspaceActions());
     await result.current.save();
@@ -114,7 +118,7 @@ describe('useDraftWorkspaceActions.generatePreview', () => {
       draft: makeDraft() as never,
       isDirty: false,
     });
-    vi.mocked(previewWorkbenchDraftById).mockResolvedValueOnce({
+    vi.mocked(previewWorkbenchDraft).mockResolvedValueOnce({
       output: 'preview text',
       token_count: 42,
       model_used: 'haiku',
@@ -139,7 +143,7 @@ describe('useDraftWorkspaceActions.commit', () => {
       draft: makeDraft() as never,
       isDirty: false,
     });
-    vi.mocked(commitWorkbenchDraftById).mockResolvedValueOnce({
+    vi.mocked(commitWorkbenchDraft).mockResolvedValueOnce({
       commit: { hash: 'sha256:c' },
       leaf: null,
     } as never);

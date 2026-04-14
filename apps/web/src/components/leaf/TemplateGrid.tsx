@@ -1,9 +1,9 @@
 'use client';
 
 import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
+import { useTemplatesList } from '@/hooks/useTemplatesList';
 import { cn } from '@/lib/utils';
-import { fetchTemplates } from '@/queries/templates';
 import type { Template } from '@/types/api';
 
 export interface LeafTemplate {
@@ -89,43 +89,18 @@ interface TemplateGridProps {
 }
 
 export function TemplateGrid({ selected, onSelect }: TemplateGridProps) {
-  const [templates, setTemplates] = useState<LeafTemplate[]>(DEFAULT_TEMPLATES);
-  const [isLoading, setIsLoading] = useState(true);
+  const { templates: apiTemplates, loading: isLoading, error } = useTemplatesList();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadTemplates() {
-      try {
-        const apiTemplates = await fetchTemplates();
-        if (cancelled) return;
-
-        if (apiTemplates.length > 0) {
-          // Convert API templates and always append "Custom" at the end
-          const converted = apiTemplates.map(apiTemplateToLeafTemplate);
-          // Ensure "custom" option is always present
-          const hasCustom = converted.some((t) => t.type === 'custom');
-          if (!hasCustom) {
-            converted.push(DEFAULT_TEMPLATES[DEFAULT_TEMPLATES.length - 1]);
-          }
-          setTemplates(converted);
-        }
-        // If API returns empty, keep DEFAULT_TEMPLATES (already set as initial state)
-      } catch {
-        // API unavailable — gracefully degrade to hardcoded defaults
-        // DEFAULT_TEMPLATES already set as initial state, nothing to do
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadTemplates();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Convert API templates -> LeafTemplate[], with graceful fallback to
+  // DEFAULT_TEMPLATES when the API returns empty or errored (same
+  // degradation behaviour the component had inline).
+  const templates = useMemo<LeafTemplate[]>(() => {
+    if (error || apiTemplates.length === 0) return DEFAULT_TEMPLATES;
+    const converted = apiTemplates.map(apiTemplateToLeafTemplate);
+    const hasCustom = converted.some((t) => t.type === 'custom');
+    if (!hasCustom) converted.push(DEFAULT_TEMPLATES[DEFAULT_TEMPLATES.length - 1]);
+    return converted;
+  }, [apiTemplates, error]);
 
   return (
     <div className="grid grid-cols-3 gap-2">

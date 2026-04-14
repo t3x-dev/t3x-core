@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getAvailableModels } from '@/infrastructure';
-import type { LLMProviderInfo } from '@/infrastructure/types';
+import { useAvailableModels } from '@/hooks/useAvailableModels';
+import type { LLMProviderInfo } from '@/types/api';
 
 interface ModelSelectorProps {
   initialProvider?: string | null;
@@ -24,11 +24,12 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<string>(initialProvider ?? '');
   const [selectedModel, setSelectedModel] = useState<string>(initialModel ?? '');
+  const { loadModels } = useAvailableModels();
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getAvailableModels()
+    loadModels()
       .then((res) => {
         if (!cancelled) {
           setProviders(res.providers);
@@ -44,7 +45,7 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadModels]);
 
   const currentProvider = providers.find((p) => p.name === selectedProvider);
   const availableModels = currentProvider?.models ?? [];

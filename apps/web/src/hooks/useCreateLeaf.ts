@@ -6,12 +6,12 @@
  */
 
 import { useCallback } from 'react';
-import { type CreateLeafInput, createLeafInProject } from '@/queries/leaves';
+import { type CreateLeafInput, createLeaf } from '@/commands/leaves';
 import type { Leaf } from '@/types/api';
 
 export function useCreateLeaf(): {
   create: (input: CreateLeafInput) => Promise<Leaf>;
 } {
-  const create = useCallback((input: CreateLeafInput) => createLeafInProject(input), []);
+  const create = useCallback((input: CreateLeafInput) => createLeaf(input), []);
   return { create };
 }

@@ -12,9 +12,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCompareModels } from '@/hooks/useCompareModels';
+import { useProvidersList } from '@/hooks/useProvidersList';
 import { cn } from '@/lib/utils';
-import { fetchProviders } from '@/queries/providers';
-import type { CompareModelsResult, ProviderInfo } from '@/types/api';
+import type { CompareModelsResult } from '@/types/api';
 
 interface CompareModelsDialogProps {
   open: boolean;
@@ -29,31 +29,13 @@ interface ModelOption {
 }
 
 export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModelsDialogProps) {
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [loadingProviders, setLoadingProviders] = useState(true);
+  const { providers, loading: loadingProviders } = useProvidersList({ enabled: open });
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [comparing, setComparing] = useState(false);
   const [results, setResults] = useState<CompareModelsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const { compare } = useCompareModels();
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoadingProviders(true);
-    fetchProviders()
-      .then((data) => {
-        if (!cancelled) setProviders(data);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoadingProviders(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
 
   const modelOptions = useMemo(() => {
     const options: ModelOption[] = [];

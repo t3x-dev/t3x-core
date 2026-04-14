@@ -1,9 +1,9 @@
 /**
  * useExtraction — adapter hook for LLM extraction.
  *
- * Authorized component-zone file (see biome.json overrides) to import from
- * @/commands/* and @/queries/*. All other components should consume this
- * hook rather than reaching into commands directly.
+ * Wraps the extraction worker + LLM adapter (commands/yops/*) and re-hydrates
+ * the conversation after a successful run. Components consume this hook
+ * instead of reaching into @/commands directly.
  */
 
 import { useCallback } from 'react';

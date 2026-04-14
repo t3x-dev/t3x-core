@@ -16,9 +16,11 @@ import { ArrowLeft, GitBranch, History, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
+import { useBranchesList } from '@/hooks/useBranchesList';
+import { useCommitsList } from '@/hooks/useCommitsList';
+import { useDiffRaw } from '@/hooks/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import type { ApiCommit, Branch } from '@/infrastructure';
-import { diffRaw, listBranches, listCommits } from '@/infrastructure';
+import type { ApiCommit, Branch } from '@/types/api';
 import { CommitHistoryRow } from './CommitHistoryRow';
 
 // ============================================================================
@@ -52,19 +54,22 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const [commits, setCommits] = useState<CommitWithDiffStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { loadBranches } = useBranchesList();
+  const { loadCommits } = useCommitsList();
+  const { loadDiff } = useDiffRaw();
 
   // Fetch branches
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await listBranches(projectId);
+        const data = await loadBranches(projectId);
         setBranches(data.branches);
       } catch {
         // Non-critical
       }
     };
     load();
-  }, [projectId]);
+  }, [projectId, loadBranches]);
 
   // Fetch commits for selected branch
   useEffect(() => {
@@ -74,7 +79,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       setError(null);
       try {
         const branch = selectedBranch === 'all' ? undefined : selectedBranch;
-        const commitList = await listCommits(projectId, branch, 100);
+        const commitList = await loadCommits(projectId, branch, 100);
 
         if (cancelled) return;
 
@@ -95,7 +100,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
               let diffStats: CommitWithDiffStats['diffStats'] = null;
               if ((commit.parents ?? []).length === 1) {
                 try {
-                  const diff = await diffRaw(commit.parents[0], commit.hash);
+                  const diff = await loadDiff(commit.parents[0], commit.hash);
                   diffStats = {
                     addedCount: diff.stats.addedCount,
                     modifiedCount: diff.stats.modifiedCount,
@@ -105,7 +110,8 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   // Diff failure is non-critical
                 }
               }
-              const nodeCount = (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
+              const nodeCount =
+                (commit as { content?: { trees?: unknown[] } })?.content?.trees?.length ?? 0;
               return { commit, diffStats, nodeCount };
             })
           );
@@ -123,7 +129,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, selectedBranch]);
+  }, [projectId, selectedBranch, loadCommits, loadDiff]);
 
   // Keyboard navigation
   const commitHashes = useMemo(() => commits.map((c) => c.commit.hash), [commits]);

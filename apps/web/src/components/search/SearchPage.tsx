@@ -11,11 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Project } from '@/infrastructure';
+import { useProjectsList } from '@/hooks/useProjectsList';
 import { useSearch } from '@/hooks/useSearch';
-import { listProjects } from '@/infrastructure';
 import { cn } from '@/lib/utils';
-import type { SearchMode } from '@/queries/search';
+import type { Project } from '@/types/api';
+import type { SearchMode } from '@/types/search';
 
 const MODES: { value: SearchMode; label: string }[] = [
   { value: 'hybrid', label: 'Hybrid' },
@@ -77,15 +77,16 @@ export function SearchPage() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { loadProjects } = useProjectsList();
 
   // Fetch projects on mount
   useEffect(() => {
-    listProjects(200, 0)
+    loadProjects(200, 0)
       .then((data) => setProjects(data.projects))
       .catch(() => {
         /* ignore project load errors */
       });
-  }, []);
+  }, [loadProjects]);
 
   // Debounced search on query change
   const handleQueryChange = useCallback(
