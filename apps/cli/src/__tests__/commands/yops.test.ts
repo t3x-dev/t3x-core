@@ -60,7 +60,7 @@ describe('yops apply', () => {
     expect(mockClient.applyYOps).toHaveBeenCalledWith(
       'draft_abc',
       [{ set: { path: 'trip/budget', value: 5000 } }],
-      4,
+      4
     );
   });
 
@@ -76,23 +76,31 @@ describe('yops apply', () => {
 
     const program = createProgram();
     await program.parseAsync([
-      'node', 'test', 'yops', 'apply', 'draft_abc',
-      '--file', 'ops.yaml', '--if-revision', '7',
+      'node',
+      'test',
+      'yops',
+      'apply',
+      'draft_abc',
+      '--file',
+      'ops.yaml',
+      '--if-revision',
+      '7',
     ]);
 
     expect(mockClient.getDraft).not.toHaveBeenCalled();
-    expect(mockClient.applyYOps).toHaveBeenCalledWith(
-      'draft_abc',
-      expect.any(Array),
-      7,
-    );
+    expect(mockClient.applyYOps).toHaveBeenCalledWith('draft_abc', expect.any(Array), 7);
   });
 
   it('falls back to T3X_DRAFT when no positional draft-id', async () => {
     process.env.T3X_DRAFT = 'draft_env';
     mockClient.getDraft.mockResolvedValue({ draft_id: 'draft_env', revision: 1 });
     mockClient.applyYOps.mockResolvedValue({
-      draft_id: 'draft_env', revision: 2, trees: [], applied_count: 1, tree_count: 0, slot_count: 0,
+      draft_id: 'draft_env',
+      revision: 2,
+      trees: [],
+      applied_count: 1,
+      tree_count: 0,
+      slot_count: 0,
     });
 
     const program = createProgram();
