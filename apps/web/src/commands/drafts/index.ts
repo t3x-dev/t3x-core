@@ -10,7 +10,9 @@
 
 export { commitWorkbenchDraft } from './commitWorkbenchDraft';
 export { type CreateWorkbenchDraftInput, createWorkbenchDraft } from './createWorkbenchDraft';
+export { deleteWorkbenchDraft } from './deleteWorkbenchDraft';
 export { DraftPersistenceError } from './errors';
 export { forkWorkbenchDraft } from './forkWorkbenchDraft';
 export { previewWorkbenchDraft } from './previewWorkbenchDraft';
+export { promoteDraft } from './promoteDraft';
 export { type UpdateWorkbenchDraftInput, updateWorkbenchDraft } from './updateWorkbenchDraft';

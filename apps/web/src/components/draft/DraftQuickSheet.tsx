@@ -23,8 +23,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { useCommitDraft } from '@/hooks/useCommitDraft';
+import { usePromoteDraft } from '@/hooks/usePromoteDraft';
 import { useTerminology } from '@/hooks/useTerminology';
-import * as api from '@/infrastructure';
+import { useUpdateDraft } from '@/hooks/useUpdateDraft';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { DraftNode, WorkbenchDraft } from '@/types/api';
 
@@ -44,16 +46,19 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
   const [promoting, setPromoting] = useState(false);
   const savingRef = useRef(false);
 
+  const { loadDraft, promote } = usePromoteDraft();
+  const { update } = useUpdateDraft();
+  const { commit } = useCommitDraft();
+
   // Load draft when sheet opens
   useEffect(() => {
     if (!open || !draftId) return;
     setLoading(true);
-    api
-      .getWorkbenchDraft(draftId)
+    loadDraft(draftId)
       .then(setDraft)
       .catch(() => setDraft(null))
       .finally(() => setLoading(false));
-  }, [open, draftId]);
+  }, [open, draftId, loadDraft]);
 
   const toggleNode = useCallback(
     async (nodeId: string) => {
@@ -63,8 +68,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       setDraft(updated);
       // Save in background with guard against rapid toggles
       savingRef.current = true;
-      api
-        .updateWorkbenchDraft(draftId, { nodes, if_revision: draft.revision })
+      update(draftId, { nodes, if_revision: draft.revision })
         .catch(() => {
           // Revert on error
           setDraft(draft);
@@ -73,14 +77,14 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
           savingRef.current = false;
         });
     },
-    [draft, draftId]
+    [draft, draftId, update]
   );
 
   const handleCommit = useCallback(async () => {
     if (!draft) return;
     setCommitting(true);
     try {
-      const result = await api.commitWorkbenchDraft(draftId);
+      const result = await commit(draftId);
       const commitHash = result.commit.hash as string;
 
       if (commitHash) {
@@ -93,12 +97,12 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     } finally {
       setCommitting(false);
     }
-  }, [draft, draftId, onClose, t]);
+  }, [draft, draftId, onClose, t, commit]);
 
   const handlePromote = useCallback(async () => {
     setPromoting(true);
     try {
-      const updated = await api.promoteDraft(draftId);
+      const updated = await promote(draftId);
       setDraft(updated);
       toast.success('Draft promoted to editing');
     } catch (err) {
@@ -106,7 +110,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
     } finally {
       setPromoting(false);
     }
-  }, [draftId]);
+  }, [draftId, promote]);
 
   const handleOpenFull = useCallback(() => {
     onClose();

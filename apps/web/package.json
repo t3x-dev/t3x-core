@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome lint src",
+    "check:boundaries": "bash scripts/check-v2-boundaries.sh",
     "test": "vitest run",
     "test:changed": "vitest run --changed",
     "test:watch": "vitest",

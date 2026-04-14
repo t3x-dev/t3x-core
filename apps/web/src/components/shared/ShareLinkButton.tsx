@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import * as api from '@/infrastructure';
+import { useShareTokens } from '@/hooks/useShareTokens';
 import { cn } from '@/lib/utils';
 import type { ShareLink } from '@/types/api';
 
@@ -33,13 +33,14 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { list, create, revoke } = useShareTokens();
+
   // Load existing share links on mount
   useEffect(() => {
-    api
-      .listShareLinks(entityType, entityId)
+    list(entityType, entityId)
       .then(setLinks)
       .catch(() => {});
-  }, [entityType, entityId]);
+  }, [entityType, entityId, list]);
 
   const shareUrl = useCallback((token: string) => {
     if (typeof window === 'undefined') return '';
@@ -49,7 +50,7 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
   const handleCreate = useCallback(async () => {
     setLoading(true);
     try {
-      const link = await api.createShareLink(entityType, entityId);
+      const link = await create(entityType, entityId);
       setLinks((prev) => [...prev, link]);
 
       // Auto-copy
@@ -63,7 +64,7 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
     } finally {
       setLoading(false);
     }
-  }, [entityType, entityId, shareUrl]);
+  }, [entityType, entityId, shareUrl, create]);
 
   const handleCopy = useCallback(
     async (token: string) => {
@@ -74,14 +75,17 @@ export function ShareLinkButton({ entityType, entityId, className }: ShareLinkBu
     [shareUrl]
   );
 
-  const handleRevoke = useCallback(async (id: string) => {
-    try {
-      await api.revokeShareLink(id);
-      setLinks((prev) => prev.filter((l) => l.id !== id));
-    } catch (err) {
-      console.error('Failed to revoke share link:', err);
-    }
-  }, []);
+  const handleRevoke = useCallback(
+    async (id: string) => {
+      try {
+        await revoke(id);
+        setLinks((prev) => prev.filter((l) => l.id !== id));
+      } catch (err) {
+        console.error('Failed to revoke share link:', err);
+      }
+    },
+    [revoke]
+  );
 
   const activeLinks = links.filter((l) => !l.revoked_at);
 

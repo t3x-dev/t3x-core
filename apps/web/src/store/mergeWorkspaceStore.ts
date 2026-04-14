@@ -17,7 +17,7 @@ import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/useTerminology';
 import { isDeveloperMode } from '@/store/shared';
 import type { MergeDraft, TurnContextData } from '@/types/merge';
-import { createSaveStatusTimer, type SaveStatus } from './saveStatus';
+import type { SaveStatus } from './saveStatus';
 
 // ============================================================================
 // Types
@@ -118,6 +118,7 @@ interface MergeWorkspaceState {
   setSaveStarted: () => void;
   setSaveSucceeded: () => void;
   setSaveFailed: () => void;
+  setSaveStatusIdle: () => void;
   clearError: () => void;
   setCommitFailed: (message: string) => void;
   setCommitted: () => void;
@@ -148,8 +149,6 @@ export interface MergeCheck {
   /** 'frontend' checks gate merge; 'server' checks are advisory only */
   source?: 'frontend' | 'server';
 }
-
-const saveTimer = createSaveStatusTimer();
 
 const initialState = {
   draftId: null,
@@ -286,9 +285,10 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   setSaveStarted: () => set({ saveStatus: 'saving' }),
   setSaveSucceeded: () => {
     set({ saveStatus: 'saved', isDirty: false, lastSavedAt: new Date() });
-    saveTimer.scheduleReset(get, set);
   },
   setSaveFailed: () => set({ saveStatus: 'error' }),
+  /** Reset saveStatus to 'idle' — driven by useSaveStatusAutoIdle. */
+  setSaveStatusIdle: () => set({ saveStatus: 'idle' }),
 
   clearError: () => set({ error: null }),
 
@@ -504,7 +504,6 @@ export const useMergeWorkspaceStore = create<MergeWorkspaceState>((set, get) => 
   },
 
   reset: () => {
-    saveTimer.cancel();
     set(initialState);
   },
 }));

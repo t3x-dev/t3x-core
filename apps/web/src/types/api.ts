@@ -43,7 +43,12 @@ export type {
   CreateTemplateInput,
   CreateWebhookInput,
   ImportParagraph,
+  ImportPreviewResult,
+  ImportResult,
+  ImportStreamEvent,
   NotificationItem,
+  PlatformImportResult,
+  PlatformPreviewResult,
   ProviderInfo,
   ShareLink,
   Template,
@@ -51,6 +56,10 @@ export type {
   UpdateWebhookInput,
   WebhookData,
 } from '@/infrastructure/misc';
+// Value-level re-exports (v2 §2.3 — consumers pattern-match via
+// instanceof / numeric comparison; hook-化 applies to functions only).
+export { STREAMING_IMPORT_THRESHOLD } from '@/infrastructure/misc';
+export { ApiError } from '@/infrastructure/core';
 export type { ConversationContext } from '@/infrastructure/pins';
 export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
 export type {

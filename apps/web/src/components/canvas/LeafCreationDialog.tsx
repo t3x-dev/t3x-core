@@ -68,6 +68,7 @@ export function LeafCreationDialog({
 
     try {
       const leaf = await createLeaf({
+        source: { type: 'user' },
         commit_hash: commitHash,
         type: selectedType,
         title: title || undefined,

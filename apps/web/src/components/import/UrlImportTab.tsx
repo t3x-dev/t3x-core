@@ -4,7 +4,8 @@ import { Globe, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import * as api from '@/infrastructure';
+import { useUrlImport } from '@/hooks/useUrlImport';
+import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
 
@@ -15,7 +16,7 @@ interface UrlImportTabProps {
 
 export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
   const [url, setUrl] = useState('');
-  const [preview, setPreview] = useState<api.ImportPreviewResult | null>(null);
+  const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importStatus, setImportStatus] = useState<
     'idle' | 'loading' | 'streaming' | 'success' | 'error'
@@ -26,25 +27,27 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
     null
   );
 
+  const { preview: fetchPreview, stream, run } = useUrlImport();
+
   const handlePreview = useCallback(async () => {
     if (!url.trim()) return;
     setPreviewLoading(true);
     setPreview(null);
     setImportStatus('idle');
     try {
-      const result = await api.previewUrlImport(url.trim(), projectId);
+      const result = await fetchPreview(url.trim(), projectId);
       setPreview(result);
     } catch (err) {
       setImportStatus('error');
-      setStatusMessage(err instanceof api.ApiError ? err.message : 'Failed to fetch URL');
+      setStatusMessage(err instanceof ApiError ? err.message : 'Failed to fetch URL');
     } finally {
       setPreviewLoading(false);
     }
-  }, [url, projectId]);
+  }, [url, projectId, fetchPreview]);
 
   const handleImport = useCallback(async () => {
     if (!url.trim()) return;
-    const useStreaming = preview && preview.estimated_turns >= api.STREAMING_IMPORT_THRESHOLD;
+    const useStreaming = preview && preview.estimated_turns >= STREAMING_IMPORT_THRESHOLD;
 
     if (useStreaming) {
       setImportStatus('streaming');
@@ -54,7 +57,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         let lastConversationId: string | undefined;
         let lastTurnsImported = 0;
 
-        for await (const event of api.streamUrlImport(url.trim(), projectId)) {
+        for await (const event of stream(url.trim(), projectId)) {
           if (event.type === 'status') {
             setStatusMessage(event.message);
           } else if (event.type === 'progress') {
@@ -76,23 +79,23 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         if (lastConversationId) onImported(lastConversationId);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     } else {
       setImportStatus('loading');
       setStatusMessage('Importing...');
       try {
-        const result = await api.importFromUrl(url.trim(), projectId);
+        const result = await run(url.trim(), projectId);
         setImportStatus('success');
         setStatusMessage('Import complete');
         setTurnsImported(result.turns_imported);
         onImported(result.conversation_id);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     }
-  }, [url, projectId, preview, onImported]);
+  }, [url, projectId, preview, onImported, stream, run]);
 
   return (
     <div className="space-y-4">

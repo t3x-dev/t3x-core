@@ -134,6 +134,12 @@ export interface CreateLeafInput {
   project_id: string;
   constraints?: Constraint[];
   config?: LeafConfig;
+  /**
+   * Provenance carried by commands/leaves.createLeaf; asserted before
+   * any HTTP write (see commands/leaves/leafSource.ts). Unknown to the
+   * backend today — forwarded as extra JSON and safely ignored.
+   */
+  source: { type: 'user'; author?: string } | { type: 'agent'; model: string; timestamp: string };
 }
 
 export async function createLeaf(input: CreateLeafInput): Promise<Leaf> {

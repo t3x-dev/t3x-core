@@ -5,8 +5,14 @@ import { useCallback, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import * as api from '@/infrastructure';
+import { usePlatformImport } from '@/hooks/usePlatformImport';
 import { cn } from '@/lib/utils';
+import {
+  ApiError,
+  type PlatformImportResult,
+  type PlatformPreviewResult,
+  STREAMING_IMPORT_THRESHOLD,
+} from '@/types/api';
 import { FileDropZone } from './FileDropZone';
 import { ImportProgress } from './ImportProgress';
 
@@ -23,7 +29,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 export function PlatformImportTab({ projectId, onImported }: PlatformImportTabProps) {
   const [rawData, setRawData] = useState<string | null>(null);
-  const [preview, setPreview] = useState<api.PlatformPreviewResult | null>(null);
+  const [preview, setPreview] = useState<PlatformPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedIdsRef = useRef(selectedIds);
@@ -32,10 +38,12 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
     'idle' | 'loading' | 'streaming' | 'success' | 'error'
   >('idle');
   const [statusMessage, setStatusMessage] = useState('');
-  const [importResult, setImportResult] = useState<api.PlatformImportResult | null>(null);
+  const [importResult, setImportResult] = useState<PlatformImportResult | null>(null);
   const [streamProgress, setStreamProgress] = useState<{ current: number; total: number } | null>(
     null
   );
+
+  const { preview: fetchPreview, stream, run } = usePlatformImport();
 
   const handleFile = useCallback(async (file: File) => {
     setPreview(null);
@@ -47,14 +55,14 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
     try {
       const text = await file.text();
       setRawData(text);
-      const result = await api.previewPlatformImport(file);
+      const result = await fetchPreview(file);
       setPreview(result);
       // Select all by default
       const convos = result.conversations ?? [];
       setSelectedIds(new Set(convos.map((c) => c.id)));
     } catch (err) {
       setImportStatus('error');
-      setStatusMessage(err instanceof api.ApiError ? err.message : 'Failed to parse export file');
+      setStatusMessage(err instanceof ApiError ? err.message : 'Failed to parse export file');
     } finally {
       setPreviewLoading(false);
     }
@@ -88,16 +96,16 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
     // Compute total messages to decide on streaming
     const selectedConvos = preview?.conversations.filter((c) => ids.has(c.id)) ?? [];
     const totalMessages = selectedConvos.reduce((sum, c) => sum + c.message_count, 0);
-    const useStreaming = totalMessages >= api.STREAMING_IMPORT_THRESHOLD;
+    const useStreaming = totalMessages >= STREAMING_IMPORT_THRESHOLD;
 
     if (useStreaming) {
       setImportStatus('streaming');
       setStatusMessage('Connecting...');
       setStreamProgress(null);
       try {
-        let lastResult: api.PlatformImportResult | null = null;
+        let lastResult: PlatformImportResult | null = null;
 
-        for await (const event of api.streamPlatformImport(projectId, rawData, Array.from(ids))) {
+        for await (const event of stream(projectId, rawData, Array.from(ids))) {
           if (event.type === 'status') {
             setStatusMessage(event.message);
           } else if (event.type === 'progress') {
@@ -107,7 +115,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
             const data = event as Record<string, unknown>;
             lastResult = {
               project_id: data.project_id as string,
-              imported: data.imported as api.PlatformImportResult['imported'],
+              imported: data.imported as PlatformImportResult['imported'],
               total_conversations: data.total_conversations as number,
               total_turns: data.total_turns as number,
             };
@@ -124,20 +132,20 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
         onImported();
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     } else {
       setImportStatus('loading');
       setStatusMessage('Importing conversations...');
       try {
-        const result = await api.importFromPlatform(projectId, rawData, Array.from(ids));
+        const result = await run(projectId, rawData, Array.from(ids));
         setImportStatus('success');
         setStatusMessage(`Imported ${result.total_conversations} conversations`);
         setImportResult(result);
         onImported();
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof api.ApiError ? err.message : 'Import failed');
+        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
       }
     }
   }, [rawData, projectId, preview, onImported]);

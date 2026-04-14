@@ -13,12 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  deleteWorkbenchDraft,
-  getWorkbenchDraft,
-  promoteDraft,
-  type WorkbenchDraft,
-} from '@/infrastructure';
+import { usePromoteDraft } from '@/hooks/usePromoteDraft';
+import type { WorkbenchDraft } from '@/types/api';
 
 interface PromotePreviewDialogProps {
   open: boolean;
@@ -42,12 +38,14 @@ export function PromotePreviewDialog({
   const [promoting, setPromoting] = useState(false);
   const [discarding, setDiscarding] = useState(false);
 
+  const { loadDraft, promote, discard } = usePromoteDraft();
+
   useEffect(() => {
     if (!open || !autoDraftId) return;
     let cancelled = false;
     setDraft(null);
     setLoading(true);
-    getWorkbenchDraft(autoDraftId)
+    loadDraft(autoDraftId)
       .then((d) => {
         if (!cancelled) setDraft(d);
       })
@@ -60,12 +58,12 @@ export function PromotePreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, autoDraftId]);
+  }, [open, autoDraftId, loadDraft]);
 
   const handlePromote = async () => {
     setPromoting(true);
     try {
-      await promoteDraft(autoDraftId);
+      await promote(autoDraftId);
       onPromoted?.(autoDraftId);
       onOpenChange(false);
     } catch {
@@ -141,7 +139,7 @@ export function PromotePreviewDialog({
                   if (!window.confirm('Discard this auto-draft? This cannot be undone.')) return;
                   setDiscarding(true);
                   try {
-                    await deleteWorkbenchDraft(autoDraftId);
+                    await discard(autoDraftId);
                     toast.success('Auto-draft discarded');
                     onDiscarded?.();
                     onOpenChange(false);
