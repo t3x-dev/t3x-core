@@ -15,6 +15,7 @@ import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
+import { useCanvasPositionPersist } from '@/hooks/useCanvasPositionPersist';
 import { useNodePositionSaver } from '@/hooks/useNodePositionSaver';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import '@xyflow/react/dist/style.css';
@@ -74,6 +75,9 @@ function CanvasWorkspaceInner({
   onViewportChange,
 }: CanvasWorkspaceProps) {
   const { save: saveNodePosition } = useNodePositionSaver();
+  // Subscribe-based persistence of drag-induced position changes.
+  // Canvas store stays pure per v2 §2.5.
+  useCanvasPositionPersist();
   const [isPanMode, setIsPanMode] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMemoryModal, setShowMemoryModal] = useState(false);
