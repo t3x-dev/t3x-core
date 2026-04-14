@@ -23,7 +23,7 @@ describe('strict mode', () => {
       builds: {},
     };
     const result = validateSchema(tree, schema);
-    const codes = result.violations.map(v => v.code);
+    const codes = result.violations.map((v) => v.code);
     expect(codes).toContain('UNEXPECTED_NODE');
   });
 
@@ -34,8 +34,8 @@ describe('strict mode', () => {
       },
     };
     const result = validateSchema(tree, schema);
-    const v = result.violations.find(x =>
-      x.code === 'UNEXPECTED_SLOT' || x.code === 'UNEXPECTED_NODE',
+    const v = result.violations.find(
+      (x) => x.code === 'UNEXPECTED_SLOT' || x.code === 'UNEXPECTED_NODE'
     );
     expect(v).toBeDefined();
     expect(v?.path).toContain('porst');
@@ -44,6 +44,6 @@ describe('strict mode', () => {
   it('accepts only declared keys', () => {
     const tree = { services: { app: { image: 'nginx:1' } } };
     const result = validateSchema(tree, schema);
-    expect(result.violations.filter(v => v.severity === 'error')).toEqual([]);
+    expect(result.violations.filter((v) => v.severity === 'error')).toEqual([]);
   });
 });

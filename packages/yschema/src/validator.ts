@@ -474,9 +474,7 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
               : new Set();
 
             // Accept scalar or list
-            const refs: YValue[] = Array.isArray(slotValue)
-              ? (slotValue as YValue[])
-              : [slotValue];
+            const refs: YValue[] = Array.isArray(slotValue) ? (slotValue as YValue[]) : [slotValue];
 
             for (const ref of refs) {
               if (typeof ref === 'string' && !validKeys.has(ref)) {
