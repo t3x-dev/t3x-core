@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { useTerminology } from '@/hooks/useTerminology';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 

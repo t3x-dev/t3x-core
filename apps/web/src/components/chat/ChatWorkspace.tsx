@@ -9,7 +9,7 @@ import { useAutoProject } from '@/hooks/projects/useAutoProject';
 import { useChatInit } from '@/hooks/useChatInit';
 import { useCommittedHighlights } from '@/hooks/useCommittedHighlights';
 import { useConversationChat } from '@/hooks/useConversationChat';
-import { useExtraction } from '@/hooks/useExtraction';
+import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';

@@ -18,8 +18,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
-import { useDraftAutoPreview } from '@/hooks/useDraftAutoPreview';
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { useDraftAutoPreview } from '@/hooks/drafts/useDraftAutoPreview';
+import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/useSaveStatusAutoIdle';
 import { fullScreenEnter, reducedMotion } from '@/utils/motion';

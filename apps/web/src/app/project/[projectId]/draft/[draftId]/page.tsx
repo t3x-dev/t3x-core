@@ -10,7 +10,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { DraftWorkspace } from '@/components/draft/DraftWorkspace';
-import { useDraftWorkspaceActions } from '@/hooks/useDraftWorkspaceActions';
+import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export default function DraftPage() {

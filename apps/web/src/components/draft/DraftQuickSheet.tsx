@@ -24,9 +24,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { useCommitDraft } from '@/hooks/useCommitDraft';
-import { usePromoteDraft } from '@/hooks/usePromoteDraft';
+import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
 import { useTerminology } from '@/hooks/useTerminology';
-import { useUpdateDraft } from '@/hooks/useUpdateDraft';
+import { useUpdateDraft } from '@/hooks/drafts/useUpdateDraft';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { DraftNode, WorkbenchDraft } from '@/types/api';
 

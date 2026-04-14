@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useExtractToDraft } from '@/hooks/useExtractToDraft';
+import { useExtractToDraft } from '@/hooks/drafts/useExtractToDraft';
 import type { WorkbenchDraft } from '@/types/api';
 
 interface LeafExtractToDraftProps {

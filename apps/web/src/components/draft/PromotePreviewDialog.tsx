@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { usePromoteDraft } from '@/hooks/usePromoteDraft';
+import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
 import type { WorkbenchDraft } from '@/types/api';
 
 interface PromotePreviewDialogProps {
