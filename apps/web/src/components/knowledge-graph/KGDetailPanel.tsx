@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
-import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
+import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
 
 interface KGDetailPanelProps {
   projectId: string;

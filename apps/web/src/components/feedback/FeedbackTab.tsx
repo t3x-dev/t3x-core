@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useFeedbackStats } from '@/hooks/useFeedbackStats';
+import { useFeedbackStats } from '@/hooks/feedback/useFeedbackStats';
 import { useLeavesByProject } from '@/hooks/useLeavesByProject';
 import { useProjectsList } from '@/hooks/useProjectsList';
 import type { CosineBucket, FeedbackStats, Project } from '@/types/api';

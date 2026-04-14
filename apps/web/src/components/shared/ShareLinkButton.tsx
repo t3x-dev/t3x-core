@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useShareTokens } from '@/hooks/useShareTokens';
+import { useShareTokens } from '@/hooks/shares/useShareTokens';
 import { cn } from '@/utils/cn';
 import type { ShareLink } from '@/types/api';
 

@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Leaf } from '@/types/api';
-import { usePinsCrud } from './usePinsCrud';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useRetuneSession } from './useRetuneSession';
 
 export interface UseLeafAssertionsReturn {

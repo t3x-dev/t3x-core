@@ -42,7 +42,7 @@ import {
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { useRetuneSession } from '@/hooks/useRetuneSession';
 import {

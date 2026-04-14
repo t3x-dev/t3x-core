@@ -26,7 +26,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useConversationsList } from '@/hooks/useConversationsList';
 import { useLeavesByProject } from '@/hooks/useLeavesByProject';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useTurnsList } from '@/hooks/useTurnsList';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { CommitWithLeaves } from '@/hooks/useBranchCommits';
 import { useBranchCommits } from '@/hooks/useBranchCommits';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';

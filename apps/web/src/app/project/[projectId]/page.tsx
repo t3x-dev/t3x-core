@@ -6,7 +6,7 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { useCanvasDeletionWiring } from '@/hooks/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
-import { usePinsCrud } from '@/hooks/usePinsCrud';
+import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/useProjectCrud';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';

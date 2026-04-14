@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
-import { useKnowledgeGraph } from '@/hooks/useKnowledgeGraph';
+import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
 
 interface KGToolbarProps {
   projectId: string;
