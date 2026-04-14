@@ -12,7 +12,7 @@ import type { YOp } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { buildHumanSource, commitGoldEdit } from '@/commands/yops/goldEditBuilder';
 import { replay } from '@/domain/replay';
-import { appendOpsAndReplay } from '@/queries/loadConversation';
+import { replayAppended } from '@/queries/loadConversation';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function useGoldEdit() {
@@ -24,10 +24,14 @@ export function useGoldEdit() {
       // Attach human source before committing
       const sourced = { ...op, source: buildHumanSource() };
       // Snapshot pre-edit state for rollback
-      const prevOps = useWorkspaceStore.getState().opsLog;
+      const pre = useWorkspaceStore.getState();
+      const prevOps = pre.opsLog;
       try {
-        // Optimistic: apply locally first so UI updates instantly
-        await appendOpsAndReplay([sourced]);
+        // Optimistic: apply locally first so UI updates instantly.
+        const nextDerived = replayAppended(prevOps, pre.turns, [sourced]);
+        if (nextDerived) {
+          useWorkspaceStore.getState().setDerived(nextDerived);
+        }
         // Persist to server
         await commitGoldEdit(convId, op);
       } catch (err) {

@@ -1,29 +1,39 @@
 /**
- * L3 — bridge between L1 persistence and the store.
+ * L3 read — bridge between L1 persistence and the workspace view.
  *
- * `hydrateConversation` loads a conversation's turns + yops log and pushes
- * the replayed state into the store. The single entry point for "hydrate
- * this conversation" (called on mount / conversation switch).
+ * Per v2 §2.3, queries return data; they do not write to store.
  *
- * `appendOpsAndReplay` is the optimistic-update hook called by command
- * handlers (extraction worker / gold edit builder) after a successful
- * commit. It merges ops into the local log and re-replays to update the
- * derived view.
+ * `fetchConversationSnapshot` loads a conversation's turns + yops log,
+ * runs the deterministic replay, and returns the full derived snapshot.
+ * `replayAppended` is a pure append-and-replay helper for optimistic-
+ * update flows (used by useGoldEdit). Neither function touches any
+ * Zustand store — callers (useChatInit, useGoldEdit, useDriftResolver)
+ * own the store writes.
  */
 
-import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { replay } from '@/domain/replay';
+import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
 
-export async function hydrateConversation(projectId: string, convId: string): Promise<void> {
-  const store = useWorkspaceStore.getState();
-  store.setConversation(convId);
-  store.setError(null);
+export interface WorkspaceTurn {
+  turn_hash: string;
+  content: string;
+}
 
+export interface ConversationSnapshot {
+  turns: WorkspaceTurn[];
+  opsLog: SourcedYOp[];
+  tree: SemanticContent;
+  sourceIndex: Map<string, Source>;
+}
+
+export async function fetchConversationSnapshot(
+  projectId: string,
+  convId: string
+): Promise<ConversationSnapshot> {
   const { turns, opsLog } = await loadL1(projectId, convId);
 
-  const workspaceTurns = turns.map((t) => ({
+  const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     turn_hash: t.turn_hash,
     content: t.content,
   }));
@@ -32,20 +42,28 @@ export async function hydrateConversation(projectId: string, convId: string): Pr
 
   const { tree, sourceIndex } = replay(flatOps, validationTurns);
 
-  store.setTurns(workspaceTurns);
-  store.setDerived({ tree, sourceIndex, opsLog: flatOps });
-  store.setMode('idle');
+  return { turns: workspaceTurns, opsLog: flatOps, tree, sourceIndex };
 }
 
-export async function appendOpsAndReplay(ops: SourcedYOp[]): Promise<void> {
-  if (ops.length === 0) return;
-  const store = useWorkspaceStore.getState();
-  const current = store.opsLog;
-  const next = [...current, ...ops];
-  const validationTurns: ValidationTurn[] = store.turns.map((t) => ({
-    turn_hash: t.turn_hash,
-    content: t.content,
-  }));
+export interface AppendedReplay {
+  tree: SemanticContent;
+  sourceIndex: Map<string, Source>;
+  opsLog: SourcedYOp[];
+}
+
+/**
+ * Pure: merge `newOps` onto `prevOps`, replay against the current
+ * turns, return the next derived slice. Returns `null` when `newOps`
+ * is empty so callers can short-circuit writes.
+ */
+export function replayAppended(
+  prevOps: SourcedYOp[],
+  turns: WorkspaceTurn[],
+  newOps: SourcedYOp[]
+): AppendedReplay | null {
+  if (newOps.length === 0) return null;
+  const next = [...prevOps, ...newOps];
+  const validationTurns: ValidationTurn[] = turns;
   const { tree, sourceIndex } = replay(next, validationTurns);
-  store.setDerived({ tree, sourceIndex, opsLog: next });
+  return { tree, sourceIndex, opsLog: next };
 }

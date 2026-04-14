@@ -15,7 +15,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { hydrateConversation } from '@/queries/loadConversation';
+import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -116,7 +116,7 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
       const projectId = useChatStore.getState().activeProjectId;
       if (!projectId) break;
 
-      hydrateConversation(projectId, conversationId)
+      hydrateConversationToStore(projectId, conversationId)
         .then(() => {
           // Expand panel
           if (!useWorkspaceStore.getState().panelExpanded) {
@@ -139,7 +139,7 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
       const projectId = useChatStore.getState().activeProjectId;
       if (!projectId) break;
 
-      hydrateConversation(projectId, conversationId).catch(() => {
+      hydrateConversationToStore(projectId, conversationId).catch(() => {
         // Hydration failed — non-critical for realtime path
       });
       break;

@@ -130,7 +130,25 @@
       "linter": {
         "rules": {
           "style": {
-            "noRestrictedImports": "off"
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": "@/components/**",
+                    "message": "queries/ is L3; cannot import components (L4)."
+                  },
+                  {
+                    "group": "@/hooks/**",
+                    "message": "queries/ is L3; cannot import hooks (same-level upstream)."
+                  },
+                  {
+                    "group": "@/store/**",
+                    "message": "queries/ is L3; cannot import store — return data, let the calling hook write."
+                  }
+                ]
+              }
+            }
           }
         }
       }

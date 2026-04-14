@@ -7,8 +7,8 @@
  */
 
 import { useCallback } from 'react';
+import { hydrateConversationToStore } from '@/hooks/hydrateConversationToStore';
 import { extractNodes } from '@/infrastructure/trees';
-import { hydrateConversation } from '@/queries/loadConversation';
 
 export interface DriftDecision {
   choice: string;
@@ -28,7 +28,7 @@ export function useDriftResolver(): {
       try {
         const result = await extractNodes(conversationId, undefined, decision);
         if (result.status === 'completed' && projectId) {
-          await hydrateConversation(projectId, conversationId);
+          await hydrateConversationToStore(projectId, conversationId);
         }
       } catch {
         // non-critical — caller can retry
