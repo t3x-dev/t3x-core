@@ -36,7 +36,7 @@ vi.mock('@/commands/drafts', () => ({
 
 import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
-import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { fetchCommits } from '@/queries/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';

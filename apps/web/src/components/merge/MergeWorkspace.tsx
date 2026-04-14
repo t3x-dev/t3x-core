@@ -13,7 +13,7 @@ import { GitMerge, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCreateMergeCommit } from '@/hooks/commits/useCreateMergeCommit';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';

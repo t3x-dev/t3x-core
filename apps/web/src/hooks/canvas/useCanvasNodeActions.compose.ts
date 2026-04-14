@@ -26,7 +26,7 @@ import {
 } from '@/store/canvasStoreUtils';
 import { isDeveloperMode } from '@/store/shared';
 import type { ApiCommit, Commit, Conversation, Leaf } from '@/types/api';
-import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
+import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
 
 export interface ComposedCanvas {
   nodes: Node<CanvasNodeData>[];

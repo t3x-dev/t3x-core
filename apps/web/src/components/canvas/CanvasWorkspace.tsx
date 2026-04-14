@@ -10,12 +10,12 @@ import {
 import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCanvasCommitActions } from '@/hooks/useCanvasCommitActions';
-import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
+import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useContextMenu } from '@/hooks/useContextMenu';
 import { usePathHighlight } from '@/hooks/usePathHighlight';
 import { useTerminology } from '@/hooks/useTerminology';
-import { useCanvasPositionPersist } from '@/hooks/useCanvasPositionPersist';
+import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { useNodePositionSaver } from '@/hooks/useNodePositionSaver';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import '@xyflow/react/dist/style.css';

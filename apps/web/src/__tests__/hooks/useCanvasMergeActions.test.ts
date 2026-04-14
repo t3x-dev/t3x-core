@@ -15,7 +15,7 @@ vi.mock('@/commands/merge', () => ({
 }));
 
 import { executeMerge, prepareMerge } from '@/commands/merge';
-import { useCanvasMergeActions } from '@/hooks/useCanvasMergeActions';
+import { useCanvasMergeActions } from '@/hooks/canvas/useCanvasMergeActions';
 import { useCanvasStore } from '@/store/canvasStore';
 
 function resetStore() {

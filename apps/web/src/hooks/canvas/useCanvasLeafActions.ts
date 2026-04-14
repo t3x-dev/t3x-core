@@ -14,7 +14,7 @@ import { getTerminology } from '@/hooks/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { isDeveloperMode } from '@/store/shared';
 import type { Template } from '@/types/api';
-import type { EmbeddedLeaf, LeafType } from '../types/nodes';
+import type { EmbeddedLeaf, LeafType } from '@/types/nodes';
 
 const LEAF_TYPE_LABELS: Record<LeafType, string> = {
   tweet: 'Twitter',

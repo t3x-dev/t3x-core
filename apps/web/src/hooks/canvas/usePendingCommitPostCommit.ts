@@ -7,7 +7,7 @@
 
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { useCanvasNodeActions } from '@/hooks/useCanvasNodeActions';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { CanvasNodeData } from '@/types/nodes';

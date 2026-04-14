@@ -15,7 +15,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCanvasLeafActions } from '@/hooks/useCanvasLeafActions';
+import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
 import { reducedMotion, staggerContainer, staggerItem } from '@/utils/motion';

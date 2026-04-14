@@ -20,8 +20,8 @@ import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 import { snapPosition } from '@/store/canvasStoreUtils';
 import type { Conversation, Leaf } from '@/types/api';
-import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '../types/nodes';
-import { composeCanvasFromFetches } from './useCanvasNodeActions.compose';
+import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '@/types/nodes';
+import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 
 export function useCanvasNodeActions() {
   const load = useCallback(

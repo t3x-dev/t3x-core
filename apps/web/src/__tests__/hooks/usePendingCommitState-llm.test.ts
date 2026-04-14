@@ -43,7 +43,7 @@ vi.mock('@/store/canvasStore', () => ({
 }));
 
 // Mock useCanvasNodeActions — the hook delegates canvas reload to this
-vi.mock('@/hooks/useCanvasNodeActions', () => ({
+vi.mock('@/hooks/canvas/useCanvasNodeActions', () => ({
   useCanvasNodeActions: () => ({
     load: vi.fn(),
     refresh: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock('@/hooks/useCanvasNodeActions', () => ({
 }));
 
 import type { Node } from '@xyflow/react';
-import { usePendingCommitState } from '@/hooks/usePendingCommitState';
+import { usePendingCommitState } from '@/hooks/canvas/usePendingCommitState';
 import * as api from '@/infrastructure';
 import type { CanvasNodeData } from '@/types/nodes';
 

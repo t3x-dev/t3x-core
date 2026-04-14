@@ -14,7 +14,7 @@ import { AlertCircle, ExternalLink, GitCompare, Loader2, X } from 'lucide-react'
 import { DraftWorkbenchLLM } from '@/components/draft/DraftWorkbenchLLM';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { usePendingCommitState } from '@/hooks/usePendingCommitState';
+import { usePendingCommitState } from '@/hooks/canvas/usePendingCommitState';
 import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
 import type { CanvasNodeData } from '@/types/nodes';
