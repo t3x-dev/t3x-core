@@ -18,6 +18,56 @@ import {
   truncate,
 } from '../utils.js';
 
+/** Register: t3x show draft [id] */
+export function registerShowDraft(parent: Command): void {
+  parent
+    .command('draft [id]')
+    .description('Show draft details (uses T3X_DRAFT env if id omitted)')
+    .option('--json', 'Output as JSON')
+    .action(async (idArg: string | undefined, options) => {
+      const draftId = getDraftId(idArg);
+      if (!draftId) return;
+      const spinner = options.json ? null : createSpinner('Fetching draft...');
+      spinner?.start();
+
+      try {
+        const client = getClientWithAuth();
+        const draft = (await client.getDraft(draftId)) as Record<string, unknown> & {
+          draft_id: string;
+          project_id: string;
+          conversation_id: string;
+          status: string;
+          created_at: string;
+          revision?: number;
+        };
+
+        spinner?.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(draft, null, 2));
+          return;
+        }
+
+        console.log();
+        console.log(`Draft:         ${draft.draft_id}`);
+        console.log(`Project:       ${draft.project_id}`);
+        console.log(`Conversation:  ${draft.conversation_id}`);
+        console.log(`Status:        ${draft.status}`);
+        if (typeof draft.revision === 'number') {
+          console.log(`Revision:      ${draft.revision}`);
+        }
+        console.log(`Created:       ${formatDate(draft.created_at)}`);
+        if (Array.isArray(draft.trees)) {
+          console.log(`Trees:         ${draft.trees.length} root nodes`);
+        }
+      } catch (err) {
+        spinner?.stop();
+        error(`Failed to show draft: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    });
+}
+
 /** Register: t3x list drafts */
 export function registerListDrafts(parent: Command): void {
   parent

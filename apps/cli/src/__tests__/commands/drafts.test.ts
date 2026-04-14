@@ -18,7 +18,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerListDrafts } from '../../commands/drafts.js';
+import { registerListDrafts, registerShowDraft } from '../../commands/drafts.js';
 
 function createProgram() {
   const program = new Command();
@@ -65,5 +65,55 @@ describe('list drafts', () => {
     await program.parseAsync(['node', 'test', 'list', 'drafts', '--project', 'proj_empty']);
 
     expect(logSpy).toHaveBeenCalledWith('No drafts found.');
+  });
+});
+
+describe('show draft', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.T3X_DRAFT;
+  });
+
+  it('fetches draft by positional id', async () => {
+    mockClient.getDraft.mockResolvedValue({
+      draft_id: 'draft_abc',
+      project_id: 'proj_1',
+      conversation_id: 'conv_1',
+      status: 'active',
+      revision: 5,
+      created_at: '2026-04-12T14:23:01Z',
+      trees: [],
+    });
+
+    const program = new Command();
+    program.exitOverride();
+    const showCmd = program.command('show');
+    registerShowDraft(showCmd);
+
+    await program.parseAsync(['node', 'test', 'show', 'draft', 'draft_abc']);
+
+    expect(mockClient.getDraft).toHaveBeenCalledWith('draft_abc');
+  });
+
+  it('falls back to T3X_DRAFT env', async () => {
+    process.env.T3X_DRAFT = 'draft_env';
+    mockClient.getDraft.mockResolvedValue({
+      draft_id: 'draft_env',
+      project_id: 'p',
+      conversation_id: 'c',
+      status: 'active',
+      revision: 1,
+      created_at: '2026-04-12T14:23:01Z',
+      trees: [],
+    });
+
+    const program = new Command();
+    program.exitOverride();
+    const showCmd = program.command('show');
+    registerShowDraft(showCmd);
+
+    await program.parseAsync(['node', 'test', 'show', 'draft']);
+
+    expect(mockClient.getDraft).toHaveBeenCalledWith('draft_env');
   });
 });
