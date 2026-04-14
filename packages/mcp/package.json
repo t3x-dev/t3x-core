@@ -1,5 +1,5 @@
 {
-  "name": "@t3x-dev/mcp",
+  "name": "@t3x-dev/mcp-lib",
   "version": "0.1.0",
   "description": "T3X MCP server library — direct core import, 8 tools",
   "type": "module",
