@@ -34,9 +34,7 @@ describe('strict mode', () => {
       },
     };
     const result = validateSchema(tree, schema);
-    const v = result.violations.find(
-      (x) => x.code === 'UNEXPECTED_SLOT' || x.code === 'UNEXPECTED_NODE'
-    );
+    const v = result.violations.find((x) => x.code === 'UNEXPECTED_SLOT');
     expect(v).toBeDefined();
     expect(v?.path).toContain('porst');
   });

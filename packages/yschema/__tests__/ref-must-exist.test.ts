@@ -38,6 +38,7 @@ describe('ref_must_exist', () => {
     const v = result.violations.find((x) => x.code === 'REF_NOT_FOUND');
     expect(v).toBeDefined();
     expect(v?.message).toMatch(/ghost/);
+    expect(v?.path).toBe('services/a');
   });
 
   it('ignores the rule when the slot is absent', () => {
