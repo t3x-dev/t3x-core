@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useCreateLeaf } from '@/hooks/useCreateLeaf';
+import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useTerminology } from '@/hooks/useTerminology';
 import { cn } from '@/utils/cn';
 import type { LeafType } from '@/types/api';

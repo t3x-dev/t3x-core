@@ -13,7 +13,7 @@ import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
-import type { WorkspaceMode } from '@/hooks/useLeafPageData';
+import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import { nestNodes } from '@/domain/tree/treeNesting';

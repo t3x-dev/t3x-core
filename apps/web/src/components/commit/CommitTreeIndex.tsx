@@ -15,7 +15,7 @@ import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lu
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { useCreateLeaf } from '@/hooks/useCreateLeaf';
+import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import type { CompatNode } from '@/domain/tree/treeCompat';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';

@@ -16,7 +16,7 @@ import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDi
 import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useKeyboardNavigation } from '@/hooks/useKeyboardNavigation';
-import { useLeafPageData } from '@/hooks/useLeafPageData';
+import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
 import type { Constraint, SuggestedConstraint } from '@/infrastructure';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { cn } from '@/utils/cn';

@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
-import type { WorkspaceMode } from '@/hooks/useLeafPageData';
+import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import { useTerminology } from '@/hooks/useTerminology';
 import type { Leaf } from '@/types/api';
 import type { ExportFormat } from '@/types/api';

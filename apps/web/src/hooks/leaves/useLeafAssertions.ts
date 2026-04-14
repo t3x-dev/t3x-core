@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Leaf } from '@/types/api';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useRetuneSession } from './useRetuneSession';
+import { useRetuneSession } from '@/hooks/useRetuneSession';
 
 export interface UseLeafAssertionsReturn {
   selectedAssertionIds: Set<string>;
