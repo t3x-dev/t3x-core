@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import { typo } from '@/lib/typography';
+import { typo } from '@/domain/format/typography';
 import { cn } from '@/lib/utils';
 
 /**

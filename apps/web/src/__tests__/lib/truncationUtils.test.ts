@@ -7,7 +7,7 @@ import {
   findWordBoundary,
   truncateLongContent,
   truncateWithHighlights,
-} from '@/lib/truncationUtils';
+} from '@/domain/format/truncationUtils';
 
 describe('truncationUtils', () => {
   describe('findWordBoundary', () => {

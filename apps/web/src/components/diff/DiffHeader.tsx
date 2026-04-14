@@ -3,7 +3,7 @@
 import { ArrowLeft, GitCompare } from 'lucide-react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { Button } from '@/components/ui/button';
-import { shortHash as fmtShortHash } from '@/lib/formatters';
+import { shortHash as fmtShortHash } from '@/domain/format/formatters';
 
 interface CommitInfo {
   hash: string;

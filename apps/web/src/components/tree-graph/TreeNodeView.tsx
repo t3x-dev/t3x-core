@@ -5,7 +5,7 @@ import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { Box, Link as LinkIcon, Paperclip } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
-import { truncate } from '@/lib/truncate';
+import { truncate } from '@/domain/format/truncate';
 import { cn } from '@/lib/utils';
 import type { TreeNodeData } from './treeGraphUtils';
 

@@ -7,7 +7,15 @@
  * @see docs/specification/commit-source-context-presentation.md
  */
 
-import type { HighlightRange } from '@/types/sourceContext';
+// HighlightRange inlined here so this domain/ module has no upstream
+// imports; @/types/sourceContext re-exports it from here to keep a
+// single source of truth.
+export interface HighlightRange {
+  /** Start position (0-indexed, inclusive) */
+  start: number;
+  /** End position (0-indexed, exclusive) */
+  end: number;
+}
 
 /**
  * Merge overlapping or adjacent highlight ranges.

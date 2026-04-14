@@ -15,7 +15,7 @@ import {
   DEFAULT_CONTEXT_CHARS,
   DEFAULT_MAX_LENGTH,
   truncateLongContent,
-} from '@/lib/truncationUtils';
+} from '@/domain/format/truncationUtils';
 import type { TurnContextData } from '@/types/api';
 import type { HighlightRange, NodeWithSource, TurnBubbleData } from '@/types/sourceContext';
 import { SourceNodeList } from './SourceNodeList';
