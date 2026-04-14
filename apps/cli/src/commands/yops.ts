@@ -19,9 +19,7 @@ function buildHeaders(): Record<string, string> {
 }
 
 export function registerYopsCommands(program: Command): void {
-  const yops = program
-    .command('yops')
-    .description('Apply, validate, and inspect YOps scripts');
+  const yops = program.command('yops').description('Apply, validate, and inspect YOps scripts');
 
   yops
     .command('validate')
@@ -48,7 +46,11 @@ export function registerYopsCommands(program: Command): void {
 
         const json = (await response.json()) as {
           success: boolean;
-          data?: { ok: boolean; applied: number; error?: { op_index: number; code: string; message: string } };
+          data?: {
+            ok: boolean;
+            applied: number;
+            error?: { op_index: number; code: string; message: string };
+          };
           error?: { code: string; message: string };
         };
 
@@ -122,7 +124,7 @@ export function registerYopsCommands(program: Command): void {
         }
 
         success(
-          `Applied ${result.applied_count} operation${result.applied_count !== 1 ? 's' : ''}`,
+          `Applied ${result.applied_count} operation${result.applied_count !== 1 ? 's' : ''}`
         );
         console.log(`  Draft: ${result.draft_id}  (revision ${revision} → ${result.revision})`);
         console.log(`  Trees: ${result.tree_count} nodes, ${result.slot_count} slots`);
@@ -140,14 +142,17 @@ export function registerYopsCommands(program: Command): void {
     .action(async (options) => {
       const baseUrl = getApiUrl();
       try {
-        const response = await fetch(
-          `${baseUrl}/v1/conversations/${options.conversation}/yops`,
-          { headers: buildHeaders() }
-        );
+        const response = await fetch(`${baseUrl}/v1/conversations/${options.conversation}/yops`, {
+          headers: buildHeaders(),
+        });
 
         const json = (await response.json()) as {
           success: boolean;
-          data?: Array<{ source: string; created_at: string; yops: Array<Record<string, unknown>> }>;
+          data?: Array<{
+            source: string;
+            created_at: string;
+            yops: Array<Record<string, unknown>>;
+          }>;
           error?: { code: string; message: string };
         };
 
