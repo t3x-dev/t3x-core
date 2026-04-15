@@ -19,7 +19,7 @@ import {
   stopRealtimeListener,
   stopTimeoutChecker,
 } from '@t3x-dev/api';
-import { getPostgresClient } from '@t3x-dev/storage';
+import { cleanupOldEvents, getPostgresClient, getPostgresDB } from '@t3x-dev/storage';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -73,9 +73,15 @@ pinoLogger.info(
 // even if the process is killed during initialization.
 // Note: The storage layer also registers its own shutdown handlers as a safety net,
 // so database closure is guaranteed even if these don't fire.
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
 const shutdown = async () => {
   pinoLogger.info('Shutting down...');
   stopTimeoutChecker();
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
   await stopRealtimeListener();
   await closeDB();
   process.exit(0);
@@ -106,6 +112,21 @@ async function start() {
       } catch (err) {
         pinoLogger.error({ err }, 'Failed to start realtime LISTEN relay');
       }
+
+      // Hourly events outbox cleanup (7-day retention). Each apps/api instance
+      // runs its own cron; DELETE ... WHERE created_at < cutoff is idempotent
+      // and safe to run concurrently across processes.
+      cleanupInterval = setInterval(
+        async () => {
+          try {
+            const count = await cleanupOldEvents(getPostgresDB(), { retentionDays: 7 });
+            pinoLogger.info({ deleted: count }, 'events cleanup ran');
+          } catch (err) {
+            pinoLogger.warn({ err }, 'events cleanup failed');
+          }
+        },
+        60 * 60 * 1000
+      );
     }
 
     // Start background tasks

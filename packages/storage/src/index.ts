@@ -36,6 +36,8 @@ export {
   type RecordEventInput,
   recordEvent,
 } from './events';
+// Background jobs (events retention cleanup, etc.)
+export { type CleanupOptions, cleanupOldEvents } from './jobs/cleanup-events';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
