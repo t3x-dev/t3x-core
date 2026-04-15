@@ -93,7 +93,14 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [{ set: { path: 'trip/budget', value: 5000 } }],
+        yops: [
+          {
+            set: {
+              path: 'trip/budget',
+              value: 5000,
+            },
+          },
+        ],
         if_revision: revision,
       }),
     });
@@ -122,7 +129,12 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       body: JSON.stringify({
         yops: [
           { define: { path: 'hotel' } },
-          { populate: { path: 'hotel', values: { name: 'Hilton', stars: 5 } } },
+          {
+            populate: {
+              path: 'hotel',
+              values: { name: 'Hilton', stars: 5 },
+            },
+          },
         ],
         if_revision: revision,
       }),
@@ -142,7 +154,15 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [{ define: { path: 'test' } }, { populate: { path: 'test', values: { val: 1 } } }],
+        yops: [
+          { define: { path: 'test' } },
+          {
+            populate: {
+              path: 'test',
+              values: { val: 1 },
+            },
+          },
+        ],
         if_revision: 0,
       }),
     });
@@ -161,7 +181,14 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [{ set: { path: 'trip/budget', value: 3000 } }],
+        yops: [
+          {
+            set: {
+              path: 'trip/budget',
+              value: 3000,
+            },
+          },
+        ],
         if_revision: revision - 1, // stale revision
       }),
     });
@@ -176,12 +203,18 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
     const initialNodes = [{ key: 'trip', slots: { destination: 'London' }, children: [] }];
     const { id, revision } = await createDraft({ nodes: initialNodes });
 
-    // drop op targeting a non-existent node path (engine returns PATH_NOT_FOUND)
+    // drop op targeting a non-existent node path — engine returns PATH_NOT_FOUND
     const res = await app.request(`/v1/drafts/${id}/apply-yops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [{ drop: { path: 'nonexistent' } }],
+        yops: [
+          {
+            drop: {
+              path: 'nonexistent',
+            },
+          },
+        ],
         if_revision: revision,
       }),
     });
@@ -204,7 +237,14 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [{ set: { path: 'test/val', value: 2 } }],
+        yops: [
+          {
+            set: {
+              path: 'test/val',
+              value: 2,
+            },
+          },
+        ],
         if_revision: revision,
       }),
     });
@@ -224,8 +264,18 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       body: JSON.stringify({
         yops: [
           { define: { path: 'trip' } },
-          { populate: { path: 'trip', values: { destination: 'Berlin' } } },
-          { set: { path: 'trip/budget', value: 2000 } },
+          {
+            populate: {
+              path: 'trip',
+              values: { destination: 'Berlin' },
+            },
+          },
+          {
+            set: {
+              path: 'trip/budget',
+              value: 2000,
+            },
+          },
         ],
         if_revision: revision,
       }),

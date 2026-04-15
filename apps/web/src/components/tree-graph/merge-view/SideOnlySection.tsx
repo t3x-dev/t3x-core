@@ -63,9 +63,12 @@ export function SideOnlySection({
                 <span className="font-mono text-zinc-600 dark:text-zinc-300">{path}</span>
                 {node && (
                   <>
-                    <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(node.type)}</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      {toTitleCase(node.type)}
+                    </span>
                     <span className="ml-auto text-zinc-400">
-                      {Object.keys(node.slots).length} slot{Object.keys(node.slots).length !== 1 ? 's' : ''}
+                      {Object.keys(node.slots).length} slot
+                      {Object.keys(node.slots).length !== 1 ? 's' : ''}
                     </span>
                   </>
                 )}

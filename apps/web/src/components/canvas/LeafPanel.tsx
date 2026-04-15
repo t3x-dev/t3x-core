@@ -18,12 +18,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
-import { reducedMotion, staggerContainer, staggerItem } from '@/utils/motion';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { Template } from '@/types/api';
 import type { LeafType } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { reducedMotion, staggerContainer, staggerItem } from '@/utils/motion';
+import { glass } from '@/utils/theme';
 import { LEAF_TYPES } from './CanvasNodes';
 
 const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { NodeWithSignals } from '../../extractors/compressPrompt';
 import { Compressor } from '../../extractors/compressor';
+import type { NodeWithSignals } from '../../extractors/compressPrompt';
 import type { LLMProvider } from '../../llm/types';
 
 function makeMockProvider(jsonResponse: string): LLMProvider {

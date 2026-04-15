@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
-import { cn } from '@/utils/cn';
 import type { NodeWithSource } from '@/types/sourceContext';
+import { cn } from '@/utils/cn';
 
 interface LeafOutputDisplayProps {
   output: string | null;
@@ -68,8 +68,7 @@ function buildConstraintRanges(
     // For REQUIRE: highlight when found (passed)
     // For EXCLUDE: highlight when found (failed — it shouldn't be there)
     const shouldHighlight =
-      (constraint.type === 'require' && passed) ||
-      (constraint.type === 'exclude' && !passed);
+      (constraint.type === 'require' && passed) || (constraint.type === 'exclude' && !passed);
     if (!shouldHighlight) continue;
 
     const needle = constraint.value.toLowerCase();
@@ -133,9 +132,7 @@ function buildHighlightedSegments(
   }
   // Add node ranges that don't overlap with constraint ranges
   for (const r of nodeRanges) {
-    const overlaps = constraintRanges.some(
-      (cr) => r.start < cr.end && r.end > cr.start
-    );
+    const overlaps = constraintRanges.some((cr) => r.start < cr.end && r.end > cr.start);
     if (!overlaps) {
       allRanges.push({ start: r.start, end: r.end, nodeId: r.nodeId });
     }
@@ -339,8 +336,7 @@ export function LeafOutputDisplay({
                   key={`seg-${i}`}
                   className={cn(
                     'underline decoration-[var(--status-success)] decoration-2 underline-offset-[3px] cursor-pointer transition-colors',
-                    hoveredNodeId === seg.nodeId &&
-                      'bg-[var(--status-success-muted)] rounded-sm'
+                    hoveredNodeId === seg.nodeId && 'bg-[var(--status-success-muted)] rounded-sm'
                   )}
                   onMouseEnter={() => handleSegmentHover(seg.nodeId!)}
                   onMouseLeave={() => handleSegmentHover(null)}

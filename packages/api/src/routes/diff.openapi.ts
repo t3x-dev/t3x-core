@@ -12,9 +12,9 @@ import {
   createCachedEmbeddingProvider,
   createGoogleAIEmbeddingProvider,
   diffCommits,
+  EmbeddingProviderError,
   runOperation,
   type TreeDiff,
-  EmbeddingProviderError,
 } from '@t3x-dev/core';
 import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -655,10 +655,14 @@ diffRoutes.openapi(frameRoute, async (c) => {
     // projectId is not relevant for diff (read-only, cross-project OK) — pass empty string
     const ctx = await buildPipelineContext(c, '');
     const result = await collectResult(
-      runOperation(diffOp, {
-        base_commit_hash: body.base_commit_hash,
-        target_commit_hash: body.target_commit_hash,
-      }, ctx),
+      runOperation(
+        diffOp,
+        {
+          base_commit_hash: body.base_commit_hash,
+          target_commit_hash: body.target_commit_hash,
+        },
+        ctx
+      )
     );
 
     return c.json({ success: true as const, data: result }, 200);

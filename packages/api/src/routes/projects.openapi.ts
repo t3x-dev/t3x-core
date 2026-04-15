@@ -21,7 +21,11 @@ import {
 } from '@t3x-dev/storage';
 import { eq, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
-import { assertProjectAccess, assertProjectAccessIncludingDeleted, getUserId } from '../lib/project-access';
+import {
+  assertProjectAccess,
+  assertProjectAccessIncludingDeleted,
+  getUserId,
+} from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -430,7 +434,8 @@ const deleteProjectRoute = createRoute({
   path: '/v1/projects/{id}',
   tags: ['Projects'],
   summary: 'Delete a project',
-  description: 'Soft-deletes a project by default. Use ?permanent=true for irreversible hard deletion.',
+  description:
+    'Soft-deletes a project by default. Use ?permanent=true for irreversible hard deletion.',
   request: {
     params: IdParamSchema,
     query: z.object({
@@ -491,7 +496,10 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
       const deleted = await permanentDeleteProject(db, id);
       if (!deleted) {
         return c.json(
-          { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
+          {
+            success: false as const,
+            error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+          },
           404
         );
       }
@@ -503,7 +511,10 @@ projectRoutes.openapi(deleteProjectRoute, async (c) => {
       const deleted = await deleteProject(db, id);
       if (!deleted) {
         return c.json(
-          { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found` } },
+          {
+            success: false as const,
+            error: { code: 'NOT_FOUND', message: `Project ${id} not found` },
+          },
           404
         );
       }
@@ -578,7 +589,10 @@ projectRoutes.openapi(restoreProjectRoute, async (c) => {
     const restored = await restoreProject(db, id);
     if (!restored) {
       return c.json(
-        { success: false as const, error: { code: 'NOT_FOUND', message: `Project ${id} not found or not deleted` } },
+        {
+          success: false as const,
+          error: { code: 'NOT_FOUND', message: `Project ${id} not found or not deleted` },
+        },
         404
       );
     }

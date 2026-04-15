@@ -7,11 +7,11 @@
  * Fail-fast: stops at the first error and returns partial state.
  */
 
-import type { YValue, YOp, YOpsResult } from './types';
+import { YOPS_ERRORS, yopsError } from './errors';
 import { deepClone } from './paths';
-import { yopsError, YOPS_ERRORS } from './errors';
 import type { OpRegistry } from './registry';
 import type { OpSpec } from './spec';
+import type { YOp, YOpsResult, YValue } from './types';
 
 // ── Field Validation ──
 
@@ -19,12 +19,16 @@ function validateFields(
   opName: string,
   fields: Record<string, unknown>,
   spec: OpSpec,
-  index: number,
+  index: number
 ): { code: string; message: string; op_index: number } | null {
   // Check required fields present
   for (const [name, fieldSpec] of Object.entries(spec.fields)) {
     if (fieldSpec.required && !(name in fields)) {
-      return { code: 'INVALID_OP', message: `${opName}: missing required field "${name}"`, op_index: index };
+      return {
+        code: 'INVALID_OP',
+        message: `${opName}: missing required field "${name}"`,
+        op_index: index,
+      };
     }
   }
   // Check no extra fields
@@ -37,7 +41,11 @@ function validateFields(
   for (const [name, fieldSpec] of Object.entries(spec.fields)) {
     if (fieldSpec.enum && name in fields) {
       if (!fieldSpec.enum.includes(fields[name] as string)) {
-        return { code: 'INVALID_OP', message: `${opName}: field "${name}" must be one of [${fieldSpec.enum.join(', ')}]`, op_index: index };
+        return {
+          code: 'INVALID_OP',
+          message: `${opName}: field "${name}" must be one of [${fieldSpec.enum.join(', ')}]`,
+          op_index: index,
+        };
       }
     }
   }
@@ -59,7 +67,9 @@ export function createEngine(registry: OpRegistry) {
       const handler = registry.getHandler(opName);
       if (!handler) {
         return {
-          ok: false, doc: current, applied: i,
+          ok: false,
+          doc: current,
+          applied: i,
           error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation: ${opName}`, i),
         };
       }

@@ -12,10 +12,7 @@
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-export async function hydrateConversationToStore(
-  projectId: string,
-  convId: string
-): Promise<void> {
+export async function hydrateConversationToStore(projectId: string, convId: string): Promise<void> {
   const pre = useWorkspaceStore.getState();
   pre.setConversation(convId);
   pre.setError(null);

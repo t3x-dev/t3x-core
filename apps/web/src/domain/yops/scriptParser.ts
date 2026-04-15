@@ -1,5 +1,5 @@
-import { load as parseYaml, dump as stringifyYaml } from 'js-yaml';
 import type { YOp } from '@t3x-dev/core';
+import { load as parseYaml, dump as stringifyYaml } from 'js-yaml';
 
 export interface ParseError {
   line: number;
@@ -12,10 +12,26 @@ export interface ParseResult {
 }
 
 const VALID_OPS = [
-  'define', 'drop', 'rename', 'set', 'unset', 'populate', 'append',
-  'move', 'clone', 'nest', 'split', 'fold', 'merge',
-  'sort', 'unique', 'pick', 'omit', 'assert',
-  'relate', 'unrelate',
+  'define',
+  'drop',
+  'rename',
+  'set',
+  'unset',
+  'populate',
+  'append',
+  'move',
+  'clone',
+  'nest',
+  'split',
+  'fold',
+  'merge',
+  'sort',
+  'unique',
+  'pick',
+  'omit',
+  'assert',
+  'relate',
+  'unrelate',
 ];
 
 export function parseYOpsScript(text: string): ParseResult {
@@ -31,7 +47,10 @@ export function parseYOpsScript(text: string): ParseResult {
   }
 
   if (!doc || typeof doc !== 'object') {
-    return { ops: null, errors: [{ line: 1, message: 'Expected a YAML document with "yops" key' }] };
+    return {
+      ops: null,
+      errors: [{ line: 1, message: 'Expected a YAML document with "yops" key' }],
+    };
   }
 
   const yops = (doc as Record<string, unknown>).yops;
@@ -48,7 +67,10 @@ export function parseYOpsScript(text: string): ParseResult {
     }
     const keys = Object.keys(op);
     if (keys.length !== 1) {
-      errors.push({ line: i + 2, message: `Op ${i + 1}: expected exactly one operation key, got ${keys.length}` });
+      errors.push({
+        line: i + 2,
+        message: `Op ${i + 1}: expected exactly one operation key, got ${keys.length}`,
+      });
       continue;
     }
     const opName = keys[0];

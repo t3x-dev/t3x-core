@@ -97,10 +97,7 @@ export async function findConversationByAliasOrId(
       .select()
       .from(conversations)
       .where(
-        and(
-          eq(conversations.conversationId, valueOrAlias),
-          eq(conversations.projectId, projectId)
-        )
+        and(eq(conversations.conversationId, valueOrAlias), eq(conversations.projectId, projectId))
       )
       .limit(1);
     if (byId) return byId;
@@ -110,12 +107,7 @@ export async function findConversationByAliasOrId(
   const [byAlias] = await db
     .select()
     .from(conversations)
-    .where(
-      and(
-        eq(conversations.alias, valueOrAlias),
-        eq(conversations.projectId, projectId)
-      )
-    )
+    .where(and(eq(conversations.alias, valueOrAlias), eq(conversations.projectId, projectId)))
     .limit(1);
 
   return byAlias ?? null;
@@ -155,12 +147,7 @@ export async function setAliasIfNull(
       const updated = await db
         .update(conversations)
         .set({ alias: candidate })
-        .where(
-          and(
-            eq(conversations.conversationId, conversationId),
-            isNull(conversations.alias)
-          )
-        )
+        .where(and(eq(conversations.conversationId, conversationId), isNull(conversations.alias)))
         .returning({ alias: conversations.alias });
 
       if (updated.length > 0) {

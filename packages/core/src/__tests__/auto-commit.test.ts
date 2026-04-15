@@ -81,10 +81,7 @@ describe('evaluateAutoCommit', () => {
   });
 
   it('returns should_commit=true when enough qualifying nodes', () => {
-    const candidates = [
-      makeCandidate({ id: 's_1' }),
-      makeCandidate({ id: 's_2' }),
-    ];
+    const candidates = [makeCandidate({ id: 's_1' }), makeCandidate({ id: 's_2' })];
     const plan = evaluateAutoCommit(candidates, enabledConfig);
 
     expect(plan.should_commit).toBe(true);

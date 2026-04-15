@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import {
+  buildCommittedHighlights,
+  type CommittedHighlight,
+} from '@/domain/commit/committedHighlights';
 import { type ApiCommit, listCommits } from '@/infrastructure/commits';
-import { type CommittedHighlight, buildCommittedHighlights } from '@/domain/commit/committedHighlights';
 import { useCommitStore } from '@/store/commitStore';
 
 /**

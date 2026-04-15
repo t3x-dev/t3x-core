@@ -103,7 +103,6 @@ export async function listYOpsLog(
   return handleResponse<YOpsLogEntry[]>(res);
 }
 
-
 export async function getSemanticDraft(
   conversationId: string,
   topicId?: string
@@ -164,4 +163,3 @@ export async function compressNodes(conversationId: string): Promise<CompressRes
   );
   return handleResponse<CompressResult>(res);
 }
-

@@ -24,17 +24,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
-import { leafContextMenuHandlerRef } from '@/hooks/shared/useContextMenu';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
+import { leafContextMenuHandlerRef } from '@/hooks/shared/useContextMenu';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { nodeEnter, reducedMotion } from '@/utils/motion';
-import { glass, toneAccent, toneGlow } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData, EmbeddedLeaf } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { nodeEnter, reducedMotion } from '@/utils/motion';
+import { glass, toneAccent, toneGlow } from '@/utils/theme';
 
 import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
 import { NodeLeavesSection } from './NodeLeavesSection';

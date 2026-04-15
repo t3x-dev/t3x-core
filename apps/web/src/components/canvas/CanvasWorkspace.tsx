@@ -10,14 +10,14 @@ import {
 import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { useContextMenu } from '@/hooks/shared/useContextMenu';
+import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
 import { usePathHighlight } from '@/hooks/shared/usePathHighlight';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
-import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
-import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import '@xyflow/react/dist/style.css';
 import { useTheme } from 'next-themes';
 import { AnimatedEdge } from './AnimatedEdge';
@@ -38,10 +38,10 @@ const edgeTypes = {
 
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';

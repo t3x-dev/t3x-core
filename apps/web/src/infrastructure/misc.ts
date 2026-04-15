@@ -593,7 +593,9 @@ export async function* streamPlatformImport(
   platformData: string,
   conversationIds?: string[]
 ): AsyncGenerator<ImportStreamEvent> {
-  const platformHeaders = await injectAuthHeaders(new Headers({ 'Content-Type': 'application/json' }));
+  const platformHeaders = await injectAuthHeaders(
+    new Headers({ 'Content-Type': 'application/json' })
+  );
   const res = await fetch(`${API_V1}/import/platform/stream`, {
     method: 'POST',
     headers: platformHeaders,

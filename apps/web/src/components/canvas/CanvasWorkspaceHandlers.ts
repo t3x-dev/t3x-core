@@ -26,7 +26,6 @@ export function useCanvasHandlers({
   addNode,
   setIsAdding,
 }: UseCanvasHandlersOptions) {
-
   const getViewportCenter = useCallback(() => {
     if (!canvasRef.current) {
       return undefined;

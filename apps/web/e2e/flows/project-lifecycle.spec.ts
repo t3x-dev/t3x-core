@@ -68,8 +68,8 @@ test.describe('Project Lifecycle', () => {
     const errorHeading = page.locator('text=Project not found');
     await expect(errorHeading).toBeVisible({ timeout: 15000 });
 
-    // Should also show a link back to projects
-    const backLink = page.locator('text=Go to Projects');
+    // Should also show a link back to chats (canvas-only redesign renamed the back button)
+    const backLink = page.locator('text=Go to Chats');
     await expect(backLink).toBeVisible({ timeout: 5000 });
   });
 });

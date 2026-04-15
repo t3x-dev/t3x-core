@@ -11,9 +11,9 @@ import {
   clearSession as clearSessionInfra,
   getSessionKey as getSessionKeyInfra,
   getSessionUser as getSessionUserInfra,
+  type SessionUser,
   setSessionKey as setSessionKeyInfra,
   setSessionUser as setSessionUserInfra,
-  type SessionUser,
 } from '@/infrastructure/session';
 
 export type { SessionUser };

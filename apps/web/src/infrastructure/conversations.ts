@@ -109,9 +109,7 @@ export async function exportConversationContext(
  * `@/infrastructure/pins.getConversationMemory`, which returns the
  * structured BuiltContext used by chat context assembly.
  */
-export async function getConversationMemoryText(
-  conversationId: string
-): Promise<{ text: string }> {
+export async function getConversationMemoryText(conversationId: string): Promise<{ text: string }> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/memory`
   );

@@ -5,8 +5,8 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/utils/cn';
 import { useHealth } from '@/hooks/shared/useApi';
+import { cn } from '@/utils/cn';
 
 export function ApiStatus() {
   const { data, loading, error } = useHealth();

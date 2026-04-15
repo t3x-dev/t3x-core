@@ -70,10 +70,7 @@ export function computeUncoveredRanges(
  * Collect verbatim quotes attributable to a specific conversation turn,
  * derived from the sourceIndex.
  */
-export function collectQuotesForTurn(
-  sourceIndex: Map<string, Source>,
-  turnHash: string,
-): string[] {
+export function collectQuotesForTurn(sourceIndex: Map<string, Source>, turnHash: string): string[] {
   const quotes: string[] = [];
   for (const src of sourceIndex.values()) {
     if (src.type === 'llm' && src.turn_ref.turn_hash === turnHash) {

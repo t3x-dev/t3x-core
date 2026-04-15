@@ -20,8 +20,8 @@ import {
 import { SkeletonText } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
-import { cn } from '@/utils/cn';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { cn } from '@/utils/cn';
 import { PreviewTypeSelector } from './PreviewTypeSelector';
 
 function formatTimeAgo(isoString: string): string {

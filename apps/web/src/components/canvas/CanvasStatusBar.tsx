@@ -3,8 +3,8 @@
 import { GitBranch, GitCommitHorizontal, Leaf } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
+import { cn } from '@/utils/cn';
 
 /**
  * CanvasStatusBar — VS Code-style status bar at the bottom of the Canvas page.

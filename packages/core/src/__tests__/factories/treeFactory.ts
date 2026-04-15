@@ -4,8 +4,8 @@
  * Create test nodes, trees, relations, and SemanticContent with sensible defaults.
  */
 
-import type { FlatNode, Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import { flattenTree, flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import type { FlatNode, Relation, SemanticContent, TreeNode } from '../../semantic/types';
 
 let counter = 0;
 
@@ -130,8 +130,18 @@ export function createBalancedTree(): TreeNode {
     key: 'hangzhou_trip',
     slots: { destination: 'Hangzhou', dates: 'May 1-3' },
     children: [
-      { key: 'activity_plan', slots: { activities: ['West Lake', 'hiking'], duration: '2 days' }, children: [], source: 'T2' },
-      { key: 'dining', slots: { cuisine: 'local Hangzhou cuisine', budget: 500 }, children: [], source: 'T3' },
+      {
+        key: 'activity_plan',
+        slots: { activities: ['West Lake', 'hiking'], duration: '2 days' },
+        children: [],
+        source: 'T2',
+      },
+      {
+        key: 'dining',
+        slots: { cuisine: 'local Hangzhou cuisine', budget: 500 },
+        children: [],
+        source: 'T3',
+      },
     ],
     source: 'T1',
   };
@@ -146,9 +156,7 @@ export function createDetailedTree(): TreeNode {
       {
         key: 'activity_plan',
         slots: { count: 3 },
-        children: [
-          { key: 'gear', slots: { rain_jacket: true, hiking_boots: true }, children: [] },
-        ],
+        children: [{ key: 'gear', slots: { rain_jacket: true, hiking_boots: true }, children: [] }],
       },
       { key: 'dining', slots: { cuisine: 'local' }, children: [] },
     ],

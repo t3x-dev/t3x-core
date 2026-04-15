@@ -107,7 +107,7 @@ describe('ylint', () => {
       expect(w!.form).toBe(2);
     });
 
-it('exempts number and boolean scalars', () => {
+    it('exempts number and boolean scalars', () => {
       const result = ylint(sc(node('metrics', { count: 42, active: true })));
       const f2Warnings = result.warnings.filter((w) => w.form === 2);
       expect(f2Warnings).toHaveLength(0);

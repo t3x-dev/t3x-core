@@ -104,7 +104,10 @@ const TERMINOLOGY: Record<string, TermEntry> = {
   },
   loading: { default: 'Loading...', developer: 'Loading...' },
   all_branches: { default: 'All branches', developer: 'All branches' },
-  configure_and_commit: { default: 'Configure and commit this unit', developer: 'Configure and commit this unit' },
+  configure_and_commit: {
+    default: 'Configure and commit this unit',
+    developer: 'Configure and commit this unit',
+  },
   new_branch_name: { default: 'Enter new branch name', developer: 'Enter new branch name' },
   draft_from: { default: 'Draft from', developer: 'Draft from' },
 };

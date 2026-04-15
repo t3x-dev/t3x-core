@@ -50,7 +50,7 @@ function getSource(op: unknown): unknown {
 
 export function validateSource(
   ops: readonly SourcedYOp[],
-  turns: readonly ValidationTurn[],
+  turns: readonly ValidationTurn[]
 ): ValidationResult {
   const turnMap = new Map(turns.map((t) => [t.turn_hash, t.content]));
   const failing: FailingOp[] = [];
@@ -87,12 +87,10 @@ export function validateSource(
           reason: 'unverifiable_quote',
           detail: `quote "${quote}" is not a verbatim substring of turn ${typedSrc.turn_ref.turn_hash}`,
         });
-        continue;
       }
     } else if (isHumanSource(typedSrc)) {
       if (!typedSrc.author || typedSrc.author.trim() === '') {
         failing.push({ op, opIndex: i, reason: 'missing_author' });
-        continue;
       }
     } else {
       failing.push({ op, opIndex: i, reason: 'invalid_source_type' });

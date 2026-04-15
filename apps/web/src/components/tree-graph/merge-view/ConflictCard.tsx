@@ -5,8 +5,8 @@ import { Check, ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-reac
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTreeMergeSuggestion } from '@/hooks/merge/useTreeMergeSuggestion';
-import { cn } from '@/utils/cn';
 import type { TreeMergeSuggestion } from '@/types/api';
+import { cn } from '@/utils/cn';
 import {
   type ConflictResolution,
   canonicalJson,

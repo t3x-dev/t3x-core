@@ -5,7 +5,10 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "yschema.yaml"],
+  "files": [
+    "dist",
+    "yschema.yaml"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -28,7 +31,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["yaml", "yschema", "schema", "validation", "yops", "lint", "declarative"],
+  "keywords": [
+    "yaml",
+    "yschema",
+    "schema",
+    "validation",
+    "yops",
+    "lint",
+    "declarative"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/t3x-dev/t3x-core.git",

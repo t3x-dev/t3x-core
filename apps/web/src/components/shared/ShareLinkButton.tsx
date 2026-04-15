@@ -18,8 +18,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useShareTokens } from '@/hooks/shares/useShareTokens';
-import { cn } from '@/utils/cn';
 import type { ShareLink } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 interface ShareLinkButtonProps {
   entityType: 'leaf' | 'run' | 'comparison' | 'commit';

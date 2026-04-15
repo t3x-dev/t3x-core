@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { OpRegistry } from '../src/registry';
 import type { OpHandler } from '../src/registry';
+import { OpRegistry } from '../src/registry';
 import type { YOpsSpec } from '../src/spec';
 
 // ── Minimal mock spec with 3 ops ──

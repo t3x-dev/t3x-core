@@ -1,5 +1,5 @@
 /**
- * Next.js Middleware
+ * Next.js Proxy (formerly "middleware" — renamed in Next 16).
  *
  * Protects routes by default.
  * When AUTH_DISABLED=true, all routes are public (opt-in).
@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 /** Paths that are always public (even when auth is enabled) */
 const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Auth is ENABLED by default (secure by default).
   // Only disabled when AUTH_DISABLED is explicitly set to 'true'.
   if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {

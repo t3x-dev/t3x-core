@@ -73,13 +73,10 @@ export function useChatHistory(
       setHasMore(false);
       setIsChatLoading(true);
       try {
-        const response = await api.listTurns(
-          projectId,
-          currentConversationId,
-          CHAT_PAGE_SIZE,
-          0,
-          { signal: abortController.signal, order: 'desc' }
-        );
+        const response = await api.listTurns(projectId, currentConversationId, CHAT_PAGE_SIZE, 0, {
+          signal: abortController.signal,
+          order: 'desc',
+        });
         if (abortController.signal.aborted) return;
         const loaded = response.turns
           .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
@@ -94,8 +91,7 @@ export function useChatHistory(
         setOffset(response.turns.length);
       } catch (err) {
         const isAbortError =
-          abortController.signal.aborted ||
-          (err instanceof api.ApiError && err.code === 'ABORTED');
+          abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
         if (!isAbortError) {
           // Silently ignore — UI remains on whatever state the page had.
         }
@@ -122,13 +118,10 @@ export function useChatHistory(
 
     setIsLoadingMore(true);
     try {
-      const response = await api.listTurns(
-        projectId,
-        conversationId,
-        CHAT_PAGE_SIZE,
-        offset,
-        { order: 'desc', signal: abortController.signal }
-      );
+      const response = await api.listTurns(projectId, conversationId, CHAT_PAGE_SIZE, offset, {
+        order: 'desc',
+        signal: abortController.signal,
+      });
       if (abortController.signal.aborted) return;
       if (response.turns.length === 0) {
         setHasMore(false);
@@ -147,8 +140,7 @@ export function useChatHistory(
       setHasMore(response.turns.length >= CHAT_PAGE_SIZE);
     } catch (err) {
       const isAbortError =
-        abortController.signal.aborted ||
-        (err instanceof api.ApiError && err.code === 'ABORTED');
+        abortController.signal.aborted || (err instanceof api.ApiError && err.code === 'ABORTED');
       if (!isAbortError) {
         // Silently ignore.
       }

@@ -4,7 +4,7 @@
  * Uses Zod v4's built-in z.toJSONSchema() — no extra dependencies needed.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { YOpSchema } from '../src/schema';

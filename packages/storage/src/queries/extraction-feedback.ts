@@ -136,7 +136,6 @@ export async function getAdaptiveFeedbackStats(
   };
 }
 
-
 export async function listExtractionFeedback(
   db: AnyDB,
   projectId: string,

@@ -5,8 +5,8 @@ import {
   type ExtractionStyleConfig,
   matchPreset,
   PRESETS,
-  styleSummaryLine,
   type PresetName,
+  styleSummaryLine,
 } from '../../extractors/extractionStyleConfig';
 
 describe('ExtractionStyleConfig', () => {

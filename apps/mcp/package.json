@@ -8,7 +8,14 @@
     "url": "https://github.com/t3x-dev/t3x-core.git",
     "directory": "apps/mcp"
   },
-  "keywords": ["t3x", "mcp", "semantic", "version-control", "ai", "knowledge-management"],
+  "keywords": [
+    "t3x",
+    "mcp",
+    "semantic",
+    "version-control",
+    "ai",
+    "knowledge-management"
+  ],
   "type": "module",
   "bin": {
     "t3x-mcp": "./dist/index.js"

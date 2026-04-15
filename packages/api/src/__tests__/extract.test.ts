@@ -29,6 +29,113 @@ vi.mock('../lib/webhook-dispatcher', () => ({
   },
 }));
 
+// Mock provider registry (mirrors extract-e2e.test.ts pattern)
+const { mockGetProviderRegistry } = vi.hoisted(() => ({
+  mockGetProviderRegistry: vi.fn(),
+}));
+
+vi.mock('../lib/provider-registry', () => ({
+  getProviderRegistry: mockGetProviderRegistry,
+}));
+
+/** Full-mode extractor YAML + metadata (consumed by FrameExtractor). */
+const EXTRACTION_YAML_FULL = `project:
+  deadline: next Friday
+  hires: 2 engineers
+  budget: $50k
+---
+{
+  "slot_quotes": {
+    "deadline": "deadline is next Friday",
+    "hires": "hire two engineers",
+    "budget": "Budget is $50k"
+  },
+  "source_map": {
+    "project": "[T1:abc12345]"
+  }
+}`;
+
+/** Incremental-mode YOps delta. */
+const EXTRACTION_YOPS_DELTA = `yops:
+  - set:
+      path: project/budget
+      value: $100k`;
+
+const PIPELINE_RESPONSES = {
+  dedup: '{"decision": "keep_separate"}',
+  topicName: 'project_plan',
+  topicEvolve: '{"verdict": "keep", "name": "project_plan"}',
+  slotPolish: '{"slots": {}}',
+  reviewer: '{"status": "approved", "issues": []}',
+  coverageStep1: JSON.stringify({
+    points: [{ type: 'fact', text: 'project plan', quote: 'project' }],
+  }),
+  coverageStep2: '{"coverage_score": 1.0, "missing_points": []}',
+  contradiction: '{"user_constraints": [], "contradictions": []}',
+};
+
+function createMockProvider(mode: 'full' | 'incremental' = 'full') {
+  return {
+    id: 'test-provider',
+    generate: vi.fn().mockImplementation(async (prompt: string) => {
+      const usage = { inputTokens: 100, outputTokens: 50 };
+
+      if (
+        prompt.includes('knowledge extraction engine') ||
+        prompt.includes('Extraction Priority')
+      ) {
+        if (mode === 'incremental' || prompt.includes('Current Tree')) {
+          return { text: EXTRACTION_YOPS_DELTA, usage };
+        }
+        return { text: EXTRACTION_YAML_FULL, usage };
+      }
+      if (prompt.includes('two semantic frames describe the same concept')) {
+        return { text: PIPELINE_RESPONSES.dedup, usage };
+      }
+      if (prompt.includes('name the main topic')) {
+        return { text: PIPELINE_RESPONSES.topicName, usage };
+      }
+      if (prompt.includes('topic name still fits')) {
+        return { text: PIPELINE_RESPONSES.topicEvolve, usage };
+      }
+      if (prompt.includes('clean up YAML key names')) {
+        return { text: PIPELINE_RESPONSES.slotPolish, usage };
+      }
+      if (prompt.includes('review a structured meaning document')) {
+        return { text: PIPELINE_RESPONSES.reviewer, usage };
+      }
+      if (prompt.includes('extract ALL important points') || prompt.includes('You extract ALL')) {
+        return { text: PIPELINE_RESPONSES.coverageStep1, usage };
+      }
+      if (
+        prompt.includes('compare a list of user-stated points') ||
+        prompt.includes('You compare')
+      ) {
+        return { text: PIPELINE_RESPONSES.coverageStep2, usage };
+      }
+      if (prompt.includes('detect contradictions')) {
+        return { text: PIPELINE_RESPONSES.contradiction, usage };
+      }
+      return { text: '{}', usage };
+    }),
+    resolveConflict: vi.fn().mockImplementation(async () => ({
+      text: '',
+      usage: { inputTokens: 0, outputTokens: 0 },
+    })),
+  };
+}
+
+function setupMockRegistry(mode: 'full' | 'incremental' = 'full') {
+  mockGetProviderRegistry.mockResolvedValue({
+    tryWithFallback: vi
+      .fn()
+      .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
+        const provider = createMockProvider(mode);
+        return fn(provider);
+      }),
+  });
+}
+
 // Import routes after mocking
 import { extractRoutes } from '../routes/extract.openapi';
 
@@ -54,6 +161,7 @@ describe('Extract Routes', () => {
 
   beforeEach(() => {
     mockDispatch.mockClear();
+    setupMockRegistry('full');
   });
 
   describe('POST /v1/extract', () => {

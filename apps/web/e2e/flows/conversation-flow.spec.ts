@@ -54,9 +54,11 @@ test.describe('Conversation Flow', () => {
     await conv.expectTurnContent(userContent);
     await conv.expectTurnContent(assistantContent);
 
-    // Role labels should be present
-    await expect(page.locator('text=You').first()).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('text=T3X').first()).toBeVisible({ timeout: 5000 });
+    // Semantic role markers on ChatMessage root (data-turn-role="user|assistant")
+    await expect(page.locator('[data-turn-role="user"]').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-turn-role="assistant"]').first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   // CF-02: Turn content and extraction panel

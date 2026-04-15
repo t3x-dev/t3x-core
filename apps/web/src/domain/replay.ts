@@ -46,7 +46,10 @@ function indexPathsFor(op: SourcedYOp): string[] {
   return [];
 }
 
-export function replay(ops: readonly SourcedYOp[], _turns: readonly ValidationTurn[]): ReplayResult {
+export function replay(
+  ops: readonly SourcedYOp[],
+  _turns: readonly ValidationTurn[]
+): ReplayResult {
   const result = applySourcedYOps(EMPTY, ops as SourcedYOp[]);
   const sourceIndex = new Map<string, Source>();
 

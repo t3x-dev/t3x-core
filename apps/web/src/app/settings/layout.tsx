@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  Blocks,
-  LogOut,
-  Settings,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { Blocks, LogOut, Settings, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';

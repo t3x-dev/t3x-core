@@ -5,6 +5,13 @@
  * Mocks the database singleton so API routes use test database.
  */
 
+// React 19 requires this flag to be set before any React test utilities run,
+// otherwise act(...) wrapping is silently skipped and state updates aren't
+// deterministically awaited. Required by @testing-library/react v16 + React 19.
+// See: https://react.dev/blog/2024/04/25/react-19-upgrade-guide#testing-updates
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
 import { type AnyDB, closePostgresStorage, createPostgresStorage } from '@t3x-dev/storage';
 import postgres from 'postgres';
 import { vi } from 'vitest';

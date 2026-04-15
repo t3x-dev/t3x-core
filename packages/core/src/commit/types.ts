@@ -6,6 +6,19 @@ import type { SemanticContent } from '../semantic/types';
 
 export const COMMIT_SCHEMA = 't3x/commit' as const;
 
+/**
+ * Historical schema strings that may appear on commits written by older code.
+ *
+ * `schema` is a first-class (hashed) field, so rewriting it in-memory would
+ * invalidate the stored hash. We read whatever the row contains and verify
+ * against it. New commits always use `COMMIT_SCHEMA`.
+ *
+ * Audit 2026-04-15, B-8. See docs/audits/2026-04-15/B-bucket-issues/
+ * diagnosis-B-8-hash-mismatch.md.
+ */
+export const LEGACY_COMMIT_SCHEMAS = ['t3x/commit', 't3x/commit/1'] as const;
+export type CommitSchemaTag = (typeof LEGACY_COMMIT_SCHEMAS)[number];
+
 export interface Author {
   type: 'human' | 'agent' | 'system';
   id?: string;
@@ -23,7 +36,7 @@ export interface Provenance {
 export interface Commit {
   // first-class (in hash)
   hash: string;
-  schema: typeof COMMIT_SCHEMA;
+  schema: CommitSchemaTag;
   parents: string[];
   author: Author;
   committed_at: string;
@@ -40,7 +53,7 @@ export interface Commit {
 }
 
 export interface CommitFirstClass {
-  schema: typeof COMMIT_SCHEMA;
+  schema: CommitSchemaTag;
   parents: string[];
   author: Author;
   committed_at: string;

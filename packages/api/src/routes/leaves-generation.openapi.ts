@@ -34,10 +34,7 @@ import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import {
-  generateWithFallback,
-  getLLMProvider,
-} from '../lib/provider-registry';
+import { generateWithFallback, getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
@@ -271,12 +268,16 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     // Run the unified pipeline operation
     const pipelineCtx = await buildPipelineContext(c, leaf.project_id);
     const result = await collectResult(
-      runOperation(leafGenerateOp, {
-        leafId: id,
-        mode,
-        userId: getUserId(c) ?? undefined,
-        stylePreferences,
-      }, pipelineCtx)
+      runOperation(
+        leafGenerateOp,
+        {
+          leafId: id,
+          mode,
+          userId: getUserId(c) ?? undefined,
+          stylePreferences,
+        },
+        pipelineCtx
+      )
     );
 
     // Fire webhook event (fire-and-forget)

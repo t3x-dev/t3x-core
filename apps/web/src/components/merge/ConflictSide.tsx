@@ -7,9 +7,9 @@
 import { useEffect } from 'react';
 import { SourceContextView } from '@/components/source-context/SourceContextView';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
-import { cn } from '@/utils/cn';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import type { ContentNode, WordDiffSegment } from '@/types/merge';
+import { cn } from '@/utils/cn';
 import { WordDiffDisplay } from './WordDiffDisplay';
 
 type SideType = 'source' | 'target';

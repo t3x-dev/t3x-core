@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 interface CanvasOnboardingProps {
   onAddNode: () => void;

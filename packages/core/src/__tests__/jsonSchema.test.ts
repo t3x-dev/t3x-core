@@ -33,9 +33,12 @@ describe('JSON Schema export', () => {
     // relations: default []
     expect(schema.properties.relations.default).toEqual([]);
     // TreeNode key: has pattern
-    const treeDef = Object.values(schema.$defs as Record<string, Record<string, unknown>>)
-      .find((def) => def.properties && (def.properties as Record<string, unknown>).key);
+    const treeDef = Object.values(schema.$defs as Record<string, Record<string, unknown>>).find(
+      (def) => def.properties && (def.properties as Record<string, unknown>).key
+    );
     expect(treeDef).toBeDefined();
-    expect((treeDef!.properties as Record<string, Record<string, unknown>>).key.pattern).toBeDefined();
+    expect(
+      (treeDef!.properties as Record<string, Record<string, unknown>>).key.pattern
+    ).toBeDefined();
   });
 });

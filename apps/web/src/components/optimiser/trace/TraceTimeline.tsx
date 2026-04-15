@@ -193,7 +193,8 @@ export function TraceTimeline({ steps, className }: TraceTimelineProps) {
                 className={cn(
                   'flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer',
                   'hover:bg-muted/50',
-                  step.status === 'error' && 'border-[var(--status-error)]/30 bg-[var(--status-error)]/5',
+                  step.status === 'error' &&
+                    'border-[var(--status-error)]/30 bg-[var(--status-error)]/5',
                   isExpanded && 'bg-muted/30'
                 )}
                 onClick={() => toggleSpan(step.step_id)}

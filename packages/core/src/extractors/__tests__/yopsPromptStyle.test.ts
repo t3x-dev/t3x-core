@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildYOpsPrompt } from '../yopsPrompt';
+import type { ExtractionTurn } from '../extractionPrompt';
 import { PRESETS } from '../extractionStyleConfig';
+import { buildYOpsPrompt } from '../yopsPrompt';
 
-const baseTurns = [
+const baseTurns: ExtractionTurn[] = [
   { role: 'user', content: 'I want to plan a trip to Tokyo' },
   { role: 'assistant', content: 'Great choice! Tokyo has amazing food and culture.' },
 ];
@@ -28,8 +29,14 @@ describe('buildYOpsPrompt — style integration', () => {
 
   describe('tier3', () => {
     it('all presets include AI content by default', () => {
-      const { systemPrompt: concise } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.concise });
-      const { systemPrompt: detailed } = buildYOpsPrompt({ turns: baseTurns }, { style: PRESETS.detailed });
+      const { systemPrompt: concise } = buildYOpsPrompt(
+        { turns: baseTurns },
+        { style: PRESETS.concise }
+      );
+      const { systemPrompt: detailed } = buildYOpsPrompt(
+        { turns: baseTurns },
+        { style: PRESETS.detailed }
+      );
       expect(concise).toContain('TIER 3');
       expect(concise).toContain('TIER 4');
       expect(detailed).toContain('TIER 3');
@@ -37,7 +44,10 @@ describe('buildYOpsPrompt — style integration', () => {
     });
 
     it('skip mode tells LLM to not extract AI content when set explicitly', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns }, { style: { ...PRESETS.balanced, tier3: 'skip' } });
+      const { systemPrompt } = buildYOpsPrompt(
+        { turns: baseTurns },
+        { style: { ...PRESETS.balanced, tier3: 'skip' } }
+      );
       expect(systemPrompt).toContain('Do NOT extract');
     });
   });
@@ -79,7 +89,7 @@ describe('buildYOpsPrompt — style integration', () => {
       };
       const { systemPrompt } = buildYOpsPrompt(
         { turns: baseTurns, snapshot, processedTurnCount: 0 },
-        { style: PRESETS.concise },
+        { style: PRESETS.concise }
       );
       expect(systemPrompt).toContain('Conclusions + Why');
     });

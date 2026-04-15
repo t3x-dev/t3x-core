@@ -50,9 +50,7 @@ export function usePinEnrichment(
             }>(res);
             if (stale) continue;
             const allAssertions = leaf.runner_assertions ?? leaf.assertions ?? [];
-            const lessons = allAssertions
-              .filter((a) => a.lesson)
-              .map((a) => a.lesson as string);
+            const lessons = allAssertions.filter((a) => a.lesson).map((a) => a.lesson as string);
             next.set(pin.id, {
               title: leaf.title || pin.ref_id.slice(0, 12),
               assertionLessons: lessons.length > 0 ? lessons : undefined,

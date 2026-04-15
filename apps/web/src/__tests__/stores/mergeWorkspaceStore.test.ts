@@ -12,9 +12,9 @@
  * Uses treeMergeResult (path-based MergeResult from core) for conflict resolution.
  */
 
+import type { MergeResult } from '@t3x-dev/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
-import type { MergeResult } from '@t3x-dev/core';
 
 // Mock the API module
 vi.mock('@/infrastructure', () => ({

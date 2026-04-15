@@ -2,65 +2,57 @@
 
 // ── Types ──
 
+export type { YOpCategory } from './classify';
+export { classifyYOp } from './classify';
+export { createEngine } from './engine';
+export { YOPS_ERRORS, type YOpsErrorCode } from './errors';
+export type { ParseResult } from './format';
+export { formatYOps, parseYOpsYaml } from './format';
+export { registerAllHandlers } from './handlers';
+export type { PathSegment } from './paths';
+export { parsePath, resolvePath } from './paths';
+export type { OpHandler, OpResult } from './registry';
+export { OpRegistry } from './registry';
+export type { ValidationResult } from './schema';
+export { validateOps, YOpSchema } from './schema';
+export type { FieldSpec, OpSpec, TestCase, YOpsSpec } from './spec';
+export { parseSpec } from './spec';
 export type {
-  YValue,
-  YDocument,
-  YOp,
-  YOpsResult,
-  YOpsError,
+  AppendOp,
+  AssertOp,
+  CloneOp,
   DefineOp,
   DropOp,
-  RenameOp,
-  SetOp,
-  UnsetOp,
-  PopulateOp,
-  AppendOp,
-  MoveOp,
-  CloneOp,
-  NestOp,
-  SplitOp,
   FoldOp,
   MergeOp,
-  SortOp,
-  UniqueOp,
-  PickOp,
+  MoveOp,
+  NestOp,
   OmitOp,
-  AssertOp,
+  PickOp,
+  PopulateOp,
+  RenameOp,
+  SetOp,
+  SortOp,
+  SplitOp,
+  UniqueOp,
+  UnsetOp,
+  YDocument,
+  YOp,
+  YOpsError,
+  YOpsResult,
+  YValue,
 } from './types';
-
-export { YOPS_ERRORS, type YOpsErrorCode } from './errors';
-
-export { parsePath, resolvePath } from './paths';
-export type { PathSegment } from './paths';
-
-export { validateOps, YOpSchema } from './schema';
-export type { ValidationResult } from './schema';
-
-export { parseYOpsYaml, formatYOps } from './format';
-export type { ParseResult } from './format';
-
-export { classifyYOp } from './classify';
-export type { YOpCategory } from './classify';
-
-export { parseSpec } from './spec';
-export type { YOpsSpec, OpSpec, FieldSpec, TestCase } from './spec';
-
-export { OpRegistry } from './registry';
-export type { OpHandler, OpResult } from './registry';
-
-export { createEngine } from './engine';
-export { registerAllHandlers } from './handlers';
 
 // ── Bootstrap: spec -> registry -> engine ──
 // specData.ts is generated from yops.yaml at build time (pnpm generate:spec).
 // No fs.readFileSync at runtime — works in Node, browsers, and bundlers.
 
-import { SPEC_YAML } from './specData';
-import { parseSpec } from './spec';
-import { OpRegistry } from './registry';
-import { registerAllHandlers } from './handlers';
-import { createEngine } from './engine';
 import { initClassify } from './classify';
+import { createEngine } from './engine';
+import { registerAllHandlers } from './handlers';
+import { OpRegistry } from './registry';
+import { parseSpec } from './spec';
+import { SPEC_YAML } from './specData';
 
 const _spec = parseSpec(SPEC_YAML);
 const _registry = new OpRegistry(_spec);

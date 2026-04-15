@@ -21,13 +21,7 @@ export const relationsRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
-  type: z.enum([
-    'causes',
-    'conditions',
-    'contrasts',
-    'follows',
-    'depends',
-  ]),
+  type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
 });
 
 const CommitHashParam = z.object({

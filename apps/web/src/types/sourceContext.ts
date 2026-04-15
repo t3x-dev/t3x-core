@@ -57,6 +57,7 @@ export interface NodeWithSource {
 // Single source of truth is `@/domain/format/highlightUtils` so this
 // type can be safely consumed from L2 (domain) utilities.
 export type { HighlightRange } from '@/domain/format/highlightUtils';
+
 import type { HighlightRange } from '@/domain/format/highlightUtils';
 
 /**

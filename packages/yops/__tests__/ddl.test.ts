@@ -2,7 +2,7 @@
  * DDL Operations Tests: define, drop, rename
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';
 
@@ -103,10 +103,7 @@ describe('rename', () => {
 describe('engine', () => {
   it('executes ops sequentially, each sees previous state', () => {
     const doc: YValue = {};
-    const result = applyYOps(doc, [
-      { define: { path: 'a' } },
-      { define: { path: 'a/b' } },
-    ]);
+    const result = applyYOps(doc, [{ define: { path: 'a' } }, { define: { path: 'a/b' } }]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(2);
     expect((result.doc as any).a.b).toEqual({});
@@ -116,7 +113,7 @@ describe('engine', () => {
     const doc: YValue = { existing: {} };
     const result = applyYOps(doc, [
       { define: { path: 'existing' } }, // fails — ALREADY_EXISTS
-      { define: { path: 'new' } },      // never reached
+      { define: { path: 'new' } }, // never reached
     ]);
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(0);

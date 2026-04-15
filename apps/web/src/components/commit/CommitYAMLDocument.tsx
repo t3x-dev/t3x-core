@@ -73,10 +73,14 @@ function buildTreeGraph(content: SemanticContent): TreeGraphNode[] {
   const rootNodes = nodes.filter((f) => !childIds.has(f.id));
 
   // Build display name map across all trees
-  const nameMap = buildDisplayNames( nodes);
+  const nameMap = buildDisplayNames(nodes);
 
   // Recursive builder (with visited set to avoid cycles)
-  function buildNode(node: CompatNode, relationType?: string, visited?: Set<string>): TreeGraphNode {
+  function buildNode(
+    node: CompatNode,
+    relationType?: string,
+    visited?: Set<string>
+  ): TreeGraphNode {
     const vis = visited ?? new Set<string>();
     vis.add(node.id);
 

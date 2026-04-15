@@ -1,21 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
-import type { YOp } from '../types';
-import type { SourcedYOp } from '../types';
-import { applyYOps, applySourcedYOps } from '../engine';
+import { applySourcedYOps, applyYOps } from '../engine';
+import type { SourcedYOp, YOp } from '../types';
 
 // ── Helpers ──
 
-const node = (
-  key: string,
-  slots: TreeNode['slots'] = {},
-  children: TreeNode[] = [],
-): TreeNode => ({ key, slots, children });
+const node = (key: string, slots: TreeNode['slots'] = {}, children: TreeNode[] = []): TreeNode => ({
+  key,
+  slots,
+  children,
+});
 
-const content = (
-  trees: TreeNode[] = [],
-  relations: Relation[] = [],
-): SemanticContent => ({ trees, relations });
+const content = (trees: TreeNode[] = [], relations: Relation[] = []): SemanticContent => ({
+  trees,
+  relations,
+});
 
 // ── Tests ──
 
@@ -36,9 +35,7 @@ describe('applyYOps (t3x adapter engine)', () => {
   it('applies set on existing tree', () => {
     const input = content([node('trip', { budget: 5000, destination: 'Tokyo' })]);
 
-    const result = applyYOps(input, [
-      { set: { path: 'trip/budget', value: 8000 } },
-    ]);
+    const result = applyYOps(input, [{ set: { path: 'trip/budget', value: 8000 } }]);
 
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
@@ -50,9 +47,7 @@ describe('applyYOps (t3x adapter engine)', () => {
     const input = content([node('trip', { budget: 5000 })]);
 
     // populate on a non-existent path returns PATH_NOT_FOUND
-    const result = applyYOps(input, [
-      { populate: { path: 'nonexistent', values: { x: 1 } } },
-    ]);
+    const result = applyYOps(input, [{ populate: { path: 'nonexistent', values: { x: 1 } } }]);
 
     expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
@@ -71,18 +66,13 @@ describe('applyYOps (t3x adapter engine)', () => {
 
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
-    expect(result.relations).toEqual([
-      { from: 'budget', to: 'trip', type: 'conditions' },
-    ]);
+    expect(result.relations).toEqual([{ from: 'budget', to: 'trip', type: 'conditions' }]);
   });
 
   it('applies unrelate operation', () => {
     const input = content(
-      [
-        node('budget', { amount: 5000 }),
-        node('trip', { destination: 'Tokyo' }),
-      ],
-      [{ from: 'budget', to: 'trip', type: 'conditions' }],
+      [node('budget', { amount: 5000 }), node('trip', { destination: 'Tokyo' })],
+      [{ from: 'budget', to: 'trip', type: 'conditions' }]
     );
 
     const result = applyYOps(input, [
@@ -109,9 +99,7 @@ describe('applyYOps (t3x adapter engine)', () => {
   it('rejects self-relation', () => {
     const input = content([node('trip', { destination: 'Tokyo' })]);
 
-    const result = applyYOps(input, [
-      { relate: { from: 'trip', to: 'trip', type: 'causes' } },
-    ]);
+    const result = applyYOps(input, [{ relate: { from: 'trip', to: 'trip', type: 'causes' } }]);
 
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('RELATE_SELF');
@@ -120,11 +108,8 @@ describe('applyYOps (t3x adapter engine)', () => {
 
   it('rejects duplicate relation', () => {
     const input = content(
-      [
-        node('budget', { amount: 5000 }),
-        node('trip', { destination: 'Tokyo' }),
-      ],
-      [{ from: 'budget', to: 'trip', type: 'conditions' }],
+      [node('budget', { amount: 5000 }), node('trip', { destination: 'Tokyo' })],
+      [{ from: 'budget', to: 'trip', type: 'conditions' }]
     );
 
     const result = applyYOps(input, [
@@ -160,16 +145,14 @@ describe('applyYOps (t3x adapter engine)', () => {
   it('does not mutate input', () => {
     const input = content(
       [node('trip', { budget: 5000 })],
-      [{ from: 'trip', to: 'other', type: 'causes' }],
+      [{ from: 'trip', to: 'other', type: 'causes' }]
     );
 
     // Freeze references to detect mutation
     const originalTrees = JSON.stringify(input.trees);
     const originalRelations = JSON.stringify(input.relations);
 
-    applyYOps(input, [
-      { set: { path: 'trip/budget', value: 9999 } },
-    ]);
+    applyYOps(input, [{ set: { path: 'trip/budget', value: 9999 } }]);
 
     expect(JSON.stringify(input.trees)).toBe(originalTrees);
     expect(JSON.stringify(input.relations)).toBe(originalRelations);
@@ -187,23 +170,17 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(5);
     expect(result.trees).toHaveLength(2);
-    expect(result.relations).toEqual([
-      { from: 'budget', to: 'trip', type: 'conditions' },
-    ]);
+    expect(result.relations).toEqual([{ from: 'budget', to: 'trip', type: 'conditions' }]);
   });
 
   it('preserves basic tree structure through conversion round-trip', () => {
     const input = content([
-      node(
-        'trip',
-        { budget: 5000, destination: 'Tokyo' },
-        [node('day_one', { activity: 'sightseeing' })],
-      ),
+      node('trip', { budget: 5000, destination: 'Tokyo' }, [
+        node('day_one', { activity: 'sightseeing' }),
+      ]),
     ]);
 
-    const result = applyYOps(input, [
-      { set: { path: 'trip/budget', value: 8000 } },
-    ]);
+    const result = applyYOps(input, [{ set: { path: 'trip/budget', value: 8000 } }]);
 
     expect(result.ok).toBe(true);
     const trip = result.trees[0];

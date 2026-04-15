@@ -1,9 +1,9 @@
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { TreeGraphView } from '@/components/tree-graph';
-import { toneAccent } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import type { CommitDisplay } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { toneAccent } from '@/utils/theme';
 
 // Preview limits for UnitNode display
 export const PREVIEW_MAX_NODES = 3;

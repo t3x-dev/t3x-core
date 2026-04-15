@@ -1,6 +1,6 @@
 'use client';
 
-import type { TreeNode, SlotValue } from '@t3x-dev/core';
+import type { SlotValue, TreeNode } from '@t3x-dev/core';
 import type { ReactNode } from 'react';
 import type { CompatNode } from '@/domain/tree/treeCompat';
 
@@ -302,7 +302,7 @@ export function YAMLRenderer({
   onHoverNode,
   className,
 }: YAMLRendererProps) {
-  const yamlLines = buildYAMLLines( nodes);
+  const yamlLines = buildYAMLLines(nodes);
 
   if (nodes.length === 0) {
     return (
@@ -348,7 +348,7 @@ export function YAMLRenderer({
           if (shouldRenderActions) {
             renderedActionNodes.add(line.treeId);
             const node = nodes.find((f) => f.id === line.treeId);
-            const actions =  node ? renderNodeActions(node.id, node.type) : null;
+            const actions = node ? renderNodeActions(node.id, node.type) : null;
             if (actions) {
               return (
                 <div key={i}>
@@ -370,7 +370,9 @@ export function YAMLRenderer({
         const borderLeft =
           line.isNodeHeader && changeType ? changeTypeBorder[changeType] : undefined;
 
-        const bg = isHighlighted ? 'color-mix(in srgb, var(--status-info) 10%, transparent)' : 'transparent';
+        const bg = isHighlighted
+          ? 'color-mix(in srgb, var(--status-info) 10%, transparent)'
+          : 'transparent';
 
         return (
           <div

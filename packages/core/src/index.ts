@@ -32,21 +32,15 @@ export {
   COMMIT_SCHEMA,
   type Commit,
   type CommitFirstClass,
+  type CommitSchemaTag,
   computeCommitHash,
+  LEGACY_COMMIT_SCHEMAS,
   type Provenance,
 } from './commit';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Ops (Operation types + runOperation pipeline runner)
-// ═══════════════════════════════════════════════════════════════════════════
-export type { Operation, OpsPipelineContext, PipelineEvent } from './ops';
-export { collectResult, runOperation } from './ops';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Common utilities
 // ═══════════════════════════════════════════════════════════════════════════
 export { canonText, hashText, sha256 } from './common';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Context Builder
 // @see docs/specification/memory-pin-system-design.md
@@ -60,7 +54,6 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Extractors
 // ═══════════════════════════════════════════════════════════════════════════
@@ -72,17 +65,20 @@ export {
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
+  // Correction prompt (batch validation feedback loop)
+  buildCorrectionPrompt,
   // Relations
   buildRelationPrompt,
   // YOps extraction pipeline
   buildYOpsPrompt,
-  // Correction prompt (batch validation feedback loop)
-  buildCorrectionPrompt,
+  Compressor,
   type CorrectionInput,
   type CorrectionPromptResult,
-  Compressor,
+  // Post-extraction transforms (deterministic, replaces MeaningPipeline)
+  checkRegression,
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
+  consolidate,
   createRelationExtractor,
   type ExtractionInput,
   type ExtractionPromptResult,
@@ -90,25 +86,21 @@ export {
   type ExtractionTurn,
   Extractor,
   type FuzzyLocateResult,
+  flagContradictions,
   fuzzyLocate,
   type NodeWithSignals,
+  nest,
   parseRelationResponse,
   parseYOpsOutput,
-  // Post-extraction transforms (deterministic, replaces MeaningPipeline)
-  checkRegression,
-  consolidate,
-  flagContradictions,
-  nest,
   type RegressionWarning,
-  runTransforms,
-  type TransformResult,
   RelationExtractor,
   type RelationItem,
   RelationParseError,
+  runTransforms,
   type Segment,
+  type TransformResult,
   type YOpsParseResult,
 } from './extractors';
-
 // Extraction Style Config
 export {
   DEFAULT_STYLE,
@@ -122,7 +114,6 @@ export {
   type UpdateStance,
 } from './extractors/extractionStyleConfig';
 export type { Lesson, LessonSource } from './feedback';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Feedback Module (Lesson generation + collection)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -138,7 +129,6 @@ export {
   type ProofStep,
   verifyMembership,
 } from './hash';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -197,7 +187,6 @@ export {
   validateConstraintsSimple,
   validateTemplateSyntax,
 } from './leaf';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // LLM Provider (interface)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -221,7 +210,6 @@ export {
   type ProviderName,
   type StructuredResult,
 } from './llm';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Multimodal content blocks for turns
 // ═══════════════════════════════════════════════════════════════════════════
@@ -235,6 +223,11 @@ export {
   textFromBlocks,
   textToBlocks,
 } from './multimodal';
+// ═══════════════════════════════════════════════════════════════════════════
+// Ops (Operation types + runOperation pipeline runner)
+// ═══════════════════════════════════════════════════════════════════════════
+export type { Operation, OpsPipelineContext, PipelineEvent } from './ops';
+export { collectResult, runOperation } from './ops';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Pipeline intelligence layer (8-step orchestrator)
@@ -353,18 +346,12 @@ export type {
   YOpsLogEntry,
   YOpsSource,
 } from './semantic';
-
-// JSON Schema export (Zod v4 native)
-export {
-  getSemanticContentJsonSchema,
-  getTreeNodeJsonSchema,
-} from './semantic/jsonSchema';
-export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Semantic Module (Tree-Primary: TreeNode + Relation + Diff + Merge)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  BLOB_TYPES,
+  type BlobType,
   // Business Gate
   BusinessGate,
   buildCoveragePrompt,
@@ -382,6 +369,7 @@ export {
   // Gate
   GateRunner,
   type GateRunnerOptions,
+  isBlob,
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
@@ -401,15 +389,73 @@ export {
   validateIntegrity,
   validateTreeDepth,
   yamlToTree,
-  isBlob,
-  BLOB_TYPES,
-  type BlobType,
 } from './semantic';
+// JSON Schema export (Zod v4 native)
+export {
+  getSemanticContentJsonSchema,
+  getTreeNodeJsonSchema,
+} from './semantic/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
 // Storage (types + pure utils only)
 // For CRUD operations, use @t3x-dev/storage package
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './storage';
+export type {
+  CloneOp,
+  DefineOp,
+  DropOp,
+  FailingOp,
+  FailureReason,
+  FoldOp,
+  HumanSource,
+  LLMSource,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  PopulateOp,
+  RelateOp,
+  RenameOp,
+  ReplayInput,
+  ReplayResult,
+  SetOp,
+  Source,
+  SourcedYOp,
+  SplitOp,
+  TurnRef,
+  UnrelateOp,
+  UnsetOp,
+  ValidationTurn,
+  VerifyResult,
+  YOp,
+  YOpCategory,
+  YOpsDocument,
+  YOpsError,
+  YOpsResult,
+} from './t3x-yops';
+// ═══════════════════════════════════════════════════════════════════════════
+// YOps — YAML Operations for Knowledge Trees
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  applySourcedYOps,
+  applyYOps,
+  classifyYOp,
+  extractOpsFromEntries,
+  findNode,
+  formatYOpsLog,
+  getNodeKey,
+  getParentPath,
+  isHumanSource,
+  isLLMSource,
+  parseYOpsYaml,
+  replayYOps,
+  SNAKE_CASE_KEY,
+  validateSource,
+  verifyReplay,
+  YOPS_ERRORS,
+  YOpSchema,
+  YOpsDocumentSchema,
+} from './t3x-yops';
+export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════
 // Architecture Types
 // @see docs/specification/semantic-layer-architecture.md
@@ -469,50 +515,14 @@ export {
   type ShareToken,
   type User,
 } from './types';
-export type { LintConfig, LintResult, LintWarning, ValidateTreeOptions, ValidateTreeResult } from './ylint';
+export type {
+  LintConfig,
+  LintResult,
+  LintWarning,
+  ValidateTreeOptions,
+  ValidateTreeResult,
+} from './ylint';
 // ═══════════════════════════════════════════════════════════════════════════
 // YLint — Knowledge Tree Validation
 // ═══════════════════════════════════════════════════════════════════════════
 export { DEFAULT_LINT_CONFIG, validateTree, ylint } from './ylint';
-export type {
-  CloneOp,
-  DefineOp,
-  DropOp,
-  FoldOp,
-  MergeOp,
-  MoveOp,
-  NestOp,
-  PopulateOp,
-  RelateOp,
-  RenameOp,
-  SetOp,
-  SplitOp,
-  UnrelateOp,
-  UnsetOp,
-  YOp,
-  YOpsDocument,
-  YOpsError,
-  YOpsResult,
-} from './t3x-yops';
-// ═══════════════════════════════════════════════════════════════════════════
-// YOps — YAML Operations for Knowledge Trees
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  applySourcedYOps,
-  applyYOps,
-  classifyYOp,
-  extractOpsFromEntries,
-  findNode,
-  formatYOpsLog,
-  getNodeKey,
-  getParentPath,
-  parseYOpsYaml,
-  replayYOps,
-  SNAKE_CASE_KEY,
-  verifyReplay,
-  YOPS_ERRORS,
-  YOpSchema,
-  YOpsDocumentSchema,
-} from './t3x-yops';
-export type { FailingOp, FailureReason, HumanSource, LLMSource, ReplayInput, ReplayResult, Source, SourcedYOp, TurnRef, ValidationTurn, VerifyResult, YOpCategory } from './t3x-yops';
-export { isHumanSource, isLLMSource, validateSource } from './t3x-yops';

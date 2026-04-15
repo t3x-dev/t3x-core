@@ -12,8 +12,8 @@ import { EventEmitter } from 'node:events';
 
 export type RealtimeEventType =
   | 'draft.changed'
-  | 'extraction.started'  // LLM extraction begins
-  | 'extraction.done'     // LLM extraction completed + persisted
+  | 'extraction.started' // LLM extraction begins
+  | 'extraction.done' // LLM extraction completed + persisted
   | 'yops.applied'
   | 'commit.created'
   | 'conversation.renamed'
@@ -43,7 +43,12 @@ class EventBus extends EventEmitter {
   }
 
   /** Shorthand: broadcast a typed event for a conversation */
-  notify(type: RealtimeEventType, conversationId: string, projectId?: string, payload?: Record<string, unknown>) {
+  notify(
+    type: RealtimeEventType,
+    conversationId: string,
+    projectId?: string,
+    payload?: Record<string, unknown>
+  ) {
     this.broadcast({ type, conversationId, projectId, payload, timestamp: Date.now() });
   }
 }

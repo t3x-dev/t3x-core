@@ -17,9 +17,9 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTerminology } from '@/hooks/shared/useTerminology';
+import { cn } from '@/utils/cn';
 import { reducedMotion, scaleIn } from '@/utils/motion';
 import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 
 interface CommandPaletteProps {
   /** Current project ID for context-aware actions */

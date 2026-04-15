@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { UserMenu } from './UserMenu';
 
 // T3X Logo - Bowtie shape with radial gradient (Blue center → Orange outer)
@@ -108,7 +108,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const isSettings = pathname.startsWith('/settings');
-  const isHome = pathname === '/' || pathname.startsWith('/project') || pathname.startsWith('/chat');
+  const isHome =
+    pathname === '/' || pathname.startsWith('/project') || pathname.startsWith('/chat');
 
   return (
     <TooltipProvider delayDuration={0}>

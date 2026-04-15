@@ -12,11 +12,7 @@
  * - Fork creates a new draft from a committed draft
  */
 
-import type {
-  CreateDraftInput,
-  Draft,
-  DraftConstraint,
-} from '@t3x-dev/core';
+import type { CreateDraftInput, Draft, DraftConstraint } from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';

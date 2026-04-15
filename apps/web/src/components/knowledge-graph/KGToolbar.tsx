@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 interface KGToolbarProps {
   projectId: string;

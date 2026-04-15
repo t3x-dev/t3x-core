@@ -389,7 +389,7 @@ describe('extractChunksFromTurns', () => {
                     type: 'money' as const,
                     start_char: 13,
                     end_char: 18,
-                      source: 'phrase' as const,
+                    source: 'phrase' as const,
                   },
                 ],
                 input_text_hash: computeHash(content),

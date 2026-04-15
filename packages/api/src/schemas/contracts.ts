@@ -13,7 +13,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES } from '@t3x-dev/core';
+import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES, LEGACY_COMMIT_SCHEMAS } from '@t3x-dev/core';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Local SemanticContent Schema (mirrors @t3x-dev/core SemanticContentSchema)
@@ -27,12 +27,7 @@ import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES } from '@t3x-dev/core';
 const OapiSlotRefSchema = z.object({ ref: z.string() });
 
 const OapiSlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    OapiSlotRefSchema,
-    z.array(OapiSlotValueSchema),
-  ])
+  z.union([z.string(), z.number(), OapiSlotRefSchema, z.array(OapiSlotValueSchema)])
 );
 
 const OapiTreeNodeSchema: z.ZodType<{
@@ -51,13 +46,7 @@ const OapiTreeNodeSchema: z.ZodType<{
   })
 );
 
-const OapiRelationTypeSchema = z.enum([
-  'causes',
-  'conditions',
-  'contrasts',
-  'follows',
-  'depends',
-]);
+const OapiRelationTypeSchema = z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']);
 
 const OapiRelationSchema = z.object({
   from: z.string(),
@@ -155,7 +144,10 @@ export const CreateCommitRequest = z
 
 export const CommitResponse = z.object({
   hash: z.string(),
-  schema: z.literal(COMMIT_SCHEMA),
+  // Accept historical schema values so legacy commits (written before the
+  // 2026-04-13 rename) can still be serialised. New commits always use
+  // COMMIT_SCHEMA. Audit 2026-04-15, B-8.
+  schema: z.enum(LEGACY_COMMIT_SCHEMAS),
   parents: z.array(z.string()),
   author: z.object({
     type: z.enum(['human', 'agent']),

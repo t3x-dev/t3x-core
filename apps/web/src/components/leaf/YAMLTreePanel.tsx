@@ -13,10 +13,10 @@ import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
-import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
-import type { Assertion, Constraint } from '@/types/api';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import { nestNodes } from '@/domain/tree/treeNesting';
+import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
+import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 // ============================================================================
@@ -122,8 +122,7 @@ export function YAMLTreePanel({
             return (
               c &&
               'source_node' in c &&
-              (c as { source_node?: { frame_type?: string } }).source_node?.frame_type ===
-                treeType
+              (c as { source_node?: { frame_type?: string } }).source_node?.frame_type === treeType
             );
           }) ?? [];
         if (frameAssertions.length > 0) {
@@ -145,12 +144,9 @@ export function YAMLTreePanel({
     [mode, content.trees, constraints, assertions, saving, onAddConstraintFromSource]
   );
 
-  const getTreeMeta = useCallback(
-    (_treeId: string) => {
-      return undefined;
-    },
-    []
-  );
+  const getTreeMeta = useCallback((_treeId: string) => {
+    return undefined;
+  }, []);
 
   return (
     <aside

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
-import type { YValue, YOp } from '../src/types';
+import type { YOp, YValue } from '../src/types';
 
 describe('applyYOps — engine behavior', () => {
   it('deep clones input — original not mutated', () => {

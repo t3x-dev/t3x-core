@@ -1,18 +1,31 @@
 // Re-export all generic types
 export type {
-  YValue, YDocument,
-  YOp as GenericYOp,
-  YOpsResult as GenericYOpsResult,
-  YOpsError,
-  DefineOp, DropOp, RenameOp,
-  SetOp, UnsetOp, PopulateOp, AppendOp,
-  MoveOp, CloneOp, NestOp, SplitOp, FoldOp, MergeOp,
-  SortOp, UniqueOp, PickOp, OmitOp,
+  AppendOp,
   AssertOp,
+  CloneOp,
+  DefineOp,
+  DropOp,
+  FoldOp,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  OmitOp,
+  PickOp,
+  PopulateOp,
+  RenameOp,
+  SetOp,
+  SortOp,
+  SplitOp,
+  UniqueOp,
+  UnsetOp,
+  YDocument,
+  YOp as GenericYOp,
+  YOpsError,
+  YOpsErrorCode,
+  YOpsResult as GenericYOpsResult,
+  YValue,
 } from '@t3x-dev/yops';
-
 export { YOPS_ERRORS } from '@t3x-dev/yops';
-export type { YOpsErrorCode } from '@t3x-dev/yops';
 
 import type { YOp as GenericYOp, YOpsError } from '@t3x-dev/yops';
 import type { RelationType } from '../semantic/types';

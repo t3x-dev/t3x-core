@@ -11,10 +11,14 @@
  */
 
 import { sha256 } from '../common/hash';
-import type { CommitFirstClass } from './types';
 import type { TreeNode } from '../semantic/types';
+import type { CommitFirstClass } from './types';
 
-function stripTree(node: TreeNode): { key: string; slots: Record<string, unknown>; children: ReturnType<typeof stripTree>[] } {
+function stripTree(node: TreeNode): {
+  key: string;
+  slots: Record<string, unknown>;
+  children: ReturnType<typeof stripTree>[];
+} {
   return {
     key: node.key,
     slots: node.slots,

@@ -91,11 +91,13 @@ describe('Source Mapping E2E', () => {
 
   it('incremental extraction applies set ops to existing snapshot', async () => {
     const existingSnapshot: SemanticContent = {
-      trees: [{
-        key: 'beef_topic',
-        slots: { interest: 'Australian beef taste' },
-        children: [],
-      }],
+      trees: [
+        {
+          key: 'beef_topic',
+          slots: { interest: 'Australian beef taste' },
+          children: [],
+        },
+      ],
       relations: [],
     };
 
@@ -117,7 +119,12 @@ describe('Source Mapping E2E', () => {
         { role: 'user', content: USER_MESSAGE, turn_hash: 'sha256:user1' },
         { role: 'assistant', content: ASSISTANT_MESSAGE, turn_hash: 'sha256:asst1' },
         { role: 'user', content: 'how should I cook it?', turn_hash: 'sha256:user2' },
-        { role: 'assistant', content: 'For Australian beef, best served medium-rare on the grill. Let it rest for about 5 minutes after cooking.', turn_hash: 'sha256:asst2' },
+        {
+          role: 'assistant',
+          content:
+            'For Australian beef, best served medium-rare on the grill. Let it rest for about 5 minutes after cooking.',
+          turn_hash: 'sha256:asst2',
+        },
       ],
       snapshot: existingSnapshot,
       processedTurnCount: 2,
@@ -128,7 +135,7 @@ describe('Source Mapping E2E', () => {
 
     // The new child should exist with correct slots
     const root = result.snapshot.trees[0];
-    const cookingChild = root.children.find(c => c.key === 'cooking_tips');
+    const cookingChild = root.children.find((c) => c.key === 'cooking_tips');
     expect(cookingChild).toBeDefined();
     expect(cookingChild!.slots.method).toBe('medium-rare grilling');
     expect(cookingChild!.slots.rest_time).toBe('5 minutes');

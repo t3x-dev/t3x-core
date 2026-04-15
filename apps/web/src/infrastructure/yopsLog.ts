@@ -7,15 +7,15 @@
  */
 
 import type { SourcedYOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
-import { createYOpsEntry, deleteYOpsEntry, listYOpsLog } from '@/infrastructure/trees';
 import { ApiError } from '@/infrastructure/core';
+import { createYOpsEntry, deleteYOpsEntry, listYOpsLog } from '@/infrastructure/trees';
 
 export class PersistenceError extends Error {
   constructor(
     public operation: 'load' | 'append' | 'delete',
     public code: string,
     message: string,
-    public cause?: unknown,
+    public cause?: unknown
   ) {
     super(message);
     this.name = 'PersistenceError';
@@ -45,16 +45,13 @@ export function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
   return allLLM ? 'pipeline' : 'manual';
 }
 
-export async function appendYOps(
-  conversationId: string,
-  ops: SourcedYOp[],
-): Promise<YOpsLogEntry> {
+export async function appendYOps(conversationId: string, ops: SourcedYOp[]): Promise<YOpsLogEntry> {
   try {
     const rowSource = deriveRowSource(ops);
     return await createYOpsEntry(
       conversationId,
       ops as unknown as Parameters<typeof createYOpsEntry>[1],
-      rowSource,
+      rowSource
     );
   } catch (err) {
     throw wrapError('append', err);
@@ -63,7 +60,7 @@ export async function appendYOps(
 
 export async function loadYOpsLog(
   conversationId: string,
-  topicId?: string,
+  topicId?: string
 ): Promise<YOpsLogEntry[]> {
   try {
     return await listYOpsLog(conversationId, topicId);
@@ -72,10 +69,7 @@ export async function loadYOpsLog(
   }
 }
 
-export async function removeYOpsEntry(
-  conversationId: string,
-  yopsId: string,
-): Promise<void> {
+export async function removeYOpsEntry(conversationId: string, yopsId: string): Promise<void> {
   try {
     await deleteYOpsEntry(conversationId, yopsId);
   } catch (err) {

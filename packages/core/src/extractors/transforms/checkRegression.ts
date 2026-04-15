@@ -20,7 +20,7 @@ export interface RegressionWarning {
 
 export function checkRegression(
   current: SemanticContent,
-  previous: SemanticContent | undefined,
+  previous: SemanticContent | undefined
 ): RegressionWarning[] {
   if (!previous || previous.trees.length === 0) return [];
 

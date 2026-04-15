@@ -42,42 +42,44 @@ export function usePendingCommitExtraction(): UsePendingCommitExtractionReturn {
   const [extractionLoading, setExtractionLoading] = useState(false);
   const [extractionError, setExtractionError] = useState<string | null>(null);
 
-  const handleProceed = useCallback(
-    async (input: ProceedInput, onBeforeProceed?: () => void) => {
-      const { projectId, sourceConversationId, title, sourceCommitHash, pendingBranch, pendingBranchName } = input;
-      if (!sourceConversationId || !projectId) return;
+  const handleProceed = useCallback(async (input: ProceedInput, onBeforeProceed?: () => void) => {
+    const {
+      projectId,
+      sourceConversationId,
+      title,
+      sourceCommitHash,
+      pendingBranch,
+      pendingBranchName,
+    } = input;
+    if (!sourceConversationId || !projectId) return;
 
-      onBeforeProceed?.();
-      setExtractionLoading(true);
-      setExtractionError(null);
+    onBeforeProceed?.();
+    setExtractionLoading(true);
+    setExtractionError(null);
 
-      try {
-        const branch =
-          pendingBranch === 'branch'
-            ? pendingBranchName?.trim() || `branch-${Date.now()}`
-            : 'main';
+    try {
+      const branch =
+        pendingBranch === 'branch' ? pendingBranchName?.trim() || `branch-${Date.now()}` : 'main';
 
-        const draft = await api.createWorkbenchDraft({
-          project_id: projectId,
-          title: title || 'Untitled Unit',
-          parent_commit_hash: sourceCommitHash || undefined,
-          target_branch: branch,
-        });
-        setDraftId(draft.id);
+      const draft = await api.createWorkbenchDraft({
+        project_id: projectId,
+        title: title || 'Untitled Unit',
+        parent_commit_hash: sourceCommitHash || undefined,
+        target_branch: branch,
+      });
+      setDraftId(draft.id);
 
-        const result = await api.extractIncremental(projectId, sourceConversationId, draft.id);
-        setSemanticPoints([...result.ready_points, ...result.review_points]);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Extraction failed';
-        setExtractionError(msg);
-        toast.error(msg);
-        throw err; // Let the caller decide whether to unlock config.
-      } finally {
-        setExtractionLoading(false);
-      }
-    },
-    []
-  );
+      const result = await api.extractIncremental(projectId, sourceConversationId, draft.id);
+      setSemanticPoints([...result.ready_points, ...result.review_points]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Extraction failed';
+      setExtractionError(msg);
+      toast.error(msg);
+      throw err; // Let the caller decide whether to unlock config.
+    } finally {
+      setExtractionLoading(false);
+    }
+  }, []);
 
   const handleReExtract = useCallback(
     async (projectId: string, sourceConversationId: string) => {

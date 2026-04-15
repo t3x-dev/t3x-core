@@ -30,9 +30,13 @@ import { validateIntegrity } from '../../semantic/validate';
 import { applyYOps } from '../../t3x-yops/engine';
 import type { YOp, YOpsResult } from '../../t3x-yops/types';
 import { buildCorrectionPrompt } from '../correctionPrompt';
-import { buildRepairPrompt } from '../repairPrompt';
-import { DEFAULT_STYLE, type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
+import {
+  DEFAULT_STYLE,
+  type ExtractionStyleConfig,
+  styleSummaryLine,
+} from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
+import { buildRepairPrompt } from '../repairPrompt';
 import { parseYOpsOutput, type YOpsParseResult } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
 import { buildYOpsPrompt } from '../yopsPrompt';
@@ -82,7 +86,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
   async extract(
     input: ExtractionInput,
     provider: LLMProvider,
-    style?: ExtractionStyleConfig,
+    style?: ExtractionStyleConfig
   ): Promise<ExtractionResult> {
     const baseSnapshot: SemanticContent = input.snapshot ?? { trees: [], relations: [] };
     const resolved: ExtractionStyleConfig = { ...DEFAULT_STYLE, ...style };
@@ -126,7 +130,15 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       }
 
       // ── L2: Engine — "Can the tree accept these ops?" ──
-      const l2 = await this.runL2Engine(l1.passed, baseSnapshot, raw, input.turns, provider, styleSummary, totalUsage);
+      const l2 = await this.runL2Engine(
+        l1.passed,
+        baseSnapshot,
+        raw,
+        input.turns,
+        provider,
+        styleSummary,
+        totalUsage
+      );
       if (!l2.ok) {
         lastError = l2.error;
         continue;
@@ -152,15 +164,25 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
     styleSummary: string,
-    usage: LLMUsage,
+    usage: LLMUsage
   ): Promise<L0Result | { ok: false; error: string }> {
     let parseResult = parseYOpsOutput(raw);
     if (!parseResult.ok) {
-      const repair = await this.repairRound('yaml_parse', raw, parseResult.error, turns, provider, styleSummary);
+      const repair = await this.repairRound(
+        'yaml_parse',
+        raw,
+        parseResult.error,
+        turns,
+        provider,
+        styleSummary
+      );
       usage.inputTokens += repair.usage.inputTokens;
       usage.outputTokens += repair.usage.outputTokens;
       if (!repair.ok) {
-        return { ok: false, error: `Failed to parse LLM output (repair failed): ${parseResult.error}` };
+        return {
+          ok: false,
+          error: `Failed to parse LLM output (repair failed): ${parseResult.error}`,
+        };
       }
       parseResult = { ok: true, format: 'yops', yops: repair.yops };
     }
@@ -181,7 +203,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
     styleSummary: string,
-    usage: LLMUsage,
+    usage: LLMUsage
   ): Promise<L1Result> {
     const gated = this.runGatesWithAutoFix(yops, turns);
 
@@ -221,7 +243,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
     styleSummary: string,
-    usage: LLMUsage,
+    usage: LLMUsage
   ): Promise<L2Result | { ok: false; error: string }> {
     // Resolve partial paths
     let resolvedYOps = yops.map((yop) => {
@@ -233,7 +255,14 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     let applyResult: YOpsResult = applyYOps(baseSnapshot, resolvedYOps);
     if (!applyResult.ok) {
       const errorMsg = applyResult.error?.message ?? 'unknown';
-      const repair = await this.repairRound('yops_apply', raw, errorMsg, turns, provider, styleSummary);
+      const repair = await this.repairRound(
+        'yops_apply',
+        raw,
+        errorMsg,
+        turns,
+        provider,
+        styleSummary
+      );
       usage.inputTokens += repair.usage.inputTokens;
       usage.outputTokens += repair.usage.outputTokens;
       if (!repair.ok) {
@@ -245,7 +274,10 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       });
       applyResult = applyYOps(baseSnapshot, resolvedYOps);
       if (!applyResult.ok) {
-        return { ok: false, error: `Failed to apply repaired YOps: ${applyResult.error?.message ?? 'unknown'}` };
+        return {
+          ok: false,
+          error: `Failed to apply repaired YOps: ${applyResult.error?.message ?? 'unknown'}`,
+        };
       }
     }
 
@@ -257,7 +289,10 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     // Integrity validation (part of L2 — structural correctness)
     const validation = validateIntegrity(snapshot);
     if (!validation.valid) {
-      return { ok: false, error: `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}` };
+      return {
+        ok: false,
+        error: `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}`,
+      };
     }
 
     return { ok: true, snapshot, resolvedYOps };
@@ -269,7 +304,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
   private runGatesWithAutoFix(
     yops: YOp[],
-    turns: Array<{ role: string; content: string }>,
+    turns: Array<{ role: string; content: string }>
   ): GatedYOp[] {
     const sourceGate = validateSources(yops, turns);
     const dedupGate = validateDedup(yops);
@@ -330,7 +365,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     rejected: GatedYOp[],
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
-    styleSummary?: string,
+    styleSummary?: string
   ): Promise<{
     ok: boolean;
     yops: YOp[];
@@ -360,7 +395,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       const sourceGate = validateSources(parseResult.yops, turns);
       const validYOps = parseResult.yops.filter((_, i) => {
         const errors = sourceGate.violations.filter(
-          (v) => v.opIndex === i && v.severity === 'error',
+          (v) => v.opIndex === i && v.severity === 'error'
         );
         return errors.length === 0;
       });
@@ -381,7 +416,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
     errorMessage: string,
     turns: Array<{ role: string; content: string }>,
     provider: LLMProvider,
-    styleSummary?: string,
+    styleSummary?: string
   ): Promise<{
     ok: boolean;
     yops: YOp[];

@@ -2,7 +2,7 @@
  * DCL Operations Tests: assert
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import { resolvePath } from '../src/paths';
 import type { YValue } from '../src/types';
@@ -119,7 +119,7 @@ describe('assert', () => {
     const doc: YValue = { name: 'alice', count: 0 };
     const result = applyYOps(doc, [
       { assert: { path: 'name', equals: 'bob' } }, // fails
-      { set: { path: 'count', value: 999 } },       // never reached
+      { set: { path: 'count', value: 999 } }, // never reached
     ]);
     expect(result.ok).toBe(false);
     expect(result.error?.op_index).toBe(0);

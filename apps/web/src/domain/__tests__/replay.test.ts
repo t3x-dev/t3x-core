@@ -1,17 +1,17 @@
-import { describe, expect, it } from 'vitest';
 import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
+import { describe, expect, it } from 'vitest';
 import { replay } from '../replay';
 
-const turns: ValidationTurn[] = [
-  { turn_hash: 'sha256:t1', content: 'Budget is $10k.' },
-];
+const turns: ValidationTurn[] = [{ turn_hash: 'sha256:t1', content: 'Budget is $10k.' }];
 
-const humanSrc = (at = '2026-04-12T00:00:00Z') =>
-  ({ type: 'human' as const, author: 'ethan', at });
+const humanSrc = (at = '2026-04-12T00:00:00Z') => ({ type: 'human' as const, author: 'ethan', at });
 
 const opsA: SourcedYOp[] = [
   { define: { path: 'trip' }, source: humanSrc('2026-04-12T00:00:00Z') },
-  { populate: { path: 'trip', values: { budget: '10k' } }, source: humanSrc('2026-04-12T00:00:01Z') },
+  {
+    populate: { path: 'trip', values: { budget: '10k' } },
+    source: humanSrc('2026-04-12T00:00:01Z'),
+  },
 ];
 
 describe('replay', () => {
@@ -47,8 +47,14 @@ describe('replay', () => {
   it('later op overwrites earlier source at same path', () => {
     const ops: SourcedYOp[] = [
       { define: { path: 'x' }, source: humanSrc() },
-      { set: { path: 'x/k', value: '1' }, source: { type: 'human', author: 'alice', at: '2026-04-12T00:00:01Z' } },
-      { set: { path: 'x/k', value: '2' }, source: { type: 'human', author: 'bob', at: '2026-04-12T00:00:02Z' } },
+      {
+        set: { path: 'x/k', value: '1' },
+        source: { type: 'human', author: 'alice', at: '2026-04-12T00:00:01Z' },
+      },
+      {
+        set: { path: 'x/k', value: '2' },
+        source: { type: 'human', author: 'bob', at: '2026-04-12T00:00:02Z' },
+      },
     ];
     const { sourceIndex } = replay(ops, turns);
     const src = sourceIndex.get('x/k');
@@ -79,7 +85,10 @@ describe('replay', () => {
     // Invalid: populate on a path that doesn't exist
     const ops: SourcedYOp[] = [
       { define: { path: 'ok' }, source: humanSrc() },
-      { populate: { path: 'nonexistent', values: { k: 'v' } }, source: humanSrc('2026-04-12T00:00:01Z') },
+      {
+        populate: { path: 'nonexistent', values: { k: 'v' } },
+        source: humanSrc('2026-04-12T00:00:01Z'),
+      },
     ];
     const { tree, sourceIndex } = replay(ops, turns);
     // First op applied, second failed

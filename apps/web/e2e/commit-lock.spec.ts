@@ -62,13 +62,27 @@ function validOps(turnHash: string) {
   ];
 }
 
-/** Open the YOps panel (if collapsed) then click Extract. */
+/**
+ * Click Extract. The panel auto-expands via useChatInit after hydration.
+ * If the first click races the activeProjectId backfill, retry once.
+ */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
+  const extractBtn = page.getByTestId('extract-button');
+  await extractBtn.waitFor({ state: 'visible' });
+  const waitForExtract = page.waitForRequest(
+    (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+    { timeout: 5_000 }
+  );
+  await extractBtn.click();
+  try {
+    await waitForExtract;
+  } catch {
+    await extractBtn.click();
+    await page.waitForRequest(
+      (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+      { timeout: 10_000 }
+    );
   }
-  await page.getByTestId('extract-button').click();
 }
 
 test.describe('Commit-lock flow', () => {

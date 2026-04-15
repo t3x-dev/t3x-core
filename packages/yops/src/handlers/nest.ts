@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, deleteAtPath, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { resolvePath, deepClone, setAtPath, deleteAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 import type { YValue } from '../types';
 
 export const nestHandler: OpHandler = (doc, fields, index) => {
@@ -10,7 +10,12 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
 
   const target = resolvePath(doc, path);
 
-  if (target === undefined || target === null || typeof target !== 'object' || Array.isArray(target)) {
+  if (
+    target === undefined ||
+    target === null ||
+    typeof target !== 'object' ||
+    Array.isArray(target)
+  ) {
     return {
       doc,
       error: yopsError(YOPS_ERRORS.NOT_A_MAPPING, `Path "${path}" is not a mapping`, index),
@@ -26,7 +31,7 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
         error: yopsError(
           YOPS_ERRORS.PATH_NOT_FOUND,
           `Key "${key}" does not exist in mapping at "${path}"`,
-          index,
+          index
         ),
       };
     }
@@ -39,7 +44,7 @@ export const nestHandler: OpHandler = (doc, fields, index) => {
       error: yopsError(
         YOPS_ERRORS.ALREADY_EXISTS,
         `Key "${under}" already exists in mapping at "${path}"`,
-        index,
+        index
       ),
     };
   }

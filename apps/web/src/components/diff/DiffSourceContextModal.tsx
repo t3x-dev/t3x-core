@@ -23,9 +23,9 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import type { ContentNode, TurnContextData, TurnWithContext, WordDiffSegment } from '@/types/merge';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 const roleIcons: Record<string, React.ReactNode> = {
   user: <User className="h-4 w-4" />,
@@ -71,7 +71,10 @@ export function TurnBubble({
             }
             if (seg.type === 'added') {
               return (
-                <mark key={i} className="bg-[var(--status-success)] text-white font-medium px-0.5 rounded-sm">
+                <mark
+                  key={i}
+                  className="bg-[var(--status-success)] text-white font-medium px-0.5 rounded-sm"
+                >
                   {seg.text}
                 </mark>
               );

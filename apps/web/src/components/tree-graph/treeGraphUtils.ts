@@ -1,11 +1,11 @@
-import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
-import { RELATION_TYPES } from '@t3x-dev/core';
+import type { RELATION_TYPES, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
  * Runtime-enriched tree node shape. API trees from historical commits may
  * carry a legacy turn-tag `source` string (e.g. `"T3"`).
  */
 type EnrichedTreeNode = TreeNode & { source?: string };
+
 import type { Edge, Node } from '@xyflow/react';
 
 // ── Exported Types ──
@@ -140,4 +140,3 @@ export function filterByZoomLevel(
   }
   return filterContent(content, visible);
 }
-

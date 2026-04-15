@@ -41,10 +41,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PinButton } from '@/components/ui/PinButton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
+import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
-import { useRetuneSession } from '@/hooks/conversations/useRetuneSession';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import {
   type ApiCommit,
   type EngineRun,
@@ -56,9 +56,9 @@ import {
   updateEngineRun,
 } from '@/infrastructure';
 import { exportRunAsJSON, exportRunAsMarkdown } from '@/infrastructure/export/report';
-import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { cn } from '@/utils/cn';
 
 // Types for parsed result data
 interface DimensionScores {

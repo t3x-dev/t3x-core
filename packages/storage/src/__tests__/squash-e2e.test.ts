@@ -5,15 +5,15 @@
  * verifying replay correctness and superseded filtering.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { applyYOps, extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
 import type { SemanticContent } from '@t3x-dev/core';
+import { applyYOps, extractOpsFromEntries, verifyReplay } from '@t3x-dev/core';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { collectYOpsForCommitRange, createCommit, listCommits } from '../queries/commits';
 import { insertRewrite, isCommitSuperseded, listRewrites } from '../queries/commit-rewrites';
-import { getYOpsForCommit, insertYOpsLogEntry } from '../queries/yops-log';
+import { collectYOpsForCommitRange, createCommit, listCommits } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
+import { getYOpsForCommit, insertYOpsLogEntry } from '../queries/yops-log';
 import { createTestDB, testData } from './setup';
 
 describe('Squash E2E', () => {
@@ -28,7 +28,10 @@ describe('Squash E2E', () => {
     cleanup = setup.cleanup;
     const project = await insertProject(db, testData.project({ name: 'Squash E2E' }));
     projectId = project.projectId;
-    const conversation = await insertConversation(db, testData.conversation(projectId, { title: 'Squash Conv' }));
+    const conversation = await insertConversation(
+      db,
+      testData.conversation(projectId, { title: 'Squash Conv' })
+    );
     conversationId = conversation.conversationId;
   });
 
@@ -76,7 +79,9 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl1.id],
     });
 
-    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [{ set: { path: 'trip/style', value: 'casual' } }]);
+    const r2 = applyYOps({ trees: r1.trees, relations: r1.relations }, [
+      { set: { path: 'trip/style', value: 'casual' } },
+    ]);
     const c2 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r2.trees, relations: r2.relations },
@@ -87,7 +92,9 @@ describe('Squash E2E', () => {
       yops_log_ids: [yl2.id],
     });
 
-    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [{ set: { path: 'trip/duration', value: 7 } }]);
+    const r3 = applyYOps({ trees: r2.trees, relations: r2.relations }, [
+      { set: { path: 'trip/duration', value: 7 } },
+    ]);
     const c3 = await createCommit(db, {
       author: { type: 'human', name: 'test' },
       content: { trees: r3.trees, relations: r3.relations },

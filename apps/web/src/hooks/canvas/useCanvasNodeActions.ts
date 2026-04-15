@@ -12,6 +12,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
+import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 import { fetchCommits } from '@/queries/commits';
 import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
@@ -21,7 +22,6 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { snapPosition } from '@/store/canvasStoreUtils';
 import type { Conversation, Leaf } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '@/types/nodes';
-import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 
 export function useCanvasNodeActions() {
   const load = useCallback(

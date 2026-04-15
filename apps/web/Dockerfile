@@ -12,6 +12,8 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/yops/package.json ./packages/yops/
+COPY packages/yschema/package.json ./packages/yschema/
 COPY packages/core/package.json ./packages/core/
 COPY packages/storage/package.json ./packages/storage/
 COPY apps/web/package.json ./apps/web/
@@ -20,12 +22,16 @@ COPY apps/web/package.json ./apps/web/
 RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source files
+COPY packages/yops/ ./packages/yops/
+COPY packages/yschema/ ./packages/yschema/
 COPY packages/core/ ./packages/core/
 COPY packages/storage/ ./packages/storage/
 COPY apps/web/ ./apps/web/
 
 # Build dependencies first
-RUN pnpm --filter @t3x-dev/core build && \
+RUN pnpm --filter @t3x-dev/yops build && \
+    pnpm --filter @t3x-dev/yschema build && \
+    pnpm --filter @t3x-dev/core build && \
     pnpm --filter @t3x-dev/storage build
 
 # Build webui

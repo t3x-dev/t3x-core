@@ -1,3 +1,4 @@
+import { flattenTrees } from './tree';
 import type {
   FlatNode,
   SemanticContent,
@@ -6,7 +7,6 @@ import type {
   ValidationResult,
   ValidationWarning,
 } from './types';
-import { flattenTrees } from './tree';
 
 export function validateIntegrity(content: SemanticContent): ValidationResult {
   const errors: ValidationError[] = [];
@@ -108,11 +108,7 @@ export function validateIntegrity(content: SemanticContent): ValidationResult {
 }
 
 /** Check for duplicate keys among siblings at each tree level */
-function collectDuplicateKeys(
-  node: TreeNode,
-  parentPath: string,
-  errors: ValidationError[]
-): void {
+function collectDuplicateKeys(node: TreeNode, parentPath: string, errors: ValidationError[]): void {
   const childKeyCounts = new Map<string, number>();
   for (const child of node.children ?? []) {
     childKeyCounts.set(child.key, (childKeyCounts.get(child.key) ?? 0) + 1);

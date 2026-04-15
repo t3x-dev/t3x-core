@@ -1,9 +1,12 @@
+import type { TreeNode } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { computeTreeDiff } from '@/domain/diff/treeDiff';
-import type { TreeNode } from '@t3x-dev/core';
 
-const makeNode = (key: string, slots: Record<string, string> = {}, children: TreeNode[] = []): TreeNode =>
-  ({ key, slots, children, source: {} } as any);
+const makeNode = (
+  key: string,
+  slots: Record<string, string> = {},
+  children: TreeNode[] = []
+): TreeNode => ({ key, slots, children, source: {} }) as any;
 
 describe('computeTreeDiff', () => {
   it('marks all nodes as added when base is empty', () => {
@@ -18,7 +21,11 @@ describe('computeTreeDiff', () => {
     const base = [makeNode('trip', { budget: 'moderate' })];
     const result = [makeNode('trip', { budget: '3000 CNY' })];
     const diff = computeTreeDiff(base, result);
-    expect(diff.modifiedSlots.trip).toContainEqual({ key: 'budget', oldValue: 'moderate', newValue: '3000 CNY' });
+    expect(diff.modifiedSlots.trip).toContainEqual({
+      key: 'budget',
+      oldValue: 'moderate',
+      newValue: '3000 CNY',
+    });
     expect(diff.summary.slotsModified).toBe(1);
   });
 

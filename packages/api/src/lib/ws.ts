@@ -22,7 +22,9 @@ let wsInstance: ReturnType<typeof createNodeWebSocket> | null = null;
  * Returns upgradeWebSocket middleware for route handlers.
  */
 export function setupWebSocket(app: Hono) {
-  wsInstance = createNodeWebSocket({ app: app as Parameters<typeof createNodeWebSocket>[0]['app'] });
+  wsInstance = createNodeWebSocket({
+    app: app as Parameters<typeof createNodeWebSocket>[0]['app'],
+  });
   return wsInstance;
 }
 

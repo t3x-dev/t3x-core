@@ -21,7 +21,6 @@ import type { MiddlewareHandler } from 'hono';
 import { Hono } from 'hono';
 import { setupWebSocket } from './lib/ws';
 import { authMiddleware } from './middleware/auth';
-import { createWsRoute } from './routes/ws';
 import { corsMiddleware } from './middleware/cors';
 import { loggerMiddleware, pinoLogger } from './middleware/logger';
 import { projectAccessMiddleware } from './middleware/project-access';
@@ -44,10 +43,11 @@ import {
   curateRoutes,
   deployAgentRoutes,
   diffRoutes,
+  docsYopsRoutes,
   draftsRoutes,
   exportRoutes,
-  extractYopsRoutes,
   extractionFeedbackRoutes,
+  extractYopsRoutes,
   gateRoutes,
   healthRoutes,
   importRoutes,
@@ -76,10 +76,10 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
-  docsYopsRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
 } from './routes';
+import { createWsRoute } from './routes/ws';
 
 export interface CreateAppOptions {
   /** Skip built-in local auth (username/password). Set true for SaaS with OAuth. */
@@ -313,11 +313,11 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
 
 // Database
 export { closeDB, getDB } from './lib/db';
+// Error utilities
+export { createError, errorResponse, zodErrorHook } from './lib/errors';
 // Real-time event bus
 export { eventBus, type RealtimeEvent, type RealtimeEventType } from './lib/event-bus';
 export { roomManager } from './lib/room-manager';
-// Error utilities
-export { createError, errorResponse, zodErrorHook } from './lib/errors';
 
 // Background tasks
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';

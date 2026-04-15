@@ -9,9 +9,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
   deleteConversation,
+  findConversationByAliasOrId,
   findConversationById,
   findConversationsByProject,
-  findConversationByAliasOrId,
   getConversationTurnCount,
   insertConversation,
   renameConversation,
@@ -116,10 +116,7 @@ describe('Conversations Storage', () => {
       });
 
       it('allows the same alias under different projects', async () => {
-        const otherProject = await insertProject(
-          db,
-          testData.project({ name: 'Other Project' })
-        );
+        const otherProject = await insertProject(db, testData.project({ name: 'Other Project' }));
         const c1 = await insertConversation(db, { projectId: testProjectId });
         const c2 = await insertConversation(db, { projectId: otherProject.projectId });
 
@@ -510,11 +507,7 @@ describe('Conversations Storage', () => {
     it('finds by conversation_id', async () => {
       const created = await insertConversation(db, { projectId: testProjectId });
 
-      const found = await findConversationByAliasOrId(
-        db,
-        testProjectId,
-        created.conversationId
-      );
+      const found = await findConversationByAliasOrId(db, testProjectId, created.conversationId);
 
       expect(found).not.toBeNull();
       expect(found?.conversationId).toBe(created.conversationId);
@@ -533,11 +526,7 @@ describe('Conversations Storage', () => {
     });
 
     it('returns null when alias does not exist in project', async () => {
-      const found = await findConversationByAliasOrId(
-        db,
-        testProjectId,
-        'nonexistent_alias'
-      );
+      const found = await findConversationByAliasOrId(db, testProjectId, 'nonexistent_alias');
 
       expect(found).toBeNull();
     });
@@ -591,9 +580,9 @@ describe('Conversations Storage', () => {
     it('throws on invalid alias format', async () => {
       const created = await insertConversation(db, { projectId: testProjectId });
 
-      await expect(
-        renameConversation(db, created.conversationId, 'BadAlias')
-      ).rejects.toThrow(/format/);
+      await expect(renameConversation(db, created.conversationId, 'BadAlias')).rejects.toThrow(
+        /format/
+      );
     });
 
     it('throws on collision within the same project', async () => {
@@ -602,9 +591,7 @@ describe('Conversations Storage', () => {
 
       await renameConversation(db, a.conversationId, 'taken_name');
 
-      await expect(
-        renameConversation(db, b.conversationId, 'taken_name')
-      ).rejects.toThrow();
+      await expect(renameConversation(db, b.conversationId, 'taken_name')).rejects.toThrow();
     });
   });
 });

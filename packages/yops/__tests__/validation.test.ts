@@ -53,8 +53,8 @@ describe('field validation', () => {
   it('reports correct op_index for validation errors', () => {
     const doc: YValue = { x: 1 };
     const ops = [
-      { set: { path: 'y', value: 2 } },     // valid
-      { set: { path: 'z' } },                // missing 'value'
+      { set: { path: 'y', value: 2 } }, // valid
+      { set: { path: 'z' } }, // missing 'value'
     ] as any;
     const result = applyYOps(doc, ops);
     expect(result.ok).toBe(false);

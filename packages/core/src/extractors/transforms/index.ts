@@ -12,10 +12,10 @@
  *   4. checkRegression — warn if content was lost (advisory only)
  */
 
-export { consolidate } from './consolidate';
-export { nest } from './nest';
-export { flagContradictions } from './flagContradictions';
 export { checkRegression, type RegressionWarning } from './checkRegression';
+export { consolidate } from './consolidate';
+export { flagContradictions } from './flagContradictions';
+export { nest } from './nest';
 
 import type { SemanticContent } from '../../semantic/types';
 import { checkRegression, type RegressionWarning } from './checkRegression';
@@ -35,7 +35,7 @@ export interface TransformResult {
 export function runTransforms(
   content: SemanticContent,
   turns: Array<{ role: string; content: string }>,
-  previousSnapshot?: SemanticContent,
+  previousSnapshot?: SemanticContent
 ): TransformResult {
   let result = content;
 

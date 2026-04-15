@@ -7,10 +7,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  cancelAllPositionSaves,
-  saveNodePosition,
-} from '@/infrastructure/nodePositionSaver';
+import { cancelAllPositionSaves, saveNodePosition } from '@/infrastructure/nodePositionSaver';
 
 export function useNodePositionSaver() {
   const save = useCallback<typeof saveNodePosition>((...args) => saveNodePosition(...args), []);

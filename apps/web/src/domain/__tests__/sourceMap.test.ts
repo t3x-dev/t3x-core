@@ -43,18 +43,13 @@ describe('buildSourceMap', () => {
 
   it('skips HumanSource entries (no turn anchor)', () => {
     const idx = new Map<string, Source>([
-      [
-        'trip/note',
-        { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
-      ],
+      ['trip/note', { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' }],
     ]);
     expect(buildSourceMap(idx, turns).size).toBe(0);
   });
 
   it('skips entries whose turn_hash is not loaded', () => {
-    const idx = new Map<string, Source>([
-      ['trip/lost', llm('sha256:missing', 'ghost', 0, 5)],
-    ]);
+    const idx = new Map<string, Source>([['trip/lost', llm('sha256:missing', 'ghost', 0, 5)]]);
     expect(buildSourceMap(idx, turns).size).toBe(0);
   });
 
@@ -62,7 +57,12 @@ describe('buildSourceMap', () => {
     const idx = new Map<string, Source>([
       [
         'trip/x',
-        { type: 'llm', model: 'claude', at: '2026-04-12T00:00:00Z', turn_ref: { turn_hash: T1, quote: 'x' } },
+        {
+          type: 'llm',
+          model: 'claude',
+          at: '2026-04-12T00:00:00Z',
+          turn_ref: { turn_hash: T1, quote: 'x' },
+        },
       ],
     ]);
     expect(buildSourceMap(idx, turns).size).toBe(0);

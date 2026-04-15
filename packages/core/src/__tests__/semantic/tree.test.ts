@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BLOB_TYPES,
-  flattenTree,
-  isBlob,
-  unflattenToTree,
-  yamlToTree,
-} from '../../semantic/tree';
+import { BLOB_TYPES, flattenTree, isBlob, unflattenToTree, yamlToTree } from '../../semantic/tree';
 import type { FlatNode, TreeNode } from '../../semantic/types';
 
 describe('flattenTree', () => {
@@ -58,7 +52,6 @@ describe('flattenTree', () => {
     expect(frames[2].type).toBe('gear');
     expect(frames[2].slots).toEqual({ rain_jacket: true });
   });
-
 });
 
 describe('unflattenToTree', () => {
@@ -101,7 +94,6 @@ describe('unflattenToTree', () => {
     expect(reconstructed.children[1].children[0].key).toBe('gear');
   });
 });
-
 
 describe('isBlob', () => {
   it('returns true for code blobs', () => {
@@ -231,7 +223,10 @@ describe('yamlToTree — all blob types round-trip', () => {
     table: {
       _type: 'table',
       headers: ['Name', 'Age', 'City'],
-      rows: [['Alice', 30, 'NYC'], ['Bob', 25, 'LA']],
+      rows: [
+        ['Alice', 30, 'NYC'],
+        ['Bob', 25, 'LA'],
+      ],
     },
     image: {
       _type: 'image',

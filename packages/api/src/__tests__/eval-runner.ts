@@ -292,12 +292,19 @@ const SCENARIOS: Scenario[] = [
 // Markdown Formatter
 // ============================================================
 
-function formatFrameToMarkdown(frame: { id: string; type: string; slots: Record<string, unknown>; slot_sources?: Record<string, unknown>; source?: string }, indent = 0): string {
+function formatFrameToMarkdown(
+  frame: {
+    id: string;
+    type: string;
+    slots: Record<string, unknown>;
+    slot_sources?: Record<string, unknown>;
+    source?: string;
+  },
+  indent = 0
+): string {
   const pad = '  '.repeat(indent);
   const lines: string[] = [];
-  lines.push(
-    `${pad}- **${frame.type}** (id: \`${frame.id}\`)`
-  );
+  lines.push(`${pad}- **${frame.type}** (id: \`${frame.id}\`)`);
   if (frame.source) {
     lines.push(`${pad}  - Source: ${frame.source}`);
   }
@@ -333,9 +340,7 @@ function formatSnapshotToMarkdown(snapshot: SemanticContent): string {
     lines.push('_No relations._\n');
   } else {
     for (const rel of snapshot.relations) {
-      lines.push(
-        `- \`${rel.from}\` → \`${rel.to}\` (${rel.type})`
-      );
+      lines.push(`- \`${rel.from}\` → \`${rel.to}\` (${rel.type})`);
     }
     lines.push('');
   }

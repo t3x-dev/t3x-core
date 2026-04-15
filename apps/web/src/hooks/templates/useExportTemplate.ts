@@ -5,11 +5,8 @@
  */
 
 import { useCallback } from 'react';
+import { exportTemplate, type TemplateExportFormat } from '@/infrastructure/export/template';
 import type { Template } from '@/types/api';
-import {
-  exportTemplate,
-  type TemplateExportFormat,
-} from '@/infrastructure/export/template';
 
 export type { TemplateExportFormat };
 

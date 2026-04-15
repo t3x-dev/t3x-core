@@ -7,7 +7,7 @@
  * @see packages/core/src/commit/types.ts
  */
 
-import type { Author, Commit, Provenance, SemanticContent } from '@t3x-dev/core';
+import type { Author, Commit, CommitSchemaTag, Provenance, SemanticContent } from '@t3x-dev/core';
 import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
@@ -288,9 +288,14 @@ function rowToCommit(row: CommitRecord): Commit {
     content = { trees: [], relations: [] };
   }
 
+  // Preserve the schema string as written. `schema` is a first-class (hashed)
+  // field — rewriting it in-memory would make recomputed hashes diverge from
+  // stored ones for any row written under a previous schema value. New rows
+  // default to COMMIT_SCHEMA at the DB layer.
+  // Audit 2026-04-15, B-8.
   return {
     hash: row.hash,
-    schema: COMMIT_SCHEMA,
+    schema: (row.schema ?? COMMIT_SCHEMA) as CommitSchemaTag,
     parents: row.parents,
     author: row.author as Author,
     committed_at: row.committedAt.toISOString(),
@@ -300,7 +305,12 @@ function rowToCommit(row: CommitRecord): Commit {
     branch: row.branch ?? 'main',
     provenance: (row.provenance as Provenance | null) ?? null,
     yops_log_ids: (row.yopsLogIds as string[]) ?? [],
-    sources: (row.sources as Array<{ type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }>) ?? null,
+    sources:
+      (row.sources as Array<{
+        type: 'conversation' | 'import' | 'leaf';
+        id: string;
+        title?: string;
+      }>) ?? null,
     // Canvas position (second-class, display-only)
     position_x: row.positionX ?? null,
     position_y: row.positionY ?? null,

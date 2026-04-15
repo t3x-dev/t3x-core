@@ -12,7 +12,7 @@ import type { NodeDef, Schema, SlotDef, SlotFull } from './types';
 export function normalizeSlot(def: SlotDef): SlotFull {
   if (typeof def !== 'string' && !Array.isArray(def) && (typeof def !== 'object' || def === null)) {
     throw new Error(
-      `Invalid slot definition: expected "scalar", "list", enum array, or slot object, got ${typeof def}`,
+      `Invalid slot definition: expected "scalar", "list", enum array, or slot object, got ${typeof def}`
     );
   }
   if (def === 'scalar') {

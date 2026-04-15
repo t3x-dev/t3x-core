@@ -44,9 +44,7 @@ describe('traceYamlToChat', () => {
     const r = traceYamlToChat(sourceIndex, turns, 'trip', null);
     expect(r.quote).toBeNull();
     // 'trip' and 'trip/destination' both point at "Hangzhou" — duplicates are expected
-    expect(new Set(r.allQuotes)).toEqual(
-      new Set(['Hangzhou', '5 days', 'Grandmas Kitchen'])
-    );
+    expect(new Set(r.allQuotes)).toEqual(new Set(['Hangzhou', '5 days', 'Grandmas Kitchen']));
     expect(r.sourceTurnIndex).toBe(1);
   });
 
@@ -67,10 +65,7 @@ describe('traceYamlToChat', () => {
 
   it('ignores HumanSource for quote (humans do not cite turns)', () => {
     const human = new Map<string, Source>([
-      [
-        'trip/dest',
-        { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
-      ],
+      ['trip/dest', { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' }],
     ]);
     const r = traceYamlToChat(human, turns, 'trip', 'dest');
     expect(r.sourceTurnIndex).toBeNull();

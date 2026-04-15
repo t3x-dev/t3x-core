@@ -25,13 +25,13 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useConversationsList } from '@/hooks/conversations/useConversationsList';
-import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
+import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
 import { useTurnsList } from '@/hooks/shared/useTurnsList';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { Conversation, Leaf, Turn } from '@/types/api';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 // Selected item type for detail panel
 type SelectedItem =

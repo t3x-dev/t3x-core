@@ -31,7 +31,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/infrastructure';
-import { createWebhook, deleteWebhook, listWebhooks, testWebhook, updateWebhook } from '@/infrastructure';
+import {
+  createWebhook,
+  deleteWebhook,
+  listWebhooks,
+  testWebhook,
+  updateWebhook,
+} from '@/infrastructure';
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<WebhookData[]>([]);

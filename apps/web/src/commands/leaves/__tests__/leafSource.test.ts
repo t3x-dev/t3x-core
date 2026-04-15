@@ -26,9 +26,9 @@ describe('assertLeafSource', () => {
   });
 
   it('rejects an agent source missing model', () => {
-    expect(() =>
-      assertLeafSource({ type: 'agent', timestamp: '2026-04-14T10:00:00Z' })
-    ).toThrow(LeafSourceValidationError);
+    expect(() => assertLeafSource({ type: 'agent', timestamp: '2026-04-14T10:00:00Z' })).toThrow(
+      LeafSourceValidationError
+    );
   });
 
   it('rejects an agent source missing timestamp', () => {

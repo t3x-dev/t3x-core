@@ -9,9 +9,9 @@ import { UseTemplateDialog } from '@/components/templates/UseTemplateDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { useTemplates } from '@/hooks/templates/useTemplates';
 import type { Template } from '@/infrastructure';
 import { cn } from '@/utils/cn';
-import { useTemplates } from '@/hooks/templates/useTemplates';
 
 const CATEGORIES = [
   { value: null, label: 'All' },

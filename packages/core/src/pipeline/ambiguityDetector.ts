@@ -18,8 +18,8 @@
 import { nanoid } from 'nanoid';
 import { escapePromptContent } from '../llm/sanitize';
 import type { LLMProvider } from '../llm/types';
-import type { FlatNode, SemanticContent } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
+import type { FlatNode, SemanticContent } from '../semantic/types';
 import type { AdvisoryQuestion } from './types';
 
 /** Valid ambiguity types */

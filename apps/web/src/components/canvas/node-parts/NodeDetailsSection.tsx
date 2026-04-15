@@ -1,8 +1,8 @@
 import { CheckCircle, Copy, FileOutput, GitCommit, PenSquare } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { toneAccent } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import type { CommitDisplay } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { toneAccent } from '@/utils/theme';
 import { CommitContentSection, PREVIEW_MAX_NODES } from '../CommitNodeContent';
 
 export interface NodeDetailsSectionProps {

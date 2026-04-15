@@ -20,8 +20,8 @@ import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/shared/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
 import { MergeContextPanel } from './MergeContextPanel';

@@ -1,6 +1,6 @@
-import type { OpHandler } from '../registry';
+import { YOPS_ERRORS, yopsError } from '../errors';
 import { deleteAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
+import type { OpHandler } from '../registry';
 
 export const dropHandler: OpHandler = (doc, fields, index) => {
   const path = fields.path as string;

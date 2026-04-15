@@ -32,16 +32,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LeafOutputWithHighlights } from '@/components/source-context/LeafOutputWithHighlights';
 import type { NodeWithHighlight } from '@/components/source-context/SourceConversationPanel';
 import { SourceConversationPanel } from '@/components/source-context/SourceConversationPanel';
-import { LeafOutputWithHighlights } from '@/components/source-context/LeafOutputWithHighlights';
 import { SourceNodeList } from '@/components/source-context/SourceNodeList';
-import { useSourceContextData, type LeafContentNode } from '@/hooks/shared/useSourceContextData';
-import type {
-  ColoredHighlightRange,
-  HighlightColor,
-  NodeWithSource,
-} from '@/types/sourceContext';
+import { type LeafContentNode, useSourceContextData } from '@/hooks/shared/useSourceContextData';
+import type { ColoredHighlightRange, HighlightColor, NodeWithSource } from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types (using shared types, keep local aliases for backward compatibility)
@@ -60,7 +56,6 @@ interface CommitSourceContextProps {
   /** Commit-level source refs (V4) for identifying leaf sources */
   sourceRefs?: Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>;
 }
-
 
 /**
  * Map anchor_type to highlight color for visual differentiation.
@@ -83,12 +78,8 @@ function anchorTypeToColor(anchorType?: string): HighlightColor {
  * Build colored highlights from nodes with anchor_type info.
  * Returns coloredHighlights when mixed anchor_types exist, undefined otherwise.
  */
-function _buildColoredHighlights(
-  nodes: NodeWithHighlight[]
-): ColoredHighlightRange[] | undefined {
-  const hasNonVerbatim = nodes.some(
-    (s) => s.node.anchor_type && s.node.anchor_type !== 'verbatim'
-  );
+function _buildColoredHighlights(nodes: NodeWithHighlight[]): ColoredHighlightRange[] | undefined {
+  const hasNonVerbatim = nodes.some((s) => s.node.anchor_type && s.node.anchor_type !== 'verbatim');
   if (!hasNonVerbatim) return undefined;
 
   return nodes.map((s) => ({
@@ -143,7 +134,6 @@ function groupNodesBySource(nodes: CommitContentNode[]): {
   return { byTurn, byLeaf, withoutSource };
 }
 
-
 export function CommitSourceContext({
   nodes,
   compact = false,
@@ -156,10 +146,7 @@ export function CommitSourceContext({
   const hasUserInteracted = useRef(false);
 
   // Group nodes by source type
-  const { byTurn, byLeaf, withoutSource } = useMemo(
-    () => groupNodesBySource(nodes),
-    [nodes]
-  );
+  const { byTurn, byLeaf, withoutSource } = useMemo(() => groupNodesBySource(nodes), [nodes]);
 
   // Group nodes by inheritance status
   const { inheritedNodes, inheritedByCommit } = useMemo(() => {
@@ -272,7 +259,11 @@ export function CommitSourceContext({
 
   // Fetch turn/leaf context data
   const { turnData, leafData, isLoading } = useSourceContextData(
-    turnHashes, leafIds, byTurn, byLeaf, compact
+    turnHashes,
+    leafIds,
+    byTurn,
+    byLeaf,
+    compact
   );
 
   // Post-fetch resolution: match nodes to leaves by text matching.
@@ -428,8 +419,7 @@ export function CommitSourceContext({
   if (leafIds.length > 0) {
     summaryParts.push(`${leafIds.length} ${leafIds.length !== 1 ? 'leaves' : 'leaf'}`);
   }
-  const inheritedNote =
-    inheritedNodes.length > 0 ? ` (${inheritedNodes.length} inherited)` : '';
+  const inheritedNote = inheritedNodes.length > 0 ? ` (${inheritedNodes.length} inherited)` : '';
   const summaryText =
     summaryParts.length > 0
       ? `${nodes.length} node${nodes.length !== 1 ? 's' : ''}${inheritedNote} from ${summaryParts.join(', ')}`

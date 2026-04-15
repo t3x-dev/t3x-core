@@ -3,8 +3,8 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { truncate } from '@/domain/format/truncate';
-import { cn } from '@/utils/cn';
 import type { NodeRelation } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 interface RelationsListProps {
   relations: NodeRelation[];

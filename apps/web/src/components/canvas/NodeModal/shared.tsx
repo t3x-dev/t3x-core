@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { PinButton } from '@/components/ui/PinButton';
 import { PinDropdownSelector } from '@/components/ui/PinDropdownSelector';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
 import type { CommitDisplay, CommitSourceRef, EmbeddedLeaf } from '@/types/nodes';
+import { cn } from '@/utils/cn';
 import { CommitSourceContext } from '../CommitSourceContext';
 import { LeafCreationDialog } from '../LeafCreationDialog';
 
@@ -243,7 +243,11 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
     ? (() => {
         // EnrichedTreeNode: runtime shape that may carry `source` from the DB.
         type TreeNodeLike = import('@t3x-dev/core').TreeNode & { source?: string };
-        const entries: Array<{ id: string; text: string; source_ref?: { turn_hash?: string; start_char?: number; end_char?: number } }> = [];
+        const entries: Array<{
+          id: string;
+          text: string;
+          source_ref?: { turn_hash?: string; start_char?: number; end_char?: number };
+        }> = [];
         function walk(nodes: TreeNodeLike[], prefix = '') {
           for (const node of nodes) {
             const path = prefix ? `${prefix}.${node.key}` : node.key;
@@ -307,9 +311,7 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
                 'bg-background border-border'
               )}
             >
-              <div
-                className={cn('w-1 self-stretch rounded-full shrink-0', 'bg-muted')}
-              />
+              <div className={cn('w-1 self-stretch rounded-full shrink-0', 'bg-muted')} />
               <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
                 {s.id}
               </span>

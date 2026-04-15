@@ -1,23 +1,22 @@
 import type { OpRegistry } from '../registry';
-
+import { appendHandler } from './append';
+import { assertHandler } from './assert';
+import { cloneHandler } from './clone';
 import { defineHandler } from './define';
 import { dropHandler } from './drop';
-import { renameHandler } from './rename';
-import { setHandler } from './set';
-import { unsetHandler } from './unset';
-import { populateHandler } from './populate';
-import { appendHandler } from './append';
-import { moveHandler } from './move';
-import { cloneHandler } from './clone';
-import { nestHandler } from './nest';
-import { splitHandler } from './split';
 import { foldHandler } from './fold';
 import { mergeHandler } from './merge';
-import { sortHandler } from './sort';
-import { uniqueHandler } from './unique';
-import { pickHandler } from './pick';
+import { moveHandler } from './move';
+import { nestHandler } from './nest';
 import { omitHandler } from './omit';
-import { assertHandler } from './assert';
+import { pickHandler } from './pick';
+import { populateHandler } from './populate';
+import { renameHandler } from './rename';
+import { setHandler } from './set';
+import { sortHandler } from './sort';
+import { splitHandler } from './split';
+import { uniqueHandler } from './unique';
+import { unsetHandler } from './unset';
 
 export function registerAllHandlers(registry: OpRegistry): void {
   registry.register('define', defineHandler);

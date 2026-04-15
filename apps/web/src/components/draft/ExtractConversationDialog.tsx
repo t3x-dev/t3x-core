@@ -22,8 +22,8 @@ import {
 } from '@/components/ui/dialog';
 import { useConversationsList } from '@/hooks/conversations/useConversationsList';
 import { useExtractFromConversation } from '@/hooks/conversations/useExtractFromConversation';
-import { cn } from '@/utils/cn';
 import type { Conversation } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 interface ExtractConversationDialogProps {
   open: boolean;

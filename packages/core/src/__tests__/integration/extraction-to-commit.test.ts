@@ -6,9 +6,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { runTransforms } from '../../extractors/transforms';
 import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent } from '../../semantic/types';
-import { runTransforms } from '../../extractors/transforms';
 
 describe('extraction-to-commit integration', () => {
   it('transforms produce valid SemanticContent from raw trees', () => {
@@ -37,7 +37,11 @@ describe('extraction-to-commit integration', () => {
     };
 
     const turns = [
-      { role: 'user', content: 'I want to plan a 2-week trip to Tokyo. Budget is under $5000. I love Japanese food.' },
+      {
+        role: 'user',
+        content:
+          'I want to plan a 2-week trip to Tokyo. Budget is under $5000. I love Japanese food.',
+      },
       { role: 'assistant', content: 'Great! Tokyo is wonderful. Let me help you plan.' },
     ];
 
@@ -94,9 +98,7 @@ describe('extraction-to-commit integration', () => {
         { key: 'trip', slots: { dest: 'Tokyo' }, children: [] },
         { key: 'budget', slots: { amount: 5000 }, children: [] },
       ],
-      relations: [
-        { from: 'budget', to: 'trip', type: 'depends' },
-      ],
+      relations: [{ from: 'budget', to: 'trip', type: 'depends' }],
     };
 
     const result = runTransforms(content, []);

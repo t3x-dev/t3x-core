@@ -22,7 +22,11 @@ export {
   type NodeWithSignals,
 } from './compressPrompt';
 // Correction prompt (batch validation feedback loop)
-export { buildCorrectionPrompt, type CorrectionInput, type CorrectionPromptResult } from './correctionPrompt';
+export {
+  buildCorrectionPrompt,
+  type CorrectionInput,
+  type CorrectionPromptResult,
+} from './correctionPrompt';
 // extractionPrompt helpers — still used by yopsPrompt.ts internally
 export {
   type ExtractionPromptResult,

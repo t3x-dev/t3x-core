@@ -218,9 +218,7 @@ describe('Projects Routes', () => {
         project_id: project.projectId,
         author: { type: 'human', name: 'Tester' },
         content: {
-          trees: [
-            { key: 's_mm1', slots: { text: 'Merkle mismatch test' }, children: [] },
-          ],
+          trees: [{ key: 's_mm1', slots: { text: 'Merkle mismatch test' }, children: [] }],
           relations: [],
         } as any,
         branch: 'main',

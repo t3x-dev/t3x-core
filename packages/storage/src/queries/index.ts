@@ -58,10 +58,18 @@ export {
   getBusinessRules,
   putBusinessRules,
 } from './business-rules';
+// Commit Rewrites (append-only rewrite log)
+export {
+  getSupersededHashes,
+  type InsertRewriteInput,
+  insertRewrite,
+  isCommitSuperseded,
+  listRewrites,
+} from './commit-rewrites';
 // Commits (tree-based)
 export {
-  collectYOpsForCommitRange,
   type CreateCommitInput,
+  collectYOpsForCommitRange,
   createCommit,
   deleteCommit,
   getCommit,
@@ -104,24 +112,6 @@ export {
   type UpdateConversationInput,
   updateConversation,
 } from './conversations';
-// YOps Log (Phase 2 — semantic yops tracking)
-export {
-  deleteYOpsLogEntry,
-  getYOpsForCommit,
-  getYOpsLogEntry,
-  type InsertYOpsLogInput,
-  insertYOpsLogEntry,
-  listYOpsLogByConversation,
-  listYOpsLogByTopic,
-} from './yops-log';
-// Commit Rewrites (append-only rewrite log)
-export {
-  getSupersededHashes,
-  type InsertRewriteInput,
-  insertRewrite,
-  isCommitSuperseded,
-  listRewrites,
-} from './commit-rewrites';
 // Deploy Agents (for Deploy page, different from agent layer)
 export {
   type CreateDeployAgentInput,
@@ -163,22 +153,6 @@ export {
   insertExtractionFeedback,
   listExtractionFeedback,
 } from './extraction-feedback';
-// Tree State (source-of-truth for current trees)
-export {
-  clearManualEditedFlags,
-  deleteTree,
-  deleteTreeRelationByKey,
-  deleteTreeRelationsByConversation,
-  deleteTreeRelationsByTreeId,
-  deleteTreesByConversation,
-  getTreeByKey,
-  listTreeRelationsByConversation,
-  listTreesByConversation,
-  type UpsertTreeInput,
-  type UpsertTreeRelationInput,
-  upsertTree,
-  upsertTreeRelation,
-} from './tree-state';
 // Global Settings (key-value config store)
 export {
   deleteGlobalSetting,
@@ -268,6 +242,12 @@ export {
   type RecordMetricInput,
   recordMetric,
 } from './metrics';
+// Node Modifications (audit trail)
+export {
+  findModificationsByDraft,
+  type InsertNodeModificationInput,
+  insertNodeModification,
+} from './node-modifications';
 // Notifications (persistent alerts, Item 16)
 export {
   type CreateNotificationInput,
@@ -305,9 +285,9 @@ export {
   findProjectWithStats,
   insertProject,
   type ListProjectsOptions,
-  permanentDeleteProject,
   type ProjectStats,
   type ProjectWithStats,
+  permanentDeleteProject,
   restoreProject,
   updateProject,
 } from './projects';
@@ -358,12 +338,6 @@ export {
   insertSegmentEmbedding,
   insertSegmentEmbeddingsBatch,
 } from './segmentEmbeddings';
-// Node Modifications (audit trail)
-export {
-  findModificationsByDraft,
-  type InsertNodeModificationInput,
-  insertNodeModification,
-} from './node-modifications';
 // Share Tokens
 export {
   type CreateShareTokenInput,
@@ -405,6 +379,22 @@ export {
   listTopicsByConversation,
   updateTopic,
 } from './topics';
+// Tree State (source-of-truth for current trees)
+export {
+  clearManualEditedFlags,
+  deleteTree,
+  deleteTreeRelationByKey,
+  deleteTreeRelationsByConversation,
+  deleteTreeRelationsByTreeId,
+  deleteTreesByConversation,
+  getTreeByKey,
+  listTreeRelationsByConversation,
+  listTreesByConversation,
+  type UpsertTreeInput,
+  type UpsertTreeRelationInput,
+  upsertTree,
+  upsertTreeRelation,
+} from './tree-state';
 // Turns
 export {
   type CreateTurnInput,
@@ -446,3 +436,13 @@ export {
   updateWebhook,
   type WebhookOutput,
 } from './webhooks';
+// YOps Log (Phase 2 — semantic yops tracking)
+export {
+  deleteYOpsLogEntry,
+  getYOpsForCommit,
+  getYOpsLogEntry,
+  type InsertYOpsLogInput,
+  insertYOpsLogEntry,
+  listYOpsLogByConversation,
+  listYOpsLogByTopic,
+} from './yops-log';

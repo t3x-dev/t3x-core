@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, deleteAtPath, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { resolvePath, deepClone, setAtPath, deleteAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 
 export const moveHandler: OpHandler = (doc, fields, index) => {
   const from = fields.from as string;

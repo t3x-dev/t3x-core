@@ -1,6 +1,5 @@
 import { ChevronDown, ChevronRight, GitCommit } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { cn } from '@/utils/cn';
 import type {
   AnchorCandidate,
   ConfirmedAnchor,
@@ -8,6 +7,7 @@ import type {
   SourceTextBlock,
   TextSelection,
 } from '@/types/nodes';
+import { cn } from '@/utils/cn';
 import {
   addSelection,
   cleanupKeywords,
@@ -404,7 +404,10 @@ export function SelectableTextBlock({
 
       {!readOnly && (
         <div className="mt-3 pt-3 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)] text-center">
-          <span>Left-click drag to select (green) · Right-click drag to exclude (red) · Click to cycle: selected → must → mustn't</span>
+          <span>
+            Left-click drag to select (green) · Right-click drag to exclude (red) · Click to cycle:
+            selected → must → mustn't
+          </span>
         </div>
       )}
     </div>
@@ -502,4 +505,3 @@ export function SourceBox({
     </div>
   );
 }
-

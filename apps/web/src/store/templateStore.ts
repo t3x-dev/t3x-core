@@ -46,8 +46,7 @@ export const useTemplateStore = create<TemplateState>((set) => ({
   setLeafType: (leafType) => set({ leafType }),
   setSearch: (search) => set({ search }),
 
-  addTemplate: (template) =>
-    set((state) => ({ templates: [template, ...state.templates] })),
+  addTemplate: (template) => set((state) => ({ templates: [template, ...state.templates] })),
   removeTemplate: (id) =>
     set((state) => ({ templates: state.templates.filter((t) => t.template_id !== id) })),
 }));

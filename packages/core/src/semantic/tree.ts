@@ -118,7 +118,6 @@ export function unflattenToTrees(flatNodes: FlatNode[]): TreeNode[] {
   return trees;
 }
 
-
 /**
  * Validate tree depth does not exceed the given maximum.
  * Returns an error message if exceeded, or null if valid.

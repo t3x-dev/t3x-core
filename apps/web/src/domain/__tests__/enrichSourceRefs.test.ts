@@ -33,9 +33,7 @@ function tree(): TreeNode[] {
 
 describe('enrichTreesWithSourceRefs', () => {
   it('injects source_ref from LLMSource at the owning node', () => {
-    const idx = new Map<string, Source>([
-      ['trip/destination', llm(T1, 'Hangzhou', 16, 24)],
-    ]);
+    const idx = new Map<string, Source>([['trip/destination', llm(T1, 'Hangzhou', 16, 24)]]);
     const [root] = enrichTreesWithSourceRefs(tree(), CONV, idx);
     expect(root.slots.source_ref).toEqual({
       conversation_id: CONV,
@@ -61,19 +59,14 @@ describe('enrichTreesWithSourceRefs', () => {
 
   it('does not mutate the input trees', () => {
     const original = tree();
-    const idx = new Map<string, Source>([
-      ['trip/destination', llm(T1, 'Hangzhou', 16, 24)],
-    ]);
+    const idx = new Map<string, Source>([['trip/destination', llm(T1, 'Hangzhou', 16, 24)]]);
     enrichTreesWithSourceRefs(original, CONV, idx);
     expect(original[0].slots.source_ref).toBeUndefined();
   });
 
   it('skips HumanSource entries (no turn anchor)', () => {
     const idx = new Map<string, Source>([
-      [
-        'trip/destination',
-        { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
-      ],
+      ['trip/destination', { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' }],
     ]);
     const [root] = enrichTreesWithSourceRefs(tree(), CONV, idx);
     expect(root.slots.source_ref).toBeUndefined();

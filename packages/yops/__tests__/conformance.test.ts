@@ -5,11 +5,11 @@
  * Any language can run these same tests against their own engine.
  */
 
-import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseSpec } from '../src/spec';
+import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
+import { parseSpec } from '../src/spec';
 import type { YOp, YValue } from '../src/types';
 
 const yamlStr = readFileSync(join(__dirname, '..', 'yops.yaml'), 'utf-8');
@@ -22,10 +22,7 @@ describe('yops.yaml conformance tests', () => {
     describe(opName, () => {
       for (const testCase of opSpec.tests) {
         it(testCase.name, () => {
-          const result = applyYOps(
-            testCase.input as YValue,
-            testCase.ops as YOp[],
-          );
+          const result = applyYOps(testCase.input as YValue, testCase.ops as YOp[]);
 
           if (testCase.error) {
             expect(result.ok).toBe(false);

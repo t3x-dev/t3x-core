@@ -45,7 +45,6 @@ const FeedbackStatsResponseSchema = z
   })
   .openapi('ExtractionFeedbackStats');
 
-
 // ============================================================
 // GET /v1/projects/:projectId/extraction-feedback/stats
 // ============================================================
@@ -100,4 +99,3 @@ extractionFeedbackRoutes.openapi(feedbackStatsRoute, async (c) => {
     return c.json({ success: false as const, error: { code: 'INTERNAL_ERROR', message } }, 500);
   }
 });
-

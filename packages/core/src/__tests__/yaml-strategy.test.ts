@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { YamlExtractionStrategy } from '../extractors/strategies/yaml-strategy';
-import type { LLMProvider } from '../llm/types';
 import type { ExtractionInput } from '../extractors/yopsPrompt';
+import type { LLMProvider } from '../llm/types';
 
 function mockProvider(responseText: string): LLMProvider {
   return {
@@ -45,7 +45,8 @@ describe('YamlExtractionStrategy', () => {
   });
 
   it('retries once on parse failure', async () => {
-    const badThenGood = vi.fn()
+    const badThenGood = vi
+      .fn()
       .mockResolvedValueOnce({
         text: 'not valid yaml at all!!!',
         usage: { inputTokens: 50, outputTokens: 20 },

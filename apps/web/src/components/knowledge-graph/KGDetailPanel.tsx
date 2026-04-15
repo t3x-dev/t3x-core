@@ -2,17 +2,16 @@
 
 import { ArrowLeft, ArrowRight, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 interface KGDetailPanelProps {
   projectId: string;
 }
 
 export function KGDetailPanel({ projectId }: KGDetailPanelProps) {
-  const { selectedNodeId, detailNode, neighbors, clearSelection, selectNode } =
-    useKnowledgeGraph();
+  const { selectedNodeId, detailNode, neighbors, clearSelection, selectNode } = useKnowledgeGraph();
 
   const isOpen = selectedNodeId !== null;
 

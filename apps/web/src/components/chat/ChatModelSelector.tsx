@@ -21,10 +21,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
     if (!open) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        buttonRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) return;
+      if (buttonRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', handler);

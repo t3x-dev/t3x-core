@@ -1,6 +1,5 @@
-import type { TreeDiff, SemanticContent, SlotDiff } from '@t3x-dev/core';
-import type { TreeNode as CoreTreeNode } from '@t3x-dev/core';
-import { treesToNodes, type CompatNode } from '@/domain/tree/treeCompat';
+import type { TreeNode as CoreTreeNode, SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
+import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
 
 // ── Aligned tree list for split view ──
 
@@ -60,7 +59,10 @@ export function buildAlignedNodes(
     let skip = false;
     while (ancestor.includes('/')) {
       ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'));
-      if (sourceSet.has(ancestor)) { skip = true; break; }
+      if (sourceSet.has(ancestor)) {
+        skip = true;
+        break;
+      }
     }
     if (skip) continue;
     aligned.push({
@@ -76,7 +78,10 @@ export function buildAlignedNodes(
     let skip = false;
     while (ancestor.includes('/')) {
       ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'));
-      if (targetSet.has(ancestor)) { skip = true; break; }
+      if (targetSet.has(ancestor)) {
+        skip = true;
+        break;
+      }
     }
     if (skip) continue;
     aligned.push({
@@ -204,7 +209,10 @@ export interface AlignedSlot {
   inRight: boolean;
 }
 
-export function buildAlignedSlotKeys(leftNode: CoreTreeNode, rightNode: CoreTreeNode): AlignedSlot[] {
+export function buildAlignedSlotKeys(
+  leftNode: CoreTreeNode,
+  rightNode: CoreTreeNode
+): AlignedSlot[] {
   const leftKeys = Object.keys(leftNode.slots);
   const rightKeys = Object.keys(rightNode.slots);
   const rightSet = new Set(rightKeys);

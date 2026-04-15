@@ -264,8 +264,9 @@ describe('Autopilot Routes', () => {
             },
             {
               id: 'sp_auto2',
-              text: 'Low confidence sentence',
-              zone: 'ready',
+              text: 'Not-yet-ready sentence',
+              // zone 'review' fails the evaluateAutoCommit filter (requires 'ready')
+              zone: 'review',
               status: 'auto_landed',
               staged: true,
               extraction_mode: 'llm_extracted',
@@ -287,8 +288,11 @@ describe('Autopilot Routes', () => {
       expect(json.data.auto_committed).toBe(true);
       expect(json.data.commit).toBeDefined();
       expect(json.data.commit.hash).toBeDefined();
-      expect(json.data.nodes_committed).toBe(1); // Only sp_auto1 qualifies (0.95 >= 0.8)
-      expect(json.data.nodes_skipped).toBeGreaterThanOrEqual(1); // sp_auto2 skipped
+      // Only sp_auto1 qualifies; sp_auto2 is skipped because zone !== 'ready'.
+      // (Confidence-based filtering was removed in 37d2b5d3 — qualification
+      //  now depends on zone/staged/status only.)
+      expect(json.data.nodes_committed).toBe(1);
+      expect(json.data.nodes_skipped).toBeGreaterThanOrEqual(1);
     });
   });
 });

@@ -412,7 +412,9 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Type Filter Project Author' },
         content: {
-          trees: [{ key: 'type_proj', slots: { text: 'Type filter project sentence' }, children: [] }],
+          trees: [
+            { key: 'type_proj', slots: { text: 'Type filter project sentence' }, children: [] },
+          ],
           relations: [],
         },
         project_id: project.projectId,
@@ -913,7 +915,9 @@ describe('Leaves Storage', () => {
         parents: [],
         author: { type: 'human', name: 'Cursor Commit Author' },
         content: {
-          trees: [{ key: 'cursor_commit', slots: { text: 'Cursor commit sentence' }, children: [] }],
+          trees: [
+            { key: 'cursor_commit', slots: { text: 'Cursor commit sentence' }, children: [] },
+          ],
           relations: [],
         },
         project_id: cursorProjId,

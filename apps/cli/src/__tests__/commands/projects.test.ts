@@ -32,11 +32,11 @@ const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as neve
 
 import { Command } from 'commander';
 import {
-  registerListProjects,
-  registerShowProject,
   registerCreateProject,
   registerDeleteProject,
+  registerListProjects,
   registerRestoreProject,
+  registerShowProject,
 } from '../../commands/projects.js';
 
 function createProgram() {
@@ -171,7 +171,9 @@ describe('Project commands (kubectl-style)', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--permanent']);
 
-      expect(console.log).toHaveBeenCalledWith('Use --force --permanent to confirm permanent deletion');
+      expect(console.log).toHaveBeenCalledWith(
+        'Use --force --permanent to confirm permanent deletion'
+      );
       expect(mockExit).toHaveBeenCalledWith(1);
     });
 
@@ -188,7 +190,15 @@ describe('Project commands (kubectl-style)', () => {
       mockClient.deleteProject.mockResolvedValue(undefined);
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'delete', 'project', 'proj_1', '--force', '--permanent']);
+      await program.parseAsync([
+        'node',
+        'test',
+        'delete',
+        'project',
+        'proj_1',
+        '--force',
+        '--permanent',
+      ]);
 
       expect(mockClient.deleteProject).toHaveBeenCalledWith('proj_1', { permanent: true });
     });

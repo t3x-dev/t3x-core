@@ -52,7 +52,9 @@ RULES (violations will cause the system to reject your output and re-ask):
   - Every op (set / populate / define / drop / relate / etc.) must have source.
 `;
 
-function formatFailingOpsRetry(failingOps: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[]): string {
+function formatFailingOpsRetry(
+  failingOps: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[]
+): string {
   if (failingOps.length === 0) return '';
   const lines = failingOps.map((f, i) => {
     const opJson = JSON.stringify(f.op, null, 2);
@@ -337,7 +339,10 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 
 export function buildYOpsPrompt(
   input: ExtractionInput,
-  opts?: { style?: Partial<ExtractionStyleConfig>; failingOps?: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[] }
+  opts?: {
+    style?: Partial<ExtractionStyleConfig>;
+    failingOps?: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[];
+  }
 ): ExtractionPromptResult {
   const style = opts?.style;
   const failingOps = opts?.failingOps ?? [];

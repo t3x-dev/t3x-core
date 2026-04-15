@@ -32,12 +32,14 @@ const DriftDecisionSchema = z.object({
   new_topic: z.string().optional(),
 });
 
-const ExtractionStyleSchema = z.object({
-  granularity: z.enum(['concise', 'balanced', 'detailed']).optional(),
-  quote_length: z.enum(['minimal', 'representative', 'contextual']).optional(),
-  update_stance: z.enum(['conservative', 'balanced', 'aggressive']).optional(),
-  tier3: z.enum(['skip', 'extract']).optional(),
-}).optional();
+const ExtractionStyleSchema = z
+  .object({
+    granularity: z.enum(['concise', 'balanced', 'detailed']).optional(),
+    quote_length: z.enum(['minimal', 'representative', 'contextual']).optional(),
+    update_stance: z.enum(['conservative', 'balanced', 'aggressive']).optional(),
+    tier3: z.enum(['skip', 'extract']).optional(),
+  })
+  .optional();
 
 const TreeExtractRequest = z.object({
   conversation_id: z.string().min(1),
@@ -224,7 +226,11 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
               503
             );
           }
-          return errorResponse(c, (errData.code ?? 'EXTRACTION_FAILED') as ErrorCode, errData.message);
+          return errorResponse(
+            c,
+            (errData.code ?? 'EXTRACTION_FAILED') as ErrorCode,
+            errData.message
+          );
         }
       }
     }
@@ -235,7 +241,8 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
           success: false as const,
           error: {
             code: 'LLM_NOT_CONFIGURED',
-            message: 'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
+            message:
+              'No LLM provider is configured. Set ANTHROPIC_API_KEY or another provider key.',
           },
         },
         503
@@ -245,20 +252,23 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     return errorResponse(c, 'EXTRACTION_FAILED', message);
   }
 
-  return c.json({
-    success: true as const,
-    data: {
-      status: status as 'completed' | 'drift_detected' | 'skipped',
-      delta: collectedYops,
-      snapshot: finalSnapshot,
-      yops_log_id: yopsLogId,
-      gate_result: gateResult,
-      advisory_questions: advisoryQuestions,
-      ...(drift && { drift }),
-      ...(choices && { choices }),
-      ...(reason && { reason }),
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        status: status as 'completed' | 'drift_detected' | 'skipped',
+        delta: collectedYops,
+        snapshot: finalSnapshot,
+        yops_log_id: yopsLogId,
+        gate_result: gateResult,
+        advisory_questions: advisoryQuestions,
+        ...(drift && { drift }),
+        ...(choices && { choices }),
+        ...(reason && { reason }),
+      },
     },
-  }, 200);
+    200
+  );
 });
 
 // ============================================================

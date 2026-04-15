@@ -54,37 +54,72 @@ function validOps(turnHash: string) {
   ];
 }
 
-/** Mock yops-log append to succeed with a fake entry (gold edits call this URL). */
+/**
+ * Mock yops-log append only for human-sourced (gold edit) rows. Extraction
+ * commits (all ops source.type === 'llm') pass through to the real API so
+ * subsequent hydrate re-reads populate the workspace tree.
+ */
 function mockYopsAppend(page: import('@playwright/test').Page) {
   return page.route(YOPS_LOG_URL, async (route: Route) => {
-    if (route.request().method() === 'POST') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            yops_log_id: 'ylog_mock001',
-            conversation_id: 'conv_mock',
-            ops: [],
-            source: 'manual',
-            created_at: new Date().toISOString(),
-          },
-        }),
-      });
-    } else {
+    if (route.request().method() !== 'POST') {
       await route.continue();
+      return;
     }
+    let body: { yops?: Array<{ source?: { type?: string } }> } | null = null;
+    try {
+      body = route.request().postDataJSON();
+    } catch {
+      // let unparseable bodies flow through
+    }
+    const hasHumanOp = (body?.yops ?? []).some((o) => o?.source?.type === 'human');
+    if (!hasHumanOp) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          yops_log_id: 'ylog_mock001',
+          conversation_id: 'conv_mock',
+          ops: [],
+          source: 'manual',
+          created_at: new Date().toISOString(),
+        },
+      }),
+    });
   });
 }
 
-/** Open the YOps panel (if collapsed) then click Extract. */
+/**
+ * Click Extract. The panel auto-expands via useChatInit after hydration.
+ *
+ * `useExtraction.handleExtract` requires `activeProjectId` in the chat store,
+ * which is backfilled asynchronously from `GET /conversations/:id` when the
+ * URL doesn't carry a projectId (our /chat/<id> routes don't). We wait for
+ * that POST to /extract-yops to land; if the first click fires before the
+ * backfill completes, we retry once.
+ */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
+  const extractBtn = page.getByTestId('extract-button');
+  await extractBtn.waitFor({ state: 'visible' });
+  const waitForExtract = page.waitForRequest(
+    (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+    { timeout: 5_000 }
+  );
+  await extractBtn.click();
+  try {
+    await waitForExtract;
+  } catch {
+    // Backfill of activeProjectId hadn't completed yet; retry once.
+    await extractBtn.click();
+    await page.waitForRequest(
+      (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+      { timeout: 10_000 }
+    );
   }
-  await page.getByTestId('extract-button').click();
 }
 
 test.describe('Gold-edit flow', () => {
@@ -94,13 +129,17 @@ test.describe('Gold-edit flow', () => {
   let conversationId: string;
   let userTurnHash: string;
 
-  test.beforeAll(async ({ request }) => {
+  // Each test needs a fresh conversation: extraction persists its LLM ops
+  // to the real yops log, so reusing the conversation across tests would
+  // replay `define trip` twice and halt with ALREADY_EXISTS before the
+  // gold edit runs (B-10, audit 2026-04-15).
+  test.beforeEach(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Gold Edit E2E ${Date.now()}`));
     conversationId = await createTestConversation(request, projectId, 'E2E Gold Edit');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', USER_CONTENT);
   });
 
-  test.afterAll(async ({ request }) => {
+  test.afterEach(async ({ request }) => {
     if (projectId) await cleanupProject(request, projectId).catch(() => {});
   });
 
@@ -118,33 +157,46 @@ test.describe('Gold-edit flow', () => {
       });
     });
 
-    // Track gold-edit append calls
+    // Track gold-edit append calls. Extraction also POSTs to the same endpoint
+    // (runExtraction → commitOps → POST /conversations/:id/yops); let those pass
+    // through to the real API so the yops-log hydrates the tree. Only intercept
+    // rows that contain a human-sourced op (gold edit). The API body shape is
+    // `{ source, yops: SourcedYOp[], metadata? }`.
     const goldAppendCalls: { body: unknown }[] = [];
     await page.route(YOPS_LOG_URL, async (route: Route) => {
-      if (route.request().method() === 'POST') {
-        try {
-          const body = route.request().postDataJSON();
-          goldAppendCalls.push({ body });
-        } catch {
-          // ignore parse errors in body inspection
-        }
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            success: true,
-            data: {
-              yops_log_id: `ylog_${Date.now()}`,
-              conversation_id: conversationId,
-              ops: [],
-              source: 'manual',
-              created_at: new Date().toISOString(),
-            },
-          }),
-        });
-      } else {
+      if (route.request().method() !== 'POST') {
         await route.continue();
+        return;
       }
+      let body: {
+        source?: string;
+        yops?: Array<{ source?: { type?: string } }>;
+      } | null = null;
+      try {
+        body = route.request().postDataJSON();
+      } catch {
+        // leave body null — unparseable bodies forward to the real API
+      }
+      const hasHumanOp = (body?.yops ?? []).some((o) => o?.source?.type === 'human');
+      if (!hasHumanOp) {
+        await route.continue();
+        return;
+      }
+      goldAppendCalls.push({ body });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            yops_log_id: `ylog_${Date.now()}`,
+            conversation_id: conversationId,
+            ops: [],
+            source: 'manual',
+            created_at: new Date().toISOString(),
+          },
+        }),
+      });
     });
 
     // Inject session user so gold-edit buildHumanSource() finds an author
@@ -181,10 +233,10 @@ test.describe('Gold-edit flow', () => {
     await page.waitForTimeout(500);
     expect(goldAppendCalls.length).toBeGreaterThanOrEqual(1);
 
-    // Inspect the ops payload: it should contain an 'unset' op with source.type === 'human'
+    // Inspect the yops payload: it should contain an op with source.type === 'human'
     const lastCall = goldAppendCalls[goldAppendCalls.length - 1];
-    const callBody = lastCall.body as { ops?: Array<{ source?: { type?: string } }> };
-    const ops = callBody?.ops ?? [];
+    const callBody = lastCall.body as { yops?: Array<{ source?: { type?: string } }> };
+    const ops = callBody?.yops ?? [];
     const humanOp = ops.find((o) => o?.source?.type === 'human');
     expect(humanOp).toBeDefined();
   });

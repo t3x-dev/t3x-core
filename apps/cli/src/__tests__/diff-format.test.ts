@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTreeDiff, formatSlotDiff } from '../lib/diff-format.js';
+import { formatSlotDiff, formatTreeDiff } from '../lib/diff-format.js';
 
 const diffResult = {
   changes: [

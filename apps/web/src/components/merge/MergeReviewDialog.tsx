@@ -11,22 +11,22 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Circle, ClipboardCopy, GitMerge, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { useClipboard } from '@/hooks/shared/useClipboard';
-import { useCountUp } from '@/hooks/shared/useCountUp';
-import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
-import { useTerminology } from '@/hooks/shared/useTerminology';
 import {
   formatReleaseNoteAsMarkdown,
   generateMergeReleaseNote,
   type MergeReleaseNote,
 } from '@/components/merge/mergeReleaseNote';
 import type { MergeSummary } from '@/components/merge/mergeSummary';
-import { useMicrocopy } from '@/utils/microcopy';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/button';
+import { useClipboard } from '@/hooks/shared/useClipboard';
+import { useCountUp } from '@/hooks/shared/useCountUp';
+import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
+import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeCheck } from '@/store/mergeWorkspaceStore';
+import { cn } from '@/utils/cn';
+import { useMicrocopy } from '@/utils/microcopy';
+import { glass } from '@/utils/theme';
 
 interface MergeReviewDialogProps {
   open: boolean;

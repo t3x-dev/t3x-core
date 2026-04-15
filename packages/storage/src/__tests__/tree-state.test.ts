@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
+import { insertProject } from '../queries/projects';
 import {
   clearManualEditedFlags,
   deleteTree,
@@ -11,7 +12,6 @@ import {
   upsertTree,
   upsertTreeRelation,
 } from '../queries/tree-state';
-import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
 describe('Tree State Queries', () => {

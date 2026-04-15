@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { resolvePath, deepClone, setAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 import type { YValue } from '../types';
 
 export const sortHandler: OpHandler = (doc, fields, index) => {
@@ -34,11 +34,11 @@ export const sortHandler: OpHandler = (doc, fields, index) => {
       aVal =
         a !== null && typeof a === 'object' && !Array.isArray(a)
           ? (a as { [key: string]: YValue })[by]
-          : undefined as unknown as YValue;
+          : (undefined as unknown as YValue);
       bVal =
         b !== null && typeof b === 'object' && !Array.isArray(b)
           ? (b as { [key: string]: YValue })[by]
-          : undefined as unknown as YValue;
+          : (undefined as unknown as YValue);
     } else {
       aVal = a;
       bVal = b;

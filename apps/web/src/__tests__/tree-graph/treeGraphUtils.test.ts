@@ -1,4 +1,4 @@
-import type { TreeNode, Relation, SemanticContent } from '@t3x-dev/core';
+import type { Relation, SemanticContent, TreeNode } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import {
   filterByZoomLevel,
@@ -161,13 +161,7 @@ describe('filterByZoomLevel', () => {
 
 describe('RELATION_STYLES', () => {
   it('has entries for all 5 relation types', () => {
-    const types = [
-      'causes',
-      'conditions',
-      'contrasts',
-      'follows',
-      'depends',
-    ] as const;
+    const types = ['causes', 'conditions', 'contrasts', 'follows', 'depends'] as const;
     for (const t of types) {
       expect(RELATION_STYLES[t]).toBeDefined();
       expect(RELATION_STYLES[t].color).toBeTruthy();

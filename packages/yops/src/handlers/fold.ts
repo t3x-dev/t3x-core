@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, deleteAtPath, parsePath, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { resolvePath, deepClone, setAtPath, deleteAtPath, parsePath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 import type { YValue } from '../types';
 
 export const foldHandler: OpHandler = (doc, fields, index) => {
@@ -8,7 +8,12 @@ export const foldHandler: OpHandler = (doc, fields, index) => {
 
   const target = resolvePath(doc, path);
 
-  if (target === undefined || target === null || typeof target !== 'object' || Array.isArray(target)) {
+  if (
+    target === undefined ||
+    target === null ||
+    typeof target !== 'object' ||
+    Array.isArray(target)
+  ) {
     return {
       doc,
       error: yopsError(YOPS_ERRORS.NOT_FOLDABLE, `Path "${path}" is not a mapping`, index),
@@ -24,7 +29,7 @@ export const foldHandler: OpHandler = (doc, fields, index) => {
       error: yopsError(
         YOPS_ERRORS.NOT_FOLDABLE,
         `Mapping at "${path}" has ${childKeys.length} keys (need exactly 1 to fold)`,
-        index,
+        index
       ),
     };
   }

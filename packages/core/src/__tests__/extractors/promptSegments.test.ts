@@ -1,7 +1,7 @@
 // packages/core/src/__tests__/extractors/promptSegments.test.ts
 import { describe, expect, it } from 'vitest';
-import { PRESETS } from '../../extractors/extractionStyleConfig';
 import { buildExtractionPrompt } from '../../extractors/extractionPrompt';
+import { PRESETS } from '../../extractors/extractionStyleConfig';
 
 describe('Prompt segment composition', () => {
   const baseTurns = [

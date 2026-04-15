@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AttachedImage } from '@/types/chat';
-import * as api from '@/infrastructure';
-import type { Citation } from '@/infrastructure/chat';
-import { useChatSessionStore } from '@/store/chatSessionStore';
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
+import * as api from '@/infrastructure';
+import type { Citation } from '@/infrastructure/chat';
+import { useChatSessionStore } from '@/store/chatSessionStore';
+import type { AttachedImage } from '@/types/chat';
 
 export type { ChatMessage } from '@/hooks/conversations/useChatHistory';
 
@@ -348,4 +348,3 @@ export function useConversationChat({
     isThinking: stream.isThinking,
   };
 }
-

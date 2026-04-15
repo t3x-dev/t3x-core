@@ -14,9 +14,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import type { CommitMeta } from '@/types/api';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { DiffHeader } from './DiffHeader';
 import { YAMLDiff } from './YAMLDiff';
 

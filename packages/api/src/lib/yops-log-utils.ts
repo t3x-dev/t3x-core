@@ -5,7 +5,12 @@
  * The `source` and `yops` fields need type assertions since storage stores them as generic JSON.
  */
 
-import { applyYOps, extractOpsFromEntries, type SemanticContent, type YOpsLogEntry } from '@t3x-dev/core';
+import {
+  applyYOps,
+  extractOpsFromEntries,
+  type SemanticContent,
+  type YOpsLogEntry,
+} from '@t3x-dev/core';
 
 /** Storage YOpsLogRecord shape (subset of fields we need) */
 interface YOpsLogRecord {

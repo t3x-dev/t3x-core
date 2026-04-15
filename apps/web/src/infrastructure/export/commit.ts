@@ -8,7 +8,7 @@
  */
 
 import type { ApiCommit } from '@/infrastructure';
-import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
+import { getSemanticContent, treeSummaryText } from '@/infrastructure/commits';
 import { copyToClipboard, downloadAsFile, type ExportResult } from './core';
 
 // ============================================================================

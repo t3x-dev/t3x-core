@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseYOpsYaml, formatYOps } from '../src/format';
+import { describe, expect, it } from 'vitest';
+import { formatYOps, parseYOpsYaml } from '../src/format';
 import type { YOp } from '../src/types';
 
 const SAMPLE_OPS: YOp[] = [

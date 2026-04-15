@@ -1,10 +1,10 @@
 export type { DiffStats } from './DiffOverlay';
 export { DiffOverlay } from './DiffOverlay';
 export { DiffSplit } from './DiffSplit';
+export { MergeView } from './MergeView';
+export { RelationEdge, RelationEdgeMarkerDefs } from './RelationEdge';
 export { TreeGraphToolbar } from './TreeGraphToolbar';
 export { TreeGraphView } from './TreeGraphView';
-export { MergeView } from './MergeView';
 export { TreeNodeView } from './TreeNodeView';
-export type { TreeNodeData, RelationEdgeData, ZoomLevel } from './treeGraphUtils';
+export type { RelationEdgeData, TreeNodeData, ZoomLevel } from './treeGraphUtils';
 export { filterByZoomLevel, RELATION_STYLES, semanticToFlowElements } from './treeGraphUtils';
-export { RelationEdge, RelationEdgeMarkerDefs } from './RelationEdge';

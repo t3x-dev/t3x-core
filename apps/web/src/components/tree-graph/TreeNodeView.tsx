@@ -114,10 +114,7 @@ function InlineEdit({
 
   return (
     <span
-      className={cn(
-        'cursor-pointer hover:bg-[var(--hover-bg)] rounded px-0.5',
-        className
-      )}
+      className={cn('cursor-pointer hover:bg-[var(--hover-bg)] rounded px-0.5', className)}
       onDoubleClick={startEdit}
       title="Double-click to edit"
     >
@@ -233,8 +230,7 @@ function EditableSlotValue({
 // ── TreeNodeView Component ──
 
 function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
-  const { treeType, slots, source, state, updatedSlots, onSlotEdit, onTypeEdit } =
-    data;
+  const { treeType, slots, source, state, updatedSlots, onSlotEdit, onTypeEdit } = data;
   const updatedSet = new Set(updatedSlots ?? []);
 
   // State-based container classes

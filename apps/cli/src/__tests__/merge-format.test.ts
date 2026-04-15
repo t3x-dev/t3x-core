@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPrepareResult, formatMergeCommitResult } from '../lib/merge-format.js';
+import { formatMergeCommitResult, formatPrepareResult } from '../lib/merge-format.js';
 
 describe('formatPrepareResult', () => {
   it('shows conflict summary with counts', () => {

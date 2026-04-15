@@ -14,10 +14,17 @@
  * - Relation changes: section at bottom
  */
 
-import type { TreeNode, TreeDiff, Relation, SemanticContent, SlotDiff, SlotValue } from '@t3x-dev/core';
-import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
+import type {
+  Relation,
+  SemanticContent,
+  SlotDiff,
+  SlotValue,
+  TreeDiff,
+  TreeNode,
+} from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
 import { cn } from '@/utils/cn';
 import { formatRelation, formatSlotValue, renderNodeSlots } from './DiffYAMLFormatters';
 
@@ -198,7 +205,8 @@ function ModifiedNodeBlock({ entry }: { entry: TreeDiff['modified'][number] }) {
       ))}
 
       {/* Slot diffs only (no unchanged slots without source content) */}
-      {slotDiffs.filter(sd => sd.type !== 'removed' && sd.newValue != null)
+      {slotDiffs
+        .filter((sd) => sd.type !== 'removed' && sd.newValue != null)
         .map((sd) => (
           <div key={sd.key} className="px-2 py-0.5 opacity-40">
             <pre
@@ -415,15 +423,15 @@ export function YAMLDiff({ diff, sourceContent, targetContent, className }: YAML
         {/* Added paths (only in target) */}
         {diff.onlyInTarget.map((path) => {
           const nodes = targetContent ? treesToNodes(targetContent.trees) : [];
-          const node = nodes.find(f => f.id === path);
-          return  node ? <AddedNodeBlock key={path} node={node} /> : null;
+          const node = nodes.find((f) => f.id === path);
+          return node ? <AddedNodeBlock key={path} node={node} /> : null;
         })}
 
         {/* Removed paths (only in source) */}
         {diff.onlyInSource.map((path) => {
           const nodes = sourceContent ? treesToNodes(sourceContent.trees) : [];
-          const node = nodes.find(f => f.id === path);
-          return  node ? <RemovedNodeBlock key={path} node={node} /> : null;
+          const node = nodes.find((f) => f.id === path);
+          return node ? <RemovedNodeBlock key={path} node={node} /> : null;
         })}
 
         {/* Identical paths (collapsible, at bottom) */}

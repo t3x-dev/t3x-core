@@ -67,7 +67,7 @@ describe('YamlExtractionStrategy — smart repair', () => {
 
   it('returns error when both main and repair fail to parse', async () => {
     const badYaml1 = 'trip:\n\tdestination: Tokyo'; // tab indent — YAML parse error
-    const badYaml2 = 'still:\n\tbroken: too';       // also tab indent
+    const badYaml2 = 'still:\n\tbroken: too'; // also tab indent
 
     // MAX_RETRIES=1, so we get 2 attempts. Each attempt: main call + repair call = 4 total.
     const provider = mockProvider([badYaml1, badYaml2, badYaml1, badYaml2]);

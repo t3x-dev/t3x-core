@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { GateRunner } from '../../semantic/gateRunner';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
-const t = (key: string, slots: Record<string, unknown> = { a: 1 }, children: TreeNode[] = []): TreeNode => ({
+const t = (
+  key: string,
+  slots: Record<string, unknown> = { a: 1 },
+  children: TreeNode[] = []
+): TreeNode => ({
   key,
   slots,
   children,

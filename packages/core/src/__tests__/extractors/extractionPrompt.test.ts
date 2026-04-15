@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildExtractionPrompt,
-  type ExtractionTurn,
-} from '../../extractors/extractionPrompt';
+import { buildExtractionPrompt, type ExtractionTurn } from '../../extractors/extractionPrompt';
 import type { SemanticContent } from '../../semantic/types';
 
 const sampleTurns: ExtractionTurn[] = [

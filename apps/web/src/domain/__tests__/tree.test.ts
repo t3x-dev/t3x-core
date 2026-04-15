@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
 import type { SemanticContent, TreeNode } from '@t3x-dev/core';
+import { describe, expect, it } from 'vitest';
 import { findNodeByPath, isEmpty } from '../tree';
 
-const makeNode = (key: string, slots: Record<string, string> = {}, children: TreeNode[] = []): TreeNode => ({
-  key, slots, children,
+const makeNode = (
+  key: string,
+  slots: Record<string, string> = {},
+  children: TreeNode[] = []
+): TreeNode => ({
+  key,
+  slots,
+  children,
 });
 
 const tree: SemanticContent = {

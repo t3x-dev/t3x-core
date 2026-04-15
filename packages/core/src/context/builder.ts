@@ -8,15 +8,9 @@
  * @see docs/specification/memory-pin-system-design.md
  */
 
-import type {
-  BuiltContext,
-  ContextSource,
-  ConversationContext,
-  Leaf,
-  Pin,
-} from '../types';
-import type { SemanticContent } from '../semantic/types';
 import { serializeForPrompt } from '../semantic/serialize';
+import type { SemanticContent } from '../semantic/types';
+import type { BuiltContext, ContextSource, ConversationContext, Leaf, Pin } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Input Types

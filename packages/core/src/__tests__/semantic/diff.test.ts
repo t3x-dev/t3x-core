@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { diffCommits } from '../../semantic/diff';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
-const tree = (key: string, slots: Record<string, unknown>, children: TreeNode[] = []): TreeNode => ({
+const tree = (
+  key: string,
+  slots: Record<string, unknown>,
+  children: TreeNode[] = []
+): TreeNode => ({
   key,
   slots,
   children,

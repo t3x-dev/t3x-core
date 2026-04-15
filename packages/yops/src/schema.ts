@@ -21,7 +21,9 @@ const YValueSchema: z.ZodType<unknown> = z.lazy(() =>
 
 // ── DDL ──
 
-const DefineOpSchema = z.object({ define: z.object({ path: z.string().min(1) }).strict() }).strict();
+const DefineOpSchema = z
+  .object({ define: z.object({ path: z.string().min(1) }).strict() })
+  .strict();
 const DropOpSchema = z.object({ drop: z.object({ path: z.string().min(1) }).strict() }).strict();
 const RenameOpSchema = z
   .object({ rename: z.object({ path: z.string().min(1), to: z.string().min(1) }).strict() })
@@ -35,7 +37,9 @@ const SetOpSchema = z
 const UnsetOpSchema = z.object({ unset: z.object({ path: z.string().min(1) }).strict() }).strict();
 const PopulateOpSchema = z
   .object({
-    populate: z.object({ path: z.string().min(1), values: z.record(z.string(), YValueSchema) }).strict(),
+    populate: z
+      .object({ path: z.string().min(1), values: z.record(z.string(), YValueSchema) })
+      .strict(),
   })
   .strict();
 const AppendOpSchema = z
@@ -59,7 +63,9 @@ const NestOpSchema = z
   .strict();
 const SplitOpSchema = z
   .object({
-    split: z.object({ path: z.string().min(1), into: z.record(z.string(), z.array(z.string())) }).strict(),
+    split: z
+      .object({ path: z.string().min(1), into: z.record(z.string(), z.array(z.string())) })
+      .strict(),
   })
   .strict();
 const FoldOpSchema = z.object({ fold: z.object({ path: z.string().min(1) }).strict() }).strict();

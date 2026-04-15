@@ -2,8 +2,8 @@
 
 import { AlertTriangle, Code, FileText, Heading, List, Quote, Table } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/utils/cn';
 import type { ImportParagraph } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 interface ImportPreviewProps {
   paragraphs: ImportParagraph[];

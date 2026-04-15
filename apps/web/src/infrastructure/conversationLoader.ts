@@ -4,8 +4,8 @@
  */
 
 import type { YOpsLogEntry } from '@t3x-dev/core';
-import type { Turn } from '@/infrastructure/types';
 import { listTurns } from '@/infrastructure/turns';
+import type { Turn } from '@/infrastructure/types';
 import { loadYOpsLog } from './yopsLog';
 
 export type { Turn as LoadedTurn };
@@ -18,7 +18,7 @@ export interface LoadedConversation {
 
 export async function loadConversation(
   projectId: string,
-  convId: string,
+  convId: string
 ): Promise<LoadedConversation> {
   const [turnsData, opsLog] = await Promise.all([
     listTurns(projectId, convId),

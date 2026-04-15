@@ -117,7 +117,9 @@ export function registerDeleteProject(parent: Command): void {
         process.exit(1);
       }
 
-      const spinner = createSpinner(options.permanent ? 'Permanently deleting project...' : 'Deleting project...');
+      const spinner = createSpinner(
+        options.permanent ? 'Permanently deleting project...' : 'Deleting project...'
+      );
       spinner.start();
 
       try {

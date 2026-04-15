@@ -1,33 +1,23 @@
 'use client';
 
-import type {
-  Relation,
-  SemanticContent,
-  SlotValue,
-  TreeNode,
-} from '@t3x-dev/core';
+import type { Relation, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 import { flattenTrees, prepareMerge } from '@t3x-dev/core';
 
-import {
-  AlertTriangle,
-  Check,
-  GitMerge,
-  Plus,
-} from 'lucide-react';
+import { AlertTriangle, Check, GitMerge, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
 import { ConflictCard } from './merge-view/ConflictCard';
-import { RelationSideSection } from './merge-view/RelationSideSection';
-import { SideOnlySection } from './merge-view/SideOnlySection';
 import {
   type ConflictResolution,
-  type SlotChoice,
   findNodeByPathLocal,
   lookupNode,
+  type SlotChoice,
 } from './merge-view/mergeViewHelpers';
+import { RelationSideSection } from './merge-view/RelationSideSection';
+import { SideOnlySection } from './merge-view/SideOnlySection';
 
 // ── Props ──
 
@@ -52,10 +42,7 @@ export function MergeView({
   className,
 }: MergeViewProps) {
   // Compute merge result
-  const mergeResult = useMemo(
-    () => prepareMerge(base, source, target),
-    [base, source, target]
-  );
+  const mergeResult = useMemo(() => prepareMerge(base, source, target), [base, source, target]);
 
   // Flatten source/target for node lookup
   const sourceFlatNodes = useMemo(() => flattenTrees(source.trees), [source]);
@@ -248,8 +235,7 @@ export function MergeView({
   );
   const resolvedSlots = mergeResult.conflicts.reduce(
     (sum, c) =>
-      sum +
-      c.slotConflicts.filter((sc) => conflictResolutions[c.path]?.slotChoices[sc.key]).length,
+      sum + c.slotConflicts.filter((sc) => conflictResolutions[c.path]?.slotChoices[sc.key]).length,
     0
   );
 

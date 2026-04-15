@@ -10,7 +10,8 @@ const stageConfig = {
     label: 'Commit',
     Icon: GitCommit,
     variant: 'default' as const,
-    className: 'bg-[var(--status-info)]/10 text-[var(--status-info)] border-[var(--status-info)]/20 hover:bg-[var(--status-info)]/15',
+    className:
+      'bg-[var(--status-info)]/10 text-[var(--status-info)] border-[var(--status-info)]/20 hover:bg-[var(--status-info)]/15',
   },
   draft: {
     label: 'Draft',

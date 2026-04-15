@@ -15,9 +15,6 @@
       "require": "./dist/index.js"
     }
   },
-  "bin": {
-    "t3x-runner": "./dist/cli.js"
-  },
   "files": [
     "dist",
     "eval-suites",

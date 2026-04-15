@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { insertConversation } from '../queries/conversations';
+import { insertProject } from '../queries/projects';
 import {
   deleteYOpsLogEntry,
   getYOpsLogEntry,
   insertYOpsLogEntry,
   listYOpsLogByConversation,
 } from '../queries/yops-log';
-import { insertProject } from '../queries/projects';
 import { createTestDB, sleep, testData } from './setup';
 
 describe('YOps Log Storage', () => {

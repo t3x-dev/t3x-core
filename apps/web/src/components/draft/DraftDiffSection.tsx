@@ -15,11 +15,15 @@ import { Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Badge } from '@/components/ui/badge';
-import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import type { DiffableNode, DiffCache } from '@/domain/diff/diffUtils';
-import { type CommitDiff, incrementalDiffCommits, type WordDiffSegment } from '@/domain/diff/diffUtils';
-import { cn } from '@/utils/cn';
+import {
+  type CommitDiff,
+  incrementalDiffCommits,
+  type WordDiffSegment,
+} from '@/domain/diff/diffUtils';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
+import { cn } from '@/utils/cn';
 
 export function DraftDiffSection() {
   const draft = useDraftWorkspaceStore((s) => s.draft);
@@ -56,7 +60,8 @@ export function DraftDiffSection() {
       .then((parentCommit) => {
         if (cancelled) return;
         const content = parentCommit.content as import('@t3x-dev/core').SemanticContent;
-        const { treesToNodes } = require('@/domain/tree/treeCompat') as typeof import('@/domain/tree/treeCompat');
+        const { treesToNodes } =
+          require('@/domain/tree/treeCompat') as typeof import('@/domain/tree/treeCompat');
         const compatNodes = treesToNodes(content.trees);
         const nodes: import('@/domain/diff/diffUtils').DiffableNode[] = compatNodes.map((node) => ({
           id: node.id,

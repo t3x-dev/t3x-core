@@ -112,8 +112,14 @@ describe('getLayoutedElements', () => {
   describe('topology fingerprint behavior', () => {
     // Helper: compute the same fingerprint used by CanvasWorkspace
     const topoFingerprint = (nodes: Node[], edges: Edge[]) => {
-      const nIds = nodes.map((n) => n.id).sort().join(',');
-      const eKeys = edges.map((e) => `${e.source}->${e.target}`).sort().join(',');
+      const nIds = nodes
+        .map((n) => n.id)
+        .sort()
+        .join(',');
+      const eKeys = edges
+        .map((e) => `${e.source}->${e.target}`)
+        .sort()
+        .join(',');
       return `${nIds}|${eKeys}`;
     };
 

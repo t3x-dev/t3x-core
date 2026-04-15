@@ -1075,4 +1075,3 @@ export const tokenUsage = pgTable(
 
 export type TokenUsageRecord = typeof tokenUsage.$inferSelect;
 export type TokenUsageInsert = typeof tokenUsage.$inferInsert;
-

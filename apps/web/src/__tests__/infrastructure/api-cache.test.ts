@@ -5,7 +5,11 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // Import after mocking
-import { clearTurnContextCache, fetchTurnContextBatch, fetchTurnContextCached } from '@/infrastructure';
+import {
+  clearTurnContextCache,
+  fetchTurnContextBatch,
+  fetchTurnContextCached,
+} from '@/infrastructure';
 
 describe('Turn Context Cache', () => {
   beforeEach(() => {

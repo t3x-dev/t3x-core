@@ -77,7 +77,11 @@ export class Compressor {
     const yops: YOp[] = [];
     for (const change of changes as Array<Record<string, unknown>>) {
       if (change.action === 'add' || change.action === 'define' || change.action === 'populate') {
-        return { ok: false, error: 'Compress output must not contain add/define/populate actions', usage };
+        return {
+          ok: false,
+          error: 'Compress output must not contain add/define/populate actions',
+          usage,
+        };
       }
       if (change.action === 'remove') {
         yops.push({

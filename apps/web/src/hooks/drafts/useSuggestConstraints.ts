@@ -4,10 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  type SuggestConstraintsResult,
-  suggestLeafConstraints,
-} from '@/infrastructure/leaves';
+import { type SuggestConstraintsResult, suggestLeafConstraints } from '@/infrastructure/leaves';
 
 export function useSuggestConstraints(): {
   suggest: (

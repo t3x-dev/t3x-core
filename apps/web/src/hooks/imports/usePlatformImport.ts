@@ -9,11 +9,7 @@ import {
   previewPlatformImport,
   streamPlatformImport,
 } from '@/infrastructure/misc';
-import type {
-  ImportStreamEvent,
-  PlatformImportResult,
-  PlatformPreviewResult,
-} from '@/types/api';
+import type { ImportStreamEvent, PlatformImportResult, PlatformPreviewResult } from '@/types/api';
 
 export function usePlatformImport() {
   const preview = useCallback(
