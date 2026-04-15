@@ -129,13 +129,17 @@ test.describe('Gold-edit flow', () => {
   let conversationId: string;
   let userTurnHash: string;
 
-  test.beforeAll(async ({ request }) => {
+  // Each test needs a fresh conversation: extraction persists its LLM ops
+  // to the real yops log, so reusing the conversation across tests would
+  // replay `define trip` twice and halt with ALREADY_EXISTS before the
+  // gold edit runs (B-10, audit 2026-04-15).
+  test.beforeEach(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Gold Edit E2E ${Date.now()}`));
     conversationId = await createTestConversation(request, projectId, 'E2E Gold Edit');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', USER_CONTENT);
   });
 
-  test.afterAll(async ({ request }) => {
+  test.afterEach(async ({ request }) => {
     if (projectId) await cleanupProject(request, projectId).catch(() => {});
   });
 
