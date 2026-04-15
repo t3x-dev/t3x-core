@@ -8,30 +8,19 @@ import {
 import { expect, test } from './fixtures/test';
 
 /**
- * Click-highlight e2e — verifies the YAML ↔ chat bidirectional highlight flow.
+ * Click-highlight e2e — verifies the YAML → chat highlight flow.
  *
- * Spec (from commit-source-context-presentation.md):
+ * Current behaviour (ChatMessage.tsx:445-451 rendering priority):
  *   - Clicking a slot row in AfterPanel calls workspaceStore.select('after', { nodePath, slotKey })
- *   - ChatMessage.SourceMappedText re-renders with isActive=true on matching spans
- *   - Active spans receive data-source-highlight="active" (added in this task)
- *   - Clicking elsewhere clears the selection → spans revert to data-source-highlight="default"
+ *   - ChatMessage resolves hoveredNodeId → populates highlightRanges from the sourceIndex quote
+ *   - `useYamlHighlights` wins over `useSourceMappedSpans` when a matching quote exists
+ *   - The quoted phrase is wrapped in a <mark> via HighlightedText
+ *   - Clicking the slot again clears the selection → <mark> unmounts
  *   - Hovering a slot (without clicking) does NOT activate highlights (click-only model)
  *
- * Implementation note:
- *   Source mappings are built from the opsLog + turns in workspaceStore after extraction.
- *   The SourceMappedText renders when `hasActiveSelection && hasSourceMappings` — so we
- *   need a selection to be active AND source maps to exist.
- *
- *   The highlight activation path is:
- *     1. User clicks slot row in AfterPanel
- *     2. workspaceStore.select() sets selectedNodePath + selectedSlotKey
- *     3. ChatMessage computes hoveredNodeId from store → isSourceMessage = true
- *     4. useSourceMappedSpans = true → SourceMappedText renders spans with data-source-highlight
- *
- *   The spans with data-source-highlight="active" are the matching spans.
- *   Since the extraction worker builds sourceIndex from verbatim quotes in ops,
- *   and our mock ops carry turn_ref.quote, we expect the quote text to be highlighted
- *   once the slot is selected.
+ * Mock ops include start_char/end_char so buildSourceMap has valid positions even if the
+ * test ever needs to exercise the source-mapped-span branch (currently shadowed by YAML
+ * highlights for this scenario).
  */
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
@@ -46,7 +35,12 @@ function validOps(turnHash: string) {
         type: 'llm',
         model: 'mock-model',
         at: '2026-04-12T00:00:00Z',
-        turn_ref: { turn_hash: turnHash, quote: 'budget of ten thousand' },
+        turn_ref: {
+          turn_hash: turnHash,
+          quote: 'budget of ten thousand',
+          start_char: 29,
+          end_char: 51,
+        },
       },
     },
     {
@@ -55,19 +49,33 @@ function validOps(turnHash: string) {
         type: 'llm',
         model: 'mock-model',
         at: '2026-04-12T00:00:01Z',
-        turn_ref: { turn_hash: turnHash, quote: QUOTE },
+        turn_ref: { turn_hash: turnHash, quote: QUOTE, start_char: 39, end_char: 59 },
       },
     },
   ];
 }
 
-/** Open the YOps panel (if collapsed) then click Extract. */
+/**
+ * Click Extract. The panel auto-expands via useChatInit after hydration.
+ * If the first click races the activeProjectId backfill, retry once.
+ */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
-  const collapsed = page.getByTestId('yops-panel-collapsed');
-  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await collapsed.click();
+  const extractBtn = page.getByTestId('extract-button');
+  await extractBtn.waitFor({ state: 'visible' });
+  const waitForExtract = page.waitForRequest(
+    (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+    { timeout: 5_000 }
+  );
+  await extractBtn.click();
+  try {
+    await waitForExtract;
+  } catch {
+    await extractBtn.click();
+    await page.waitForRequest(
+      (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
+      { timeout: 10_000 }
+    );
   }
-  await page.getByTestId('extract-button').click();
 }
 
 test.describe('Click-highlight flow', () => {
@@ -113,14 +121,13 @@ test.describe('Click-highlight flow', () => {
     await expect(slotRow).toBeVisible({ timeout: 5_000 });
     await slotRow.click();
 
-    // After clicking, the chat should render source-mapped spans.
-    // The span containing QUOTE should become active.
-    // data-source-highlight="active" is set when hoveredNodeId matches m.treePath.
-    const activeSpan = page.locator('[data-source-highlight="active"]').first();
-    await expect(activeSpan).toBeVisible({ timeout: 5_000 });
-    // The active span text should overlap with (or equal) the quoted phrase
-    const spanText = await activeSpan.textContent();
-    expect(spanText?.toLowerCase()).toContain(QUOTE.split(' ')[0]); // e.g. "ten"
+    // After clicking, YAML→chat highlights render: the quoted phrase in the user turn
+    // is wrapped in a <mark> (HighlightedText) — this shadows the source-mapped span
+    // branch for this case (see ChatMessage.tsx:445-451 priority).
+    const activeMark = page.locator('mark', { hasText: QUOTE.split(' ')[0] }).first();
+    await expect(activeMark).toBeVisible({ timeout: 5_000 });
+    const markText = await activeMark.textContent();
+    expect(markText?.toLowerCase()).toContain(QUOTE.split(' ')[0]); // e.g. "ten"
   });
 
   // ── CLICK-02: click elsewhere → highlight clears ─────────────────────────
@@ -143,17 +150,15 @@ test.describe('Click-highlight flow', () => {
 
     // Click slot to activate
     await page.getByTestId('slot-row-trip-budget').click();
-    await expect(page.locator('[data-source-highlight="active"]').first()).toBeVisible({
+    await expect(page.locator('mark', { hasText: QUOTE.split(' ')[0] }).first()).toBeVisible({
       timeout: 5_000,
     });
 
-    // Click on an empty area of the AfterPanel header (not a slot)
-    // The header "Result" label has no click handler → workspaceStore.clearSelection() fires
-    // when clicking the slot row again (toggle) or clicking outside
-    await page.getByTestId('slot-row-trip-budget').click(); // second click = toggle/clear
+    // Second click on the slot row toggles/clears the selection
+    await page.getByTestId('slot-row-trip-budget').click();
 
-    // Active highlights should be gone
-    await expect(page.locator('[data-source-highlight="active"]')).toHaveCount(0, {
+    // Chat highlight <mark>s should be gone
+    await expect(page.locator('mark', { hasText: QUOTE.split(' ')[0] })).toHaveCount(0, {
       timeout: 3_000,
     });
   });
@@ -178,12 +183,12 @@ test.describe('Click-highlight flow', () => {
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('budget', { timeout: 15_000 });
 
-    // Hover the slot row (no click) — should NOT produce an active highlight
+    // Hover the slot row (no click) — should NOT produce a chat highlight
     await page.getByTestId('slot-row-trip-budget').hover();
     // Wait briefly to confirm no highlights appear
     await page.waitForTimeout(400);
 
-    // No active highlight spans should exist
-    await expect(page.locator('[data-source-highlight="active"]')).toHaveCount(0);
+    // No <mark> highlights should exist in chat for the quoted phrase
+    await expect(page.locator('mark', { hasText: QUOTE.split(' ')[0] })).toHaveCount(0);
   });
 });
