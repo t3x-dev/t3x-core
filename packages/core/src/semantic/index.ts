@@ -36,7 +36,7 @@ export {
 } from './schema';
 
 // ── Serialization ──
-export { serializeForPrompt } from './serialize';
+export { semanticToPlain, serializeForPrompt } from './serialize';
 
 // ── Tree utilities ──
 export {
