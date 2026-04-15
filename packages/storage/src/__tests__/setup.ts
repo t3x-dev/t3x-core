@@ -578,6 +578,20 @@ CREATE TABLE IF NOT EXISTS topics (
 CREATE INDEX IF NOT EXISTS idx_topics_conversation ON topics(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_topics_project ON topics(project_id);
 
+-- Events outbox (v39) — cross-process realtime sync
+CREATE TABLE IF NOT EXISTS events (
+  id BIGSERIAL PRIMARY KEY,
+  type TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  conversation_id TEXT,
+  payload JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS events_project_id_idx ON events (project_id, id);
+CREATE INDEX IF NOT EXISTS events_conversation_id_idx ON events (conversation_id, id)
+  WHERE conversation_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at);
+
 `;
 
 /** SQL for pgvector tables (created separately, may fail if vector unavailable) */

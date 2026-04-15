@@ -434,3 +434,6 @@ export type NewTemplate = typeof templates.$inferInsert;
 
 export type GlobalSetting = typeof globalSettings.$inferSelect;
 export type NewGlobalSetting = typeof globalSettings.$inferInsert;
+
+// Events outbox for realtime sync (see schema-events.ts)
+export { events, type EventRow, type NewEventRow } from './schema-events';

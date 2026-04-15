@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 38;
+const SCHEMA_VERSION = 39;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1020,6 +1020,23 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_alias
       ON conversations (project_id, alias) WHERE alias IS NOT NULL;
+  `);
+
+  // ── Schema v39: events outbox for cross-process realtime sync ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS events (
+      id BIGSERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      conversation_id TEXT,
+      payload JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS events_project_id_idx ON events (project_id, id);
+    CREATE INDEX IF NOT EXISTS events_conversation_id_idx ON events (conversation_id, id)
+      WHERE conversation_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at);
   `);
 
   // Record schema version so subsequent startups skip the init SQL.
