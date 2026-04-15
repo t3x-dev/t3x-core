@@ -28,7 +28,7 @@ nodes:
           type: scalar
           required: false
         environment:
-          type: scalar
+          type: list
           required: false
         ports:
           type: list
