@@ -340,6 +340,30 @@ describe('runExtractionPipeline', () => {
     expect(doneEvent!.data.delta).toBeDefined();
   });
 
+  it('calls recordEvent with extraction.started and extraction.done', async () => {
+    await collectEvents({ ...baseParams, forceExtract: true });
+
+    const { recordEvent } = await import('@t3x-dev/storage');
+    const recordEventMock = vi.mocked(recordEvent);
+
+    expect(recordEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'extraction.started',
+        projectId: 'proj_test1',
+        conversationId: 'conv_test1',
+      })
+    );
+    expect(recordEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'extraction.done',
+        projectId: 'proj_test1',
+        conversationId: 'conv_test1',
+      })
+    );
+  });
+
   it('yields reorganized event with snapshot', async () => {
     const events = await collectEvents({ ...baseParams, forceExtract: true });
 
