@@ -9,7 +9,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyYOps, Compressor, flattenTrees, type NodeWithSignals, type SemanticContent } from '@t3x-dev/core';
+import {
+  applyYOps,
+  Compressor,
+  flattenTrees,
+  type NodeWithSignals,
+  type SemanticContent,
+} from '@t3x-dev/core';
 import {
   findConversationById,
   insertYOpsLogEntry,
@@ -17,11 +23,11 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
-import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
+import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const treeCompressRoutes = new OpenAPIHono({
@@ -291,7 +297,12 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
         pipelineState: 'completed',
         metadata: result.metadata,
       });
-      await rebuildTreesFromSnapshot(tx, conversationId, conversation.projectId, compressedSnapshot);
+      await rebuildTreesFromSnapshot(
+        tx,
+        conversationId,
+        conversation.projectId,
+        compressedSnapshot
+      );
       return rec;
     });
 

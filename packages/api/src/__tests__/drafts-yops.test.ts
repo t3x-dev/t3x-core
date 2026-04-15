@@ -142,10 +142,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [
-          { define: { path: 'test' } },
-          { populate: { path: 'test', values: { val: 1 } } },
-        ],
+        yops: [{ define: { path: 'test' } }, { populate: { path: 'test', values: { val: 1 } } }],
         if_revision: 0,
       }),
     });

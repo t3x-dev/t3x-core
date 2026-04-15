@@ -35,16 +35,13 @@ describe('cleanupOldEvents', () => {
 
     // Backdate to 10 days old
     await (db as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
-      sql`UPDATE events SET created_at = NOW() - INTERVAL '10 days' WHERE id = ${id}`,
+      sql`UPDATE events SET created_at = NOW() - INTERVAL '10 days' WHERE id = ${id}`
     );
 
     const deleted = await cleanupOldEvents(db, { retentionDays: 7 });
     expect(deleted).toBeGreaterThan(0);
 
-    const remaining = await db
-      .select()
-      .from(events)
-      .where(sql`project_id = 'proj_cleanup_a'`);
+    const remaining = await db.select().from(events).where(sql`project_id = 'proj_cleanup_a'`);
     expect(remaining.length).toBe(0);
   });
 
@@ -56,10 +53,7 @@ describe('cleanupOldEvents', () => {
 
     await cleanupOldEvents(db, { retentionDays: 7 });
 
-    const remaining = await db
-      .select()
-      .from(events)
-      .where(sql`project_id = 'proj_cleanup_b'`);
+    const remaining = await db.select().from(events).where(sql`project_id = 'proj_cleanup_b'`);
     expect(remaining.length).toBeGreaterThan(0);
   });
 
@@ -69,15 +63,12 @@ describe('cleanupOldEvents', () => {
       projectId: 'proj_cleanup_c',
     });
     await (db as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
-      sql`UPDATE events SET created_at = NOW() - INTERVAL '8 days' WHERE id = ${id}`,
+      sql`UPDATE events SET created_at = NOW() - INTERVAL '8 days' WHERE id = ${id}`
     );
 
     await cleanupOldEvents(db);
 
-    const remaining = await db
-      .select()
-      .from(events)
-      .where(sql`project_id = 'proj_cleanup_c'`);
+    const remaining = await db.select().from(events).where(sql`project_id = 'proj_cleanup_c'`);
     expect(remaining.length).toBe(0);
   });
 });

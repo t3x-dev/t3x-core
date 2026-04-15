@@ -17,9 +17,7 @@ export const events = pgTable(
     projectId: text('project_id').notNull(),
     conversationId: text('conversation_id'),
     payload: jsonb('payload'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .default(sql`NOW()`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`NOW()`),
   },
   (t) => ({
     byProject: index('events_project_id_idx').on(t.projectId, t.id),

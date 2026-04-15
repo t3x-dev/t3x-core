@@ -5,8 +5,8 @@
  * so consumers (apps/api thin launcher, t3x_cloud) can import from '@t3x-dev/api'.
  */
 
-export { createApp } from './app';
 export type { CreateAppOptions } from './app';
+export { createApp } from './app';
 
 // Database
 export { closeDB, getDB } from './lib/db';

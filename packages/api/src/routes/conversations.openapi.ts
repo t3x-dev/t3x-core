@@ -19,7 +19,6 @@ import {
   flattenTrees,
   getModelInfo,
   type SemanticContent,
-  serializeForPrompt,
 } from '@t3x-dev/core';
 import {
   deleteConversation,

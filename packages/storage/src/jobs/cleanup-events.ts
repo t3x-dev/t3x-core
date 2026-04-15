@@ -26,10 +26,7 @@ const DEFAULT_RETENTION_DAYS = 7;
  * safely inlined into the INTERVAL expression because Postgres cannot bind
  * INTERVAL literals as parameters.
  */
-export async function cleanupOldEvents(
-  db: AnyDB,
-  options: CleanupOptions = {}
-): Promise<number> {
+export async function cleanupOldEvents(db: AnyDB, options: CleanupOptions = {}): Promise<number> {
   const days = options.retentionDays ?? DEFAULT_RETENTION_DAYS;
   const safeDays = Number.isFinite(days) && days > 0 ? Math.floor(days) : DEFAULT_RETENTION_DAYS;
   const result = await (db as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(

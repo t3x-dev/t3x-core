@@ -6,15 +6,15 @@
  * docs/superpowers/plans/2026-04-15-realtime-sync-mcp.md.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { asc, eq, sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { events } from '../schema-events';
 import { createCommit } from '../queries/commits';
 import { insertConversation, renameConversation } from '../queries/conversations';
 import { insertDraft, updateDraft } from '../queries/drafts';
 import { insertProject } from '../queries/projects';
 import { insertYOpsLogEntry } from '../queries/yops-log';
+import { events } from '../schema-events';
 import { createTestDB, testData } from './setup';
 
 describe('event triggers', () => {
@@ -141,21 +141,13 @@ describe('event triggers', () => {
       title: 'No-op Draft',
     });
 
-    const before = await db
-      .select()
-      .from(events)
-      .where(eq(events.projectId, projectId));
+    const before = await db.select().from(events).where(eq(events.projectId, projectId));
 
     // Raw UPDATE that sets updated_at to the same value — IS DISTINCT FROM is false,
     // so the trigger body must be skipped.
-    await db.execute(
-      sql`UPDATE drafts SET updated_at = updated_at WHERE id = ${draft.id}`,
-    );
+    await db.execute(sql`UPDATE drafts SET updated_at = updated_at WHERE id = ${draft.id}`);
 
-    const after = await db
-      .select()
-      .from(events)
-      .where(eq(events.projectId, projectId));
+    const after = await db.select().from(events).where(eq(events.projectId, projectId));
 
     expect(after.length).toBe(before.length);
     expect(after.filter((r) => r.type === 'draft.changed').length).toBe(0);
@@ -167,7 +159,7 @@ describe('event triggers', () => {
 
     // Raw UPDATE that rewrites alias to the same value — IS DISTINCT FROM is false.
     await db.execute(
-      sql`UPDATE conversations SET alias = alias WHERE conversation_id = ${conv.conversationId}`,
+      sql`UPDATE conversations SET alias = alias WHERE conversation_id = ${conv.conversationId}`
     );
 
     const rows = await db

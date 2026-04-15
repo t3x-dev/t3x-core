@@ -33,7 +33,6 @@ describe('realtime-listener', () => {
     expect(mockPg.listen).toHaveBeenCalledWith('t3x_events', expect.any(Function));
 
     // Simulate a notification arriving
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('42');
     await new Promise((r) => setTimeout(r, 10));
 
@@ -63,7 +62,6 @@ describe('realtime-listener', () => {
       pg: mockPg as unknown as Parameters<typeof startRealtimeListener>[0]['pg'],
       fetchEventById: mockFetch,
     });
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('99');
     await new Promise((r) => setTimeout(r, 10));
 
@@ -88,9 +86,7 @@ describe('realtime-listener', () => {
       fetchEventById: mockFetch,
     });
     // Calling the handler with a bad payload should not throw synchronously
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     expect(() => capturedHandler!('not-a-number')).not.toThrow();
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('1');
     await new Promise((r) => setTimeout(r, 10));
     // No assertion on broadcast — point is "doesn't throw"
@@ -136,11 +132,8 @@ describe('realtime-listener', () => {
       pg: mockPg as unknown as Parameters<typeof startRealtimeListener>[0]['pg'],
       fetchEventById: mockFetch,
     });
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('1');
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('2');
-    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
     capturedHandler!('3');
     await new Promise((r) => setTimeout(r, 30));
 

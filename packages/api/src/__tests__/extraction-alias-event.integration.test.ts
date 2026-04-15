@@ -6,7 +6,13 @@
  * verify that a trigger fires. This test covers that gap.
  */
 
-import { type AnyDB, events, insertConversation, insertProject, setAliasIfNull } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  events,
+  insertConversation,
+  insertProject,
+  setAliasIfNull,
+} from '@t3x-dev/storage';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setupTestDB } from './setup';
@@ -39,10 +45,7 @@ describe('setAliasIfNull → conversation.renamed event (trigger integration)', 
       .select()
       .from(events)
       .where(
-        and(
-          eq(events.conversationId, conv.conversationId),
-          eq(events.type, 'conversation.renamed')
-        )
+        and(eq(events.conversationId, conv.conversationId), eq(events.type, 'conversation.renamed'))
       );
     expect(matches.length).toBeGreaterThanOrEqual(1);
     expect((matches[0].payload as { alias: string }).alias).toBe('first_alias');

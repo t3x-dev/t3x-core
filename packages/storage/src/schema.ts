@@ -8,6 +8,7 @@
  */
 
 import type { ContentBlock } from '@t3x-dev/core';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
@@ -22,7 +23,6 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -436,4 +436,4 @@ export type GlobalSetting = typeof globalSettings.$inferSelect;
 export type NewGlobalSetting = typeof globalSettings.$inferInsert;
 
 // Events outbox for realtime sync (see schema-events.ts)
-export { events, type EventRow, type NewEventRow } from './schema-events';
+export { type EventRow, events, type NewEventRow } from './schema-events';

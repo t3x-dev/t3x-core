@@ -27,17 +27,17 @@ import {
   findConversationById,
   findTurnsByConversation,
   insertConversation,
-  insertYOpsLogEntry,
   insertProject,
   insertTurn,
+  insertYOpsLogEntry,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { assertProjectAccess } from '../lib/project-access';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { wrapWithUsageTracking } from '../lib/usage-tracking';
+import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const treeAnswerRoutes = new OpenAPIHono({
@@ -275,16 +275,19 @@ async function handleDriftChoice4(
 
   // 3. Extract frames via FrameExtractor
   const reg = await getProviderRegistry();
-  const extractResult = (await reg.tryWithFallback('generation', (provider): Promise<ExtractionResult> => {
-    // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-    const { provider: tracked } = wrapWithUsageTracking(provider as any);
-    const extractor = new Extractor(tracked);
-    return extractor.extract({
-      turns: extractionTurns,
-      snapshot: currentSnapshot.trees.length > 0 ? currentSnapshot : undefined,
-      processedTurnCount,
-    });
-  })) as ExtractionResult;
+  const extractResult = (await reg.tryWithFallback(
+    'generation',
+    (provider): Promise<ExtractionResult> => {
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      const { provider: tracked } = wrapWithUsageTracking(provider as any);
+      const extractor = new Extractor(tracked);
+      return extractor.extract({
+        turns: extractionTurns,
+        snapshot: currentSnapshot.trees.length > 0 ? currentSnapshot : undefined,
+        processedTurnCount,
+      });
+    }
+  )) as ExtractionResult;
 
   if (!extractResult.ok) {
     return errorResponse(c, 'EXTRACTION_FAILED', extractResult.error);
@@ -296,7 +299,7 @@ async function handleDriftChoice4(
     const transformResult = runTransforms(
       extractResult.snapshot,
       extractionTurns.map((t) => ({ role: t.role, content: t.content })),
-      currentSnapshot,
+      currentSnapshot
     );
     organizedSnapshot = transformResult.content;
   } catch {
@@ -330,9 +333,10 @@ async function handleDriftChoice4(
   }
 
   // Apply the relate op to get the final snapshot
-  const finalResult = allYops.length > extractResult.yops.length
-    ? applyYOps(organizedSnapshot, allYops.slice(extractResult.yops.length))
-    : null;
+  const finalResult =
+    allYops.length > extractResult.yops.length
+      ? applyYOps(organizedSnapshot, allYops.slice(extractResult.yops.length))
+      : null;
   const finalSnapshot = finalResult?.ok
     ? { trees: finalResult.trees, relations: finalResult.relations }
     : organizedSnapshot;

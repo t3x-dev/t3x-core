@@ -44,14 +44,8 @@ describe('events table', () => {
   });
 
   it('id is monotonically increasing', async () => {
-    const [a] = await db
-      .insert(events)
-      .values({ type: 'x', projectId: 'p' })
-      .returning();
-    const [b] = await db
-      .insert(events)
-      .values({ type: 'x', projectId: 'p' })
-      .returning();
+    const [a] = await db.insert(events).values({ type: 'x', projectId: 'p' }).returning();
+    const [b] = await db.insert(events).values({ type: 'x', projectId: 'p' }).returning();
     expect(b.id > a.id).toBe(true);
   });
 });

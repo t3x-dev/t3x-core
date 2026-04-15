@@ -46,6 +46,7 @@ interface EnrichedTreeNode {
   source?: string;
   slot_quotes?: Record<string, string>;
 }
+
 import {
   type AnyDB,
   createTopic,
@@ -172,7 +173,15 @@ export interface ExtractionPipelineParams {
 export async function* runExtractionPipeline(
   params: ExtractionPipelineParams
 ): AsyncGenerator<PipelineEvent> {
-  const { conversationId, turnHashes, driftDecision, topicId, forceExtract, userId, style: requestStyle } = params;
+  const {
+    conversationId,
+    turnHashes,
+    driftDecision,
+    topicId,
+    forceExtract,
+    userId,
+    style: requestStyle,
+  } = params;
 
   try {
     const db = await getDB();
@@ -595,10 +604,7 @@ export async function* runExtractionPipeline(
       // No fuzzy matching, no synthesis — the audit trail must be 100% deterministic.
       // If the LLM didn't provide a verifiable quote, the slot has no source tracing
       // (slot_quote is simply absent — no guessing).
-      const verifyMetadata = (
-        trees: EnrichedTreeNode[],
-        turns: Array<{ content: string }>
-      ) => {
+      const verifyMetadata = (trees: EnrichedTreeNode[], turns: Array<{ content: string }>) => {
         const turnsLower = turns.map((t) => t.content.toLowerCase());
 
         const walk = (node: EnrichedTreeNode) => {
