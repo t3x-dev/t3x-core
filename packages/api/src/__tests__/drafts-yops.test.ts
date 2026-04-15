@@ -93,16 +93,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [
-          {
-            set: {
-              path: 'trip/budget',
-              value: 5000,
-              source: 'around five thousand',
-              from: 'T1',
-            },
-          },
-        ],
+        yops: [{ set: { path: 'trip/budget', value: 5000 } }],
         if_revision: revision,
       }),
     });
@@ -130,15 +121,8 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
-          { define: { parent: '', key: 'hotel' } },
-          {
-            populate: {
-              path: 'hotel',
-              slots: { name: 'Hilton', stars: 5 },
-              source: { name: 'called Hilton', stars: 'five stars' },
-              from: 'T2',
-            },
-          },
+          { define: { path: 'hotel' } },
+          { populate: { path: 'hotel', values: { name: 'Hilton', stars: 5 } } },
         ],
         if_revision: revision,
       }),
@@ -159,15 +143,8 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
-          { define: { parent: '', key: 'test' } },
-          {
-            populate: {
-              path: 'test',
-              slots: { val: 1 },
-              source: { val: 'one' },
-              from: 'T1',
-            },
-          },
+          { define: { path: 'test' } },
+          { populate: { path: 'test', values: { val: 1 } } },
         ],
         if_revision: 0,
       }),
@@ -187,16 +164,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [
-          {
-            set: {
-              path: 'trip/budget',
-              value: 3000,
-              source: 'three thousand',
-              from: 'T1',
-            },
-          },
-        ],
+        yops: [{ set: { path: 'trip/budget', value: 3000 } }],
         if_revision: revision - 1, // stale revision
       }),
     });
@@ -211,21 +179,12 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
     const initialNodes = [{ key: 'trip', slots: { destination: 'London' }, children: [] }];
     const { id, revision } = await createDraft({ nodes: initialNodes });
 
-    // set op targeting a non-existent node path
+    // drop op targeting a non-existent node path (engine returns PATH_NOT_FOUND)
     const res = await app.request(`/v1/drafts/${id}/apply-yops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [
-          {
-            set: {
-              path: 'nonexistent/budget',
-              value: 1000,
-              source: 'one thousand',
-              from: 'T1',
-            },
-          },
-        ],
+        yops: [{ drop: { path: 'nonexistent' } }],
         if_revision: revision,
       }),
     });
@@ -248,16 +207,7 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        yops: [
-          {
-            set: {
-              path: 'test/val',
-              value: 2,
-              source: 'two',
-              from: 'T1',
-            },
-          },
-        ],
+        yops: [{ set: { path: 'test/val', value: 2 } }],
         if_revision: revision,
       }),
     });
@@ -276,23 +226,9 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         yops: [
-          { define: { parent: '', key: 'trip' } },
-          {
-            populate: {
-              path: 'trip',
-              slots: { destination: 'Berlin' },
-              source: { destination: 'going to Berlin' },
-              from: 'T1',
-            },
-          },
-          {
-            set: {
-              path: 'trip/budget',
-              value: 2000,
-              source: 'two thousand euros',
-              from: 'T2',
-            },
-          },
+          { define: { path: 'trip' } },
+          { populate: { path: 'trip', values: { destination: 'Berlin' } } },
+          { set: { path: 'trip/budget', value: 2000 } },
         ],
         if_revision: revision,
       }),
