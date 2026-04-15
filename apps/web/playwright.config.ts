@@ -20,6 +20,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
+  // Don't auto-abort the suite on failures — audit runs want the full picture.
+  // CI stops after 10 failures to bound runtime; local never aborts.
+  maxFailures: process.env.CI ? 10 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   timeout: 30_000,
   expect: { timeout: 5_000 },
