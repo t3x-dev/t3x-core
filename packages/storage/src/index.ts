@@ -46,3 +46,10 @@ export * from './schema-trees';
 export * from './schema-metrics';
 // Node Modifications Schema (audit trail)
 export * from './schema-node-modifications';
+// recordEvent helper + event type whitelist (realtime sync)
+export {
+  ALLOWED_EVENT_TYPES,
+  type EventType,
+  type RecordEventInput,
+  recordEvent,
+} from './events';
