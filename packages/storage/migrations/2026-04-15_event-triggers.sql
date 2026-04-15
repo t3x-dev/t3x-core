@@ -49,7 +49,7 @@ BEGIN
       'draft.changed',
       NEW.project_id,
       NULL,
-      jsonb_build_object('draft_id', NEW.id)
+      jsonb_build_object('draft_id', NEW.id, 'revision', NEW.revision)
     );
   END IF;
   RETURN NEW;

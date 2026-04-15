@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { events } from '../schema-events';
 import { createCommit } from '../queries/commits';
@@ -129,7 +129,57 @@ describe('event triggers', () => {
 
     const draftEvents = rows.filter((r) => r.type === 'draft.changed');
     expect(draftEvents.length).toBe(1);
-    const payload = draftEvents[0].payload as { draft_id: string };
+    const payload = draftEvents[0].payload as { draft_id: string; revision: number };
     expect(payload.draft_id).toBe(draft.id);
+    // updateDraft increments revision by 1 (starts at 1 on insert → 2 after one update)
+    expect(payload.revision).toBe(draft.revision + 1);
+  });
+
+  it('UPDATE on drafts without updated_at change does NOT fire draft.changed', async () => {
+    const draft = await insertDraft(db, {
+      project_id: projectId,
+      title: 'No-op Draft',
+    });
+
+    const before = await db
+      .select()
+      .from(events)
+      .where(eq(events.projectId, projectId));
+
+    // Raw UPDATE that sets updated_at to the same value — IS DISTINCT FROM is false,
+    // so the trigger body must be skipped.
+    await db.execute(
+      sql`UPDATE drafts SET updated_at = updated_at WHERE id = ${draft.id}`,
+    );
+
+    const after = await db
+      .select()
+      .from(events)
+      .where(eq(events.projectId, projectId));
+
+    expect(after.length).toBe(before.length);
+    expect(after.filter((r) => r.type === 'draft.changed').length).toBe(0);
+  });
+
+  it('UPDATE on conversations without alias change does NOT fire conversation.renamed', async () => {
+    const conv = await insertConversation(db, { projectId, title: 'Same Alias' });
+    await renameConversation(db, conv.conversationId, 'stable');
+
+    // Raw UPDATE that rewrites alias to the same value — IS DISTINCT FROM is false.
+    await db.execute(
+      sql`UPDATE conversations SET alias = alias WHERE conversation_id = ${conv.conversationId}`,
+    );
+
+    const rows = await db
+      .select()
+      .from(events)
+      .where(eq(events.projectId, projectId))
+      .orderBy(asc(events.id));
+
+    const renames = rows.filter((r) => r.type === 'conversation.renamed');
+    // Only the initial null → 'stable' rename should have fired.
+    expect(renames.length).toBe(1);
+    const payload = renames[0].payload as { alias: string; previous_alias: string | null };
+    expect(payload.alias).toBe('stable');
   });
 });

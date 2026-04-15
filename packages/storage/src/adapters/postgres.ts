@@ -67,7 +67,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 40;
+const SCHEMA_VERSION = 41;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1086,7 +1086,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
           'draft.changed',
           NEW.project_id,
           NULL,
-          jsonb_build_object('draft_id', NEW.id)
+          jsonb_build_object('draft_id', NEW.id, 'revision', NEW.revision)
         );
       END IF;
       RETURN NEW;
