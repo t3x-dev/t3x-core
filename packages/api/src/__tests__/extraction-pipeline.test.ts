@@ -62,6 +62,7 @@ vi.mock('@t3x-dev/storage', () => ({
   // did nothing). Tests that care about alias-specific behavior should
   // override this with vi.mocked(...).
   setAliasIfNull: vi.fn(() => Promise.resolve(null)),
+  recordEvent: vi.fn(() => Promise.resolve(1n)),
 }));
 
 // ── Core mocks ──

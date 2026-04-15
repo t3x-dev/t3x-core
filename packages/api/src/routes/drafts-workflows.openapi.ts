@@ -24,7 +24,6 @@ import {
 import { getDB } from '../lib/db';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { eventBus } from '../lib/event-bus';
 import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -495,9 +494,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
     });
-
-    // 5a. Notify commit created
-    eventBus.notify('commit.created', draftConversationId ?? '', draft.project_id);
 
     // 5b. Best-effort: populate node vectors (skip on failure)
     const embedder = getEmbedder();

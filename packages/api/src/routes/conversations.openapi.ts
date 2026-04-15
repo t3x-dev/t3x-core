@@ -42,7 +42,6 @@ import {
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { eventBus } from '../lib/event-bus';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import {
   CursorPageResponseSchema,
@@ -998,14 +997,6 @@ conversationRoutes.openapi(renameRoute, async (c) => {
   if (!updated) {
     return errorResponse(c, 'INTERNAL_ERROR', 'Conversation disappeared during rename');
   }
-
-  eventBus.broadcast({
-    type: 'conversation.renamed',
-    conversationId: conversation_id,
-    projectId: existing.projectId,
-    payload: { alias, previous_alias: existing.alias },
-    timestamp: Date.now(),
-  });
 
   return c.json({ success: true as const, data: toApiConversation(updated) }, 200);
 });
