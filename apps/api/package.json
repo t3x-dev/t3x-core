@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.15.2",
-    "@t3x-dev/api": "workspace:*"
+    "@t3x-dev/api": "workspace:*",
+    "@t3x-dev/storage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
