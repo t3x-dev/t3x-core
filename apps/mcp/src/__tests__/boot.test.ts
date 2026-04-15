@@ -6,8 +6,8 @@
  * no network — just constructs the factory and inspects the registered tools.
  */
 
-import { describe, expect, it } from 'vitest';
 import { createMcpServer } from '@t3x-dev/mcp-lib';
+import { describe, expect, it } from 'vitest';
 
 describe('mcp server boot', () => {
   it('registers the full core + advanced toolset', () => {

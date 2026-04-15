@@ -7,13 +7,7 @@
  * @see packages/core/src/commit/types.ts
  */
 
-import type {
-  Author,
-  Commit,
-  CommitSchemaTag,
-  Provenance,
-  SemanticContent,
-} from '@t3x-dev/core';
+import type { Author, Commit, CommitSchemaTag, Provenance, SemanticContent } from '@t3x-dev/core';
 import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';

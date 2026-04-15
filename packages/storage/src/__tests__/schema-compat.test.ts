@@ -14,13 +14,13 @@
  */
 
 import { type Author, computeCommitHash } from '@t3x-dev/core';
+import type { Sql } from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { verifyHashChain } from '../backup/verify';
 import { getCommit } from '../queries/commits';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
-import type { Sql } from 'postgres';
 
 const LEGACY_SCHEMA = 't3x/commit/1' as const;
 
@@ -36,10 +36,7 @@ describe('rowToCommit — legacy schema round-trip (B-8)', () => {
     sql = setup.sql;
     cleanup = setup.cleanup;
 
-    const project = await insertProject(
-      db,
-      testData.project({ name: 'Legacy Schema Fixture' })
-    );
+    const project = await insertProject(db, testData.project({ name: 'Legacy Schema Fixture' }));
     projectId = project.projectId;
   });
 
