@@ -29,23 +29,6 @@
 export * from './adapters';
 // Backup / verify utilities
 export * from './backup';
-// Query functions
-export * from './queries';
-// Schema (table definitions and types)
-export * from './schema';
-// Commits Schema (commits, tree_lineage — tree-based commits)
-export * from './schema-commits';
-// Extraction Feedback Schema (Anchoring L4)
-export * from './schema-extraction-feedback';
-// Tree State (source-of-truth for current trees)
-export * from './schema-tree-state';
-// Schema (leaves, pins, conversation_contexts)
-// @see docs/specification/semantic-layer-architecture.md
-export * from './schema-trees';
-// Observable Metrics Schema (event tracking)
-export * from './schema-metrics';
-// Node Modifications Schema (audit trail)
-export * from './schema-node-modifications';
 // recordEvent helper + event type whitelist (realtime sync)
 export {
   ALLOWED_EVENT_TYPES,
@@ -53,3 +36,22 @@ export {
   type RecordEventInput,
   recordEvent,
 } from './events';
+// Query functions
+export * from './queries';
+// Schema (table definitions and types)
+export * from './schema';
+// Commits Schema (commits, tree_lineage — tree-based commits)
+export * from './schema-commits';
+// Events outbox table (realtime sync)
+export * from './schema-events';
+// Extraction Feedback Schema (Anchoring L4)
+export * from './schema-extraction-feedback';
+// Observable Metrics Schema (event tracking)
+export * from './schema-metrics';
+// Node Modifications Schema (audit trail)
+export * from './schema-node-modifications';
+// Tree State (source-of-truth for current trees)
+export * from './schema-tree-state';
+// Schema (leaves, pins, conversation_contexts)
+// @see docs/specification/semantic-layer-architecture.md
+export * from './schema-trees';
