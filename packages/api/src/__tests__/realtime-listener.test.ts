@@ -111,4 +111,60 @@ describe('realtime-listener', () => {
     });
     expect(mockPg.listen).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves notification order across multiple events', async () => {
+    const broadcastSpy = vi.spyOn(eventBus, 'broadcast');
+    broadcastSpy.mockClear();
+    let capturedHandler: ((payload: string) => void) | null = null;
+    const mockPg = {
+      listen: vi.fn(async (_channel: string, cb: (payload: string) => void) => {
+        capturedHandler = cb;
+        return { unlisten: async () => {} };
+      }),
+    };
+    // fetchEventById returns event whose type encodes the input id, so we can check order
+    const mockFetch = vi.fn(async (id: bigint) => ({
+      id,
+      type: 'commit.created',
+      projectId: 'proj_x',
+      conversationId: null,
+      payload: { seq: id.toString() },
+      createdAt: new Date(),
+    }));
+
+    await startRealtimeListener({
+      pg: mockPg as unknown as Parameters<typeof startRealtimeListener>[0]['pg'],
+      fetchEventById: mockFetch,
+    });
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
+    capturedHandler!('1');
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
+    capturedHandler!('2');
+    // biome-ignore lint/style/noNonNullAssertion: test setup guarantees handler is captured
+    capturedHandler!('3');
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(broadcastSpy).toHaveBeenCalledTimes(3);
+    // Extract seq from each broadcast call to verify order
+    const seqs = broadcastSpy.mock.calls.map(
+      (c) => (c[0] as { payload: { seq: string } }).payload.seq
+    );
+    expect(seqs).toEqual(['1', '2', '3']);
+  });
+
+  it('stopRealtimeListener is safe to call when not started or twice in a row', async () => {
+    // Not started yet
+    await expect(stopRealtimeListener()).resolves.toBeUndefined();
+
+    // Start, stop, stop again
+    const mockPg = {
+      listen: vi.fn(async () => ({ unlisten: async () => {} })),
+    };
+    await startRealtimeListener({
+      pg: mockPg as unknown as Parameters<typeof startRealtimeListener>[0]['pg'],
+      fetchEventById: vi.fn(),
+    });
+    await stopRealtimeListener();
+    await expect(stopRealtimeListener()).resolves.toBeUndefined();
+  });
 });
