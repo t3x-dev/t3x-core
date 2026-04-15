@@ -120,7 +120,9 @@ function CanvasWorkspaceInner({
     openLeafPanel,
   } = useCanvasStore();
   const { load: loadCanvas, add: addNode } = useCanvasNodeActions();
-  const { addConversationFromCommit } = useCanvasCommitActions();
+  const { addConversationFromCommit, startMerge } = useCanvasCommitActions();
+  const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
+  const getCommitTone = useCanvasStore((state) => state.getCommitTone);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   // Sync from localStorage after mount (avoids SSR hydration mismatch)
@@ -494,26 +496,50 @@ function CanvasWorkspaceInner({
           onClose={closeContextMenu}
         />
       )}
-      {actionPanel && (
-        <CommitActionPanel
-          x={actionPanel.x}
-          y={actionPanel.y}
-          actions={buildCommitActions({
-            onContinueConversation: () => {
-              addConversationFromCommit(actionPanel.nodeId);
-            },
-            onViewDetails: () => {
-              if (projectId) {
-                router.push(`/project/${projectId}/commit/${encodeURIComponent(actionPanel.hash)}`);
-              }
-            },
-            onCreateLeaf: () => {
-              openLeafPanel(actionPanel.nodeId);
-            },
-          })}
-          onClose={() => setActionPanel(null)}
-        />
-      )}
+      {actionPanel &&
+        (() => {
+          const panelNode = nodes.find((n) => n.id === actionPanel.nodeId);
+          const panelTone = getCommitTone(actionPanel.nodeId);
+          const canMerge =
+            !!panelNode &&
+            panelNode.data.branchType === 'branch' &&
+            panelNode.data.commitStatus === 'committed' &&
+            panelTone === 'branch-latest' &&
+            hasMainCommit;
+          return (
+            <CommitActionPanel
+              x={actionPanel.x}
+              y={actionPanel.y}
+              actions={buildCommitActions({
+                onContinueConversation: () => {
+                  addConversationFromCommit(actionPanel.nodeId);
+                },
+                onViewDetails: () => {
+                  if (projectId) {
+                    router.push(
+                      `/project/${projectId}/commit/${encodeURIComponent(actionPanel.hash)}`
+                    );
+                  }
+                },
+                onCreateLeaf: () => {
+                  openLeafPanel(actionPanel.nodeId);
+                },
+                onMerge:
+                  canMerge && projectId
+                    ? () => {
+                        void (async () => {
+                          const draftId = await startMerge(actionPanel.nodeId);
+                          if (draftId) {
+                            router.push(`/project/${projectId}/merge/${draftId}`);
+                          }
+                        })();
+                      }
+                    : undefined,
+              })}
+              onClose={() => setActionPanel(null)}
+            />
+          );
+        })()}
       <CanvasStatusBar />
       {modalNode &&
         modalNode.data.commitStatus === 'draft' &&
