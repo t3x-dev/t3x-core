@@ -32,7 +32,12 @@ export function ChatSidebar() {
     setActiveConversation,
   } = useChatStore();
 
-  const { projects, refresh: refreshProjects, remove: removeProject } = useProjects();
+  const {
+    projects,
+    refresh: refreshProjects,
+    remove: removeProject,
+    create: createProject,
+  } = useProjects();
   const {
     conversationsByProject: projectConversations,
     load: loadConversations,
@@ -78,9 +83,18 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
-  function handleNewChat() {
-    setActiveConversation(null, null);
-    router.push('/chat');
+  async function handleNewProject() {
+    try {
+      const project = await createProject('Untitled Project');
+      setActiveConversation(null, project.project_id);
+      useChatStore.getState().refreshSidebar();
+      router.push(`/project/${project.project_id}`);
+    } catch {
+      // Fallback: land on blank chat so users can still type a first message
+      // (which will auto-create a project via useAutoProject).
+      setActiveConversation(null, null);
+      router.push('/chat');
+    }
   }
 
   async function handleNewChatInProject(projectId: string) {
@@ -184,14 +198,14 @@ export function ChatSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                onClick={handleNewChat}
+                onClick={handleNewProject}
                 className={cn(
                   'rounded-xl bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30',
                   'text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 hover:text-[var(--accent-commit)]',
                   'transition-all duration-[var(--motion-base)]',
                   collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
                 )}
-                aria-label="New conversation"
+                aria-label="New project"
               >
                 <Plus className="h-4 w-4 shrink-0" />
                 {!collapsed && <span className="text-sm font-medium">New Project</span>}
