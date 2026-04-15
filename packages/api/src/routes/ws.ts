@@ -41,6 +41,7 @@ import { Hono } from 'hono';
 import type { UpgradeWebSocket } from 'hono/ws';
 import { getDB } from '../lib/db';
 import { createError } from '../lib/errors';
+import { replayEventsSince } from '../lib/event-replay';
 import { type RoomConnection, roomManager } from '../lib/room-manager';
 import { verifyBearerToken } from '../middleware/auth';
 import { pinoLogger } from '../middleware/logger';
@@ -53,6 +54,8 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
     const projectId = c.req.query('project_id') ?? null;
     const userId = c.req.query('user_id') ?? 'anonymous';
     const token = c.req.query('token') ?? null;
+    const lastEventIdRaw = c.req.query('last_event_id') ?? null;
+    const lastEventId = lastEventIdRaw ? safeBigInt(lastEventIdRaw) : null;
 
     // Validate: at least one room identifier is required.
     if (!conversationId && !projectId) {
@@ -130,6 +133,49 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
             // If the socket is already dead we silently ignore — join/leave
             // bookkeeping will still fire via onClose/onError.
           }
+
+          // Replay missed events for clients reconnecting with ?last_event_id=N.
+          // Requires a project_id to safely scope the query. Runs after the
+          // welcome envelope so the client sees 'connected' first, then the
+          // replayed event stream, then (via roomManager subscription already
+          // set up above) live events. Ordering within replay is id ASC so
+          // the client can advance its last_event_id pointer monotonically.
+          if (lastEventId !== null && projectId) {
+            void (async () => {
+              try {
+                const db = await getDB();
+                const missed = await replayEventsSince(db, {
+                  sinceId: lastEventId,
+                  projectId,
+                  conversationId: conversationId ?? undefined,
+                });
+                for (const row of missed) {
+                  try {
+                    ws.send(
+                      JSON.stringify({
+                        type: row.type,
+                        conversationId: row.conversationId ?? '',
+                        projectId: row.projectId,
+                        // event_id is owned by the relay — intentionally overwrites
+                        // any same-named key in row.payload. Matches realtime-listener.ts.
+                        payload: { ...(row.payload ?? {}), event_id: row.id.toString() },
+                        timestamp: row.createdAt.getTime(),
+                      })
+                    );
+                  } catch {
+                    // Socket died mid-replay — stop pushing, live subscription cleanup
+                    // handles the rest via onClose/onError.
+                    break;
+                  }
+                }
+              } catch (err) {
+                pinoLogger.warn(
+                  { err, lastEventId: lastEventId.toString(), projectId },
+                  'ws: replay failed, continuing with live subscription only'
+                );
+              }
+            })();
+          }
         },
 
         onMessage(evt, ws) {
@@ -169,4 +215,16 @@ export function createWsRoute(upgradeWebSocket: UpgradeWebSocket) {
   });
 
   return wsRoute;
+}
+
+/**
+ * Parse a bigint query param safely. Returns null for malformed input so the
+ * handshake can proceed without replay (rather than 500ing the connection).
+ */
+function safeBigInt(s: string): bigint | null {
+  try {
+    return BigInt(s);
+  } catch {
+    return null;
+  }
 }

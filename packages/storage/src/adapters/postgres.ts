@@ -54,6 +54,17 @@ export function getPostgresDB(): PostgresDB {
 }
 
 /**
+ * Get the raw postgres.js client — needed for LISTEN channels which
+ * must hold their own connection outside the Drizzle query path.
+ */
+export function getPostgresClient(): postgres.Sql {
+  if (!client) {
+    throw new Error('PostgreSQL client not initialized. Call createPostgresStorage() first.');
+  }
+  return client;
+}
+
+/**
  * Close the database connection
  */
 export async function closePostgresStorage(): Promise<void> {
@@ -67,7 +78,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 38;
+const SCHEMA_VERSION = 42;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1020,6 +1031,144 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_alias
       ON conversations (project_id, alias) WHERE alias IS NOT NULL;
+  `);
+
+  // ── Schema v39: events outbox for cross-process realtime sync ──
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS events (
+      id BIGSERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      conversation_id TEXT,
+      payload JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS events_project_id_idx ON events (project_id, id);
+    CREATE INDEX IF NOT EXISTS events_conversation_id_idx ON events (conversation_id, id)
+      WHERE conversation_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at);
+  `);
+
+  // ── Schema v40: event triggers for cross-process realtime sync ──
+  // Shared emit helper: inserts into events table.
+  // pg_notify fires via the events-table AFTER INSERT trigger (defined below),
+  // which means recordEvent() and table-trigger emissions both notify uniformly.
+  await sql.unsafe(`
+    CREATE OR REPLACE FUNCTION t3x_emit_event(
+      p_type TEXT,
+      p_project_id TEXT,
+      p_conversation_id TEXT,
+      p_payload JSONB
+    ) RETURNS BIGINT AS $$
+    DECLARE
+      new_id BIGINT;
+    BEGIN
+      INSERT INTO events (type, project_id, conversation_id, payload)
+      VALUES (p_type, p_project_id, p_conversation_id, p_payload)
+      RETURNING id INTO new_id;
+      RETURN new_id;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- commits INSERT → commit.created
+    CREATE OR REPLACE FUNCTION t3x_trg_commit_created() RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.project_id IS NULL THEN RETURN NEW; END IF;
+      PERFORM t3x_emit_event(
+        'commit.created',
+        NEW.project_id,
+        NULL,
+        jsonb_build_object('hash', NEW.hash, 'branch', NEW.branch)
+      );
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_commits_event ON commits;
+    CREATE TRIGGER trg_commits_event
+      AFTER INSERT ON commits
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_commit_created();
+
+    -- drafts UPDATE → draft.changed (only when updated_at moves)
+    CREATE OR REPLACE FUNCTION t3x_trg_draft_changed() RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.updated_at IS DISTINCT FROM OLD.updated_at THEN
+        PERFORM t3x_emit_event(
+          'draft.changed',
+          NEW.project_id,
+          NULL,
+          jsonb_build_object('draft_id', NEW.id, 'revision', NEW.revision)
+        );
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_drafts_event ON drafts;
+    CREATE TRIGGER trg_drafts_event
+      AFTER UPDATE ON drafts
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_draft_changed();
+
+    -- yops_log INSERT → yops.applied (project_id lives on the row; no join needed)
+    CREATE OR REPLACE FUNCTION t3x_trg_yops_applied() RETURNS TRIGGER AS $$
+    BEGIN
+      PERFORM t3x_emit_event(
+        'yops.applied',
+        NEW.project_id,
+        NEW.conversation_id,
+        jsonb_build_object(
+          'yops_log_id', NEW.id,
+          'op_count', CASE
+            WHEN jsonb_typeof(NEW.yops) = 'array' THEN jsonb_array_length(NEW.yops)
+            ELSE 1
+          END
+        )
+      );
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_yops_log_event ON yops_log;
+    CREATE TRIGGER trg_yops_log_event
+      AFTER INSERT ON yops_log
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_yops_applied();
+
+    -- conversations.alias UPDATE → conversation.renamed
+    CREATE OR REPLACE FUNCTION t3x_trg_conversation_renamed() RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.alias IS DISTINCT FROM OLD.alias THEN
+        PERFORM t3x_emit_event(
+          'conversation.renamed',
+          NEW.project_id,
+          NEW.conversation_id,
+          jsonb_build_object('alias', NEW.alias, 'previous_alias', OLD.alias)
+        );
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_conversations_alias_event ON conversations;
+    CREATE TRIGGER trg_conversations_alias_event
+      AFTER UPDATE ON conversations
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_conversation_renamed();
+
+    -- Trigger: events INSERT → pg_notify directly
+    -- This fires when recordEvent() inserts complex events (extraction.*) so
+    -- the LISTEN relay is notified the same way as trigger-driven events.
+    -- Without this, recordEvent rows would silently fail to reach WS clients.
+    CREATE OR REPLACE FUNCTION t3x_trg_events_notify() RETURNS TRIGGER AS $$
+    BEGIN
+      PERFORM pg_notify('t3x_events', NEW.id::text);
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_events_notify ON events;
+    CREATE TRIGGER trg_events_notify
+      AFTER INSERT ON events
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_events_notify();
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

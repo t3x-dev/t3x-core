@@ -10,7 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { generateLeafOutput, generateNodeId, isGenerationConfigured } from '@t3x-dev/core';
 import {
   commitDraft,
@@ -18,16 +18,13 @@ import {
   createLeaf,
   findDraftById,
   forkDraft,
-  updateDraft,
   updateDraftPreview,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { eventBus } from '../lib/event-bus';
 import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
-import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CommitDraftRequest,
@@ -496,9 +493,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       yops_log_ids: yopsLogIds,
     });
 
-    // 5a. Notify commit created
-    eventBus.notify('commit.created', draftConversationId ?? '', draft.project_id);
-
     // 5b. Best-effort: populate node vectors (skip on failure)
     const embedder = getEmbedder();
     if (embedder) {
@@ -608,7 +602,7 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 // POST /v1/drafts/:id/suggest
 draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
+  const _body = c.req.valid('json');
 
   try {
     const db = await getDB();

@@ -12,8 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { YOpsSource } from '@t3x-dev/core';
-import { collectResult, flattenTrees, runOperation, YOpSchema } from '@t3x-dev/core';
+import { collectResult, runOperation } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
   findConversationById,
@@ -23,7 +22,6 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { eventBus } from '../lib/event-bus';
 import { readDraftFromTrees, rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { buildPipelineContext } from '../ops/context';
@@ -334,7 +332,6 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
       )
     );
 
-    eventBus.notify('yops.applied', conversationId, conversation.projectId);
     return c.json({ success: true as const, data: result }, 201);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -426,7 +423,6 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 
-    eventBus.notify('yops.applied', conversationId, existing.projectId);
     return c.json({ success: true as const, data: null }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

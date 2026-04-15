@@ -14,6 +14,11 @@ export { closeDB, getDB } from './lib/db';
 export { createError, errorResponse, zodErrorHook } from './lib/errors';
 
 // Background tasks
+export {
+  defaultFetchEventById,
+  startRealtimeListener,
+  stopRealtimeListener,
+} from './lib/realtime-listener';
 export { startTimeoutChecker, stopTimeoutChecker } from './lib/timeout-checker';
 // Logger
 export { pinoLogger } from './middleware/logger';

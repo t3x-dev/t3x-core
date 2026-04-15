@@ -34,48 +34,34 @@ describe('maybeAssignAlias', () => {
   it('skips when conversation already has an alias', async () => {
     const db = {} as never;
     const setAliasIfNull = vi.fn();
-    const broadcast = vi.fn();
 
     await maybeAssignAlias({
       db,
       conversation: { conversationId: 'conv_a', projectId: 'proj_a', alias: 'existing' },
       rootKey: 'fresh_topic',
       setAliasIfNull,
-      broadcast,
     });
 
     expect(setAliasIfNull).not.toHaveBeenCalled();
-    expect(broadcast).not.toHaveBeenCalled();
   });
 
-  it('sets alias and emits conversation.renamed when alias was null', async () => {
+  it('sets alias when alias was null (trigger emits conversation.renamed)', async () => {
     const db = {} as never;
     const setAliasIfNull = vi.fn().mockResolvedValue('fresh_topic');
-    const broadcast = vi.fn();
 
     await maybeAssignAlias({
       db,
       conversation: { conversationId: 'conv_b', projectId: 'proj_b', alias: null },
       rootKey: 'fresh_topic',
       setAliasIfNull,
-      broadcast,
     });
 
     expect(setAliasIfNull).toHaveBeenCalledWith(db, 'conv_b', 'fresh_topic');
-    expect(broadcast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'conversation.renamed',
-        conversationId: 'conv_b',
-        projectId: 'proj_b',
-        payload: expect.objectContaining({ alias: 'fresh_topic', previous_alias: null }),
-      })
-    );
   });
 
   it('does not throw when setAliasIfNull rejects', async () => {
     const db = {} as never;
     const setAliasIfNull = vi.fn().mockRejectedValue(new Error('boom'));
-    const broadcast = vi.fn();
 
     await expect(
       maybeAssignAlias({
@@ -83,9 +69,7 @@ describe('maybeAssignAlias', () => {
         conversation: { conversationId: 'conv_c', projectId: 'proj_c', alias: null },
         rootKey: 'topic',
         setAliasIfNull,
-        broadcast,
       })
     ).resolves.not.toThrow();
-    expect(broadcast).not.toHaveBeenCalled();
   });
 });

@@ -16,7 +16,6 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { SemanticContent, YOp } from '@t3x-dev/core';
 import { collectResult, extractOpsFromEntries, runOperation, verifyReplay } from '@t3x-dev/core';
 import {
-  clearManualEditedFlags,
   collectYOpsForCommitRange,
   createCommit,
   getCommit,
@@ -29,7 +28,6 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { eventBus } from '../lib/event-bus';
 import { commitOp } from '../ops/commit';
 import { buildPipelineContext } from '../ops/context';
 import {
@@ -53,7 +51,7 @@ const AuthorSchema = z.object({
   name: z.string().optional(),
 });
 
-const SourceSchema = z.object({
+const _SourceSchema = z.object({
   type: z.enum(['conversation', 'import', 'leaf']),
   id: z.string(),
   title: z.string().optional(),
@@ -163,7 +161,6 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       )
     );
 
-    eventBus.notify('commit.created', '', body.project_id);
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create commit';

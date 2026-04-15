@@ -250,6 +250,16 @@ const trace = observer.completeRun(runId, output, 'completed');
 const result = await evalEngine.evaluate({ trace, test_steps: [...] });
 ```
 
+### Realtime Sync
+
+Cross-process writes (MCP, CLI, any worker) propagate to WebUI live via an
+events-table outbox + `pg_notify` LISTEN relay. See
+`packages/storage/REALTIME-SYNC.md` for the full architecture and event
+type whitelist.
+
+**Key rule:** New event types require updating `ALLOWED_EVENT_TYPES` in
+`packages/storage/src/events.ts` and PR review.
+
 ## WebUI Architecture (`apps/web`)
 
 ### Folder map (current on disk)

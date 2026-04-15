@@ -29,9 +29,19 @@
 export * from './adapters';
 // Backup / verify utilities
 export * from './backup';
+// recordEvent helper + event type whitelist (realtime sync)
+export {
+  ALLOWED_EVENT_TYPES,
+  type EventType,
+  type RecordEventInput,
+  recordEvent,
+} from './events';
+// Background jobs (events retention cleanup, etc.)
+export { type CleanupOptions, cleanupOldEvents } from './jobs/cleanup-events';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
+// (events outbox is already re-exported via schema.ts; do not add a duplicate line here)
 export * from './schema';
 // Commits Schema (commits, tree_lineage — tree-based commits)
 export * from './schema-commits';

@@ -61,12 +61,12 @@ import {
   listTopicsByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
+  recordEvent,
   setAliasIfNull,
 } from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
 import { ExtractionStyleSchema } from '../schemas/contracts';
 import { getDB } from './db';
-import { eventBus, type RealtimeEvent } from './event-bus';
 import { getProviderRegistry } from './provider-registry';
 import { rebuildTreesFromSnapshot } from './tree-state-sync';
 import { recordUsageFireAndForget, wrapWithUsageTracking } from './usage-tracking';
@@ -104,32 +104,24 @@ interface MaybeAssignAliasArgs {
   conversation: { conversationId: string; projectId: string; alias: string | null };
   rootKey: string;
   setAliasIfNull: typeof import('@t3x-dev/storage').setAliasIfNull;
-  broadcast: (event: RealtimeEvent) => void;
 }
 
 /**
  * If the conversation has no alias yet, derive one from `rootKey` and try
- * to set it. On success, emits `conversation.renamed`. Failures are logged
- * and swallowed — alias derivation MUST NOT block extraction success.
+ * to set it. The `conversations.alias` UPDATE trigger emits
+ * `conversation.renamed` automatically when the alias changes — this helper
+ * does NOT broadcast. Failures are logged and swallowed — alias derivation
+ * MUST NOT block extraction success.
  *
  * Exported for unit testing.
  */
 export async function maybeAssignAlias(args: MaybeAssignAliasArgs): Promise<void> {
-  const { db, conversation, rootKey, setAliasIfNull, broadcast } = args;
+  const { db, conversation, rootKey, setAliasIfNull } = args;
   if (conversation.alias) return;
 
   try {
     const candidate = deriveAliasCandidate(rootKey, conversation.conversationId);
-    const written = await setAliasIfNull(db, conversation.conversationId, candidate);
-    if (!written) return;
-
-    broadcast({
-      type: 'conversation.renamed',
-      conversationId: conversation.conversationId,
-      projectId: conversation.projectId,
-      payload: { alias: written, previous_alias: null },
-      timestamp: Date.now(),
-    });
+    await setAliasIfNull(db, conversation.conversationId, candidate);
   } catch (err) {
     pinoLogger.warn(
       { err, conversationId: conversation.conversationId },
@@ -448,8 +440,12 @@ export async function* runExtractionPipeline(
     // ── Step 4: Extractor — LLM extraction via provider registry ──
     yield { type: 'status', data: { step: 'extracting' } };
 
-    // Broadcast extraction started (for other tabs/clients)
-    eventBus.notify('extraction.started', conversationId, conversation.projectId);
+    // Record extraction.started (realtime-listener relays to WS clients)
+    await recordEvent(db, {
+      type: 'extraction.started',
+      projectId: conversation.projectId,
+      conversationId,
+    });
 
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
@@ -866,7 +862,8 @@ export async function* runExtractionPipeline(
 
     // ── Derive alias from root tree key (no-op if already set) ──
     // Failures are logged inside maybeAssignAlias and must never block the
-    // extraction.done broadcast below.
+    // extraction.done event below. The conversations.alias UPDATE trigger
+    // emits conversation.renamed automatically when the alias actually changes.
     const rootKey = organizedSnapshot.trees[0]?.key;
     if (rootKey) {
       const refreshed = await findConversationById(db, conversationId);
@@ -880,18 +877,16 @@ export async function* runExtractionPipeline(
           },
           rootKey,
           setAliasIfNull,
-          broadcast: (event) => eventBus.broadcast(event),
         });
       }
     }
 
-    // Broadcast to WebSocket clients
-    eventBus.broadcast({
+    // Record extraction.done (realtime-listener relays to WS clients)
+    await recordEvent(db, {
       type: 'extraction.done',
-      conversationId,
       projectId: conversation.projectId,
-      payload: { yopsLogId: record.id },
-      timestamp: Date.now(),
+      conversationId,
+      payload: { yops_log_id: record.id, source: 'api' },
     });
 
     // ── Done ──

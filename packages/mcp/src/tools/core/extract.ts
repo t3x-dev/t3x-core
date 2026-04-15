@@ -41,6 +41,7 @@ import {
   insertConversation,
   insertDraft,
   insertTurn,
+  recordEvent,
 } from '@t3x-dev/storage';
 
 import { getDB } from '../../db.js';
@@ -324,6 +325,30 @@ export const extractHandler: ToolHandler = async (args) => {
   // Persist the extracted nodes into the draft
   const { updateDraft } = await import('@t3x-dev/storage');
   await updateDraft(db, draft.id, { nodes: draftNodes }, draft.revision);
+
+  // ── Step 9: Emit extraction.done event for WebUI realtime sync ──
+  // Unlike simple CRUD events (which DB triggers handle), extraction.done
+  // carries semantic payload (source, node counts, model) that the trigger
+  // cannot synthesize. MCP runs out-of-process — wrap in try/catch so a
+  // transient events-table failure does not fail the user's extraction.
+  try {
+    await recordEvent(db, {
+      type: 'extraction.done',
+      projectId,
+      conversationId: convId,
+      payload: {
+        draft_id: draft.id,
+        node_count: draftNodes.length,
+        yops_count: result.yops.length,
+        source: 'mcp',
+      },
+    });
+  } catch (err) {
+    // Best-effort: realtime sync is a nice-to-have, not a correctness requirement.
+    // Log to stderr (stdio transport uses stdout) without failing the extraction.
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[mcp:extract] failed to record extraction.done event: ${message}\n`);
+  }
 
   // ── Build summary ──
   const treeSummary = finalSnapshot.trees.map((t) => ({

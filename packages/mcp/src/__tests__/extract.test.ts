@@ -121,6 +121,7 @@ vi.mock('@t3x-dev/storage', () => ({
   findTurnsByConversation: vi.fn(() => Promise.resolve([MOCK_TURN])),
   insertDraft: vi.fn(() => Promise.resolve(MOCK_DRAFT)),
   updateDraft: vi.fn(() => Promise.resolve(MOCK_UPDATED_DRAFT)),
+  recordEvent: vi.fn(() => Promise.resolve(1n)),
 }));
 
 // ── Import handler after mocks ──
@@ -299,6 +300,45 @@ describe('t3x_extract handler', () => {
       }),
       1 // initial draft revision
     );
+  });
+
+  it('emits extraction.done event for WebUI realtime sync', async () => {
+    const { recordEvent } = await import('@t3x-dev/storage');
+
+    await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+
+    expect(recordEvent).toHaveBeenCalledWith(
+      mockDB,
+      expect.objectContaining({
+        type: 'extraction.done',
+        projectId: 'proj_test1',
+        conversationId: 'conv_new1',
+        payload: expect.objectContaining({
+          draft_id: 'draft_ext1',
+          source: 'mcp',
+        }),
+      })
+    );
+  });
+
+  it('does not fail extraction if recordEvent throws', async () => {
+    const { recordEvent } = await import('@t3x-dev/storage');
+    (recordEvent as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('events table wedged')
+    );
+
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+
+    // Extraction should still succeed — realtime sync is best-effort
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.draft_id).toBe('draft_ext1');
   });
 
   it('includes yops_count in response', async () => {

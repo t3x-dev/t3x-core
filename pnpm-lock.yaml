@@ -51,6 +51,9 @@ importers:
       '@t3x-dev/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@t3x-dev/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

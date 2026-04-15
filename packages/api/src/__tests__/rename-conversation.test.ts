@@ -1,5 +1,6 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertConversation, insertProject } from '@t3x-dev/storage';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -10,7 +11,7 @@ vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
 }));
 
-import { eventBus } from '../lib/event-bus';
+import { events } from '@t3x-dev/storage';
 import { conversationRoutes } from '../routes/conversations.openapi';
 
 describe('PATCH /v1/conversations/:conversation_id/rename', () => {
@@ -88,10 +89,8 @@ describe('PATCH /v1/conversations/:conversation_id/rename', () => {
     expect(res.status).toBe(404);
   });
 
-  it('emits conversation.renamed on success', async () => {
+  it('emits conversation.renamed on success (via DB trigger)', async () => {
     const conv = await insertConversation(mockDB, { projectId });
-    const handler = vi.fn();
-    eventBus.on(`room:project:${projectId}`, handler);
 
     await app.request(`/v1/conversations/${conv.conversationId}/rename`, {
       method: 'PATCH',
@@ -99,13 +98,15 @@ describe('PATCH /v1/conversations/:conversation_id/rename', () => {
       body: JSON.stringify({ alias: 'broadcast_test' }),
     });
 
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'conversation.renamed',
-        payload: expect.objectContaining({ alias: 'broadcast_test' }),
-      })
-    );
+    const rows = await mockDB
+      .select()
+      .from(events)
+      .where(
+        and(eq(events.conversationId, conv.conversationId), eq(events.type, 'conversation.renamed'))
+      );
 
-    eventBus.off(`room:project:${projectId}`, handler);
+    expect(rows.length).toBeGreaterThan(0);
+    const payload = rows[rows.length - 1].payload as { alias: string };
+    expect(payload.alias).toBe('broadcast_test');
   });
 });
