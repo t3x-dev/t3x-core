@@ -387,7 +387,7 @@ another_junk:
     expect(missing.length).toBe(2);
 
     // Auto-fix: create required nodes
-    let current = empty;
+    let current: YValue = empty;
     for (const fix of r1.fixes) {
       const r = applyYOps(current, [fix]);
       if (r.ok) current = r.doc;

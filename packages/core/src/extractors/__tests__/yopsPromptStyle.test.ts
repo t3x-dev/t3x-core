@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { ExtractionTurn } from '../extractionPrompt';
 import { PRESETS } from '../extractionStyleConfig';
 import { buildYOpsPrompt } from '../yopsPrompt';
 
-const baseTurns = [
+const baseTurns: ExtractionTurn[] = [
   { role: 'user', content: 'I want to plan a trip to Tokyo' },
   { role: 'assistant', content: 'Great choice! Tokyo has amazing food and culture.' },
 ];
