@@ -103,6 +103,13 @@ async function start() {
 
     // Start LISTEN relay when running against real Postgres (DATABASE_URL set).
     // Embedded/local dev skips this — single-process mode doesn't need it.
+    if (!process.env.DATABASE_URL) {
+      pinoLogger.warn(
+        'DATABASE_URL not set — realtime sync relay disabled. ' +
+          'Out-of-process writes (MCP, CLI) will NOT propagate to WebUI in this dev mode. ' +
+          'See packages/storage/REALTIME-SYNC.md.'
+      );
+    }
     if (process.env.DATABASE_URL) {
       try {
         await startRealtimeListener({
