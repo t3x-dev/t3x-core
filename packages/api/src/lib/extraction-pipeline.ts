@@ -880,7 +880,7 @@ export async function* runExtractionPipeline(
       type: 'extraction.done',
       projectId: conversation.projectId,
       conversationId,
-      payload: { yopsLogId: record.id },
+      payload: { yops_log_id: record.id, source: 'api' },
     });
 
     // ── Done ──
