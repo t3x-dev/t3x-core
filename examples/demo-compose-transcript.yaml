@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_PASSWORD=demo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  web:
+    image: nginx:1.25
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+volumes:
+  pgdata: null
