@@ -549,6 +549,7 @@ export function AfterPanel({
   beforeVisible?: boolean;
 }) {
   const tree = useWorkspaceStore((s) => s.tree);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const { applyEdit } = useGoldEdit();
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
@@ -684,7 +685,7 @@ export function AfterPanel({
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);
             }}
-            disabled={!hasResult || isCommitting}
+            disabled={!hasResult || isCommitting || isCommitted}
             className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             {isCommitting ? 'Committing...' : '\u2192 Commit'}
