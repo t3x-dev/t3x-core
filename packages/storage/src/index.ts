@@ -39,11 +39,10 @@ export {
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
+// (events outbox is already re-exported via schema.ts; do not add a duplicate line here)
 export * from './schema';
 // Commits Schema (commits, tree_lineage — tree-based commits)
 export * from './schema-commits';
-// Events outbox table (realtime sync)
-export * from './schema-events';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
 // Observable Metrics Schema (event tracking)
