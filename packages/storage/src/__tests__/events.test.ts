@@ -77,4 +77,13 @@ describe('recordEvent', () => {
     const [row] = await db.select().from(events).where(eq(events.id, id));
     expect(row.payload).toBeNull();
   });
+
+  it('rejects unknown event types at compile time', () => {
+    // Smoke test: the EventType union must refuse strings outside the whitelist.
+    // If this starts compiling, the whitelist type has regressed to `string`.
+    // @ts-expect-error — 'presence.join' is intentionally excluded (ephemeral)
+    void (async () => recordEvent(db, { type: 'presence.join', projectId: 'proj_x' }));
+    // @ts-expect-error — arbitrary strings must not be accepted
+    void (async () => recordEvent(db, { type: 'not.a.real.event', projectId: 'proj_x' }));
+  });
 });

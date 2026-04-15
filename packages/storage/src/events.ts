@@ -15,6 +15,9 @@
 import type { AnyDB } from './adapters';
 import { events } from './schema-events';
 
+// Intentionally excludes `presence.join` / `presence.leave` from
+// RealtimeEventType: presence is ephemeral WebSocket state and must NOT be
+// persisted to the outbox (replaying stale presence on reconnect is wrong).
 export const ALLOWED_EVENT_TYPES = [
   'commit.created',
   'draft.changed',
@@ -43,5 +46,5 @@ export async function recordEvent(db: AnyDB, input: RecordEventInput): Promise<b
       payload: input.payload ?? null,
     })
     .returning({ id: events.id });
-  return row.id as bigint;
+  return row.id;
 }
