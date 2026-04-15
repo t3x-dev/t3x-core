@@ -1,3 +1,4 @@
+import { parseSchema } from '@t3x-dev/yschema';
 import { describe, expect, it } from 'vitest';
 import { buildExtractionPrompt, type ExtractionTurn } from '../../extractors/extractionPrompt';
 import type { SemanticContent } from '../../semantic/types';
@@ -148,5 +149,55 @@ describe('buildExtractionPrompt', () => {
       });
       expect(result.systemPrompt).toContain('JSON');
     });
+  });
+});
+
+const composeSchema = parseSchema(`
+name: docker-compose
+strict: true
+nodes:
+  services:
+    required: true
+    children: any
+    each_child:
+      slots:
+        image:
+          type: scalar
+          required: true
+          pattern: "^[^:\\\\s]+:[^:\\\\s]+$"
+        restart:
+          enum: [no, always, on-failure, unless-stopped]
+`);
+
+describe('buildExtractionPrompt with targetSchema', () => {
+  it('injects a contract block when targetSchema is provided', () => {
+    const prompt = buildExtractionPrompt({
+      turns: sampleTurns,
+      targetSchema: composeSchema,
+    });
+    const fullText = prompt.systemPrompt + '\n' + prompt.userPrompt;
+    expect(fullText).toContain('SCHEMA (STRICT');
+    expect(fullText).toContain('services');
+    expect(fullText).toContain('image');
+    expect(fullText).toContain('restart');
+    expect(fullText).toContain('pattern');
+  });
+
+  it('does not inject contract block when targetSchema is absent', () => {
+    const prompt = buildExtractionPrompt({
+      turns: sampleTurns,
+    });
+    const fullText = prompt.systemPrompt + '\n' + prompt.userPrompt;
+    expect(fullText).not.toContain('SCHEMA (STRICT');
+    expect(fullText).not.toContain('TARGET SHAPE');
+  });
+
+  it('includes domain soft guidance for docker-compose', () => {
+    const prompt = buildExtractionPrompt({
+      turns: sampleTurns,
+      targetSchema: composeSchema,
+    });
+    const fullText = prompt.systemPrompt + '\n' + prompt.userPrompt;
+    expect(fullText).toMatch(/postgres.*password|mysql.*password/i);
   });
 });
