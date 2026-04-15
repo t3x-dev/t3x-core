@@ -32,7 +32,9 @@ export {
   COMMIT_SCHEMA,
   type Commit,
   type CommitFirstClass,
+  type CommitSchemaTag,
   computeCommitHash,
+  LEGACY_COMMIT_SCHEMAS,
   type Provenance,
 } from './commit';
 // ═══════════════════════════════════════════════════════════════════════════
