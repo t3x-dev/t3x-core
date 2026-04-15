@@ -351,13 +351,13 @@ describe('T3xClient', () => {
   // Commits
   // =========================================================================
   describe('commits', () => {
-    it('listCommits adds project_id and branch to query', async () => {
+    it('listCommits sends GET /v1/projects/:id/commits with branch query', async () => {
       const fn = mockFetch(successResponse({ commits: [], limit: 20, offset: 0 }));
       const client = createTestClient(fn);
 
       await client.listCommits('proj_1', 'main');
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('project_id=proj_1');
+      expect(url).toContain('/v1/projects/proj_1/commits');
       expect(url).toContain('branch=main');
     });
 
@@ -367,7 +367,7 @@ describe('T3xClient', () => {
 
       await client.listCommits('proj_1');
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('project_id=proj_1');
+      expect(url).toContain('/v1/projects/proj_1/commits');
       expect(url).not.toContain('branch=');
     });
 
@@ -644,7 +644,7 @@ describe('T3xClient', () => {
 
       await client.listCommits('proj_1', undefined, { limit: 10 });
       const url = (fn.mock.calls[0] as unknown[])[0] as string;
-      expect(url).toContain('project_id=proj_1');
+      expect(url).toContain('/v1/projects/proj_1/commits');
       expect(url).toContain('limit=10');
       // branch should not appear since it's undefined
       expect(url).not.toContain('branch');
