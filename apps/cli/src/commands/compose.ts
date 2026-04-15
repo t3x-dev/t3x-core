@@ -23,15 +23,9 @@ const SCHEMA_CANDIDATES = [
     '@t3x-dev',
     'yschema',
     'examples',
-    'docker-compose.yschema.yaml',
+    'docker-compose.yschema.yaml'
   ),
-  path.join(
-    process.cwd(),
-    'packages',
-    'yschema',
-    'examples',
-    'docker-compose.yschema.yaml',
-  ),
+  path.join(process.cwd(), 'packages', 'yschema', 'examples', 'docker-compose.yschema.yaml'),
 ];
 
 function loadComposeSchema(): string {
@@ -39,7 +33,7 @@ function loadComposeSchema(): string {
     if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
   }
   throw new Error(
-    `docker-compose.yschema.yaml not found. Tried:\n  ${SCHEMA_CANDIDATES.join('\n  ')}`,
+    `docker-compose.yschema.yaml not found. Tried:\n  ${SCHEMA_CANDIDATES.join('\n  ')}`
   );
 }
 
@@ -50,9 +44,7 @@ function previewDir(): string {
 }
 
 export function registerComposeCommands(program: Command): void {
-  const compose = program
-    .command('compose')
-    .description('Docker Compose from a YAML tree');
+  const compose = program.command('compose').description('Docker Compose from a YAML tree');
 
   compose
     .command('verify <file>')
@@ -77,9 +69,7 @@ export function registerComposeCommands(program: Command): void {
 
   compose
     .command('preview <tree>')
-    .description(
-      'Validate a YAML tree with yschema, emit preview compose, optionally verify',
-    )
+    .description('Validate a YAML tree with yschema, emit preview compose, optionally verify')
     .option('-o, --out <path>', 'Write output to this path instead of the preview dir')
     .option('--no-verify', 'Skip the docker compose config step')
     .action((treeFile: string, opts: { out?: string; verify?: boolean }) => {
@@ -132,8 +122,7 @@ export function registerComposeCommands(program: Command): void {
       }
 
       const outYaml = emitDockerCompose(tree);
-      const outPath =
-        opts.out ?? path.join(previewDir(), `compose-${Date.now()}.yml`);
+      const outPath = opts.out ?? path.join(previewDir(), `compose-${Date.now()}.yml`);
       fs.writeFileSync(outPath, outYaml);
       info(`Preview written: ${outPath}`);
 
