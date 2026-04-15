@@ -436,7 +436,25 @@ Source of truth: `ID_PREFIXES` in `packages/core/src/types/index.ts`.
 
 ## MCP Server
 
-`apps/mcp` exposes 36 tools for AI agents (Claude Code, Cursor, …). Tool files live one-per-file in `apps/mcp/src/tools/`. Register new tools in `apps/mcp/src/index.ts`.
+T3X exposes **8 umbrella tools** for AI agents (Claude Code, Cursor, …), built
+by the `createMcpServer` factory in `packages/mcp/src/server.ts`. Each umbrella
+dispatches to sub-actions via a `target` / `action` / etc. parameter, replacing
+the earlier ~36 one-tool-per-action surface.
+
+| Toolset | Tools |
+|---|---|
+| `core` (5) | `t3x_query`, `t3x_extract`, `t3x_edit`, `t3x_commit`, `t3x_generate` |
+| `advanced` (3) | `t3x_diff`, `t3x_merge`, `t3x_admin` |
+
+Layout:
+
+- Tool definitions: `packages/mcp/src/tools/core/*.ts` and `packages/mcp/src/tools/advanced/*.ts`
+- Registration: `createMcpServer` in `packages/mcp/src/server.ts` (toolset picked via `T3X_TOOLSETS` env)
+- Server entry point: `apps/mcp/src/index.ts` — a thin stdio wrapper around `createMcpServer`
+
+Register a new tool by adding a `ToolDef` + handler file under
+`packages/mcp/src/tools/{core,advanced}/` and appending its entry to
+`CORE_TOOLS` / `ADVANCED_TOOLS` in `server.ts`.
 
 ### Setup
 
@@ -454,18 +472,19 @@ pnpm dev:api
 
 ### Agent workflow
 
-```
-Extract → Triage → Edit → Commit:
-  t3x_create_project({ name })                        → project_id
-  t3x_extract({ project_id, text })                   → draft_id
-  t3x_show_draft({ draft_id })                        → nodes, revision
-  t3x_yops_schema()                                   → learn YOps operations
-  t3x_edit_draft({ draft_id, yops, if_revision })     → updated trees
-  t3x_commit({ project_id, draft_id })                → commit_hash
+Umbrellas dispatch to sub-actions via `target` / `action` / etc. Typical flow:
 
-Merge:
-  t3x_merge_prepare({ source_hash, target_hash })     → autoKept, conflicts
-  t3x_merge_execute({ …, decisions, message })        → merge commit_hash
+```
+Extract → Inspect → Edit → Commit:
+  t3x_admin({ action: "create_project", name })            → project_id
+  t3x_extract({ project_id, text })                        → draft_id
+  t3x_query({ target: "draft", id: draft_id })             → nodes, revision
+  t3x_edit({ draft_id, yops, if_revision })                → updated trees
+  t3x_commit({ project_id, draft_id, message })            → commit_hash
+
+Merge (advanced toolset):
+  t3x_merge({ action: "prepare", source_hash, target_hash })  → autoKept, conflicts
+  t3x_merge({ action: "execute", …, decisions, message })     → merge commit_hash
 ```
 
 ## Environment Variables
