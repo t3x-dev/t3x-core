@@ -7,8 +7,13 @@
  * Pure deterministic transform. No LLM.
  */
 
+import type { Schema } from '@t3x-dev/yschema';
 import { flattenTrees, unflattenToTrees } from '../../semantic/tree';
 import type { FlatNode, SemanticContent, SlotValue } from '../../semantic/types';
+
+export interface ConsolidateOptions {
+  schema?: Schema;
+}
 
 function consolidateDuplicateTypes(frames: FlatNode[]): FlatNode[] {
   const groups = new Map<string, FlatNode[]>();
@@ -53,12 +58,18 @@ function consolidateDuplicateTypes(frames: FlatNode[]): FlatNode[] {
   return result;
 }
 
-export function consolidate(content: SemanticContent): SemanticContent {
+export function consolidate(
+  content: SemanticContent,
+  options?: ConsolidateOptions
+): SemanticContent {
+  // Strict schemas declare their shape exactly. Pluralising duplicate types
+  // would invent keys the schema doesn't allow — skip.
+  if (options?.schema?.strict === true) return content;
+
   const frames = flattenTrees(content.trees);
   const types = frames.map((f) => f.type);
   const uniqueTypes = new Set(types);
 
-  // No duplicates — nothing to do
   if (uniqueTypes.size === types.length) return content;
 
   const consolidated = consolidateDuplicateTypes(frames);

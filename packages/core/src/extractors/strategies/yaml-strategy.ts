@@ -20,6 +20,7 @@
  * ylint is available as an on-demand quality check (not in pipeline).
  */
 
+import type { YValue } from '@t3x-dev/yops';
 import { validateSchema } from '@t3x-dev/yschema';
 import type { LLMProvider } from '../../llm/types';
 import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
@@ -151,7 +152,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
 
       // ── L3: Schema — "Does the tree conform to targetSchema?" ──
       if (input.targetSchema) {
-        const plain = semanticToPlain(l2.snapshot);
+        const plain = semanticToPlain(l2.snapshot) as YValue;
         const vresult = validateSchema(plain, input.targetSchema);
         const errors = vresult.violations.filter((v) => v.severity === 'error');
         if (errors.length > 0) {
@@ -209,7 +210,7 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
               lastError = l2r.error;
               continue;
             }
-            const plain2 = semanticToPlain(l2r.snapshot);
+            const plain2 = semanticToPlain(l2r.snapshot) as YValue;
             const vresult2 = validateSchema(plain2, input.targetSchema);
             const errors2 = vresult2.violations.filter((v) => v.severity === 'error');
             if (errors2.length === 0) {

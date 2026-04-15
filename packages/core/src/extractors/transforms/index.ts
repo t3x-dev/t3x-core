@@ -17,6 +17,7 @@ export { consolidate } from './consolidate';
 export { flagContradictions } from './flagContradictions';
 export { nest } from './nest';
 
+import type { Schema } from '@t3x-dev/yschema';
 import type { SemanticContent } from '../../semantic/types';
 import { checkRegression, type RegressionWarning } from './checkRegression';
 import { consolidate } from './consolidate';
@@ -28,6 +29,10 @@ export interface TransformResult {
   regressionWarnings: RegressionWarning[];
 }
 
+export interface RunTransformsOptions {
+  schema?: Schema;
+}
+
 /**
  * Run all post-extraction transforms in order.
  * Replaces MeaningPipeline + createMeaningPipeline.
@@ -35,12 +40,13 @@ export interface TransformResult {
 export function runTransforms(
   content: SemanticContent,
   turns: Array<{ role: string; content: string }>,
-  previousSnapshot?: SemanticContent
+  previousSnapshot?: SemanticContent,
+  options?: RunTransformsOptions
 ): TransformResult {
   let result = content;
 
   // 1. Merge duplicate node types
-  result = consolidate(result);
+  result = consolidate(result, { schema: options?.schema });
 
   // 2. Build nesting from relations
   result = nest(result);
