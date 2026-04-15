@@ -11,7 +11,7 @@ export interface SchemaCorrectionPromptResult {
 }
 
 export function buildSchemaCorrectionPrompt(
-  input: SchemaCorrectionInput,
+  input: SchemaCorrectionInput
 ): SchemaCorrectionPromptResult | null {
   const errors = input.violations.filter((v) => v.severity === 'error');
   if (errors.length === 0) return null;
