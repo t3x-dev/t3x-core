@@ -78,7 +78,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 41;
+const SCHEMA_VERSION = 42;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1051,7 +1051,9 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   `);
 
   // ── Schema v40: event triggers for cross-process realtime sync ──
-  // Shared emit helper: inserts into events + fires pg_notify.
+  // Shared emit helper: inserts into events table.
+  // pg_notify fires via the events-table AFTER INSERT trigger (defined below),
+  // which means recordEvent() and table-trigger emissions both notify uniformly.
   await sql.unsafe(`
     CREATE OR REPLACE FUNCTION t3x_emit_event(
       p_type TEXT,
@@ -1065,7 +1067,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       INSERT INTO events (type, project_id, conversation_id, payload)
       VALUES (p_type, p_project_id, p_conversation_id, p_payload)
       RETURNING id INTO new_id;
-      PERFORM pg_notify('t3x_events', new_id::text);
       RETURN new_id;
     END;
     $$ LANGUAGE plpgsql;
@@ -1152,6 +1153,22 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE TRIGGER trg_conversations_alias_event
       AFTER UPDATE ON conversations
       FOR EACH ROW EXECUTE FUNCTION t3x_trg_conversation_renamed();
+
+    -- Trigger: events INSERT → pg_notify directly
+    -- This fires when recordEvent() inserts complex events (extraction.*) so
+    -- the LISTEN relay is notified the same way as trigger-driven events.
+    -- Without this, recordEvent rows would silently fail to reach WS clients.
+    CREATE OR REPLACE FUNCTION t3x_trg_events_notify() RETURNS TRIGGER AS $$
+    BEGIN
+      PERFORM pg_notify('t3x_events', NEW.id::text);
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_events_notify ON events;
+    CREATE TRIGGER trg_events_notify
+      AFTER INSERT ON events
+      FOR EACH ROW EXECUTE FUNCTION t3x_trg_events_notify();
   `);
 
   // Record schema version so subsequent startups skip the init SQL.
