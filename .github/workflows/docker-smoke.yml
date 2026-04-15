@@ -1,0 +1,38 @@
+name: docker-smoke
+
+# Manual only. Not a required check. Promote to push triggers after 3 clean runs.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  docker-build:
+    name: docker compose up --build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build + start stack
+        run: docker compose up -d --build
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 120); do
+            curl -sf http://localhost:8000/health > /dev/null && exit 0
+            sleep 2
+          done
+          docker compose logs --tail=200
+          exit 1
+
+      - name: Hit WebUI root
+        run: |
+          curl -sI http://localhost:3000 | head -1 | tee /tmp/webui
+          grep -q "307" /tmp/webui
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
