@@ -556,6 +556,9 @@ importers:
       '@t3x-dev/yops':
         specifier: workspace:*
         version: link:../yops
+      '@t3x-dev/yschema':
+        specifier: workspace:*
+        version: link:../yschema
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -575,9 +578,6 @@ importers:
       '@swc/core':
         specifier: ^1.15.18
         version: 1.15.18
-      '@t3x-dev/yschema':
-        specifier: workspace:*
-        version: link:../yschema
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
