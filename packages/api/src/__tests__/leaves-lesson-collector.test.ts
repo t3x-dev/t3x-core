@@ -16,13 +16,12 @@ import { setupTestDB, testData } from './setup';
 type ApiResponse = any;
 
 // Hoist the mocks so they can be referenced in vi.mock factories
-const { mockGenerateLeafOutput, mockIsGenerationConfigured, mockCollectLessonsFromAssertions } = vi.hoisted(
-  () => ({
+const { mockGenerateLeafOutput, mockIsGenerationConfigured, mockCollectLessonsFromAssertions } =
+  vi.hoisted(() => ({
     mockGenerateLeafOutput: vi.fn(),
     mockIsGenerationConfigured: vi.fn(),
     mockCollectLessonsFromAssertions: vi.fn(),
-  })
-);
+  }));
 
 // Mock the database module
 let mockDB: AnyDB;
@@ -96,7 +95,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
           { key: 's_lc2', slots: { text: 'User likes bullet points' }, children: [] },
         ],
         relations: [],
-      // biome-ignore lint/suspicious/noExplicitAny: test data cast
+        // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       branch: 'main',
@@ -148,7 +147,9 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     });
 
     // collectLessons returns lessons extracted from historical leaves
-    mockCollectLessonsFromAssertions.mockReturnValue(['Always include the main keyword in the first sentence']);
+    mockCollectLessonsFromAssertions.mockReturnValue([
+      'Always include the main keyword in the first sentence',
+    ]);
 
     // generateWithFallback returns a successful result
     mockGenerateWithFallback.mockResolvedValue({
@@ -258,11 +259,9 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     const freshCommit = await createCommit(mockDB, {
       author: { type: 'human', name: 'Test User' },
       content: {
-        trees: [
-          { key: 's_fresh1', slots: { text: 'A brand new sentence' }, children: [] },
-        ],
+        trees: [{ key: 's_fresh1', slots: { text: 'A brand new sentence' }, children: [] }],
         relations: [],
-      // biome-ignore lint/suspicious/noExplicitAny: test data cast
+        // biome-ignore lint/suspicious/noExplicitAny: test data cast
       } as any,
       project_id: testProjectId,
       branch: 'main',

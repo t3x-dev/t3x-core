@@ -6,13 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { usePlatformImport } from '@/hooks/imports/usePlatformImport';
-import { cn } from '@/utils/cn';
 import {
   ApiError,
   type PlatformImportResult,
   type PlatformPreviewResult,
   STREAMING_IMPORT_THRESHOLD,
 } from '@/types/api';
+import { cn } from '@/utils/cn';
 import { FileDropZone } from './FileDropZone';
 import { ImportProgress } from './ImportProgress';
 

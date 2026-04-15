@@ -1,4 +1,3 @@
-import { cn } from '@/utils/cn';
 import type {
   AnchorCandidate,
   ConfirmedAnchor,
@@ -6,6 +5,7 @@ import type {
   TextSelection,
   TextToken,
 } from '@/types/nodes';
+import { cn } from '@/utils/cn';
 import { isTokenInExcludeSelection, isTokenInIncludeSelection } from '@/utils/tokenizer';
 
 export type TokenState =

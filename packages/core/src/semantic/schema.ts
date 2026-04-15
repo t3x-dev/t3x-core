@@ -7,7 +7,10 @@ export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
     z.string(),
     z.number(),
     z.boolean(),
-    z.record(z.string(), z.lazy(() => SlotValueSchema)),
+    z.record(
+      z.string(),
+      z.lazy(() => SlotValueSchema)
+    ),
     z.array(SlotValueSchema),
   ])
 );
@@ -16,7 +19,10 @@ export const SlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
 
 export const TreeNodeSchema: z.ZodType<unknown> = z.lazy(() =>
   z.object({
-    key: z.string().min(1).regex(/^[a-z][a-z0-9_]*$/),
+    key: z
+      .string()
+      .min(1)
+      .regex(/^[a-z][a-z0-9_]*$/),
     slots: z.record(z.string(), SlotValueSchema),
     children: z.array(TreeNodeSchema),
   })
@@ -43,7 +49,10 @@ export const RelationSchema = z.object({
 // ── SemanticContent ──
 
 export const SemanticContentSchema = z.object({
-  trees: z.array(z.lazy(() => TreeNodeSchema)).min(1).max(1000),
+  trees: z
+    .array(z.lazy(() => TreeNodeSchema))
+    .min(1)
+    .max(1000),
   relations: z.array(RelationSchema).max(5000).default([]),
 });
 
@@ -53,7 +62,8 @@ export const SemanticContentSchema = z.object({
 export const FlatNodeSchema = z.object({
   id: z.string(),
   type: z.string().min(1),
-  slots: z.record(z.string(), SlotValueSchema)
+  slots: z
+    .record(z.string(), SlotValueSchema)
     .refine((s) => Object.keys(s).length >= 1, { message: 'FlatNode must have at least one slot' }),
   source: z.string().optional(),
 });

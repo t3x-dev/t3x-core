@@ -9,8 +9,8 @@ import { BookOpen, Loader2, Plus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useReverseLearn } from '@/hooks/shared/useReverseLearn';
-import { cn } from '@/utils/cn';
 import type { ReverseLearnResult, SuggestedConstraint } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 interface LearnFromEditSuggestionProps {
   leafId: string;

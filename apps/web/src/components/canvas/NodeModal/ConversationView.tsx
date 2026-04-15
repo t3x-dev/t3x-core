@@ -9,14 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
 } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import type { NodeQuickAction } from './NodeModal';
 import { MemoryContextSidebar } from './shared';
 
@@ -238,7 +238,8 @@ export function ConversationView({
                     No linked conversation
                   </p>
                   <p className="text-xs text-[var(--text-tertiary)] max-w-[320px] leading-relaxed">
-                    This commit was created without a conversation source. Click <strong>Details</strong> on the commit card to view its content.
+                    This commit was created without a conversation source. Click{' '}
+                    <strong>Details</strong> on the commit card to view its content.
                   </p>
                 </div>
               );

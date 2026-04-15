@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
 
-const tree = (key: string, slots: Record<string, unknown> = { a: 1 }, children: TreeNode[] = []): TreeNode => ({
+const tree = (
+  key: string,
+  slots: Record<string, unknown> = { a: 1 },
+  children: TreeNode[] = []
+): TreeNode => ({
   key,
   slots,
   children,

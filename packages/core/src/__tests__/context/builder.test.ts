@@ -13,8 +13,8 @@ import {
   estimateTokens,
   filterActivePins,
 } from '../../context/builder';
-import type { ConversationContext, Leaf, Pin } from '../../types';
 import type { SemanticContent } from '../../semantic/types';
+import type { ConversationContext, Leaf, Pin } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -25,9 +25,7 @@ const mockKnowledge: SemanticContent = {
     { key: 'travel_plan', slots: { destination: 'Tokyo', season: 'spring' }, children: [] },
     { key: 'budget', slots: { amount: 3000, per: 'person' }, children: [] },
   ],
-  relations: [
-    { from: 'budget', to: 'travel_plan', type: 'causes' as const },
-  ],
+  relations: [{ from: 'budget', to: 'travel_plan', type: 'causes' as const }],
 };
 
 const mockConversation: ConversationData = {

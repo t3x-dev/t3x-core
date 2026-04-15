@@ -9,9 +9,9 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { getDB } from '@t3x-dev/api';
 import { API_KEY_VALUE_PREFIX } from '@t3x-dev/core';
 import { createApiKey } from '@t3x-dev/storage';
-import { getDB } from '@t3x-dev/api';
 
 async function main() {
   const name = process.argv[2] || 'dev-bootstrap';

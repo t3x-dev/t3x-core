@@ -5,14 +5,14 @@ import { X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import type {
   CanvasNodeData,
   ConversationConstraints,
   DraftConstraintOverrides,
 } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { CommittedCommitView } from './CommittedCommitView';
 import { ConversationView } from './ConversationView';
 import { PendingCommitView } from './PendingCommitView';

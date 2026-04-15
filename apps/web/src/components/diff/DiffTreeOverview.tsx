@@ -1,11 +1,11 @@
 'use client';
 
-import type { TreeDiff, SemanticContent } from '@t3x-dev/core';
+import type { SemanticContent, TreeDiff } from '@t3x-dev/core';
 import {
   buildDiffStatusMap,
   buildTreeGraph,
-  deriveRootNodeId,
   type DiffTreeNode,
+  deriveRootNodeId,
 } from './DiffYAMLUtils';
 
 // ── Props ──
@@ -18,7 +18,10 @@ interface DiffTreeOverviewProps {
 
 // ── Status helpers ──
 
-const STATUS_BADGE: Record<DiffTreeNode['diffStatus'], { char: string; color: string; bg?: string }> = {
+const STATUS_BADGE: Record<
+  DiffTreeNode['diffStatus'],
+  { char: string; color: string; bg?: string }
+> = {
   modified: {
     char: '~',
     color: 'var(--dy-modified-accent)',
@@ -39,7 +42,15 @@ const STATUS_BADGE: Record<DiffTreeNode['diffStatus'], { char: string; color: st
 
 // ── Recursive tree node renderer ──
 
-function TreeNodeLine({ node, isLast, depth }: { node: DiffTreeNode; isLast: boolean; depth: number }) {
+function TreeNodeLine({
+  node,
+  isLast,
+  depth,
+}: {
+  node: DiffTreeNode;
+  isLast: boolean;
+  depth: number;
+}) {
   const badge = STATUS_BADGE[node.diffStatus];
   const isRemoved = node.diffStatus === 'removed';
   const isAdded = node.diffStatus === 'added';

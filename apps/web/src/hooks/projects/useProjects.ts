@@ -34,13 +34,10 @@ export function useProjects(limit = 50): UseProjectsResult {
     void refresh();
   }, [refresh]);
 
-  const remove = useCallback(
-    async (projectId: string) => {
-      await deleteProject(projectId);
-      setProjects((prev) => prev.filter((p) => p.project_id !== projectId));
-    },
-    []
-  );
+  const remove = useCallback(async (projectId: string) => {
+    await deleteProject(projectId);
+    setProjects((prev) => prev.filter((p) => p.project_id !== projectId));
+  }, []);
 
   return { projects, loading, refresh, remove };
 }

@@ -23,8 +23,8 @@ export {
   generateLeafHistoryId,
   generateLeafId,
   generateMergeDraftId,
+  generateNodeId,
   generatePinId,
   generateProjectId,
-  generateNodeId,
   isoNow,
 } from './utils';

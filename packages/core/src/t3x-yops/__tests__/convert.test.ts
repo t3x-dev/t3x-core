@@ -4,11 +4,11 @@ import { treesToYValue, yvalueToTrees } from '../convert';
 
 // ── Helpers ──
 
-const node = (
-  key: string,
-  slots: TreeNode['slots'] = {},
-  children: TreeNode[] = [],
-): TreeNode => ({ key, slots, children });
+const node = (key: string, slots: TreeNode['slots'] = {}, children: TreeNode[] = []): TreeNode => ({
+  key,
+  slots,
+  children,
+});
 
 // ── Tests ──
 
@@ -25,11 +25,7 @@ describe('treesToYValue', () => {
   });
 
   it('converts a single tree with nested children', () => {
-    const trees = [
-      node('trip', { budget: 5000 }, [
-        node('dining', { style: 'casual' }),
-      ]),
-    ];
+    const trees = [node('trip', { budget: 5000 }, [node('dining', { style: 'casual' })])];
     expect(treesToYValue(trees)).toEqual({
       trip: {
         budget: 5000,
@@ -39,10 +35,7 @@ describe('treesToYValue', () => {
   });
 
   it('converts multiple root trees to separate top-level keys', () => {
-    const trees = [
-      node('trip', { destination: 'Paris' }),
-      node('budget', { total: 3000 }),
-    ];
+    const trees = [node('trip', { destination: 'Paris' }), node('budget', { total: 3000 })];
     expect(treesToYValue(trees)).toEqual({
       trip: { destination: 'Paris' },
       budget: { total: 3000 },
@@ -51,11 +44,7 @@ describe('treesToYValue', () => {
 
   it('converts deeply nested children', () => {
     const trees = [
-      node('project', {}, [
-        node('phase1', { duration: '2w' }, [
-          node('task', { owner: 'alice' }),
-        ]),
-      ]),
+      node('project', {}, [node('phase1', { duration: '2w' }, [node('task', { owner: 'alice' })])]),
     ];
     expect(treesToYValue(trees)).toEqual({
       project: {
@@ -172,27 +161,20 @@ describe('round-trip: yvalueToTrees(treesToYValue(trees))', () => {
   });
 
   it('preserves nested children', () => {
-    const original = [
-      node('trip', { budget: 5000 }, [node('dining', { style: 'casual' })]),
-    ];
+    const original = [node('trip', { budget: 5000 }, [node('dining', { style: 'casual' })])];
     const result = yvalueToTrees(treesToYValue(original));
     expect(result).toEqual(original);
   });
 
   it('preserves multiple root trees', () => {
-    const original = [
-      node('trip', { dest: 'Rome' }),
-      node('budget', { total: 2000 }),
-    ];
+    const original = [node('trip', { dest: 'Rome' }), node('budget', { total: 2000 })];
     const result = yvalueToTrees(treesToYValue(original));
     expect(result).toEqual(original);
   });
 
   it('preserves deeply nested structure', () => {
     const original = [
-      node('project', {}, [
-        node('phase1', { duration: '2w' }, [node('task', { owner: 'alice' })]),
-      ]),
+      node('project', {}, [node('phase1', { duration: '2w' }, [node('task', { owner: 'alice' })])]),
     ];
     const result = yvalueToTrees(treesToYValue(original));
     expect(result).toEqual(original);

@@ -40,15 +40,15 @@ export { serializeForPrompt } from './serialize';
 
 // ── Tree utilities ──
 export {
+  BLOB_TYPES,
+  type BlobType,
   flattenTree,
   flattenTrees,
+  isBlob,
   unflattenToTree,
   unflattenToTrees,
   validateTreeDepth,
   yamlToTree,
-  isBlob,
-  BLOB_TYPES,
-  type BlobType,
 } from './tree';
 
 // ── Types ──

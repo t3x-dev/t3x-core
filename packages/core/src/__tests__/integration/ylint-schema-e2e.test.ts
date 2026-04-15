@@ -11,9 +11,9 @@
  *   7. Show what remains for human review
  */
 
-import { buildFixPlan, parseSchema, validateSchema } from '@t3x-dev/yschema';
 import type { YOp, YValue } from '@t3x-dev/yops';
 import { applyYOps } from '@t3x-dev/yops';
+import { buildFixPlan, parseSchema, validateSchema } from '@t3x-dev/yschema';
 import { describe, expect, it } from 'vitest';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { treesToYValue, yvalueToTrees } from '../../t3x-yops/convert';

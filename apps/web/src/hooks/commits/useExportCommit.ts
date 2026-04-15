@@ -6,11 +6,8 @@
  */
 
 import { useCallback } from 'react';
+import { type CommitExportFormat, exportCommit } from '@/infrastructure/export/commit';
 import type { ApiCommit } from '@/types/api';
-import {
-  type CommitExportFormat,
-  exportCommit,
-} from '@/infrastructure/export/commit';
 
 export type { CommitExportFormat };
 

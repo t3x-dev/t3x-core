@@ -13,11 +13,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useVerifyProjectHashChain } from '@/hooks/projects/useVerifyProjectHashChain';
 import { formatTimeAgo } from '@/domain/format/timeUtils';
-import { cn } from '@/utils/cn';
+import { useVerifyProjectHashChain } from '@/hooks/projects/useVerifyProjectHashChain';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { QuickVerifyResult, VerifyResult } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 type VerificationState = 'idle' | 'loading' | 'verified' | 'failed';
 
@@ -372,7 +372,9 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
             </button>
             {showTechDetails && (
               <div className="mt-2 space-y-2 text-xs font-mono text-muted-foreground">
-                {fullResult.truncated && <p className="text-[var(--status-warning)]">Truncated (100K limit)</p>}
+                {fullResult.truncated && (
+                  <p className="text-[var(--status-warning)]">Truncated (100K limit)</p>
+                )}
                 {fullResult.merkle_mismatches && fullResult.merkle_mismatches.length > 0 && (
                   <div>
                     <p className="font-sans font-medium text-foreground">

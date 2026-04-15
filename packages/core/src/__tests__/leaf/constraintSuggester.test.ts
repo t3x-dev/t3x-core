@@ -18,8 +18,8 @@ import {
   validateRequireSemantic,
 } from '../../leaf/validate-constraints';
 import type { LLMProvider } from '../../llm/types';
-import type { SemanticContent } from '../../semantic/types';
 import type { EmbeddingProvider } from '../../providers/embedding/base';
+import type { SemanticContent } from '../../semantic/types';
 
 // ============================================================
 // Mock LLM Provider

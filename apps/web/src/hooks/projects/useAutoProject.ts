@@ -14,7 +14,10 @@ function deriveProjectName(message?: string): string {
   // Remove question marks, periods, and common filler prefixes
   let clean = message
     .replace(/[?.!,;:]+$/g, '')
-    .replace(/^(I want to|I'd like to|I need to|Can you|Could you|Please|Help me|Let's|What's a good|Tell me about|I'm looking for|I'm planning)\s+/i, '')
+    .replace(
+      /^(I want to|I'd like to|I need to|Can you|Could you|Please|Help me|Let's|What's a good|Tell me about|I'm looking for|I'm planning)\s+/i,
+      ''
+    )
     .trim();
 
   // Take first ~40 chars, break at word boundary

@@ -157,7 +157,9 @@ export async function findProjects(
   return db
     .select()
     .from(projects)
-    .where(ownerCondition ? and(ownerCondition, isNull(projects.deletedAt)) : isNull(projects.deletedAt))
+    .where(
+      ownerCondition ? and(ownerCondition, isNull(projects.deletedAt)) : isNull(projects.deletedAt)
+    )
     .orderBy(desc(projects.createdAt))
     .limit(limit)
     .offset(offset);
@@ -245,10 +247,7 @@ export async function restoreProject(db: AnyDB, projectId: string): Promise<Proj
  * Permanently delete a project (hard delete with cascade)
  */
 export async function permanentDeleteProject(db: AnyDB, projectId: string): Promise<boolean> {
-  const result = await db
-    .delete(projects)
-    .where(eq(projects.projectId, projectId))
-    .returning();
+  const result = await db.delete(projects).where(eq(projects.projectId, projectId)).returning();
 
   return result.length > 0;
 }

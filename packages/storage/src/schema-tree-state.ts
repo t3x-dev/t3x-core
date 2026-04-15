@@ -6,15 +6,7 @@
  */
 
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  index,
-  jsonb,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { conversations, projects } from './schema';
 
 // ── Trees ──

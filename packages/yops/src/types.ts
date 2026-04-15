@@ -8,13 +8,7 @@
 
 // ── Value Types ──
 
-export type YValue =
-  | string
-  | number
-  | boolean
-  | null
-  | YValue[]
-  | { [key: string]: YValue };
+export type YValue = string | number | boolean | null | YValue[] | { [key: string]: YValue };
 
 export type YDocument = YValue;
 

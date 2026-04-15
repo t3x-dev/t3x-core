@@ -34,8 +34,17 @@ function mockProvider(responses: string[]): LLMProvider {
 }
 
 const turns = [
-  { role: 'user' as const, content: 'I want to plan a trip to Tokyo with a budget of 5000 dollars', turn_hash: 'sha256:aaa' },
-  { role: 'assistant' as const, content: 'Great choice! Tokyo has amazing food and culture. The JR Pass costs about 500 dollars.', turn_hash: 'sha256:bbb' },
+  {
+    role: 'user' as const,
+    content: 'I want to plan a trip to Tokyo with a budget of 5000 dollars',
+    turn_hash: 'sha256:aaa',
+  },
+  {
+    role: 'assistant' as const,
+    content:
+      'Great choice! Tokyo has amazing food and culture. The JR Pass costs about 500 dollars.',
+    turn_hash: 'sha256:bbb',
+  },
 ];
 
 const baseInput: ExtractionInput = {
@@ -176,10 +185,13 @@ describe('L1: Gate', () => {
     const result = await strategy.extract(baseInput, provider);
 
     // At least 2 calls: main + correction
-    expect((provider.generate as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(
+      (provider.generate as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBeGreaterThanOrEqual(2);
 
     // Correction prompt should mention the duplicate
-    const correctionCall = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[1][0] as string;
+    const correctionCall = (provider.generate as ReturnType<typeof vi.fn>).mock
+      .calls[1][0] as string;
     expect(correctionCall).toContain('duplicate');
   });
 
@@ -307,7 +319,7 @@ describe('Full pipeline integration', () => {
     const provider = mockProvider([incrementalYOps, validYOps]);
     const result = await strategy.extract(
       { ...baseInput, snapshot: existingSnapshot, processedTurnCount: 1 },
-      provider,
+      provider
     );
 
     // Might succeed or fail depending on path resolution — both are valid pipeline behavior

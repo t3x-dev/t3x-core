@@ -145,18 +145,22 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
   try {
     const ctx = await buildPipelineContext(c, body.project_id);
     const commit = await collectResult(
-      runOperation(commitOp, {
-        project_id: body.project_id,
-        // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
-        content: body.content as any,
-        branch: body.branch,
-        parents: body.parents,
-        message: body.message,
-        author: body.author,
-        provenance: body.provenance,
-        yops_log_ids: body.yops_log_ids,
-        sources: body.sources,
-      }, ctx),
+      runOperation(
+        commitOp,
+        {
+          project_id: body.project_id,
+          // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
+          content: body.content as any,
+          branch: body.branch,
+          parents: body.parents,
+          message: body.message,
+          author: body.author,
+          provenance: body.provenance,
+          yops_log_ids: body.yops_log_ids,
+          sources: body.sources,
+        },
+        ctx
+      )
     );
 
     eventBus.notify('commit.created', '', body.project_id);

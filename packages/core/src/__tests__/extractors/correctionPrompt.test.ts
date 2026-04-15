@@ -38,7 +38,9 @@ describe('buildCorrectionPrompt', () => {
     const rejected = [
       {
         index: 0,
-        yop: { set: { path: 'trip/budget', value: 7000, source: 'not found text', from: 'T1' } } as unknown as YOp,
+        yop: {
+          set: { path: 'trip/budget', value: 7000, source: 'not found text', from: 'T1' },
+        } as unknown as YOp,
         violations: [
           {
             gate: 'source' as const,
@@ -62,13 +64,17 @@ describe('buildCorrectionPrompt', () => {
       {
         index: 0,
         yop: { unset: { path: 'x' } } as unknown as YOp,
-        violations: [{ gate: 'source' as const, severity: 'error' as const, opIndex: 0, message: 'test' }],
+        violations: [
+          { gate: 'source' as const, severity: 'error' as const, opIndex: 0, message: 'test' },
+        ],
       },
     ];
 
     const result = buildCorrectionPrompt({ rejectedYOps: rejected, turns });
 
     expect(result.systemPrompt).toContain('Fix ONLY the listed operations');
-    expect(result.systemPrompt).toContain('unset and drop operations need ONLY their required fields');
+    expect(result.systemPrompt).toContain(
+      'unset and drop operations need ONLY their required fields'
+    );
   });
 });

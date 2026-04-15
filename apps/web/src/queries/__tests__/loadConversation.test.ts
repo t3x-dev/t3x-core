@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchConversationSnapshot, replayAppended } from '../loadConversation';
-import * as loader from '@/infrastructure/conversationLoader';
 import type { SourcedYOp } from '@t3x-dev/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as loader from '@/infrastructure/conversationLoader';
+import { fetchConversationSnapshot, replayAppended } from '../loadConversation';
 
 beforeEach(() => {
   vi.restoreAllMocks();

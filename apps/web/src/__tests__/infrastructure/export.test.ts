@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Assertion, Constraint, Leaf } from '@/infrastructure';
-import { formatLeafAsJSON, formatLeafAsJSONString, formatLeafAsMarkdown } from '@/infrastructure/export/core';
+import {
+  formatLeafAsJSON,
+  formatLeafAsJSONString,
+  formatLeafAsMarkdown,
+} from '@/infrastructure/export/core';
 
 describe('Export Utilities', () => {
   // Sample test data

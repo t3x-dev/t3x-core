@@ -24,8 +24,8 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import * as api from '@/infrastructure';
-import { glass } from '@/utils/theme';
 import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 interface RunData {
   runId: string;
@@ -74,7 +74,13 @@ interface CommitData {
   committed_at: string;
   content: {
     nodes?: Array<{ id: string; text: string }>;
-    trees?: Array<{ id: string; type: string; slots: Record<string, unknown>; key?: string; children?: unknown[] }>;
+    trees?: Array<{
+      id: string;
+      type: string;
+      slots: Record<string, unknown>;
+      key?: string;
+      children?: unknown[];
+    }>;
     relations?: Array<{ from: string; to: string; type: string }>;
   };
   project_id?: string;
@@ -573,7 +579,10 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
             </h2>
             <div className="space-y-2">
               {trees.map((node, idx: number) => (
-                <div key={node.key || node.type || idx} className={cn('rounded-lg px-4 py-3', glass.cardBase)}>
+                <div
+                  key={node.key || node.type || idx}
+                  className={cn('rounded-lg px-4 py-3', glass.cardBase)}
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
                       {node.key || node.type}

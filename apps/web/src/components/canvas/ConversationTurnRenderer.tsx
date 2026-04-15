@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { cn } from '@/utils/cn';
 import type {
   AnchorCandidate,
   ConfirmedAnchor,
@@ -8,6 +7,7 @@ import type {
   TextSelection,
   TextToken,
 } from '@/types/nodes';
+import { cn } from '@/utils/cn';
 import {
   addSelection,
   cleanupKeywords,
@@ -354,7 +354,10 @@ export function ConversationTurnRenderer({
 
       {!readOnly && (
         <div className="mt-3 pt-3 border-t border-[var(--color-border)] text-xs text-[var(--color-text-muted)] text-center">
-          <span>Left-click drag to select (green) · Right-click drag to exclude (red) · Click to toggle: selected → must → mustn't</span>
+          <span>
+            Left-click drag to select (green) · Right-click drag to exclude (red) · Click to toggle:
+            selected → must → mustn't
+          </span>
         </div>
       )}
     </div>

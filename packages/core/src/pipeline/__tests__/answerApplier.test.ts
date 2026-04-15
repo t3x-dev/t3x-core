@@ -12,7 +12,9 @@ import {
 const baseSnapshot: SemanticContent = {
   trees: [
     {
-      key: 'travel_plan', slots: { destination: 'Hangzhou', budget: '5000左右' }, children: [
+      key: 'travel_plan',
+      slots: { destination: 'Hangzhou', budget: '5000左右' },
+      children: [
         { key: 'attractions', slots: { places: ['West Lake', 'Lingyin Temple'] }, children: [] },
         { key: 'food', slots: { cuisine: 'Hangbang' }, children: [] },
       ],
@@ -67,7 +69,11 @@ describe('applyVaguenessAnswer', () => {
 
 describe('applyStructuralAnswer', () => {
   it('adds relate YOp for new parent', () => {
-    const result = applyStructuralAnswer(baseSnapshot, 'travel_plan/food', 'travel_plan/attractions');
+    const result = applyStructuralAnswer(
+      baseSnapshot,
+      'travel_plan/food',
+      'travel_plan/attractions'
+    );
     expect(result.applied).toBe(true);
     expect(result.yops).toBeDefined();
     expect(result.yops!.length).toBeGreaterThan(0);
@@ -196,7 +202,13 @@ describe('applyAnswer', () => {
   });
 
   it('fails vagueness answer without value', () => {
-    const result = applyAnswer(baseSnapshot, { question_id: 'q1' }, 'vagueness', 'travel_plan', 'budget');
+    const result = applyAnswer(
+      baseSnapshot,
+      { question_id: 'q1' },
+      'vagueness',
+      'travel_plan',
+      'budget'
+    );
     expect(result.applied).toBe(false);
     expect(result.errors![0]).toContain('No value');
   });

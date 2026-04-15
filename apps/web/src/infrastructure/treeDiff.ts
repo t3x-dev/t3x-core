@@ -15,10 +15,7 @@ export interface DiffResponse {
   target: CommitMeta;
 }
 
-export async function getTreeDiff(
-  baseHash: string,
-  targetHash: string
-): Promise<DiffResponse> {
+export async function getTreeDiff(baseHash: string, targetHash: string): Promise<DiffResponse> {
   const res = await fetchWithTimeout(`${API_V1}/diff/frame`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

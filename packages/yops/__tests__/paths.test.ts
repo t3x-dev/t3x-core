@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parsePath, resolvePath, setAtPath, deleteAtPath, deepClone } from '../src/paths';
+import { describe, expect, it } from 'vitest';
+import { deepClone, deleteAtPath, parsePath, resolvePath, setAtPath } from '../src/paths';
 import type { YValue } from '../src/types';
 
 // ── parsePath ──────────────────────────────────────────────────────────────
@@ -94,7 +94,12 @@ describe('resolvePath', () => {
   });
 
   it('key match with numeric coercion', () => {
-    const numDoc: YValue = { items: [{ id: 1, name: 'first' }, { id: 2, name: 'second' }] };
+    const numDoc: YValue = {
+      items: [
+        { id: 1, name: 'first' },
+        { id: 2, name: 'second' },
+      ],
+    };
     expect(resolvePath(numDoc, 'items/[id=1]/name')).toBe('first');
     expect(resolvePath(numDoc, 'items/[id=2]/name')).toBe('second');
   });

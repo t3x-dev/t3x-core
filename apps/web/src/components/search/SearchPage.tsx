@@ -13,9 +13,9 @@ import {
 } from '@/components/ui/select';
 import { useProjectsList } from '@/hooks/projects/useProjectsList';
 import { useSearch } from '@/hooks/shared/useSearch';
-import { cn } from '@/utils/cn';
 import type { Project } from '@/types/api';
 import type { SearchMode } from '@/types/search';
+import { cn } from '@/utils/cn';
 
 const MODES: { value: SearchMode; label: string }[] = [
   { value: 'hybrid', label: 'Hybrid' },

@@ -14,9 +14,9 @@ import { AlertCircle, Check, GitCompare, Loader2, Lock, RotateCcw } from 'lucide
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { cn } from '@/utils/cn';
 import type { Branch } from '@/types/api';
 import type { CanvasNodeData } from '@/types/nodes';
+import { cn } from '@/utils/cn';
 import { bridgeTemplates } from './helpers';
 
 // ============================================================================

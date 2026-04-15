@@ -12,6 +12,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+
 // Note: buildKnowledgeGraph removed in tree-primary refactor — uses frame-based approach now
 // biome-ignore lint/suspicious/noExplicitAny: stub for removed function
 function buildKnowledgeGraph(input: any): any {
@@ -22,6 +23,7 @@ function buildKnowledgeGraph(input: any): any {
     stats: { node_count: 0, edge_count: 0, node_count_input: 0 },
   };
 }
+
 import {
   deleteKnowledgeGraphByProject,
   findKnowledgeNodeById,
@@ -138,7 +140,11 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
 
     // Require at least some data to build from
     if (result.nodes.length === 0) {
-      return errorResponse(c, 'EMBEDDINGS_REQUIRED', 'No embeddings found for this project. Add content and generate embeddings first.');
+      return errorResponse(
+        c,
+        'EMBEDDINGS_REQUIRED',
+        'No embeddings found for this project. Add content and generate embeddings first.'
+      );
     }
 
     // 5-8. Persist graph in a transaction (delete + insert atomically)
@@ -158,7 +164,8 @@ knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
       );
 
       // Insert members
-      const allMembers: Array<{ node_id: string; content_node_id: string; commit_hash: string }> = [];
+      const allMembers: Array<{ node_id: string; content_node_id: string; commit_hash: string }> =
+        [];
       for (let i = 0; i < result.nodes.length; i++) {
         for (const m of result.nodes[i].member_node_ids) {
           allMembers.push({

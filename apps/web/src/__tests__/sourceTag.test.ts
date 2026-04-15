@@ -1,6 +1,6 @@
+import type { YOp } from '@t3x-dev/core';
 import { describe, expect, test } from 'vitest';
 import { deriveSourceTags } from '@/domain/format/sourceTag';
-import type { YOp } from '@t3x-dev/core';
 
 describe('deriveSourceTags', () => {
   const messages = [

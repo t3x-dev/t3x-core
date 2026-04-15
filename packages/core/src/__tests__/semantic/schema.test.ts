@@ -29,9 +29,7 @@ describe('TreeNodeSchema', () => {
     const result = TreeNodeSchema.safeParse({
       key: 'trip',
       slots: { dest: 'Tokyo' },
-      children: [
-        { key: 'budget', slots: { amount: 5000 }, children: [] },
-      ],
+      children: [{ key: 'budget', slots: { amount: 5000 }, children: [] }],
     });
     expect(result.success).toBe(true);
   });
@@ -53,8 +51,6 @@ describe('TreeNodeSchema', () => {
     });
     expect(result.success).toBe(true);
   });
-
-
 });
 
 describe('FlatNodeSchema (internal)', () => {
@@ -84,7 +80,6 @@ describe('FlatNodeSchema (internal)', () => {
     });
     expect(result.success).toBe(false);
   });
-
 });
 
 describe('SemanticContentSchema', () => {
@@ -144,4 +139,3 @@ describe('RelationTypeSchema', () => {
     expect(RelationTypeSchema.safeParse('elaborates').success).toBe(false);
   });
 });
-

@@ -300,7 +300,12 @@ function rowToCommit(row: CommitRecord): Commit {
     branch: row.branch ?? 'main',
     provenance: (row.provenance as Provenance | null) ?? null,
     yops_log_ids: (row.yopsLogIds as string[]) ?? [],
-    sources: (row.sources as Array<{ type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }>) ?? null,
+    sources:
+      (row.sources as Array<{
+        type: 'conversation' | 'import' | 'leaf';
+        id: string;
+        title?: string;
+      }>) ?? null,
     // Canvas position (second-class, display-only)
     position_x: row.positionX ?? null,
     position_y: row.positionY ?? null,

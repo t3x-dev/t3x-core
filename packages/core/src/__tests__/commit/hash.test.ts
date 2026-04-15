@@ -40,7 +40,7 @@ describe('computeCommitHash', () => {
     expect(computeCommitHash(baseCommit)).not.toBe(computeCommitHash(withParent));
   });
 
-it('includes relations in hash', () => {
+  it('includes relations in hash', () => {
     const withRelation: CommitFirstClass = {
       ...baseCommit,
       content: {

@@ -5,14 +5,15 @@
  */
 
 import { useEffect, useState } from 'react';
-import type {
-  NodeWithHighlight,
-  TurnWithHighlights,
-} from '@/types/sourceContext';
+import { checkContentIntegrity } from '@/domain/format/truncationUtils';
 import type { Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
-import { checkContentIntegrity } from '@/domain/format/truncationUtils';
-import type { ContentIntegrityStatus, NodeWithSource } from '@/types/sourceContext';
+import type {
+  ContentIntegrityStatus,
+  NodeWithHighlight,
+  NodeWithSource,
+  TurnWithHighlights,
+} from '@/types/sourceContext';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Cache (module-level, shared across instances)

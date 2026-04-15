@@ -12,9 +12,9 @@
  * @see docs/plans/parallel-dev-guidelines.md
  */
 
-import type { SemanticContent } from '../semantic/types';
 import { serializeForPrompt } from '../semantic/serialize';
 import { flattenTrees } from '../semantic/tree';
+import type { SemanticContent } from '../semantic/types';
 import type { AnyLeafType, Constraint, Leaf } from '../types';
 import { isGenerationLeaf } from '../types';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
@@ -363,8 +363,13 @@ export function validateTemplateSyntax(template: string): {
 export function previewTemplate(template: LeafTemplate, leafType: AnyLeafType): RenderedTemplate {
   // Create sample context
   const sampleContext: TemplateContext = {
-    knowledge: ['user_preference: theme=dark mode', 'language: primary=English', 'goal: task=complete project'],
-    formattedKnowledge: 'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English\ngoal:\n  task: complete project',
+    knowledge: [
+      'user_preference: theme=dark mode',
+      'language: primary=English',
+      'goal: task=complete project',
+    ],
+    formattedKnowledge:
+      'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English\ngoal:\n  task: complete project',
     requires: ['- MUST include EXACTLY: "sample requirement"'],
     excludes: ['- MUST NOT include exactly: "sample exclusion"'],
     formattedConstraints: `## Constraints

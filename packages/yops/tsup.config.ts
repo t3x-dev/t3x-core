@@ -1,5 +1,5 @@
-import { defineConfig } from 'tsup';
 import { copyFileSync } from 'node:fs';
+import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: ['src/index.ts'],

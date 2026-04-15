@@ -4,14 +4,14 @@ import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { useSlotActions } from '@/hooks/shared/useSlotActions';
-import type { Citation } from '@/types/api';
 import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';
 import { traceYamlToChat } from '@/domain/hoverTrace';
 import type { SourceMapping } from '@/domain/sourceMap';
-import { cn } from '@/utils/cn';
+import { useSlotActions } from '@/hooks/shared/useSlotActions';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { Citation } from '@/types/api';
+import { cn } from '@/utils/cn';
 import { CitationChips } from './CitationChips';
 import { CodeBlock } from './CodeBlock';
 import { CommittedHighlightTooltip } from './CommittedHighlightTooltip';
@@ -447,7 +447,8 @@ export function ChatMessage({
   const useCoverageHighlights = coverageMode && uncoveredRanges.length > 0;
   const useYamlHighlights = hasCharHighlights && !useCoverageHighlights;
   const hasActiveSelection = !!hoveredNodeId;
-  const useSourceMappedSpans = hasActiveSelection && !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
+  const useSourceMappedSpans =
+    hasActiveSelection && !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
   const useCommittedHighlightSpans =
     !useYamlHighlights && !useSourceMappedSpans && !useCoverageHighlights && hasCommittedHighlights;
 
@@ -466,19 +467,18 @@ export function ChatMessage({
           : isSourceMessage && hasCharHighlights
             ? 'rgba(99, 102, 241, 0.06)'
             : 'transparent',
-        borderLeft: isSourceMessage
-          ? '3px solid rgb(99, 102, 241)'
-          : undefined,
+        borderLeft: isSourceMessage ? '3px solid rgb(99, 102, 241)' : undefined,
       }}
     >
       <div className="mx-auto max-w-3xl px-4">
         <div className={cn(isUser ? 'flex justify-end' : '')}>
           {/* Content */}
-          <div className={cn(
-            'min-w-0',
-            isUser ? 'max-w-[85%] rounded-2xl bg-[var(--hover-bg)] px-4 py-2.5' : 'flex-1'
-          )}>
-
+          <div
+            className={cn(
+              'min-w-0',
+              isUser ? 'max-w-[85%] rounded-2xl bg-[var(--hover-bg)] px-4 py-2.5' : 'flex-1'
+            )}
+          >
             {isUser ? (
               <div className="relative">
                 {/* Edit button - top right on hover */}

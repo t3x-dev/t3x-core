@@ -14,8 +14,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { cn } from '@/utils/cn';
 import type { Template } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {
   tweet: Hash,

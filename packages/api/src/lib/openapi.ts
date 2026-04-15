@@ -49,7 +49,8 @@ export function createOpenAPIApp() {
       },
       {
         name: 'Turns',
-        description: 'Turn (message) management. Each turn has a role (user/assistant/system/tool), content, and a hash-chain link to its parent.',
+        description:
+          'Turn (message) management. Each turn has a role (user/assistant/system/tool), content, and a hash-chain link to its parent.',
       },
       {
         name: 'Drafts',
@@ -76,7 +77,8 @@ export function createOpenAPIApp() {
       },
       {
         name: 'Branches',
-        description: 'Branch management. Branches are named pointers to commit chains, like Git branches.',
+        description:
+          'Branch management. Branches are named pointers to commit chains, like Git branches.',
       },
       {
         name: 'Diff',
@@ -93,8 +95,11 @@ export function createOpenAPIApp() {
           'Resolution types: source, target, both (keep both), edit (custom text).',
       },
       { name: 'Export', description: 'Export project data as cfpack or JSONL ledger.' },
-      { name: 'Chat', description: 'LLM chat with context from the project\'s semantic trees.' },
-      { name: 'Reference', description: 'API reference and documentation endpoints for AI agents and developers.' },
+      { name: 'Chat', description: "LLM chat with context from the project's semantic trees." },
+      {
+        name: 'Reference',
+        description: 'API reference and documentation endpoints for AI agents and developers.',
+      },
     ],
   });
 

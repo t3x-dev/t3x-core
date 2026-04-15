@@ -9,12 +9,12 @@
  * interleaved at any position in the ops list.
  */
 
-import { applyYOps as applyGenericYOps } from '@t3x-dev/yops';
 import type { YOp as GenericYOp, YValue } from '@t3x-dev/yops';
+import { applyYOps as applyGenericYOps } from '@t3x-dev/yops';
 import type { Relation, SemanticContent } from '../semantic/types';
-import type { RelateOp, SourcedYOp, UnrelateOp, YOp, YOpsResult } from './types';
 import { treesToYValue, yvalueToTrees } from './convert';
 import { findNode } from './helpers';
+import type { RelateOp, SourcedYOp, UnrelateOp, YOp, YOpsResult } from './types';
 
 // ── Op type guards ──
 
@@ -78,8 +78,11 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
       if ('drop' in op) {
         const droppedPath = (op as { drop: { path: string } }).drop.path;
         relations = relations.filter(
-          (r) => r.from !== droppedPath && r.to !== droppedPath
-            && !r.from.startsWith(`${droppedPath}/`) && !r.to.startsWith(`${droppedPath}/`),
+          (r) =>
+            r.from !== droppedPath &&
+            r.to !== droppedPath &&
+            !r.from.startsWith(`${droppedPath}/`) &&
+            !r.to.startsWith(`${droppedPath}/`)
         );
       }
 
@@ -102,7 +105,7 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
 function handleRelate(
   op: RelateOp,
   currentDoc: YValue,
-  relations: Relation[],
+  relations: Relation[]
 ): { ok: true; relations: Relation[] } | { ok: false; error: { code: string; message: string } } {
   const { from, to, type } = op;
 
@@ -141,9 +144,7 @@ function handleRelate(
   }
 
   // Reject duplicate
-  const isDuplicate = relations.some(
-    (r) => r.from === from && r.to === to && r.type === type,
-  );
+  const isDuplicate = relations.some((r) => r.from === from && r.to === to && r.type === type);
   if (isDuplicate) {
     return {
       ok: false,
@@ -164,9 +165,7 @@ function handleRelate(
 
 function handleUnrelate(op: UnrelateOp, relations: Relation[]): Relation[] {
   const { from, to, type } = op;
-  return relations.filter(
-    (r) => !(r.from === from && r.to === to && r.type === type),
-  );
+  return relations.filter((r) => !(r.from === from && r.to === to && r.type === type));
 }
 
 // ── Sourced entry point ──
@@ -196,7 +195,11 @@ export function applySourcedYOps(content: SemanticContent, ops: SourcedYOp[]): Y
         trees: content.trees,
         relations: content.relations,
         applied: 0,
-        error: { code: 'INVALID_SOURCE_TYPE', message: `Op at index ${i} has invalid source.type`, op_index: i },
+        error: {
+          code: 'INVALID_SOURCE_TYPE',
+          message: `Op at index ${i} has invalid source.type`,
+          op_index: i,
+        },
       };
     }
     if (s.type === 'human' && (!s.author || s.author.trim() === '')) {
@@ -205,7 +208,11 @@ export function applySourcedYOps(content: SemanticContent, ops: SourcedYOp[]): Y
         trees: content.trees,
         relations: content.relations,
         applied: 0,
-        error: { code: 'MISSING_AUTHOR', message: `Human op at index ${i} missing author`, op_index: i },
+        error: {
+          code: 'MISSING_AUTHOR',
+          message: `Human op at index ${i} missing author`,
+          op_index: i,
+        },
       };
     }
   }

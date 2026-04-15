@@ -6,18 +6,14 @@
  * the engine is allowed to run.
  */
 
-import type { YValue, YOpsError } from './types';
-import type { YOpsSpec, OpSpec } from './spec';
+import type { OpSpec, YOpsSpec } from './spec';
+import type { YOpsError, YValue } from './types';
 
 // ── Public types ──
 
 export type OpResult = { doc: YValue; error?: YOpsError };
 
-export type OpHandler = (
-  doc: YValue,
-  fields: Record<string, unknown>,
-  index: number,
-) => OpResult;
+export type OpHandler = (doc: YValue, fields: Record<string, unknown>, index: number) => OpResult;
 
 // ── Registry ──
 
@@ -36,9 +32,7 @@ export class OpRegistry {
    */
   register(opName: string, handler: OpHandler): void {
     if (!(opName in this.spec.operations)) {
-      throw new Error(
-        `Cannot register handler for unknown op "${opName}": not defined in spec`,
-      );
+      throw new Error(`Cannot register handler for unknown op "${opName}": not defined in spec`);
     }
     this.handlers.set(opName, handler);
   }
@@ -55,9 +49,7 @@ export class OpRegistry {
       }
     }
     if (missing.length > 0) {
-      throw new Error(
-        `OpRegistry is incomplete — missing handlers for: ${missing.join(', ')}`,
-      );
+      throw new Error(`OpRegistry is incomplete — missing handlers for: ${missing.join(', ')}`);
     }
   }
 

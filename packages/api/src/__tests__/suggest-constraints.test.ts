@@ -85,8 +85,16 @@ describe('Suggest Constraints', () => {
       author: { type: 'human', name: 'test' },
       content: {
         trees: [
-          { key: 's_test001', slots: { text: 'The user prefers budget-friendly travel.' }, children: [] },
-          { key: 's_test002', slots: { text: 'The user wants to visit Japan in spring.' }, children: [] },
+          {
+            key: 's_test001',
+            slots: { text: 'The user prefers budget-friendly travel.' },
+            children: [],
+          },
+          {
+            key: 's_test002',
+            slots: { text: 'The user wants to visit Japan in spring.' },
+            children: [],
+          },
         ],
         relations: [],
       } as any,

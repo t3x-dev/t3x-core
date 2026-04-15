@@ -217,7 +217,11 @@ function framesEqual(a: FlatNode, b: FlatNode): boolean {
   return aKeys.every((k) => k in b.slots && deepEqual(a.slots[k], b.slots[k]));
 }
 
-function findSlotConflicts(base: FlatNode | undefined, src: FlatNode, tgt: FlatNode): SlotConflict[] {
+function findSlotConflicts(
+  base: FlatNode | undefined,
+  src: FlatNode,
+  tgt: FlatNode
+): SlotConflict[] {
   const conflicts: SlotConflict[] = [];
   const allKeys = new Set([...Object.keys(src.slots), ...Object.keys(tgt.slots)]);
 

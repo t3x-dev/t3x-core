@@ -26,10 +26,7 @@ export class LeafSourceValidationError extends CommandError {
     public readonly missingField: string,
     message?: string
   ) {
-    super(
-      'leaf_source_validation',
-      message ?? `LeafSource rejected: ${missingField}`
-    );
+    super('leaf_source_validation', message ?? `LeafSource rejected: ${missingField}`);
     this.name = 'LeafSourceValidationError';
   }
 }

@@ -189,7 +189,10 @@ function createMockProvider(mode: 'full' | 'incremental' = 'full') {
 
       // ── FrameExtractor ──
       // Prompt contains extraction markers from yopsPrompt.ts
-      if (prompt.includes('knowledge extraction engine') || prompt.includes('Extraction Priority')) {
+      if (
+        prompt.includes('knowledge extraction engine') ||
+        prompt.includes('Extraction Priority')
+      ) {
         if (mode === 'incremental' || prompt.includes('Current Tree')) {
           return { text: INCREMENTAL_DELTA, usage: { inputTokens: 800, outputTokens: 300 } };
         }

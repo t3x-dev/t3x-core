@@ -126,16 +126,18 @@ draftsSpecialRoutes.openapi(reviewActionRoute, async (c) => {
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
 
     // SemanticPoint type is no longer exported; use structural typing
-    const sps = [...((draft.semantic_points ?? []) as Array<{
-      id: string;
-      text: string;
-      zone: string;
-      status: string;
-      staged: boolean;
-      inference_type?: string;
-      low_coverage?: boolean;
-      [key: string]: unknown;
-    }>)];
+    const sps = [
+      ...((draft.semantic_points ?? []) as Array<{
+        id: string;
+        text: string;
+        zone: string;
+        status: string;
+        staged: boolean;
+        inference_type?: string;
+        low_coverage?: boolean;
+        [key: string]: unknown;
+      }>),
+    ];
     const idx = sps.findIndex((sp) => sp.id === sp_id);
     if (idx === -1) return errorResponse(c, 'NOT_FOUND', 'Semantic point not found');
 

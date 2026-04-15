@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, parsePath, resolvePath } from '../paths';
 import type { OpHandler } from '../registry';
-import { deepClone, resolvePath, parsePath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 import type { YValue } from '../types';
 
 export const renameHandler: OpHandler = (doc, fields, index) => {
@@ -24,24 +24,36 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
       error: yopsError(
         YOPS_ERRORS.INVALID_PATH,
         `rename only supports key segments; path "${path}" ends with a non-key segment`,
-        index,
+        index
       ),
     };
   }
 
   const oldKey = lastSeg.value;
-  const parentPath = segments.slice(0, -1).map((s) => {
-    if (s.type === 'key') return s.value;
-    if (s.type === 'index') return `[${s.value}]`;
-    return `[${s.key}=${s.value}]`;
-  }).join('/');
+  const parentPath = segments
+    .slice(0, -1)
+    .map((s) => {
+      if (s.type === 'key') return s.value;
+      if (s.type === 'index') return `[${s.value}]`;
+      return `[${s.key}=${s.value}]`;
+    })
+    .join('/');
 
   const parent = parentPath === '' ? doc : resolvePath(doc, parentPath);
 
-  if (parent === null || parent === undefined || typeof parent !== 'object' || Array.isArray(parent)) {
+  if (
+    parent === null ||
+    parent === undefined ||
+    typeof parent !== 'object' ||
+    Array.isArray(parent)
+  ) {
     return {
       doc,
-      error: yopsError(YOPS_ERRORS.NOT_A_MAPPING, `Parent at "${parentPath}" is not a mapping`, index),
+      error: yopsError(
+        YOPS_ERRORS.NOT_A_MAPPING,
+        `Parent at "${parentPath}" is not a mapping`,
+        index
+      ),
     };
   }
 
@@ -53,13 +65,15 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
       error: yopsError(
         YOPS_ERRORS.ALREADY_EXISTS,
         `Key "${to}" already exists at the same level as "${path}"`,
-        index,
+        index
       ),
     };
   }
 
   const cloned = deepClone(doc);
-  const clonedParent = (parentPath === '' ? cloned : resolvePath(cloned, parentPath)) as { [key: string]: YValue };
+  const clonedParent = (parentPath === '' ? cloned : resolvePath(cloned, parentPath)) as {
+    [key: string]: YValue;
+  };
 
   const entries = Object.entries(clonedParent);
   for (const key of Object.keys(clonedParent)) {

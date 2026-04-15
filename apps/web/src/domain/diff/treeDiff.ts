@@ -83,7 +83,11 @@ export function computeTreeDiff(baseTrees: TreeNode[], resultTrees: TreeNode[]):
   const totalModifiedSlots = Object.values(modifiedSlots).reduce((s, a) => s + a.length, 0);
 
   return {
-    added, removed, addedSlots, removedSlots, modifiedSlots,
+    added,
+    removed,
+    addedSlots,
+    removedSlots,
+    modifiedSlots,
     summary: {
       nodesAdded: added.length,
       nodesRemoved: removed.length,

@@ -15,9 +15,9 @@ import { DraftWorkbenchLLM } from '@/components/draft/DraftWorkbenchLLM';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePendingCommitState } from '@/hooks/canvas/usePendingCommitState';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import type { CanvasNodeData } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { CommitConfigStep } from './CommitConfigStep';
 import { PendingSuccessPage } from './PendingSuccessPage';
 

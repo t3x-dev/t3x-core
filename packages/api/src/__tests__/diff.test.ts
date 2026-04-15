@@ -153,8 +153,9 @@ describe('Diff Routes', () => {
 
         // Turn hash mode needs embedding API — mock it
         process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
-        const { createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } =
-          await import('@t3x-dev/core');
+        const { createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } = await import(
+          '@t3x-dev/core'
+        );
 
         (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
         (createCachedEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({

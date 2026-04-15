@@ -262,7 +262,10 @@ export async function findMembersByNode(db: AnyDB, nodeId: string): Promise<Node
  * Reverse lookup: find which node a content node belongs to.
  * Returns the node ID, or null if content node is not a member of any node.
  */
-export async function findNodeByContentId(db: AnyDB, contentNodeId: string): Promise<string | null> {
+export async function findNodeByContentId(
+  db: AnyDB,
+  contentNodeId: string
+): Promise<string | null> {
   const [row] = await db
     .select({ nodeId: knowledgeNodeMembers.nodeId })
     .from(knowledgeNodeMembers)

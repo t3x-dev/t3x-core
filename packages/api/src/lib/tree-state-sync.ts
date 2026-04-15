@@ -24,6 +24,7 @@ interface EnrichedTreeNode {
   source?: string;
   slot_quotes?: Record<string, string>;
 }
+
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteTreeRelationsByConversation,
@@ -50,7 +51,6 @@ export async function syncYOpsToTrees(
   const snapshot = replayYOpsLog(toYOpsLogEntries(records));
   await rebuildTreesFromSnapshot(db, conversationId, projectId, snapshot, opts?.topicId);
 }
-
 
 /**
  * Rebuild trees table from a SemanticContent snapshot.
@@ -104,7 +104,6 @@ export async function rebuildTreesFromSnapshot(
     });
   }
 }
-
 
 /**
  * Build a SemanticContent from the trees table (replaces buildDraft for reads).
@@ -165,4 +164,3 @@ export async function readDraftFromTrees(
 
   return { trees: rootTrees, relations: relationsResult };
 }
-

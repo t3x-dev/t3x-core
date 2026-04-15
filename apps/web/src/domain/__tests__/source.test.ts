@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { Source } from '@t3x-dev/core';
+import { describe, expect, it } from 'vitest';
 import { getSlotSource } from '../source';
 
 const humanAt = (at: string): Source => ({ type: 'human', author: 'e', at });

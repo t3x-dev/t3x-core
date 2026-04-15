@@ -259,7 +259,6 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
         baseUrl: process.env.OLLAMA_BASE_URL,
       }),
   });
-
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -295,4 +294,3 @@ export async function generateWithFallback(
     generateLeafOutput({ ...options, provider })
   );
 }
-

@@ -15,8 +15,8 @@
  * @see https://github.com/t3x-dev/t3x-core/issues/622
  */
 
-import type { FlatNode, SemanticContent } from '../semantic/types';
 import { flattenTrees } from '../semantic/tree';
+import type { FlatNode, SemanticContent } from '../semantic/types';
 import { validateIntegrity } from '../semantic/validate';
 import { applyYOps } from '../t3x-yops/engine';
 import type { YOp } from '../t3x-yops/types';
@@ -55,9 +55,7 @@ export function applyVaguenessAnswer(
   const resolvedValue =
     typeof newValue === 'string' || typeof newValue === 'number' ? newValue : String(newValue);
 
-  const yops: YOp[] = [
-    { set: { path: `${nodeId}/${slotKey}`, value: resolvedValue } },
-  ];
+  const yops: YOp[] = [{ set: { path: `${nodeId}/${slotKey}`, value: resolvedValue } }];
 
   return applyAndValidate(snapshot, yops);
 }

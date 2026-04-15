@@ -15,6 +15,7 @@ export type {
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
 export type { ApiCommit } from '@/infrastructure/commits';
+export { ApiError } from '@/infrastructure/core';
 export type { DeployAgent } from '@/infrastructure/deploy';
 export type { TreeMergeSuggestion } from '@/infrastructure/diff';
 export type {
@@ -25,6 +26,11 @@ export type {
   SuggestResult,
   WorkbenchDraft,
 } from '@/infrastructure/drafts';
+export type { CommitExportFormat } from '@/infrastructure/export/commit';
+// Export-format unions (re-exported so components consume types
+// without touching @/infrastructure — Phase F boundary).
+export type { ExportFormat } from '@/infrastructure/export/core';
+export type { TemplateExportFormat } from '@/infrastructure/export/template';
 export type {
   CosineBucket,
   FeedbackStats,
@@ -59,7 +65,6 @@ export type {
 // Value-level re-exports (v2 §2.3 — consumers pattern-match via
 // instanceof / numeric comparison; hook-化 applies to functions only).
 export { STREAMING_IMPORT_THRESHOLD } from '@/infrastructure/misc';
-export { ApiError } from '@/infrastructure/core';
 export type { ConversationContext } from '@/infrastructure/pins';
 export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
 export type {
@@ -82,9 +87,3 @@ export type {
   Turn,
 } from '@/infrastructure/types';
 export type { NodeMember } from '@/types/knowledgeGraph';
-
-// Export-format unions (re-exported so components consume types
-// without touching @/infrastructure — Phase F boundary).
-export type { ExportFormat } from '@/infrastructure/export/core';
-export type { CommitExportFormat } from '@/infrastructure/export/commit';
-export type { TemplateExportFormat } from '@/infrastructure/export/template';

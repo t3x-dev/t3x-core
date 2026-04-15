@@ -22,6 +22,7 @@ import {
   updateDraftPreview,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { eventBus } from '../lib/event-bus';
@@ -37,7 +38,6 @@ import {
   SuggestDraftRequest,
   SuggestDraftResponse,
 } from '../schemas/contracts';
-import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { toApiDraft } from './drafts-crud.openapi';
 
 export const draftsWorkflowRoutes = new OpenAPIHono({
@@ -101,7 +101,7 @@ const commitDraftRoute = createRoute({
   operationId: 'commitDraft',
   summary: 'Commit draft',
   description:
-    'Saves the draft\'s current semantic tree as an immutable commit in the hash chain. ' +
+    "Saves the draft's current semantic tree as an immutable commit in the hash chain. " +
     'The draft status changes to `committed`. ' +
     'Optionally provide a `message` and `branch` (defaults to current branch).',
   request: {

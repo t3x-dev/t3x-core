@@ -11,7 +11,17 @@ interface SemanticPoint {
   zone: string;
   status: string;
   staged: boolean;
-  evidence?: Array<{ conversation_id?: string; turn_hash?: string; start_char?: number; end_char?: number; role?: string; quoted_text?: string; match_score?: number; relevance?: string; enabled?: boolean }>;
+  evidence?: Array<{
+    conversation_id?: string;
+    turn_hash?: string;
+    start_char?: number;
+    end_char?: number;
+    role?: string;
+    quoted_text?: string;
+    match_score?: number;
+    relevance?: string;
+    enabled?: boolean;
+  }>;
   position?: number;
   extraction_mode?: string;
   inference_type?: string;
@@ -19,6 +29,7 @@ interface SemanticPoint {
   inherited_from?: string;
   low_coverage?: boolean;
 }
+
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';

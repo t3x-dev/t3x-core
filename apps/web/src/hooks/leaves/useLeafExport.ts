@@ -15,9 +15,7 @@ export interface UseLeafExportReturn {
   handleExport: (format: ExportFormat) => Promise<void>;
 }
 
-export function useLeafExport(
-  leafRef: React.MutableRefObject<Leaf | null>
-): UseLeafExportReturn {
+export function useLeafExport(leafRef: React.MutableRefObject<Leaf | null>): UseLeafExportReturn {
   const [exportMessage, setExportMessage] = useState<{
     type: 'success' | 'error';
     text: string;

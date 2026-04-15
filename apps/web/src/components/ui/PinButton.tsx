@@ -6,8 +6,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { cn } from '@/utils/cn';
 import { usePinsStore } from '@/store/pinsStore';
+import { cn } from '@/utils/cn';
 
 interface PinButtonProps {
   projectId: string;

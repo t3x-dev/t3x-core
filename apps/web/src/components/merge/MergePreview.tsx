@@ -9,9 +9,9 @@
 
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 
 interface MergePreviewProps {
   expanded: boolean;

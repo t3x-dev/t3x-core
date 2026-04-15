@@ -51,9 +51,7 @@ describe('Relations Routes', () => {
             { key: 'f_001', slots: { text: 'Tokyo in spring' }, children: [] },
             { key: 'f_002', slots: { text: 'Cherry blossoms' }, children: [] },
           ],
-          relations: [
-            { from: 'f_001', to: 'f_002', type: 'causes' },
-          ],
+          relations: [{ from: 'f_001', to: 'f_002', type: 'causes' }],
         },
         project_id: testProjectId,
         message: 'Relations test commit',

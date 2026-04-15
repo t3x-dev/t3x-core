@@ -10,9 +10,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjects } from '@/hooks/projects/useProjects';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
 import { LogoIcon } from './sidebar/LogoIcon';
 import { ProjectFolder } from './sidebar/ProjectFolder';
@@ -72,7 +72,6 @@ export function ChatSidebar() {
       router.push(`/chat/${convs[0].conversation_id}`);
     }
   }, [projectConversations, router, setActiveConversation]);
-
 
   function handleConversationClick(convId: string, projectId: string) {
     setActiveConversation(convId, projectId);
@@ -166,14 +165,15 @@ export function ChatSidebar() {
         >
           <button
             type="button"
-            onClick={() => { setActiveConversation(null, null); router.push('/chat'); }}
+            onClick={() => {
+              setActiveConversation(null, null);
+              router.push('/chat');
+            }}
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <LogoIcon />
             {!collapsed && (
-              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                T3X
-              </span>
+              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">T3X</span>
             )}
           </button>
         </div>
@@ -207,7 +207,9 @@ export function ChatSidebar() {
 
         {/* Scrollable content: Projects + conversations */}
         <ScrollArea className="flex-1 w-full">
-          <div className={cn('flex flex-col gap-0.5 py-2', collapsed ? 'items-center px-2' : 'px-3')}>
+          <div
+            className={cn('flex flex-col gap-0.5 py-2', collapsed ? 'items-center px-2' : 'px-3')}
+          >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
               <div className="px-1 pt-2 pb-1">
@@ -270,7 +272,6 @@ export function ChatSidebar() {
         >
           {/* User Menu (includes Settings in dropdown) */}
           <UserMenu collapsed={collapsed} />
-
         </div>
       </aside>
 

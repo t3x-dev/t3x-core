@@ -24,9 +24,6 @@ export function useShareTokens() {
       createShareLink(entityType, entityId),
     []
   );
-  const revoke = useCallback(
-    async (id: string): Promise<ShareLink> => revokeShareLink(id),
-    []
-  );
+  const revoke = useCallback(async (id: string): Promise<ShareLink> => revokeShareLink(id), []);
   return { list, create, revoke };
 }

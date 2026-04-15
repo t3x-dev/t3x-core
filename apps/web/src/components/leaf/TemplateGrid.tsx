@@ -3,8 +3,8 @@
 import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
-import { cn } from '@/utils/cn';
 import type { Template } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 export interface LeafTemplate {
   type: string;

@@ -37,7 +37,9 @@ export function ImportProgress({
         {(status === 'loading' || status === 'streaming') && (
           <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
         )}
-        {status === 'success' && <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] shrink-0" />}
+        {status === 'success' && (
+          <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] shrink-0" />
+        )}
         {status === 'error' && <XCircle className="h-4 w-4 text-destructive shrink-0" />}
         <div className="flex-1 min-w-0">
           {message && <p className="truncate">{message}</p>}

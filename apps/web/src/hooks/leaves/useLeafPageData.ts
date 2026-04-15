@@ -37,11 +37,11 @@ export type WorkspaceMode = 'generate' | 'display';
 export type NodeCoverageEntry = _NodeCoverageEntry;
 export { computeNodeCoverage } from '@/hooks/leaves/useLeafCommit';
 
-import type { ApiCommit, Leaf } from '@/infrastructure';
 import type { SemanticContent } from '@t3x-dev/core';
-import type { NodeWithSource } from '@/types/sourceContext';
+import type { ApiCommit, Leaf } from '@/infrastructure';
 import type { ExportFormat } from '@/infrastructure/export/core';
 import type { Constraint } from '@/types/api';
+import type { NodeWithSource } from '@/types/sourceContext';
 
 export interface UseLeafPageDataReturn {
   // Core data
@@ -116,12 +116,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
   const commit = useLeafCommit(core.leaf);
   const generate = useLeafGenerate(core.leaf, leafId, core.setLeaf);
   const validate = useLeafValidate(core.leaf, leafId, core.setLeaf);
-  const constraintsEdit = useLeafConstraintsEdit(
-    leafId,
-    core.leafRef,
-    core.setLeaf,
-    core.setError
-  );
+  const constraintsEdit = useLeafConstraintsEdit(leafId, core.leafRef, core.setLeaf, core.setError);
   const exportFns = useLeafExport(core.leafRef);
   const assertions = useLeafAssertions(projectId, leafId, core.leaf);
 

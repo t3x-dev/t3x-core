@@ -2,16 +2,16 @@
 
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
+import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
+import { useCanvasStore } from '@/store/canvasStore';
+import type { CanvasNodeData, NodeKind } from '@/types/nodes';
 import {
   buildBackgroundMenu,
   buildLeafNodeMenu,
   buildUnitNodeMenu,
   type ContextMenuGroup,
 } from '@/utils/canvasMenuBuilders';
-import { useCanvasStore } from '@/store/canvasStore';
-import type { CanvasNodeData, NodeKind } from '@/types/nodes';
-import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
-import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 
 /**
  * Module-level ref for the leaf context menu handler.

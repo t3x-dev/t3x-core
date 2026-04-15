@@ -33,12 +33,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSemanticContent } from '@/domain/commitContent';
 import { useExportCommit } from '@/hooks/commits/useExportCommit';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import type { CommitExportFormat } from '@/types/api';
-import { glass, toneAccent } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
-import type { ApiCommit } from '@/types/api';
+import type { ApiCommit, CommitExportFormat } from '@/types/api';
 import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
+import { cn } from '@/utils/cn';
+import { glass, toneAccent } from '@/utils/theme';
 import { CommitHistoryPanel } from '../CommitHistoryPanel';
 import type { NodeQuickAction } from './NodeModal';
 import {

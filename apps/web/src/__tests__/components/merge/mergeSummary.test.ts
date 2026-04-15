@@ -85,9 +85,7 @@ describe('computeMergeSummary', () => {
   it('counts extended "both" resolutions', () => {
     const prepared: MergeResult = {
       ...makeEmptyPrepared(),
-      conflicts: [
-        { path: 'topic/a', slotConflicts: [] },
-      ],
+      conflicts: [{ path: 'topic/a', slotConflicts: [] }],
     };
     const ext: Record<string, ExtendedResolutionData> = {
       '0': { type: 'both' },
@@ -167,9 +165,7 @@ describe('computeMergeSummary', () => {
     const prepared: MergeResult = {
       ...makeEmptyPrepared(),
       autoKept: ['topic/ok'],
-      conflicts: [
-        { path: 'topic/conflict', slotConflicts: [] },
-      ],
+      conflicts: [{ path: 'topic/conflict', slotConflicts: [] }],
     };
 
     const result = computeMergeSummary(prepared);
@@ -185,9 +181,7 @@ describe('computeMergeSummary', () => {
   it('handles singular conflict in highlight', () => {
     const prepared: MergeResult = {
       ...makeEmptyPrepared(),
-      conflicts: [
-        { path: 'topic/a', slotConflicts: [] },
-      ],
+      conflicts: [{ path: 'topic/a', slotConflicts: [] }],
     };
     const resolutions: Record<string, 'source' | 'target'> = {
       'topic/a': 'source',

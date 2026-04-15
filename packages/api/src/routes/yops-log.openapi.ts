@@ -24,10 +24,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { eventBus } from '../lib/event-bus';
-import {
-  readDraftFromTrees,
-  rebuildTreesFromSnapshot,
-} from '../lib/tree-state-sync';
+import { readDraftFromTrees, rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { buildPipelineContext } from '../ops/context';
 import { yopsApplyOp } from '../ops/yops-apply';
@@ -121,7 +118,7 @@ export type SourcedYOpsValidationError =
  * for zod-layer cases — those are guaranteed handled upstream.
  */
 export function validateSourcedYOpsStructure(
-  yops: readonly unknown[],
+  yops: readonly unknown[]
 ): { ok: true } | SourcedYOpsValidationError {
   for (let i = 0; i < yops.length; i++) {
     const op = yops[i] as { source?: { type?: string; author?: string } };
@@ -306,7 +303,7 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
     return errorResponse(
       c,
       structural.code,
-      `op[${structural.opIndex}] ${structural.code === 'MISSING_SOURCE' ? 'missing valid source' : 'human source missing author'}`,
+      `op[${structural.opIndex}] ${structural.code === 'MISSING_SOURCE' ? 'missing valid source' : 'human source missing author'}`
     );
   }
 
@@ -325,12 +322,16 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
 
     const ctx = await buildPipelineContext(c, conversation.projectId);
     const result = await collectResult(
-      runOperation(yopsApplyOp, {
-        conversationId,
-        source: body.source,
-        turnHash: body.turn_hash,
-        yops: body.yops,
-      }, ctx),
+      runOperation(
+        yopsApplyOp,
+        {
+          conversationId,
+          source: body.source,
+          turnHash: body.turn_hash,
+          yops: body.yops,
+        },
+        ctx
+      )
     );
 
     eventBus.notify('yops.applied', conversationId, conversation.projectId);

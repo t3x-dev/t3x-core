@@ -5,7 +5,10 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "yops.yaml"],
+  "files": [
+    "dist",
+    "yops.yaml"
+  ],
   "scripts": {
     "generate:spec": "tsx scripts/generate-spec-data.ts",
     "generate:schema": "tsx scripts/generate-json-schema.ts",
@@ -30,7 +33,13 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["yaml", "operations", "declarative", "atomic", "patch"],
+  "keywords": [
+    "yaml",
+    "operations",
+    "declarative",
+    "atomic",
+    "patch"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/t3x-dev/t3x-core.git",

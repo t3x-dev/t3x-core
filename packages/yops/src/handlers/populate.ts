@@ -1,6 +1,6 @@
-import type { OpHandler } from '../registry';
+import { YOPS_ERRORS, yopsError } from '../errors';
 import { resolvePath, setAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
+import type { OpHandler } from '../registry';
 import type { YValue } from '../types';
 
 export const populateHandler: OpHandler = (doc, fields, index) => {
@@ -34,7 +34,7 @@ export const populateHandler: OpHandler = (doc, fields, index) => {
         error: yopsError(
           YOPS_ERRORS.INVALID_PATH,
           `Cannot populate key "${key}" at "${path}": ${(err as Error).message}`,
-          index,
+          index
         ),
       };
     }

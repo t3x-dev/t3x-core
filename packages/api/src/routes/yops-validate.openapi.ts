@@ -32,7 +32,7 @@ const ValidateRequestSchema = z.object({
         from: z.string(),
         to: z.string(),
         type: z.string(),
-      }),
+      })
     )
     .default([])
     .pipe(z.array(z.any()).max(2000)),
@@ -131,7 +131,7 @@ function resolveDocPath(doc: Record<string, unknown>, path: string): unknown | u
 function preValidateSetOp(
   doc: Record<string, unknown>,
   op: Record<string, unknown>,
-  opIndex: number,
+  opIndex: number
 ): { op_index: number; code: string; message: string } | null {
   if (!('set' in op)) return null;
 

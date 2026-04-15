@@ -1,8 +1,8 @@
 'use client';
 
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
+import { cn } from '@/utils/cn';
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const collapsed = useChatStore((s) => s.sidebarCollapsed);

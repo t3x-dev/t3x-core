@@ -65,7 +65,7 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
     return createCommit(mockDB, {
       parents: [],
       author: { type: 'human' as const, name: 'Test User' },
-      content: ({
+      content: {
         trees: nodes.map((n) => ({
           key: n.id,
           slots: n.slots,
@@ -73,7 +73,7 @@ describe('GET /v1/merge/drafts/:id/checks', () => {
           source: n.source,
         })),
         relations: [],
-      }) as any,
+      } as any,
       project_id: testProjectId,
       message: 'Test commit',
       branch: 'main',

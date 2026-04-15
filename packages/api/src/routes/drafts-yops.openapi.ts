@@ -56,7 +56,7 @@ const applyYOpsRoute = createRoute({
   operationId: 'applyYOpsToDraft',
   summary: 'Apply YOps to a draft',
   description:
-    'Apply YAML Operations (YOps) to mutate a draft\'s semantic tree. ' +
+    "Apply YAML Operations (YOps) to mutate a draft's semantic tree. " +
     'Use `GET /v1/docs/yops` to see all 18 available operations.\n\n' +
     '**Common operations:**\n' +
     '- `set: { path: "trip/budget", value: 5000 }` — update a single slot\n' +

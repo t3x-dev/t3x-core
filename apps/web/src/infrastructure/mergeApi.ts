@@ -65,9 +65,7 @@ export async function createMergeDraft(params: {
  * Load an existing merge draft by ID.
  */
 export async function getMergeDraft(draftId: string): Promise<MergeDraftResponse> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`
-  );
+  const res = await fetchWithTimeout(`${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`);
   return handleResponse<MergeDraftResponse>(res);
 }
 
@@ -78,14 +76,11 @@ export async function saveMergeDraft(
   draftId: string,
   patch: { prepared?: MergeResult; message?: string }
 ): Promise<void> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
   await handleResponse(res);
 }
 
@@ -93,10 +88,9 @@ export async function saveMergeDraft(
  * Delete a merge draft.
  */
 export async function deleteMergeDraft(draftId: string): Promise<void> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`,
-    { method: 'DELETE' }
-  );
+  const res = await fetchWithTimeout(`${API_V1}/merge/drafts/${encodeURIComponent(draftId)}`, {
+    method: 'DELETE',
+  });
   await handleResponse(res);
 }
 

@@ -2,7 +2,7 @@
  * DTL Operations Tests: move, clone, nest, split, fold, merge, sort, unique, pick, omit
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';
 
@@ -94,9 +94,11 @@ describe('clone', () => {
 describe('nest', () => {
   it('wraps sibling keys under a new parent', () => {
     const doc: YValue = { config: { host: 'localhost', port: 5432, name: 'mydb' } };
-    const result = applyYOps(doc, [{
-      nest: { path: 'config', keys: ['host', 'port'], under: 'connection' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        nest: { path: 'config', keys: ['host', 'port'], under: 'connection' },
+      },
+    ]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     const cfg = (result.doc as any).config;
@@ -110,9 +112,11 @@ describe('nest', () => {
 
   it('errors if path is not a mapping', () => {
     const doc: YValue = { items: [1, 2, 3] };
-    const result = applyYOps(doc, [{
-      nest: { path: 'items', keys: ['0'], under: 'wrapped' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        nest: { path: 'items', keys: ['0'], under: 'wrapped' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
     expect(result.error?.op_index).toBe(0);
@@ -120,9 +124,11 @@ describe('nest', () => {
 
   it('errors if a key does not exist in the mapping', () => {
     const doc: YValue = { config: { host: 'localhost' } };
-    const result = applyYOps(doc, [{
-      nest: { path: 'config', keys: ['host', 'missing'], under: 'wrapped' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        nest: { path: 'config', keys: ['host', 'missing'], under: 'wrapped' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
@@ -130,9 +136,11 @@ describe('nest', () => {
 
   it('errors if path does not exist', () => {
     const doc: YValue = {};
-    const result = applyYOps(doc, [{
-      nest: { path: 'missing', keys: ['a'], under: 'wrapped' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        nest: { path: 'missing', keys: ['a'], under: 'wrapped' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
   });
@@ -145,15 +153,17 @@ describe('split', () => {
     const doc: YValue = {
       settings: { host: 'localhost', port: 5432, log_level: 'debug', timeout: 30 },
     };
-    const result = applyYOps(doc, [{
-      split: {
-        path: 'settings',
-        into: {
-          db: ['host', 'port'],
-          app: ['log_level', 'timeout'],
+    const result = applyYOps(doc, [
+      {
+        split: {
+          path: 'settings',
+          into: {
+            db: ['host', 'port'],
+            app: ['log_level', 'timeout'],
+          },
         },
       },
-    }]);
+    ]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     const s = (result.doc as any).settings;
@@ -167,9 +177,11 @@ describe('split', () => {
 
   it('errors if path is not a mapping', () => {
     const doc: YValue = { items: [1, 2, 3] };
-    const result = applyYOps(doc, [{
-      split: { path: 'items', into: { group: ['0'] } },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        split: { path: 'items', into: { group: ['0'] } },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
     expect(result.error?.op_index).toBe(0);
@@ -177,9 +189,11 @@ describe('split', () => {
 
   it('errors if a listed key does not exist', () => {
     const doc: YValue = { settings: { host: 'localhost' } };
-    const result = applyYOps(doc, [{
-      split: { path: 'settings', into: { db: ['host', 'missing'] } },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        split: { path: 'settings', into: { db: ['host', 'missing'] } },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
@@ -243,9 +257,11 @@ describe('merge', () => {
         app: { name: 'myapp', debug: true },
       },
     };
-    const result = applyYOps(doc, [{
-      merge: { path: 'config', keys: ['db', 'app'], into: 'combined' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        merge: { path: 'config', keys: ['db', 'app'], into: 'combined' },
+      },
+    ]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     const cfg = (result.doc as any).config;
@@ -263,9 +279,11 @@ describe('merge', () => {
         second: { y: 2, shared: 'from_second' },
       },
     };
-    const result = applyYOps(doc, [{
-      merge: { path: 'root', keys: ['first', 'second'], into: 'merged' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        merge: { path: 'root', keys: ['first', 'second'], into: 'merged' },
+      },
+    ]);
     expect(result.ok).toBe(true);
     const merged = (result.doc as any).root.merged;
     expect(merged.shared).toBe('from_second'); // last wins
@@ -275,9 +293,11 @@ describe('merge', () => {
 
   it('errors if path is not a mapping', () => {
     const doc: YValue = { items: [1, 2, 3] };
-    const result = applyYOps(doc, [{
-      merge: { path: 'items', keys: ['0', '1'], into: 'merged' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        merge: { path: 'items', keys: ['0', '1'], into: 'merged' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
     expect(result.error?.op_index).toBe(0);
@@ -285,9 +305,11 @@ describe('merge', () => {
 
   it('errors if a listed key does not exist', () => {
     const doc: YValue = { config: { db: { host: 'localhost' } } };
-    const result = applyYOps(doc, [{
-      merge: { path: 'config', keys: ['db', 'missing'], into: 'combined' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        merge: { path: 'config', keys: ['db', 'missing'], into: 'combined' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
@@ -432,7 +454,9 @@ describe('unique', () => {
 
 describe('pick', () => {
   it('keeps only the specified keys in a mapping', () => {
-    const doc: YValue = { user: { name: 'alice', email: 'alice@example.com', role: 'admin', age: 30 } };
+    const doc: YValue = {
+      user: { name: 'alice', email: 'alice@example.com', role: 'admin', age: 30 },
+    };
     const result = applyYOps(doc, [{ pick: { path: 'user', keys: ['name', 'email'] } }]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
@@ -522,9 +546,11 @@ describe('omit', () => {
 describe('nest — ALREADY_EXISTS guard', () => {
   it('errors if wrapper key already exists', () => {
     const doc: YValue = { config: { host: 'x', port: 5432, database: {} } };
-    const result = applyYOps(doc, [{
-      nest: { path: 'config', keys: ['host', 'port'], under: 'database' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        nest: { path: 'config', keys: ['host', 'port'], under: 'database' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('ALREADY_EXISTS');
   });
@@ -533,9 +559,11 @@ describe('nest — ALREADY_EXISTS guard', () => {
 describe('split — ALREADY_EXISTS guard', () => {
   it('errors if group name already exists as a non-moved key', () => {
     const doc: YValue = { config: { host: 'x', port: 5432, db: 'existing' } };
-    const result = applyYOps(doc, [{
-      split: { path: 'config', into: { db: ['host', 'port'] } },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        split: { path: 'config', into: { db: ['host', 'port'] } },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('ALREADY_EXISTS');
   });
@@ -544,9 +572,11 @@ describe('split — ALREADY_EXISTS guard', () => {
 describe('merge — NOT_A_MAPPING guard', () => {
   it('errors if a listed key is not a mapping', () => {
     const doc: YValue = { config: { a: { x: 1 }, b: 'scalar' } };
-    const result = applyYOps(doc, [{
-      merge: { path: 'config', keys: ['a', 'b'], into: 'merged' },
-    }]);
+    const result = applyYOps(doc, [
+      {
+        merge: { path: 'config', keys: ['a', 'b'], into: 'merged' },
+      },
+    ]);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
   });

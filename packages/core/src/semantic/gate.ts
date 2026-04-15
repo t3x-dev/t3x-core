@@ -178,8 +178,12 @@ export function parseSemanticGateResponse(raw: string): Omit<SemanticGateResult,
             : 'accuracy';
           issues.push({
             severity,
-            node_path: typeof issue.frame_id === 'string' ? issue.frame_id :
-              typeof issue.node_path === 'string' ? issue.node_path : undefined,
+            node_path:
+              typeof issue.frame_id === 'string'
+                ? issue.frame_id
+                : typeof issue.node_path === 'string'
+                  ? issue.node_path
+                  : undefined,
             dimension,
             description: issue.description,
             suggestion: typeof issue.suggestion === 'string' ? issue.suggestion : undefined,

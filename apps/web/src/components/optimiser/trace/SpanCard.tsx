@@ -126,8 +126,10 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
               className={cn(
                 'rounded-lg border p-3',
                 msg.role === 'user' && 'bg-[var(--status-info)]/5 border-[var(--status-info)]/20',
-                msg.role === 'assistant' && 'bg-[var(--status-success)]/5 border-[var(--status-success)]/20',
-                msg.role === 'system' && 'bg-[var(--status-warning)]/5 border-[var(--status-warning)]/20'
+                msg.role === 'assistant' &&
+                  'bg-[var(--status-success)]/5 border-[var(--status-success)]/20',
+                msg.role === 'system' &&
+                  'bg-[var(--status-warning)]/5 border-[var(--status-warning)]/20'
               )}
             >
               <div className="mb-1 text-xs font-medium uppercase text-muted-foreground">

@@ -10,8 +10,7 @@ export function useReverseLearn(): {
   run: (leafId: string, maxSuggestions?: number) => Promise<ReverseLearnResult>;
 } {
   const run = useCallback(
-    (leafId: string, maxSuggestions?: number) =>
-      reverseLearnConstraints(leafId, maxSuggestions),
+    (leafId: string, maxSuggestions?: number) => reverseLearnConstraints(leafId, maxSuggestions),
     []
   );
   return { run };

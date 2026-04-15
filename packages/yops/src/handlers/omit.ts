@@ -1,6 +1,6 @@
+import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { resolvePath, deepClone, setAtPath } from '../paths';
-import { yopsError, YOPS_ERRORS } from '../errors';
 import type { YValue } from '../types';
 
 export const omitHandler: OpHandler = (doc, fields, index) => {
@@ -9,7 +9,12 @@ export const omitHandler: OpHandler = (doc, fields, index) => {
 
   const target = resolvePath(doc, path);
 
-  if (target === undefined || target === null || typeof target !== 'object' || Array.isArray(target)) {
+  if (
+    target === undefined ||
+    target === null ||
+    typeof target !== 'object' ||
+    Array.isArray(target)
+  ) {
     return {
       doc,
       error: yopsError(YOPS_ERRORS.NOT_A_MAPPING, `Path "${path}" is not a mapping`, index),

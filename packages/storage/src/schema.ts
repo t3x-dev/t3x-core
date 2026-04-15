@@ -8,6 +8,7 @@
  */
 
 import type { ContentBlock } from '@t3x-dev/core';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
@@ -22,7 +23,6 @@ import {
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 
 // Custom type for vector embeddings (bytea in Postgres)
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({

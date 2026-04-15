@@ -1,9 +1,9 @@
 'use client';
 
-import type { TreeNode, SlotDiff, SlotValue } from '@t3x-dev/core';
+import type { SlotDiff, SlotValue, TreeNode } from '@t3x-dev/core';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import { YAMLLine, type YAMLLineStatus } from './YAMLLine';
-import type { CompatNode } from '@/domain/tree/treeCompat';
 
 interface YAMLNodeRendererProps {
   node: TreeNode;

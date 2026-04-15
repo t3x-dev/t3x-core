@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { Extractor } from '../../extractors/extractor';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
 
-const t = (key: string, slots: Record<string, unknown> = {}, children: TreeNode[] = []): TreeNode => ({
-  key, slots, children,
+const t = (
+  key: string,
+  slots: Record<string, unknown> = {},
+  children: TreeNode[] = []
+): TreeNode => ({
+  key,
+  slots,
+  children,
 });
 
 const mockProvider = (text: string) => ({

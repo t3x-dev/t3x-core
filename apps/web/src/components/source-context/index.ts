@@ -1,14 +1,14 @@
 export { SourceContextView } from './SourceContextView';
 export {
+  type NodeWithHighlight,
   SourceConversationPanel,
   type SourceConversationPanelProps,
-  type NodeWithHighlight,
   type TurnWithHighlights,
 } from './SourceConversationPanel';
 export { SourceNodeList } from './SourceNodeList';
 export { TurnBubble } from './TurnBubble';
 export {
-  ViewSourceLink,
   buildSourceUrl,
   parseHighlightParam,
+  ViewSourceLink,
 } from './ViewSourceLink';

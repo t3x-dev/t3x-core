@@ -4,8 +4,8 @@ import type { SemanticContent, TreeNode, WordDiffFn } from '@t3x-dev/core';
 import { diffCommits, flattenTrees } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
 import { wordDiff } from '@/domain/diff/diffUtils';
-import { TreeGraphView } from './TreeGraphView';
 import { treesToNodes } from '@/domain/tree/treeCompat';
+import { TreeGraphView } from './TreeGraphView';
 
 // ── Props ──
 
@@ -56,11 +56,14 @@ export function DiffOverlay({ source, target, onStats, className }: DiffOverlayP
 
     // Merge trees from both sides for the combined content
     const combinedContent: SemanticContent = {
-      trees: [...target.trees, ...source.trees.filter((t) => {
-        // Include source trees that are only in source (removed)
-        const sourceNodes = treesToNodes([t]);
-        return sourceNodes.some((f) => diff.onlyInSource.includes(f.id));
-      })],
+      trees: [
+        ...target.trees,
+        ...source.trees.filter((t) => {
+          // Include source trees that are only in source (removed)
+          const sourceNodes = treesToNodes([t]);
+          return sourceNodes.some((f) => diff.onlyInSource.includes(f.id));
+        }),
+      ],
       relations: allRelations,
     };
 

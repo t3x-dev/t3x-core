@@ -97,8 +97,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setError: (error) => set({ error }),
   setInitialized: (initialized) => set({ initialized }),
 
-  addToProjects: (project) =>
-    set((state) => ({ projects: [project, ...state.projects] })),
+  addToProjects: (project) => set((state) => ({ projects: [project, ...state.projects] })),
 
   removeProject: (id) => {
     const existing = get().projects.find((p) => p.id === id);

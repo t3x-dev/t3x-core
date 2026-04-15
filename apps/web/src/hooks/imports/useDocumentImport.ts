@@ -4,11 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  importDocument,
-  previewDocumentImport,
-  streamDocumentImport,
-} from '@/infrastructure/misc';
+import { importDocument, previewDocumentImport, streamDocumentImport } from '@/infrastructure/misc';
 import type { ImportPreviewResult, ImportResult, ImportStreamEvent } from '@/types/api';
 
 export function useDocumentImport() {
@@ -23,8 +19,7 @@ export function useDocumentImport() {
     []
   );
   const run = useCallback(
-    async (file: File, projectId: string): Promise<ImportResult> =>
-      importDocument(file, projectId),
+    async (file: File, projectId: string): Promise<ImportResult> => importDocument(file, projectId),
     []
   );
   return { preview, stream, run };

@@ -1,10 +1,10 @@
 import * as yaml from 'js-yaml';
 
 export interface FieldSpec {
-  type: string;        // 'string', 'any', 'boolean', 'mapping', 'sequence'
+  type: string; // 'string', 'any', 'boolean', 'mapping', 'sequence'
   required: boolean;
   description: string;
-  enum?: string[];     // e.g., ['asc', 'desc']
+  enum?: string[]; // e.g., ['asc', 'desc']
   default?: unknown;
   item_type?: string;
 }
@@ -19,10 +19,10 @@ export interface TestCase {
 
 export interface OpSpec {
   name: string;
-  category: string;    // 'ddl', 'dml', 'dtl', 'dcl'
+  category: string; // 'ddl', 'dml', 'dtl', 'dcl'
   description: string;
   fields: Record<string, FieldSpec>;
-  errors: string[];    // error codes this op can produce
+  errors: string[]; // error codes this op can produce
   rules: string[];
   tests: TestCase[];
 }
@@ -94,7 +94,7 @@ export function parseSpec(yamlStr: string): YOpsSpec {
     for (const [fieldName, fieldDef] of Object.entries(opDef.fields ?? {})) {
       fields[fieldName] = {
         type: fieldDef.type,
-        required: fieldDef.required !== false,   // default true if not specified
+        required: fieldDef.required !== false, // default true if not specified
         description: fieldDef.description ?? '',
         ...(fieldDef.enum !== undefined && { enum: fieldDef.enum }),
         ...(fieldDef.default !== undefined && { default: fieldDef.default }),

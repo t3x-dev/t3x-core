@@ -13,9 +13,9 @@ import { useCountUp } from '@/hooks/shared/useCountUp';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ApiCommit, Project } from '@/infrastructure';
 import { listCommits, listProjects } from '@/infrastructure';
-import { treeSummaryText, getSemanticContent } from '@/infrastructure/commits';
-import { cn } from '@/utils/cn';
+import { getSemanticContent, treeSummaryText } from '@/infrastructure/commits';
 import type { SemanticEntry } from '@/types/semantic';
+import { cn } from '@/utils/cn';
 
 const stageColors = {
   commit: 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/20',

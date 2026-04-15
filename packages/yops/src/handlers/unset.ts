@@ -1,5 +1,5 @@
+import { deepClone, deleteAtPath } from '../paths';
 import type { OpHandler } from '../registry';
-import { deleteAtPath, deepClone } from '../paths';
 
 export const unsetHandler: OpHandler = (doc, fields, _index) => {
   const path = fields.path as string;

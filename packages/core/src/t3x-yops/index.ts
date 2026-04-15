@@ -1,40 +1,56 @@
 // ── Engine ──
-export { applyYOps, applySourcedYOps } from './engine';
 
 // ── Format (from @t3x-dev/yops, with backward-compat alias) ──
-export { parseYOpsYaml, formatYOps as formatYOpsLog } from '@t3x-dev/yops';
-
-// ── Schema ──
-export { YOpSchema, YOpsDocumentSchema } from './schema';
-
-// ── Types ──
-export type {
-  CloneOp, DefineOp, DropOp, FoldOp, MergeOp, MoveOp, NestOp,
-  PopulateOp, RelateOp, RenameOp, SetOp, SplitOp, UnrelateOp, UnsetOp,
-  YOp, YOpsDocument, YOpsError, YOpsResult,
-  // New ops in @t3x-dev/yops
-  AppendOp, SortOp, UniqueOp, PickOp, OmitOp, AssertOp,
-} from './types';
-export { YOPS_ERRORS, SNAKE_CASE_KEY } from './types';
-
 // ── Classify ──
-export { classifyYOp, type YOpCategory } from '@t3x-dev/yops';
-
+export {
+  classifyYOp,
+  formatYOps as formatYOpsLog,
+  parseYOpsYaml,
+  type YOpCategory,
+} from '@t3x-dev/yops';
+export { applySourcedYOps, applyYOps } from './engine';
 // ── Helpers (public-facing only) ──
 export { findNode, getNodeKey, getParentPath } from './helpers';
-
 // ── JSON Schema ──
 export { getYOpsJsonSchema } from './jsonSchema';
-
-// ── Replay ──
-export { replayYOps, verifyReplay, extractOpsFromEntries } from './replay';
 export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
-
+// ── Replay ──
+export { extractOpsFromEntries, replayYOps, verifyReplay } from './replay';
+// ── Schema ──
+export { YOpSchema, YOpsDocumentSchema } from './schema';
 // ── Source provenance ──
-export type { Source, LLMSource, HumanSource, TurnRef } from './source';
-export { isLLMSource, isHumanSource } from './source';
-export type { SourcedYOp } from './types';
-
+export type { HumanSource, LLMSource, Source, TurnRef } from './source';
+export { isHumanSource, isLLMSource } from './source';
+export type { FailingOp, FailureReason, ValidationResult, ValidationTurn } from './sourceValidator';
 // ── Source validator ──
 export { validateSource } from './sourceValidator';
-export type { ValidationResult, ValidationTurn, FailingOp, FailureReason } from './sourceValidator';
+// ── Types ──
+export type {
+  // New ops in @t3x-dev/yops
+  AppendOp,
+  AssertOp,
+  CloneOp,
+  DefineOp,
+  DropOp,
+  FoldOp,
+  MergeOp,
+  MoveOp,
+  NestOp,
+  OmitOp,
+  PickOp,
+  PopulateOp,
+  RelateOp,
+  RenameOp,
+  SetOp,
+  SortOp,
+  SourcedYOp,
+  SplitOp,
+  UniqueOp,
+  UnrelateOp,
+  UnsetOp,
+  YOp,
+  YOpsDocument,
+  YOpsError,
+  YOpsResult,
+} from './types';
+export { SNAKE_CASE_KEY, YOPS_ERRORS } from './types';

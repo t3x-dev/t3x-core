@@ -8,10 +8,10 @@
  * Extracted from useLeafPageData (PR22).
  */
 
+import type { SemanticContent } from '@t3x-dev/core';
 import { useEffect, useMemo, useState } from 'react';
 import type { ApiCommit, Leaf } from '@/infrastructure';
 import { getApiCommit, getSemanticContent } from '@/infrastructure';
-import type { SemanticContent } from '@t3x-dev/core';
 import type { NodeWithSource } from '@/types/sourceContext';
 
 export interface NodeCoverageEntry {

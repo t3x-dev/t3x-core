@@ -62,7 +62,7 @@ interface WorkspaceState {
 
   select: (
     source: SelectionSource,
-    target: { nodePath?: string; slotKey?: string; turnIndex?: number },
+    target: { nodePath?: string; slotKey?: string; turnIndex?: number }
   ) => void;
   clearSelection: () => void;
 

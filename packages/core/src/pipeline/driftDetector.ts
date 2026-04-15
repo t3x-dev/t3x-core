@@ -106,8 +106,7 @@ export function parseDriftResponse(raw: string): DriftResult {
     // Validate relation type
     let relationType: RelationType | undefined;
     if (typeof parsed.relation === 'string' && VALID_RELATIONS.has(parsed.relation)) {
-      relationType =
-        parsed.relation === 'none' ? undefined : (parsed.relation as RelationType);
+      relationType = parsed.relation === 'none' ? undefined : (parsed.relation as RelationType);
     }
 
     // Validate new_topic name

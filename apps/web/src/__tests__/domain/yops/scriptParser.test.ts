@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseYOpsScript, opsToYaml } from '@/domain/yops/scriptParser';
+import { opsToYaml, parseYOpsScript } from '@/domain/yops/scriptParser';
 
 describe('parseYOpsScript', () => {
   it('parses valid yops document', () => {

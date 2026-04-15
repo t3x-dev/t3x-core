@@ -2,7 +2,7 @@
  * DML Operations Tests: set, unset, populate, append
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';
 
@@ -80,12 +80,14 @@ describe('unset', () => {
 describe('populate', () => {
   it('sets multiple keys on a mapping', () => {
     const doc: YValue = { user: { name: 'alice' } };
-    const result = applyYOps(doc, [{
-      populate: {
-        path: 'user',
-        values: { role: 'admin', active: true },
+    const result = applyYOps(doc, [
+      {
+        populate: {
+          path: 'user',
+          values: { role: 'admin', active: true },
+        },
       },
-    }]);
+    ]);
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     expect((result.doc as any).user).toEqual({ name: 'alice', role: 'admin', active: true });
@@ -95,12 +97,14 @@ describe('populate', () => {
 
   it('errors if path is not a mapping', () => {
     const doc: YValue = { items: [1, 2, 3] };
-    const result = applyYOps(doc, [{
-      populate: {
-        path: 'items',
-        values: { extra: 4 },
+    const result = applyYOps(doc, [
+      {
+        populate: {
+          path: 'items',
+          values: { extra: 4 },
+        },
       },
-    }]);
+    ]);
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(0);
     expect(result.error?.code).toBe('NOT_A_MAPPING');
@@ -109,12 +113,14 @@ describe('populate', () => {
 
   it('errors if path does not exist', () => {
     const doc: YValue = { config: {} };
-    const result = applyYOps(doc, [{
-      populate: {
-        path: 'missing',
-        values: { key: 'value' },
+    const result = applyYOps(doc, [
+      {
+        populate: {
+          path: 'missing',
+          values: { key: 'value' },
+        },
       },
-    }]);
+    ]);
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(0);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
@@ -155,12 +161,11 @@ describe('append', () => {
 
   it('appends a mapping to a sequence', () => {
     const doc: YValue = { users: [{ name: 'alice' }] };
-    const result = applyYOps(doc, [{ append: { path: 'users', value: { name: 'bob', role: 'viewer' } } }]);
-    expect(result.ok).toBe(true);
-    expect((result.doc as any).users).toEqual([
-      { name: 'alice' },
-      { name: 'bob', role: 'viewer' },
+    const result = applyYOps(doc, [
+      { append: { path: 'users', value: { name: 'bob', role: 'viewer' } } },
     ]);
+    expect(result.ok).toBe(true);
+    expect((result.doc as any).users).toEqual([{ name: 'alice' }, { name: 'bob', role: 'viewer' }]);
     // original untouched
     expect((doc as any).users).toHaveLength(1);
   });

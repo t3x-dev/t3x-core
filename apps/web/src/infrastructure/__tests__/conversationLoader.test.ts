@@ -1,9 +1,11 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { loadConversation } from '../conversationLoader';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as turnsClient from '@/infrastructure/turns';
+import { loadConversation } from '../conversationLoader';
 import * as yopsLog from '../yopsLog';
 
-beforeEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('loadConversation', () => {
   it('loads turns and yops in parallel', async () => {

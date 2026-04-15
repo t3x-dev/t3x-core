@@ -5,8 +5,8 @@
  * Initialized via initClassify() at bootstrap; falls back to 'dtl'.
  */
 
-import type { YOp } from './types';
 import type { YOpsSpec } from './spec';
+import type { YOp } from './types';
 
 export type YOpCategory = 'ddl' | 'dml' | 'dtl' | 'dcl';
 

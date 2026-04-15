@@ -14,13 +14,13 @@
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
-import * as api from '@/infrastructure';
-import { useCanvasStore } from '@/store/canvasStore';
-import type { CanvasNodeData } from '@/types/nodes';
 import { usePendingCommitExtraction } from '@/hooks/canvas/usePendingCommitExtraction';
 import { usePendingCommitLayout } from '@/hooks/canvas/usePendingCommitLayout';
 import { usePendingCommitPostCommit } from '@/hooks/canvas/usePendingCommitPostCommit';
 import { findUpstreamCommitHash } from '@/hooks/canvas/usePendingCommitState.helpers';
+import * as api from '@/infrastructure';
+import { useCanvasStore } from '@/store/canvasStore';
+import type { CanvasNodeData } from '@/types/nodes';
 
 interface UsePendingCommitStateProps {
   node: Node<CanvasNodeData>;

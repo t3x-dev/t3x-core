@@ -15,12 +15,12 @@ import { QualityPanel } from '@/components/leaf/QualityPanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
-import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
+import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { Constraint, SuggestedConstraint } from '@/infrastructure';
-import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
-import { cn } from '@/utils/cn';
 import { useProjectStore } from '@/store/projectStore';
+import { cn } from '@/utils/cn';
+import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 
 function getGenerateErrorMessage(error: string): {
   title: string;

@@ -107,12 +107,8 @@ export function generateMergeReleaseNote(
   }
 
   // Removed
-  const removedSource = keepSource
-    ? prepared.onlyInSource.filter((p) => !keepSource.has(p))
-    : [];
-  const removedTarget = keepTarget
-    ? prepared.onlyInTarget.filter((p) => !keepTarget.has(p))
-    : [];
+  const removedSource = keepSource ? prepared.onlyInSource.filter((p) => !keepSource.has(p)) : [];
+  const removedTarget = keepTarget ? prepared.onlyInTarget.filter((p) => !keepTarget.has(p)) : [];
   const removed = [...removedSource, ...removedTarget];
   if (removed.length > 0) {
     sections.push({
@@ -161,4 +157,3 @@ export function formatReleaseNoteAsMarkdown(note: MergeReleaseNote): string {
 
   return lines.join('\n');
 }
-

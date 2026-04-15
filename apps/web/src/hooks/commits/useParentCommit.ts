@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type ParentCommit, fetchParentCommit } from '@/queries/parentCommit';
+import { fetchParentCommit, type ParentCommit } from '@/queries/parentCommit';
 import { useCommitStore } from '@/store/commitStore';
 
 /**

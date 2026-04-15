@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGates } from '../../ops/gates/runner';
-import type { YOp } from '../../t3x-yops/types';
 import type { SemanticContent } from '../../semantic/types';
+import type { YOp } from '../../t3x-yops/types';
 
 const turns = [
   { role: 'user', content: 'I want to go to Tokyo' },

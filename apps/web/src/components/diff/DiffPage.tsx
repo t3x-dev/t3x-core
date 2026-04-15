@@ -20,9 +20,9 @@ import { TreeGraphView } from '@/components/tree-graph';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
+import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
-import { useProjectStore } from '@/store/projectStore';
 import { TreeDiffIndex } from './DiffIndex';
 import { DiffTreeOverview } from './DiffTreeOverview';
 import { DiffYAMLSplitView } from './DiffYAMLSplitView';
@@ -214,11 +214,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      loadDiff(baseHash, targetHash),
-      loadCommit(targetHash),
-      loadCommit(baseHash),
-    ])
+    Promise.all([loadDiff(baseHash, targetHash), loadCommit(targetHash), loadCommit(baseHash)])
       .then(([diffResp, tgtCommit, baseCommitData]) => {
         if (cancelled) return;
         setDiffResponse(diffResp);

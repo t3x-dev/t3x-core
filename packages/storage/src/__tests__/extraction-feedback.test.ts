@@ -197,4 +197,3 @@ describe('getAdaptiveFeedbackStats', () => {
     expect(stats.byInferenceType).toEqual({});
   });
 });
-

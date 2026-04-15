@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateSource, type ValidationTurn } from '../sourceValidator';
+import { type ValidationTurn, validateSource } from '../sourceValidator';
 import type { SourcedYOp } from '../types';
 
 const turn: ValidationTurn = {
@@ -74,7 +74,12 @@ describe('validateSource', () => {
   it('rejects LLM source with empty quote', () => {
     const op = {
       set: { path: 'x', value: 'y' },
-      source: { type: 'llm', model: 'm', at: '2026-04-12T00:00:00Z', turn_ref: { turn_hash: 'sha256:abc', quote: '' } },
+      source: {
+        type: 'llm',
+        model: 'm',
+        at: '2026-04-12T00:00:00Z',
+        turn_ref: { turn_hash: 'sha256:abc', quote: '' },
+      },
     } as SourcedYOp;
     const result = validateSource([op], [turn]);
     expect(result.ok).toBe(false);
@@ -104,7 +109,9 @@ describe('validateSource', () => {
     const bad: SourcedYOp = {
       set: { path: 'x', value: 'y' },
       source: {
-        type: 'llm', model: 'm', at: '2026-04-12T00:00:00Z',
+        type: 'llm',
+        model: 'm',
+        at: '2026-04-12T00:00:00Z',
         turn_ref: { turn_hash: 'sha256:abc', quote: 'not present' },
       },
     };

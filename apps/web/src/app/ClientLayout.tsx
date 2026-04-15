@@ -7,16 +7,16 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDialog';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { showToast } from '@/components/layout/Toast';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
-import { showToast } from '@/components/layout/Toast';
 import { Toaster } from '@/components/ui/sonner';
-import { cn } from '@/utils/cn';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { cn } from '@/utils/cn';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

@@ -35,9 +35,8 @@
 
 import { ChevronDown, ChevronUp, Loader2, MessageCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-
-import { useTurnContext } from '@/hooks/shared/useTurnContext';
 import { truncateWithHighlights } from '@/domain/format/truncationUtils';
+import { useTurnContext } from '@/hooks/shared/useTurnContext';
 import type { TurnContextData, WordDiffSegment } from '@/types/merge';
 import type { HighlightColor, HighlightRange } from '@/types/sourceContext';
 
@@ -97,10 +96,8 @@ export interface SourceContextViewProps {
 // ============================================================================
 
 const highlightColorClasses: Record<HighlightColor, string> = {
-  yellow:
-    'bg-[var(--status-warning-muted)] font-medium border-b-2 border-[var(--status-warning)]',
-  green:
-    'bg-[var(--status-success-muted)] font-medium border-b-2 border-[var(--status-success)]',
+  yellow: 'bg-[var(--status-warning-muted)] font-medium border-b-2 border-[var(--status-warning)]',
+  green: 'bg-[var(--status-success-muted)] font-medium border-b-2 border-[var(--status-success)]',
   deepGreen: 'bg-[var(--status-success)] text-white font-medium',
   deepRed: 'bg-[var(--status-error)] text-white font-medium',
   amber:

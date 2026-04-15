@@ -5,16 +5,16 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import type { CompatNode } from '@/domain/tree/treeCompat';
 import {
   buildYAMLLines,
   YAMLRenderer,
   type YAMLRendererProps,
 } from '@/components/shared/YAMLRenderer';
+import type { CompatNode } from '@/domain/tree/treeCompat';
 
 // ── Helper: minimal trees ──────────────────────────────────────────────────
 
-function makeNode(overrides: Partial< CompatNode> & { id: string; type: string }): CompatNode {
+function makeNode(overrides: Partial<CompatNode> & { id: string; type: string }): CompatNode {
   return {
     key: overrides.type,
     slots: {},
@@ -45,7 +45,7 @@ describe('buildYAMLLines', () => {
 
   test('single tree renders header line', () => {
     const nodes: CompatNode[] = [makeNode({ id: 'f_001', type: 'user_goal', slots: {} })];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     // Should have a header line and a blank separator
     expect(lines.length).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe('buildYAMLLines', () => {
         slots: { color: 'blue' },
       }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const slotLine = lines.find((l) => l.slotKey === 'color');
     expect(slotLine).toBeDefined();
@@ -82,7 +82,7 @@ describe('buildYAMLLines', () => {
         slots: { amount: 3000 },
       }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const slotLine = lines.find((l) => l.slotKey === 'amount');
     expect(slotLine).toBeDefined();
@@ -97,7 +97,7 @@ describe('buildYAMLLines', () => {
         slots: { target: { ref: 'f_002' } },
       }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const slotLine = lines.find((l) => l.slotKey === 'target');
     expect(slotLine).toBeDefined();
@@ -114,7 +114,7 @@ describe('buildYAMLLines', () => {
         },
       }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     // Should have address: line plus indented city: line
     const addressLine = lines.find((l) => l.slotKey === 'address' && l.text === '  address:');
@@ -134,7 +134,7 @@ describe('buildYAMLLines', () => {
         slots: { items: ['apple', 'banana'] },
       }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const arrayHeaderLine = lines.find((l) => l.text === '  items:');
     expect(arrayHeaderLine).toBeDefined();
@@ -147,8 +147,10 @@ describe('buildYAMLLines', () => {
   });
 
   test('blank separator line is added after each tree', () => {
-    const nodes: CompatNode[] = [makeNode({ id: 'f_001', type: 'tree_one', slots: { key: 'val' } })];
-    const lines = buildYAMLLines( nodes);
+    const nodes: CompatNode[] = [
+      makeNode({ id: 'f_001', type: 'tree_one', slots: { key: 'val' } }),
+    ];
+    const lines = buildYAMLLines(nodes);
 
     const emptyLine = lines.find((l) => l.isEmpty);
     expect(emptyLine).toBeDefined();
@@ -160,7 +162,7 @@ describe('buildYAMLLines', () => {
       makeNode({ id: 'f_001', type: 'type_a', slots: {} }),
       makeNode({ id: 'f_002', type: 'type_b', slots: {} }),
     ];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const headers = lines.filter((l) => l.isNodeHeader);
     expect(headers.length).toBe(2);
@@ -170,7 +172,7 @@ describe('buildYAMLLines', () => {
 
   test('YAMLLine has correct shape', () => {
     const nodes: CompatNode[] = [makeNode({ id: 'f_001', type: 'test_type', slots: { k: 'v' } })];
-    const lines = buildYAMLLines( nodes);
+    const lines = buildYAMLLines(nodes);
 
     const headerLine = lines.find((l) => l.isNodeHeader)!;
     expect(headerLine).toHaveProperty('text');

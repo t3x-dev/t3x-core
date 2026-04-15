@@ -20,18 +20,14 @@ describe('validateSources', () => {
   });
 
   it('passes even for ops that previously had invalid turn references', () => {
-    const yops: YOp[] = [
-      { set: { path: 'trip/cost', value: 100 } },
-    ];
+    const yops: YOp[] = [{ set: { path: 'trip/cost', value: 100 } }];
     const result = validateSources(yops, turns);
     expect(result.passed).toBe(true);
     expect(result.violations).toHaveLength(0);
   });
 
   it('passes for all op types without source metadata', () => {
-    const yops: YOp[] = [
-      { set: { path: 'trip/food', value: 'sushi' } },
-    ];
+    const yops: YOp[] = [{ set: { path: 'trip/food', value: 'sushi' } }];
     const result = validateSources(yops, turns);
     expect(result.passed).toBe(true);
     expect(result.violations).toHaveLength(0);
@@ -49,9 +45,7 @@ describe('validateSources', () => {
   });
 
   it('passes for populate ops', () => {
-    const yops: YOp[] = [
-      { populate: { path: 'trip', values: { cost: 280 } } },
-    ];
+    const yops: YOp[] = [{ populate: { path: 'trip', values: { cost: 280 } } }];
     const result = validateSources(yops, turns);
     expect(result.passed).toBe(true);
   });

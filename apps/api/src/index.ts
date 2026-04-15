@@ -8,7 +8,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
-import { closeDB, createApp, getDB, pinoLogger, startTimeoutChecker, stopTimeoutChecker } from '@t3x-dev/api';
+import {
+  closeDB,
+  createApp,
+  getDB,
+  pinoLogger,
+  startTimeoutChecker,
+  stopTimeoutChecker,
+} from '@t3x-dev/api';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -94,7 +101,10 @@ async function start() {
     // Enable WebSocket connections on the HTTP server
     injectWebSocket(server);
 
-    pinoLogger.info({ port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` }, 'T3X API server running');
+    pinoLogger.info(
+      { port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` },
+      'T3X API server running'
+    );
 
     return server;
   } catch (error) {

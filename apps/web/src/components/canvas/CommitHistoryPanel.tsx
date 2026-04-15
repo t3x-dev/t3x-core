@@ -16,8 +16,8 @@ import {
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
-import { cn } from '@/utils/cn';
 import type { ApiCommit } from '@/types/api';
+import { cn } from '@/utils/cn';
 
 // Helper functions (module-scope so CommitHistoryRow can use them)
 function shortHash(hash: string) {

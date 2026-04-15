@@ -7,8 +7,7 @@
  * Pure deterministic transform. No LLM.
  */
 
-import type { SlotValue, TreeNode } from '../../semantic/types';
-import type { SemanticContent } from '../../semantic/types';
+import type { SemanticContent, SlotValue, TreeNode } from '../../semantic/types';
 
 const NEGATIVE_PATTERNS = [
   /\bavoid(?:ing)?\s+(.+?)(?:\.|,|$)/gi,
@@ -73,7 +72,7 @@ function flagTree(node: TreeNode, avoidedTerms: string[]): TreeNode {
 
 export function flagContradictions(
   content: SemanticContent,
-  turns: Array<{ role: string; content: string }>,
+  turns: Array<{ role: string; content: string }>
 ): SemanticContent {
   const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.content);
   const avoidedTerms = extractAvoidedTerms(userMessages);

@@ -316,8 +316,20 @@ describe('buildLeafPrompt', () => {
     const knowledge = createTestKnowledge([{ type: 'topic', slots: { subject: 'AI' } }]);
     const leaf = createTestLeaf('tweet');
     const lessons = [
-      { id: 'lsn_1', source: 'assertion' as const, signal: 'Previous output was too formal for Twitter', leaf_id: 'leaf_1', created_at: '2026-03-31T00:00:00Z' },
-      { id: 'lsn_2', source: 'assertion' as const, signal: 'Include more hashtags for engagement', leaf_id: 'leaf_1', created_at: '2026-03-31T00:00:00Z' },
+      {
+        id: 'lsn_1',
+        source: 'assertion' as const,
+        signal: 'Previous output was too formal for Twitter',
+        leaf_id: 'leaf_1',
+        created_at: '2026-03-31T00:00:00Z',
+      },
+      {
+        id: 'lsn_2',
+        source: 'assertion' as const,
+        signal: 'Include more hashtags for engagement',
+        leaf_id: 'leaf_1',
+        created_at: '2026-03-31T00:00:00Z',
+      },
     ];
 
     const result = buildLeafPrompt({ knowledge, leaf, lessons });

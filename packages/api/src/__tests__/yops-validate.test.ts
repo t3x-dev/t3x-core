@@ -16,7 +16,7 @@ describe('POST /v1/yops/validate', () => {
           yops: [{ set: { path: 'trip/destination', value: 'Tokyo' } }],
         }),
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -36,7 +36,7 @@ describe('POST /v1/yops/validate', () => {
           yops: [{ set: { path: 'trip/nonexistent/deep', value: 'x' } }],
         }),
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -55,7 +55,7 @@ describe('POST /v1/yops/validate', () => {
           yops: [],
         }),
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
     );
     expect(res.status).toBe(400);
   });

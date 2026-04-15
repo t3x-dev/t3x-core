@@ -19,10 +19,7 @@ export interface InsertNodeModificationInput {
   actor: string;
 }
 
-export async function insertNodeModification(
-  db: AnyDB,
-  input: InsertNodeModificationInput
-) {
+export async function insertNodeModification(db: AnyDB, input: InsertNodeModificationInput) {
   const [row] = await db
     .insert(nodeModifications)
     .values({

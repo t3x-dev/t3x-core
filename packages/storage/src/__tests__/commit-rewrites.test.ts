@@ -4,13 +4,13 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { collectYOpsForCommitRange, createCommit, listCommits } from '../queries/commits';
 import {
   getSupersededHashes,
   insertRewrite,
   isCommitSuperseded,
   listRewrites,
 } from '../queries/commit-rewrites';
+import { collectYOpsForCommitRange, createCommit, listCommits } from '../queries/commits';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
@@ -150,7 +150,9 @@ describe('collectYOpsForCommitRange', () => {
   });
 
   it('throws if commit not found', async () => {
-    await expect(collectYOpsForCommitRange(db, ['sha256:nonexistent'])).rejects.toThrow('not found');
+    await expect(collectYOpsForCommitRange(db, ['sha256:nonexistent'])).rejects.toThrow(
+      'not found'
+    );
   });
 });
 

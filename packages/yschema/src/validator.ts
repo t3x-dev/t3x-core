@@ -280,7 +280,14 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
           const msg =
             rule.message?.replace('{{path}}', path) ??
             `Rule "${rule.id}": "${path}" is not a mapping, cannot check slots`;
-          push(violations, 'RULE_VIOLATION', path, severity, msg, interpolateFixOps(rule.fix, path));
+          push(
+            violations,
+            'RULE_VIOLATION',
+            path,
+            severity,
+            msg,
+            interpolateFixOps(rule.fix, path)
+          );
         } else {
           for (const slot of rule.must_have) {
             if (!(slot in (value as Record<string, YValue>))) {

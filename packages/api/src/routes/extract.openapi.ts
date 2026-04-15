@@ -63,7 +63,7 @@ const postExtractRoute = createRoute({
     'then `POST /v1/drafts/{draft_id}/apply-yops` to edit it, ' +
     'then `POST /v1/drafts/{draft_id}/commit` to save it.\n\n' +
     '**Extraction modes:** concise (~30% coverage), balanced (~70-80%), detailed (~95%). ' +
-    'Set via project\'s `extraction_style` or pass `style` in the request body.',
+    "Set via project's `extraction_style` or pass `style` in the request body.",
   request: {
     body: {
       content: {

@@ -8,9 +8,9 @@
  */
 
 import * as yaml from 'js-yaml';
+import { autoFixYOp } from '../ops/gates/autofix';
 import { yamlToTree } from '../semantic/tree';
 import type { SlotValue, TreeNode } from '../semantic/types';
-import { autoFixYOp } from '../ops/gates/autofix';
 import { YOpSchema } from '../t3x-yops/schema';
 import type { YOp } from '../t3x-yops/types';
 
@@ -79,7 +79,6 @@ function isYopsList(cleaned: string): boolean {
   return firstLine === 'yops:' || firstLine.startsWith('yops:');
 }
 
-
 /**
  * Convert a TreeNode into define + populate YOps recursively.
  * Each node becomes a `define` (create empty node) + optional `populate` (fill slots).
@@ -108,7 +107,6 @@ function treeToOps(tree: TreeNode, parentPath: string): YOp[] {
 
   return yops;
 }
-
 
 // ── JSON extraction for metadata ──
 
@@ -227,7 +225,9 @@ function parseYopsList(cleaned: string): YOpsParseResult {
 
     // Autofix didn't help — skip this op (don't fail the entire parse)
     // The correction round in yaml-strategy will handle rejected ops
-    console.warn(`[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`);
+    console.warn(
+      `[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`
+    );
   }
 
   return { ok: true, format: 'yops', yops: validated };

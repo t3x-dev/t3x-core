@@ -8,10 +8,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  SemanticContentSchema,
-  validateIntegrity,
   checkRelationSanity,
   type SemanticContent,
+  SemanticContentSchema,
+  validateIntegrity,
 } from '@t3x-dev/core';
 import type { Command } from 'commander';
 import YAML from 'yaml';
@@ -38,7 +38,7 @@ function countNodes(tree: { children: { children: unknown[] }[] }): number {
 export function parseAndValidate(
   content: string,
   format: 'json' | 'yaml',
-  schemaOnly: boolean,
+  schemaOnly: boolean
 ): ValidateResult {
   // 1. Parse
   let parsed: unknown;
@@ -58,9 +58,7 @@ export function parseAndValidate(
   // 2. Zod structural validation
   const result = SemanticContentSchema.safeParse(parsed);
   if (!result.success) {
-    const errors = result.error.issues.map(
-      (issue) => `${issue.path.join('.')}: ${issue.message}`,
-    );
+    const errors = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
     return { valid: false, tree_count: 0, node_count: 0, relation_count: 0, errors, warnings: [] };
   }
 
@@ -143,7 +141,9 @@ export function registerValidateCommands(program: Command): void {
       }
 
       if (result.valid) {
-        success(`Valid: ${result.tree_count} trees, ${result.node_count} nodes, ${result.relation_count} relations`);
+        success(
+          `Valid: ${result.tree_count} trees, ${result.node_count} nodes, ${result.relation_count} relations`
+        );
         if (result.warnings.length > 0) {
           warn('Warnings:');
           for (const w of result.warnings) {

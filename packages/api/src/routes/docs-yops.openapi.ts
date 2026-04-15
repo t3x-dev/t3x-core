@@ -68,7 +68,18 @@ const YOPS_REFERENCE = {
     },
     dtl: {
       name: 'DTL — Data Transformation',
-      operations: ['move', 'clone', 'nest', 'split', 'fold', 'merge', 'sort', 'unique', 'pick', 'omit'],
+      operations: [
+        'move',
+        'clone',
+        'nest',
+        'split',
+        'fold',
+        'merge',
+        'sort',
+        'unique',
+        'pick',
+        'omit',
+      ],
     },
     dcl: {
       name: 'DCL — Data Constraint',
@@ -87,7 +98,10 @@ const YOPS_REFERENCE = {
       description: 'Create an empty mapping at a path',
       fields: { path: 'string (required) — path to create' },
       example: [{ define: { path: 'config/database' } }],
-      errors: ['PATH_NOT_FOUND — parent path does not exist', 'ALREADY_EXISTS — key already exists'],
+      errors: [
+        'PATH_NOT_FOUND — parent path does not exist',
+        'ALREADY_EXISTS — key already exists',
+      ],
     },
     {
       name: 'drop',
@@ -101,7 +115,10 @@ const YOPS_REFERENCE = {
       name: 'rename',
       category: 'ddl',
       description: 'Change a key name without moving its value',
-      fields: { path: 'string (required) — path to rename', to: 'string (required) — new key name' },
+      fields: {
+        path: 'string (required) — path to rename',
+        to: 'string (required) — new key name',
+      },
       example: [{ rename: { path: 'config/db', to: 'database' } }],
       errors: ['PATH_NOT_FOUND', 'ALREADY_EXISTS — target key already exists'],
     },
@@ -127,8 +144,18 @@ const YOPS_REFERENCE = {
       name: 'populate',
       category: 'dml',
       description: 'Set multiple keys on a mapping at once',
-      fields: { path: 'string (required) — target mapping', values: 'object (required) — key-value pairs to set' },
-      example: [{ populate: { path: 'trip/hotel', values: { type: 'ryokan', area: 'Asakusa', budget: 200 } } }],
+      fields: {
+        path: 'string (required) — target mapping',
+        values: 'object (required) — key-value pairs to set',
+      },
+      example: [
+        {
+          populate: {
+            path: 'trip/hotel',
+            values: { type: 'ryokan', area: 'Asakusa', budget: 200 },
+          },
+        },
+      ],
       errors: ['PATH_NOT_FOUND', 'NOT_A_MAPPING — target is not a mapping'],
       note: 'Prefer populate over multiple set calls when updating several slots on the same node.',
     },
@@ -136,7 +163,10 @@ const YOPS_REFERENCE = {
       name: 'append',
       category: 'dml',
       description: 'Append a value to a sequence',
-      fields: { path: 'string (required) — path to sequence', value: 'any (required) — value to append' },
+      fields: {
+        path: 'string (required) — path to sequence',
+        value: 'any (required) — value to append',
+      },
       example: [{ append: { path: 'config/tags', value: 'production' } }],
       errors: ['PATH_NOT_FOUND', 'NOT_A_SEQUENCE — target is not a sequence'],
     },
@@ -144,15 +174,24 @@ const YOPS_REFERENCE = {
       name: 'move',
       category: 'dtl',
       description: 'Move a value from one path to another',
-      fields: { from: 'string (required) — source path', to: 'string (required) — destination path' },
+      fields: {
+        from: 'string (required) — source path',
+        to: 'string (required) — destination path',
+      },
       example: [{ move: { from: 'temp/draft', to: 'published/article' } }],
-      errors: ['PATH_NOT_FOUND — source does not exist', 'ALREADY_EXISTS — destination already exists'],
+      errors: [
+        'PATH_NOT_FOUND — source does not exist',
+        'ALREADY_EXISTS — destination already exists',
+      ],
     },
     {
       name: 'clone',
       category: 'dtl',
       description: 'Deep-copy a value from one path to another',
-      fields: { from: 'string (required) — source path', to: 'string (required) — destination path' },
+      fields: {
+        from: 'string (required) — source path',
+        to: 'string (required) — destination path',
+      },
       example: [{ clone: { from: 'templates/default', to: 'config/active' } }],
       errors: ['PATH_NOT_FOUND', 'ALREADY_EXISTS'],
     },
@@ -160,7 +199,10 @@ const YOPS_REFERENCE = {
       name: 'nest',
       category: 'dtl',
       description: 'Wrap the value at path inside a new parent key',
-      fields: { path: 'string (required) — path to wrap', under: 'string (required) — new parent key name' },
+      fields: {
+        path: 'string (required) — path to wrap',
+        under: 'string (required) — new parent key name',
+      },
       example: [{ nest: { path: 'host', under: 'database' } }],
       errors: ['PATH_NOT_FOUND', 'ALREADY_EXISTS'],
     },
@@ -168,8 +210,21 @@ const YOPS_REFERENCE = {
       name: 'split',
       category: 'dtl',
       description: 'Split a mapping into multiple sibling keys',
-      fields: { path: 'string (required) — mapping to split', into: 'array of [key, ...fields] (required)' },
-      example: [{ split: { path: 'config', into: [['db', 'host', 'port'], ['cache', 'ttl']] } }],
+      fields: {
+        path: 'string (required) — mapping to split',
+        into: 'array of [key, ...fields] (required)',
+      },
+      example: [
+        {
+          split: {
+            path: 'config',
+            into: [
+              ['db', 'host', 'port'],
+              ['cache', 'ttl'],
+            ],
+          },
+        },
+      ],
       errors: ['PATH_NOT_FOUND', 'NOT_A_MAPPING'],
     },
     {
@@ -184,7 +239,10 @@ const YOPS_REFERENCE = {
       name: 'merge',
       category: 'dtl',
       description: 'Deep-merge a source mapping into a target mapping',
-      fields: { from: 'string (required) — source to merge from', into: 'string (required) — target to merge into' },
+      fields: {
+        from: 'string (required) — source to merge from',
+        into: 'string (required) — target to merge into',
+      },
       example: [{ merge: { from: 'overrides', into: 'config' } }],
       errors: ['PATH_NOT_FOUND', 'NOT_A_MAPPING'],
     },
@@ -192,7 +250,11 @@ const YOPS_REFERENCE = {
       name: 'sort',
       category: 'dtl',
       description: 'Sort a sequence in place',
-      fields: { path: 'string (required)', by: 'string (optional) — key to sort by', order: '"asc" | "desc" (default: asc)' },
+      fields: {
+        path: 'string (required)',
+        by: 'string (optional) — key to sort by',
+        order: '"asc" | "desc" (default: asc)',
+      },
       example: [{ sort: { path: 'items', by: 'priority', order: 'desc' } }],
       errors: ['PATH_NOT_FOUND', 'NOT_A_SEQUENCE'],
     },
@@ -224,7 +286,11 @@ const YOPS_REFERENCE = {
       name: 'assert',
       category: 'dcl',
       description: 'Validate a condition — no mutation, fails if condition is false',
-      fields: { path: 'string (required)', operator: '"exists" | "equals" | "type"', value: 'any (optional)' },
+      fields: {
+        path: 'string (required)',
+        operator: '"exists" | "equals" | "type"',
+        value: 'any (optional)',
+      },
       example: [{ assert: { path: 'config/database', operator: 'exists' } }],
       errors: ['ASSERTION_FAILED — condition not met'],
     },
@@ -237,7 +303,9 @@ const YOPS_REFERENCE = {
         to: 'string (required) — target node path',
         type: 'string (required) — relation type: causes | conditions | contrasts | follows | depends',
       },
-      example: [{ relate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } }],
+      example: [
+        { relate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } },
+      ],
       errors: ['PATH_NOT_FOUND — endpoint path does not exist'],
     },
     {
@@ -249,7 +317,9 @@ const YOPS_REFERENCE = {
         to: 'string (required) — target node path',
         type: 'string (required) — relation type to remove',
       },
-      example: [{ unrelate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } }],
+      example: [
+        { unrelate: { from: 'diagnosis/root_cause', to: 'solution/approach', type: 'causes' } },
+      ],
       errors: [],
     },
   ],

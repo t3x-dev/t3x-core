@@ -75,9 +75,7 @@ describe('preFilterDrift', () => {
 
 describe('parseDriftResponse', () => {
   it('parses same_topic response', () => {
-    const result = parseDriftResponse(
-      '{"same_topic": true, "relation": "none", "new_topic": ""}'
-    );
+    const result = parseDriftResponse('{"same_topic": true, "relation": "none", "new_topic": ""}');
     expect(result.drifted).toBe(false);
   });
 

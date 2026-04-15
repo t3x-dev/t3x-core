@@ -37,12 +37,12 @@ export * from './schema';
 export * from './schema-commits';
 // Extraction Feedback Schema (Anchoring L4)
 export * from './schema-extraction-feedback';
+// Observable Metrics Schema (event tracking)
+export * from './schema-metrics';
+// Node Modifications Schema (audit trail)
+export * from './schema-node-modifications';
 // Tree State (source-of-truth for current trees)
 export * from './schema-tree-state';
 // Schema (leaves, pins, conversation_contexts)
 // @see docs/specification/semantic-layer-architecture.md
 export * from './schema-trees';
-// Observable Metrics Schema (event tracking)
-export * from './schema-metrics';
-// Node Modifications Schema (audit trail)
-export * from './schema-node-modifications';

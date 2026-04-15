@@ -18,8 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { cn } from '@/utils/cn';
 import type { LeafType } from '@/types/api';
+import { cn } from '@/utils/cn';
 import { LEAF_TYPES } from './CanvasNodes';
 
 const isRunnerEnabled = process.env.NEXT_PUBLIC_RUNNER_ENABLED === 'true';

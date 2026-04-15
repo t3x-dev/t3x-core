@@ -38,7 +38,11 @@ describe('getYOpsForCommit', () => {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'pipeline',
-      yops: { changes: [{ action: 'add', parent_path: '', node: { key: 'a', slots: { v: '1' }, children: [] } }] },
+      yops: {
+        changes: [
+          { action: 'add', parent_path: '', node: { key: 'a', slots: { v: '1' }, children: [] } },
+        ],
+      },
     });
 
     await sleep(50);
@@ -47,7 +51,11 @@ describe('getYOpsForCommit', () => {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'manual',
-      yops: { changes: [{ action: 'add', parent_path: '', node: { key: 'b', slots: { v: '2' }, children: [] } }] },
+      yops: {
+        changes: [
+          { action: 'add', parent_path: '', node: { key: 'b', slots: { v: '2' }, children: [] } },
+        ],
+      },
     });
 
     const results = await getYOpsForCommit(db, [entry1.id, entry2.id]);

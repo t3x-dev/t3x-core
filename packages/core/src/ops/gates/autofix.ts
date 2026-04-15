@@ -53,10 +53,10 @@ function collectPaths(trees: TreeNode[]): Array<{ path: string; node: TreeNode }
  */
 function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): string | null {
   // 1. Exact match
-  if (allPaths.some(p => p.path === partialPath)) return partialPath;
+  if (allPaths.some((p) => p.path === partialPath)) return partialPath;
 
   // 2. Suffix match: find paths that end with /partialPath
-  const suffixMatches = allPaths.filter(p => p.path.endsWith(`/${partialPath}`));
+  const suffixMatches = allPaths.filter((p) => p.path.endsWith(`/${partialPath}`));
   if (suffixMatches.length === 1) return suffixMatches[0].path;
 
   // 3. For slot paths like "company_info/team_size", try resolving parent
@@ -64,7 +64,9 @@ function resolvePath(partialPath: string, allPaths: Array<{ path: string }>): st
   if (lastSlash > 0) {
     const parentPartial = partialPath.slice(0, lastSlash);
     const slotKey = partialPath.slice(lastSlash + 1);
-    const parentMatches = allPaths.filter(p => p.path.endsWith(`/${parentPartial}`) || p.path === parentPartial);
+    const parentMatches = allPaths.filter(
+      (p) => p.path.endsWith(`/${parentPartial}`) || p.path === parentPartial
+    );
     if (parentMatches.length === 1) return `${parentMatches[0].path}/${slotKey}`;
   }
 
@@ -88,10 +90,25 @@ const FIELDS_ALLOWED: Record<string, string[]> = {
   merge: ['path', 'keys', 'into'],
 };
 
-const OP_TYPES = ['set', 'unset', 'define', 'populate', 'drop', 'rename', 'clone', 'move', 'nest', 'split', 'fold', 'merge', 'relate', 'unrelate'];
+const OP_TYPES = [
+  'set',
+  'unset',
+  'define',
+  'populate',
+  'drop',
+  'rename',
+  'clone',
+  'move',
+  'nest',
+  'split',
+  'fold',
+  'merge',
+  'relate',
+  'unrelate',
+];
 
 function detectOpType(rawOp: Record<string, unknown>): string | null {
-  return Object.keys(rawOp).find(k => OP_TYPES.includes(k)) ?? null;
+  return Object.keys(rawOp).find((k) => OP_TYPES.includes(k)) ?? null;
 }
 
 function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[]): void {
@@ -114,7 +131,7 @@ function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[
   // Strip extra fields
   if (FIELDS_ALLOWED[opType]) {
     const allowed = new Set(FIELDS_ALLOWED[opType]);
-    const extra = Object.keys(data).filter(k => !allowed.has(k));
+    const extra = Object.keys(data).filter((k) => !allowed.has(k));
     if (extra.length > 0) {
       for (const key of extra) delete data[key];
       fixes.push(`stripped extra fields [${extra.join(', ')}] from ${opType}`);
@@ -140,7 +157,12 @@ function fixSchema(opType: string, data: Record<string, unknown>, fixes: string[
   }
 }
 
-function fixPaths(opType: string, data: Record<string, unknown>, allPaths: Array<{ path: string }>, fixes: string[]): void {
+function fixPaths(
+  opType: string,
+  data: Record<string, unknown>,
+  allPaths: Array<{ path: string }>,
+  fixes: string[]
+): void {
   // For set/unset: path = node_path/slot_key → only resolve the node_path part
   if ((opType === 'set' || opType === 'unset') && 'path' in data && typeof data.path === 'string') {
     const fullPath = data.path as string;
@@ -196,7 +218,10 @@ function fixPaths(opType: string, data: Record<string, unknown>, allPaths: Array
     for (const field of ['from', 'to']) {
       if (field in data && typeof data[field] === 'string') {
         const partial = data[field] as string;
-        const resolved = resolvePath(partial, allPaths.map(p => ({ path: p.path.split('/')[0] })));
+        const resolved = resolvePath(
+          partial,
+          allPaths.map((p) => ({ path: p.path.split('/')[0] }))
+        );
         if (resolved && resolved !== partial) {
           data[field] = resolved;
           fixes.push(`resolved ${field}: "${partial}" → "${resolved}"`);

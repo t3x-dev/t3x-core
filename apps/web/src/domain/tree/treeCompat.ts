@@ -79,7 +79,9 @@ export function contentToNodes(content: SemanticContent): CompatNode[] {
  * Get compat SemanticContent with both .trees and .nodes.
  * .trees is a flat array of Tree compat objects derived from .trees.
  */
-export function toCompatContent(content: SemanticContent): SemanticContent & { nodes: CompatNode[] } {
+export function toCompatContent(
+  content: SemanticContent
+): SemanticContent & { nodes: CompatNode[] } {
   return {
     ...content,
     nodes: treesToNodes(content.trees),
@@ -92,9 +94,7 @@ export function toCompatContent(content: SemanticContent): SemanticContent & { n
  * Nested trees are restored via the children property.
  */
 export function nodesToTrees(nodes: CompatNode[]): TreeNode[] {
-  return nodes
-    .filter((f) => !f.id.includes('.'))
-    .map((f) => treeToNode(f));
+  return nodes.filter((f) => !f.id.includes('.')).map((f) => treeToNode(f));
 }
 
 function treeToNode(node: CompatNode): EnrichedTreeNode {

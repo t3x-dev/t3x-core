@@ -27,12 +27,7 @@ import { ALL_LEAF_TYPES, COMMIT_SCHEMA, LEAF_TYPES } from '@t3x-dev/core';
 const OapiSlotRefSchema = z.object({ ref: z.string() });
 
 const OapiSlotValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    OapiSlotRefSchema,
-    z.array(OapiSlotValueSchema),
-  ])
+  z.union([z.string(), z.number(), OapiSlotRefSchema, z.array(OapiSlotValueSchema)])
 );
 
 const OapiTreeNodeSchema: z.ZodType<{
@@ -51,13 +46,7 @@ const OapiTreeNodeSchema: z.ZodType<{
   })
 );
 
-const OapiRelationTypeSchema = z.enum([
-  'causes',
-  'conditions',
-  'contrasts',
-  'follows',
-  'depends',
-]);
+const OapiRelationTypeSchema = z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']);
 
 const OapiRelationSchema = z.object({
   from: z.string(),

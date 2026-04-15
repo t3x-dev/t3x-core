@@ -3,9 +3,9 @@
  * Used by PinDropdownSelector to display branch-scoped commit browsing.
  */
 
+import { useQuery } from '@/hooks/shared/useQuery';
 import type { ApiCommit, Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
-import { useQuery } from '@/hooks/shared/useQuery';
 
 export interface CommitWithLeaves {
   commit: ApiCommit;

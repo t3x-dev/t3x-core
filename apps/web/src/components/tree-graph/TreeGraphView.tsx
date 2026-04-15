@@ -1,16 +1,17 @@
 'use client';
 
 import {
-  type YOp,
-  type YOpsSource,
   RELATION_TYPES,
   type Relation,
   type SemanticContent,
   type SlotValue,
+  type YOp,
+  type YOpsSource,
 } from '@t3x-dev/core';
 import { treesToNodes } from '@/domain/tree/treeCompat';
 
 type SemanticRelationType = (typeof RELATION_TYPES)[number];
+
 import type { Connection, Edge, Node } from '@xyflow/react';
 import {
   Background,
@@ -25,16 +26,16 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { cn } from '@/utils/cn';
+import { RelationEdge, RelationEdgeMarkerDefs } from './RelationEdge';
 import { TreeGraphToolbar } from './TreeGraphToolbar';
 import { TreeNodeView } from './TreeNodeView';
 import {
-  type TreeNodeData,
   filterByZoomLevel,
   RELATION_STYLES,
   semanticToFlowElements,
+  type TreeNodeData,
   type ZoomLevel,
 } from './treeGraphUtils';
-import { RelationEdge, RelationEdgeMarkerDefs } from './RelationEdge';
 
 // ── Custom type registrations ──
 

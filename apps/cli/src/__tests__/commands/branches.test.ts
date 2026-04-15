@@ -26,10 +26,10 @@ const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as neve
 
 import { Command } from 'commander';
 import {
-  registerListBranches,
   registerCreateBranch,
-  registerSwitchBranch,
   registerCurrentBranch,
+  registerListBranches,
+  registerSwitchBranch,
 } from '../../commands/branches.js';
 
 function createProgram() {

@@ -3,8 +3,8 @@
 import { Code, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { cn } from '@/utils/cn';
 import { type UserExperience, useSettingsStore } from '@/store/settingsStore';
+import { cn } from '@/utils/cn';
 
 interface OptionCardProps<T extends string> {
   value: T;
@@ -127,7 +127,6 @@ export default function PreferencesPage() {
           />
         </div>
       </section>
-
 
       {/* Density, Extraction Style, Developer Mode — removed (non-core) */}
     </div>

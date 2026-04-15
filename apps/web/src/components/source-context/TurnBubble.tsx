@@ -10,7 +10,8 @@
 
 import { Bot, Settings, Terminal, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-
+import { type ContentBlock, ContentBlockRenderer } from '@/components/shared/ContentBlockRenderer';
+import { ImageLightbox } from '@/components/shared/ImageLightbox';
 import { mergeHighlightRanges } from '@/domain/format/highlightUtils';
 import type {
   ColoredHighlightRange,
@@ -19,8 +20,6 @@ import type {
   TurnBubbleData,
   TurnBubbleProps,
 } from '@/types/sourceContext';
-import { type ContentBlock, ContentBlockRenderer } from '@/components/shared/ContentBlockRenderer';
-import { ImageLightbox } from '@/components/shared/ImageLightbox';
 
 // Re-export types for backward compatibility
 export type { ColoredHighlightRange, HighlightColor, TurnBubbleData, TurnBubbleProps };
@@ -45,8 +44,7 @@ const highlightColors: Record<HighlightColor, string> = {
   green: 'bg-[var(--status-success-muted)]',
   deepGreen: 'bg-[var(--status-success)] text-white',
   deepRed: 'bg-[var(--status-error)] text-white',
-  amber:
-    'bg-[var(--status-warning-muted)] border border-dashed border-[var(--status-warning)]/40',
+  amber: 'bg-[var(--status-warning-muted)] border border-dashed border-[var(--status-warning)]/40',
   blue: 'bg-[var(--status-info)]/10 border border-dotted border-[var(--status-info)]/40',
 };
 

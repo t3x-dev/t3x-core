@@ -13,12 +13,12 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { showToast } from '@/components/layout/Toast';
 import { E2ETestCard } from '@/components/optimiser/E2ETestCard';
 import { LeafSelector } from '@/components/optimiser/LeafSelector';
 import { QuickStatsBar } from '@/components/optimiser/metrics/QuickStatsBar';
 import { RunsTable } from '@/components/optimiser/RunsTable';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
-import { showToast } from '@/components/layout/Toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import {
   checkRunnerHealth,
@@ -42,7 +43,6 @@ import {
   listEngineRuns,
   updateDeployAgent,
 } from '@/infrastructure';
-import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function DeployPage() {

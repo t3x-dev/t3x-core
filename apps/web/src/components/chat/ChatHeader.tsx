@@ -4,11 +4,11 @@ import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lu
 import { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
-import { glass } from '@/utils/theme';
-import { cn } from '@/utils/cn';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { cn } from '@/utils/cn';
+import { glass } from '@/utils/theme';
 import { BranchSwitcher } from './BranchSwitcher';
 
 const PRESET_LABELS: Record<string, { label: string; desc: string }> = {

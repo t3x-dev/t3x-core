@@ -20,7 +20,9 @@ function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         onClick={() => select('before', { nodePath: node.key })}
       >
         <span className="text-[8px] text-[var(--text-tertiary)] w-2">{hasChildren ? '▾' : ''}</span>
-        <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)]">◆</span>
+        <span className="w-3 h-3 rounded flex items-center justify-center text-[7px] font-bold bg-[var(--source-dim)] text-[var(--source)]">
+          ◆
+        </span>
         <span className="text-[var(--text-primary)]">{node.key}</span>
       </div>
       {slotEntries.map(([key, value]) => (
@@ -30,14 +32,19 @@ function TreeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
           style={{ paddingLeft: `${12 + (depth + 1) * 14}px` }}
         >
           <span className="w-2" />
-          <span className="w-3 h-3 rounded flex items-center justify-center text-[12px] bg-[var(--slot-dim)] text-[var(--slot)]">·</span>
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[12px] bg-[var(--slot-dim)] text-[var(--slot)]">
+            ·
+          </span>
           <span className="text-[var(--text-primary)]">{key}</span>
-          <span className="ml-auto text-[9px] text-[var(--text-tertiary)] truncate max-w-[100px]">{String(value)}</span>
+          <span className="ml-auto text-[9px] text-[var(--text-tertiary)] truncate max-w-[100px]">
+            {String(value)}
+          </span>
         </div>
       ))}
-      {hasChildren && node.children.map((child: TreeNode) => (
-        <TreeRow key={child.key} node={child} depth={depth + 1} />
-      ))}
+      {hasChildren &&
+        node.children.map((child: TreeNode) => (
+          <TreeRow key={child.key} node={child} depth={depth + 1} />
+        ))}
     </>
   );
 }

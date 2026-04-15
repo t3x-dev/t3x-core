@@ -54,7 +54,11 @@ export async function assertProjectAccess(c: Context, db: AnyDB, projectId: stri
  * Used by restore and permanent-delete routes where `findProjectById()`
  * would return null for deleted projects.
  */
-export async function assertProjectAccessIncludingDeleted(c: Context, db: AnyDB, projectId: string) {
+export async function assertProjectAccessIncludingDeleted(
+  c: Context,
+  db: AnyDB,
+  projectId: string
+) {
   const project = await findProjectByIdIncludingDeleted(db, projectId);
 
   if (!project) {

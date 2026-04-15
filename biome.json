@@ -97,7 +97,7 @@
     }
   },
   "overrides": [
-  {
+    {
       "includes": ["apps/web/src/commands/**"],
       "linter": {
         "rules": {
@@ -262,7 +262,8 @@
           }
         }
       }
-    },{
+    },
+    {
       "includes": ["apps/web/src/components/**"],
       "linter": {
         "rules": {

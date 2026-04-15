@@ -109,13 +109,7 @@ export function ConfidenceBadge({ value, pulse = false }: { value: number; pulse
       : pct >= 80
         ? 'text-[var(--status-warning)]'
         : 'text-[var(--status-error)]';
-  return (
-    <span
-      className={`font-mono text-[10px] ${color}`}
-    >
-      {pct}%
-    </span>
-  );
+  return <span className={`font-mono text-[10px] ${color}`}>{pct}%</span>;
 }
 
 // ============================================================================
