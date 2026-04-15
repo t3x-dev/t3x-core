@@ -282,7 +282,7 @@ function checkStrict(doc: YValue, declaredNodes: Record<string, NodeDef>, violat
         violations,
         'UNEXPECTED_NODE',
         key,
-        'warn',
+        'error',
         `Node "${key}" is not declared in schema (strict mode)`,
         [{ drop: { path: key } }]
       );
