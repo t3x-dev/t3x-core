@@ -51,6 +51,7 @@ import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
+import { registerComposeCommands } from './commands/compose.js';
 
 const program = new Command();
 
@@ -120,6 +121,7 @@ registerValidateCommands(program);
 registerYopsCommands(program);
 registerDiffCommand(program);
 registerMergeCommands(program);
+registerComposeCommands(program);
 
 // Parse arguments
 program.parse();
