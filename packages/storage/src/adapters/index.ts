@@ -15,6 +15,7 @@
 export {
   closePostgresStorage,
   createPostgresStorage,
+  getPostgresClient,
   getPostgresDB,
   type PostgresConfig,
   type PostgresDB,

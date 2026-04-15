@@ -54,6 +54,17 @@ export function getPostgresDB(): PostgresDB {
 }
 
 /**
+ * Get the raw postgres.js client — needed for LISTEN channels which
+ * must hold their own connection outside the Drizzle query path.
+ */
+export function getPostgresClient(): postgres.Sql {
+  if (!client) {
+    throw new Error('PostgreSQL client not initialized. Call createPostgresStorage() first.');
+  }
+  return client;
+}
+
+/**
  * Close the database connection
  */
 export async function closePostgresStorage(): Promise<void> {

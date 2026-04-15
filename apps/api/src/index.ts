@@ -8,7 +8,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
-import { closeDB, createApp, getDB, pinoLogger, startTimeoutChecker, stopTimeoutChecker } from '@t3x-dev/api';
+import {
+  closeDB,
+  createApp,
+  defaultFetchEventById,
+  getDB,
+  pinoLogger,
+  startRealtimeListener,
+  startTimeoutChecker,
+  stopRealtimeListener,
+  stopTimeoutChecker,
+} from '@t3x-dev/api';
+import { getPostgresClient } from '@t3x-dev/storage';
 
 function loadEnvLocal(): void {
   // Load env from monorepo root (unified config)
@@ -65,6 +76,7 @@ pinoLogger.info(
 const shutdown = async () => {
   pinoLogger.info('Shutting down...');
   stopTimeoutChecker();
+  await stopRealtimeListener();
   await closeDB();
   process.exit(0);
 };
@@ -83,6 +95,19 @@ async function start() {
     await getDB();
     pinoLogger.info('Database initialized');
 
+    // Start LISTEN relay when running against real Postgres (DATABASE_URL set).
+    // Embedded/local dev skips this — single-process mode doesn't need it.
+    if (process.env.DATABASE_URL) {
+      try {
+        await startRealtimeListener({
+          pg: getPostgresClient(),
+          fetchEventById: defaultFetchEventById,
+        });
+      } catch (err) {
+        pinoLogger.error({ err }, 'Failed to start realtime LISTEN relay');
+      }
+    }
+
     // Start background tasks
     startTimeoutChecker();
 
@@ -94,7 +119,10 @@ async function start() {
     // Enable WebSocket connections on the HTTP server
     injectWebSocket(server);
 
-    pinoLogger.info({ port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` }, 'T3X API server running');
+    pinoLogger.info(
+      { port, url: `http://localhost:${port}`, ws: `ws://localhost:${port}/ws` },
+      'T3X API server running'
+    );
 
     return server;
   } catch (error) {
