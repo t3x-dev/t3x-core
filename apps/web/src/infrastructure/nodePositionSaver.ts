@@ -56,6 +56,13 @@ export function saveNodePosition(
 
     if (pending.kind !== 'unit') return;
 
+    // Workbench draft nodes (id = draft_*) are ephemeral canvas entities
+    // with no backing persistence column. Skip the save rather than
+    // PATCHing /commits/{draft_*}/position, which returns 404
+    // (COMMIT_NOT_FOUND) because the handler looks up the commits table
+    // by hash. See docs/audits/2026-04-15/DEEP-WALK-DIAGNOSIS.md Bug 5.
+    if (nodeId.startsWith('draft_')) return;
+
     // Staging units use conversationId as nodeId (conv_xxx); committed
     // units use the commit hash (sha256:xxx). Pick the matching API.
     const isStagingUnit = nodeId.startsWith('conv_');

@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { createProject as createProjectCommand } from '@/commands/projects';
 import { deleteProject, listProjects } from '@/infrastructure/projects';
 import type { Project } from '@/infrastructure/types';
 
@@ -14,6 +15,7 @@ export interface UseProjectsResult {
   loading: boolean;
   refresh: () => Promise<void>;
   remove: (projectId: string) => Promise<void>;
+  create: (name?: string) => Promise<Project>;
 }
 
 export function useProjects(limit = 50): UseProjectsResult {
@@ -39,5 +41,12 @@ export function useProjects(limit = 50): UseProjectsResult {
     setProjects((prev) => prev.filter((p) => p.project_id !== projectId));
   }, []);
 
-  return { projects, loading, refresh, remove };
+  const create = useCallback(async (rawName?: string): Promise<Project> => {
+    const name = (rawName ?? '').trim() || 'Untitled Project';
+    const project = (await createProjectCommand(name)) as Project;
+    setProjects((prev) => [project, ...prev]);
+    return project;
+  }, []);
+
+  return { projects, loading, refresh, remove, create };
 }

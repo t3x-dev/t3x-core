@@ -47,6 +47,7 @@ import {
   draftsRoutes,
   exportRoutes,
   extractionFeedbackRoutes,
+  extractIncrementalRoutes,
   extractYopsRoutes,
   gateRoutes,
   healthRoutes,
@@ -194,6 +195,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', commitFromDraftRoutes);
   api.route('/', relationsRoutes);
   api.route('/', extractYopsRoutes); // /v1/extract-yops
+  api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
 

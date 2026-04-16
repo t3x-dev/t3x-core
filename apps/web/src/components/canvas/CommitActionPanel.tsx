@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, Leaf, MessageSquarePlus } from 'lucide-react';
+import { Eye, GitMerge, Leaf, MessageSquarePlus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { cn } from '@/utils/cn';
 
@@ -92,8 +92,10 @@ export function buildCommitActions(opts: {
   onContinueConversation: () => void;
   onViewDetails: () => void;
   onCreateLeaf: () => void;
+  /** Optional: surfaces a "Merge" action when the commit is the latest tip of a non-main branch. */
+  onMerge?: () => void;
 }): CommitAction[] {
-  return [
+  const actions: CommitAction[] = [
     {
       label: 'Continue',
       icon: <MessageSquarePlus size={14} />,
@@ -110,4 +112,12 @@ export function buildCommitActions(opts: {
       onClick: opts.onCreateLeaf,
     },
   ];
+  if (opts.onMerge) {
+    actions.push({
+      label: 'Merge',
+      icon: <GitMerge size={14} />,
+      onClick: opts.onMerge,
+    });
+  }
+  return actions;
 }
