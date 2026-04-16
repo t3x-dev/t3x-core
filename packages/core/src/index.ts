@@ -72,8 +72,6 @@ export {
   type AnchorType,
   // Correction prompt (batch validation feedback loop)
   buildCorrectionPrompt,
-  // Relations
-  buildRelationPrompt,
   // YOps extraction pipeline
   buildYOpsPrompt,
   Compressor,
@@ -84,23 +82,16 @@ export {
   computeAdaptiveConfig,
   computeAdaptiveThresholds,
   consolidate,
-  createRelationExtractor,
   type ExtractionInput,
   type ExtractionPromptResult,
   type ExtractionResult,
   type ExtractionTurn,
   Extractor,
-  type FuzzyLocateResult,
   flagContradictions,
-  fuzzyLocate,
   type NodeWithSignals,
   nest,
-  parseRelationResponse,
   parseYOpsOutput,
   type RegressionWarning,
-  RelationExtractor,
-  type RelationItem,
-  RelationParseError,
   runTransforms,
   type Segment,
   type TransformResult,
@@ -123,17 +114,6 @@ export type { Lesson, LessonSource } from './feedback';
 // Feedback Module (Lesson generation + collection)
 // ═══════════════════════════════════════════════════════════════════════════
 export { collectLessonsFromAssertions, generateLesson } from './feedback';
-// ═══════════════════════════════════════════════════════════════════════════
-// Hash / Merkle Tree (#14)
-// ═══════════════════════════════════════════════════════════════════════════
-export {
-  buildMerkleTree,
-  type MembershipProof,
-  type MerkleLeaf,
-  type MerkleTree,
-  type ProofStep,
-  verifyMembership,
-} from './hash';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // ═══════════════════════════════════════════════════════════════════════════
