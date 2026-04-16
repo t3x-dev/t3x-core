@@ -290,25 +290,35 @@ ${granularitySegment(style.granularity)}
 
 ${quoteLengthSegment(style.quote_length)}
 
-### Example
+### Example (every op MUST include source)
 
 \`\`\`
 yops:
   - set:
       path: trip/budget
       value: 5000
+    source:
+      type: llm
+      turn_ref:
+        turn_hash: sha256:abc123
+        quote: "budget is 5000"
   - populate:
       path: trip/accommodation
       values:
         type: ryokan
         area: Asakusa
-  - append:
-      path: trip/dietary_restrictions
-      value: lactose_intolerant
-  - drop:
-      path: trip/old_plan
+    source:
+      type: llm
+      turn_ref:
+        turn_hash: sha256:abc123
+        quote: "ryokan in Asakusa"
   - define:
       path: trip/activities
+    source:
+      type: llm
+      turn_ref:
+        turn_hash: sha256:abc123
+        quote: "activities"
 \`\`\`
 
 ### Content Blobs (code, plots, tables)
@@ -328,7 +338,7 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 ### Rules
 - Output ONLY valid YAML starting with \`yops:\`
 - No markdown fences, no explanatory text
-- Each op must use EXACTLY the fields shown above — no extra fields like \`parent\`, \`key\`, \`slots\`, \`source\`, or \`from\`
+- Each op must use EXACTLY the fields shown above — no extra fields like \`parent\`, \`key\`, \`slots\`, or \`from\` (the \`source\` field is REQUIRED — see SOURCE CONTRACT below)
 - NEVER use \`define\` for a path that already exists in the Current Tree — use \`set\` or \`populate\` instead
 - Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
 - Do NOT reorganize the tree unless the conversation explicitly calls for it
