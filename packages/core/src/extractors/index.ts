@@ -42,11 +42,6 @@ export {
   type ExtractionTurn,
   Extractor,
 } from './extractor';
-export { type FuzzyLocateResult, fuzzyLocate } from './fuzzyLocate';
-// Relation Extraction (Inter-node Relations)
-export { createRelationExtractor, RelationExtractor } from './relationExtractor';
-export { parseRelationResponse, type RelationItem, RelationParseError } from './relationParser';
-export { buildRelationPrompt } from './relationPrompt';
 // Extraction Strategies
 export {
   type ExtractionStrategy,

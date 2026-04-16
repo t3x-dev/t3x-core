@@ -208,13 +208,12 @@ LLM proposes YOps; the pipeline applies them deterministically. `yops_log` is th
 | Prompt build | `extractionPrompt.ts`, `yopsPrompt.ts`, `extractionStyleConfig.ts` |
 | Strategy + LLM call | `strategies/`, `extractor.ts` |
 | Parse | `yopsParser.ts` |
-| Relations (2nd pass) | `relationExtractor.ts`, `relationPrompt.ts`, `relationParser.ts` |
 | Transforms (deterministic) | `transforms/` (`consolidate`, `nest`, `flagContradictions`, `checkRegression`) |
-| Repair | `repairPrompt.ts`, `correctionPrompt.ts`, `fuzzyLocate.ts` |
+| Repair | `repairPrompt.ts`, `correctionPrompt.ts` |
 | Compression | `compressor.ts`, `compressPrompt.ts` |
 | Thresholds | `adaptiveThresholds.ts` |
 
-Flow: `turns → prompt → LLM → YOps YAML → parser → @t3x-dev/yops engine → relation pass → transforms → yops_log + commit`.
+Flow: `turns → prompt → LLM → YOps YAML → parser → @t3x-dev/yops engine → transforms → yops_log + commit`.
 
 ### Diff & merge (`packages/core/src/semantic/`)
 
