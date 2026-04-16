@@ -68,7 +68,7 @@ describe('buildYAMLLines', () => {
 
     const slotLine = lines.find((l) => l.slotKey === 'color');
     expect(slotLine).toBeDefined();
-    expect(slotLine?.text).toBe('  color: "blue"');
+    expect(slotLine?.text).toBe('  color: blue');
     expect(slotLine?.treeId).toBe('f_001');
     expect(slotLine?.isNodeHeader).toBe(false);
     expect(slotLine?.indent).toBe(1);
@@ -122,7 +122,7 @@ describe('buildYAMLLines', () => {
 
     const cityLine = lines.find((l) => l.text.includes('city'));
     expect(cityLine).toBeDefined();
-    expect(cityLine?.text).toBe('    city: "Paris"');
+    expect(cityLine?.text).toBe('    city: Paris');
     expect(cityLine?.indent).toBe(2);
   });
 
@@ -142,8 +142,8 @@ describe('buildYAMLLines', () => {
     const bulletLines = lines.filter((l) => l.text.includes('- '));
     expect(bulletLines.length).toBe(2);
     // Array items at indent=1: pad='  ' + '  - ' = 4 spaces before dash
-    expect(bulletLines[0].text).toBe('    - "apple"');
-    expect(bulletLines[1].text).toBe('    - "banana"');
+    expect(bulletLines[0].text).toBe('    - apple');
+    expect(bulletLines[1].text).toBe('    - banana');
   });
 
   test('blank separator line is added after each tree', () => {

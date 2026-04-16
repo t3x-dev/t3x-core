@@ -37,11 +37,13 @@ function serializeTree(node: TreeNode, indent = 0): string {
     if (Array.isArray(value)) {
       lines.push(`${pad}  ${key}:`);
       for (const item of value) {
-        lines.push(`${pad}    - ${typeof item === 'object' ? JSON.stringify(item) : String(item)}`);
+        lines.push(
+          `${pad}    - ${typeof item === 'object' ? serializePlainObject(item) : String(item)}`
+        );
       }
     } else {
       lines.push(
-        `${pad}  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
+        `${pad}  ${key}: ${typeof value === 'object' ? serializePlainObject(value) : String(value)}`
       );
     }
   }
@@ -49,4 +51,11 @@ function serializeTree(node: TreeNode, indent = 0): string {
     lines.push(serializeTree(child, indent + 1));
   }
   return lines.join('\n');
+}
+
+function serializePlainObject(obj: unknown): string {
+  if (obj === null || obj === undefined) return '';
+  if (typeof obj !== 'object') return String(obj);
+  const entries = Object.entries(obj as Record<string, unknown>);
+  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(', ');
 }

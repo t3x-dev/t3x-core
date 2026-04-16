@@ -37,7 +37,7 @@ export interface YAMLRendererProps {
 // ── Internal Helpers ──────────────────────────────────────────────────────────
 
 function formatValue(value: SlotValue): string {
-  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'object' && value !== null && 'ref' in value) {

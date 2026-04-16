@@ -22,6 +22,7 @@ import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { CommittedBar } from './CommittedBar';
 import { SourceMaterialPanel } from './SourceMaterialPanel';
 
 interface ChatWorkspaceProps {
@@ -397,21 +398,25 @@ export function ChatWorkspace({
       {/* Add-to-extraction form (visible in Review phase when text is selected) */}
       {showAddForm && selection && <ChatAddForm selection={selection} onDone={clearSelection} />}
 
-      {/* Input area — centered like messages */}
-      <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
-        <div className="mx-auto max-w-3xl px-4">
-          <ChatInput
-            onSend={handleSend}
-            onStop={stopGenerating}
-            isStreaming={isStreaming}
-            disabled={isLoading || isExtracting || isCommitted}
-            placeholder="Reply..."
-            conversationId={resolvedConversationId}
-            selectedModel={selectedModel}
-            onModelChange={handleModelChange}
-          />
+      {/* Input area — committed bar replaces input after commit */}
+      {isCommitted ? (
+        <CommittedBar projectId={resolvedProjectId || undefined} />
+      ) : (
+        <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
+          <div className="mx-auto max-w-3xl px-4">
+            <ChatInput
+              onSend={handleSend}
+              onStop={stopGenerating}
+              isStreaming={isStreaming}
+              disabled={isLoading || isExtracting}
+              placeholder="Reply..."
+              conversationId={resolvedConversationId}
+              selectedModel={selectedModel}
+              onModelChange={handleModelChange}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

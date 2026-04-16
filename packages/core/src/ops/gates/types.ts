@@ -23,4 +23,3 @@ export interface GateResult {
   passed: boolean;
   violations: GateViolation[];
 }
-

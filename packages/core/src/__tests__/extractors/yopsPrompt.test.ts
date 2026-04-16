@@ -72,7 +72,7 @@ describe('buildYOpsPrompt', () => {
       });
       expect(result.userPrompt).toContain('travel_plan:');
       expect(result.userPrompt).toContain('budget:');
-      expect(result.userPrompt).toContain('"Tokyo"');
+      expect(result.userPrompt).toContain('Tokyo');
       expect(result.userPrompt).toContain('Current Tree');
     });
   });
