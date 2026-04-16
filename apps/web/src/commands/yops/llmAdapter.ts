@@ -24,6 +24,11 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
     const text = typeof res.text === 'function' ? await res.text().catch(() => '') : '';
     throw new Error(`extract-yops HTTP ${res.status}: ${text}`);
   }
-  const body = (await res.json()) as { ops: SourcedYOp[] };
-  return body.ops;
+  const body = (await res.json()) as
+    | { success: true; data: { ops: SourcedYOp[] } }
+    | { success: false; error: { code: string; message: string } };
+  if (!body.success) {
+    throw new Error(`extract-yops ${body.error.code}: ${body.error.message}`);
+  }
+  return body.data.ops;
 }
