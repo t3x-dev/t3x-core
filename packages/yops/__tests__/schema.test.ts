@@ -18,8 +18,53 @@ describe('YOpSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects extra fields (strict mode)', () => {
+  it('rejects extra fields inside op params (strict mode)', () => {
     const result = YOpSchema.safeParse({ define: { path: 'foo', extra: 'bar' } });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an op with valid LLM source', () => {
+    const result = YOpSchema.safeParse({
+      set: { path: 'budget', value: '5000 yuan' },
+      source: {
+        type: 'llm',
+        model: 'claude-sonnet-4-20250514',
+        at: '2026-04-15T10:00:00Z',
+        turn_ref: { turn_hash: 'sha256:abc', quote: '五千块' },
+      },
+    });
+    expect(result.success).toBe(true);
+    expect((result as any).data.source.turn_ref.quote).toBe('五千块');
+  });
+
+  it('accepts an op with valid human source', () => {
+    const result = YOpSchema.safeParse({
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'user@example.com' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an op without source (optional)', () => {
+    const result = YOpSchema.safeParse({ define: { path: 'trip' } });
+    expect(result.success).toBe(true);
+    expect((result as any).data.source).toBeUndefined();
+  });
+
+  it('rejects an op with invalid source shape', () => {
+    const result = YOpSchema.safeParse({
+      set: { path: 'x', value: 1 },
+      source: { type: 'llm' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects unknown fields other than source (strict still enforced)', () => {
+    const result = YOpSchema.safeParse({
+      define: { path: 'foo' },
+      source: { type: 'human', author: 'me' },
+      bogus: 'should fail',
+    });
     expect(result.success).toBe(false);
   });
 });
