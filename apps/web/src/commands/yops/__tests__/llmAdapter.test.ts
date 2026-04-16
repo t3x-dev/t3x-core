@@ -11,12 +11,15 @@ describe('callExtractionLLM', () => {
       ok: true,
       status: 200,
       json: async () => ({
-        ops: [
-          {
-            set: { path: 'x', value: 'y' },
-            source: { type: 'human', author: 'test', at: '2026-04-12T00:00:00Z' },
-          },
-        ],
+        success: true,
+        data: {
+          ops: [
+            {
+              set: { path: 'x', value: 'y' },
+              source: { type: 'human', author: 'test', at: '2026-04-12T00:00:00Z' },
+            },
+          ],
+        },
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -39,7 +42,7 @@ describe('callExtractionLLM', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ ops: [] }),
+      json: async () => ({ success: true, data: { ops: [] } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 

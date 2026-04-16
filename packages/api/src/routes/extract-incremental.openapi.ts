@@ -34,10 +34,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { type PipelineEvent, runExtractionPipeline } from '../lib/extraction-pipeline';
 import { ErrorResponseSchema } from '../schemas/common';
-import {
-  IncrementalExtractRequest,
-  IncrementalExtractResponse,
-} from '../schemas/contracts';
+import { IncrementalExtractRequest, IncrementalExtractResponse } from '../schemas/contracts';
 
 export const extractIncrementalRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -58,13 +55,7 @@ interface SemanticPointOut {
   text: string;
   extraction_mode: 'deterministic' | 'llm_extracted' | 'manual';
   inference_type?: 'direct' | 'paraphrase' | 'cross_turn' | 'implicit';
-  status:
-    | 'inherited'
-    | 'auto_landed'
-    | 'reviewed'
-    | 'modified'
-    | 'reinforced'
-    | 'undone';
+  status: 'inherited' | 'auto_landed' | 'reviewed' | 'modified' | 'reinforced' | 'undone';
   zone: 'ready' | 'review';
   routing_reason?: string;
   inherited_from?: string;
@@ -100,10 +91,7 @@ function buildPointText(node: EnrichedTreeNode): string {
 }
 
 /** Convert a SemanticContent snapshot into SemanticPoints (all `ready`). */
-function contentToPoints(
-  content: SemanticContent,
-  conversationId: string
-): SemanticPointOut[] {
+function contentToPoints(content: SemanticContent, conversationId: string): SemanticPointOut[] {
   const points: SemanticPointOut[] = [];
   let position = 0;
 
@@ -204,11 +192,7 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
     const draft = await findDraftById(db, draft_id);
     if (!draft) return errorResponse(c, 'NOT_FOUND', 'Draft not found');
     if (draft.project_id !== project_id) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        'Draft does not belong to the specified project'
-      );
+      return errorResponse(c, 'INVALID_REQUEST', 'Draft does not belong to the specified project');
     }
 
     // 2. Validate conversation
@@ -260,7 +244,9 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
       // Treat skip as an empty successful extraction.
       const skipEvent = events.find((e) => e.type === 'skipped');
       if (skipEvent) {
-        const emptyCursor = { cursors: {} as Record<string, { last_processed_turn: string; processed_at: string }> };
+        const emptyCursor = {
+          cursors: {} as Record<string, { last_processed_turn: string; processed_at: string }>,
+        };
         await updateDraft(
           db,
           draft_id,

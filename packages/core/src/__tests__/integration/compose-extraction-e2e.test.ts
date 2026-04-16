@@ -42,7 +42,7 @@ const composeSchemaPath = join(
   '..',
   'yschema',
   'examples',
-  'docker-compose.yschema.yaml',
+  'docker-compose.yschema.yaml'
 );
 const composeSchema = parseSchema(readFileSync(composeSchemaPath, 'utf8'));
 
@@ -106,7 +106,7 @@ describe('E2E: conversation → compose-valid tree → compose YAML', () => {
 
     const result = await strategy.extract(
       { turns, targetSchema: composeSchema } as ExtractionInput,
-      provider,
+      provider
     );
 
     expect(result.ok).toBe(true);
@@ -135,7 +135,7 @@ describe('E2E: conversation → compose-valid tree → compose YAML', () => {
 
     const result = await strategy.extract(
       { turns, targetSchema: composeSchema } as ExtractionInput,
-      provider,
+      provider
     );
 
     expect(result.ok).toBe(false);

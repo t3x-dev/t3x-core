@@ -73,8 +73,8 @@ describe('saveNodePosition', () => {
     saveNodePosition('draft_xyz', 'unit', { x: 1, y: 2 });
     vi.runAllTimers();
 
-    const calledWithDraft = commitSpy.mock.calls.some(([id]) =>
-      typeof id === 'string' && id.startsWith('draft_')
+    const calledWithDraft = commitSpy.mock.calls.some(
+      ([id]) => typeof id === 'string' && id.startsWith('draft_')
     );
     expect(calledWithDraft).toBe(false);
   });

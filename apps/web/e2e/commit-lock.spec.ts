@@ -112,7 +112,7 @@ test.describe('Commit-lock flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ops: validOps(userTurnHash) }),
+        body: JSON.stringify({ success: true, data: { ops: validOps(userTurnHash) } }),
       });
     });
 
@@ -178,7 +178,7 @@ test.describe('Commit-lock flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ops: validOps(userTurnHash) }),
+        body: JSON.stringify({ success: true, data: { ops: validOps(userTurnHash) } }),
       });
     });
 

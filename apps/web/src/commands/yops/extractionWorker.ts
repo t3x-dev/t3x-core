@@ -7,7 +7,7 @@
  */
 
 import type { FailingOp, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { validateSource } from '@t3x-dev/core';
+import { normalizeOpTurnHashes, repairOpQuotes, validateSource } from '@t3x-dev/core';
 import { ExtractionFailedError } from './errors';
 import { commitOps } from './yopsService';
 
@@ -50,6 +50,8 @@ export async function runExtraction({
       throw new ExtractionFailedError([], attempt, 'llm_error', msg);
     }
 
+    normalizeOpTurnHashes(ops, turns);
+    repairOpQuotes(ops, turns);
     const result = validateSource(ops, turns);
     if (result.ok) {
       await commitOps(conversationId, ops);

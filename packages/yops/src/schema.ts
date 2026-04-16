@@ -11,7 +11,7 @@ import { z } from 'zod';
 const LLMSourceSchema = z.object({
   type: z.literal('llm'),
   model: z.string().optional(),
-  at: z.string().optional(),
+  at: z.preprocess((v) => (v instanceof Date ? v.toISOString() : v), z.string()).optional(),
   turn_ref: z.object({
     turn_hash: z.string().min(1),
     quote: z.string().min(1),
@@ -51,7 +51,10 @@ const DropOpSchema = z
   .object({ drop: z.object({ path: z.string().min(1) }).strict(), source: s })
   .strict();
 const RenameOpSchema = z
-  .object({ rename: z.object({ path: z.string().min(1), to: z.string().min(1) }).strict(), source: s })
+  .object({
+    rename: z.object({ path: z.string().min(1), to: z.string().min(1) }).strict(),
+    source: s,
+  })
   .strict();
 
 // ── DML ──
@@ -71,16 +74,25 @@ const PopulateOpSchema = z
   })
   .strict();
 const AppendOpSchema = z
-  .object({ append: z.object({ path: z.string().min(1), value: YValueSchema }).strict(), source: s })
+  .object({
+    append: z.object({ path: z.string().min(1), value: YValueSchema }).strict(),
+    source: s,
+  })
   .strict();
 
 // ── DTL ──
 
 const MoveOpSchema = z
-  .object({ move: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(), source: s })
+  .object({
+    move: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(),
+    source: s,
+  })
   .strict();
 const CloneOpSchema = z
-  .object({ clone: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(), source: s })
+  .object({
+    clone: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(),
+    source: s,
+  })
   .strict();
 const NestOpSchema = z
   .object({
@@ -122,13 +134,22 @@ const SortOpSchema = z
   })
   .strict();
 const UniqueOpSchema = z
-  .object({ unique: z.object({ path: z.string().min(1), by: z.string().optional() }).strict(), source: s })
+  .object({
+    unique: z.object({ path: z.string().min(1), by: z.string().optional() }).strict(),
+    source: s,
+  })
   .strict();
 const PickOpSchema = z
-  .object({ pick: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(), source: s })
+  .object({
+    pick: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(),
+    source: s,
+  })
   .strict();
 const OmitOpSchema = z
-  .object({ omit: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(), source: s })
+  .object({
+    omit: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(),
+    source: s,
+  })
   .strict();
 
 // ── DCL ──

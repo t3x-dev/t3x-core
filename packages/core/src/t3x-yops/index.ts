@@ -23,7 +23,7 @@ export type { HumanSource, LLMSource, Source, TurnRef } from './source';
 export { isHumanSource, isLLMSource } from './source';
 export type { FailingOp, FailureReason, ValidationResult, ValidationTurn } from './sourceValidator';
 // ── Source validator ──
-export { validateSource } from './sourceValidator';
+export { normalizeOpTurnHashes, repairOpQuotes, validateSource } from './sourceValidator';
 // ── Types ──
 export type {
   // New ops in @t3x-dev/yops

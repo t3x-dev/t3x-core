@@ -47,6 +47,10 @@ interface WorkspaceState {
   extractionPreset: 'concise' | 'balanced' | 'detailed';
   lastExtractionPinIds: string[];
 
+  // ── Script editor state ──
+  scriptText: string;
+  scriptDirty: boolean;
+
   // ── State setters (no business logic) ──
   setConversation: (id: string | null) => void;
   setTurns: (turns: WorkspaceTurn[]) => void;
@@ -72,6 +76,9 @@ interface WorkspaceState {
   setExtractionPreset: (preset: 'concise' | 'balanced' | 'detailed') => void;
   setLastExtractionPinIds: (ids: string[]) => void;
 
+  setScriptText: (text: string) => void;
+  setScriptDirty: (dirty: boolean) => void;
+
   reset: () => void;
 }
 
@@ -92,6 +99,8 @@ function initialState(): Omit<
   | 'clearDrift'
   | 'setExtractionPreset'
   | 'setLastExtractionPinIds'
+  | 'setScriptText'
+  | 'setScriptDirty'
   | 'reset'
 > {
   return {
@@ -114,6 +123,8 @@ function initialState(): Omit<
     driftChoices: [],
     extractionPreset: 'balanced',
     lastExtractionPinIds: [],
+    scriptText: '',
+    scriptDirty: false,
   };
 }
 
@@ -151,6 +162,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
 
   setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
   setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
+
+  setScriptText: (scriptText) => set({ scriptText }),
+  setScriptDirty: (scriptDirty) => set({ scriptDirty }),
 
   reset: () => set(initialState()),
 }));

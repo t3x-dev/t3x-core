@@ -13,11 +13,6 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Emitters (deterministic output generators)
-// ═══════════════════════════════════════════════════════════════════════════
-export * from './emitters/index';
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Autopilot (auto-commit evaluator)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
@@ -28,7 +23,6 @@ export {
   evaluateAutoCommit,
   mergeAutopilotConfig,
 } from './autopilot';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Commit
 // ═══════════════════════════════════════════════════════════════════════════
@@ -59,6 +53,10 @@ export {
   estimateTokens,
   filterActivePins,
 } from './context';
+// ═══════════════════════════════════════════════════════════════════════════
+// Emitters (deterministic output generators)
+// ═══════════════════════════════════════════════════════════════════════════
+export * from './emitters/index';
 // ═══════════════════════════════════════════════════════════════════════════
 // Extractors
 // ═══════════════════════════════════════════════════════════════════════════
@@ -431,7 +429,9 @@ export {
   getParentPath,
   isHumanSource,
   isLLMSource,
+  normalizeOpTurnHashes,
   parseYOpsYaml,
+  repairOpQuotes,
   replayYOps,
   SNAKE_CASE_KEY,
   validateSource,
