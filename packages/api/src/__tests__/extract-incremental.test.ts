@@ -6,12 +6,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import {
-  insertConversation,
-  insertDraft,
-  insertProject,
-  insertTurn,
-} from '@t3x-dev/storage';
+import { insertConversation, insertDraft, insertProject, insertTurn } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -93,10 +88,7 @@ function createMockProvider() {
       if (prompt.includes('review a structured meaning document')) {
         return { text: PIPELINE_RESPONSES.reviewer, usage };
       }
-      if (
-        prompt.includes('extract ALL important points') ||
-        prompt.includes('You extract ALL')
-      ) {
+      if (prompt.includes('extract ALL important points') || prompt.includes('You extract ALL')) {
         return { text: PIPELINE_RESPONSES.coverageStep1, usage };
       }
       if (

@@ -12,14 +12,9 @@
  * server so pg_notify works end-to-end.
  */
 
+import { insertConversation, insertProject, recordEvent, setAliasIfNull } from '@t3x-dev/storage';
 import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
-import {
-  insertConversation,
-  insertProject,
-  recordEvent,
-  setAliasIfNull,
-} from '@t3x-dev/storage';
+import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventBus, type RealtimeEvent } from '../lib/event-bus';
 import {
@@ -74,7 +69,7 @@ describe('realtime sync e2e (real pg_notify)', () => {
   async function waitFor(
     type: string,
     minCount: number,
-    timeoutMs = 2000,
+    timeoutMs = 2000
   ): Promise<RealtimeEvent[]> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -152,7 +147,7 @@ describe('realtime sync e2e (real pg_notify)', () => {
 
     // Now do a no-op UPDATE — alias = same value — trigger should NOT fire
     await db.execute(
-      sql`UPDATE conversations SET alias = ${'distinct_alias'} WHERE conversation_id = ${conv.conversationId}`,
+      sql`UPDATE conversations SET alias = ${'distinct_alias'} WHERE conversation_id = ${conv.conversationId}`
     );
     // Wait briefly to give any erroneous trigger time to fire
     await new Promise((r) => setTimeout(r, 250));

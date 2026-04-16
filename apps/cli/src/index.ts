@@ -21,6 +21,7 @@ import {
 // New commit command
 import { registerCommitCommand } from './commands/commit.js';
 import { registerListCommits, registerShowCommit } from './commands/commits.js';
+import { registerComposeCommands } from './commands/compose.js';
 // Diff command
 import { registerDiffCommand } from './commands/diff.js';
 import { registerDeleteDraft, registerListDrafts, registerShowDraft } from './commands/drafts.js';
@@ -51,7 +52,6 @@ import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
-import { registerComposeCommands } from './commands/compose.js';
 
 const program = new Command();
 
