@@ -55,6 +55,7 @@ export function ChatWorkspace({
   const pins = usePinsStore((s) => s.pins);
   const { fetch: fetchPins } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const [coverageMode, setCoverageMode] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
@@ -244,6 +245,22 @@ export function ChatWorkspace({
         onModelChange={handleModelChange}
       />
 
+      {/* Coverage toggle — visible after extraction */}
+      {sourceMapByTurn.size > 0 && (
+        <button
+          type="button"
+          onClick={() => setCoverageMode((p) => !p)}
+          className={cn(
+            'absolute top-12 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+            coverageMode
+              ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
+              : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+          )}
+        >
+          {coverageMode ? 'Hide coverage' : 'Show coverage'}
+        </button>
+      )}
+
       {/* Message list */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* Parent conversation banner */}
@@ -288,6 +305,7 @@ export function ChatWorkspace({
                 }
                 sourceMap={sourceMapByTurn.get(i + 1)}
                 committedHighlights={committedHighlightsByTurn.get(msg.id)}
+                coverageMode={coverageMode}
               />
             ))}
 

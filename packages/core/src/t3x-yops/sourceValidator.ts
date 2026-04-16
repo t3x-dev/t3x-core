@@ -48,6 +48,81 @@ function getSource(op: unknown): unknown {
   return maybe;
 }
 
+/**
+ * LLMs see truncated turn hashes in the prompt (e.g. `sha256:5` from
+ * `.slice(0,8)`) and parrot them back. This function resolves truncated
+ * hashes to their full counterparts via unique-prefix matching, mutating
+ * ops in place. Ambiguous prefixes (matching multiple turns) are left
+ * untouched so they fail validation normally.
+ */
+export function normalizeOpTurnHashes(ops: SourcedYOp[], turns: readonly ValidationTurn[]): void {
+  const fullHashes = turns.map((t) => t.turn_hash);
+  for (const op of ops) {
+    const src = (op as { source?: { type?: string; turn_ref?: { turn_hash?: string } } }).source;
+    if (!src || src.type !== 'llm' || !src.turn_ref?.turn_hash) continue;
+    const h = src.turn_ref.turn_hash;
+    if (fullHashes.includes(h)) continue;
+    const matches = fullHashes.filter((f) => f.startsWith(h));
+    if (matches.length === 1) {
+      src.turn_ref.turn_hash = matches[0];
+    }
+  }
+}
+
+/**
+ * LLMs often produce quotes that are close but not verbatim substrings of
+ * the turn content (extra whitespace, markdown artifacts, slight rewording).
+ * This function attempts deterministic repair:
+ *  1. Try the quote as-is (already valid → skip)
+ *  2. Strip markdown bold/italic markers and retry
+ *  3. Fall back to the op's slot value if it appears verbatim in the turn
+ *
+ * Mutates ops in place. Quotes that can't be repaired are left untouched
+ * so they fail validation normally.
+ */
+export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn[]): void {
+  const turnMap = new Map(turns.map((t) => [t.turn_hash, t.content]));
+  for (const op of ops) {
+    const src = (
+      op as { source?: { type?: string; turn_ref?: { turn_hash?: string; quote?: string } } }
+    ).source;
+    if (!src || src.type !== 'llm' || !src.turn_ref?.turn_hash) continue;
+    const content = turnMap.get(src.turn_ref.turn_hash);
+    if (!content) continue;
+    const quote = src.turn_ref.quote;
+    if (quote && content.includes(quote)) continue;
+
+    // Strategy 1: strip markdown bold/italic
+    if (quote) {
+      const stripped = quote.replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1');
+      if (stripped !== quote && content.includes(stripped)) {
+        src.turn_ref.quote = stripped;
+        continue;
+      }
+    }
+
+    // Strategy 2: use the op's slot value as quote
+    const opObj = op as Record<string, unknown>;
+    const setVal =
+      (opObj.set as { value?: string })?.value ??
+      (opObj.populate as { values?: Record<string, string> })?.values;
+    if (typeof setVal === 'string' && setVal.length >= 4 && content.includes(setVal)) {
+      src.turn_ref.quote = setVal;
+      continue;
+    }
+
+    // Strategy 3: for define ops, use the path's last segment as a keyword search
+    const definePath = (opObj.define as { path?: string })?.path;
+    if (definePath && !quote) {
+      const keyword = definePath.split('/').pop()?.replace(/_/g, ' ');
+      if (keyword && keyword.length >= 3 && content.toLowerCase().includes(keyword.toLowerCase())) {
+        const idx = content.toLowerCase().indexOf(keyword.toLowerCase());
+        src.turn_ref.quote = content.slice(idx, idx + keyword.length);
+      }
+    }
+  }
+}
+
 export function validateSource(
   ops: readonly SourcedYOp[],
   turns: readonly ValidationTurn[]
