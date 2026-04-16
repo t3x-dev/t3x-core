@@ -18,7 +18,7 @@
 # ============================================================================
 
 name: yschema
-version: "1.0"
+version: "1.1"
 description: Schema format for YAML tree validation
 
 # ----------------------------------------------------------------------------
@@ -86,12 +86,15 @@ node_fields:
 #     default: system                — default value for auto-fix
 
 slot_fields:
-  type:     { enum: [scalar, list], default: scalar }
-  required: { type: scalar, default: true }
-  enum:     { type: sequence, description: "Allowed values" }
-  min:      { type: scalar, description: "Minimum value or item count" }
-  max:      { type: scalar, description: "Maximum value or item count" }
-  default:  { type: any, description: "Default value for auto-fix" }
+  type:            { enum: [scalar, list], default: scalar }
+  required:        { type: scalar, default: true }
+  enum:            { type: sequence, description: "Allowed values" }
+  min:             { type: scalar, description: "Minimum value or item count" }
+  max:             { type: scalar, description: "Maximum value or item count" }
+  default:         { type: any, description: "Default value for auto-fix" }
+  pattern:         { type: scalar, description: "Regex the scalar value must match" }
+  pattern_message: { type: scalar, description: "Human-readable pattern explanation" }
+  item_pattern:    { type: scalar, description: "Regex each list item must match (list slots only)" }
 
 # ----------------------------------------------------------------------------
 # Rules
@@ -124,6 +127,7 @@ rule_fields:
   max_children:  { type: scalar, description: "Maximum child node count" }
   requires:      { type: sequence, description: "Paths that must exist if this path exists" }
   fix:           { type: sequence, description: "YOps operations to auto-fix the violation" }
+  ref_must_exist: { type: mapping, description: "{ slot: <name>, in_path: <path> } — ref value must be a key under in_path" }
 
 # ----------------------------------------------------------------------------
 # Validation Behavior
@@ -167,6 +171,18 @@ validation:
     RULE_VIOLATION:
       description: A cross-node rule was not met
       auto_fix: "rule.fix if provided"
+    INVALID_PATTERN:
+      description: Scalar slot value does not match the required regex pattern
+      auto_fix: null
+    INVALID_ITEM_PATTERN:
+      description: A list slot item does not match the required item_pattern regex
+      auto_fix: null
+    REF_NOT_FOUND:
+      description: A referenced key does not exist under the declared in_path (ref_must_exist rule)
+      auto_fix: null
+    UNEXPECTED_SLOT:
+      description: Slot exists but is not declared in schema (strict mode, inside each_child)
+      auto_fix: null
 
 # ----------------------------------------------------------------------------
 # Example User Schema

@@ -20,11 +20,14 @@
  * ylint is available as an on-demand quality check (not in pipeline).
  */
 
+import type { YValue } from '@t3x-dev/yops';
+import { validateSchema } from '@t3x-dev/yschema';
 import type { LLMProvider } from '../../llm/types';
 import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
 import { validateDedup } from '../../ops/gates/dedup';
 import { validateSources } from '../../ops/gates/source';
 import type { GateViolation } from '../../ops/gates/types';
+import { semanticToPlain } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
 import { validateIntegrity } from '../../semantic/validate';
 import { applyYOps } from '../../t3x-yops/engine';
@@ -37,12 +40,15 @@ import {
 } from '../extractionStyleConfig';
 import type { ExtractionResult } from '../extractor';
 import { buildRepairPrompt } from '../repairPrompt';
+import { buildSchemaCorrectionPrompt } from '../schemaCorrectionPrompt';
 import { parseYOpsOutput, type YOpsParseResult } from '../yopsParser';
 import type { ExtractionInput } from '../yopsPrompt';
 import { buildYOpsPrompt } from '../yopsPrompt';
 import type { ExtractionStrategy } from './types';
 
 const MAX_RETRIES = 1;
+/** Independent retry budget for L3 schema-validation repair (does not affect L0/L1/L2 budget). */
+const MAX_SCHEMA_RETRIES = 1;
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 8192;
 
@@ -142,6 +148,86 @@ export class YamlExtractionStrategy implements ExtractionStrategy {
       if (!l2.ok) {
         lastError = l2.error;
         continue;
+      }
+
+      // ── L3: Schema — "Does the tree conform to targetSchema?" ──
+      if (input.targetSchema) {
+        const plain = semanticToPlain(l2.snapshot) as YValue;
+        const vresult = validateSchema(plain, input.targetSchema);
+        const errors = vresult.violations.filter((v) => v.severity === 'error');
+        if (errors.length > 0) {
+          for (let s = 0; s < MAX_SCHEMA_RETRIES; s++) {
+            const correction = buildSchemaCorrectionPrompt({
+              previousOutput: raw,
+              violations: vresult.violations,
+            });
+            if (!correction) break;
+            let repairRaw: string;
+            try {
+              const repairResult = await provider.generate(
+                `${correction.systemPrompt}\n\n---\n\n${correction.userPrompt}`,
+                { temperature: TEMPERATURE, maxTokens: MAX_TOKENS }
+              );
+              repairRaw = repairResult.text;
+              totalUsage.inputTokens += repairResult.usage.inputTokens;
+              totalUsage.outputTokens += repairResult.usage.outputTokens;
+            } catch (err) {
+              lastError = `L3 LLM error: ${err instanceof Error ? err.message : String(err)}`;
+              break;
+            }
+            const l0r = await this.runL0Parse(
+              repairRaw,
+              input.turns,
+              provider,
+              styleSummary,
+              totalUsage
+            );
+            if (!l0r.ok) {
+              lastError = l0r.error;
+              continue;
+            }
+            const l1r = await this.runL1Gate(
+              l0r.yops,
+              input.turns,
+              provider,
+              styleSummary,
+              totalUsage
+            );
+            if (l1r.passed.length === 0 && l0r.yops.length > 0) {
+              lastError = `L3 all YOps rejected by gates`;
+              continue;
+            }
+            const l2r = await this.runL2Engine(
+              l1r.passed,
+              baseSnapshot,
+              repairRaw,
+              input.turns,
+              provider,
+              styleSummary,
+              totalUsage
+            );
+            if (!l2r.ok) {
+              lastError = l2r.error;
+              continue;
+            }
+            const plain2 = semanticToPlain(l2r.snapshot) as YValue;
+            const vresult2 = validateSchema(plain2, input.targetSchema);
+            const errors2 = vresult2.violations.filter((v) => v.severity === 'error');
+            if (errors2.length === 0) {
+              return {
+                ok: true,
+                yops: l2r.resolvedYOps,
+                snapshot: l2r.snapshot,
+                usage: totalUsage,
+              };
+            }
+            lastError = `Schema validation failed after repair: ${errors2.map((e) => `${e.code} at ${e.path}`).join('; ')}`;
+          }
+          lastError =
+            lastError ||
+            `Schema validation failed: ${errors.map((e) => `${e.code} at ${e.path}`).join('; ')}`;
+          continue;
+        }
       }
 
       return { ok: true, yops: l2.resolvedYOps, snapshot: l2.snapshot, usage: totalUsage };

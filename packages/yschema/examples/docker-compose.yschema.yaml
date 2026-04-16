@@ -1,0 +1,81 @@
+name: docker-compose
+version: "1"
+strict: true
+description: Docker Compose v3.x — image-only variant.
+
+nodes:
+  version:
+    required: false
+    slots:
+      value:
+        type: scalar
+        required: false
+
+  services:
+    required: true
+    children: any
+    each_child:
+      slots:
+        image:
+          type: scalar
+          required: true
+          pattern: "^[^:\\s]+:[^:\\s]+$"
+          pattern_message: "pin a specific tag (e.g. postgres:16). No bare names."
+        container_name:
+          type: scalar
+          required: false
+        command:
+          type: scalar
+          required: false
+        environment:
+          type: list
+          required: false
+        ports:
+          type: list
+          required: false
+          item_pattern: "^\\d+(:\\d+)?$"
+        volumes:
+          type: list
+          required: false
+        depends_on:
+          type: list
+          required: false
+        restart:
+          enum: [no, always, on-failure, unless-stopped]
+          required: false
+          default: unless-stopped
+        healthcheck:
+          type: scalar
+          required: false
+
+  volumes:
+    required: false
+    children: any
+
+  networks:
+    required: false
+    children: any
+
+rules:
+  - id: at-least-one-service
+    if: services
+    not_empty: true
+    severity: error
+    message: "services must declare at least one service"
+
+  - id: depends-on-target-exists
+    if: "services/*"
+    ref_must_exist:
+      slot: depends_on
+      in_path: services
+    severity: error
+
+  - id: restart-default
+    if: "services/*"
+    must_have: [restart]
+    severity: info
+    message: "service '{{path}}' has no restart policy"
+    fix:
+      - set:
+          path: "{{path}}/restart"
+          value: unless-stopped

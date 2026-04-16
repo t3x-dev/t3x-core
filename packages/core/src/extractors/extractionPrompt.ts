@@ -7,6 +7,7 @@
  * - Incremental mode (with snapshot): asks LLM for incremental changes only
  */
 
+import type { Schema } from '@t3x-dev/yschema';
 import type { SemanticContent, TreeNode } from '../semantic/types';
 import {
   DEFAULT_STYLE,
@@ -16,6 +17,7 @@ import {
   type Tier3Behavior,
   type UpdateStance,
 } from './extractionStyleConfig';
+import { renderSchemaHint } from './schemaHint';
 
 // -- Input Types --
 
@@ -32,6 +34,8 @@ export interface ExtractionInput {
   processedTurnCount?: number;
   /** Additional context from pinned sources (conversations, leaf assertions) */
   additionalContext?: string;
+  /** Optional domain schema. When provided, a contract block is appended to the prompt instructing the LLM to produce YOps conforming to this shape. */
+  targetSchema?: Schema;
 }
 
 // -- Output Type --
@@ -405,7 +409,7 @@ export function buildExtractionPrompt(
   input: ExtractionInput,
   style: ExtractionStyleConfig = DEFAULT_STYLE
 ): ExtractionPromptResult {
-  const { turns, snapshot, processedTurnCount, additionalContext } = input;
+  const { turns, snapshot, processedTurnCount, additionalContext, targetSchema } = input;
 
   if (snapshot) {
     // Incremental mode
@@ -467,6 +471,10 @@ For each piece of new information:
 - If the user explicitly rejected all new AI content \u2192 output empty changes: { "changes": [], "drift_detected": false }
 Include "source" field referencing the turn tag (T1, T2, etc.).`;
 
+    if (targetSchema) {
+      userPrompt += renderSchemaHint(targetSchema);
+    }
+
     return { systemPrompt: buildIncrementalSystemPrompt(style), userPrompt };
   }
 
@@ -483,6 +491,10 @@ ${turnsText}
 ## Instructions
 Extract the semantic meaning from this conversation into a YAML topic tree.
 Include "source" referencing the turn tag (T1, T2, etc.) for each node.`;
+
+  if (targetSchema) {
+    userPrompt += renderSchemaHint(targetSchema);
+  }
 
   return { systemPrompt: buildFirstExtractionSystemPrompt(style), userPrompt };
 }

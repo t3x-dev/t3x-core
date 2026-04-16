@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@t3x-dev/yops": "workspace:*",
+    "@t3x-dev/yschema": "workspace:*",
     "js-yaml": "^4.1.1",
     "json-canonicalize": "^2.0.0",
     "nanoid": "^5.1.6",
@@ -29,7 +30,6 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@t3x-dev/yschema": "workspace:*",
     "@swc/core": "^1.15.18",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",

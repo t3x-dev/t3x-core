@@ -36,7 +36,13 @@ function push(
 
 // ── Node Validation ──
 
-function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: Violation[]) {
+function validateNode(
+  doc: YValue,
+  nodeDef: NodeDef,
+  path: string,
+  violations: Violation[],
+  strict = false
+) {
   const nodeValue = resolvePath(doc, path);
 
   // Check required
@@ -70,7 +76,7 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
   // Validate declared children
   if (nodeDef.children && nodeDef.children !== 'any' && isMapping(nodeValue)) {
     for (const [childKey, childDef] of Object.entries(nodeDef.children)) {
-      validateNode(doc, childDef, `${path}/${childKey}`, violations);
+      validateNode(doc, childDef, `${path}/${childKey}`, violations, strict);
     }
   }
 
@@ -83,6 +89,7 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
       if (nodeDef.children && nodeDef.children !== 'any' && childKey in nodeDef.children) continue;
 
       const childValue = nodeValue[childKey];
+      // No each_child.slots template → nothing to enforce against; pragmatic choice.
       if (nodeDef.each_child.slots) {
         if (isMapping(childValue)) {
           validateSlots(
@@ -91,6 +98,21 @@ function validateNode(doc: YValue, nodeDef: NodeDef, path: string, violations: V
             `${path}/${childKey}`,
             violations
           );
+          // Strict mode: reject slots not declared in each_child.slots
+          if (strict) {
+            const declaredSlots = nodeDef.each_child.slots as Record<string, SlotFull>;
+            for (const slotKey of Object.keys(childValue as Record<string, YValue>)) {
+              if (!(slotKey in declaredSlots)) {
+                push(
+                  violations,
+                  'UNEXPECTED_SLOT',
+                  `${path}/${childKey}/${slotKey}`,
+                  'error',
+                  `Slot "${slotKey}" at "${path}/${childKey}" is not declared in schema (strict mode)`
+                );
+              }
+            }
+          }
         } else {
           push(
             violations,
@@ -217,6 +239,36 @@ function validateSlots(
         );
       }
     }
+
+    // Pattern check (scalar slots only)
+    if (slotDef.pattern && slotDef.type !== 'list' && typeof value === 'string') {
+      if (!new RegExp(slotDef.pattern).test(value)) {
+        push(
+          violations,
+          'INVALID_PATTERN',
+          slotPath,
+          'error',
+          slotDef.pattern_message ?? `value '${value}' does not match pattern ${slotDef.pattern}`
+        );
+      }
+    }
+
+    // Item pattern check (list slots only)
+    if (slotDef.item_pattern && Array.isArray(value)) {
+      const re = new RegExp(slotDef.item_pattern);
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === 'string' && !re.test(item)) {
+          push(
+            violations,
+            'INVALID_ITEM_PATTERN',
+            `${slotPath}/[${i}]`,
+            'error',
+            `item '${item}' at index ${i} does not match pattern ${slotDef.item_pattern}`
+          );
+        }
+      }
+    }
   }
 }
 
@@ -230,7 +282,7 @@ function checkStrict(doc: YValue, declaredNodes: Record<string, NodeDef>, violat
         violations,
         'UNEXPECTED_NODE',
         key,
-        'warn',
+        'error',
         `Node "${key}" is not declared in schema (strict mode)`,
         [{ drop: { path: key } }]
       );
@@ -408,6 +460,36 @@ function validateRules(doc: YValue, rules: RuleDef[], violations: Violation[]) {
           }
         }
       }
+
+      // ref_must_exist: each value in a slot must be a key under in_path
+      if (rule.ref_must_exist) {
+        const { slot, in_path } = rule.ref_must_exist;
+        if (isMapping(value)) {
+          const slotValue = (value as Record<string, YValue>)[slot];
+          if (slotValue !== undefined) {
+            // Resolve the set of valid keys from in_path (top-level)
+            const target = resolvePath(doc, in_path);
+            const validKeys: Set<string> = isMapping(target)
+              ? new Set(Object.keys(target as Record<string, YValue>))
+              : new Set();
+
+            // Accept scalar or list
+            const refs: YValue[] = Array.isArray(slotValue) ? (slotValue as YValue[]) : [slotValue];
+
+            for (const ref of refs) {
+              if (typeof ref === 'string' && !validKeys.has(ref)) {
+                push(
+                  violations,
+                  'REF_NOT_FOUND',
+                  path,
+                  severity,
+                  `'${ref}' (referenced from ${path}/${slot}) is not a key under ${in_path}`
+                );
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -418,8 +500,9 @@ export function validateSchema(doc: YValue, schema: Schema): SchemaResult {
   const violations: Violation[] = [];
 
   // Validate declared nodes
+  const strict = schema.strict ?? false;
   for (const [nodeKey, nodeDef] of Object.entries(schema.nodes)) {
-    validateNode(doc, nodeDef, nodeKey, violations);
+    validateNode(doc, nodeDef, nodeKey, violations, strict);
   }
 
   // Strict mode: check for undeclared nodes

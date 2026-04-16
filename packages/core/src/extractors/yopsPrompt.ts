@@ -15,6 +15,7 @@
 
 import type { SemanticContent, TreeNode } from '../semantic/types';
 import { DEFAULT_STYLE, type ExtractionStyleConfig } from './extractionStyleConfig';
+import { renderSchemaHint } from './schemaHint';
 
 // -- Re-export types that callers need --
 
@@ -391,6 +392,10 @@ Extract changes from the NEW turns only. Prefer set/populate for updates, define
 
     userPrompt += formatFailingOpsRetry(failingOps);
 
+    if (input.targetSchema) {
+      userPrompt += renderSchemaHint(input.targetSchema);
+    }
+
     return { systemPrompt, userPrompt };
   }
 
@@ -406,6 +411,10 @@ ${formatTurns(turns)}
 Extract ALL knowledge into a YAML tree, then \`---\`, then the JSON metadata block.
 Capture EVERY fact, number, list item, recommendation, and detail — both from user and assistant.
 Do NOT skip information because you're unsure about quoting. A short keyword quote is enough.`;
+
+  if (input.targetSchema) {
+    userPrompt += renderSchemaHint(input.targetSchema);
+  }
 
   return { systemPrompt, userPrompt };
 }
