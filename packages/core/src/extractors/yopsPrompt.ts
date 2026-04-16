@@ -77,12 +77,20 @@ function serializeTreeForSnapshot(node: TreeNode, indent = 0): string {
   const lines: string[] = [];
   lines.push(`${pad}${node.key}:`);
   for (const [key, value] of Object.entries(node.slots)) {
-    lines.push(`${pad}  ${key}: ${JSON.stringify(value)}`);
+    lines.push(`${pad}  ${key}: ${serializeSlotValue(value)}`);
   }
   for (const child of node.children ?? []) {
     lines.push(serializeTreeForSnapshot(child, indent + 1));
   }
   return lines.join('\n');
+}
+
+function serializeSlotValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'object') return String(value);
+  if (Array.isArray(value)) return value.map(String).join(', ');
+  const entries = Object.entries(value as Record<string, unknown>);
+  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(', ');
 }
 
 function serializeSnapshot(snapshot: SemanticContent): string {

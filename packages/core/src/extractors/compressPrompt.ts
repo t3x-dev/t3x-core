@@ -63,7 +63,12 @@ function serializeNodeWithSignals(frame: NodeWithSignals): string {
     `${frame.id}: # type=${frame.type}, has_manual_edit=${frame.has_manual_edit}, last_touched=${frame.last_touched}, mention_count=${frame.mention_count}`
   );
   for (const [key, value] of Object.entries(frame.slots)) {
-    const display = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    const display =
+      typeof value === 'object' && value !== null
+        ? Object.entries(value as Record<string, unknown>)
+            .map(([k, v]) => `${k}: ${String(v)}`)
+            .join(', ')
+        : String(value);
     lines.push(`  ${key}: ${display}`);
   }
   return lines.join('\n');

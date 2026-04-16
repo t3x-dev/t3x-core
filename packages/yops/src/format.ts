@@ -36,5 +36,12 @@ export function parseYOpsYaml(yamlStr: string): ParseResult {
 }
 
 export function formatYOps(ops: YOp[]): string {
-  return yaml.dump(ops, { indent: 2, lineWidth: 120, noRefs: true, sortKeys: false });
+  return yaml.dump(ops, {
+    indent: 2,
+    lineWidth: 120,
+    noRefs: true,
+    sortKeys: false,
+    quotingType: "'",
+    forceQuotes: false,
+  });
 }
