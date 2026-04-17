@@ -4,6 +4,7 @@ import { createTestDB } from './setup';
 import {
   deleteProviderCredential,
   getProviderCredentialBundle,
+  updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '../queries/provider-credentials';
 
@@ -48,5 +49,25 @@ describe('provider credentials', () => {
     const bundle = await getProviderCredentialBundle(db);
     expect(bundle.secrets.ANTHROPIC_API_KEY).toBeUndefined();
     expect(bundle.safe.anthropic?.configured).toBe(false);
+  });
+
+  it('redacts raw api keys from lastTestError in safe metadata', async () => {
+    const rawKey = 'sk-openai-sensitive-key';
+
+    await upsertProviderCredential(db, {
+      providerId: 'openai',
+      apiKey: rawKey,
+      defaultModel: 'gpt-4o-mini',
+    });
+    await updateProviderCredentialTestResult(db, 'openai', {
+      lastTestStatus: 'error',
+      lastTestError: `provider auth failed for ${rawKey}`,
+    });
+
+    const bundle = await getProviderCredentialBundle(db);
+
+    expect(bundle.safe.openai?.lastTestError).toContain('[redacted]');
+    expect(bundle.safe.openai?.lastTestError).not.toContain(rawKey);
+    expect(JSON.stringify(bundle.safe)).not.toContain(rawKey);
   });
 });

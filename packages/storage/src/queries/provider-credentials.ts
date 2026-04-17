@@ -90,6 +90,11 @@ function normalizeTimestamp(value: Date | string | null | undefined): string | n
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function redactSecret(text: string | null, secret: string | null | undefined): string | null {
+  if (!text || !secret) return text;
+  return text.split(secret).join('[redacted]');
+}
+
 async function readProviderCredentialStore(db: AnyDB): Promise<ProviderCredentialStore> {
   return (await getGlobalSetting<ProviderCredentialStore>(db, PROVIDER_CREDENTIALS_KEY)) ?? {};
 }
@@ -116,7 +121,7 @@ export async function getProviderCredentialBundle(db: AnyDB): Promise<ProviderCr
       defaultModel: entry.defaultModel ?? null,
       lastTestStatus: entry.lastTestStatus ?? null,
       lastTestedAt: entry.lastTestedAt ?? null,
-      lastTestError: entry.lastTestError ?? null,
+      lastTestError: redactSecret(entry.lastTestError, entry.apiKey),
     };
   }
 
@@ -137,7 +142,7 @@ export async function upsertProviderCredential(
     updatedAt: now,
     lastTestStatus: store[providerId]?.lastTestStatus ?? null,
     lastTestedAt: store[providerId]?.lastTestedAt ?? null,
-    lastTestError: store[providerId]?.lastTestError ?? null,
+    lastTestError: redactSecret(store[providerId]?.lastTestError ?? null, input.apiKey),
   };
 
   await writeProviderCredentialStore(db, store);
@@ -161,7 +166,7 @@ export async function updateProviderCredentialTestResult(
     ...existing,
     lastTestStatus: input.lastTestStatus,
     lastTestedAt: normalizeTimestamp(input.lastTestedAt ?? new Date()),
-    lastTestError: input.lastTestError ?? null,
+    lastTestError: redactSecret(input.lastTestError ?? null, existing.apiKey),
     updatedAt: new Date().toISOString(),
   };
 
