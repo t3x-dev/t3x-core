@@ -30,6 +30,8 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
+At release, the public npm surface is centered on `@t3x-dev/core`, `@t3x-dev/yops`, `@t3x-dev/yschema`, `@t3x-dev/api-client`, `@t3x-dev/cli`, and `@t3x-dev/mcp`. The WebUI, API server, storage layer, and runner remain source-first for self-hosting and product deployments.
+
 <br/>
 
 ## How it works
@@ -178,6 +180,12 @@ docker compose up -d
 npx @t3x-dev/cli init
 ```
 
+### Packages
+
+```bash
+npm install @t3x-dev/core @t3x-dev/yops @t3x-dev/yschema @t3x-dev/api-client
+```
+
 ### From source
 
 ```bash
@@ -216,6 +224,15 @@ The core engine works without any API key. To use extraction, add an Anthropic o
 ```
 
 tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
+
+Published release packages:
+
+- `@t3x-dev/core` — deterministic semantic engine
+- `@t3x-dev/yops` — declarative YAML operations
+- `@t3x-dev/yschema` — schema validation with YOps auto-fix
+- `@t3x-dev/api-client` — TypeScript API client
+- `@t3x-dev/cli` — command line interface
+- `@t3x-dev/mcp` — MCP server for agents
 
 ### CLI
 
