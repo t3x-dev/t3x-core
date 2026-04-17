@@ -1,8 +1,9 @@
 /**
- * useAvailableModels — LLM provider list for chat-facing model pickers.
+ * useAvailableModels — runtime-usable LLM provider list for chat-facing model pickers.
  *
- * Filters the backend model registry against the configured local
- * generation providers so chat surfaces only expose usable options.
+ * Filters the backend model registry to providers that are actually usable
+ * at runtime. Local provider status is used only to prefer a saved default
+ * provider/model when that provider is still available.
  * Failures are swallowed to match the current empty-state UX.
  */
 
@@ -26,18 +27,10 @@ export interface AvailableModelSelection {
   model: string | null;
 }
 
-function filterConfiguredProviders(
-  providers: LLMProviderInfo[],
-  configuredProviderNames: Set<string>
-): LLMProviderInfo[] {
+function filterUsableProviders(providers: LLMProviderInfo[]): LLMProviderInfo[] {
   return providers.filter((provider) => {
     const localProviderId = toLocalProviderId(provider.name);
-    return (
-      provider.available &&
-      provider.models.length > 0 &&
-      localProviderId !== null &&
-      configuredProviderNames.has(localProviderId)
-    );
+    return provider.available && provider.models.length > 0 && localProviderId !== null;
   });
 }
 
@@ -83,6 +76,35 @@ export function resolveAvailableModelSelection(
   return { provider, model };
 }
 
+function resolvePreferredAvailableSelection(
+  providers: LLMProviderInfo[],
+  preferredProvider: string | null,
+  preferredModel: string | null
+): AvailableModelSelection {
+  if (providers.length === 0) {
+    return { provider: null, model: null };
+  }
+
+  if (preferredProvider) {
+    const provider = providers.find((entry) => entry.name === preferredProvider);
+    if (provider) {
+      return {
+        provider: provider.name,
+        model:
+          (preferredModel && provider.models.some((model) => model.id === preferredModel)
+            ? preferredModel
+            : provider.models[0]?.id) ?? null,
+      };
+    }
+  }
+
+  const fallback = providers[0];
+  return {
+    provider: fallback.name,
+    model: fallback.models[0]?.id ?? null,
+  };
+}
+
 export function useAvailableModels(): {
   providers: LLMProviderInfo[];
   loading: boolean;
@@ -93,23 +115,12 @@ export function useAvailableModels(): {
 } {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const {
-    loading: providerStatusLoading,
-    statuses,
-    hasConfiguredGenerationProvider,
-    defaultProvider,
-    defaultModel,
-  } = useProviderStatus();
-
-  const configuredProviderNames = useMemo(
-    () => new Set(statuses.filter((status) => status.configured).map((status) => status.provider)),
-    [statuses]
-  );
+  const { loading: providerStatusLoading, defaultProvider, defaultModel } = useProviderStatus();
 
   const loadModels = useCallback(async () => {
     const data = await getAvailableModels();
-    return { providers: filterConfiguredProviders(data.providers, configuredProviderNames) };
-  }, [configuredProviderNames]);
+    return { providers: filterUsableProviders(data.providers) };
+  }, []);
 
   useEffect(() => {
     if (providerStatusLoading) {
@@ -122,8 +133,7 @@ export function useAvailableModels(): {
     setLoading(true);
     getAvailableModels()
       .then((data) => {
-        if (!cancelled)
-          setProviders(filterConfiguredProviders(data.providers, configuredProviderNames));
+        if (!cancelled) setProviders(filterUsableProviders(data.providers));
       })
       .catch(() => {
         if (!cancelled) setProviders([]);
@@ -135,14 +145,19 @@ export function useAvailableModels(): {
     return () => {
       cancelled = true;
     };
-  }, [configuredProviderNames, providerStatusLoading]);
+  }, [providerStatusLoading]);
+
+  const { provider: defaultUsableProvider, model: defaultUsableModel } = useMemo(
+    () => resolvePreferredAvailableSelection(providers, defaultProvider, defaultModel),
+    [providers, defaultProvider, defaultModel]
+  );
 
   return {
     providers,
     loading: providerStatusLoading || loading,
     loadModels,
-    hasConfiguredGenerationProvider,
-    defaultProvider,
-    defaultModel,
+    hasConfiguredGenerationProvider: providers.length > 0,
+    defaultProvider: defaultUsableProvider,
+    defaultModel: defaultUsableModel,
   };
 }
