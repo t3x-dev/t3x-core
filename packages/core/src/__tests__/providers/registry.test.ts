@@ -31,6 +31,58 @@ describe('ProviderRegistry', () => {
       expect(reg.getForRole('generation')?.id).toBe('provider-b');
     });
 
+    it('keeps assignRole ordering sticky across config override refreshes', () => {
+      const reg = createProviderRegistry();
+
+      reg.register({
+        id: 'provider-a',
+        name: 'Provider A',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_A_KEY'],
+        factory: () => ({ id: 'provider-a', generate: vi.fn() }),
+      });
+
+      reg.register({
+        id: 'provider-b',
+        name: 'Provider B',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_B_KEY'],
+        factory: () => ({ id: 'provider-b', generate: vi.fn() }),
+      });
+
+      reg.assignRole('generation', ['provider-b', 'provider-a']);
+      reg.setConfigOverrides({ T3X_PROVIDER_A_KEY: 'local-secret' });
+
+      expect(reg.getProviderIdsForRole('generation')).toEqual(['provider-b', 'provider-a']);
+    });
+
+    it('keeps importConfig ordering sticky across config override refreshes', () => {
+      const reg = createProviderRegistry();
+
+      reg.register({
+        id: 'provider-a',
+        name: 'Provider A',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_A_KEY'],
+        factory: () => ({ id: 'provider-a', generate: vi.fn() }),
+      });
+
+      reg.register({
+        id: 'provider-b',
+        name: 'Provider B',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_B_KEY'],
+        factory: () => ({ id: 'provider-b', generate: vi.fn() }),
+      });
+
+      reg.importConfig({
+        roles: [{ role: 'generation', providerIds: ['provider-b', 'provider-a'] }],
+      });
+      reg.setConfigOverrides({ T3X_PROVIDER_A_KEY: 'local-secret' });
+
+      expect(reg.getProviderIdsForRole('generation')).toEqual(['provider-b', 'provider-a']);
+    });
+
     it('prefers config overrides over process.env while preserving env fallback', () => {
       const envKey = 'T3X_TEST_PROVIDER_KEY';
       const original = process.env[envKey];

@@ -84,6 +84,7 @@ export class ProviderRegistry {
   private entries = new Map<string, ProviderEntry>();
   private instances = new Map<string, AnyProvider>();
   private roleAssignments = new Map<ProviderRole, string[]>();
+  private explicitRoleAssignments = new Set<ProviderRole>();
   private configOverrides: ResolvedConfig = {};
 
   /**
@@ -92,7 +93,7 @@ export class ProviderRegistry {
    */
   setConfigOverrides(overrides: ResolvedConfig): void {
     this.configOverrides = { ...overrides };
-    this.syncRoleAssignmentsFromResolvedConfig();
+    this.syncDefaultRoleAssignmentsFromResolvedConfig();
   }
 
   /**
@@ -194,6 +195,7 @@ export class ProviderRegistry {
       }
     }
     this.roleAssignments.set(role, providerIds);
+    this.explicitRoleAssignments.add(role);
     // Clear cached instances for this role's providers
     for (const id of providerIds) {
       this.instances.delete(id);
@@ -293,6 +295,7 @@ export class ProviderRegistry {
       const validIds = providerIds.filter((id) => this.entries.has(id));
       if (validIds.length > 0) {
         this.roleAssignments.set(role, validIds);
+        this.explicitRoleAssignments.add(role);
       }
     }
     // Clear all cached instances
@@ -304,22 +307,7 @@ export class ProviderRegistry {
    * Called at startup to set sensible defaults.
    */
   autoConfigureFromEnv(): void {
-    const roleProviders = new Map<ProviderRole, string[]>();
-
-    for (const entry of this.entries.values()) {
-      if (this.isConfigured(entry.id)) {
-        const existing = roleProviders.get(entry.role) ?? [];
-        existing.push(entry.id);
-        roleProviders.set(entry.role, existing);
-      }
-    }
-
-    for (const [role, providerIds] of roleProviders.entries()) {
-      // Only set if no explicit assignment exists
-      if (!this.roleAssignments.has(role) || this.roleAssignments.get(role)?.length === 0) {
-        this.roleAssignments.set(role, providerIds);
-      }
-    }
+    this.syncDefaultRoleAssignmentsFromResolvedConfig();
   }
 
   /**
@@ -368,20 +356,31 @@ export class ProviderRegistry {
   }
 
   /**
-   * Recompute active role assignments from the currently resolved config.
-   * Providers are kept in registration order, but only configured providers remain active.
+   * Recompute only non-explicit role assignments from the currently resolved config.
+   * Explicitly assigned roles keep their ordering exactly as imported or assigned.
    */
-  syncRoleAssignmentsFromResolvedConfig(): void {
-    const roleProviders = new Map<ProviderRole, string[]>();
+  syncDefaultRoleAssignmentsFromResolvedConfig(): void {
+    const configuredProviders = new Map<ProviderRole, string[]>();
+    const defaultProviders = new Map<ProviderRole, string[]>();
 
     for (const entry of this.entries.values()) {
+      const defaults = defaultProviders.get(entry.role) ?? [];
+      defaults.push(entry.id);
+      defaultProviders.set(entry.role, defaults);
+
       if (!this.isConfigured(entry.id)) continue;
-      const existing = roleProviders.get(entry.role) ?? [];
-      existing.push(entry.id);
-      roleProviders.set(entry.role, existing);
+      const configured = configuredProviders.get(entry.role) ?? [];
+      configured.push(entry.id);
+      configuredProviders.set(entry.role, configured);
     }
 
-    this.roleAssignments = roleProviders;
+    for (const [role, defaults] of defaultProviders.entries()) {
+      if (this.explicitRoleAssignments.has(role)) continue;
+
+      const configured = configuredProviders.get(role) ?? [];
+      this.roleAssignments.set(role, configured.length > 0 ? configured : defaults);
+    }
+
     this.instances.clear();
   }
 
