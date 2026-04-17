@@ -44,10 +44,21 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
   const getPopoverStyle = (): React.CSSProperties => {
     if (!buttonRef.current) return {};
     const rect = buttonRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const popoverWidth = 280;
+    const estimatedHeight = Math.min(
+      320,
+      providers.reduce((sum, provider) => sum + 28 + provider.models.length * 34, 16)
+    );
+    const spaceBelow = viewportHeight - rect.bottom - 8;
+    const openUpward = spaceBelow < Math.min(estimatedHeight, 220);
+    const left = Math.min(rect.left, viewportWidth - popoverWidth - 8);
     return {
       position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
+      top: openUpward ? undefined : rect.bottom + 4,
+      bottom: openUpward ? viewportHeight - rect.top + 4 : undefined,
+      left: Math.max(8, left),
       zIndex: 9999,
     };
   };
@@ -60,12 +71,13 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="text-xs px-2 py-0.5 rounded border cursor-pointer"
+        className="max-w-[132px] truncate text-xs px-2 py-0.5 rounded border cursor-pointer"
         style={{
           background: 'var(--source-dim)',
           color: 'var(--source)',
           borderColor: 'color-mix(in srgb, var(--source) 30%, transparent)',
         }}
+        title={currentLabel}
       >
         ⚡ {currentLabel} ▾
       </button>
@@ -79,6 +91,8 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
               borderColor: 'var(--stroke-default)',
               minWidth: 220,
               maxWidth: 280,
+              maxHeight: 'min(320px, calc(100vh - 16px))',
+              overflowY: 'auto',
               padding: 4,
             }}
           >

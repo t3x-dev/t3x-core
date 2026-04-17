@@ -22,7 +22,8 @@ export type FailureReason =
   | 'invalid_source_type'
   | 'unknown_turn_hash'
   | 'unverifiable_quote'
-  | 'missing_author';
+  | 'missing_author'
+  | 'invalid_structure';
 
 export interface FailingOp {
   op: SourcedYOp;
@@ -34,6 +35,32 @@ export interface FailingOp {
 export interface ValidationResult {
   ok: boolean;
   failingOps: FailingOp[];
+}
+
+function tryExactQuote(content: string, candidate: string | undefined): string | null {
+  if (!candidate) return null;
+  const trimmed = candidate.trim();
+  if (!trimmed) return null;
+  return content.includes(trimmed) ? trimmed : null;
+}
+
+function generateQuoteCandidates(quote: string): string[] {
+  const candidates = new Set<string>([quote]);
+  const push = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed) candidates.add(trimmed);
+  };
+
+  for (const current of [...candidates]) {
+    push(current.replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1'));
+    push(current.replace(/^#+\s*/, ''));
+    push(current.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"));
+    push(current.replace(/'/g, '’'));
+    push(current.replace(/"/g, '“'));
+    push(current.replace(/"/g, '”'));
+  }
+
+  return [...candidates];
 }
 
 /**
@@ -92,26 +119,49 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
     const quote = src.turn_ref.quote;
     if (quote && content.includes(quote)) continue;
 
-    // Strategy 1: strip markdown bold/italic
+    // Strategy 1: deterministic quote normalization (markdown + punctuation variants)
     if (quote) {
-      const stripped = quote.replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1');
-      if (stripped !== quote && content.includes(stripped)) {
-        src.turn_ref.quote = stripped;
+      for (const candidate of generateQuoteCandidates(quote)) {
+        const repaired = tryExactQuote(content, candidate);
+        if (repaired) {
+          src.turn_ref.quote = repaired;
+          break;
+        }
+      }
+      if (src.turn_ref.quote && content.includes(src.turn_ref.quote)) {
         continue;
       }
     }
 
-    // Strategy 2: use the op's slot value as quote
+    // Strategy 2: use the op's scalar slot value as quote
     const opObj = op as Record<string, unknown>;
-    const setVal =
-      (opObj.set as { value?: string })?.value ??
-      (opObj.populate as { values?: Record<string, string> })?.values;
+    const setVal = (opObj.set as { value?: string })?.value;
     if (typeof setVal === 'string' && setVal.length >= 4 && content.includes(setVal)) {
       src.turn_ref.quote = setVal;
       continue;
     }
 
-    // Strategy 3: for define ops, use the path's last segment as a keyword search
+    // Strategy 3: use the first scalar value from populate.values when available
+    const populateValues = (opObj.populate as { values?: Record<string, unknown> })?.values;
+    if (populateValues && typeof populateValues === 'object') {
+      const scalarCandidate = Object.values(populateValues).find(
+        (value) =>
+          typeof value === 'string' ||
+          (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string')
+      );
+      const scalarQuote =
+        typeof scalarCandidate === 'string'
+          ? scalarCandidate
+          : Array.isArray(scalarCandidate) && typeof scalarCandidate[0] === 'string'
+            ? scalarCandidate[0]
+            : null;
+      if (scalarQuote && scalarQuote.length >= 4 && content.includes(scalarQuote)) {
+        src.turn_ref.quote = scalarQuote;
+        continue;
+      }
+    }
+
+    // Strategy 4: for define ops, use the path's last segment as a keyword search
     const definePath = (opObj.define as { path?: string })?.path;
     if (definePath && !quote) {
       const keyword = definePath.split('/').pop()?.replace(/_/g, ' ');

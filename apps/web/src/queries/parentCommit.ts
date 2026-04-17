@@ -13,11 +13,12 @@ import { getApiCommit } from '@/infrastructure/commits';
 export interface ParentCommit {
   hash: string;
   trees: TreeNode[];
+  message: string | null;
 }
 
 export async function fetchParentCommit(hash: string | null): Promise<ParentCommit | null> {
   if (!hash) return null;
   const commit = await getApiCommit(hash);
   const trees = (commit.content?.trees as TreeNode[] | undefined) ?? [];
-  return { hash, trees };
+  return { hash, trees, message: commit.message ?? null };
 }

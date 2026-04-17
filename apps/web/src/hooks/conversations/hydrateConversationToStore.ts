@@ -11,13 +11,21 @@
 
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { formatWorkspaceError } from './formatWorkspaceError';
 
 export async function hydrateConversationToStore(projectId: string, convId: string): Promise<void> {
   const pre = useWorkspaceStore.getState();
   pre.setConversation(convId);
   pre.setError(null);
-
-  const snapshot = await fetchConversationSnapshot(projectId, convId);
+  let snapshot;
+  try {
+    snapshot = await fetchConversationSnapshot(projectId, convId);
+  } catch (err) {
+    const msg = formatWorkspaceError(err);
+    pre.setMode('error');
+    pre.setError(msg);
+    throw err;
+  }
 
   const post = useWorkspaceStore.getState();
   post.setTurns(snapshot.turns);

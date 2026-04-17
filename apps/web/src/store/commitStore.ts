@@ -21,6 +21,7 @@ interface CommitState {
 
   // Commit tracking
   lastCommitHash: string | null;
+  beforeCommitHash: string | null;
   committedNodeIds: Record<string, boolean>;
   committedNodeSnapshot: Record<string, TreeNode>;
   commitBranch: string;
@@ -50,6 +51,7 @@ interface CommitState {
     committedNodeIds: Record<string, boolean>;
     committedNodeSnapshot: Record<string, TreeNode>;
   }) => void;
+  setBeforeCommitHash: (hash: string | null) => void;
   setInitialCommit: (
     hash: string,
     committedNodeIds: Record<string, boolean>,
@@ -62,6 +64,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   confirmedSlotKeys: {},
   manualEditedNodeIds: new Set(),
   lastCommitHash: null,
+  beforeCommitHash: null,
   committedNodeIds: {},
   committedNodeSnapshot: {},
   commitBranch: 'main',
@@ -127,11 +130,14 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   setCommitSuccess: ({ lastCommitHash, committedNodeIds, committedNodeSnapshot }) =>
     set({
       lastCommitHash,
+      beforeCommitHash: lastCommitHash,
       committedNodeIds,
       committedNodeSnapshot,
       isCommitting: false,
       manualEditedNodeIds: new Set(),
     }),
+
+  setBeforeCommitHash: (hash) => set({ beforeCommitHash: hash }),
 
   setInitialCommit: (hash, committedNodeIds, committedNodeSnapshot) =>
     set({ lastCommitHash: hash, committedNodeIds, committedNodeSnapshot }),

@@ -7,16 +7,16 @@ import { useCommitStore } from '@/store/commitStore';
  * trees. Null result = first commit on the branch (empty "before" state).
  */
 export function useParentCommit(): ParentCommit | null {
-  const lastCommitHash = useCommitStore((s) => s.lastCommitHash);
+  const beforeCommitHash = useCommitStore((s) => s.beforeCommitHash);
   const [parent, setParent] = useState<ParentCommit | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (!lastCommitHash) {
+    if (!beforeCommitHash) {
       setParent(null);
       return;
     }
-    fetchParentCommit(lastCommitHash)
+    fetchParentCommit(beforeCommitHash)
       .then((result) => {
         if (!cancelled) setParent(result);
       })
@@ -26,7 +26,7 @@ export function useParentCommit(): ParentCommit | null {
     return () => {
       cancelled = true;
     };
-  }, [lastCommitHash]);
+  }, [beforeCommitHash]);
 
   return parent;
 }

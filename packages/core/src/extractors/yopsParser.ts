@@ -21,6 +21,10 @@ export type YOpsParseResult =
   | { ok: true; format: 'yops'; yops: YOp[] }
   | { ok: false; error: string };
 
+export interface ParseYOpsOptions {
+  strictYopsList?: boolean;
+}
+
 // ── Helpers ──
 
 /**
@@ -177,7 +181,7 @@ function parseYamlTree(cleaned: string): YOpsParseResult {
 
 // ── Case 2: YOps List ──
 
-function parseYopsList(cleaned: string): YOpsParseResult {
+function parseYopsList(cleaned: string, options?: ParseYOpsOptions): YOpsParseResult {
   let parsed: unknown;
   try {
     parsed = yaml.load(cleaned);
@@ -223,11 +227,14 @@ function parseYopsList(cleaned: string): YOpsParseResult {
       }
     }
 
+    const message = `Invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`;
+    if (options?.strictYopsList) {
+      return { ok: false, error: message };
+    }
+
     // Autofix didn't help — skip this op (don't fail the entire parse)
-    // The correction round in yaml-strategy will handle rejected ops
-    console.warn(
-      `[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`
-    );
+    // Legacy callers may still tolerate partial parses.
+    console.warn(`[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`);
   }
 
   return { ok: true, format: 'yops', yops: validated };
@@ -235,7 +242,7 @@ function parseYopsList(cleaned: string): YOpsParseResult {
 
 // ── Main export ──
 
-export function parseYOpsOutput(raw: string): YOpsParseResult {
+export function parseYOpsOutput(raw: string, options?: ParseYOpsOptions): YOpsParseResult {
   const cleaned = sanitizeYamlQuotes(stripFences(raw));
 
   if (cleaned.length === 0) {
@@ -244,7 +251,7 @@ export function parseYOpsOutput(raw: string): YOpsParseResult {
 
   // Check yops first — "yops:" also matches the YAML tree pattern
   if (isYopsList(cleaned)) {
-    return parseYopsList(cleaned);
+    return parseYopsList(cleaned, options);
   }
 
   if (isYamlTree(cleaned)) {
@@ -252,7 +259,7 @@ export function parseYOpsOutput(raw: string): YOpsParseResult {
   }
 
   // Fallback: try as yops list anyway
-  const yopsAttempt = parseYopsList(cleaned);
+  const yopsAttempt = parseYopsList(cleaned, options);
   if (yopsAttempt.ok) {
     return yopsAttempt;
   }

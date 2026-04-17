@@ -250,6 +250,38 @@ describe('Chat Routes', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('supports OpenAI non-streaming chat with env-backed credentials', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            model: 'gpt-4o-mini',
+            choices: [{ message: { content: 'Hello from OpenAI' } }],
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      const res = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.content).toBe('Hello from OpenAI');
+      fetchMock.mockRestore();
+      delete process.env.OPENAI_API_KEY;
+    });
+
     it('strips the provider prefix before calling upstream for prefixed-model requests', async () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'openai',
@@ -531,6 +563,47 @@ describe('Chat Routes', () => {
       expect(body).toContain('"type":"done","model":"claude-sonnet-4-20250514"');
       expect(body).toContain('[DONE]');
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('supports OpenAI streaming chat', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      const streamBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}\n\n'
+            )
+          );
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}\n\n'
+            )
+          );
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(streamBody, { status: 200 }));
+
+      const res = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('"type":"token","content":"Hel"');
+      expect(text).toContain('"type":"token","content":"lo"');
+      expect(text).toContain('"type":"done"');
+      fetchMock.mockRestore();
+      delete process.env.OPENAI_API_KEY;
     });
 
     it('fails clearly instead of falling back when stream model targets an unsupported provider', async () => {

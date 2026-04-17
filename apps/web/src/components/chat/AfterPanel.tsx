@@ -1,21 +1,29 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
-import { Check, Play, Plus, X } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { AlertCircle, Play, Plus, X } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { getSlotSource } from '@/domain/source';
+import {
+  TREE_BASE_PADDING,
+  TREE_FOOTER_HEIGHT,
+  TREE_INDENT_STEP,
+  TREE_ROW_HEIGHT,
+  TREE_TRAILING_WIDTH,
+} from '@/components/chat/treeRowMetrics';
+import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
+import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
+import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
-// ── Constants ──
-
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
+type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 
-/** Format a slot value for display — handles strings, numbers, arrays, objects */
 function formatSlotValue(val: unknown): string {
   if (val === null || val === undefined) return '';
   if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
@@ -40,49 +48,198 @@ function formatSlotValue(val: unknown): string {
   return String(val);
 }
 
-// ── SlotRow ──
-
-interface SlotRowProps {
-  nodeKey: string;
-  nodePath: string;
-  slotKey: string;
-  value: string;
-  diffType: 'added' | 'modified' | 'removed' | null;
-  oldValue?: string;
-  sourceTag?: string;
-  onDelete: () => void;
-  onEdit: (newValue: string) => void;
+function flattenNodes(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
+  const map = new Map<string, TreeNode>();
+  for (const node of trees) {
+    const path = prefix ? `${prefix}/${node.key}` : node.key;
+    map.set(path, node);
+    if (node.children?.length) {
+      for (const [childPath, childNode] of flattenNodes(node.children, path)) {
+        map.set(childPath, childNode);
+      }
+    }
+  }
+  return map;
 }
 
-function SlotRow({
-  nodeKey: _nodeKey,
-  nodePath,
-  slotKey,
-  value,
-  diffType,
-  oldValue,
-  sourceTag,
+function summarizeVisibleDiff(diff: TreeDiffResult | null): {
+  addedRows: number;
+  modifiedRows: number;
+  removedRows: number;
+} {
+  if (!diff) return { addedRows: 0, modifiedRows: 0, removedRows: 0 };
+  return {
+    addedRows: Object.values(diff.addedSlots).reduce((n, slots) => n + slots.length, 0),
+    modifiedRows: Object.values(diff.modifiedSlots).reduce((n, slots) => n + slots.length, 0),
+    removedRows:
+      Object.values(diff.removedSlots).reduce((n, slots) => n + slots.length, 0) +
+      diff.removed.length,
+  };
+}
+
+interface RenderRowBase {
+  key: string;
+  depth: number;
+}
+
+interface NodeRenderRow extends RenderRowBase {
+  kind: 'node';
+  path: string;
+  nodeKey: string;
+  beforeNode: TreeNode | null;
+  afterNode: TreeNode | null;
+  isAdded: boolean;
+  isRemoved: boolean;
+}
+
+interface SlotRenderRow extends RenderRowBase {
+  kind: 'slot';
+  path: string;
+  slotKey: string;
+  beforeValue: string | null;
+  afterValue: string | null;
+  diffType: SlotDiffType;
+  oldValue?: string;
+}
+
+type RenderRow = NodeRenderRow | SlotRenderRow;
+
+function buildRenderRows(
+  baseNode: TreeNode | null,
+  resultNode: TreeNode | null,
+  path: string,
+  depth: number,
+  diff: TreeDiffResult | null
+): RenderRow[] {
+  if (!baseNode && !resultNode) return [];
+  const isRemovedNode = !!baseNode && !resultNode;
+  const nodeKey = resultNode?.key ?? baseNode?.key ?? path.split('/').pop() ?? path;
+  const rows: RenderRow[] = [
+    {
+      kind: 'node',
+      key: `node:${path}`,
+      path,
+      nodeKey,
+      depth,
+      beforeNode: baseNode,
+      afterNode: resultNode,
+      isAdded: !!resultNode && !baseNode,
+      isRemoved: isRemovedNode,
+    },
+  ];
+
+  if (isRemovedNode) return rows;
+
+  const baseSlots = baseNode?.slots || {};
+  const resultSlots = resultNode?.slots || {};
+  const resultSlotKeys = Object.keys(resultSlots).filter((key) => !key.startsWith('_'));
+  const baseOnlySlotKeys = Object.keys(baseSlots).filter(
+    (key) => !key.startsWith('_') && !(key in resultSlots)
+  );
+  const orderedSlotKeys = [...resultSlotKeys, ...baseOnlySlotKeys];
+
+  const modifiedByKey = new Map((diff?.modifiedSlots[path] ?? []).map((entry) => [entry.key, entry]));
+  const addedSlotSet = new Set(diff?.addedSlots[path] ?? []);
+  const removedSlotSet = new Set(diff?.removedSlots[path] ?? []);
+
+  for (const slotKey of orderedSlotKeys) {
+    const inBase = slotKey in baseSlots;
+    const inResult = slotKey in resultSlots;
+    const beforeValue = inBase ? formatSlotValue(baseSlots[slotKey]) : null;
+    const afterValue = inResult ? formatSlotValue(resultSlots[slotKey]) : null;
+    let diffType: SlotDiffType = null;
+    let oldValue: string | undefined;
+
+    if (!inBase && inResult) {
+      diffType = 'added';
+    } else if (inBase && !inResult) {
+      diffType = 'removed';
+    } else if (addedSlotSet.has(slotKey)) {
+      diffType = 'added';
+    } else if (removedSlotSet.has(slotKey)) {
+      diffType = 'removed';
+    } else if (modifiedByKey.has(slotKey)) {
+      diffType = 'modified';
+      oldValue = modifiedByKey.get(slotKey)?.oldValue;
+    } else if (resultNode && !baseNode) {
+      diffType = 'added';
+    }
+
+    rows.push({
+      kind: 'slot',
+      key: `slot:${path}:${slotKey}`,
+      path,
+      slotKey,
+      depth: depth + 1,
+      beforeValue,
+      afterValue,
+      diffType,
+      oldValue,
+    });
+  }
+
+  const baseChildren = new Map((baseNode?.children ?? []).map((child) => [child.key, child]));
+  const resultChildren = new Map((resultNode?.children ?? []).map((child) => [child.key, child]));
+  const childOrder = [
+    ...resultChildren.keys(),
+    ...Array.from(baseChildren.keys()).filter((key) => !resultChildren.has(key)),
+  ];
+
+  for (const childKey of childOrder) {
+    const nextBase = baseChildren.get(childKey) ?? null;
+    const nextResult = resultChildren.get(childKey) ?? null;
+    rows.push(...buildRenderRows(nextBase, nextResult, `${path}/${childKey}`, depth + 1, diff));
+  }
+
+  return rows;
+}
+
+interface SlotCellProps {
+  side: 'before' | 'after';
+  row: SlotRenderRow;
+  parentMessage: string | null;
+  selected: boolean;
+  onSelect: () => void;
+  onClear: () => void;
+  onDelete?: () => void;
+  onEdit?: (newValue: string) => void;
+}
+
+function SlotCell({
+  side,
+  row,
+  parentMessage,
+  selected,
+  onSelect,
+  onClear,
   onDelete,
   onEdit,
-}: SlotRowProps) {
+}: SlotCellProps) {
   const [editing, setEditing] = useState(false);
-  const select = useWorkspaceStore((s) => s.select);
-  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
-  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
-  const isSlotSelected = selectedPath === nodePath && selectedSlot === slotKey;
   const inputRef = useRef<HTMLInputElement>(null);
+  const displayValue = side === 'before' ? row.beforeValue : row.afterValue;
+  const isInteractive = side === 'after';
+  const tag = side === 'after' ? deriveSlotTag({ diffType: row.diffType, parentMessage }) : null;
+  const isRemoved = row.diffType === 'removed';
+  const isModified = row.diffType === 'modified';
+  const isAdded = row.diffType === 'added';
+  const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
 
-  const handleDoubleClick = useCallback(() => {
+  const handleStartEdit = useCallback(() => {
+    if (!isInteractive || !onEdit || isRemoved) return;
     setEditing(true);
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+  }, [isInteractive, isRemoved, onEdit]);
 
   const handleSave = useCallback(() => {
+    if (!onEdit) {
+      setEditing(false);
+      return;
+    }
     const newValue = inputRef.current?.value.trim() ?? '';
-    if (newValue && newValue !== value) onEdit(newValue);
+    if (newValue && newValue !== displayValue) onEdit(newValue);
     setEditing(false);
-  }, [value, onEdit]);
+  }, [displayValue, onEdit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -92,452 +249,211 @@ function SlotRow({
     [handleSave]
   );
 
-  const gutterColor =
-    diffType === 'added'
-      ? 'bg-[var(--status-success)]'
-      : diffType === 'modified'
-        ? 'bg-[var(--status-warning)]'
-        : diffType === 'removed'
-          ? 'bg-[var(--status-error)]'
-          : 'bg-transparent';
+  const rowBg =
+    side === 'after'
+      ? isAdded
+        ? 'bg-[var(--status-success)]/[0.04]'
+        : isModified
+          ? 'bg-[var(--status-warning)]/[0.05]'
+          : isRemoved
+            ? 'bg-[var(--status-error)]/[0.035] opacity-50'
+            : ''
+      : '';
 
-  if (editing) {
-    return (
-      <div className="flex items-stretch" style={{ minHeight: 24 }}>
-        <div className={`shrink-0 w-[3px] ${gutterColor}`} />
-        <div
-          className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 bg-[var(--status-warning)]/[0.06]"
-          style={MONO}
-        >
-          <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
-          <input
-            ref={inputRef}
-            defaultValue={value}
-            onKeyDown={handleKeyDown}
-            onBlur={handleSave}
-            className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
-            style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-          />
-          <span className="shrink-0 text-[8px] text-[var(--text-tertiary)] whitespace-nowrap">
-            Enter ↵ · Esc ✕
-          </span>
-        </div>
-      </div>
-    );
-  }
+  const gutterColor =
+    side === 'after'
+      ? isAdded
+        ? 'bg-[var(--status-success)]'
+        : isModified
+          ? 'bg-[var(--status-warning)]'
+          : isRemoved
+            ? 'bg-[var(--status-error)]'
+            : 'bg-transparent'
+      : 'bg-transparent';
 
   return (
-    <div
-      className="group flex items-stretch"
-      data-testid={`slot-row-${nodePath}-${slotKey}`}
-      style={{ minHeight: 24 }}
-    >
-      <div className={`shrink-0 w-[3px] ${isSlotSelected ? 'bg-[var(--source)]' : gutterColor}`} />
-      <div
-        className={cn(
-          'flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
-          isSlotSelected && 'bg-[var(--source-dim)]'
-        )}
-        style={MONO}
-        onClick={() => (isSlotSelected ? clearSelection() : select('after', { nodePath, slotKey }))}
-        onDoubleClick={handleDoubleClick}
-      >
-        <span className="shrink-0 text-[var(--yaml-key,#2563eb)]">{slotKey}:</span>
-        {diffType === 'modified' && oldValue && (
-          <span className="text-[var(--status-error)] opacity-50 line-through mr-1 truncate text-[10px]">
-            {oldValue}
-          </span>
-        )}
-        <span
-          className={
-            diffType === 'added'
-              ? 'text-[var(--status-success)] truncate'
-              : diffType === 'modified'
-                ? 'text-[var(--status-warning)] truncate'
-                : diffType === 'removed'
-                  ? 'text-[var(--status-error)] opacity-50 line-through truncate'
-                  : 'text-[var(--yaml-string,#16a34a)] truncate'
-          }
+    <div className="h-full w-full">
+      <div className={cn('flex h-full w-full items-stretch', rowBg)}>
+        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : gutterColor}`} />
+        <div
+          className={cn(
+            'group flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
+            selected && 'bg-[var(--source-dim)]'
+          )}
+          style={{ ...MONO, paddingLeft }}
+          onClick={() => (selected ? onClear() : onSelect())}
+          onDoubleClick={handleStartEdit}
         >
-          {value}
-        </span>
-        {/* Source tag — turn reference if available */}
-        {sourceTag && (
-          <span
-            className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
-            title={`Source: ${sourceTag}`}
-          >
-            {sourceTag}
+          <span className={cn('shrink-0 text-[var(--text-secondary)]', isRemoved && 'line-through')}>
+            {row.slotKey}
           </span>
-        )}
-        <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-          <button
-            type="button"
-            data-testid="slot-delete"
-            title="Delete slot"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
-          >
-            <X className="h-2.5 w-2.5" />
-          </button>
+          <span className="shrink-0 text-[var(--text-tertiary)]">:</span>
+          {editing ? (
+            <input
+              ref={inputRef}
+              defaultValue={displayValue ?? ''}
+              onKeyDown={handleKeyDown}
+              onBlur={handleSave}
+              className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
+              style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+            />
+          ) : (
+            <>
+              {side === 'after' && isModified && row.oldValue && (
+                <span className="text-[var(--status-error)] opacity-50 line-through truncate mr-1">
+                  {row.oldValue}
+                </span>
+              )}
+              <span className={cn('truncate text-[var(--text-primary)]', isRemoved && 'line-through')}>
+                {displayValue ?? ''}
+              </span>
+            </>
+          )}
+          {side === 'after' && tag && (
+            <span className="ml-auto shrink-0" style={{ width: TREE_TRAILING_WIDTH }}>
+              <span
+                className={cn(
+                  'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[7px] font-semibold',
+                  tag.kind === 'inherited' && 'text-[var(--text-tertiary)] bg-black/[0.03]',
+                  tag.kind === 'new' && 'text-[var(--status-success)] bg-[var(--status-success)]/10',
+                  tag.kind === 'modified' &&
+                    'text-[var(--status-warning)] bg-[var(--status-warning)]/10',
+                  tag.kind === 'removed' && 'text-[var(--status-error)] bg-[var(--status-error)]/10'
+                )}
+              >
+                {tag.label}
+              </span>
+            </span>
+          )}
+          {side === 'after' && onDelete && (
+            <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                data-testid="slot-delete"
+                title="Delete slot"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ── NodeRow ──
-
-interface NodeRowProps {
-  node: TreeNode;
-  /** Full path for source tracing (e.g., "root/child") */
-  path: string;
-  depth: number;
-  diffType: 'added' | 'removed' | null;
-  addedSlots: string[];
-  removedSlots: string[];
-  modifiedSlots: Array<{ key: string; oldValue: string; newValue: string }>;
-  onDismiss: () => void;
-  onAccept: () => void;
-  onEditSlot: (slotKey: string, newValue: string) => void;
-  onDeleteSlot: (slotKey: string) => void;
+interface NodeCellProps {
+  side: 'before' | 'after';
+  row: NodeRenderRow;
+  selected: boolean;
+  onSelect: () => void;
+  onClear: () => void;
+  onAddChild?: () => void;
+  onDeleteNode?: () => void;
 }
 
-function NodeRow({
-  node,
-  path,
-  depth,
-  diffType,
-  addedSlots,
-  removedSlots,
-  modifiedSlots,
-  onDismiss,
-  onAccept,
-  onEditSlot,
-  onDeleteSlot,
-}: NodeRowProps) {
-  const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
-  const select = useWorkspaceStore((s) => s.select);
-  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
-  const { applyEdit } = useGoldEdit();
-  const isSelected = selectedNodePath === path;
-
-  const nodeSource = getSlotSource(sourceIndex, path);
-  const sourceTag =
-    nodeSource?.type === 'llm' ? 'LLM' : nodeSource?.type === 'human' ? 'human' : null;
-
-  const handleDropNode = useCallback(() => {
-    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
-    void applyEdit({ drop: { path } });
-  }, [path, node.key, applyEdit]);
-
-  const handleAddChild = useCallback(() => {
-    const childKey = window.prompt('New node name (snake_case):');
-    if (!childKey || !childKey.trim()) return;
-    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-    void applyEdit({ define: { path: `${path}/${cleanKey}` } });
-  }, [path, applyEdit]);
-  const slots = node.slots || {};
-  const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
-  const hasChanges =
-    diffType !== null ||
-    addedSlots.length > 0 ||
-    removedSlots.length > 0 ||
-    modifiedSlots.length > 0;
-
-  const nodeGutterColor =
-    diffType === 'added'
-      ? 'bg-[var(--status-success)]'
-      : diffType === 'removed'
-        ? 'bg-[var(--status-error)]'
-        : hasChanges
-          ? 'bg-[var(--status-warning)]'
-          : 'bg-transparent';
-
+function NodeCell({
+  side,
+  row,
+  selected,
+  onSelect,
+  onClear,
+  onAddChild,
+  onDeleteNode,
+}: NodeCellProps) {
+  const isRemoved = row.isRemoved && side === 'after';
+  const isAdded = row.isAdded && side === 'after';
+  const hasNode = side === 'before' ? !!row.beforeNode : !!row.afterNode || row.isRemoved;
+  const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
   const nodeBg =
-    diffType === 'added'
-      ? 'bg-[var(--status-success)]/[0.04]'
-      : diffType === 'removed'
-        ? 'bg-[var(--status-error)]/[0.04]'
-        : hasChanges
-          ? 'bg-[var(--status-warning)]/[0.03]'
-          : '';
+    side === 'after'
+      ? isAdded
+        ? 'bg-[var(--status-success)]/[0.04]'
+        : isRemoved
+          ? 'bg-[var(--status-error)]/[0.035] opacity-50'
+          : ''
+      : '';
+  const gutterColor =
+    side === 'after'
+      ? isAdded
+        ? 'bg-[var(--status-success)]'
+        : isRemoved
+          ? 'bg-[var(--status-error)]'
+          : 'bg-transparent'
+      : 'bg-transparent';
 
   return (
-    <>
-      {/* Node header */}
-      <div
-        className={`group flex items-stretch ${nodeBg} ${isSelected ? 'ring-1 ring-[var(--source)]/40 bg-[var(--source-dim)]' : ''}`}
-        style={{ minHeight: 26 }}
-      >
-        <div
-          className={`shrink-0 w-[3px] ${isSelected ? 'bg-[var(--source)]' : nodeGutterColor}`}
-        />
-        <div
-          className="flex-1 flex items-center gap-1 px-2 py-0.5 hover:bg-[var(--hover-bg)] transition-colors cursor-pointer"
-          onClick={() => (isSelected ? clearSelection() : select('after', { nodePath: path }))}
-          style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
-        >
-          <span
-            className={
-              diffType === 'added'
-                ? 'text-[var(--status-success)] font-semibold'
-                : diffType === 'removed'
-                  ? 'text-[var(--status-error)]/60 line-through font-semibold'
-                  : 'text-[var(--yaml-key,#2563eb)] font-semibold'
-            }
-          >
-            {node.key}:
-          </span>
-          {diffType === 'added' && (
-            <span className="text-[8px] text-[var(--status-success)] bg-[var(--status-success)]/15 px-1 py-0.5 rounded ml-1">
-              new
-            </span>
-          )}
-          {sourceTag && (
-            <span
-              className="text-[7px] font-bold px-1 py-px rounded-sm bg-[var(--source-dim)] text-[var(--source)] cursor-pointer hover:bg-[var(--source)]/20 shrink-0 ml-1 tracking-wide"
-              onClick={(e) => {
-                e.stopPropagation();
-                select('after', { nodePath: path });
-              }}
-            >
-              {sourceTag}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-            {hasChanges && diffType !== 'removed' && (
-              <>
-                <button
-                  type="button"
-                  title="Keep changes"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAccept();
-                  }}
-                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)]"
-                >
-                  <Check className="h-2.5 w-2.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Dismiss changes"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDismiss();
-                  }}
-                  className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-warning)]"
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              data-testid="add-child-button"
-              title="Add child node"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddChild();
-              }}
-              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
-            >
-              <Plus className="h-2.5 w-2.5" />
-            </button>
-            <button
-              type="button"
-              title="Remove node and children"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDropNode();
-              }}
-              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Slot rows */}
-      {slotEntries.map(([key, val]) => {
-        const isAdded = addedSlots.includes(key);
-        const isRemoved = removedSlots.includes(key);
-        const mod = modifiedSlots.find((m) => m.key === key);
-
-        const slotDiff = isAdded
-          ? 'added'
-          : isRemoved
-            ? 'removed'
-            : mod
-              ? 'modified'
-              : diffType === 'added'
-                ? 'added'
-                : null;
-
-        return (
-          <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-            <SlotRow
-              nodeKey={node.key}
-              nodePath={path}
-              slotKey={key}
-              value={formatSlotValue(val)}
-              diffType={slotDiff}
-              oldValue={mod?.oldValue}
-              sourceTag={sourceTag ?? undefined}
-              onDelete={() => onDeleteSlot(key)}
-              onEdit={(newValue) => onEditSlot(key, newValue)}
-            />
-          </div>
-        );
-      })}
-
-      {/* Removed slots (exist in base, not in result) */}
-      {removedSlots
-        .filter((k) => !(k in slots))
-        .map((key) => (
-          <div key={`removed-${key}`} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-            <div className="flex items-stretch" style={{ minHeight: 24 }}>
-              <div className="shrink-0 w-[3px] bg-[var(--status-error)]" />
-              <div
-                className="flex-1 min-w-0 flex items-center gap-1 px-2 py-0.5 opacity-50"
-                style={MONO}
-              >
-                <span className="text-[var(--text-secondary)] line-through">{key}: —</span>
-              </div>
-            </div>
-          </div>
-        ))}
-
-      {/* Children */}
-      {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive
-          key={child.key}
-          node={child}
-          path={`${path}/${child.key}`}
-          depth={depth + 1}
-        />
-      ))}
-    </>
-  );
-}
-
-// ── AfterNodeRecursive — re-uses diff from parent context ──
-
-interface AfterNodeRecursiveProps {
-  path: string;
-  node: TreeNode;
-  depth: number;
-}
-
-function AfterNodeRecursive({ node, path, depth }: AfterNodeRecursiveProps) {
-  const slots = node.slots || {};
-  const slotEntries = Object.entries(slots).filter(([k]) => !k.startsWith('_'));
-  const select = useWorkspaceStore((s) => s.select);
-  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
-  const { applyEdit } = useGoldEdit();
-  const selectedPath = useWorkspaceStore((s) => s.selectedNodePath);
-  const selectedSlot = useWorkspaceStore((s) => s.selectedSlotKey);
-  const isNodeSelected = selectedPath === path && !selectedSlot;
-
-  const handleEditSlot = useCallback(
-    (slotKey: string, newValue: string) => {
-      void applyEdit({ set: { path: `${path}/${slotKey}`, value: newValue } });
-    },
-    [path, applyEdit]
-  );
-
-  const handleDeleteSlot = useCallback(
-    (slotKey: string) => {
-      void applyEdit({ unset: { path: `${path}/${slotKey}` } });
-    },
-    [path, applyEdit]
-  );
-
-  const handleDropNode = useCallback(() => {
-    if (!window.confirm(`Remove "${node.key}" and all its children?`)) return;
-    void applyEdit({ drop: { path } });
-  }, [path, node.key, applyEdit]);
-
-  const handleAddChild = useCallback(() => {
-    const childKey = window.prompt('New node name (snake_case):');
-    if (!childKey || !childKey.trim()) return;
-    const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-    void applyEdit({ define: { path: `${path}/${cleanKey}` } });
-  }, [path, applyEdit]);
-
-  return (
-    <>
-      <div className="group flex items-stretch" style={{ minHeight: 26 }}>
-        <div
-          className={`shrink-0 w-[3px] ${isNodeSelected ? 'bg-[var(--source)]' : 'bg-transparent'}`}
-        />
+    <div className="h-full w-full">
+      <div className={cn('group flex h-full w-full items-stretch', nodeBg)}>
+        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : gutterColor}`} />
         <div
           className={cn(
-            'flex-1 flex items-center gap-1 py-0.5 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors',
-            isNodeSelected && 'bg-[var(--source-dim)]'
+            'flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
+            selected && 'bg-[var(--source-dim)]'
           )}
-          style={{ ...MONO, paddingLeft: `${8 + depth * 14}px` }}
-          onClick={() => (isNodeSelected ? clearSelection() : select('after', { nodePath: path }))}
+          style={{ ...MONO, paddingLeft }}
+          onClick={() => (hasNode ? (selected ? onClear() : onSelect()) : undefined)}
         >
-          <span className="text-[var(--yaml-key,#2563eb)] font-semibold">{node.key}:</span>
-          <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-            <button
-              type="button"
-              data-testid="add-child-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleAddChild();
-              }}
-              title="Add child node"
-              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
-            >
-              <Plus className="h-2.5 w-2.5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDropNode();
-              }}
-              title="Remove node and children"
-              className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </div>
+          {hasNode && <span className="text-[8px] text-[var(--text-tertiary)] mr-1">◆</span>}
+          <span className={cn('text-[var(--text-secondary)] font-semibold', isRemoved && 'line-through')}>
+            {row.nodeKey}
+          </span>
+          <span className="text-[var(--text-tertiary)]">:</span>
+          {side === 'after' && (
+            <>
+              <span className="ml-auto shrink-0" style={{ width: TREE_TRAILING_WIDTH }}>
+                {isAdded && (
+                  <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-success)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-success)]">
+                    New node
+                  </span>
+                )}
+                {isRemoved && (
+                  <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-error)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-error)]">
+                    Removed node
+                  </span>
+                )}
+              </span>
+              {row.afterNode && (
+                <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    data-testid="add-child-button"
+                    title="Add child node"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddChild?.();
+                    }}
+                    className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
+                  >
+                    <Plus className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Remove node and children"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteNode?.();
+                    }}
+                    className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
-      {slotEntries.map(([key, val]) => (
-        <div key={key} style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-          <SlotRow
-            nodeKey={node.key}
-            nodePath={path}
-            slotKey={key}
-            value={formatSlotValue(val)}
-            diffType={null}
-            onDelete={() => handleDeleteSlot(key)}
-            onEdit={(newValue) => handleEditSlot(key, newValue)}
-          />
-        </div>
-      ))}
-      {node.children?.map((child: TreeNode) => (
-        <AfterNodeRecursive
-          key={child.key}
-          node={child}
-          path={`${path}/${child.key}`}
-          depth={depth + 1}
-        />
-      ))}
-    </>
+    </div>
   );
 }
-
-// ── AfterPanel ──
 
 export function AfterPanel({
   showBeforeToggle,
@@ -550,52 +466,91 @@ export function AfterPanel({
 }) {
   const tree = useWorkspaceStore((s) => s.tree);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const opsCount = useWorkspaceStore((s) => s.opsLog.length);
+  const lastError = useWorkspaceStore((s) => s.lastError);
+  const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
+  const selectedSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
+  const select = useWorkspaceStore((s) => s.select);
+  const clearSelection = useWorkspaceStore((s) => s.clearSelection);
   const { applyEdit } = useGoldEdit();
+  const parent = useParentCommit();
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
+  const projectId = useCommitStore((s) => s.projectId);
   const { commit: commitTrees } = useCommitActions();
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
 
   const trees = tree.trees as TreeNode[];
+  const parentTrees = parent?.trees ?? [];
   const hasResult = trees.length > 0;
+  const hasParent = !!parent;
+  const showBefore = !!beforeVisible && hasParent;
 
-  // ── Dismiss: no-op in new architecture (script ops are gone) ──
-  const handleDismiss = useCallback((_nodeKey: string) => {
-    // TODO(commit5-diff-display): implement dismiss via gold-edit drop op if needed
-  }, []);
+  const diff = useMemo<TreeDiffResult | null>(() => {
+    if (!parent) return null;
+    return computeTreeDiff(parent.trees, tree.trees);
+  }, [parent, tree.trees]);
 
-  // ── Accept: no-op (changes are already in the tree) ──
-  const handleAccept = useCallback((_nodeKey: string) => {
-    // Changes are already in the tree; accept is a visual confirmation only.
-  }, []);
+  const summary = useMemo(() => summarizeVisibleDiff(diff), [diff]);
+  const parentMessage = parent?.message ?? null;
 
-  // ── Edit slot inline: gold layer edit ──
+  const baseMap = useMemo(() => flattenNodes(parentTrees), [parentTrees]);
+  const resultMap = useMemo(() => flattenNodes(trees), [trees]);
+
+  const rows = useMemo<RenderRow[]>(() => {
+    const baseRoots = new Map(parentTrees.map((node) => [node.key, node]));
+    const resultRoots = new Map(trees.map((node) => [node.key, node]));
+    const rootOrder = [
+      ...resultRoots.keys(),
+      ...Array.from(baseRoots.keys()).filter((key) => !resultRoots.has(key)),
+    ];
+    return rootOrder.flatMap((key) =>
+      buildRenderRows(baseRoots.get(key) ?? null, resultRoots.get(key) ?? null, key, 0, diff)
+    );
+  }, [diff, parentTrees, trees]);
+
   const handleEditSlot = useCallback(
-    (nodeKey: string, slotKey: string, newValue: string) => {
-      void applyEdit({ set: { path: `${nodeKey}/${slotKey}`, value: newValue } });
+    (nodePath: string, slotKey: string, newValue: string) => {
+      void applyEdit({ set: { path: `${nodePath}/${slotKey}`, value: newValue } });
     },
     [applyEdit]
   );
 
-  // ── Delete slot inline: gold layer edit ──
   const handleDeleteSlot = useCallback(
-    (nodeKey: string, slotKey: string) => {
-      void applyEdit({ unset: { path: `${nodeKey}/${slotKey}` } });
+    (nodePath: string, slotKey: string) => {
+      void applyEdit({ unset: { path: `${nodePath}/${slotKey}` } });
+    },
+    [applyEdit]
+  );
+
+  const handleAddChild = useCallback(
+    (nodePath: string) => {
+      const childKey = window.prompt('New node name (snake_case):');
+      if (!childKey || !childKey.trim()) return;
+      const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
+      void applyEdit({ define: { path: `${nodePath}/${cleanKey}` } });
+    },
+    [applyEdit]
+  );
+
+  const handleDeleteNode = useCallback(
+    (nodePath: string, nodeKey: string) => {
+      if (!window.confirm(`Remove "${nodeKey}" and all its children?`)) return;
+      void applyEdit({ drop: { path: nodePath } });
     },
     [applyEdit]
   );
 
   const getDefaultCommitName = useCallback(() => {
-    if (!trees || trees.length === 0) return 'Knowledge Extract';
-    const rootKeys = trees
+    if (!trees.length) return 'Knowledge Extract';
+    return trees
       .slice(0, 3)
-      .map((t) => t.key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
-    return rootKeys.join(' & ');
+      .map((t) => t.key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+      .join(' & ');
   }, [trees]);
 
-  // ── Commit: persist current tree ──
   const handleCommit = useCallback(
     async (message: string) => {
       try {
@@ -618,66 +573,193 @@ export function AfterPanel({
     [commitTrees]
   );
 
+  const handleDiscard = useCallback(async () => {
+    const convId = useWorkspaceStore.getState().conversationId;
+    if (!projectId || !convId || isCommitting) return;
+    await hydrateConversationToStore(projectId, convId);
+    useWorkspaceStore.getState().clearSelection();
+    useWorkspaceStore.getState().setMode('idle');
+    toast.success('Workspace reverted to last commit');
+  }, [isCommitting, projectId]);
+
   return (
-    <div data-testid="after-panel" className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)] shrink-0">
-        <div className="flex items-center gap-2">
+    <div
+      data-testid="after-panel"
+      className="relative flex h-full min-h-0 w-full flex-1 flex-col"
+    >
+      <div
+        className={cn(
+          'grid shrink-0 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]',
+          showBefore ? 'grid-cols-2' : 'grid-cols-1'
+        )}
+      >
+        {showBefore && (
+          <div className="flex items-center justify-between px-3 py-1.5 border-r border-[var(--stroke-default)]">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+              Before <span className="opacity-80">🔒</span>
+            </span>
+            <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60 truncate max-w-[150px]">
+              {parentMessage ?? (parent ? parent.hash.replace(/^sha256:/, '').slice(0, 6) : 'empty')}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
           <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Result
           </span>
-          {showBeforeToggle && onToggleBefore && (
+          {showBeforeToggle && onToggleBefore && hasParent && (
             <button
               type="button"
               onClick={onToggleBefore}
               className={`text-[9px] font-medium px-1.5 py-0.5 rounded transition-colors ${
-                beforeVisible
-                  ? 'bg-[var(--source)]/10 text-[var(--source)]'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                showBefore
+                  ? 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                  : 'bg-[var(--source)]/10 text-[var(--source)]'
               }`}
             >
-              {beforeVisible ? 'Hide Previous' : 'Show Previous'}
+              {showBefore ? 'Hide Previous' : 'Show Previous'}
             </button>
           )}
         </div>
-        {/* TODO(commit5-diff-display): diff summary badges — needs base snapshot strategy */}
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto py-1">
-        {trees.length === 0 ? (
-          // Empty state — no tree yet
-          <div className="flex flex-col items-center justify-center h-full gap-2 py-8 opacity-40">
-            <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
-            <span className="text-[10px] text-[var(--text-tertiary)] italic">
-              No knowledge extracted yet
-            </span>
+      <div className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
+        {rows.length === 0 && lastError ? (
+          <div className="flex h-full min-h-[160px] items-center justify-center px-6">
+            <div className="flex max-w-[280px] flex-col items-center gap-2 text-center">
+              <AlertCircle className="h-5 w-5 text-[var(--status-error)] opacity-80" />
+              <span className="text-[11px] leading-5 text-[var(--status-error)]">{lastError}</span>
+            </div>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="flex h-full min-h-[160px] items-center justify-center opacity-40">
+            <div className="flex flex-col items-center gap-2">
+              <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
+              <span className="text-[10px] text-[var(--text-tertiary)] italic">
+                No knowledge extracted yet
+              </span>
+            </div>
           </div>
         ) : (
-          // TODO(commit5-diff-display): diff badges hidden — no base snapshot in new arch
-          trees.map((node) => (
-            <NodeRow
-              key={node.key}
-              node={node}
-              path={node.key}
-              depth={0}
-              diffType={null}
-              addedSlots={[]}
-              removedSlots={[]}
-              modifiedSlots={[]}
-              onDismiss={() => handleDismiss(node.key)}
-              onAccept={() => handleAccept(node.key)}
-              onEditSlot={(slotKey, newValue) => handleEditSlot(node.key, slotKey, newValue)}
-              onDeleteSlot={(slotKey) => handleDeleteSlot(node.key, slotKey)}
-            />
-          ))
+          <div className="flex min-h-full flex-col">
+            {rows.map((row) => {
+              const rowSelected =
+                selectedNodePath === row.path &&
+                (row.kind === 'node' ? !selectedSlotKey : selectedSlotKey === row.slotKey);
+
+              const beforeCell =
+                row.kind === 'node' ? (
+                  <NodeCell
+                    side="before"
+                    row={row}
+                    selected={rowSelected}
+                    onSelect={() => select('before', { nodePath: row.path })}
+                    onClear={clearSelection}
+                  />
+                ) : (
+                  <SlotCell
+                    side="before"
+                    row={row}
+                    parentMessage={parentMessage}
+                    selected={rowSelected}
+                    onSelect={() => select('before', { nodePath: row.path, slotKey: row.slotKey })}
+                    onClear={clearSelection}
+                  />
+                );
+
+              const afterCell =
+                row.kind === 'node' ? (
+                  <NodeCell
+                    side="after"
+                    row={row}
+                    selected={rowSelected}
+                    onSelect={() => select('after', { nodePath: row.path })}
+                    onClear={clearSelection}
+                    onAddChild={row.afterNode ? () => handleAddChild(row.path) : undefined}
+                    onDeleteNode={
+                      row.afterNode ? () => handleDeleteNode(row.path, row.nodeKey) : undefined
+                    }
+                  />
+                ) : (
+                  <SlotCell
+                    side="after"
+                    row={row}
+                    parentMessage={parentMessage}
+                    selected={rowSelected}
+                    onSelect={() => select('after', { nodePath: row.path, slotKey: row.slotKey })}
+                    onClear={clearSelection}
+                    onDelete={row.afterValue !== null ? () => handleDeleteSlot(row.path, row.slotKey) : undefined}
+                    onEdit={row.afterValue !== null ? (newValue) => handleEditSlot(row.path, row.slotKey, newValue) : undefined}
+                  />
+                );
+
+              return (
+                showBefore ? (
+                  <div
+                    key={row.key}
+                    className="grid w-full grid-cols-2"
+                    style={{ minHeight: TREE_ROW_HEIGHT }}
+                  >
+                    <div
+                      className="border-r border-[var(--stroke-default)] border-b border-black/[0.025]"
+                      style={{ height: TREE_ROW_HEIGHT }}
+                    >
+                      {beforeCell}
+                    </div>
+                    <div className="border-b border-black/[0.025]" style={{ height: TREE_ROW_HEIGHT }}>
+                      {afterCell}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    key={row.key}
+                    className="w-full border-b border-black/[0.025]"
+                    style={{ height: TREE_ROW_HEIGHT }}
+                  >
+                    {afterCell}
+                  </div>
+                )
+              );
+            })}
+            {showBefore && rows.length === 0 && (
+              <div className="border-r border-[var(--stroke-default)] flex items-center justify-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic">
+                {parent ? 'Parent commit is empty' : 'No prior commits'}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Commit footer — always visible, disabled when no result */}
-      <div className="flex shrink-0 items-center justify-between border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3 py-1.5">
-        <span className="text-[9px] text-[var(--text-tertiary)]"> </span>
-        <div className="flex items-center gap-1.5">
+      <div
+        className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3"
+        style={{ height: TREE_FOOTER_HEIGHT }}
+      >
+        <span className="text-[9px] font-mono text-[var(--text-tertiary)] truncate">
+          {opsCount} ops
+          {diff && (
+            <>
+              {' · '}
+              {summary.addedRows > 0 && (
+                <span className="text-[var(--status-success)]">+{summary.addedRows}</span>
+              )}
+              {summary.modifiedRows > 0 && (
+                <span className="text-[var(--status-warning)]"> ~{summary.modifiedRows}</span>
+              )}
+              {summary.removedRows > 0 && (
+                <span className="text-[var(--status-error)]"> −{summary.removedRows}</span>
+              )}
+            </>
+          )}
+        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => void handleDiscard()}
+            disabled={!projectId || !hasResult || isCommitting || isCommitted}
+            className="flex min-w-[88px] items-center justify-center rounded border border-[var(--stroke-default)] bg-transparent px-3 py-2 text-[11px] font-semibold text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Discard
+          </button>
           <button
             type="button"
             data-testid="commit-button"
@@ -686,12 +768,13 @@ export function AfterPanel({
               setShowCommitDialog(true);
             }}
             disabled={!hasResult || isCommitting || isCommitted}
-            className="flex items-center gap-1 rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--commit)] px-3 py-2 text-[11px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             {isCommitting ? 'Committing...' : '\u2192 Commit'}
           </button>
         </div>
       </div>
+
       {showCommitDialog && (
         <div
           data-testid="commit-dialog"
@@ -711,7 +794,6 @@ export function AfterPanel({
               }}
               className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
               placeholder="e.g. Budget & Attractions"
-              // biome-ignore lint/a11y/noAutofocus: intentional — user just opened commit dialog
               autoFocus
             />
             <div className="flex justify-end gap-1.5 mt-3">

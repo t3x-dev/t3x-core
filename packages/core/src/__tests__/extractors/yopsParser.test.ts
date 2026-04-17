@@ -222,6 +222,18 @@ describe('parseYOpsOutput — yops list (incremental)', () => {
       expect(result.yops).toHaveLength(0); // invalid op skipped
     }
   });
+
+  it('fails the entire parse in strict mode when a yops entry is invalid', () => {
+    const raw = `yops:
+  - set:
+      path: trip/budget`;
+
+    const result = parseYOpsOutput(raw, { strictYopsList: true });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('Invalid yop at index 0');
+    }
+  });
 });
 
 // ── All 13 Op Types — Parser Round-Trip Tests ──
