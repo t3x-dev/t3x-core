@@ -32,7 +32,6 @@ import {
   type RoleAssignment,
   updateProjectProviderConfig,
 } from '@/infrastructure';
-import { updateProject } from '@/infrastructure/projects';
 import { useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 
@@ -226,11 +225,10 @@ export default function ProjectSettingsPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [data, roles, projectConfig, projectDetail] = await Promise.all([
+      const [data, roles, projectConfig] = await Promise.all([
         listProviders(),
         getProviderRoles(),
         getProjectProviderConfig(projectId),
-        import('@/infrastructure/projects').then((m) => m.getProject(projectId)),
       ]);
 
       setGlobalRoles(roles);

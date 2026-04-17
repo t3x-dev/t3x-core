@@ -14,7 +14,6 @@ import {
   Pencil,
   PenSquare,
   Plus,
-  Rocket,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

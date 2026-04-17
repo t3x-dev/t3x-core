@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import type { ContextMenuGroup, ContextMenuItem } from '@/utils/canvasMenuBuilders';
+import type { ContextMenuGroup } from '@/utils/canvasMenuBuilders';
 import { cn } from '@/utils/cn';
 
 // ============================================================================

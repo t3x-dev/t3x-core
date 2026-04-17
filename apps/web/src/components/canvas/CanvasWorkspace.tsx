@@ -108,7 +108,6 @@ function CanvasWorkspaceInner({
     onNodesChange,
     onEdgesChange,
     onConnect,
-    addPendingCommitFromCommit,
     saveConversationConstraints,
     getPendingCommitEffectiveConstraints,
     updatePendingCommitConstraintOverrides,
@@ -144,7 +143,6 @@ function CanvasWorkspaceInner({
   const { handleAddNode, selectAllNodes, deselectAllNodes, navigateToNode } = useCanvasHandlers({
     getNodes,
     setNodes,
-    fitView,
     setCenter,
     screenToFlowPosition,
     canvasRef,
@@ -165,15 +163,10 @@ function CanvasWorkspaceInner({
     });
 
   // Path highlight (extracted hook)
-  const {
-    highlight,
-    setHighlight,
-    toggleHighlight,
-    nodesForRender,
-    edgesForRender,
-    hasMainCommits,
-    hasBranchCommits,
-  } = usePathHighlight({ nodes, edges });
+  const { highlight, setHighlight, nodesForRender, edgesForRender } = usePathHighlight({
+    nodes,
+    edges,
+  });
 
   // DAG auto-layout: compute topology fingerprint from node IDs + edge connections.
   // Position changes don't alter this, so ELK only runs when the graph structure changes.
