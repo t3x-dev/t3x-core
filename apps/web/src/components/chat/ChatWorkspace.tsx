@@ -180,10 +180,9 @@ export function ChatWorkspace({
       if (detail?.sourcePinIds) {
         // Came from source panel confirm — extract with selected pins
         handleExtract(detail.sourcePinIds);
-      } else if (pins.length > 0) {
-        // Has pins — show source panel instead of extracting directly
+      } else if (detail?.chooseSources && pins.length > 0) {
+        // Explicit request to review pinned sources before extracting
         setShowSourcePanel(true);
-        // Scroll chat area to bottom so user can see the source panel
         requestAnimationFrame(() => {
           chatContainerRef.current?.scrollTo({
             top: chatContainerRef.current.scrollHeight,
@@ -191,7 +190,7 @@ export function ChatWorkspace({
           });
         });
       } else {
-        // No pins — extract directly (current behavior)
+        // Default behavior: extract immediately, even when pins exist.
         handleExtract();
       }
     };

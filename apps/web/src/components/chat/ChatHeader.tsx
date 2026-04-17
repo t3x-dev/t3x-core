@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useChatStore } from '@/store/chatStore';
@@ -45,6 +45,7 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<HTMLButtonElement>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement>(null);
 
   const handleBranchChange = useCallback(
     (branch: string) => {
@@ -57,11 +58,16 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
     [setActiveBranch, setCommitBranch, initCommitState, activeProjectId]
   );
 
-  const handleBlur = () => {
-    setTimeout(() => {
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (dropdownRef.current?.contains(target) || dropdownMenuRef.current?.contains(target)) return;
       setDropdownOpen(false);
-    }, 200);
-  };
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dropdownOpen]);
 
   const displayTitle = storeTitle || conversationTitle || 'New Chat';
 
@@ -102,7 +108,7 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
 
       {/* Extract split button — only visible when YOps panel is expanded */}
       {panelExpanded && !isCommitted && (
-        <div ref={dropdownRef} className="relative flex shrink-0" onBlur={handleBlur}>
+        <div ref={dropdownRef} className="relative flex shrink-0">
           <button
             type="button"
             data-testid="extract-button"
@@ -133,6 +139,7 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
           {dropdownOpen &&
             createPortal(
               <div
+                ref={dropdownMenuRef}
                 className="w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
                 style={{
                   position: 'fixed',
@@ -169,6 +176,26 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
                     </span>
                   </button>
                 ))}
+                <div className="my-1 border-t border-[var(--stroke-default)]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('t3x:extract-requested', {
+                        detail: { chooseSources: true },
+                      })
+                    );
+                    setDropdownOpen(false);
+                  }}
+                  className="flex w-full flex-col px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
+                >
+                  <span className="text-xs font-medium text-[var(--text-primary)]">
+                    Choose sources
+                  </span>
+                  <span className="text-[10px] text-[var(--text-tertiary)]">
+                    Review pinned sources before extracting
+                  </span>
+                </button>
               </div>,
               document.body
             )}

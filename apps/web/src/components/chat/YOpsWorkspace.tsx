@@ -1,6 +1,7 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
+import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -9,7 +10,7 @@ import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 
 const DEFAULT_WIDTH = 700;
-const COLLAPSED_WIDTH = 40;
+const COLLAPSED_WIDTH = 48;
 const WORKSPACE_TOPBAR_HEIGHT = 44;
 const SPLIT_HANDLE_HEIGHT = 3;
 const TREE_ROW_HEIGHT = 26;
@@ -112,12 +113,14 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     return (
       <div
         data-testid="yops-panel-collapsed"
-        className="flex flex-col items-center py-4 gap-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
+        className="flex h-full flex-col items-center justify-center gap-3 border-l border-[var(--stroke-default)] bg-[var(--panel)] py-4 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
+        title="Expand workspace"
       >
+        <PanelRightOpen className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
         <span className="text-[10px] font-bold text-[var(--source)] [writing-mode:vertical-rl] rotate-180">
-          YOps
+          Workspace
         </span>
       </div>
     );
@@ -127,7 +130,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     <div
       ref={containerRef}
       className="flex flex-col h-full bg-[var(--panel)] border-l border-[var(--stroke-default)]"
-      style={{ width, minWidth: 500, maxWidth: 1200 }}
+      style={{ width, minWidth: 460, maxWidth: 1200 }}
     >
       <WorkspaceTopbar />
 

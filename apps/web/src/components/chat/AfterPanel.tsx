@@ -1,7 +1,7 @@
 'use client';
 
 import type { TreeNode } from '@t3x-dev/core';
-import { Play, Plus, X } from 'lucide-react';
+import { AlertCircle, Play, Plus, X } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -467,6 +467,7 @@ export function AfterPanel({
   const tree = useWorkspaceStore((s) => s.tree);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
+  const lastError = useWorkspaceStore((s) => s.lastError);
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const select = useWorkspaceStore((s) => s.select);
@@ -623,7 +624,14 @@ export function AfterPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
-        {rows.length === 0 ? (
+        {rows.length === 0 && lastError ? (
+          <div className="flex h-full min-h-[160px] items-center justify-center px-6">
+            <div className="flex max-w-[280px] flex-col items-center gap-2 text-center">
+              <AlertCircle className="h-5 w-5 text-[var(--status-error)] opacity-80" />
+              <span className="text-[11px] leading-5 text-[var(--status-error)]">{lastError}</span>
+            </div>
+          </div>
+        ) : rows.length === 0 ? (
           <div className="flex h-full min-h-[160px] items-center justify-center opacity-40">
             <div className="flex flex-col items-center gap-2">
               <Play className="h-5 w-5 text-[var(--text-tertiary)]" />
