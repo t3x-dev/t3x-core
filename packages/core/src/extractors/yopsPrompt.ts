@@ -57,16 +57,47 @@ function formatFailingOpsRetry(
   failingOps: readonly { op: unknown; opIndex: number; reason: string; detail?: string }[]
 ): string {
   if (failingOps.length === 0) return '';
+  const structureFailures = failingOps.filter((f) => f.reason === 'invalid_structure');
   const lines = failingOps.map((f, i) => {
     const opJson = JSON.stringify(f.op, null, 2);
     return `# Failing op ${i + 1} — reason: ${f.reason}${f.detail ? ` (${f.detail})` : ''}\n${opJson}`;
   });
+  const structureGuidance =
+    structureFailures.length > 0
+      ? `
+# STRUCTURE REPAIR RULES
+Some of the previous ops were structurally invalid.
+
+- If an error says \`PATH_NOT_FOUND: Path "a/b/c" does not exist\`, you MUST create that exact node path before writing to it.
+- The correct repair is:
+  1. emit \`define: { path: a/b/c }\`
+  2. then emit \`populate: { path: a/b/c, values: ... }\`
+- Do NOT only define the parent (\`a/b\`) and then populate the child (\`a/b/c\`). The child path itself must be defined first.
+- Re-emit the corrected batch in dependency order so later ops can rely on earlier \`define\` ops.
+
+Example:
+
+\`\`\`
+yops:
+  - define:
+      path: trip/itinerary/day_1
+    source: ...
+  - populate:
+      path: trip/itinerary/day_1
+      values:
+        activities:
+          - Check into your hotel
+    source: ...
+\`\`\`
+`
+      : '';
   return `
 
 # RETRY — FIX THESE OPS
 The previous attempt produced ops that could not be verified. For EACH failing op below,
-produce a corrected version with a verbatim quote from the correct turn. Do NOT re-emit
-the entire extraction — only repair the listed ops.
+produce a corrected version with a verbatim quote from the correct turn.${structureFailures.length > 0 ? ' Preserve dependency order and repair missing define/populate pairs exactly as required.' : ' Do NOT re-emit the entire extraction — only repair the listed ops.'}
+
+${structureGuidance}
 
 ${lines.join('\n\n')}
 `;
@@ -349,6 +380,8 @@ When new turns contain reasoning, step-by-step logic, or cause-effect chains:
 - Each op must use EXACTLY the fields shown above — no extra fields like \`parent\`, \`key\`, \`slots\`, or \`from\` (the \`source\` field is REQUIRED — see SOURCE CONTRACT below)
 - NEVER use \`define\` for a path that already exists in the Current Tree — use \`set\` or \`populate\` instead
 - Use \`define\` ONLY for creating brand-new nodes not yet in the snapshot
+- If you write to a nested new node such as \`a/b/c\`, and \`a/b/c\` does not already exist in the Current Tree, you MUST first emit \`define: { path: a/b/c }\` earlier in the same output, then emit \`populate: { path: a/b/c, values: ... }\`
+- NEVER emit \`populate\` for a node path that does not already exist in the Current Tree or earlier in this same output
 - Do NOT reorganize the tree unless the conversation explicitly calls for it
 - If nothing to extract: output \`yops: []\`
 - Drift: if NEW turns discuss a topic UNRELATED to the current tree, output \`yops: []\`${updateStanceSegment(style.update_stance)}${SOURCE_CONTRACT}`;

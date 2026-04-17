@@ -1,23 +1,42 @@
 'use client';
 
+import type { TreeNode } from '@t3x-dev/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { AfterPanel } from './AfterPanel';
-import { BeforePanel } from './BeforePanel';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 
 const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 40;
+const WORKSPACE_TOPBAR_HEIGHT = 44;
+const SPLIT_HANDLE_HEIGHT = 3;
+const TREE_ROW_HEIGHT = 26;
+const RESULT_HEADER_HEIGHT = 30;
+const RESULT_FOOTER_HEIGHT = 52;
+const RESULT_MIN_HEIGHT = 180;
+
+function countTreeRows(trees: TreeNode[]): number {
+  let rows = 0;
+  const walk = (node: TreeNode) => {
+    rows += 1;
+    rows += Object.keys(node.slots || {}).filter((key) => !key.startsWith('_')).length;
+    for (const child of node.children ?? []) walk(child);
+  };
+  for (const tree of trees) walk(tree);
+  return rows;
+}
 
 export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
+  const tree = useWorkspaceStore((s) => s.tree);
   const [splitRatio, setSplitRatio] = useState(0.3);
   const [showBefore, setShowBefore] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  const hasManualSplitRef = useRef(false);
   const prevExpandedRef = useRef(panelExpanded);
   const sidebarWasCollapsedRef = useRef(true);
 
@@ -35,9 +54,32 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     }
   }, [panelExpanded]);
 
+  useEffect(() => {
+    if (hasManualSplitRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const availableHeight =
+      container.clientHeight - WORKSPACE_TOPBAR_HEIGHT - SPLIT_HANDLE_HEIGHT;
+    if (availableHeight <= 0) return;
+
+    const visibleRows = Math.max(countTreeRows((tree.trees as TreeNode[]) ?? []), 4);
+    const desiredBottomHeight = Math.min(
+      Math.max(
+        RESULT_MIN_HEIGHT,
+        RESULT_HEADER_HEIGHT + visibleRows * TREE_ROW_HEIGHT + RESULT_FOOTER_HEIGHT
+      ),
+      Math.floor(availableHeight * 0.58)
+    );
+
+    const nextRatio = 1 - desiredBottomHeight / availableHeight;
+    setSplitRatio(Math.max(0.2, Math.min(0.75, nextRatio)));
+  }, [tree.trees]);
+
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isDragging.current = true;
+    hasManualSplitRef.current = true;
     const container = containerRef.current;
     if (!container) return;
 
@@ -101,19 +143,12 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         className="h-[3px] bg-[var(--stroke-default)] cursor-row-resize hover:bg-[var(--source)] transition-colors flex-shrink-0"
       />
 
-      <div className="flex flex-1 min-h-0">
-        {showBefore && (
-          <div className="flex-1 border-r border-[var(--stroke-default)] overflow-hidden">
-            <BeforePanel />
-          </div>
-        )}
-        <div className="flex-1 overflow-hidden">
-          <AfterPanel
-            showBeforeToggle
-            onToggleBefore={() => setShowBefore((p) => !p)}
-            beforeVisible={showBefore}
-          />
-        </div>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <AfterPanel
+          showBeforeToggle
+          onToggleBefore={() => setShowBefore((p) => !p)}
+          beforeVisible={showBefore}
+        />
       </div>
     </div>
   );

@@ -5,13 +5,14 @@
  * command layer so commands/ never contains a literal fetch().
  */
 
-import type { FailingOp, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
+import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { postExtractYops } from '@/infrastructure/llm';
+import type { RetryFailingOp } from './types';
 
 export interface CallExtractionLLMInput {
   conversationId: string;
   turns: ValidationTurn[];
-  failingOps?: FailingOp[];
+  failingOps?: RetryFailingOp[];
 }
 
 export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<SourcedYOp[]> {

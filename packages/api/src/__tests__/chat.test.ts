@@ -96,6 +96,42 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.error.code).toBe('PROVIDER_ERROR');
     });
+
+    it('supports OpenAI non-streaming chat', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            model: 'gpt-4o-mini',
+            choices: [
+              {
+                message: { content: 'Hello from OpenAI' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 11, completion_tokens: 7 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      const res = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.content).toBe('Hello from OpenAI');
+      fetchMock.mockRestore();
+      delete process.env.OPENAI_API_KEY;
+    });
   });
 
   describe('POST /v1/chat/stream', () => {
@@ -126,6 +162,47 @@ describe('Chat Routes', () => {
         }),
       });
       expect(res.status).toBe(400);
+    });
+
+    it('supports OpenAI streaming chat', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      const streamBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}\n\n'
+            )
+          );
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}\n\n'
+            )
+          );
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(streamBody, { status: 200 }));
+
+      const res = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('"type":"token","content":"Hel"');
+      expect(text).toContain('"type":"token","content":"lo"');
+      expect(text).toContain('"type":"done"');
+      fetchMock.mockRestore();
+      delete process.env.OPENAI_API_KEY;
     });
   });
 });

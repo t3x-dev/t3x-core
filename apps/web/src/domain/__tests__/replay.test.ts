@@ -1,5 +1,6 @@
 import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
+import { YOpsReplayError } from '@/commands/yops/errors';
 import { replay } from '../replay';
 
 const turns: ValidationTurn[] = [{ turn_hash: 'sha256:t1', content: 'Budget is $10k.' }];
@@ -81,7 +82,7 @@ describe('replay', () => {
     expect(sourceIndex.has('new_name')).toBe(true);
   });
 
-  it('stops indexing at the op where engine fails (partial apply)', () => {
+  it('throws when engine fails instead of returning partial apply', () => {
     // Invalid: populate on a path that doesn't exist
     const ops: SourcedYOp[] = [
       { define: { path: 'ok' }, source: humanSrc() },
@@ -90,10 +91,6 @@ describe('replay', () => {
         source: humanSrc('2026-04-12T00:00:01Z'),
       },
     ];
-    const { tree, sourceIndex } = replay(ops, turns);
-    // First op applied, second failed
-    expect(tree.trees.length).toBeGreaterThan(0);
-    expect(sourceIndex.has('ok')).toBe(true);
-    expect(sourceIndex.has('nonexistent')).toBe(false);
+    expect(() => replay(ops, turns)).toThrow(YOpsReplayError);
   });
 });

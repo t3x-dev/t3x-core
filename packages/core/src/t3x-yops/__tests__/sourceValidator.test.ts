@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type ValidationTurn, validateSource } from '../sourceValidator';
+import { repairOpQuotes, type ValidationTurn, validateSource } from '../sourceValidator';
 import type { SourcedYOp } from '../types';
 
 const turn: ValidationTurn = {
@@ -118,5 +118,60 @@ describe('validateSource', () => {
     const result = validateSource([bad, bad, bad], [turn]);
     expect(result.ok).toBe(false);
     expect(result.failingOps).toHaveLength(3);
+  });
+});
+
+describe('repairOpQuotes', () => {
+  it('repairs straight apostrophes to exact curly-apostrophe substrings', () => {
+    const turns: ValidationTurn[] = [
+      {
+        turn_hash: 'sha256:def',
+        content: 'Here’s a suggested itinerary for your 5-day stay.',
+      },
+    ];
+    const ops: SourcedYOp[] = [
+      {
+        define: { path: 'trip/itinerary' },
+        source: {
+          type: 'llm',
+          model: 'm',
+          at: '2026-04-12T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:def', quote: "Here's a suggested itinerary for your 5-day stay." },
+        },
+      },
+    ];
+
+    repairOpQuotes(ops, turns);
+
+    const src = ops[0].source;
+    if (src?.type !== 'llm') throw new Error('expected llm source');
+    expect(src.turn_ref.quote).toBe('Here’s a suggested itinerary for your 5-day stay.');
+    expect(validateSource(ops, turns).ok).toBe(true);
+  });
+
+  it('repairs markdown heading prefixes for quoted section titles', () => {
+    const turns: ValidationTurn[] = [
+      {
+        turn_hash: 'sha256:def',
+        content: '### Budget Breakdown (Estimated):\nAccommodation: 750-1500 yuan',
+      },
+    ];
+    const ops: SourcedYOp[] = [
+      {
+        define: { path: 'trip/budget_breakdown' },
+        source: {
+          type: 'llm',
+          model: 'm',
+          at: '2026-04-12T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:def', quote: '### Budget Breakdown (Estimated)' },
+        },
+      },
+    ];
+
+    repairOpQuotes(ops, turns);
+
+    const src = ops[0].source;
+    if (src?.type !== 'llm') throw new Error('expected llm source');
+    expect(validateSource(ops, turns).ok).toBe(true);
   });
 });

@@ -12,6 +12,7 @@
 
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
+import { YOpsReplayError } from '@/commands/yops/errors';
 
 export interface ReplayResult {
   tree: SemanticContent;
@@ -51,9 +52,18 @@ export function replay(
   _turns: readonly ValidationTurn[]
 ): ReplayResult {
   const result = applySourcedYOps(EMPTY, ops as SourcedYOp[]);
+  if (!result.ok) {
+    throw new YOpsReplayError(
+      result.error?.op_index ?? result.applied,
+      result.error?.code ?? 'UNKNOWN',
+      result.error?.message
+        ? `replay failed at op ${result.error?.op_index ?? result.applied}: ${result.error.message}`
+        : undefined
+    );
+  }
   const sourceIndex = new Map<string, Source>();
 
-  const appliedCount = result.ok ? ops.length : result.applied;
+  const appliedCount = ops.length;
   for (let i = 0; i < appliedCount; i++) {
     const op = ops[i];
     const src = (op as unknown as { source: Source }).source;
