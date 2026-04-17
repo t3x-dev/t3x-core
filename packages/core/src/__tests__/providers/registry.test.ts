@@ -3,6 +3,51 @@ import { GenerationError } from '../../leaf/generate';
 import { AllProvidersFailedError, createProviderRegistry } from '../../providers/registry';
 
 describe('ProviderRegistry', () => {
+  describe('config overrides', () => {
+    it('prefers config overrides over process.env while preserving env fallback', () => {
+      const envKey = 'T3X_TEST_PROVIDER_KEY';
+      const original = process.env[envKey];
+      delete process.env[envKey];
+
+      try {
+        const reg = createProviderRegistry();
+        const factory = vi.fn((config) => ({ id: 'override-provider', generate: vi.fn(), config }));
+
+        reg.register({
+          id: 'override-provider',
+          name: 'Override Provider',
+          role: 'generation',
+          requiredEnvKeys: [envKey],
+          factory,
+        });
+
+        expect(reg.isConfigured('override-provider')).toBe(false);
+        expect(reg.getById('override-provider')).toBeNull();
+        expect(factory).not.toHaveBeenCalled();
+
+        process.env[envKey] = 'env-secret';
+        expect(reg.isConfigured('override-provider')).toBe(true);
+
+        const envProvider = reg.getById('override-provider');
+        expect(envProvider).not.toBeNull();
+        expect(factory).toHaveBeenCalledWith({ [envKey]: 'env-secret' });
+
+        reg.setConfigOverrides({ [envKey]: 'local-secret' });
+
+        expect(reg.isConfigured('override-provider')).toBe(true);
+        const overrideProvider = reg.getById('override-provider');
+        expect(overrideProvider).not.toBeNull();
+        expect(factory).toHaveBeenLastCalledWith({ [envKey]: 'local-secret' });
+      } finally {
+        if (original === undefined) {
+          delete process.env[envKey];
+        } else {
+          process.env[envKey] = original;
+        }
+      }
+    });
+  });
+
   describe('tryWithFallback', () => {
     function createTestRegistry() {
       const reg = createProviderRegistry();

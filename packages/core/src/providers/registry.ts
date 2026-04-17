@@ -84,6 +84,16 @@ export class ProviderRegistry {
   private entries = new Map<string, ProviderEntry>();
   private instances = new Map<string, AnyProvider>();
   private roleAssignments = new Map<ProviderRole, string[]>();
+  private configOverrides: ResolvedConfig = {};
+
+  /**
+   * Set runtime config overrides.
+   * Overrides take precedence over process.env for provider factories.
+   */
+  setConfigOverrides(overrides: ResolvedConfig): void {
+    this.configOverrides = { ...overrides };
+    this.instances.clear();
+  }
 
   /**
    * Register a provider entry.
@@ -197,9 +207,8 @@ export class ProviderRegistry {
     const entry = this.entries.get(id);
     if (!entry) return false;
     if (entry.requiredEnvKeys.length === 0) return true;
-    return entry.requiredEnvKeys.every(
-      (key) => typeof process !== 'undefined' && !!process.env?.[key]
-    );
+    const config = this.getResolvedConfig(entry);
+    return entry.requiredEnvKeys.every((key) => Boolean(config[key]));
   }
 
   /**
@@ -212,9 +221,8 @@ export class ProviderRegistry {
     }
 
     if (!this.isConfigured(id)) {
-      const missing = entry.requiredEnvKeys.filter(
-        (key) => !(typeof process !== 'undefined' && process.env?.[key])
-      );
+      const config = this.getResolvedConfig(entry);
+      const missing = entry.requiredEnvKeys.filter((key) => !config[key]);
       return { ok: false, error: `Missing environment variables: ${missing.join(', ')}` };
     }
 
@@ -359,6 +367,16 @@ export class ProviderRegistry {
     return [...(this.roleAssignments.get(role) ?? [])];
   }
 
+  private getResolvedConfig(entry: ProviderEntry): ResolvedConfig {
+    const config: ResolvedConfig = { ...this.configOverrides };
+    for (const key of entry.requiredEnvKeys) {
+      if (config[key] === undefined) {
+        config[key] = typeof process !== 'undefined' ? process.env?.[key] : undefined;
+      }
+    }
+    return config;
+  }
+
   private getInstance<T extends AnyProvider>(id: string): T | null {
     // Return cached instance
     if (this.instances.has(id)) {
@@ -371,11 +389,7 @@ export class ProviderRegistry {
     // Check env keys
     if (!this.isConfigured(id)) return null;
 
-    // Build config from env
-    const config: ResolvedConfig = {};
-    for (const key of entry.requiredEnvKeys) {
-      config[key] = process.env[key];
-    }
+    const config = this.getResolvedConfig(entry);
 
     try {
       const instance = entry.factory(config) as AnyProvider;
