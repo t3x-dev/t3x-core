@@ -24,14 +24,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
+import type { ProviderInfo, RoleAssignment } from '@/infrastructure';
 import {
-  getProjectProviderConfig,
-  getProviderRoles,
-  listProviders,
-  type ProviderInfo,
-  type RoleAssignment,
-  updateProjectProviderConfig,
-} from '@/infrastructure';
+  fetchProjectProviderConfig,
+  fetchProviderRoles,
+  fetchProviders,
+} from '@/queries/providers';
 import { useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 
@@ -206,6 +205,7 @@ function SortableRoleGroup({
 
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { saveProjectProviderConfig } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [globalRoles, setGlobalRoles] = useState<RoleAssignment[]>([]);
   const [overriddenRoles, setOverriddenRoles] = useState<Set<string>>(new Set());
@@ -226,9 +226,9 @@ export default function ProjectSettingsPage() {
     try {
       setLoading(true);
       const [data, roles, projectConfig] = await Promise.all([
-        listProviders(),
-        getProviderRoles(),
-        getProjectProviderConfig(projectId),
+        fetchProviders(),
+        fetchProviderRoles(),
+        fetchProjectProviderConfig(projectId),
       ]);
 
       setGlobalRoles(roles);
@@ -312,7 +312,7 @@ export default function ProjectSettingsPage() {
         }
       }
 
-      await updateProjectProviderConfig(projectId, { roles: projectRoles });
+      await saveProjectProviderConfig(projectId, { roles: projectRoles });
     } catch (err) {
       console.error('Failed to save project provider config:', err);
       await loadData();
@@ -324,10 +324,10 @@ export default function ProjectSettingsPage() {
   const handleResetToGlobal = async () => {
     try {
       setSaving(true);
-      await updateProjectProviderConfig(projectId, null);
+      await saveProjectProviderConfig(projectId, null);
       setOverriddenRoles(new Set());
       // Reload with global defaults
-      const data = await listProviders();
+      const data = await fetchProviders();
       setProviders(reorderByRoles(data, globalRoles));
     } catch (err) {
       console.error('Failed to reset to global:', err);

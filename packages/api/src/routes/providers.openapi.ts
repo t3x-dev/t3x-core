@@ -14,7 +14,7 @@
  * PUT    /v1/providers/config       - Update global provider config
  */
 
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { getModelsByProvider, type ProviderName } from '@t3x-dev/core';
 import {
   deleteProviderCredential,
@@ -31,51 +31,20 @@ import {
   saveRegistryConfig,
 } from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  LocalProviderParamSchema,
+  LocalProviderStatusSchema,
+  LocalProviderWriteSchema,
+  ProviderConfigSchema,
+  ProviderListSchema,
+  ProviderTestParamSchema,
+  RoleAssignmentListSchema,
+  RoleAssignmentWriteSchema,
+  TestResultSchema,
+} from '../schemas/providers';
 
 export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
-});
-
-// ============================================================
-// Schemas
-// ============================================================
-
-const ProviderSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  role: z.enum(['generation', 'embedding', 'merge']),
-  configured: z.boolean(),
-  roles: z.array(z.enum(['generation', 'embedding', 'merge'])),
-  required_env_keys: z.array(z.string()),
-  default_model: z.string().nullable(),
-  available_models: z.array(z.string()).nullable(),
-});
-
-const RoleAssignmentSchema = z.object({
-  role: z.enum(['generation', 'embedding', 'merge']),
-  provider_ids: z.array(z.string()),
-});
-
-const TestResultSchema = z.object({
-  ok: z.boolean(),
-  error: z.string().optional(),
-  latency_ms: z.number().optional(),
-});
-
-const LocalProviderIdSchema = z.enum(['anthropic', 'openai', 'google']);
-
-const LocalProviderStatusSchema = z.object({
-  provider: LocalProviderIdSchema,
-  configured: z.boolean(),
-  default_model: z.string().nullable(),
-  last_test_status: z.enum(['ok', 'error']).nullable(),
-  last_tested_at: z.string().nullable(),
-  last_test_error: z.string().nullable(),
-});
-
-const LocalProviderWriteSchema = z.object({
-  api_key: z.string().trim().min(1),
-  default_model: z.string().nullable().optional(),
 });
 
 const LOCAL_PROVIDER_ALIASES: Record<string, LocalProviderId> = {
@@ -154,7 +123,7 @@ const listProvidersRoute = createRoute({
       description: 'Provider list',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(ProviderSchema)),
+          schema: SuccessResponseSchema(ProviderListSchema),
         },
       },
     },
@@ -195,7 +164,7 @@ const getRolesRoute = createRoute({
       description: 'Role assignments',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(RoleAssignmentSchema)),
+          schema: SuccessResponseSchema(RoleAssignmentListSchema),
         },
       },
     },
@@ -228,9 +197,7 @@ const updateRolesRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            roles: z.array(RoleAssignmentSchema),
-          }),
+          schema: RoleAssignmentWriteSchema,
         },
       },
     },
@@ -240,7 +207,7 @@ const updateRolesRoute = createRoute({
       description: 'Updated role assignments',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(RoleAssignmentSchema)),
+          schema: SuccessResponseSchema(RoleAssignmentListSchema),
         },
       },
     },
@@ -292,17 +259,13 @@ providersRoutes.openapi(updateRolesRoute, async (c) => {
 // DELETE /v1/providers/local/:id — Delete local provider credential
 // ============================================================
 
-const localProviderParamSchema = z.object({
-  id: z.string(),
-});
-
 const getLocalProviderRoute = createRoute({
   method: 'get',
   path: '/v1/providers/local/{id}',
   tags: ['Providers'],
   summary: 'Get local provider credential status',
   request: {
-    params: localProviderParamSchema,
+    params: LocalProviderParamSchema,
   },
   responses: {
     200: {
@@ -354,7 +317,7 @@ const upsertLocalProviderRoute = createRoute({
   tags: ['Providers'],
   summary: 'Upsert local provider credential',
   request: {
-    params: localProviderParamSchema,
+    params: LocalProviderParamSchema,
     body: {
       content: {
         'application/json': {
@@ -421,7 +384,7 @@ const deleteLocalProviderRoute = createRoute({
   tags: ['Providers'],
   summary: 'Delete local provider credential',
   request: {
-    params: localProviderParamSchema,
+    params: LocalProviderParamSchema,
   },
   responses: {
     200: {
@@ -480,9 +443,7 @@ const testProviderRoute = createRoute({
   tags: ['Providers'],
   summary: 'Test provider connection',
   request: {
-    params: z.object({
-      id: z.string(),
-    }),
+    params: ProviderTestParamSchema,
   },
   responses: {
     200: {
@@ -567,11 +528,7 @@ const getConfigRoute = createRoute({
       description: 'Provider config',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              roles: z.array(RoleAssignmentSchema),
-            })
-          ),
+          schema: SuccessResponseSchema(ProviderConfigSchema),
         },
       },
     },
@@ -606,9 +563,7 @@ const updateConfigRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            roles: z.array(RoleAssignmentSchema),
-          }),
+          schema: ProviderConfigSchema,
         },
       },
     },
@@ -618,11 +573,7 @@ const updateConfigRoute = createRoute({
       description: 'Updated config',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              roles: z.array(RoleAssignmentSchema),
-            })
-          ),
+          schema: SuccessResponseSchema(ProviderConfigSchema),
         },
       },
     },

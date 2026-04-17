@@ -6,7 +6,7 @@
  * GET  /v1/chat/providers — List available providers (OpenAPI route)
  */
 
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
@@ -15,6 +15,11 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { pinoLogger } from '../middleware/logger';
+import {
+  ChatRequestBodySchema,
+  ChatResponseDataSchema,
+  ProvidersResponseDataSchema,
+} from '../schemas/chat';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 // Create proxy-aware fetch. Always uses ProxyAgent when proxy is configured.
@@ -616,38 +621,6 @@ async function callClaudeNonStreaming(
     finish_reason: data.stop_reason ?? 'end_turn',
   };
 }
-
-// ============================================================================
-// OpenAPI Schemas
-// ============================================================================
-
-const ChatRequestBodySchema = z.object({
-  messages: z.array(z.unknown()).min(1).max(100),
-  provider: z.string().optional(),
-  model: z.string().optional(),
-  temperature: z.number().optional(),
-  max_tokens: z.number().optional(),
-  project_id: z.string().optional(),
-  web_search: z.boolean().optional(),
-  thinking: z.boolean().optional(),
-});
-
-const ChatResponseDataSchema = z.object({
-  content: z.string(),
-  model: z.string(),
-  usage: z
-    .object({
-      input_tokens: z.number().optional(),
-      output_tokens: z.number().optional(),
-    })
-    .optional(),
-  finish_reason: z.string().optional(),
-});
-
-const ProvidersResponseDataSchema = z.object({
-  providers: z.array(z.string()),
-  default: z.string(),
-});
 
 // ============================================================================
 // Routes

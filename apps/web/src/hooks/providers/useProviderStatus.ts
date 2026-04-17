@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getLocalProviderStatus } from '@/infrastructure/misc';
 import type { LocalProviderId, LocalProviderStatus } from '@/infrastructure/types';
+import { fetchLocalProviderStatus } from '@/queries/providerStatus';
 
 const SUPPORTED_LOCAL_GENERATION_PROVIDERS: LocalProviderId[] = ['anthropic', 'openai', 'google'];
 
@@ -41,7 +41,7 @@ export function useProviderStatus(): UseProviderStatusResult {
 
     async function loadStatuses() {
       const settled = await Promise.allSettled(
-        SUPPORTED_LOCAL_GENERATION_PROVIDERS.map((provider) => getLocalProviderStatus(provider))
+        SUPPORTED_LOCAL_GENERATION_PROVIDERS.map((provider) => fetchLocalProviderStatus(provider))
       );
 
       if (cancelled) return;

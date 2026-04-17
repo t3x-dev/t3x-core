@@ -3,22 +3,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
 
-vi.mock('@/infrastructure/llm', () => ({
-  getAvailableModels: vi.fn(),
+vi.mock('@/queries/llm', () => ({
+  fetchAvailableModels: vi.fn(),
 }));
 
-vi.mock('@/infrastructure/misc', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/infrastructure/misc')>('@/infrastructure/misc');
-  return {
-    ...actual,
-    getLocalProviderStatus: vi.fn(),
-  };
-});
+vi.mock('@/queries/providerStatus', () => ({
+  fetchLocalProviderStatus: vi.fn(),
+}));
 
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
-import { getAvailableModels } from '@/infrastructure/llm';
-import { getLocalProviderStatus } from '@/infrastructure/misc';
+import { fetchAvailableModels } from '@/queries/llm';
+import { fetchLocalProviderStatus } from '@/queries/providerStatus';
 
 function makeModel(id: string, label: string) {
   return { id, label, capabilities: [], max_output_tokens: 4096 };
@@ -34,7 +29,7 @@ afterEach(() => {
 
 describe('useAvailableModels', () => {
   it('keeps env-backed providers usable when no local credentials are stored', async () => {
-    vi.mocked(getLocalProviderStatus).mockImplementation(async (providerId: string) => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
       const defaults = {
         configured: false,
         default_model: null,
@@ -50,7 +45,7 @@ describe('useAvailableModels', () => {
       } as never;
     });
 
-    vi.mocked(getAvailableModels).mockResolvedValue({
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
       generation_provider_order: ['anthropic', 'openai', 'google'],
       default_provider: 'anthropic',
       providers: [
@@ -100,7 +95,7 @@ describe('useAvailableModels', () => {
   });
 
   it('prefers a usable local default provider and model when they are available', async () => {
-    vi.mocked(getLocalProviderStatus).mockImplementation(async (providerId: string) => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
       if (providerId === 'anthropic') {
         return {
           provider: 'anthropic',
@@ -122,7 +117,7 @@ describe('useAvailableModels', () => {
       } as never;
     });
 
-    vi.mocked(getAvailableModels).mockResolvedValue({
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
       generation_provider_order: ['anthropic', 'openai'],
       default_provider: 'anthropic',
       providers: [
@@ -158,7 +153,7 @@ describe('useAvailableModels', () => {
   });
 
   it('uses backend provider ordering/default and only applies a saved default model within that provider', async () => {
-    vi.mocked(getLocalProviderStatus).mockImplementation(async (providerId: string) => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
       if (providerId === 'openai') {
         return {
           provider: 'openai',
@@ -180,7 +175,7 @@ describe('useAvailableModels', () => {
       } as never;
     });
 
-    vi.mocked(getAvailableModels).mockResolvedValue({
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
       generation_provider_order: ['google', 'openai', 'anthropic'],
       default_provider: 'google',
       providers: [
@@ -223,7 +218,7 @@ describe('useAvailableModels', () => {
   });
 
   it('uses a saved local default model when it is valid for the backend-selected provider', async () => {
-    vi.mocked(getLocalProviderStatus).mockImplementation(async (providerId: string) => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
       if (providerId === 'anthropic') {
         return {
           provider: 'anthropic',
@@ -245,7 +240,7 @@ describe('useAvailableModels', () => {
       } as never;
     });
 
-    vi.mocked(getAvailableModels).mockResolvedValue({
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
       generation_provider_order: ['anthropic', 'openai'],
       default_provider: 'anthropic',
       providers: [
@@ -277,7 +272,7 @@ describe('useAvailableModels', () => {
   });
 
   it('fails closed when the model registry cannot be loaded', async () => {
-    vi.mocked(getLocalProviderStatus).mockResolvedValue({
+    vi.mocked(fetchLocalProviderStatus).mockResolvedValue({
       provider: 'anthropic',
       configured: false,
       default_model: null,
@@ -285,7 +280,7 @@ describe('useAvailableModels', () => {
       last_tested_at: null,
       last_test_error: null,
     } as never);
-    vi.mocked(getAvailableModels).mockRejectedValue(new Error('boom'));
+    vi.mocked(fetchAvailableModels).mockRejectedValue(new Error('boom'));
 
     const { result, unmount } = renderHook(() => useAvailableModels());
     await waitForHook();

@@ -21,22 +21,18 @@ import { CheckCircle2, Circle, GripVertical, Loader2, RefreshCw, Zap } from 'luc
 import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
+import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import {
-  deleteLocalProvider,
-  getLocalProviderStatus,
-  getProviderRoles,
   type LocalProviderCredentialInput,
   type LocalProviderId,
   type LocalProviderStatus,
-  listProviders,
   type ProviderInfo,
   type RoleAssignment,
   type TestConnectionResult,
-  testProvider,
   toLocalProviderId,
-  updateProviderRoles,
-  upsertLocalProvider,
 } from '@/infrastructure';
+import { fetchLocalProviderStatus } from '@/queries/providerStatus';
+import { fetchProviderRoles, fetchProviders as fetchProvidersQuery } from '@/queries/providers';
 import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
@@ -275,6 +271,12 @@ function SortableRoleGroup({
 // ────────────────────────────────────────────────────────────
 
 export default function ProvidersPage() {
+  const {
+    removeLocalProviderCredential,
+    runProviderConnectionTest,
+    saveLocalProviderCredential,
+    saveProviderRoles,
+  } = useProviderCommands();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [dialogProvider, setDialogProvider] = useState<{
     id: LocalProviderId;
@@ -292,7 +294,7 @@ export default function ProvidersPage() {
   const [saving, setSaving] = useState(false);
 
   const fetchProviders = useCallback(async (): Promise<ProviderInfo[]> => {
-    const [data, roles] = await Promise.all([listProviders(), getProviderRoles()]);
+    const [data, roles] = await Promise.all([fetchProvidersQuery(), fetchProviderRoles()]);
     return reorderByRoles(data, roles);
   }, []);
 
@@ -334,7 +336,7 @@ export default function ProvidersPage() {
     setDialogStatusLoading(true);
     setDialogError(null);
 
-    void getLocalProviderStatus(dialogProvider.id)
+    void fetchLocalProviderStatus(dialogProvider.id)
       .then((status) => {
         if (cancelled) return;
         setDialogStatus(status);
@@ -357,7 +359,7 @@ export default function ProvidersPage() {
   const handleTest = async (providerId: string) => {
     setTestResults((prev) => ({ ...prev, [providerId]: 'loading' }));
     try {
-      const result = await testProvider(providerId);
+      const result = await runProviderConnectionTest(providerId);
       setTestResults((prev) => ({ ...prev, [providerId]: result }));
     } catch {
       setTestResults((prev) => ({
@@ -386,7 +388,7 @@ export default function ProvidersPage() {
     setDialogError(null);
 
     try {
-      const status = await upsertLocalProvider(dialogProvider.id, input);
+      const status = await saveLocalProviderCredential(dialogProvider.id, input);
       setDialogStatus(status);
       clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
       try {
@@ -407,7 +409,7 @@ export default function ProvidersPage() {
     setDialogError(null);
 
     try {
-      const status = await deleteLocalProvider(dialogProvider.id);
+      const status = await removeLocalProviderCredential(dialogProvider.id);
       setDialogStatus(status);
       clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
       try {
@@ -456,7 +458,7 @@ export default function ProvidersPage() {
         provider_ids: ps.filter((p) => p.configured).map((p) => p.id),
       }));
 
-      await updateProviderRoles(roles);
+      await saveProviderRoles(roles);
     } catch (err) {
       console.error('Failed to save provider order:', err);
       // Reload to revert

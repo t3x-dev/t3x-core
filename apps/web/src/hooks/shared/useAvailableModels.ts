@@ -10,9 +10,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProviderStatus } from '@/hooks/providers/useProviderStatus';
-import { getAvailableModels } from '@/infrastructure/llm';
 import { toLocalProviderId } from '@/infrastructure/misc';
 import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
+import { fetchAvailableModels } from '@/queries/llm';
 
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];
@@ -116,7 +116,7 @@ export function useAvailableModels(): {
   const { loading: providerStatusLoading, statuses } = useProviderStatus();
 
   const loadModels = useCallback(async () => {
-    const data = await getAvailableModels();
+    const data = await fetchAvailableModels();
     return { providers: getUsableProviders(data) };
   }, []);
 
@@ -129,7 +129,7 @@ export function useAvailableModels(): {
     let cancelled = false;
 
     setLoading(true);
-    getAvailableModels()
+    fetchAvailableModels()
       .then((data) => {
         if (!cancelled) {
           setProviders(getUsableProviders(data));
