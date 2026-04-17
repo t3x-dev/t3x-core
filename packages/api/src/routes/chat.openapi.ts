@@ -7,10 +7,13 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { loadResolvedProviderConfig } from '../lib/provider-config';
+import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { pinoLogger } from '../middleware/logger';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -138,38 +141,322 @@ interface ChatResponse {
   finish_reason?: string;
 }
 
-const PROVIDER_DEFAULTS: Record<string, { model: string; envKey: string }> = {
-  claude: { model: 'claude-sonnet-4-20250514', envKey: 'ANTHROPIC_API_KEY' },
-  anthropic: { model: 'claude-sonnet-4-20250514', envKey: 'ANTHROPIC_API_KEY' },
-  openai: { model: 'gpt-4o-mini', envKey: 'OPENAI_API_KEY' },
-  gpt: { model: 'gpt-4o-mini', envKey: 'OPENAI_API_KEY' },
+type ChatRuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
+
+const CHAT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ChatRuntimeProviderId> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  openai: 'openai',
+  gpt: 'openai',
+  gemini: 'google-ai',
+  google: 'google-ai',
+  'google-ai': 'google-ai',
 };
+
+const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
+  anthropic: 'claude',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
+const CHAT_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
+const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic'] as const;
+const DEFAULT_MAX_TOKENS = 4096;
+const MAX_CHAT_TOKENS = 16384;
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function inferProviderFromModel(model: string): string {
-  const modelLower = model.toLowerCase();
-  if (modelLower.startsWith('claude') || modelLower.includes('anthropic')) {
-    return 'claude';
-  }
-  if (
-    modelLower.startsWith('gpt') ||
-    modelLower.startsWith('o1') ||
-    modelLower.includes('openai')
-  ) {
-    return 'openai';
-  }
-  return 'claude';
+function isSupportedChatProviderId(value: string): value is ChatRuntimeProviderId {
+  return (CHAT_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
 }
 
-function getApiKey(provider: string): string | undefined {
-  const providerLower = provider.toLowerCase();
-  if (providerLower === 'claude' || providerLower === 'anthropic') {
-    return process.env.ANTHROPIC_API_KEY;
+function isSupportedStreamProviderId(
+  value: string
+): value is Extract<ChatRuntimeProviderId, 'anthropic'> {
+  return (STREAM_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
+}
+
+function normalizeChatProvider(provider: string | undefined): ChatRuntimeProviderId | null {
+  if (!provider) return null;
+  return CHAT_PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
+}
+
+function getModelDefaultForProvider(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  providerId: ChatRuntimeProviderId
+): string | null {
+  return registry.getEntry(providerId)?.defaultModel ?? null;
+}
+
+function findProviderForModel(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  model: string,
+  candidateProviders: readonly string[]
+): ChatRuntimeProviderId | null {
+  const providerPrefix = model.split(':', 1)[0];
+  if (providerPrefix && providerPrefix !== model) {
+    const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
+    if (normalizedPrefixedProvider && candidateProviders.includes(normalizedPrefixedProvider)) {
+      return normalizedPrefixedProvider;
+    }
   }
-  return process.env.OPENAI_API_KEY;
+
+  for (const provider of registry.listProviders()) {
+    if (!candidateProviders.includes(provider.id)) {
+      continue;
+    }
+
+    if (provider.defaultModel === model || provider.availableModels?.includes(model)) {
+      return provider.id as ChatRuntimeProviderId;
+    }
+  }
+
+  return null;
+}
+
+function getInvalidModelError(model: string) {
+  return {
+    code: 'PROVIDER_ERROR',
+    message: `Unknown or unsupported model: ${model}`,
+  } as const;
+}
+
+function stripProviderPrefixFromModel(model: string, providerId: ChatRuntimeProviderId): string {
+  const separatorIndex = model.indexOf(':');
+  if (separatorIndex === -1) {
+    return model;
+  }
+
+  const providerPrefix = model.slice(0, separatorIndex);
+  const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
+  if (normalizedPrefixedProvider !== providerId) {
+    return model;
+  }
+
+  const providerModel = model.slice(separatorIndex + 1);
+  return providerModel || model;
+}
+
+async function resolveProviderApiKey(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  providerId: ChatRuntimeProviderId
+): Promise<string | undefined> {
+  const configKey = registry.getEntry(providerId)?.requiredEnvKeys[0];
+  if (!configKey) {
+    return undefined;
+  }
+
+  const overrides = await loadResolvedProviderConfig();
+  return overrides[configKey] ?? process.env[configKey];
+}
+
+function getUnsupportedChatFeatureError(options: {
+  providerId: ChatRuntimeProviderId;
+  route: 'chat' | 'stream';
+  thinking?: boolean;
+  webSearch?: boolean;
+}) {
+  if (options.thinking && options.providerId !== 'anthropic') {
+    return {
+      code: 'PROVIDER_ERROR',
+      message: `Provider ${options.providerId} does not support thinking`,
+    } as const;
+  }
+
+  if (options.webSearch) {
+    if (options.providerId !== 'anthropic') {
+      return {
+        code: 'PROVIDER_ERROR',
+        message: `Provider ${options.providerId} does not support web_search`,
+      } as const;
+    }
+
+    if (options.route !== 'stream') {
+      return {
+        code: 'PROVIDER_ERROR',
+        message: 'web_search is only supported for Anthropic streaming chat',
+      } as const;
+    }
+  }
+
+  return null;
+}
+
+async function resolveChatRequestTarget(options: {
+  provider?: string;
+  model?: string;
+  supportedProviders?: readonly string[];
+}) {
+  await refreshProviderRegistryConfig();
+  const registry = await getProviderRegistry();
+  const supportedProviders = options.supportedProviders ?? CHAT_PROVIDER_RUNTIME_IDS;
+
+  const explicitProvider = normalizeChatProvider(options.provider);
+  if (options.provider && !explicitProvider) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `Unknown provider: ${options.provider}`,
+      },
+    } as const;
+  }
+
+  if (options.model) {
+    const normalizedBareProviderAlias = normalizeChatProvider(options.model);
+    if (normalizedBareProviderAlias) {
+      return {
+        error: getInvalidModelError(options.model),
+      } as const;
+    }
+
+    const separatorIndex = options.model.indexOf(':');
+    if (separatorIndex !== -1) {
+      const providerPrefix = options.model.slice(0, separatorIndex);
+      const providerModel = options.model.slice(separatorIndex + 1);
+      const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
+      if (normalizedPrefixedProvider && !providerModel) {
+        return {
+          error: getInvalidModelError(options.model),
+        } as const;
+      }
+    }
+  }
+
+  const modelProvider = options.model
+    ? findProviderForModel(registry, options.model, CHAT_PROVIDER_RUNTIME_IDS)
+    : null;
+
+  if (options.model && !modelProvider) {
+    return {
+      error: getInvalidModelError(options.model),
+    } as const;
+  }
+
+  if (modelProvider && !supportedProviders.includes(modelProvider)) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `Model ${options.model} requires provider: ${modelProvider}`,
+      },
+    } as const;
+  }
+
+  if (explicitProvider && modelProvider && explicitProvider !== modelProvider) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `Model ${options.model} does not match provider: ${options.provider}`,
+      },
+    } as const;
+  }
+
+  const defaultProvider = registry
+    .getProviderIdsForRole('generation')
+    .find((id) => supportedProviders.includes(id) && registry.isConfigured(id));
+
+  const providerId =
+    explicitProvider ?? modelProvider ?? (defaultProvider as ChatRuntimeProviderId | undefined);
+
+  if (!providerId) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: 'No configured chat provider is available',
+      },
+    } as const;
+  }
+
+  if (!supportedProviders.includes(providerId)) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `Provider ${providerId} not implemented`,
+      },
+    } as const;
+  }
+
+  if (!registry.isConfigured(providerId)) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `API key not configured for provider: ${providerId}`,
+      },
+    } as const;
+  }
+
+  const provider = registry.getById<LLMProvider>(providerId);
+  if (!provider) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `Provider ${providerId} is unavailable`,
+      },
+    } as const;
+  }
+
+  const model = options.model
+    ? stripProviderPrefixFromModel(options.model, providerId)
+    : getModelDefaultForProvider(registry, providerId);
+  if (!model) {
+    return {
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: `No default model configured for provider: ${providerId}`,
+      },
+    } as const;
+  }
+
+  return {
+    registry,
+    provider,
+    providerId,
+    model,
+  } as const;
+}
+
+async function callProviderNonStreaming(
+  provider: LLMProvider,
+  model: string,
+  messages: ChatMessage[],
+  temperature: number,
+  maxTokens: number
+): Promise<ChatResponse> {
+  if (!provider.generateFromPrompt) {
+    throw new Error(`Provider ${provider.id} does not support chat prompts`);
+  }
+
+  const systemMessage = messages.find((message) => message.role === 'system');
+  const prompt: LLMPrompt = {
+    ...(systemMessage && {
+      system:
+        typeof systemMessage.content === 'string'
+          ? systemMessage.content
+          : JSON.stringify(systemMessage.content),
+    }),
+    messages: messages
+      .filter((message) => message.role !== 'system')
+      .map((message) => ({
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content,
+      })),
+  };
+
+  const result: LLMResult = await provider.generateFromPrompt(prompt, {
+    model,
+    temperature,
+    maxTokens,
+  });
+
+  return {
+    content: result.text,
+    model,
+    usage: {
+      input_tokens: result.usage.inputTokens,
+      output_tokens: result.usage.outputTokens,
+    },
+  };
 }
 
 function encodeSseEvent(payload: string): Uint8Array {
@@ -342,82 +629,78 @@ chatRoutes.openapi(chatRoute, async (c) => {
 
   const messages = body.messages as ChatMessage[] | undefined;
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
-    return errorResponse(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items') as any;
+    return errorResponse(c, 'INVALID_REQUEST', 'messages must be an array of 1-100 items');
   }
 
   const msgError = validateMessages(messages);
   if (msgError) {
-    return errorResponse(c, 'INVALID_REQUEST', msgError) as any;
+    return errorResponse(c, 'INVALID_REQUEST', msgError);
   }
 
-  // Determine provider
-  let provider = body.provider ?? 'claude';
-  if (body.model && provider === 'claude') {
-    const inferred = inferProviderFromModel(body.model);
-    if (inferred !== provider) {
-      provider = inferred;
-    }
+  const target = await resolveChatRequestTarget({
+    provider: body.provider,
+    model: body.model,
+  });
+  if ('error' in target) {
+    return c.json({ success: false as const, error: target.error }, 400);
   }
 
-  const apiKey = getApiKey(provider);
-  if (!apiKey) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PROVIDER_ERROR',
-          message: `API key not configured for provider: ${provider}`,
-        },
-      },
-      400
-    ) as any;
+  const { provider, providerId, model, registry } = target;
+  const unsupportedFeatureError = getUnsupportedChatFeatureError({
+    providerId,
+    route: 'chat',
+    thinking: body.thinking,
+    webSearch: body.web_search,
+  });
+  if (unsupportedFeatureError) {
+    return c.json({ success: false as const, error: unsupportedFeatureError }, 400);
   }
 
-  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
   const temperature = body.temperature ?? 0.7;
-  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
+  const maxTokens = Math.min(
+    Math.max(parseInt(String(body.max_tokens), 10) || DEFAULT_MAX_TOKENS, 1),
+    MAX_CHAT_TOKENS
+  );
 
   try {
-    // Currently only Claude is implemented
-    if (provider === 'claude' || provider === 'anthropic') {
-      const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
-        thinking: body.thinking,
-      });
+    const result =
+      providerId === 'anthropic' && (body.thinking || body.web_search)
+        ? await (async () => {
+            const apiKey = await resolveProviderApiKey(registry, providerId);
+            if (!apiKey) {
+              throw new Error('Anthropic API key not configured');
+            }
 
-      // Record token usage (fire-and-forget, only if project_id provided)
-      if (body?.project_id && result.usage) {
-        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-        const apiKeyCtx = (c as any).get('apiKey') as { user_id?: string } | undefined;
-        getDB()
-          .then((db) =>
-            recordUsage(db, {
-              user_id: apiKeyCtx?.user_id,
-              project_id: body!.project_id!,
-              endpoint: 'chat',
-              model: result.model,
-              input_tokens: result.usage!.input_tokens ?? 0,
-              output_tokens: result.usage!.output_tokens ?? 0,
-            })
-          )
-          .catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
-      }
+            return callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
+              thinking: body.thinking,
+            });
+          })()
+        : await callProviderNonStreaming(provider, model, messages, temperature, maxTokens);
 
-      return c.json({ success: true as const, data: result }, 200) as any;
-    } else {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
-        },
-        400
-      ) as any;
+    if (body?.project_id && result.usage) {
+      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+      const apiKeyCtx = (c as any).get('apiKey') as { user_id?: string } | undefined;
+      getDB()
+        .then((db) =>
+          recordUsage(db, {
+            user_id: apiKeyCtx?.user_id,
+            project_id: body!.project_id!,
+            endpoint: 'chat',
+            model: result.model,
+            input_tokens: result.usage!.input_tokens ?? 0,
+            output_tokens: result.usage!.output_tokens ?? 0,
+          })
+        )
+        .catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
     }
+
+    return c.json({ success: true as const, data: result }, 200);
   } catch (err) {
     pinoLogger.error({ err }, 'Chat error');
     return c.json(
       { success: false as const, error: { code: 'CHAT_ERROR', message: sanitizeError(err) } },
       500
-    ) as any;
+    );
   }
 });
 
@@ -462,44 +745,56 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return errorResponse(c, 'INVALID_REQUEST', msgError);
   }
 
-  // Determine provider
-  let provider = body.provider ?? 'claude';
-  if (body.model && provider === 'claude') {
-    const inferred = inferProviderFromModel(body.model);
-    if (inferred !== provider) {
-      provider = inferred;
-    }
+  const target = await resolveChatRequestTarget({
+    provider: body.provider,
+    model: body.model,
+    supportedProviders: STREAM_PROVIDER_RUNTIME_IDS,
+  });
+  if ('error' in target) {
+    return c.json({ success: false as const, error: target.error }, 400);
   }
 
-  const apiKey = getApiKey(provider);
+  const { providerId, model, registry } = target;
+  const unsupportedFeatureError = getUnsupportedChatFeatureError({
+    providerId,
+    route: 'stream',
+    thinking: body.thinking,
+    webSearch: body.web_search,
+  });
+  if (unsupportedFeatureError) {
+    return c.json({ success: false as const, error: unsupportedFeatureError }, 400);
+  }
+
+  const temperature = body.temperature ?? 0.7;
+  const maxTokens = Math.min(
+    Math.max(parseInt(String(body.max_tokens), 10) || DEFAULT_MAX_TOKENS, 1),
+    MAX_CHAT_TOKENS
+  );
+  const apiKey = await resolveProviderApiKey(registry, providerId);
   if (!apiKey) {
     return c.json(
       {
         success: false as const,
         error: {
           code: 'PROVIDER_ERROR',
-          message: `API key not configured for provider: ${provider}`,
+          message: `API key not configured for provider: ${providerId}`,
         },
       },
       400
     );
   }
 
-  const model = body.model ?? PROVIDER_DEFAULTS[provider]?.model ?? 'claude-sonnet-4-20250514';
-  const temperature = body.temperature ?? 0.7;
-  const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
-
-  if (provider !== 'claude' && provider !== 'anthropic') {
+  if (!isSupportedStreamProviderId(providerId)) {
     return c.json(
       {
         success: false as const,
-        error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
+        error: { code: 'PROVIDER_ERROR', message: `Provider ${providerId} not implemented` },
       },
       400
     );
   }
 
-  const useThinking = body.thinking && (provider === 'claude' || provider === 'anthropic');
+  const useThinking = body.thinking && providerId === 'anthropic';
 
   // Extract system message if present
   const systemMessage = messages.find((m) => m.role === 'system');
@@ -703,15 +998,33 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 // -----------------------------------------------------------------------
 
 chatRoutes.openapi(providersRoute, (c) => {
-  const availableProviders: string[] = ['claude'];
+  return refreshProviderRegistryConfig()
+    .then(() => getProviderRegistry())
+    .then((registry) => {
+      const configuredProviders = registry
+        .listProviders()
+        .filter((provider) => isSupportedChatProviderId(provider.id) && provider.configured)
+        .map((provider) => provider.id as ChatRuntimeProviderId);
 
-  // Check if OpenAI is configured
-  if (process.env.OPENAI_API_KEY) {
-    availableProviders.push('openai');
-  }
+      const defaultProviderId = registry
+        .getProviderIdsForRole('generation')
+        .find(
+          (providerId) => isSupportedChatProviderId(providerId) && registry.isConfigured(providerId)
+        );
 
-  return c.json(
-    { success: true as const, data: { providers: availableProviders, default: 'claude' } },
-    200
-  ) as any;
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            providers: configuredProviders.map(
+              (providerId) => CHAT_PROVIDER_RUNTIME_TO_PUBLIC[providerId]
+            ),
+            default: defaultProviderId
+              ? CHAT_PROVIDER_RUNTIME_TO_PUBLIC[defaultProviderId as ChatRuntimeProviderId]
+              : 'claude',
+          },
+        },
+        200
+      );
+    });
 });
