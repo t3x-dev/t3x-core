@@ -5,7 +5,9 @@ import { deleteGlobalSetting, getGlobalSetting, setGlobalSetting } from './globa
 const PROVIDER_CREDENTIAL_KEY_PREFIX = 'local_provider_credentials_v1_';
 const SAFE_LAST_TEST_ERROR = '[redacted]';
 
+// Task 1 models local provider family IDs, not the full runtime provider registry.
 export type LocalProviderId = 'anthropic' | 'openai' | 'google';
+type LocalProviderIdInput = LocalProviderId | 'google-ai';
 
 type ProviderTestStatus = 'ok' | 'error';
 
@@ -32,7 +34,7 @@ export interface ProviderCredentialBundle {
 }
 
 export interface UpsertProviderCredentialInput {
-  providerId: LocalProviderId;
+  providerId: LocalProviderIdInput;
   apiKey: string;
   defaultModel?: string | null;
 }
@@ -77,9 +79,13 @@ function createEmptySafeState(): Record<LocalProviderId, ProviderCredentialSafe>
   };
 }
 
-function normalizeProviderId(providerId: string): LocalProviderId {
+function normalizeProviderId(providerId: LocalProviderIdInput | string): LocalProviderId {
+  if (providerId === 'google-ai') {
+    return 'google';
+  }
+
   if (!LOCAL_PROVIDER_IDS.includes(providerId as LocalProviderId)) {
-    throw new Error(`Unsupported local provider id: ${providerId}`);
+    throw new Error(`Unsupported local provider family id: ${providerId}`);
   }
   return providerId as LocalProviderId;
 }
@@ -157,7 +163,7 @@ export async function upsertProviderCredential(
 
 export async function updateProviderCredentialTestResult(
   db: AnyDB,
-  providerId: LocalProviderId,
+  providerId: LocalProviderIdInput,
   input: UpdateProviderCredentialTestResultInput
 ): Promise<ProviderCredentialBundle> {
   providerId = normalizeProviderId(providerId);
@@ -179,7 +185,7 @@ export async function updateProviderCredentialTestResult(
 
 export async function deleteProviderCredential(
   db: AnyDB,
-  providerId: LocalProviderId
+  providerId: LocalProviderIdInput
 ): Promise<ProviderCredentialBundle> {
   providerId = normalizeProviderId(providerId);
   await deleteGlobalSetting(db, providerCredentialKey(providerId));

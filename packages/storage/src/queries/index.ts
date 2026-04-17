@@ -160,6 +160,17 @@ export {
   listGlobalSettings,
   setGlobalSetting,
 } from './global-settings';
+// Local provider credentials (provider-family settings stored in global_settings)
+export {
+  deleteProviderCredential,
+  getProviderCredentialBundle,
+  type LocalProviderId,
+  type ProviderCredentialBundle,
+  type UpdateProviderCredentialTestResultInput,
+  type UpsertProviderCredentialInput,
+  updateProviderCredentialTestResult,
+  upsertProviderCredential,
+} from './provider-credentials';
 // Knowledge Graph (cross-conversation entity/topic graph)
 export {
   deleteKnowledgeGraphByProject,

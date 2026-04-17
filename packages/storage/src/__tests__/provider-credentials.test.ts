@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import { getGlobalSetting } from '../queries/global-settings';
+import * as queries from '../queries';
 import { createTestDB } from './setup';
 import {
   deleteProviderCredential,
@@ -37,6 +38,13 @@ describe('provider credentials', () => {
     expect(bundle.safe.openai?.configured).toBe(true);
     expect(bundle.safe.openai?.defaultModel).toBe('gpt-4o-mini');
     expect(JSON.stringify(bundle.safe)).not.toContain('sk-local-openai');
+  });
+
+  it('exports provider credential helpers through the queries entrypoint', () => {
+    expect(queries.getProviderCredentialBundle).toBeTypeOf('function');
+    expect(queries.upsertProviderCredential).toBeTypeOf('function');
+    expect(queries.updateProviderCredentialTestResult).toBeTypeOf('function');
+    expect(queries.deleteProviderCredential).toBeTypeOf('function');
   });
 
   it('keeps provider entries independent in global_settings', async () => {
@@ -132,5 +140,18 @@ describe('provider credentials', () => {
         lastTestError: 'provider unavailable',
       })
     ).rejects.toThrow('Provider credential not found for google');
+  });
+
+  it('accepts the google-ai alias as the local google provider family', async () => {
+    await upsertProviderCredential(db, {
+      providerId: 'google-ai',
+      apiKey: 'sk-google-local',
+      defaultModel: 'gemini-2.5-pro',
+    });
+
+    const bundle = await getProviderCredentialBundle(db);
+
+    expect(bundle.secrets.GOOGLE_AI_STUDIO_KEY).toBe('sk-google-local');
+    expect(bundle.safe.google?.configured).toBe(true);
   });
 });
