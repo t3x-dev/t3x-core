@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
+import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -39,6 +40,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
       try {
         const turns = useWorkspaceStore.getState().turns;
         await runExtraction({
+          baseTree: tree,
           conversationId: extractConvId,
           turns,
           llm: (input) =>
@@ -60,13 +62,15 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
               ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
               : err.reason === 'missing_source'
                 ? `Extraction returned ops without provenance. Please retry.`
+                : err.reason === 'invalid_structure'
+                  ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
                 : err.reason === 'llm_error'
                   ? `LLM call failed: ${err.message}`
                   : `Extraction failed after ${err.lastAttempt} attempts.`;
           useWorkspaceStore.getState().setError(msg);
           toast.error(msg);
         } else {
-          const msg = err instanceof Error ? err.message : 'Extraction failed';
+          const msg = formatWorkspaceError(err) || 'Extraction failed';
           useWorkspaceStore.getState().setError(msg);
           toast.error(msg);
         }

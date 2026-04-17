@@ -14,14 +14,19 @@
  * the pre-state via `setDerived(replay(pre-opsLog))`.
  */
 
-import type { FailingOp } from '@t3x-dev/core';
 import { CommandError } from '../CommandError';
+import type { RetryFailingOp } from './types';
 
 export class ExtractionFailedError extends CommandError {
   constructor(
-    public failingOps: FailingOp[],
+    public failingOps: RetryFailingOp[],
     public lastAttempt: number,
-    public reason: 'missing_source' | 'unverifiable_quote' | 'exhausted_retries' | 'llm_error',
+    public reason:
+      | 'missing_source'
+      | 'unverifiable_quote'
+      | 'invalid_structure'
+      | 'exhausted_retries'
+      | 'llm_error',
     message?: string
   ) {
     super('extraction_failed', message ?? `Extraction failed after ${lastAttempt} attempts`);

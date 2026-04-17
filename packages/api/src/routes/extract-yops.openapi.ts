@@ -153,12 +153,22 @@ extractYopsRoutes.openapi(route, async (c) => {
     const reg = await getProviderRegistry();
     let rawText: string;
     try {
-      const genResult = await reg.tryWithFallback('generation', (provider) =>
-        provider.generate(combinedPrompt, {
-          temperature: 0.1,
-          maxTokens: 8192,
-        })
-      );
+      const openaiProvider =
+        process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY
+          ? reg.getById<any>('openai')
+          : null;
+
+      const genResult = openaiProvider
+        ? await openaiProvider.generate(combinedPrompt, {
+            temperature: 0.1,
+            maxTokens: 8192,
+          })
+        : await reg.tryWithFallback('generation', (provider) =>
+            provider.generate(combinedPrompt, {
+              temperature: 0.1,
+              maxTokens: 8192,
+            })
+          );
       rawText = genResult.text;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LLM provider error';
@@ -166,7 +176,7 @@ extractYopsRoutes.openapi(route, async (c) => {
     }
 
     // Parse LLM output
-    const parseResult = parseYOpsOutput(rawText);
+    const parseResult = parseYOpsOutput(rawText, { strictYopsList: true });
     if (!parseResult.ok) {
       return errorResponse(c, 'EXTRACTION_FAILED', `LLM output parse error: ${parseResult.error}`);
     }

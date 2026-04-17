@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
+import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { fetchConversationMeta, fetchConversationTopics } from '@/queries/chatInitFetch';
 import { fetchParentCommitData } from '@/queries/hydrateFromParent';
@@ -59,6 +60,7 @@ export function useChatInit({
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }
     useCommitStore.getState().setProjectId(resolvedProjectId || null);
+    useCommitStore.getState().setBeforeCommitHash(null);
     // Inheritance sets its own lastCommitHash, so don't overwrite it with the branch head.
     if (resolvedProjectId && !inheritFromCommitHash) {
       void initCommitState(resolvedProjectId);
@@ -85,6 +87,7 @@ export function useChatInit({
       if (data.fetched && data.hasTrees && data.lastCommitHash) {
         useCommitStore.setState({
           lastCommitHash: data.lastCommitHash,
+          beforeCommitHash: data.lastCommitHash,
           confirmedNodeIds: data.confirmedNodeIds,
         });
         if (!useWorkspaceStore.getState().panelExpanded) {
@@ -106,8 +109,14 @@ export function useChatInit({
           // TODO(topics-state): route through workspaceStore once the schema lands.
           await fetchConversationTopics(convId);
         })
-        .catch(() => {
-          if (inheritFromCommitHash) void runInheritance(inheritFromCommitHash);
+        .catch((err) => {
+          if (inheritFromCommitHash) {
+            void runInheritance(inheritFromCommitHash);
+            return;
+          }
+          const store = useWorkspaceStore.getState();
+          store.setMode('error');
+          store.setError(formatWorkspaceError(err));
         });
     } else if (inheritFromCommitHash) {
       useCommitStore.getState().setProjectId(resolvedProjectId || null);

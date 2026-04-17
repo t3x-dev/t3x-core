@@ -79,8 +79,8 @@ export function ChatWorkspace({
   }, [resolvedProjectId, fetchPins]);
 
   // Model selection state
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
-  const [selectedProvider, setSelectedProvider] = useState('anthropic');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedProvider, setSelectedProvider] = useState('openai');
 
   const handleModelChange = useCallback((provider: string, model: string) => {
     setSelectedProvider(provider);

@@ -176,6 +176,101 @@ function encodeSseEvent(payload: string): Uint8Array {
   return new TextEncoder().encode(`data: ${payload}\n\n`);
 }
 
+function toOpenAIContent(
+  content: ChatMessage['content']
+):
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'image_url'; image_url: { url: string } }
+    > {
+  if (typeof content === 'string') return content;
+  return content.map((block) => {
+    if (block.type === 'text') {
+      return { type: 'text', text: block.text ?? '' };
+    }
+    return {
+      type: 'image_url',
+      image_url: {
+        url: `data:${block.source?.media_type ?? 'image/png'};base64,${block.source?.data ?? ''}`,
+      },
+    };
+  });
+}
+
+async function callOpenAINonStreaming(
+  messages: ChatMessage[],
+  model: string,
+  apiKey: string,
+  temperature: number,
+  maxTokens: number
+): Promise<ChatResponse> {
+  const proxyFetch = getProxyFetch();
+  const response = await proxyFetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      max_completion_tokens: maxTokens,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: toOpenAIContent(m.content),
+      })),
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    pinoLogger.error({ status: response.status, responseText }, 'OpenAI API error');
+    throw new Error(`OpenAI API error: ${response.status}`);
+  }
+
+  const data = JSON.parse(responseText) as {
+    model: string;
+    choices?: Array<{
+      message?: {
+        content?: string | Array<{ type?: string; text?: string }>;
+      };
+      finish_reason?: string | null;
+    }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+    };
+  };
+
+  const firstChoice = data.choices?.[0];
+  const rawContent = firstChoice?.message?.content;
+  const content =
+    typeof rawContent === 'string'
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent
+            .filter((part) => part.type === 'text' && typeof part.text === 'string')
+            .map((part) => part.text)
+            .join('')
+        : '';
+
+  if (!content) {
+    throw new Error('No text content in OpenAI response');
+  }
+
+  return {
+    content,
+    model: data.model,
+    usage: {
+      input_tokens: data.usage?.prompt_tokens,
+      output_tokens: data.usage?.completion_tokens,
+    },
+    finish_reason: firstChoice?.finish_reason ?? 'stop',
+  };
+}
+
 async function callClaudeNonStreaming(
   messages: ChatMessage[],
   model: string,
@@ -378,7 +473,6 @@ chatRoutes.openapi(chatRoute, async (c) => {
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
   try {
-    // Currently only Claude is implemented
     if (provider === 'claude' || provider === 'anthropic') {
       const result = await callClaudeNonStreaming(messages, model, apiKey, temperature, maxTokens, {
         thinking: body.thinking,
@@ -403,15 +497,38 @@ chatRoutes.openapi(chatRoute, async (c) => {
       }
 
       return c.json({ success: true as const, data: result }, 200) as any;
-    } else {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
-        },
-        400
-      ) as any;
     }
+
+    if (provider === 'openai' || provider === 'gpt') {
+      const result = await callOpenAINonStreaming(messages, model, apiKey, temperature, maxTokens);
+
+      if (body?.project_id && result.usage) {
+        // biome-ignore lint/suspicious/noExplicitAny: generic error handler
+        const apiKeyCtx = (c as any).get('apiKey') as { user_id?: string } | undefined;
+        getDB()
+          .then((db) =>
+            recordUsage(db, {
+              user_id: apiKeyCtx?.user_id,
+              project_id: body!.project_id!,
+              endpoint: 'chat',
+              model: result.model,
+              input_tokens: result.usage!.input_tokens ?? 0,
+              output_tokens: result.usage!.output_tokens ?? 0,
+            })
+          )
+          .catch((err) => pinoLogger.warn({ err }, 'Failed to record chat usage'));
+      }
+
+      return c.json({ success: true as const, data: result }, 200) as any;
+    }
+
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
+      },
+      400
+    ) as any;
   } catch (err) {
     pinoLogger.error({ err }, 'Chat error');
     return c.json(
@@ -489,16 +606,6 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
   const temperature = body.temperature ?? 0.7;
   const maxTokens = Math.min(Math.max(parseInt(String(body.max_tokens), 10) || 4096, 1), 16384);
 
-  if (provider !== 'claude' && provider !== 'anthropic') {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'PROVIDER_ERROR', message: `Provider ${provider} not implemented` },
-      },
-      400
-    );
-  }
-
   const useThinking = body.thinking && (provider === 'claude' || provider === 'anthropic');
 
   // Extract system message if present
@@ -507,50 +614,71 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
   const stream = new ReadableStream({
     async start(controller) {
-      let anthropicResponse: Response | undefined;
+      let upstreamResponse: Response | undefined;
       let resolvedModel = model;
       const usage: { input_tokens?: number; output_tokens?: number } = {};
       try {
         const proxyFetch = getProxyFetch();
-        anthropicResponse = (await proxyFetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            ...(body.web_search && { 'anthropic-beta': 'web-search-2025-03-05' }),
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: useThinking ? Math.max(maxTokens, 16384) : maxTokens,
-            ...(useThinking
-              ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
-              : { temperature }),
-            stream: true,
-            ...(systemMessage && { system: systemMessage.content }),
-            ...(body.web_search && {
-              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+        if (provider === 'claude' || provider === 'anthropic') {
+          upstreamResponse = (await proxyFetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              ...(body.web_search && { 'anthropic-beta': 'web-search-2025-03-05' }),
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: useThinking ? Math.max(maxTokens, 16384) : maxTokens,
+              ...(useThinking
+                ? { thinking: { type: 'enabled', budget_tokens: 10000 } }
+                : { temperature }),
+              stream: true,
+              ...(systemMessage && { system: systemMessage.content }),
+              ...(body.web_search && {
+                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+              }),
+              messages: otherMessages.map((m) => ({
+                role: m.role,
+                content: m.content,
+              })),
             }),
-            messages: otherMessages.map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-          }),
-          signal: AbortSignal.timeout(120000),
-        })) as unknown as Response;
-
-        if (!anthropicResponse.ok) {
-          const errorText = await anthropicResponse.text();
-          pinoLogger.error(
-            { status: anthropicResponse.status, errorText },
-            'Claude streaming API error'
-          );
-          throw new Error(`Claude API error: ${anthropicResponse.status}`);
+            signal: AbortSignal.timeout(120000),
+          })) as unknown as Response;
+        } else if (provider === 'openai' || provider === 'gpt') {
+          upstreamResponse = (await proxyFetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              temperature,
+              max_completion_tokens: maxTokens,
+              stream: true,
+              stream_options: { include_usage: true },
+              messages: messages.map((m) => ({
+                role: m.role,
+                content: toOpenAIContent(m.content),
+              })),
+            }),
+            signal: AbortSignal.timeout(120000),
+          })) as unknown as Response;
+        } else {
+          throw new Error(`Provider ${provider} not implemented`);
         }
 
-        const reader = anthropicResponse.body?.getReader();
+        if (!upstreamResponse.ok) {
+          const errorText = await upstreamResponse.text();
+          pinoLogger.error({ status: upstreamResponse.status, errorText }, 'Streaming API error');
+          throw new Error(`${provider} API error: ${upstreamResponse.status}`);
+        }
+
+        const reader = upstreamResponse.body?.getReader();
         if (!reader) {
-          throw new Error('No response body from Claude API');
+          throw new Error(`No response body from ${provider} API`);
         }
 
         const decoder = new TextDecoder();
@@ -584,11 +712,51 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (!dataStr) continue;
+            if ((provider === 'openai' || provider === 'gpt') && dataStr === '[DONE]') {
+              receivedMessageStop = true;
+              controller.enqueue(
+                encodeSseEvent(
+                  JSON.stringify({
+                    type: 'done',
+                    model: resolvedModel,
+                    usage,
+                  })
+                )
+              );
+              controller.enqueue(encodeSseEvent('[DONE]'));
+              continue;
+            }
 
             let parsed: Record<string, unknown>;
             try {
               parsed = JSON.parse(dataStr);
             } catch {
+              continue;
+            }
+
+            if (provider === 'openai' || provider === 'gpt') {
+              if (typeof parsed.model === 'string') {
+                resolvedModel = parsed.model;
+              }
+              const usageChunk = parsed.usage as Record<string, number> | undefined;
+              if (usageChunk) {
+                usage.input_tokens = usageChunk.prompt_tokens ?? usage.input_tokens;
+                usage.output_tokens = usageChunk.completion_tokens ?? usage.output_tokens;
+              }
+              const choices = Array.isArray(parsed.choices)
+                ? (parsed.choices as Array<Record<string, unknown>>)
+                : [];
+              for (const choice of choices) {
+                const delta = choice.delta as Record<string, unknown> | undefined;
+                if (typeof delta?.content === 'string') {
+                  controller.enqueue(
+                    encodeSseEvent(JSON.stringify({ type: 'token', content: delta.content }))
+                  );
+                }
+                if (typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0) {
+                  receivedMessageStop = true;
+                }
+              }
               continue;
             }
 
@@ -703,15 +871,25 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 // -----------------------------------------------------------------------
 
 chatRoutes.openapi(providersRoute, (c) => {
-  const availableProviders: string[] = ['claude'];
+  const availableProviders: string[] = [];
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    availableProviders.push('claude');
+  }
 
   // Check if OpenAI is configured
   if (process.env.OPENAI_API_KEY) {
     availableProviders.push('openai');
   }
 
+  if (availableProviders.length === 0) {
+    availableProviders.push('claude');
+  }
+
+  const defaultProvider = process.env.OPENAI_API_KEY ? 'openai' : 'claude';
+
   return c.json(
-    { success: true as const, data: { providers: availableProviders, default: 'claude' } },
+    { success: true as const, data: { providers: availableProviders, default: defaultProvider } },
     200
   ) as any;
 });
