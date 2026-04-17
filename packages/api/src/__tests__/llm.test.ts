@@ -12,7 +12,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { resetProviderRegistry } from '../lib/provider-registry';
+import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-registry';
 import { llmRoutes } from '../routes/llm.openapi';
 
 const originalEnv = { ...process.env };
@@ -92,6 +92,24 @@ describe('GET /v1/llm/models', () => {
     expect(anthropic.available).toBe(false);
     expect(openai.available).toBe(false);
     expect(google.available).toBe(true);
+  });
+
+  it('returns generation provider order and default from backend role priority', async () => {
+    const registry = await getProviderRegistry();
+    registry.assignRole('generation', ['openai', 'google-ai', 'anthropic']);
+
+    const res = await app.request('/v1/llm/models');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.data.generation_provider_order).toEqual(['openai', 'google', 'anthropic']);
+    expect(body.data.default_provider).toBe('openai');
+    expect(body.data.providers.map((provider: { name: string }) => provider.name)).toEqual([
+      'openai',
+      'google',
+      'anthropic',
+    ]);
   });
 
   it('each model has required fields', async () => {

@@ -4,6 +4,7 @@
  * Covers safe CRUD for local provider credentials and test metadata updates.
  */
 
+import { getModelsByProvider } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import * as storage from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -18,6 +19,11 @@ let cleanup: (() => Promise<void>) | null = null;
 
 const mockRegistry = {
   getEntry: vi.fn((id: string) => ({ id })),
+  listProviders: vi.fn(() => []),
+  getProviderIdsForRole: vi.fn(() => []),
+  isConfigured: vi.fn(() => false),
+  exportConfig: vi.fn(() => ({ roles: [] })),
+  assignRole: vi.fn(),
   testConnection: vi.fn(),
   clearInstances: vi.fn(),
 };
@@ -33,6 +39,7 @@ vi.mock('../lib/provider-registry', () => ({
   saveRegistryConfig: vi.fn(() => Promise.resolve()),
 }));
 
+import { refreshProviderRegistryConfig } from '../lib/provider-registry';
 import { providersRoutes } from '../routes/providers.openapi';
 
 describe('Provider Routes', () => {
@@ -47,8 +54,14 @@ describe('Provider Routes', () => {
 
   beforeEach(async () => {
     mockRegistry.getEntry.mockImplementation((id: string) => ({ id }));
+    mockRegistry.listProviders.mockReset();
+    mockRegistry.getProviderIdsForRole.mockReset();
+    mockRegistry.isConfigured.mockReset();
+    mockRegistry.exportConfig.mockReset();
+    mockRegistry.assignRole.mockReset();
     mockRegistry.testConnection.mockReset();
     mockRegistry.clearInstances.mockReset();
+    vi.mocked(refreshProviderRegistryConfig).mockClear();
     await storage.deleteProviderCredential(mockDB, 'anthropic');
     await storage.deleteProviderCredential(mockDB, 'openai');
     await storage.deleteProviderCredential(mockDB, 'google');
@@ -233,5 +246,65 @@ describe('Provider Routes', () => {
     expect(json.data.provider).toBe('anthropic');
     expect(json.data.configured).toBe(false);
     expect(JSON.stringify(json)).not.toContain('sk-ant-local');
+  });
+
+  it('refreshes runtime overrides before listing providers and uses the shared generation model catalog', async () => {
+    mockRegistry.listProviders.mockImplementation(() => [
+      {
+        id: 'google-ai',
+        name: 'Google AI (Gemini)',
+        role: 'generation',
+        configured: true,
+        roles: ['generation'],
+        requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
+        defaultModel: 'gemini-2.0-flash',
+        availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro'],
+      },
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        role: 'generation',
+        configured: true,
+        roles: ['generation'],
+        requiredEnvKeys: ['OPENAI_API_KEY'],
+        defaultModel: 'gpt-4o',
+        availableModels: ['gpt-4-turbo'],
+      },
+      {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        role: 'generation',
+        configured: false,
+        roles: ['generation'],
+        requiredEnvKeys: ['DEEPSEEK_API_KEY'],
+        defaultModel: 'deepseek-chat',
+        availableModels: ['deepseek-chat'],
+      },
+    ]);
+
+    const res = await app.request('/v1/providers');
+
+    expect(res.status).toBe(200);
+    const json: ApiResponse = await res.json();
+    expect(json.success).toBe(true);
+    expect(vi.mocked(refreshProviderRegistryConfig)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(refreshProviderRegistryConfig).mock.invocationCallOrder[0]).toBeLessThan(
+      mockRegistry.listProviders.mock.invocationCallOrder[0]
+    );
+
+    expect(json.data).toEqual([
+      expect.objectContaining({
+        id: 'google-ai',
+        available_models: getModelsByProvider('google').map((model) => model.id),
+      }),
+      expect.objectContaining({
+        id: 'openai',
+        available_models: getModelsByProvider('openai').map((model) => model.id),
+      }),
+      expect.objectContaining({
+        id: 'deepseek',
+        available_models: ['deepseek-chat'],
+      }),
+    ]);
   });
 });

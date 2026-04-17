@@ -1002,9 +1002,11 @@ chatRoutes.openapi(providersRoute, (c) => {
     .then(() => getProviderRegistry())
     .then((registry) => {
       const configuredProviders = registry
-        .listProviders()
-        .filter((provider) => isSupportedChatProviderId(provider.id) && provider.configured)
-        .map((provider) => provider.id as ChatRuntimeProviderId);
+        .getProviderIdsForRole('generation')
+        .filter(
+          (providerId): providerId is ChatRuntimeProviderId =>
+            isSupportedChatProviderId(providerId) && registry.isConfigured(providerId)
+        );
 
       const defaultProviderId = registry
         .getProviderIdsForRole('generation')

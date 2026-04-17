@@ -22,7 +22,7 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
-import { resetProviderRegistry } from '../lib/provider-registry';
+import { getProviderRegistry, resetProviderRegistry } from '../lib/provider-registry';
 import { chatRoutes } from '../routes/chat.openapi';
 
 const originalEnv = { ...process.env };
@@ -81,6 +81,28 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.providers).toEqual(['openai']);
+      expect(data.data.default).toBe('openai');
+    });
+
+    it('uses generation role priority order for configured chat providers and default selection', async () => {
+      const registry = await getProviderRegistry();
+      registry.assignRole('generation', ['google-ai', 'openai', 'anthropic']);
+
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'anthropic',
+        apiKey: 'sk-local-anthropic',
+      });
+
+      const res = await app.request('/v1/chat/providers');
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.providers).toEqual(['openai', 'claude']);
       expect(data.data.default).toBe('openai');
     });
   });

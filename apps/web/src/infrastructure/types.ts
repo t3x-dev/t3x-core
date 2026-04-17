@@ -339,6 +339,8 @@ export interface LLMProviderInfo {
 }
 
 export interface LLMModelsResponse {
+  generation_provider_order: string[];
+  default_provider: string | null;
   providers: LLMProviderInfo[];
 }
 

@@ -15,13 +15,35 @@ const RUNTIME_PROVIDER_IDS: Record<ProviderName, 'anthropic' | 'openai' | 'googl
   google: 'google-ai',
 };
 
+const PUBLIC_PROVIDER_IDS_BY_RUNTIME: Record<string, ProviderName> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
+function getGenerationProviderOrder(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>
+): ProviderName[] {
+  const orderedProviders = registry
+    .getProviderIdsForRole('generation')
+    .map((providerId) => PUBLIC_PROVIDER_IDS_BY_RUNTIME[providerId])
+    .filter((providerId): providerId is ProviderName => providerId !== undefined);
+
+  const remainingProviders = (Object.keys(MODEL_CATALOG) as ProviderName[]).filter(
+    (providerId) => !orderedProviders.includes(providerId)
+  );
+
+  return [...orderedProviders, ...remainingProviders];
+}
+
 export const llmRoutes = new Hono();
 
 llmRoutes.get('/v1/llm/models', async (c) => {
   await refreshProviderRegistryConfig();
   const registry = await getProviderRegistry();
+  const generationProviderOrder = getGenerationProviderOrder(registry);
 
-  const providers = (Object.keys(MODEL_CATALOG) as ProviderName[]).map((name) => {
+  const providers = generationProviderOrder.map((name) => {
     const runtimeProviderId = RUNTIME_PROVIDER_IDS[name];
 
     return {
@@ -37,5 +59,12 @@ llmRoutes.get('/v1/llm/models', async (c) => {
     };
   });
 
-  return c.json({ success: true, data: { providers } });
+  return c.json({
+    success: true,
+    data: {
+      generation_provider_order: generationProviderOrder,
+      default_provider: generationProviderOrder[0] ?? null,
+      providers,
+    },
+  });
 });

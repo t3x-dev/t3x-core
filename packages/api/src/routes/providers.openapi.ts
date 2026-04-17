@@ -15,6 +15,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { getModelsByProvider, type ProviderName } from '@t3x-dev/core';
 import {
   deleteProviderCredential,
   getProviderCredentialBundle,
@@ -116,6 +117,29 @@ function normalizeDefaultModel(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
+const SHARED_GENERATION_PROVIDER_CATALOG: Partial<Record<string, ProviderName>> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
+function getAvailableModelsForProvider(
+  providerId: string,
+  role: string,
+  fallback: string[] | null | undefined
+) {
+  if (role !== 'generation') {
+    return fallback ?? null;
+  }
+
+  const providerName = SHARED_GENERATION_PROVIDER_CATALOG[providerId];
+  if (!providerName) {
+    return fallback ?? null;
+  }
+
+  return getModelsByProvider(providerName).map((model) => model.id);
+}
+
 // ============================================================
 // GET /v1/providers — List all providers
 // ============================================================
@@ -138,6 +162,7 @@ const listProvidersRoute = createRoute({
 });
 
 providersRoutes.openapi(listProvidersRoute, async (c) => {
+  await refreshProviderRegistryConfig();
   const registry = await getProviderRegistry();
   const providers = registry.listProviders();
 
@@ -151,7 +176,7 @@ providersRoutes.openapi(listProvidersRoute, async (c) => {
       roles: p.roles,
       required_env_keys: p.requiredEnvKeys,
       default_model: p.defaultModel ?? null,
-      available_models: p.availableModels ?? null,
+      available_models: getAvailableModelsForProvider(p.id, p.role, p.availableModels),
     })),
   });
 });
