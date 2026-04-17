@@ -38,6 +38,17 @@ export {
 } from './events';
 // Background jobs (events retention cleanup, etc.)
 export { type CleanupOptions, cleanupOldEvents } from './jobs/cleanup-events';
+// Local provider credentials stored in global_settings
+export {
+  deleteProviderCredential,
+  getProviderCredentialBundle,
+  type LocalProviderId,
+  type ProviderCredentialBundle,
+  type UpdateProviderCredentialTestResultInput,
+  type UpsertProviderCredentialInput,
+  updateProviderCredentialTestResult,
+  upsertProviderCredential,
+} from './queries/provider-credentials';
 // Query functions
 export * from './queries';
 // Schema (table definitions and types)
