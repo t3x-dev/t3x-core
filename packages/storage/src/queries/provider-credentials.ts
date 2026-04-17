@@ -90,6 +90,10 @@ function normalizeTimestamp(value: Date | string | null | undefined): string | n
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function toSafeLastTestError(lastTestError: string | null): string | null {
+  return lastTestError ? '[redacted]' : null;
+}
+
 function redactSecret(text: string | null, secret: string | null | undefined): string | null {
   if (!text || !secret) return text;
   return text.split(secret).join('[redacted]');
@@ -121,7 +125,7 @@ export async function getProviderCredentialBundle(db: AnyDB): Promise<ProviderCr
       defaultModel: entry.defaultModel ?? null,
       lastTestStatus: entry.lastTestStatus ?? null,
       lastTestedAt: entry.lastTestedAt ?? null,
-      lastTestError: redactSecret(entry.lastTestError, entry.apiKey),
+      lastTestError: toSafeLastTestError(entry.lastTestError),
     };
   }
 

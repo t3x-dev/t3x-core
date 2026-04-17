@@ -66,8 +66,35 @@ describe('provider credentials', () => {
 
     const bundle = await getProviderCredentialBundle(db);
 
-    expect(bundle.safe.openai?.lastTestError).toContain('[redacted]');
+    expect(bundle.safe.openai?.lastTestError).toBe('[redacted]');
     expect(bundle.safe.openai?.lastTestError).not.toContain(rawKey);
     expect(JSON.stringify(bundle.safe)).not.toContain(rawKey);
+  });
+
+  it('does not leak old or new raw keys after rotation', async () => {
+    const oldKey = 'sk-openai-old-key';
+    const newKey = 'sk-openai-new-key';
+
+    await upsertProviderCredential(db, {
+      providerId: 'openai',
+      apiKey: oldKey,
+      defaultModel: 'gpt-4o-mini',
+    });
+    await updateProviderCredentialTestResult(db, 'openai', {
+      lastTestStatus: 'error',
+      lastTestError: `provider auth failed for ${oldKey}`,
+    });
+    await upsertProviderCredential(db, {
+      providerId: 'openai',
+      apiKey: newKey,
+      defaultModel: 'gpt-4o-mini',
+    });
+
+    const bundle = await getProviderCredentialBundle(db);
+
+    expect(bundle.secrets.OPENAI_API_KEY).toBe(newKey);
+    expect(bundle.safe.openai?.lastTestError).toBe('[redacted]');
+    expect(JSON.stringify(bundle.safe)).not.toContain(oldKey);
+    expect(JSON.stringify(bundle.safe)).not.toContain(newKey);
   });
 });
