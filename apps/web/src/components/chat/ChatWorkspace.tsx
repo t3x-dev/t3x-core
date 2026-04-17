@@ -2,7 +2,6 @@
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { DriftPopup } from '@/components/chat/DriftPopup';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
@@ -12,6 +11,10 @@ import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useAutoProject } from '@/hooks/projects/useAutoProject';
+import {
+  resolveAvailableModelSelection,
+  useAvailableModels,
+} from '@/hooks/shared/useAvailableModels';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
 import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { usePinsStore } from '@/store/pinsStore';
@@ -23,6 +26,7 @@ import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 import { CommittedBar } from './CommittedBar';
+import { ProviderSetupBanner } from './ProviderSetupBanner';
 import { SourceMaterialPanel } from './SourceMaterialPanel';
 
 interface ChatWorkspaceProps {
@@ -60,6 +64,13 @@ export function ChatWorkspace({
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
+  const {
+    providers: availableProviders,
+    loading: modelsLoading,
+    hasConfiguredGenerationProvider,
+    defaultProvider,
+    defaultModel,
+  } = useAvailableModels();
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -79,26 +90,46 @@ export function ChatWorkspace({
   }, [resolvedProjectId, fetchPins]);
 
   // Model selection state
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
-  const [selectedProvider, setSelectedProvider] = useState('anthropic');
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
   const handleModelChange = useCallback((provider: string, model: string) => {
     setSelectedProvider(provider);
     setSelectedModel(model);
   }, []);
 
+  const isSelectionReady = Boolean(selectedProvider && selectedModel && !modelsLoading);
+
+  const resolvedSelection = useMemo(
+    () =>
+      resolveAvailableModelSelection(
+        availableProviders,
+        selectedProvider,
+        selectedModel,
+        defaultProvider,
+        defaultModel
+      ),
+    [availableProviders, selectedProvider, selectedModel, defaultProvider, defaultModel]
+  );
+
+  useEffect(() => {
+    if (modelsLoading) return;
+    if (resolvedSelection.provider !== selectedProvider) {
+      setSelectedProvider(resolvedSelection.provider);
+    }
+    if (resolvedSelection.model !== selectedModel) {
+      setSelectedModel(resolvedSelection.model);
+    }
+  }, [modelsLoading, resolvedSelection, selectedProvider, selectedModel]);
+
   const {
     messages,
-    input,
-    setInput,
     isLoading,
     isStreaming,
     streamingContent,
     error,
     warning,
     sendMessage,
-    regenerate,
-    editAndResend,
     stopGenerating,
     searchQuery,
     citations,
@@ -107,8 +138,8 @@ export function ChatWorkspace({
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
-    provider: selectedProvider,
-    model: selectedModel,
+    provider: selectedProvider ?? undefined,
+    model: selectedModel ?? undefined,
     onConversationCreated: useCallback(
       (newConvId: string) => {
         setResolvedConversationId(newConvId);
@@ -134,12 +165,12 @@ export function ChatWorkspace({
 
   // Flush pending message once projectId is resolved and sendMessage is recreated
   useEffect(() => {
-    if (resolvedProjectId && pendingMessageRef.current) {
+    if (resolvedProjectId && pendingMessageRef.current && isSelectionReady) {
       const msg = pendingMessageRef.current;
       pendingMessageRef.current = null;
       sendMessage(msg);
     }
-  }, [resolvedProjectId, sendMessage]);
+  }, [resolvedProjectId, sendMessage, isSelectionReady]);
 
   // Store initialization, draft loading, inheritance hydration, topic loading
   const { parentConversationId } = useChatInit({
@@ -208,21 +239,35 @@ export function ChatWorkspace({
   useEffect(() => {
     if (firstMessage && !firstMessageSentRef.current && !isLoading) {
       firstMessageSentRef.current = true;
+      pendingMessageRef.current = firstMessage;
 
       if (isNewChat && !resolvedProjectId) {
-        pendingMessageRef.current = firstMessage;
         ensureProject(firstMessage).then((projId) => {
           setResolvedProjectId(projId);
           // pendingMessageRef will be flushed by the effect above
         });
-      } else {
+      } else if (isSelectionReady) {
+        pendingMessageRef.current = null;
         sendMessage(firstMessage);
       }
     }
-  }, [firstMessage, isLoading, isNewChat, resolvedProjectId, ensureProject, sendMessage]);
+  }, [
+    firstMessage,
+    isLoading,
+    isNewChat,
+    resolvedProjectId,
+    ensureProject,
+    sendMessage,
+    isSelectionReady,
+  ]);
 
   const handleSend = useCallback(
     async (message: string, images?: AttachedImage[]) => {
+      if (!isSelectionReady) {
+        pendingMessageRef.current = message;
+        return;
+      }
+
       if (!resolvedProjectId) {
         pendingMessageRef.current = message;
         const projId = await ensureProject(message);
@@ -231,7 +276,7 @@ export function ChatWorkspace({
         sendMessage(message, images ? { images } : undefined);
       }
     },
-    [resolvedProjectId, ensureProject, sendMessage]
+    [resolvedProjectId, ensureProject, sendMessage, isSelectionReady]
   );
 
   return (
@@ -242,7 +287,7 @@ export function ChatWorkspace({
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}
-        selectedModel={selectedModel}
+        selectedModel={selectedModel ?? ''}
         onModelChange={handleModelChange}
       />
 
@@ -286,6 +331,11 @@ export function ChatWorkspace({
           </div>
         ) : messages.length === 0 && !isStreaming ? (
           <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
+            {!modelsLoading && !hasConfiguredGenerationProvider && (
+              <div className="w-full max-w-3xl px-4 pb-2">
+                <ProviderSetupBanner />
+              </div>
+            )}
             <MessageSquarePlus size={40} strokeWidth={1} />
             <p className="text-sm font-medium text-[var(--text-primary)]">No messages yet</p>
             <span className="text-xs text-[var(--text-tertiary)]">
@@ -408,10 +458,12 @@ export function ChatWorkspace({
               onSend={handleSend}
               onStop={stopGenerating}
               isStreaming={isStreaming}
-              disabled={isLoading || isExtracting}
+              disabled={
+                isLoading || isExtracting || modelsLoading || !selectedProvider || !selectedModel
+              }
               placeholder="Reply..."
               conversationId={resolvedConversationId}
-              selectedModel={selectedModel}
+              selectedModel={selectedModel ?? ''}
               onModelChange={handleModelChange}
             />
           </div>

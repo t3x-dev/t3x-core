@@ -2,8 +2,12 @@
 
 import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
+import {
+  resolveAvailableModelSelection,
+  useAvailableModels,
+} from '@/hooks/shared/useAvailableModels';
 
 const STARTER_CARDS = [
   {
@@ -28,8 +32,8 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
-
+  const { providers, loading, defaultProvider, defaultModel } = useAvailableModels();
+  const [selectedModel, setSelectedModel] = useState('');
   const handleSend = useCallback(
     (message: string) => {
       if (!message.trim()) return;
@@ -38,9 +42,19 @@ export default function ChatLandingPage() {
     [router]
   );
 
-  const handleModelChange = useCallback((_provider: string, model: string) => {
-    setSelectedModel(model);
-  }, []);
+  useEffect(() => {
+    if (loading) return;
+    const resolved = resolveAvailableModelSelection(
+      providers,
+      null,
+      selectedModel,
+      defaultProvider,
+      defaultModel
+    );
+    if (resolved.model !== selectedModel) {
+      setSelectedModel(resolved.model ?? '');
+    }
+  }, [loading, providers, defaultProvider, defaultModel, selectedModel]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
@@ -69,7 +83,7 @@ export default function ChatLandingPage() {
           onSend={handleSend}
           placeholder="Start a conversation..."
           selectedModel={selectedModel}
-          onModelChange={handleModelChange}
+          onModelChange={(_provider, model) => setSelectedModel(model)}
         />
       </div>
     </div>
