@@ -92,7 +92,7 @@ export class ProviderRegistry {
    */
   setConfigOverrides(overrides: ResolvedConfig): void {
     this.configOverrides = { ...overrides };
-    this.instances.clear();
+    this.syncRoleAssignmentsFromResolvedConfig();
   }
 
   /**
@@ -365,6 +365,24 @@ export class ProviderRegistry {
   /** Get the list of provider IDs assigned to a role (returns a copy). */
   getProviderIdsForRole(role: ProviderRole): string[] {
     return [...(this.roleAssignments.get(role) ?? [])];
+  }
+
+  /**
+   * Recompute active role assignments from the currently resolved config.
+   * Providers are kept in registration order, but only configured providers remain active.
+   */
+  syncRoleAssignmentsFromResolvedConfig(): void {
+    const roleProviders = new Map<ProviderRole, string[]>();
+
+    for (const entry of this.entries.values()) {
+      if (!this.isConfigured(entry.id)) continue;
+      const existing = roleProviders.get(entry.role) ?? [];
+      existing.push(entry.id);
+      roleProviders.set(entry.role, existing);
+    }
+
+    this.roleAssignments = roleProviders;
+    this.instances.clear();
   }
 
   private getResolvedConfig(entry: ProviderEntry): ResolvedConfig {

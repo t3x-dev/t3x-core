@@ -4,6 +4,33 @@ import { AllProvidersFailedError, createProviderRegistry } from '../../providers
 
 describe('ProviderRegistry', () => {
   describe('config overrides', () => {
+    it('recomputes active role assignments when a later provider becomes configured', () => {
+      const reg = createProviderRegistry();
+
+      reg.register({
+        id: 'provider-a',
+        name: 'Provider A',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_A_KEY'],
+        factory: () => ({ id: 'provider-a', generate: vi.fn() }),
+      });
+
+      reg.register({
+        id: 'provider-b',
+        name: 'Provider B',
+        role: 'generation',
+        requiredEnvKeys: ['T3X_PROVIDER_B_KEY'],
+        factory: () => ({ id: 'provider-b', generate: vi.fn() }),
+      });
+
+      expect(reg.getProviderIdsForRole('generation')).toEqual(['provider-a']);
+
+      reg.setConfigOverrides({ T3X_PROVIDER_B_KEY: 'local-secret' });
+
+      expect(reg.getProviderIdsForRole('generation')).toEqual(['provider-b']);
+      expect(reg.getForRole('generation')?.id).toBe('provider-b');
+    });
+
     it('prefers config overrides over process.env while preserving env fallback', () => {
       const envKey = 'T3X_TEST_PROVIDER_KEY';
       const original = process.env[envKey];
