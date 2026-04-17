@@ -4,6 +4,7 @@ import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
 import {
   resolveAvailableModelSelection,
   useAvailableModels,
@@ -32,8 +33,15 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
-  const { providers, loading, defaultProvider, defaultModel } = useAvailableModels();
-  const [selectedModel, setSelectedModel] = useState('');
+  const { providers, loading, hasConfiguredGenerationProvider, defaultProvider, defaultModel } =
+    useAvailableModels();
+  const [selection, setSelection] = useState<{
+    provider: string | null;
+    model: string;
+  }>({
+    provider: null,
+    model: '',
+  });
   const handleSend = useCallback(
     (message: string) => {
       if (!message.trim()) return;
@@ -44,17 +52,23 @@ export default function ChatLandingPage() {
 
   useEffect(() => {
     if (loading) return;
-    const resolved = resolveAvailableModelSelection(
-      providers,
-      null,
-      selectedModel,
-      defaultProvider,
-      defaultModel
-    );
-    if (resolved.model !== selectedModel) {
-      setSelectedModel(resolved.model ?? '');
-    }
-  }, [loading, providers, defaultProvider, defaultModel, selectedModel]);
+    setSelection((current) => {
+      const resolved = resolveAvailableModelSelection(
+        providers,
+        current.provider,
+        current.model,
+        defaultProvider,
+        defaultModel
+      );
+      if (current.provider === resolved.provider && current.model === (resolved.model ?? '')) {
+        return current;
+      }
+      return {
+        provider: resolved.provider,
+        model: resolved.model ?? '',
+      };
+    });
+  }, [loading, providers, defaultProvider, defaultModel]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
@@ -79,11 +93,17 @@ export default function ChatLandingPage() {
           ))}
         </div>
 
+        {!loading && !hasConfiguredGenerationProvider && (
+          <div className="mb-4">
+            <ProviderSetupBanner />
+          </div>
+        )}
+
         <ChatInput
           onSend={handleSend}
           placeholder="Start a conversation..."
-          selectedModel={selectedModel}
-          onModelChange={(_provider, model) => setSelectedModel(model)}
+          selectedModel={selection.model}
+          onModelChange={(provider, model) => setSelection({ provider, model })}
         />
       </div>
     </div>
