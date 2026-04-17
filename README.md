@@ -34,6 +34,51 @@ At release, the public npm surface is centered on `@t3x-dev/core`, `@t3x-dev/yop
 
 <br/>
 
+## Quickstart
+
+Choose the shortest path for what you want to do:
+
+### Use T3X as a library
+
+```bash
+npm install @t3x-dev/core @t3x-dev/yops @t3x-dev/yschema @t3x-dev/api-client
+```
+
+Use this if you want the deterministic engine, YAML operations, schema validation, or the TypeScript API client inside your own app.
+
+### Use the CLI
+
+```bash
+npx @t3x-dev/cli init
+```
+
+Use this if you want the simplest terminal-first way to create a project and work with commits, diffs, merges, and extraction.
+
+### Run the full stack locally
+
+```bash
+docker compose up -d
+```
+
+> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
+
+Use this if you want the self-hosted product experience with WebUI + API.
+
+### Develop from source
+
+```bash
+git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
+pnpm install && pnpm build
+pnpm dev:api     # API at localhost:8000
+pnpm dev:webui   # WebUI at localhost:3000
+```
+
+Requires Node.js 20+ and pnpm 10+.
+
+Use this if you want to contribute to T3X itself or run the source-first apps locally.
+
+<br/>
+
 ## How it works
 
 T3X turns unstructured text into versioned, structured knowledge through five stages:
@@ -163,39 +208,6 @@ rules:
 Built-in structural rules that run without a schema &mdash; checks key naming, value quality, list hygiene, and tree depth. When issues are auto-fixable, ylint emits YOps operations directly.
 
 <br/>
-
-## Getting started
-
-### Docker (full stack)
-
-```bash
-docker compose up -d
-```
-
-> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
-
-### CLI
-
-```bash
-npx @t3x-dev/cli init
-```
-
-### Packages
-
-```bash
-npm install @t3x-dev/core @t3x-dev/yops @t3x-dev/yschema @t3x-dev/api-client
-```
-
-### From source
-
-```bash
-git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
-pnpm install && pnpm build
-pnpm dev:api     # API at localhost:8000
-pnpm dev:webui   # WebUI at localhost:3000
-```
-
-Requires Node.js 20+ and pnpm 10+.
 
 ### Configuration
 
