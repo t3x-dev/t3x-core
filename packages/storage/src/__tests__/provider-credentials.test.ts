@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { getGlobalSetting } from '../queries/global-settings';
 import { createTestDB } from './setup';
 import {
   deleteProviderCredential,
@@ -36,6 +37,23 @@ describe('provider credentials', () => {
     expect(bundle.safe.openai?.configured).toBe(true);
     expect(bundle.safe.openai?.defaultModel).toBe('gpt-4o-mini');
     expect(JSON.stringify(bundle.safe)).not.toContain('sk-local-openai');
+  });
+
+  it('keeps provider entries independent in global_settings', async () => {
+    await upsertProviderCredential(db, {
+      providerId: 'anthropic',
+      apiKey: 'sk-ant-local',
+      defaultModel: 'claude-sonnet-4-20250514',
+    });
+    await upsertProviderCredential(db, {
+      providerId: 'openai',
+      apiKey: 'sk-openai-local',
+      defaultModel: 'gpt-4o-mini',
+    });
+
+    const bundle = await getProviderCredentialBundle(db);
+    expect(bundle.secrets.ANTHROPIC_API_KEY).toBe('sk-ant-local');
+    expect(bundle.secrets.OPENAI_API_KEY).toBe('sk-openai-local');
   });
 
   it('removes a provider credential cleanly', async () => {
@@ -96,5 +114,23 @@ describe('provider credentials', () => {
     expect(bundle.safe.openai?.lastTestError).toBe('[redacted]');
     expect(JSON.stringify(bundle.safe)).not.toContain(oldKey);
     expect(JSON.stringify(bundle.safe)).not.toContain(newKey);
+
+    const persisted = await getGlobalSetting<Record<string, unknown>>(
+      db,
+      'local_provider_credentials_v1_openai'
+    );
+    expect(persisted).toBeDefined();
+    expect(JSON.stringify(persisted)).not.toContain(oldKey);
+    expect(JSON.stringify(persisted)).toContain(newKey);
+    expect((persisted as { lastTestError?: string }).lastTestError).toBe('[redacted]');
+  });
+
+  it('throws when updating test result for a missing provider credential', async () => {
+    await expect(
+      updateProviderCredentialTestResult(db, 'google', {
+        lastTestStatus: 'error',
+        lastTestError: 'provider unavailable',
+      })
+    ).rejects.toThrow('Provider credential not found for google');
   });
 });

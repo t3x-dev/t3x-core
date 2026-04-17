@@ -2,7 +2,8 @@ import type { ResolvedConfig } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import { deleteGlobalSetting, getGlobalSetting, setGlobalSetting } from './global-settings';
 
-const PROVIDER_CREDENTIALS_KEY = 'local_provider_credentials_v1';
+const PROVIDER_CREDENTIAL_KEY_PREFIX = 'local_provider_credentials_v1_';
+const SAFE_LAST_TEST_ERROR = '[redacted]';
 
 export type LocalProviderId = 'anthropic' | 'openai' | 'google';
 
@@ -16,8 +17,6 @@ interface StoredProviderCredential {
   lastTestedAt: string | null;
   lastTestError: string | null;
 }
-
-type ProviderCredentialStore = Partial<Record<LocalProviderId, StoredProviderCredential>>;
 
 type ProviderCredentialSafe = {
   configured: boolean;
@@ -91,29 +90,34 @@ function normalizeTimestamp(value: Date | string | null | undefined): string | n
 }
 
 function toSafeLastTestError(lastTestError: string | null): string | null {
-  return lastTestError ? '[redacted]' : null;
+  return lastTestError ? SAFE_LAST_TEST_ERROR : null;
 }
 
-function redactSecret(text: string | null, secret: string | null | undefined): string | null {
-  if (!text || !secret) return text;
-  return text.split(secret).join('[redacted]');
+function providerCredentialKey(providerId: LocalProviderId): string {
+  return `${PROVIDER_CREDENTIAL_KEY_PREFIX}${providerId}`;
 }
 
-async function readProviderCredentialStore(db: AnyDB): Promise<ProviderCredentialStore> {
-  return (await getGlobalSetting<ProviderCredentialStore>(db, PROVIDER_CREDENTIALS_KEY)) ?? {};
+async function readProviderCredential(
+  db: AnyDB,
+  providerId: LocalProviderId
+): Promise<StoredProviderCredential | null> {
+  return (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ?? null;
 }
 
-async function writeProviderCredentialStore(db: AnyDB, store: ProviderCredentialStore): Promise<void> {
-  await setGlobalSetting(db, PROVIDER_CREDENTIALS_KEY, store);
+async function writeProviderCredential(
+  db: AnyDB,
+  providerId: LocalProviderId,
+  credential: StoredProviderCredential
+): Promise<void> {
+  await setGlobalSetting(db, providerCredentialKey(providerId), credential);
 }
 
 export async function getProviderCredentialBundle(db: AnyDB): Promise<ProviderCredentialBundle> {
-  const store = await readProviderCredentialStore(db);
   const secrets: ResolvedConfig = {};
   const safe = createEmptySafeState();
 
   for (const providerId of LOCAL_PROVIDER_IDS) {
-    const entry = store[providerId];
+    const entry = await readProviderCredential(db, providerId);
     if (!entry) continue;
 
     if (entry.apiKey) {
@@ -137,19 +141,17 @@ export async function upsertProviderCredential(
   input: UpsertProviderCredentialInput
 ): Promise<ProviderCredentialBundle> {
   const providerId = normalizeProviderId(input.providerId);
-  const store = await readProviderCredentialStore(db);
   const now = new Date().toISOString();
+  const previous = await readProviderCredential(db, providerId);
 
-  store[providerId] = {
+  await writeProviderCredential(db, providerId, {
     apiKey: input.apiKey,
     defaultModel: input.defaultModel ?? null,
     updatedAt: now,
-    lastTestStatus: store[providerId]?.lastTestStatus ?? null,
-    lastTestedAt: store[providerId]?.lastTestedAt ?? null,
-    lastTestError: redactSecret(store[providerId]?.lastTestError ?? null, input.apiKey),
-  };
-
-  await writeProviderCredentialStore(db, store);
+    lastTestStatus: previous?.lastTestStatus ?? null,
+    lastTestedAt: previous?.lastTestedAt ?? null,
+    lastTestError: toSafeLastTestError(previous?.lastTestError ?? null),
+  });
   return getProviderCredentialBundle(db);
 }
 
@@ -159,22 +161,19 @@ export async function updateProviderCredentialTestResult(
   input: UpdateProviderCredentialTestResultInput
 ): Promise<ProviderCredentialBundle> {
   providerId = normalizeProviderId(providerId);
-  const store = await readProviderCredentialStore(db);
-  const existing = store[providerId];
+  const existing = await readProviderCredential(db, providerId);
 
   if (!existing) {
-    return getProviderCredentialBundle(db);
+    throw new Error(`Provider credential not found for ${providerId}`);
   }
 
-  store[providerId] = {
+  await writeProviderCredential(db, providerId, {
     ...existing,
     lastTestStatus: input.lastTestStatus,
     lastTestedAt: normalizeTimestamp(input.lastTestedAt ?? new Date()),
-    lastTestError: redactSecret(input.lastTestError ?? null, existing.apiKey),
+    lastTestError: input.lastTestError ? SAFE_LAST_TEST_ERROR : null,
     updatedAt: new Date().toISOString(),
-  };
-
-  await writeProviderCredentialStore(db, store);
+  });
   return getProviderCredentialBundle(db);
 }
 
@@ -183,14 +182,7 @@ export async function deleteProviderCredential(
   providerId: LocalProviderId
 ): Promise<ProviderCredentialBundle> {
   providerId = normalizeProviderId(providerId);
-  const store = await readProviderCredentialStore(db);
-
-  delete store[providerId];
-  if (Object.keys(store).length === 0) {
-    await deleteGlobalSetting(db, PROVIDER_CREDENTIALS_KEY);
-  } else {
-    await writeProviderCredentialStore(db, store);
-  }
+  await deleteGlobalSetting(db, providerCredentialKey(providerId));
 
   return getProviderCredentialBundle(db);
 }
