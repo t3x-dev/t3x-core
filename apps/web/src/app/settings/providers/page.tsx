@@ -18,15 +18,24 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CheckCircle2, Circle, GripVertical, Loader2, RefreshCw, Zap } from 'lucide-react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
 import {
+  deleteLocalProvider,
+  getLocalProviderStatus,
   getProviderRoles,
+  type LocalProviderCredentialInput,
+  type LocalProviderId,
+  type LocalProviderStatus,
   listProviders,
   type ProviderInfo,
   type RoleAssignment,
   type TestConnectionResult,
   testProvider,
+  toLocalProviderId,
   updateProviderRoles,
+  upsertLocalProvider,
 } from '@/infrastructure';
 import { cn } from '@/utils/cn';
 
@@ -54,11 +63,13 @@ function SortableProviderCard({
   provider,
   testResult,
   onTest,
+  onManageCredentials,
   isDraggable,
 }: {
   provider: ProviderInfo;
   testResult: TestConnectionResult | 'loading' | undefined;
   onTest: (id: string) => void;
+  onManageCredentials: (provider: ProviderInfo) => void;
   isDraggable: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -73,6 +84,8 @@ function SortableProviderCard({
 
   const isTesting = testResult === 'loading';
   const result = testResult && testResult !== 'loading' ? testResult : null;
+  const localProviderId = getLocalGenerationProviderId(provider);
+  const displayName = getSettingsProviderName(provider);
 
   return (
     <div
@@ -106,7 +119,7 @@ function SortableProviderCard({
           <Circle className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
         )}
         <div>
-          <div className="text-sm font-medium text-[var(--text-primary)]">{provider.name}</div>
+          <div className="text-sm font-medium text-[var(--text-primary)]">{displayName}</div>
           <div className="text-xs text-[var(--text-tertiary)]">
             {provider.configured ? (
               <>
@@ -135,6 +148,20 @@ function SortableProviderCard({
           <span className="text-xs text-[var(--text-tertiary)] hidden sm:inline">
             {provider.available_models.length} models
           </span>
+        )}
+        {localProviderId && (
+          <button
+            type="button"
+            onClick={() => onManageCredentials(provider)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+              'border border-[var(--stroke-divider)]',
+              'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+              'hover:bg-[var(--hover-bg)] transition-colors'
+            )}
+          >
+            {provider.configured ? 'Manage' : 'Connect'}
+          </button>
         )}
         {provider.configured && (
           <button
@@ -167,12 +194,14 @@ function SortableRoleGroup({
   providers,
   testResults,
   onTest,
+  onManageCredentials,
   onReorder,
 }: {
   role: RoleGroup;
   providers: ProviderInfo[];
   testResults: Record<string, TestConnectionResult | 'loading'>;
   onTest: (id: string) => void;
+  onManageCredentials: (provider: ProviderInfo) => void;
   onReorder: (role: RoleGroup, oldIndex: number, newIndex: number) => void;
 }) {
   const sensors = useSensors(
@@ -219,6 +248,7 @@ function SortableRoleGroup({
                 provider={provider}
                 testResult={testResults[provider.id]}
                 onTest={onTest}
+                onManageCredentials={onManageCredentials}
                 isDraggable={configured.length > 1}
               />
             ))}
@@ -231,6 +261,7 @@ function SortableRoleGroup({
             provider={provider}
             testResult={testResults[provider.id]}
             onTest={onTest}
+            onManageCredentials={onManageCredentials}
             isDraggable={false}
           />
         ))}
@@ -245,6 +276,14 @@ function SortableRoleGroup({
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [dialogProvider, setDialogProvider] = useState<{
+    id: LocalProviderId;
+    name: string;
+    availableModels: string[];
+  } | null>(null);
+  const [dialogStatus, setDialogStatus] = useState<LocalProviderStatus | null>(null);
+  const [dialogStatusLoading, setDialogStatusLoading] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestConnectionResult | 'loading'>>(
@@ -252,16 +291,18 @@ export default function ProvidersPage() {
   );
   const [saving, setSaving] = useState(false);
 
+  const fetchProviders = useCallback(async (): Promise<ProviderInfo[]> => {
+    const [data, roles] = await Promise.all([listProviders(), getProviderRoles()]);
+    return reorderByRoles(data, roles);
+  }, []);
+
   const loadProviders = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
       setTestResults({});
 
-      const [data, roles] = await Promise.all([listProviders(), getProviderRoles()]);
-
-      // Reorder providers based on saved role assignments
-      const reordered = reorderByRoles(data, roles);
+      const reordered = await fetchProviders();
       setProviders(reordered);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load providers';
@@ -270,11 +311,48 @@ export default function ProvidersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchProviders]);
+
+  const refreshProvidersSilently = useCallback(async () => {
+    const reordered = await fetchProviders();
+    setProviders(reordered);
+  }, [fetchProviders]);
 
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
+
+  useEffect(() => {
+    if (!dialogProvider) {
+      setDialogStatus(null);
+      setDialogStatusLoading(false);
+      setDialogError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDialogStatusLoading(true);
+    setDialogError(null);
+
+    void getLocalProviderStatus(dialogProvider.id)
+      .then((status) => {
+        if (cancelled) return;
+        setDialogStatus(status);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setDialogError(err instanceof Error ? err.message : 'Failed to load provider status');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDialogStatusLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogProvider]);
 
   const handleTest = async (providerId: string) => {
     setTestResults((prev) => ({ ...prev, [providerId]: 'loading' }));
@@ -286,6 +364,61 @@ export default function ProvidersPage() {
         ...prev,
         [providerId]: { ok: false, error: 'Connection test failed' },
       }));
+    }
+  };
+
+  const handleManageCredentials = (provider: ProviderInfo) => {
+    const localProviderId = getLocalGenerationProviderId(provider);
+    if (!localProviderId) return;
+
+    setDialogStatus(null);
+    setDialogError(null);
+    setDialogProvider({
+      id: localProviderId,
+      name: getSettingsProviderName(provider),
+      availableModels: provider.available_models ?? [],
+    });
+  };
+
+  const handleDialogSave = async (input: LocalProviderCredentialInput) => {
+    if (!dialogProvider) return;
+
+    setDialogError(null);
+
+    try {
+      const status = await upsertLocalProvider(dialogProvider.id, input);
+      setDialogStatus(status);
+      clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
+      try {
+        await refreshProvidersSilently();
+      } catch (refreshError) {
+        console.error('Failed to refresh providers after credential save:', refreshError);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save provider credentials';
+      setDialogError(message);
+      throw err;
+    }
+  };
+
+  const handleDialogDelete = async () => {
+    if (!dialogProvider) return;
+
+    setDialogError(null);
+
+    try {
+      const status = await deleteLocalProvider(dialogProvider.id);
+      setDialogStatus(status);
+      clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
+      try {
+        await refreshProvidersSilently();
+      } catch (refreshError) {
+        console.error('Failed to refresh providers after credential removal:', refreshError);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove provider credentials';
+      setDialogError(message);
+      throw err;
     }
   };
 
@@ -372,6 +505,7 @@ export default function ProvidersPage() {
               providers={roleProviders}
               testResults={testResults}
               onTest={handleTest}
+              onManageCredentials={handleManageCredentials}
               onReorder={handleReorder}
             />
           );
@@ -393,6 +527,34 @@ export default function ProvidersPage() {
           Refresh
         </button>
       </div>
+
+      {dialogProvider && (
+        <ProviderCredentialDialog
+          providerId={dialogProvider.id}
+          providerName={dialogProvider.name}
+          availableModels={dialogProvider.availableModels}
+          error={dialogError}
+          open={dialogProvider !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDialogProvider(null);
+            }
+          }}
+          onDelete={handleDialogDelete}
+          onSave={handleDialogSave}
+          status={
+            dialogStatus
+              ? {
+                  configured: dialogStatus.configured,
+                  defaultModel: dialogStatus.default_model,
+                  lastTestStatus: dialogStatus.last_test_status,
+                  lastTestError: dialogStatus.last_test_error,
+                }
+              : null
+          }
+          statusLoading={dialogStatusLoading}
+        />
+      )}
     </div>
   );
 }
@@ -446,4 +608,32 @@ function reorderByRoles(providers: ProviderInfo[], roles: RoleAssignment[]): Pro
   }
 
   return result;
+}
+
+function getLocalGenerationProviderId(provider: ProviderInfo): LocalProviderId | null {
+  if (provider.role !== 'generation') return null;
+  return toLocalProviderId(provider.id);
+}
+
+function getSettingsProviderName(provider: ProviderInfo): string {
+  const localProviderId = getLocalGenerationProviderId(provider);
+  if (localProviderId === 'google') return 'Google';
+  return provider.name;
+}
+
+function clearTestResultsForLocalProvider(
+  providerId: LocalProviderId,
+  setTestResults: Dispatch<SetStateAction<Record<string, TestConnectionResult | 'loading'>>>
+) {
+  setTestResults((prev) => {
+    const next = { ...prev };
+
+    for (const key of Object.keys(next)) {
+      if (toLocalProviderId(key) === providerId) {
+        delete next[key];
+      }
+    }
+
+    return next;
+  });
 }
