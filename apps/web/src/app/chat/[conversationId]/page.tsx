@@ -12,6 +12,8 @@ export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
+  const initialProvider = searchParams.get('provider');
+  const initialModel = searchParams.get('model');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
 
@@ -57,6 +59,8 @@ export default function ConversationPage() {
         conversationId={conversationId}
         projectId={activeProjectId ?? undefined}
         firstMessage={firstMessage ?? undefined}
+        initialProvider={initialProvider ?? undefined}
+        initialModel={initialModel ?? undefined}
         className="flex-1 min-w-0"
         inheritFromCommitHash={inheritFromCommitHash}
         onInheritComplete={clearInherit}

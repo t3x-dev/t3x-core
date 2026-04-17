@@ -42,12 +42,17 @@ export default function ChatLandingPage() {
     provider: null,
     model: '',
   });
+
   const handleSend = useCallback(
     (message: string) => {
-      if (!message.trim()) return;
-      router.push(`/chat/new?firstMessage=${encodeURIComponent(message)}`);
+      if (!message.trim() || !hasConfiguredGenerationProvider) return;
+
+      const params = new URLSearchParams({ firstMessage: message });
+      if (selection.provider) params.set('provider', selection.provider);
+      if (selection.model) params.set('model', selection.model);
+      router.push(`/chat/new?${params.toString()}`);
     },
-    [router]
+    [router, hasConfiguredGenerationProvider, selection.model, selection.provider]
   );
 
   useEffect(() => {
@@ -81,8 +86,9 @@ export default function ChatLandingPage() {
             <button
               key={card.title}
               type="button"
+              disabled={!hasConfiguredGenerationProvider}
               onClick={() => handleSend(card.prompt)}
-              className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40"
+              className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <card.icon className="h-4 w-4 text-[var(--text-tertiary)]" />
               <div>
@@ -103,6 +109,7 @@ export default function ChatLandingPage() {
           onSend={handleSend}
           placeholder="Start a conversation..."
           selectedModel={selection.model}
+          disabled={!hasConfiguredGenerationProvider || loading}
           onModelChange={(provider, model) => setSelection({ provider, model })}
         />
       </div>

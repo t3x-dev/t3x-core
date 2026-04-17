@@ -33,6 +33,8 @@ interface ChatWorkspaceProps {
   conversationId: string;
   projectId?: string;
   firstMessage?: string;
+  initialProvider?: string;
+  initialModel?: string;
   className?: string;
   /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
   onConversationCreated?: (conversationId: string) => void;
@@ -46,6 +48,8 @@ export function ChatWorkspace({
   conversationId,
   projectId,
   firstMessage,
+  initialProvider,
+  initialModel,
   className,
   onConversationCreated: onConversationCreatedProp,
   inheritFromCommitHash,
@@ -90,8 +94,8 @@ export function ChatWorkspace({
   }, [resolvedProjectId, fetchPins]);
 
   // Model selection state
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(initialProvider ?? null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(initialModel ?? null);
 
   const handleModelChange = useCallback((provider: string, model: string) => {
     setSelectedProvider(provider);
