@@ -1,12 +1,12 @@
 import { spawn } from 'node:child_process';
-import { applySourceDevAuthDefault, getDevTargetFilter } from './lib/sourceDevAuthDefaults.mjs';
+import { applySourceDevDefaults, getDevTargetFilter } from './lib/sourceDevAuthDefaults.mjs';
 
 const target = process.argv[2];
 const filter = getDevTargetFilter(target);
 const extraArgs = process.argv.slice(3);
 
 const child = spawn('pnpm', ['turbo', 'run', 'dev', `--filter=${filter}`, ...extraArgs], {
-  env: applySourceDevAuthDefault(process.env),
+  env: applySourceDevDefaults(target, process.env),
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });

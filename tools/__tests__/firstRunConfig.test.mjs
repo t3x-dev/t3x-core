@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { applySourceDevAuthDefault } from '../lib/sourceDevAuthDefaults.mjs';
+import { applySourceDevDefaults } from '../lib/sourceDevAuthDefaults.mjs';
 
 const root = new URL('../..', import.meta.url);
 
@@ -48,14 +48,14 @@ test('README documents the first-run auth split accurately', () => {
 });
 
 test('source-dev auth defaults only apply when the shell has not already set AUTH_DISABLED', () => {
-  assert.equal(applySourceDevAuthDefault({ PATH: '/usr/bin' }).AUTH_DISABLED, 'true');
+  assert.equal(applySourceDevDefaults('api', { PATH: '/usr/bin' }).AUTH_DISABLED, 'true');
   assert.equal(
-    applySourceDevAuthDefault({ PATH: '/usr/bin', AUTH_DISABLED: 'false' }).AUTH_DISABLED,
+    applySourceDevDefaults('api', { PATH: '/usr/bin', AUTH_DISABLED: 'false' }).AUTH_DISABLED,
     'false'
   );
 });
 
-test('turbo dev tasks preserve AUTH_DISABLED for source-dev launches', () => {
+test('turbo dev tasks preserve source-dev environment defaults', () => {
   const turboConfig = readJson('turbo.json');
   const taskEnv = turboConfig.tasks?.dev?.env ?? [];
   const globalEnv = turboConfig.globalEnv ?? [];
@@ -63,6 +63,10 @@ test('turbo dev tasks preserve AUTH_DISABLED for source-dev launches', () => {
   assert.ok(
     taskEnv.includes('AUTH_DISABLED') || globalEnv.includes('AUTH_DISABLED'),
     'expected turbo dev tasks to preserve AUTH_DISABLED'
+  );
+  assert.ok(
+    taskEnv.includes('NEXT_PUBLIC_API_URL') || globalEnv.includes('NEXT_PUBLIC_API_URL'),
+    'expected turbo dev tasks to preserve NEXT_PUBLIC_API_URL'
   );
 });
 

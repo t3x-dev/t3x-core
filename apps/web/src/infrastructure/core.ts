@@ -3,9 +3,10 @@
  */
 
 import type { ApiCommitAnchors, ApiResponse } from './types';
+import { API_BASE as RESOLVED_API_BASE } from '@/utils/apiBase';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+export const API_BASE = RESOLVED_API_BASE;
 export const API_V1 = `${API_BASE}/api/v1`;
 export const DEFAULT_TIMEOUT = 10000;
 

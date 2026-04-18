@@ -3,15 +3,26 @@ const DEV_TARGET_FILTERS = {
   webui: 't3x-webui',
 };
 
-export function applySourceDevAuthDefault(env) {
-  if (env.AUTH_DISABLED !== undefined) {
-    return { ...env };
+const SOURCE_DEV_DEFAULTS = {
+  AUTH_DISABLED: 'true',
+};
+
+const WEBUI_SOURCE_DEV_DEFAULTS = {
+  NEXT_PUBLIC_API_URL: 'http://localhost:8000',
+};
+
+export function applySourceDevDefaults(target, env) {
+  const nextEnv = { ...env };
+
+  if (nextEnv.AUTH_DISABLED === undefined) {
+    nextEnv.AUTH_DISABLED = SOURCE_DEV_DEFAULTS.AUTH_DISABLED;
   }
 
-  return {
-    ...env,
-    AUTH_DISABLED: 'true',
-  };
+  if (target === 'webui' && nextEnv.NEXT_PUBLIC_API_URL === undefined) {
+    nextEnv.NEXT_PUBLIC_API_URL = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_API_URL;
+  }
+
+  return nextEnv;
 }
 
 export function getDevTargetFilter(target) {

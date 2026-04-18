@@ -10,8 +10,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { setSessionKey, setSessionUser } from '@/infrastructure/session';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+import { API_BASE } from '@/utils/apiBase';
 
 function LoginForm() {
   const router = useRouter();

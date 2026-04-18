@@ -24,7 +24,7 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "env": ["AUTH_DISABLED"]
+      "env": ["AUTH_DISABLED", "NEXT_PUBLIC_API_URL"]
     },
     "clean": {
       "cache": false
