@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { applySourceDevAuthDefault } from '../lib/sourceDevAuthDefaults.mjs';
 
 const root = new URL('../..', import.meta.url);
 
@@ -30,25 +31,27 @@ test('docker-compose.yml defaults auth on for docker and self-hosted deployments
 test('README documents the first-run auth split accurately', () => {
   const readme = readText('README.md');
 
+  assert.match(readme, /## Quickstart/);
+  assert.match(readme, /Run the full stack locally/);
+  assert.match(readme, /Develop from source/);
+  assert.match(readme, /Docker and self-hosted runs keep auth on by default/);
+  assert.match(readme, /source-dev mode and open straight into the app on `localhost`/);
   assert.match(
     readme,
-    /Docker and self-hosted runs keep auth on by default, so the first WebUI visit goes through the built-in username\/password login at `\/login`\./
+    /set `AUTH_DISABLED=false` in the shell where you start both dev processes/i
   );
-  assert.match(
-    readme,
-    /When `AUTH_DISABLED` is unset, `pnpm dev:api` and `pnpm dev:webui` default to source-dev mode and open straight into the app on `localhost`\./
-  );
-  assert.match(
-    readme,
-    /- Source development \(`pnpm dev:api`, `pnpm dev:webui`\) opens directly into the app by default\./
-  );
-  assert.match(
-    readme,
-    /- Docker and self-host keep auth on by default and use the built-in username\/password login\./
+  assert.match(readme, /- Docker and self-host keep auth on by default/);
+});
+
+test('source-dev auth defaults only apply when the shell has not already set AUTH_DISABLED', () => {
+  assert.equal(applySourceDevAuthDefault({ PATH: '/usr/bin' }).AUTH_DISABLED, 'true');
+  assert.equal(
+    applySourceDevAuthDefault({ PATH: '/usr/bin', AUTH_DISABLED: 'false' }).AUTH_DISABLED,
+    'false'
   );
 });
 
-test('.env.example documents provider keys and source-dev auth overrides', () => {
+test('.env.example documents provider keys and shell-based source-dev auth overrides', () => {
   const envExample = readText('.env.example');
 
   assert.match(envExample, /^ANTHROPIC_API_KEY=$/m);
@@ -60,7 +63,11 @@ test('.env.example documents provider keys and source-dev auth overrides', () =>
   );
   assert.match(
     envExample,
-    /Set AUTH_DISABLED=false here or in your shell if you want to exercise the login/
+    /export[\s\S]*AUTH_DISABLED=false in the same shell before starting both dev processes/i
+  );
+  assert.match(
+    envExample,
+    /The source-dev launcher sets the default before the apps read `\.env`\./
   );
   assert.match(
     envExample,
