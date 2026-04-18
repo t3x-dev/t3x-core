@@ -63,6 +63,7 @@ docker compose up -d
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
 Use this if you want the self-hosted product experience with WebUI + API.
+Docker and self-hosted runs keep auth on by default, so the first WebUI visit goes through the built-in username/password login at `/login`.
 
 ### Develop from source
 
@@ -76,6 +77,8 @@ pnpm dev:webui   # WebUI at localhost:3000
 Requires Node.js 20+ and pnpm 10+.
 
 Use this if you want to contribute to T3X itself or run the source-first apps locally.
+When `AUTH_DISABLED` is unset, `pnpm dev:api` and `pnpm dev:webui` default to source-dev mode and open straight into the app on `localhost`.
+Set `AUTH_DISABLED=false` in your shell or `.env` if you want to exercise the login flow during local source development.
 
 <br/>
 
@@ -216,7 +219,14 @@ Built-in structural rules that run without a schema &mdash; checks key naming, v
 <project>/.t3x/config.json  # Project-specific settings
 ```
 
-The core engine works without any API key. To use extraction, add an Anthropic or Google AI key.
+Copy `.env.example` to `.env` to add provider keys or override auth behavior for source development.
+
+The core engine works without any API key. To use extraction or chat, add an Anthropic, OpenAI, or Google AI Studio key.
+
+First-run auth defaults:
+
+- Source development (`pnpm dev:api`, `pnpm dev:webui`) opens directly into the app by default.
+- Docker and self-host keep auth on by default and use the built-in username/password login.
 
 <br/>
 

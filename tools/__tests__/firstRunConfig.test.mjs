@@ -26,3 +26,45 @@ test('docker-compose.yml defaults auth on for docker and self-hosted deployments
   assert.match(webuiSection, /^\s*- AUTH_DISABLED=\$\{AUTH_DISABLED:-false\}$/m);
   assert.match(dockerCompose, /auth-on by default/i);
 });
+
+test('README documents the first-run auth split accurately', () => {
+  const readme = readText('README.md');
+
+  assert.match(
+    readme,
+    /Docker and self-hosted runs keep auth on by default, so the first WebUI visit goes through the built-in username\/password login at `\/login`\./
+  );
+  assert.match(
+    readme,
+    /When `AUTH_DISABLED` is unset, `pnpm dev:api` and `pnpm dev:webui` default to source-dev mode and open straight into the app on `localhost`\./
+  );
+  assert.match(
+    readme,
+    /- Source development \(`pnpm dev:api`, `pnpm dev:webui`\) opens directly into the app by default\./
+  );
+  assert.match(
+    readme,
+    /- Docker and self-host keep auth on by default and use the built-in username\/password login\./
+  );
+});
+
+test('.env.example documents provider keys and source-dev auth overrides', () => {
+  const envExample = readText('.env.example');
+
+  assert.match(envExample, /^ANTHROPIC_API_KEY=$/m);
+  assert.match(envExample, /^OPENAI_API_KEY=$/m);
+  assert.match(envExample, /^GOOGLE_AI_STUDIO_KEY=$/m);
+  assert.match(
+    envExample,
+    /Source development \(`pnpm dev:api`, `pnpm dev:webui`\) defaults AUTH_DISABLED=true/
+  );
+  assert.match(
+    envExample,
+    /Set AUTH_DISABLED=false here or in your shell if you want to exercise the login/
+  );
+  assert.match(
+    envExample,
+    /Docker and other self-hosted deployments keep auth on by default through/
+  );
+  assert.match(envExample, /^AUTH_DISABLED=$/m);
+});
