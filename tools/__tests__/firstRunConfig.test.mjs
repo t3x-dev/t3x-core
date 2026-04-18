@@ -17,8 +17,12 @@ test('package.json dev scripts route through the source launcher', () => {
 
 test('docker-compose.yml defaults auth on for docker and self-hosted deployments', () => {
   const dockerCompose = readText('docker-compose.yml');
+  const apiSection = dockerCompose.match(/  t3x-api:\n([\s\S]*?)\n  # ============================================\n  # T3X WebUI/m)?.[1];
+  const webuiSection = dockerCompose.match(/  t3x-webui:\n([\s\S]*?)\n  # ============================================\n  # T3X Runner/m)?.[1];
 
-  assert.match(dockerCompose, /t3x-api:[\s\S]*AUTH_DISABLED=\$\{AUTH_DISABLED:-false\}/);
-  assert.match(dockerCompose, /t3x-webui:[\s\S]*AUTH_DISABLED=\$\{AUTH_DISABLED:-false\}/);
+  assert.ok(apiSection, 'expected to find the t3x-api service section');
+  assert.ok(webuiSection, 'expected to find the t3x-webui service section');
+  assert.match(apiSection, /^\s*- AUTH_DISABLED=\$\{AUTH_DISABLED:-false\}$/m);
+  assert.match(webuiSection, /^\s*- AUTH_DISABLED=\$\{AUTH_DISABLED:-false\}$/m);
   assert.match(dockerCompose, /auth-on by default/i);
 });
