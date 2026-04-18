@@ -9,8 +9,12 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
+function readJson(relativePath) {
+  return JSON.parse(readText(relativePath));
+}
+
 test('package.json dev scripts route through the source launcher', () => {
-  const packageJson = JSON.parse(readText('package.json'));
+  const packageJson = readJson('package.json');
 
   assert.equal(packageJson.scripts['dev:api'], 'node tools/dev-source-runner.mjs api');
   assert.equal(packageJson.scripts['dev:webui'], 'node tools/dev-source-runner.mjs webui');
@@ -48,6 +52,17 @@ test('source-dev auth defaults only apply when the shell has not already set AUT
   assert.equal(
     applySourceDevAuthDefault({ PATH: '/usr/bin', AUTH_DISABLED: 'false' }).AUTH_DISABLED,
     'false'
+  );
+});
+
+test('turbo dev tasks preserve AUTH_DISABLED for source-dev launches', () => {
+  const turboConfig = readJson('turbo.json');
+  const taskEnv = turboConfig.tasks?.dev?.env ?? [];
+  const globalEnv = turboConfig.globalEnv ?? [];
+
+  assert.ok(
+    taskEnv.includes('AUTH_DISABLED') || globalEnv.includes('AUTH_DISABLED'),
+    'expected turbo dev tasks to preserve AUTH_DISABLED'
   );
 });
 
