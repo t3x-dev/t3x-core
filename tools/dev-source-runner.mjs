@@ -1,16 +1,25 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { applySourceDevAuthDefault, getDevTargetFilter } from './lib/sourceDevAuthDefaults.mjs';
 
 const target = process.argv[2];
 const filter = getDevTargetFilter(target);
+const extraArgs = process.argv.slice(3);
 
-const result = spawnSync('pnpm', ['turbo', 'run', 'dev', `--filter=${filter}`], {
+const child = spawn('pnpm', ['turbo', 'run', 'dev', `--filter=${filter}`, ...extraArgs], {
   env: applySourceDevAuthDefault(process.env),
   stdio: 'inherit',
+  shell: process.platform === 'win32',
 });
 
-if (result.error) {
-  throw result.error;
-}
+child.on('error', (error) => {
+  throw error;
+});
 
-process.exit(result.status ?? 1);
+child.on('close', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+
+  process.exit(code ?? 1);
+});
