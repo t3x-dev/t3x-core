@@ -1,0 +1,296 @@
+// @vitest-environment jsdom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
+
+vi.mock('@/queries/llm', () => ({
+  fetchAvailableModels: vi.fn(),
+}));
+
+vi.mock('@/queries/providerStatus', () => ({
+  fetchLocalProviderStatus: vi.fn(),
+}));
+
+import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
+import { fetchAvailableModels } from '@/queries/llm';
+import { fetchLocalProviderStatus } from '@/queries/providerStatus';
+
+function makeModel(id: string, label: string) {
+  return { id, label, capabilities: [], max_output_tokens: 4096 };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  cleanupRoots();
+});
+
+describe('useAvailableModels', () => {
+  it('keeps env-backed providers usable when no local credentials are stored', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
+      const defaults = {
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      };
+
+      return {
+        provider:
+          providerId === 'anthropic' ? 'anthropic' : providerId === 'openai' ? 'openai' : 'google',
+        ...defaults,
+      } as never;
+    });
+
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
+      generation_provider_order: ['anthropic', 'openai', 'google'],
+      default_provider: 'anthropic',
+      providers: [
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: false,
+          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
+        },
+        {
+          name: 'openai',
+          label: 'OpenAI',
+          available: true,
+          models: [makeModel('gpt-4.1', 'GPT-4.1')],
+        },
+        {
+          name: 'google',
+          label: 'Google',
+          available: false,
+          models: [makeModel('gemini-2.5-pro', 'Gemini 2.5 Pro')],
+        },
+      ],
+    } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    expect(result.current.loading).toBe(true);
+
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.hasConfiguredGenerationProvider).toBe(true);
+    expect(result.current.providers).toEqual([
+      {
+        name: 'openai',
+        label: 'OpenAI',
+        available: true,
+        models: [makeModel('gpt-4.1', 'GPT-4.1')],
+      },
+    ]);
+    expect(result.current.defaultProvider).toBe('openai');
+    expect(result.current.defaultModel).toBe('gpt-4.1');
+
+    const loaded = await result.current.loadModels();
+    expect(loaded.providers).toEqual(result.current.providers);
+    unmount();
+  });
+
+  it('prefers a usable local default provider and model when they are available', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
+      if (providerId === 'anthropic') {
+        return {
+          provider: 'anthropic',
+          configured: true,
+          default_model: 'claude-sonnet-4-20250514',
+          last_test_status: 'ok',
+          last_tested_at: null,
+          last_test_error: null,
+        } as never;
+      }
+
+      return {
+        provider: providerId === 'openai' ? 'openai' : 'google',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never;
+    });
+
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
+      generation_provider_order: ['anthropic', 'openai'],
+      default_provider: 'anthropic',
+      providers: [
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: true,
+          models: [
+            makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4'),
+            makeModel('claude-haiku-4-20250514', 'Claude Haiku 4'),
+          ],
+        },
+        {
+          name: 'openai',
+          label: 'OpenAI',
+          available: true,
+          models: [makeModel('gpt-4.1', 'GPT-4.1')],
+        },
+      ],
+    } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.providers.map((provider) => provider.name)).toEqual([
+      'anthropic',
+      'openai',
+    ]);
+    expect(result.current.defaultProvider).toBe('anthropic');
+    expect(result.current.defaultModel).toBe('claude-sonnet-4-20250514');
+    unmount();
+  });
+
+  it('uses backend provider ordering/default and only applies a saved default model within that provider', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
+      if (providerId === 'openai') {
+        return {
+          provider: 'openai',
+          configured: true,
+          default_model: 'gpt-4o',
+          last_test_status: 'ok',
+          last_tested_at: null,
+          last_test_error: null,
+        } as never;
+      }
+
+      return {
+        provider: providerId === 'anthropic' ? 'anthropic' : 'google',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never;
+    });
+
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
+      generation_provider_order: ['google', 'openai', 'anthropic'],
+      default_provider: 'google',
+      providers: [
+        {
+          name: 'google',
+          label: 'Google',
+          available: true,
+          models: [
+            makeModel('gemini-2.5-flash', 'Gemini 2.5 Flash'),
+            makeModel('gemini-2.5-pro', 'Gemini 2.5 Pro'),
+          ],
+        },
+        {
+          name: 'openai',
+          label: 'OpenAI',
+          available: true,
+          models: [makeModel('gpt-4o', 'GPT-4o')],
+        },
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: true,
+          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
+        },
+      ],
+    } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.providers.map((provider) => provider.name)).toEqual([
+      'google',
+      'openai',
+      'anthropic',
+    ]);
+    expect(result.current.defaultProvider).toBe('google');
+    expect(result.current.defaultModel).toBe('gemini-2.5-flash');
+    unmount();
+  });
+
+  it('uses a saved local default model when it is valid for the backend-selected provider', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
+      if (providerId === 'anthropic') {
+        return {
+          provider: 'anthropic',
+          configured: true,
+          default_model: 'claude-haiku-4-20250514',
+          last_test_status: 'ok',
+          last_tested_at: null,
+          last_test_error: null,
+        } as never;
+      }
+
+      return {
+        provider: providerId === 'openai' ? 'openai' : 'google',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never;
+    });
+
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
+      generation_provider_order: ['anthropic', 'openai'],
+      default_provider: 'anthropic',
+      providers: [
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: true,
+          models: [
+            makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4'),
+            makeModel('claude-haiku-4-20250514', 'Claude Haiku 4'),
+          ],
+        },
+        {
+          name: 'openai',
+          label: 'OpenAI',
+          available: true,
+          models: [makeModel('gpt-4o', 'GPT-4o')],
+        },
+      ],
+    } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.defaultProvider).toBe('anthropic');
+    expect(result.current.defaultModel).toBe('claude-haiku-4-20250514');
+    unmount();
+  });
+
+  it('fails closed when the model registry cannot be loaded', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockResolvedValue({
+      provider: 'anthropic',
+      configured: false,
+      default_model: null,
+      last_test_status: null,
+      last_tested_at: null,
+      last_test_error: null,
+    } as never);
+    vi.mocked(fetchAvailableModels).mockRejectedValue(new Error('boom'));
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.providers).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
+    expect(result.current.defaultProvider).toBeNull();
+    expect(result.current.defaultModel).toBeNull();
+    unmount();
+  });
+});

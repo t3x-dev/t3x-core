@@ -125,7 +125,7 @@ export default function LeafDetailPage() {
 
   // Keyboard navigation for nodes
   const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
-  const { activeId: activeNodeId } = useKeyboardNavigation({
+  useKeyboardNavigation({
     ids: nodeIds,
     onSelect: (id) => {
       if (id) {

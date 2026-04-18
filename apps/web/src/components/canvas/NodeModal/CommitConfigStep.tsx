@@ -133,11 +133,15 @@ export function CommitConfigStep({
             {/* Branch Selection - from real API data */}
             {shouldShowBranchSelect && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide flex items-center">
+                <label
+                  htmlFor="pending-branch"
+                  className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide flex items-center"
+                >
                   {t('branch')}
                   {branchesLoading && <Loader2 size={12} className="animate-spin ml-1" />}
                 </label>
                 <select
+                  id="pending-branch"
                   className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--accent-conversation)] focus:ring-2 focus:ring-[var(--accent-conversation-soft)]"
                   value={
                     data.pendingBranch !== 'branch'
@@ -193,10 +197,14 @@ export function CommitConfigStep({
               data.pendingBranch === 'branch' &&
               !branches.some((b) => b.name === data.pendingBranchName) && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
+                  <label
+                    htmlFor="pending-branch-name"
+                    className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide"
+                  >
                     New {t('branch')} Name
                   </label>
                   <Input
+                    id="pending-branch-name"
                     type="text"
                     value={data.pendingBranchName || ''}
                     onChange={(e) => onBranchNameChange?.(e.target.value)}
@@ -207,10 +215,14 @@ export function CommitConfigStep({
 
             {/* Template */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide">
+              <label
+                htmlFor="pending-template"
+                className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wide"
+              >
                 Template
               </label>
               <select
+                id="pending-template"
                 className="w-full py-2 px-3 border border-[var(--stroke-default)] rounded-md text-[0.85rem] bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:border-[var(--accent-conversation)] focus:ring-2 focus:ring-[var(--accent-conversation-soft)]"
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}

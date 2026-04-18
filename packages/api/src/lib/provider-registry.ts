@@ -25,6 +25,7 @@ import {
 } from '@t3x-dev/core';
 import { findProjectById, getGlobalSetting, setGlobalSetting } from '@t3x-dev/storage';
 import { getDB } from './db';
+import { loadResolvedProviderConfig } from './provider-config';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Singleton
@@ -63,7 +64,10 @@ async function initRegistry(): Promise<ProviderRegistry> {
   // Register all built-in providers
   registerBuiltinProviders(reg);
 
-  // Auto-configure defaults from env
+  // Load local credential overrides first so runtime config uses stored secrets.
+  reg.setConfigOverrides(await loadResolvedProviderConfig());
+
+  // Auto-configure defaults from env and local overrides.
   reg.autoConfigureFromEnv();
 
   // Load saved config from DB (overrides auto-config)
@@ -115,6 +119,14 @@ export async function saveRegistryConfig(): Promise<void> {
   if (!registry) return;
   const db = await getDB();
   await setGlobalSetting(db, PROVIDER_CONFIG_KEY, registry.exportConfig());
+}
+
+/**
+ * Refresh runtime provider config overrides from storage.
+ */
+export async function refreshProviderRegistryConfig(): Promise<void> {
+  const reg = await getProviderRegistry();
+  reg.setConfigOverrides(await loadResolvedProviderConfig());
 }
 
 /**

@@ -158,20 +158,28 @@ export function ConversationView({
                     Metadata
                   </h4>
                   <div className="mb-[var(--space-group)]">
-                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                    <label
+                      htmlFor="conversation-title"
+                      className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5"
+                    >
                       Title
                     </label>
                     <Input
+                      id="conversation-title"
                       type="text"
                       value={data.title}
                       onChange={(e) => onUpdate({ title: e.target.value })}
                     />
                   </div>
                   <div className="mb-[var(--space-group)]">
-                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                    <label
+                      htmlFor="conversation-tags"
+                      className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5"
+                    >
                       Tags
                     </label>
                     <Input
+                      id="conversation-tags"
                       type="text"
                       value={data.tags.join(', ')}
                       onChange={(e) =>

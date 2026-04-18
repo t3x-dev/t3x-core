@@ -6,7 +6,6 @@ import type { NodeKind } from '@/types/nodes';
 interface UseCanvasHandlersOptions {
   getNodes: () => Node[];
   setNodes: ReactFlowInstance['setNodes'];
-  fitView: ReactFlowInstance['fitView'];
   setCenter: ReactFlowInstance['setCenter'];
   screenToFlowPosition: ReactFlowInstance['screenToFlowPosition'];
   canvasRef: React.RefObject<HTMLDivElement | null>;
@@ -18,7 +17,6 @@ interface UseCanvasHandlersOptions {
 export function useCanvasHandlers({
   getNodes,
   setNodes,
-  fitView,
   setCenter,
   screenToFlowPosition,
   canvasRef,

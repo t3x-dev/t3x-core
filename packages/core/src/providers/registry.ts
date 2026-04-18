@@ -84,6 +84,17 @@ export class ProviderRegistry {
   private entries = new Map<string, ProviderEntry>();
   private instances = new Map<string, AnyProvider>();
   private roleAssignments = new Map<ProviderRole, string[]>();
+  private explicitRoleAssignments = new Set<ProviderRole>();
+  private configOverrides: ResolvedConfig = {};
+
+  /**
+   * Set runtime config overrides.
+   * Overrides take precedence over process.env for provider factories.
+   */
+  setConfigOverrides(overrides: ResolvedConfig): void {
+    this.configOverrides = { ...overrides };
+    this.syncDefaultRoleAssignmentsFromResolvedConfig();
+  }
 
   /**
    * Register a provider entry.
@@ -184,6 +195,7 @@ export class ProviderRegistry {
       }
     }
     this.roleAssignments.set(role, providerIds);
+    this.explicitRoleAssignments.add(role);
     // Clear cached instances for this role's providers
     for (const id of providerIds) {
       this.instances.delete(id);
@@ -197,9 +209,8 @@ export class ProviderRegistry {
     const entry = this.entries.get(id);
     if (!entry) return false;
     if (entry.requiredEnvKeys.length === 0) return true;
-    return entry.requiredEnvKeys.every(
-      (key) => typeof process !== 'undefined' && !!process.env?.[key]
-    );
+    const config = this.getResolvedConfig(entry);
+    return entry.requiredEnvKeys.every((key) => Boolean(config[key]));
   }
 
   /**
@@ -212,9 +223,8 @@ export class ProviderRegistry {
     }
 
     if (!this.isConfigured(id)) {
-      const missing = entry.requiredEnvKeys.filter(
-        (key) => !(typeof process !== 'undefined' && process.env?.[key])
-      );
+      const config = this.getResolvedConfig(entry);
+      const missing = entry.requiredEnvKeys.filter((key) => !config[key]);
       return { ok: false, error: `Missing environment variables: ${missing.join(', ')}` };
     }
 
@@ -285,6 +295,7 @@ export class ProviderRegistry {
       const validIds = providerIds.filter((id) => this.entries.has(id));
       if (validIds.length > 0) {
         this.roleAssignments.set(role, validIds);
+        this.explicitRoleAssignments.add(role);
       }
     }
     // Clear all cached instances
@@ -296,22 +307,7 @@ export class ProviderRegistry {
    * Called at startup to set sensible defaults.
    */
   autoConfigureFromEnv(): void {
-    const roleProviders = new Map<ProviderRole, string[]>();
-
-    for (const entry of this.entries.values()) {
-      if (this.isConfigured(entry.id)) {
-        const existing = roleProviders.get(entry.role) ?? [];
-        existing.push(entry.id);
-        roleProviders.set(entry.role, existing);
-      }
-    }
-
-    for (const [role, providerIds] of roleProviders.entries()) {
-      // Only set if no explicit assignment exists
-      if (!this.roleAssignments.has(role) || this.roleAssignments.get(role)?.length === 0) {
-        this.roleAssignments.set(role, providerIds);
-      }
-    }
+    this.syncDefaultRoleAssignmentsFromResolvedConfig();
   }
 
   /**
@@ -359,6 +355,45 @@ export class ProviderRegistry {
     return [...(this.roleAssignments.get(role) ?? [])];
   }
 
+  /**
+   * Recompute only non-explicit role assignments from the currently resolved config.
+   * Explicitly assigned roles keep their ordering exactly as imported or assigned.
+   */
+  syncDefaultRoleAssignmentsFromResolvedConfig(): void {
+    const configuredProviders = new Map<ProviderRole, string[]>();
+    const defaultProviders = new Map<ProviderRole, string[]>();
+
+    for (const entry of this.entries.values()) {
+      const defaults = defaultProviders.get(entry.role) ?? [];
+      defaults.push(entry.id);
+      defaultProviders.set(entry.role, defaults);
+
+      if (!this.isConfigured(entry.id)) continue;
+      const configured = configuredProviders.get(entry.role) ?? [];
+      configured.push(entry.id);
+      configuredProviders.set(entry.role, configured);
+    }
+
+    for (const [role, defaults] of defaultProviders.entries()) {
+      if (this.explicitRoleAssignments.has(role)) continue;
+
+      const configured = configuredProviders.get(role) ?? [];
+      this.roleAssignments.set(role, configured.length > 0 ? configured : defaults);
+    }
+
+    this.instances.clear();
+  }
+
+  private getResolvedConfig(entry: ProviderEntry): ResolvedConfig {
+    const config: ResolvedConfig = { ...this.configOverrides };
+    for (const key of entry.requiredEnvKeys) {
+      if (config[key] === undefined) {
+        config[key] = typeof process !== 'undefined' ? process.env?.[key] : undefined;
+      }
+    }
+    return config;
+  }
+
   private getInstance<T extends AnyProvider>(id: string): T | null {
     // Return cached instance
     if (this.instances.has(id)) {
@@ -371,11 +406,7 @@ export class ProviderRegistry {
     // Check env keys
     if (!this.isConfigured(id)) return null;
 
-    // Build config from env
-    const config: ResolvedConfig = {};
-    for (const key of entry.requiredEnvKeys) {
-      config[key] = process.env[key];
-    }
+    const config = this.getResolvedConfig(entry);
 
     try {
       const instance = entry.factory(config) as AnyProvider;

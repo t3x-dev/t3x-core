@@ -38,10 +38,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/t3x-dev/t3x.git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
     "directory": "packages/api-client"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }

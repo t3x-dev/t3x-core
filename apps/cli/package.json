@@ -1,7 +1,6 @@
 {
   "name": "@t3x-dev/cli",
   "version": "0.1.0",
-  "private": true,
   "description": "T3X Command Line Interface",
   "type": "module",
   "bin": {
@@ -44,5 +43,13 @@
     "version-control",
     "ai"
   ],
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "apps/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

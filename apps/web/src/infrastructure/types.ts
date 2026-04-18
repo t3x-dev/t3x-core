@@ -339,5 +339,30 @@ export interface LLMProviderInfo {
 }
 
 export interface LLMModelsResponse {
+  generation_provider_order: string[];
+  default_provider: string | null;
   providers: LLMProviderInfo[];
+}
+
+// ============================================================================
+// Local provider settings types
+// ============================================================================
+
+export type LocalProviderId = 'anthropic' | 'openai' | 'google';
+export type LocalProviderAlias = 'claude' | 'gemini' | 'google-ai' | 'gpt';
+export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
+export type LocalProviderTestStatus = 'ok' | 'error';
+
+export interface LocalProviderStatus {
+  provider: LocalProviderId;
+  configured: boolean;
+  default_model: string | null;
+  last_test_status: LocalProviderTestStatus | null;
+  last_tested_at: string | null;
+  last_test_error: string | null;
+}
+
+export interface LocalProviderCredentialInput {
+  api_key: string;
+  default_model?: string | null;
 }

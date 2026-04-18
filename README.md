@@ -30,6 +30,53 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
+At release, the public npm surface is centered on `@t3x-dev/core`, `@t3x-dev/yops`, `@t3x-dev/yschema`, `@t3x-dev/api-client`, `@t3x-dev/cli`, and `@t3x-dev/mcp`. The WebUI, API server, storage layer, and runner remain source-first for self-hosting and product deployments.
+
+<br/>
+
+## Quickstart
+
+Choose the shortest path for what you want to do:
+
+### Use T3X as a library
+
+```bash
+npm install @t3x-dev/core @t3x-dev/yops @t3x-dev/yschema @t3x-dev/api-client
+```
+
+Use this if you want the deterministic engine, YAML operations, schema validation, or the TypeScript API client inside your own app.
+
+### Use the CLI
+
+```bash
+npx @t3x-dev/cli init
+```
+
+Use this if you want the simplest terminal-first way to create a project and work with commits, diffs, merges, and extraction.
+
+### Run the full stack locally
+
+```bash
+docker compose up -d
+```
+
+> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
+
+Use this if you want the self-hosted product experience with WebUI + API.
+
+### Develop from source
+
+```bash
+git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
+pnpm install && pnpm build
+pnpm dev:api     # API at localhost:8000
+pnpm dev:webui   # WebUI at localhost:3000
+```
+
+Requires Node.js 20+ and pnpm 10+.
+
+Use this if you want to contribute to T3X itself or run the source-first apps locally.
+
 <br/>
 
 ## How it works
@@ -162,33 +209,6 @@ Built-in structural rules that run without a schema &mdash; checks key naming, v
 
 <br/>
 
-## Getting started
-
-### Docker (full stack)
-
-```bash
-docker compose up -d
-```
-
-> **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
-
-### CLI
-
-```bash
-npx @t3x-dev/cli init
-```
-
-### From source
-
-```bash
-git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
-pnpm install && pnpm build
-pnpm dev:api     # API at localhost:8000
-pnpm dev:webui   # WebUI at localhost:3000
-```
-
-Requires Node.js 20+ and pnpm 10+.
-
 ### Configuration
 
 ```
@@ -216,6 +236,15 @@ The core engine works without any API key. To use extraction, add an Anthropic o
 ```
 
 tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
+
+Published release packages:
+
+- `@t3x-dev/core` — deterministic semantic engine
+- `@t3x-dev/yops` — declarative YAML operations
+- `@t3x-dev/yschema` — schema validation with YOps auto-fix
+- `@t3x-dev/api-client` — TypeScript API client
+- `@t3x-dev/cli` — command line interface
+- `@t3x-dev/mcp` — MCP server for agents
 
 ### CLI
 

@@ -3,6 +3,12 @@
  */
 
 import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
+import type {
+  LocalProviderClientId,
+  LocalProviderCredentialInput,
+  LocalProviderId,
+  LocalProviderStatus,
+} from './types';
 
 // ============================================================================
 // Share Links
@@ -240,6 +246,20 @@ export interface TestConnectionResult {
   latency_ms?: number;
 }
 
+const LOCAL_PROVIDER_ID_ALIASES: Record<LocalProviderClientId, LocalProviderId> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  gemini: 'google',
+  gpt: 'openai',
+  openai: 'openai',
+  google: 'google',
+  'google-ai': 'google',
+};
+
+export function toLocalProviderId(providerId: string): LocalProviderId | null {
+  return LOCAL_PROVIDER_ID_ALIASES[providerId as LocalProviderClientId] ?? null;
+}
+
 export async function listProviders(): Promise<ProviderInfo[]> {
   const res = await fetchWithTimeout(`${API_V1}/providers`);
   return handleResponse<ProviderInfo[]>(res);
@@ -266,6 +286,49 @@ export async function testProvider(providerId: string): Promise<TestConnectionRe
     30000 // Longer timeout for connection test
   );
   return handleResponse<TestConnectionResult>(res);
+}
+
+export async function getLocalProviderStatus(
+  providerId: LocalProviderClientId | string
+): Promise<LocalProviderStatus> {
+  const localProviderId = toLocalProviderId(providerId);
+  if (!localProviderId) {
+    throw new ApiError('INVALID_PROVIDER', `Provider "${providerId}" does not support local setup`);
+  }
+
+  const res = await fetchWithTimeout(`${API_V1}/providers/local/${localProviderId}`);
+  return handleResponse<LocalProviderStatus>(res);
+}
+
+export async function upsertLocalProvider(
+  providerId: LocalProviderClientId | string,
+  input: LocalProviderCredentialInput
+): Promise<LocalProviderStatus> {
+  const localProviderId = toLocalProviderId(providerId);
+  if (!localProviderId) {
+    throw new ApiError('INVALID_PROVIDER', `Provider "${providerId}" does not support local setup`);
+  }
+
+  const res = await fetchWithTimeout(`${API_V1}/providers/local/${localProviderId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<LocalProviderStatus>(res);
+}
+
+export async function deleteLocalProvider(
+  providerId: LocalProviderClientId | string
+): Promise<LocalProviderStatus> {
+  const localProviderId = toLocalProviderId(providerId);
+  if (!localProviderId) {
+    throw new ApiError('INVALID_PROVIDER', `Provider "${providerId}" does not support local setup`);
+  }
+
+  const res = await fetchWithTimeout(`${API_V1}/providers/local/${localProviderId}`, {
+    method: 'DELETE',
+  });
+  return handleResponse<LocalProviderStatus>(res);
 }
 
 export async function getProviderConfig(): Promise<{ roles: RoleAssignment[] }> {

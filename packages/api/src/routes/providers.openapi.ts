@@ -6,45 +6,108 @@
  * GET    /v1/providers              - List all providers
  * GET    /v1/providers/roles        - Get role assignments
  * PUT    /v1/providers/roles        - Update role assignments
+ * GET    /v1/providers/local/:id    - Get local provider credential status
+ * PUT    /v1/providers/local/:id    - Upsert local provider credential
+ * DELETE /v1/providers/local/:id    - Delete local provider credential
  * POST   /v1/providers/:id/test     - Test provider connection
  * GET    /v1/providers/config       - Get global provider config
  * PUT    /v1/providers/config       - Update global provider config
  */
 
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import { getModelsByProvider, type ProviderName } from '@t3x-dev/core';
+import {
+  deleteProviderCredential,
+  getProviderCredentialBundle,
+  type LocalProviderId,
+  updateProviderCredentialTestResult,
+  upsertProviderCredential,
+} from '@t3x-dev/storage';
+import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
-import { getProviderRegistry, saveRegistryConfig } from '../lib/provider-registry';
+import {
+  getProviderRegistry,
+  refreshProviderRegistryConfig,
+  saveRegistryConfig,
+} from '../lib/provider-registry';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import {
+  LocalProviderParamSchema,
+  LocalProviderStatusSchema,
+  LocalProviderWriteSchema,
+  ProviderConfigSchema,
+  ProviderListSchema,
+  ProviderTestParamSchema,
+  RoleAssignmentListSchema,
+  RoleAssignmentWriteSchema,
+  TestResultSchema,
+} from '../schemas/providers';
 
 export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
-// ============================================================
-// Schemas
-// ============================================================
+const LOCAL_PROVIDER_ALIASES: Record<string, LocalProviderId> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  openai: 'openai',
+  gpt: 'openai',
+  google: 'google',
+  'google-ai': 'google',
+  gemini: 'google',
+};
 
-const ProviderSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  role: z.enum(['generation', 'embedding', 'merge']),
-  configured: z.boolean(),
-  roles: z.array(z.enum(['generation', 'embedding', 'merge'])),
-  required_env_keys: z.array(z.string()),
-  default_model: z.string().nullable(),
-  available_models: z.array(z.string()).nullable(),
-});
+function normalizeLocalProviderId(id: string): LocalProviderId | null {
+  return LOCAL_PROVIDER_ALIASES[id.toLowerCase()] ?? null;
+}
 
-const RoleAssignmentSchema = z.object({
-  role: z.enum(['generation', 'embedding', 'merge']),
-  provider_ids: z.array(z.string()),
-});
+function getRuntimeProviderId(provider: LocalProviderId): 'anthropic' | 'openai' | 'google-ai' {
+  return provider === 'google' ? 'google-ai' : provider;
+}
 
-const TestResultSchema = z.object({
-  ok: z.boolean(),
-  error: z.string().optional(),
-  latency_ms: z.number().optional(),
-});
+function toSafeLocalProviderStatus(
+  bundle: Awaited<ReturnType<typeof getProviderCredentialBundle>>,
+  provider: LocalProviderId
+) {
+  const safe = bundle.safe[provider];
+  return {
+    provider,
+    configured: safe.configured,
+    default_model: safe.defaultModel,
+    last_test_status: safe.lastTestStatus,
+    last_tested_at: safe.lastTestedAt,
+    last_test_error: safe.lastTestError,
+  };
+}
+
+function normalizeDefaultModel(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+const SHARED_GENERATION_PROVIDER_CATALOG: Partial<Record<string, ProviderName>> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
+function getAvailableModelsForProvider(
+  providerId: string,
+  role: string,
+  fallback: string[] | null | undefined
+) {
+  if (role !== 'generation') {
+    return fallback ?? null;
+  }
+
+  const providerName = SHARED_GENERATION_PROVIDER_CATALOG[providerId];
+  if (!providerName) {
+    return fallback ?? null;
+  }
+
+  return getModelsByProvider(providerName).map((model) => model.id);
+}
 
 // ============================================================
 // GET /v1/providers — List all providers
@@ -60,7 +123,7 @@ const listProvidersRoute = createRoute({
       description: 'Provider list',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(ProviderSchema)),
+          schema: SuccessResponseSchema(ProviderListSchema),
         },
       },
     },
@@ -68,6 +131,7 @@ const listProvidersRoute = createRoute({
 });
 
 providersRoutes.openapi(listProvidersRoute, async (c) => {
+  await refreshProviderRegistryConfig();
   const registry = await getProviderRegistry();
   const providers = registry.listProviders();
 
@@ -81,7 +145,7 @@ providersRoutes.openapi(listProvidersRoute, async (c) => {
       roles: p.roles,
       required_env_keys: p.requiredEnvKeys,
       default_model: p.defaultModel ?? null,
-      available_models: p.availableModels ?? null,
+      available_models: getAvailableModelsForProvider(p.id, p.role, p.availableModels),
     })),
   });
 });
@@ -100,7 +164,7 @@ const getRolesRoute = createRoute({
       description: 'Role assignments',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(RoleAssignmentSchema)),
+          schema: SuccessResponseSchema(RoleAssignmentListSchema),
         },
       },
     },
@@ -133,9 +197,7 @@ const updateRolesRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            roles: z.array(RoleAssignmentSchema),
-          }),
+          schema: RoleAssignmentWriteSchema,
         },
       },
     },
@@ -145,7 +207,7 @@ const updateRolesRoute = createRoute({
       description: 'Updated role assignments',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(z.array(RoleAssignmentSchema)),
+          schema: SuccessResponseSchema(RoleAssignmentListSchema),
         },
       },
     },
@@ -192,6 +254,186 @@ providersRoutes.openapi(updateRolesRoute, async (c) => {
 });
 
 // ============================================================
+// GET /v1/providers/local/:id — Get local provider credential status
+// PUT /v1/providers/local/:id — Upsert local provider credential
+// DELETE /v1/providers/local/:id — Delete local provider credential
+// ============================================================
+
+const getLocalProviderRoute = createRoute({
+  method: 'get',
+  path: '/v1/providers/local/{id}',
+  tags: ['Providers'],
+  summary: 'Get local provider credential status',
+  request: {
+    params: LocalProviderParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Local provider status',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(LocalProviderStatusSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Local provider not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+providersRoutes.openapi(getLocalProviderRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const provider = normalizeLocalProviderId(id);
+
+  if (!provider) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Provider "${id}" not found`,
+        },
+      },
+      404
+    );
+  }
+
+  const db = await getDB();
+  const bundle = await getProviderCredentialBundle(db);
+  return c.json({
+    success: true as const,
+    data: toSafeLocalProviderStatus(bundle, provider),
+  });
+});
+
+const upsertLocalProviderRoute = createRoute({
+  method: 'put',
+  path: '/v1/providers/local/{id}',
+  tags: ['Providers'],
+  summary: 'Upsert local provider credential',
+  request: {
+    params: LocalProviderParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: LocalProviderWriteSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Local provider status',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(LocalProviderStatusSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Local provider not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+providersRoutes.openapi(upsertLocalProviderRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const provider = normalizeLocalProviderId(id);
+
+  if (!provider) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Provider "${id}" not found`,
+        },
+      },
+      404
+    );
+  }
+
+  const body = c.req.valid('json');
+  const db = await getDB();
+  await upsertProviderCredential(db, {
+    providerId: provider,
+    apiKey: body.api_key,
+    defaultModel: normalizeDefaultModel(body.default_model),
+  });
+  await refreshProviderRegistryConfig();
+
+  const bundle = await getProviderCredentialBundle(db);
+  return c.json({
+    success: true as const,
+    data: toSafeLocalProviderStatus(bundle, provider),
+  });
+});
+
+const deleteLocalProviderRoute = createRoute({
+  method: 'delete',
+  path: '/v1/providers/local/{id}',
+  tags: ['Providers'],
+  summary: 'Delete local provider credential',
+  request: {
+    params: LocalProviderParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Local provider status',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(LocalProviderStatusSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Local provider not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+// @ts-expect-error - OpenAPI handler return type
+providersRoutes.openapi(deleteLocalProviderRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const provider = normalizeLocalProviderId(id);
+
+  if (!provider) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Provider "${id}" not found`,
+        },
+      },
+      404
+    );
+  }
+
+  const db = await getDB();
+  await deleteProviderCredential(db, provider);
+  await refreshProviderRegistryConfig();
+
+  const bundle = await getProviderCredentialBundle(db);
+  return c.json({
+    success: true as const,
+    data: toSafeLocalProviderStatus(bundle, provider),
+  });
+});
+
+// ============================================================
 // POST /v1/providers/:id/test — Test provider connection
 // ============================================================
 
@@ -201,9 +443,7 @@ const testProviderRoute = createRoute({
   tags: ['Providers'],
   summary: 'Test provider connection',
   request: {
-    params: z.object({
-      id: z.string(),
-    }),
+    params: ProviderTestParamSchema,
   },
   responses: {
     200: {
@@ -227,22 +467,43 @@ const testProviderRoute = createRoute({
 providersRoutes.openapi(testProviderRoute, async (c) => {
   const { id } = c.req.valid('param');
   const registry = await getProviderRegistry();
+  const localProvider = normalizeLocalProviderId(id);
+  const runtimeProviderId = localProvider ? getRuntimeProviderId(localProvider) : id;
 
-  const entry = registry.getEntry(id);
+  const entry = registry.getEntry(runtimeProviderId);
   if (!entry) {
     return c.json(
       {
         success: false as const,
-        error: {
-          code: 'NOT_FOUND',
-          message: `Provider "${id}" not found`,
-        },
+        error: { code: 'NOT_FOUND', message: `Provider "${id}" not found` },
       },
       404
     );
   }
 
-  const result = await registry.testConnection(id);
+  if (localProvider) {
+    await refreshProviderRegistryConfig();
+  }
+
+  const result = await registry.testConnection(runtimeProviderId);
+
+  if (localProvider) {
+    try {
+      const db = await getDB();
+      const bundle = await getProviderCredentialBundle(db);
+      if (bundle.safe[localProvider].configured) {
+        await updateProviderCredentialTestResult(db, localProvider, {
+          lastTestStatus: result.ok ? 'ok' : 'error',
+          lastTestedAt: new Date(),
+          lastTestError: result.error ?? null,
+        });
+        await refreshProviderRegistryConfig();
+      }
+    } catch {
+      // Best-effort local metadata persistence only.
+    }
+  }
+
   return c.json({
     success: true as const,
     data: {
@@ -267,11 +528,7 @@ const getConfigRoute = createRoute({
       description: 'Provider config',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              roles: z.array(RoleAssignmentSchema),
-            })
-          ),
+          schema: SuccessResponseSchema(ProviderConfigSchema),
         },
       },
     },
@@ -306,9 +563,7 @@ const updateConfigRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({
-            roles: z.array(RoleAssignmentSchema),
-          }),
+          schema: ProviderConfigSchema,
         },
       },
     },
@@ -318,11 +573,7 @@ const updateConfigRoute = createRoute({
       description: 'Updated config',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(
-            z.object({
-              roles: z.array(RoleAssignmentSchema),
-            })
-          ),
+          schema: SuccessResponseSchema(ProviderConfigSchema),
         },
       },
     },

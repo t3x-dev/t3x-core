@@ -28,6 +28,13 @@ export function DeletionConfirmDialog() {
   if (nodeIds.length > 0) summaryParts.push(`${nodeIds.length} node(s)`);
   if (edgeIds.length > 0) summaryParts.push(`${edgeIds.length} connection(s)`);
   const summary = summaryParts.join(' and ') + ' will be removed.';
+  const messageLines = message
+    .split('\n')
+    .reduce<Array<{ key: string; line: string }>>((acc, line) => {
+      const duplicates = acc.filter((entry) => entry.line === line).length;
+      acc.push({ key: `${line}-${duplicates}`, line });
+      return acc;
+    }, []);
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && cancelDeletion()}>
@@ -43,8 +50,8 @@ export function DeletionConfirmDialog() {
 
         <DialogDescription asChild>
           <div className="space-y-[var(--space-item)]">
-            {message.split('\n').map((line, idx) => (
-              <p key={idx} className="text-sm text-muted-foreground">
+            {messageLines.map(({ key, line }) => (
+              <p key={key} className="text-sm text-muted-foreground">
                 {line}
               </p>
             ))}

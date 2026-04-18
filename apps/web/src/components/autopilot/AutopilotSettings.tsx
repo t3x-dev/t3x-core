@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAutopilot } from '@/hooks/shared/useAutopilot';
 import type { AdaptiveResult, AutopilotConfig } from '@/types/api';
-import { cn } from '@/utils/cn';
 
 export function AutopilotSettings({ projectId }: { projectId: string }) {
   const [config, setConfig] = useState<AutopilotConfig | null>(null);
@@ -185,7 +184,6 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
                 const totalCount = (stats?.total as number) ?? 0;
                 const editRate =
                   totalCount > 0 ? ((stats?.edited as number) ?? 0) / totalCount : null;
-                const byType = (stats?.by_type as Record<string, { accept_rate?: number }>) ?? {};
                 const { suppressedTypes, cosineThresholdDelta } = adaptiveResult.adaptive;
 
                 return (

@@ -163,8 +163,8 @@ export default function DevDatabasePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.rows.map((row, i) => (
-                      <tr key={i}>
+                    {result.rows.map((row) => (
+                      <tr key={JSON.stringify(row)}>
                         {result.fields?.map((f) => (
                           <td key={f.name} style={styles.td}>
                             {formatValue(row[f.name])}

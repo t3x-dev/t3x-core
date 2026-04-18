@@ -42,7 +42,6 @@ function formatTime(iso: string) {
 // Extracted row component for reuse with VirtualList
 function CommitHistoryRow({
   commit,
-  index,
   isHead,
   isRoot,
   isSelected,
@@ -50,7 +49,6 @@ function CommitHistoryRow({
   t,
 }: {
   commit: ApiCommit;
-  index: number;
   isHead: boolean;
   isRoot: boolean;
   isSelected: boolean;
@@ -135,7 +133,6 @@ export function CommitHistoryPanel({
   open,
   onClose,
   onSelectCommit,
-  projectId,
 }: CommitHistoryPanelProps) {
   const { t } = useTerminology();
   const { history, loading, error } = useCommitHistory(commitHash, {
@@ -250,7 +247,6 @@ export function CommitHistoryPanel({
                     renderItem={(commit, index) => (
                       <CommitHistoryRow
                         commit={commit}
-                        index={index}
                         isHead={index === 0}
                         isRoot={index === history.length - 1}
                         isSelected={selectedHash === commit.hash}
@@ -265,7 +261,6 @@ export function CommitHistoryPanel({
                       <CommitHistoryRow
                         key={commit.hash}
                         commit={commit}
-                        index={index}
                         isHead={index === 0}
                         isRoot={index === history.length - 1}
                         isSelected={selectedHash === commit.hash}

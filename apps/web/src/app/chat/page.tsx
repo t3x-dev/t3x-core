@@ -2,8 +2,13 @@
 
 import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
+import {
+  resolveAvailableModelSelection,
+  useAvailableModels,
+} from '@/hooks/shared/useAvailableModels';
 
 const STARTER_CARDS = [
   {
@@ -28,19 +33,47 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514');
+  const { providers, loading, hasConfiguredGenerationProvider, defaultProvider, defaultModel } =
+    useAvailableModels();
+  const [selection, setSelection] = useState<{
+    provider: string | null;
+    model: string;
+  }>({
+    provider: null,
+    model: '',
+  });
 
   const handleSend = useCallback(
     (message: string) => {
-      if (!message.trim()) return;
-      router.push(`/chat/new?firstMessage=${encodeURIComponent(message)}`);
+      if (!message.trim() || !hasConfiguredGenerationProvider) return;
+
+      const params = new URLSearchParams({ firstMessage: message });
+      if (selection.provider) params.set('provider', selection.provider);
+      if (selection.model) params.set('model', selection.model);
+      router.push(`/chat/new?${params.toString()}`);
     },
-    [router]
+    [router, hasConfiguredGenerationProvider, selection.model, selection.provider]
   );
 
-  const handleModelChange = useCallback((_provider: string, model: string) => {
-    setSelectedModel(model);
-  }, []);
+  useEffect(() => {
+    if (loading) return;
+    setSelection((current) => {
+      const resolved = resolveAvailableModelSelection(
+        providers,
+        current.provider,
+        current.model,
+        defaultProvider,
+        defaultModel
+      );
+      if (current.provider === resolved.provider && current.model === (resolved.model ?? '')) {
+        return current;
+      }
+      return {
+        provider: resolved.provider,
+        model: resolved.model ?? '',
+      };
+    });
+  }, [loading, providers, defaultProvider, defaultModel]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
@@ -53,8 +86,9 @@ export default function ChatLandingPage() {
             <button
               key={card.title}
               type="button"
+              disabled={!hasConfiguredGenerationProvider}
               onClick={() => handleSend(card.prompt)}
-              className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40"
+              className="flex flex-col items-start gap-2 rounded-xl border border-[var(--stroke-default)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--hover-bg)] hover:border-[var(--accent-commit)]/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <card.icon className="h-4 w-4 text-[var(--text-tertiary)]" />
               <div>
@@ -65,11 +99,18 @@ export default function ChatLandingPage() {
           ))}
         </div>
 
+        {!loading && !hasConfiguredGenerationProvider && (
+          <div className="mb-4">
+            <ProviderSetupBanner />
+          </div>
+        )}
+
         <ChatInput
           onSend={handleSend}
           placeholder="Start a conversation..."
-          selectedModel={selectedModel}
-          onModelChange={handleModelChange}
+          selectedModel={selection.model}
+          disabled={!hasConfiguredGenerationProvider || loading}
+          onModelChange={(provider, model) => setSelection({ provider, model })}
         />
       </div>
     </div>
