@@ -16,6 +16,10 @@ export type ProviderRole = 'generation' | 'embedding' | 'merge';
 
 export type AnyProvider = LLMProvider | EmbeddingProvider;
 
+export interface ProviderFactoryContext {
+  defaultModel?: string;
+}
+
 export interface ProviderEntry<T = AnyProvider> {
   /** Unique provider ID, e.g., "anthropic", "openai", "ollama" */
   id: string;
@@ -24,9 +28,11 @@ export interface ProviderEntry<T = AnyProvider> {
   /** What role this provider can serve */
   role: ProviderRole;
   /** Factory function to create the provider instance */
-  factory: (config: ResolvedConfig) => T;
+  factory: (config: ResolvedConfig, context: ProviderFactoryContext) => T;
   /** Environment variable keys required for this provider */
   requiredEnvKeys: string[];
+  /** Optional config key containing a preferred model override for this provider. */
+  modelConfigKey?: keyof ResolvedConfig;
   /** Default model for this provider */
   defaultModel?: string;
   /** Available models for this provider */
@@ -51,6 +57,8 @@ export interface TestConnectionResult {
   error?: string;
   latencyMs?: number;
 }
+
+const MIN_LLM_TEST_CONNECTION_TOKENS = 16;
 
 /** Error codes that indicate a transient failure worth retrying with a different provider. */
 const RETRYABLE_ERROR_CODES = new Set([
@@ -238,7 +246,10 @@ export class ProviderRegistry {
       // Test based on provider type
       if ('generate' in instance) {
         // LLM provider — send a minimal prompt
-        await (instance as LLMProvider).generate('Say "ok"', { maxTokens: 5, temperature: 0 });
+        await (instance as LLMProvider).generate('Say "ok"', {
+          maxTokens: MIN_LLM_TEST_CONNECTION_TOKENS,
+          temperature: 0,
+        });
       } else if ('encode' in instance) {
         // Embedding provider — encode a test string
         await (instance as EmbeddingProvider).encode(['test']);
@@ -268,6 +279,7 @@ export class ProviderRegistry {
       }
       result.push({
         ...entry,
+        defaultModel: this.getDefaultModel(entry.id),
         configured: this.isConfigured(entry.id),
         roles: assignedRoles,
       });
@@ -318,6 +330,20 @@ export class ProviderRegistry {
   }
 
   /**
+   * Resolve the effective default model for a provider, including config overrides.
+   */
+  getDefaultModel(id: string): string | undefined {
+    const entry = this.entries.get(id);
+    if (!entry) return undefined;
+    const config = this.getResolvedConfig(entry);
+    const override =
+      entry.modelConfigKey && typeof config[entry.modelConfigKey] === 'string'
+        ? config[entry.modelConfigKey]
+        : undefined;
+    return override ?? entry.defaultModel;
+  }
+
+  /**
    * Resolve a model string like "openai:gpt-4o" to a provider + model.
    */
   resolveModel(modelSpec: string): { provider: AnyProvider; model: string } | null {
@@ -332,7 +358,10 @@ export class ProviderRegistry {
 
     // Search all providers for the model name
     for (const entry of this.entries.values()) {
-      if (entry.availableModels?.includes(modelSpec) || entry.defaultModel === modelSpec) {
+      if (
+        entry.availableModels?.includes(modelSpec) ||
+        this.getDefaultModel(entry.id) === modelSpec
+      ) {
         const instance = this.getInstance(entry.id);
         if (instance) return { provider: instance, model: modelSpec };
       }
@@ -391,6 +420,10 @@ export class ProviderRegistry {
         config[key] = typeof process !== 'undefined' ? process.env?.[key] : undefined;
       }
     }
+    if (entry.modelConfigKey && config[entry.modelConfigKey] === undefined) {
+      config[entry.modelConfigKey] =
+        typeof process !== 'undefined' ? process.env?.[entry.modelConfigKey] : undefined;
+    }
     return config;
   }
 
@@ -407,9 +440,12 @@ export class ProviderRegistry {
     if (!this.isConfigured(id)) return null;
 
     const config = this.getResolvedConfig(entry);
+    const context: ProviderFactoryContext = {
+      defaultModel: this.getDefaultModel(id),
+    };
 
     try {
-      const instance = entry.factory(config) as AnyProvider;
+      const instance = entry.factory(config, context) as AnyProvider;
       this.instances.set(id, instance);
       return instance as T;
     } catch (error) {

@@ -1,7 +1,7 @@
 /**
  * OpenAI LLM Provider
  *
- * Implementation of LLMProvider using OpenAI's Chat Completions API.
+ * Implementation of LLMProvider using OpenAI's Responses API.
  */
 
 import type { ZodType } from 'zod';
@@ -60,14 +60,76 @@ export class OpenAIProvider implements LLMProvider {
 
   constructor(config: OpenAIProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'gpt-4o';
+    this.model = config.model ?? 'gpt-5.4-mini';
     this.baseUrl = config.baseUrl ?? 'https://api.openai.com/v1';
+  }
+
+  private buildInputFromPrompt(prompt: LLMPrompt): Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string | Array<Record<string, unknown>>;
+  }> {
+    const input: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string | Array<Record<string, unknown>>;
+    }> = [];
+
+    if (prompt.system) {
+      input.push({ role: 'system', content: prompt.system });
+    }
+
+    for (const message of prompt.messages) {
+      if (typeof message.content === 'string') {
+        input.push({ role: message.role, content: message.content });
+        continue;
+      }
+
+      input.push({
+        role: message.role,
+        content: message.content.map((block) => {
+          if (block.type === 'text') {
+            return {
+              type: 'input_text',
+              text: typeof block.text === 'string' ? block.text : '',
+            };
+          }
+
+          const source = block.source as { media_type?: string; data?: string } | undefined;
+
+          return {
+            type: 'input_image',
+            image_url: `data:${source?.media_type ?? 'image/png'};base64,${source?.data ?? ''}`,
+          };
+        }),
+      });
+    }
+
+    return input;
+  }
+
+  private extractOutputText(data: {
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  }): string {
+    if (typeof data.output_text === 'string' && data.output_text.length > 0) {
+      return data.output_text;
+    }
+
+    const parts =
+      data.output
+        ?.flatMap((item) => item.content ?? [])
+        .filter((part) => part.type === 'output_text' && typeof part.text === 'string')
+        .map((part) => part.text as string) ?? [];
+
+    return parts.join('');
   }
 
   async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
-    const url = `${this.baseUrl}/chat/completions`;
+    const url = `${this.baseUrl}/responses`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -81,9 +143,9 @@ export class OpenAIProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: this.model,
-          max_tokens: maxTokens,
+          max_output_tokens: maxTokens,
           temperature,
-          messages: [{ role: 'user', content: prompt }],
+          input: [{ role: 'user', content: prompt }],
           ...(options?.stopSequences && { stop: options.stopSequences }),
         }),
         signal: controller.signal,
@@ -101,19 +163,24 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        choices: Array<{ message: { content: string } }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        output_text?: string;
+        output?: Array<{
+          type?: string;
+          content?: Array<{ type?: string; text?: string }>;
+        }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
       };
 
-      if (!data.choices?.[0]?.message?.content) {
+      const text = this.extractOutputText(data);
+      if (!text) {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
       return {
-        text: data.choices[0].message.content,
+        text,
         usage: {
-          inputTokens: data.usage?.prompt_tokens ?? 0,
-          outputTokens: data.usage?.completion_tokens ?? 0,
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
         },
       };
     } catch (error) {
@@ -133,18 +200,7 @@ export class OpenAIProvider implements LLMProvider {
   async generateFromPrompt(prompt: LLMPrompt, options: LLMGenerateOptions): Promise<LLMResult> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
-    const url = `${this.baseUrl}/chat/completions`;
-
-    const messages: Array<{ role: string; content: string }> = [];
-    if (prompt.system) {
-      messages.push({ role: 'system', content: prompt.system });
-    }
-    for (const msg of prompt.messages) {
-      messages.push({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
+    const url = `${this.baseUrl}/responses`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -158,9 +214,9 @@ export class OpenAIProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: options.model,
-          max_tokens: maxTokens,
+          max_output_tokens: maxTokens,
           temperature,
-          messages,
+          input: this.buildInputFromPrompt(prompt),
           ...(options.stopSequences && { stop: options.stopSequences }),
         }),
         signal: controller.signal,
@@ -178,19 +234,24 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        choices: Array<{ message: { content: string } }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        output_text?: string;
+        output?: Array<{
+          type?: string;
+          content?: Array<{ type?: string; text?: string }>;
+        }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
       };
 
-      if (!data.choices?.[0]?.message?.content) {
+      const text = this.extractOutputText(data);
+      if (!text) {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
       return {
-        text: data.choices[0].message.content,
+        text,
         usage: {
-          inputTokens: data.usage?.prompt_tokens ?? 0,
-          outputTokens: data.usage?.completion_tokens ?? 0,
+          inputTokens: data.usage?.input_tokens ?? 0,
+          outputTokens: data.usage?.output_tokens ?? 0,
         },
       };
     } catch (error) {
@@ -215,18 +276,7 @@ export class OpenAIProvider implements LLMProvider {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const jsonSchema = zodToJsonSchema(schema);
-    const url = `${this.baseUrl}/chat/completions`;
-
-    const messages: Array<{ role: string; content: string }> = [];
-    if (prompt.system) {
-      messages.push({ role: 'system', content: prompt.system });
-    }
-    for (const msg of prompt.messages) {
-      messages.push({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      });
-    }
+    const url = `${this.baseUrl}/responses`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -240,12 +290,13 @@ export class OpenAIProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model: options.model,
-          max_tokens: maxTokens,
+          max_output_tokens: maxTokens,
           temperature,
-          messages,
-          response_format: {
+          input: this.buildInputFromPrompt(prompt),
+          text: {
             type: 'json_schema',
-            json_schema: {
+            format: {
+              type: 'json_schema',
               name: 'extract_data',
               schema: jsonSchema,
               strict: true,
@@ -268,16 +319,20 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        choices: Array<{ message: { content: string } }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
+        output_text?: string;
+        output?: Array<{
+          type?: string;
+          content?: Array<{ type?: string; text?: string }>;
+        }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
       };
 
       const usage = {
-        inputTokens: data.usage?.prompt_tokens ?? 0,
-        outputTokens: data.usage?.completion_tokens ?? 0,
+        inputTokens: data.usage?.input_tokens ?? 0,
+        outputTokens: data.usage?.output_tokens ?? 0,
       };
 
-      const content = data.choices?.[0]?.message?.content;
+      const content = this.extractOutputText(data);
       if (!content) {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }

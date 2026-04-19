@@ -51,6 +51,12 @@ const ENV_KEY_BY_PROVIDER: Record<LocalProviderId, keyof ResolvedConfig> = {
   google: 'GOOGLE_AI_STUDIO_KEY',
 };
 
+const MODEL_KEY_BY_PROVIDER: Record<LocalProviderId, keyof ResolvedConfig> = {
+  anthropic: 'ANTHROPIC_MODEL',
+  openai: 'OPENAI_MODEL',
+  google: 'GOOGLE_AI_MODEL',
+};
+
 const LOCAL_PROVIDER_IDS: readonly LocalProviderId[] = ['anthropic', 'openai', 'google'];
 
 function createEmptySafeState(): Record<LocalProviderId, ProviderCredentialSafe> {
@@ -107,7 +113,10 @@ async function readProviderCredential(
   db: AnyDB,
   providerId: LocalProviderId
 ): Promise<StoredProviderCredential | null> {
-  return (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ?? null;
+  return (
+    (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ??
+    null
+  );
 }
 
 async function writeProviderCredential(
@@ -128,6 +137,9 @@ export async function getProviderCredentialBundle(db: AnyDB): Promise<ProviderCr
 
     if (entry.apiKey) {
       secrets[ENV_KEY_BY_PROVIDER[providerId]] = entry.apiKey;
+    }
+    if (entry.defaultModel) {
+      secrets[MODEL_KEY_BY_PROVIDER[providerId]] = entry.defaultModel;
     }
 
     safe[providerId] = {

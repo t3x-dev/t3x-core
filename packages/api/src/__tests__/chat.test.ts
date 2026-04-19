@@ -144,7 +144,7 @@ describe('Chat Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: 'Hello' }],
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
         }),
       });
 
@@ -171,13 +171,13 @@ describe('Chat Routes', () => {
           model: string;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('claude-sonnet-4-20250514');
+        expect(payload.model).toBe('claude-sonnet-4-6');
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello' }]);
 
         return new Response(
           JSON.stringify({
             content: [{ type: 'text', text: 'Anthropic says hi' }],
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             usage: { input_tokens: 11, output_tokens: 7 },
             stop_reason: 'end_turn',
           }),
@@ -191,6 +191,7 @@ describe('Chat Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: 'Hello' }],
+          thinking: true,
         }),
       });
 
@@ -207,10 +208,11 @@ describe('Chat Routes', () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'openai',
         apiKey: 'sk-local-openai',
+        defaultModel: 'gpt-5.4-nano',
       });
 
       const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        expect(String(input)).toBe('https://api.openai.com/v1/chat/completions');
+        expect(String(input)).toBe('https://api.openai.com/v1/responses');
         expect(init?.headers).toMatchObject({
           'Content-Type': 'application/json',
           Authorization: 'Bearer sk-local-openai',
@@ -218,15 +220,21 @@ describe('Chat Routes', () => {
 
         const payload = JSON.parse(String(init?.body)) as {
           model: string;
-          messages: Array<{ role: string; content: string }>;
+          input: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('gpt-4o');
-        expect(payload.messages).toEqual([{ role: 'user', content: 'Hello from OpenAI' }]);
+        expect(payload.model).toBe('gpt-5.4-nano');
+        expect(payload.input).toEqual([{ role: 'user', content: 'Hello from OpenAI' }]);
 
         return new Response(
           JSON.stringify({
-            choices: [{ message: { content: 'OpenAI says hi' } }],
-            usage: { prompt_tokens: 13, completion_tokens: 5 },
+            output: [
+              {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'OpenAI says hi' }],
+              },
+            ],
+            usage: { input_tokens: 13, output_tokens: 5 },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
@@ -246,7 +254,7 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.content).toBe('OpenAI says hi');
-      expect(data.data.model).toBe('gpt-4o');
+      expect(data.data.model).toBe('gpt-5.4-nano');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
@@ -256,9 +264,15 @@ describe('Chat Routes', () => {
       const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
           JSON.stringify({
-            model: 'gpt-4o-mini',
-            choices: [{ message: { content: 'Hello from OpenAI' } }],
-            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            model: 'gpt-5.4-mini',
+            output: [
+              {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'Hello from OpenAI' }],
+              },
+            ],
+            usage: { input_tokens: 10, output_tokens: 5 },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
@@ -269,7 +283,7 @@ describe('Chat Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'openai',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5.4-mini',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -289,19 +303,25 @@ describe('Chat Routes', () => {
       });
 
       const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        expect(String(input)).toBe('https://api.openai.com/v1/chat/completions');
+        expect(String(input)).toBe('https://api.openai.com/v1/responses');
 
         const payload = JSON.parse(String(init?.body)) as {
           model: string;
-          messages: Array<{ role: string; content: string }>;
+          input: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('gpt-4o');
-        expect(payload.messages).toEqual([{ role: 'user', content: 'Hello prefixed OpenAI' }]);
+        expect(payload.model).toBe('gpt-5.4-mini');
+        expect(payload.input).toEqual([{ role: 'user', content: 'Hello prefixed OpenAI' }]);
 
         return new Response(
           JSON.stringify({
-            choices: [{ message: { content: 'OpenAI prefixed model works' } }],
-            usage: { prompt_tokens: 10, completion_tokens: 6 },
+            output: [
+              {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'OpenAI prefixed model works' }],
+              },
+            ],
+            usage: { input_tokens: 10, output_tokens: 6 },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
@@ -312,7 +332,7 @@ describe('Chat Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai:gpt-4o',
+          model: 'openai:gpt-5.4-mini',
           messages: [{ role: 'user', content: 'Hello prefixed OpenAI' }],
         }),
       });
@@ -321,7 +341,7 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.content).toBe('OpenAI prefixed model works');
-      expect(data.data.model).toBe('gpt-4o');
+      expect(data.data.model).toBe('gpt-5.4-mini');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
@@ -338,7 +358,7 @@ describe('Chat Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'anthropic:claude-sonnet-4-20250514',
+          model: 'anthropic:claude-sonnet-4-6',
           messages: [{ role: 'user', content: 'Do not fall through' }],
         }),
       });
@@ -505,7 +525,7 @@ describe('Chat Routes', () => {
             new TextEncoder().encode(
               [
                 'event: message_start',
-                'data: {"message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":9}}}',
+                'data: {"message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":9}}}',
                 '',
                 'event: content_block_delta',
                 'data: {"delta":{"type":"text_delta","text":"Hello from stream"}}',
@@ -536,7 +556,7 @@ describe('Chat Routes', () => {
           stream: boolean;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('claude-sonnet-4-20250514');
+        expect(payload.model).toBe('claude-sonnet-4-6');
         expect(payload.stream).toBe(true);
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello stream' }]);
 
@@ -560,7 +580,7 @@ describe('Chat Routes', () => {
 
       const body = await res.text();
       expect(body).toContain('"type":"token","content":"Hello from stream"');
-      expect(body).toContain('"type":"done","model":"claude-sonnet-4-20250514"');
+      expect(body).toContain('"type":"done","model":"claude-sonnet-4-6"');
       expect(body).toContain('[DONE]');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
@@ -571,15 +591,22 @@ describe('Chat Routes', () => {
         start(controller) {
           controller.enqueue(
             new TextEncoder().encode(
-              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}\n\n'
+              'event: response.output_text.delta\n' +
+                'data: {"type":"response.output_text.delta","delta":"Hel"}\n\n'
             )
           );
           controller.enqueue(
             new TextEncoder().encode(
-              'data: {"id":"chatcmpl_1","model":"gpt-4o-mini","choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}\n\n'
+              'event: response.output_text.delta\n' +
+                'data: {"type":"response.output_text.delta","delta":"lo"}\n\n'
             )
           );
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.enqueue(
+            new TextEncoder().encode(
+              'event: response.completed\n' +
+                'data: {"type":"response.completed","response":{"model":"gpt-5.4-mini","usage":{"input_tokens":10,"output_tokens":5}}}\n\n'
+            )
+          );
           controller.close();
         },
       });
@@ -592,7 +619,7 @@ describe('Chat Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'openai',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5.4-mini',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
@@ -601,9 +628,65 @@ describe('Chat Routes', () => {
       const text = await res.text();
       expect(text).toContain('"type":"token","content":"Hel"');
       expect(text).toContain('"type":"token","content":"lo"');
+      expect(text).toContain('"type":"done","model":"gpt-5.4-mini"');
       expect(text).toContain('"type":"done"');
       fetchMock.mockRestore();
       delete process.env.OPENAI_API_KEY;
+    });
+
+    it('supports Gemini chat through the stream endpoint', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'google',
+        apiKey: 'test-google-key',
+        defaultModel: 'gemini-3.1-flash-lite-preview',
+      });
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent'
+        );
+        expect(init?.headers).toMatchObject({
+          'Content-Type': 'application/json',
+          'x-goog-api-key': 'test-google-key',
+        });
+
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Hello from Gemini' }],
+                },
+              },
+            ],
+            usageMetadata: {
+              promptTokenCount: 12,
+              candidatesTokenCount: 6,
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const res = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'google',
+          model: 'gemini-3.1-flash-lite-preview',
+          messages: [{ role: 'user', content: 'Hello Gemini' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/event-stream');
+
+      const text = await res.text();
+      expect(text).toContain('"type":"token","content":"Hello from Gemini"');
+      expect(text).toContain('"type":"done","model":"gemini-3.1-flash-lite-preview"');
+      expect(text).toContain('[DONE]');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('fails clearly instead of falling back when stream model targets an unsupported provider', async () => {
@@ -619,7 +702,7 @@ describe('Chat Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'openai:gpt-5.4-mini',
           thinking: true,
           messages: [{ role: 'user', content: 'Do not silently stream with Claude' }],
         }),

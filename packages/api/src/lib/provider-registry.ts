@@ -149,15 +149,13 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude',
     role: 'generation',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
-    availableModels: [
-      'claude-sonnet-4-20250514',
-      'claude-opus-4-20250514',
-      'claude-haiku-4-5-20251001',
-    ],
-    factory: (config) =>
+    modelConfigKey: 'ANTHROPIC_MODEL',
+    defaultModel: 'claude-sonnet-4-6',
+    availableModels: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-6'],
+    factory: (config, context) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
+        model: context.defaultModel,
         baseUrl: process.env.ANTHROPIC_BASE_URL,
       }),
   });
@@ -167,11 +165,13 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'OpenAI',
     role: 'generation',
     requiredEnvKeys: ['OPENAI_API_KEY'],
-    defaultModel: 'gpt-4o',
-    availableModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
-    factory: (config) =>
+    modelConfigKey: 'OPENAI_MODEL',
+    defaultModel: 'gpt-5.4-mini',
+    availableModels: ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'],
+    factory: (config, context) =>
       createOpenAIProvider({
         apiKey: config.OPENAI_API_KEY!,
+        model: context.defaultModel,
         baseUrl: process.env.OPENAI_BASE_URL,
       }),
   });
@@ -195,11 +195,17 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Google AI (Gemini)',
     role: 'generation',
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-    defaultModel: 'gemini-2.0-flash',
-    availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-    factory: (config) =>
+    modelConfigKey: 'GOOGLE_AI_MODEL',
+    defaultModel: 'gemini-3-flash-preview',
+    availableModels: [
+      'gemini-3.1-flash-lite-preview',
+      'gemini-3-flash-preview',
+      'gemini-3-pro-preview',
+    ],
+    factory: (config, context) =>
       createGeminiProvider({
         apiKey: config.GOOGLE_AI_STUDIO_KEY!,
+        model: context.defaultModel,
       }),
   });
 
@@ -223,10 +229,12 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude (Merge)',
     role: 'merge',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
-    factory: (config) =>
+    modelConfigKey: 'ANTHROPIC_MODEL',
+    defaultModel: 'claude-sonnet-4-6',
+    factory: (config, context) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
+        model: context.defaultModel,
         baseUrl: process.env.ANTHROPIC_BASE_URL,
       }),
   });

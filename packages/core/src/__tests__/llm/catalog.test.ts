@@ -33,7 +33,7 @@ describe('Model Catalog', () => {
   });
 
   it('getModelInfo finds model by ID', () => {
-    const info = getModelInfo('gpt-4o');
+    const info = getModelInfo('gpt-5.4');
     expect(info).toBeDefined();
     expect(info!.provider).toBe('openai');
   });

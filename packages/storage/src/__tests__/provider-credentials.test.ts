@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { getGlobalSetting } from '../queries/global-settings';
 import * as queries from '../queries';
-import { createTestDB } from './setup';
+import { getGlobalSetting } from '../queries/global-settings';
 import {
   deleteProviderCredential,
   getProviderCredentialBundle,
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '../queries/provider-credentials';
+import { createTestDB } from './setup';
 
 describe('provider credentials', () => {
   let db: AnyDB;
@@ -29,14 +29,15 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'openai',
       apiKey: 'sk-local-openai',
-      defaultModel: 'gpt-4o-mini',
+      defaultModel: 'gpt-5.4-mini',
     });
 
     const bundle = await getProviderCredentialBundle(db);
 
     expect(bundle.secrets.OPENAI_API_KEY).toBe('sk-local-openai');
+    expect(bundle.secrets.OPENAI_MODEL).toBe('gpt-5.4-mini');
     expect(bundle.safe.openai?.configured).toBe(true);
-    expect(bundle.safe.openai?.defaultModel).toBe('gpt-4o-mini');
+    expect(bundle.safe.openai?.defaultModel).toBe('gpt-5.4-mini');
     expect(JSON.stringify(bundle.safe)).not.toContain('sk-local-openai');
   });
 
@@ -51,29 +52,32 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'anthropic',
       apiKey: 'sk-ant-local',
-      defaultModel: 'claude-sonnet-4-20250514',
+      defaultModel: 'claude-sonnet-4-6',
     });
     await upsertProviderCredential(db, {
       providerId: 'openai',
       apiKey: 'sk-openai-local',
-      defaultModel: 'gpt-4o-mini',
+      defaultModel: 'gpt-5.4-mini',
     });
 
     const bundle = await getProviderCredentialBundle(db);
     expect(bundle.secrets.ANTHROPIC_API_KEY).toBe('sk-ant-local');
     expect(bundle.secrets.OPENAI_API_KEY).toBe('sk-openai-local');
+    expect(bundle.secrets.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6');
+    expect(bundle.secrets.OPENAI_MODEL).toBe('gpt-5.4-mini');
   });
 
   it('removes a provider credential cleanly', async () => {
     await upsertProviderCredential(db, {
       providerId: 'anthropic',
       apiKey: 'sk-ant-local',
-      defaultModel: 'claude-sonnet-4-20250514',
+      defaultModel: 'claude-sonnet-4-6',
     });
     await deleteProviderCredential(db, 'anthropic');
 
     const bundle = await getProviderCredentialBundle(db);
     expect(bundle.secrets.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(bundle.secrets.ANTHROPIC_MODEL).toBeUndefined();
     expect(bundle.safe.anthropic?.configured).toBe(false);
   });
 
@@ -83,7 +87,7 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'openai',
       apiKey: rawKey,
-      defaultModel: 'gpt-4o-mini',
+      defaultModel: 'gpt-5.4-mini',
     });
     await updateProviderCredentialTestResult(db, 'openai', {
       lastTestStatus: 'error',
@@ -104,7 +108,7 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'openai',
       apiKey: oldKey,
-      defaultModel: 'gpt-4o-mini',
+      defaultModel: 'gpt-5.4-mini',
     });
     await updateProviderCredentialTestResult(db, 'openai', {
       lastTestStatus: 'error',
@@ -113,7 +117,7 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'openai',
       apiKey: newKey,
-      defaultModel: 'gpt-4o-mini',
+      defaultModel: 'gpt-5.4-mini',
     });
 
     const bundle = await getProviderCredentialBundle(db);
@@ -146,12 +150,13 @@ describe('provider credentials', () => {
     await upsertProviderCredential(db, {
       providerId: 'google-ai',
       apiKey: 'sk-google-local',
-      defaultModel: 'gemini-2.5-pro',
+      defaultModel: 'gemini-3-flash-preview',
     });
 
     const bundle = await getProviderCredentialBundle(db);
 
     expect(bundle.secrets.GOOGLE_AI_STUDIO_KEY).toBe('sk-google-local');
+    expect(bundle.secrets.GOOGLE_AI_MODEL).toBe('gemini-3-flash-preview');
     expect(bundle.safe.google?.configured).toBe(true);
   });
 });

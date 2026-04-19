@@ -165,7 +165,7 @@ const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
 };
 
 const CHAT_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
-const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai'] as const;
+const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
 const DEFAULT_MAX_TOKENS = 4096;
 const MAX_CHAT_TOKENS = 16384;
 
@@ -179,7 +179,7 @@ function isSupportedChatProviderId(value: string): value is ChatRuntimeProviderI
 
 function isSupportedStreamProviderId(
   value: string
-): value is Extract<ChatRuntimeProviderId, 'anthropic' | 'openai'> {
+): value is Extract<ChatRuntimeProviderId, 'anthropic' | 'openai' | 'google-ai'> {
   return (STREAM_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
 }
 
@@ -192,7 +192,7 @@ function getModelDefaultForProvider(
   registry: Awaited<ReturnType<typeof getProviderRegistry>>,
   providerId: ChatRuntimeProviderId
 ): string | null {
-  return registry.getEntry(providerId)?.defaultModel ?? null;
+  return registry.getDefaultModel(providerId) ?? null;
 }
 
 function findProviderForModel(
@@ -468,23 +468,41 @@ function encodeSseEvent(payload: string): Uint8Array {
   return new TextEncoder().encode(`data: ${payload}\n\n`);
 }
 
-function toOpenAIContent(
+function toOpenAIInputContent(
   content: ChatMessage['content']
 ):
   | string
-  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> {
+  | Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> {
   if (typeof content === 'string') return content;
   return content.map((block) => {
     if (block.type === 'text') {
-      return { type: 'text', text: block.text ?? '' };
+      return { type: 'input_text', text: block.text ?? '' };
     }
     return {
-      type: 'image_url',
-      image_url: {
-        url: `data:${block.source?.media_type ?? 'image/png'};base64,${block.source?.data ?? ''}`,
-      },
+      type: 'input_image',
+      image_url: `data:${block.source?.media_type ?? 'image/png'};base64,${block.source?.data ?? ''}`,
     };
   });
+}
+
+function extractOpenAIOutputText(data: {
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+}): string {
+  if (typeof data.output_text === 'string' && data.output_text.length > 0) {
+    return data.output_text;
+  }
+
+  return (
+    data.output
+      ?.flatMap((item) => item.content ?? [])
+      .filter((part) => part.type === 'output_text' && typeof part.text === 'string')
+      .map((part) => part.text ?? '')
+      .join('') ?? ''
+  );
 }
 
 async function callOpenAINonStreaming(
@@ -495,7 +513,7 @@ async function callOpenAINonStreaming(
   maxTokens: number
 ): Promise<ChatResponse> {
   const proxyFetch = getProxyFetch();
-  const response = await proxyFetch('https://api.openai.com/v1/chat/completions', {
+  const response = await proxyFetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -504,10 +522,10 @@ async function callOpenAINonStreaming(
     body: JSON.stringify({
       model,
       temperature,
-      max_completion_tokens: maxTokens,
-      messages: messages.map((message) => ({
+      max_output_tokens: maxTokens,
+      input: messages.map((message) => ({
         role: message.role,
-        content: toOpenAIContent(message.content),
+        content: toOpenAIInputContent(message.content),
       })),
     }),
     signal: AbortSignal.timeout(120000),
@@ -521,29 +539,18 @@ async function callOpenAINonStreaming(
 
   const data = JSON.parse(responseText) as {
     model: string;
-    choices?: Array<{
-      message?: {
-        content?: string | Array<{ type?: string; text?: string }>;
-      };
-      finish_reason?: string | null;
-    }>;
     usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
+      input_tokens?: number;
+      output_tokens?: number;
     };
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
   };
 
-  const firstChoice = data.choices?.[0];
-  const rawContent = firstChoice?.message?.content;
-  const content =
-    typeof rawContent === 'string'
-      ? rawContent
-      : Array.isArray(rawContent)
-        ? rawContent
-            .filter((part) => part.type === 'text' && typeof part.text === 'string')
-            .map((part) => part.text)
-            .join('')
-        : '';
+  const content = extractOpenAIOutputText(data);
 
   if (!content) {
     throw new Error('No text content in OpenAI response');
@@ -553,10 +560,10 @@ async function callOpenAINonStreaming(
     content,
     model: data.model ?? model,
     usage: {
-      input_tokens: data.usage?.prompt_tokens,
-      output_tokens: data.usage?.completion_tokens,
+      input_tokens: data.usage?.input_tokens,
+      output_tokens: data.usage?.output_tokens,
     },
-    finish_reason: firstChoice?.finish_reason ?? 'stop',
+    finish_reason: 'stop',
   };
 }
 
@@ -829,7 +836,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return c.json({ success: false as const, error: target.error }, 400);
   }
 
-  const { providerId, model, registry } = target;
+  const { provider, providerId, model, registry } = target;
   const unsupportedFeatureError = getUnsupportedChatFeatureError({
     providerId,
     route: 'stream',
@@ -910,7 +917,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             signal: AbortSignal.timeout(120000),
           })) as unknown as Response;
         } else if (providerId === 'openai') {
-          upstreamResponse = (await proxyFetch('https://api.openai.com/v1/chat/completions', {
+          upstreamResponse = (await proxyFetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -919,16 +926,44 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             body: JSON.stringify({
               model,
               temperature,
-              max_completion_tokens: maxTokens,
+              max_output_tokens: maxTokens,
               stream: true,
-              stream_options: { include_usage: true },
-              messages: messages.map((message) => ({
+              input: messages.map((message) => ({
                 role: message.role,
-                content: toOpenAIContent(message.content),
+                content: toOpenAIInputContent(message.content),
               })),
             }),
             signal: AbortSignal.timeout(120000),
           })) as unknown as Response;
+        } else if (providerId === 'google-ai') {
+          const result = await callProviderNonStreaming(
+            provider,
+            model,
+            messages,
+            temperature,
+            maxTokens
+          );
+
+          resolvedModel = result.model;
+          usage.input_tokens = result.usage?.input_tokens;
+          usage.output_tokens = result.usage?.output_tokens;
+
+          if (result.content) {
+            controller.enqueue(
+              encodeSseEvent(JSON.stringify({ type: 'token', content: result.content }))
+            );
+          }
+          controller.enqueue(
+            encodeSseEvent(
+              JSON.stringify({
+                type: 'done',
+                model: resolvedModel,
+                usage,
+              })
+            )
+          );
+          controller.enqueue(encodeSseEvent('[DONE]'));
+          return;
         } else {
           throw new Error(`Provider ${providerId} not implemented`);
         }
@@ -975,21 +1010,6 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (!dataStr) continue;
-            if (providerId === 'openai' && dataStr === '[DONE]') {
-              receivedMessageStop = true;
-              controller.enqueue(
-                encodeSseEvent(
-                  JSON.stringify({
-                    type: 'done',
-                    model: resolvedModel,
-                    usage,
-                  })
-                )
-              );
-              controller.enqueue(encodeSseEvent('[DONE]'));
-              continue;
-            }
-
             let parsed: Record<string, unknown>;
             try {
               parsed = JSON.parse(dataStr);
@@ -998,28 +1018,45 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (providerId === 'openai') {
-              if (typeof parsed.model === 'string') {
-                resolvedModel = parsed.model;
-              }
-              const usageChunk = parsed.usage as Record<string, number> | undefined;
-              if (usageChunk) {
-                usage.input_tokens = usageChunk.prompt_tokens ?? usage.input_tokens;
-                usage.output_tokens = usageChunk.completion_tokens ?? usage.output_tokens;
-              }
-              const choices = Array.isArray(parsed.choices)
-                ? (parsed.choices as Array<Record<string, unknown>>)
-                : [];
-              for (const choice of choices) {
-                const delta = choice.delta as Record<string, unknown> | undefined;
-                if (typeof delta?.content === 'string') {
+              if (eventType === 'response.output_text.delta') {
+                if (typeof parsed.delta === 'string' && parsed.delta.length > 0) {
                   controller.enqueue(
-                    encodeSseEvent(JSON.stringify({ type: 'token', content: delta.content }))
+                    encodeSseEvent(JSON.stringify({ type: 'token', content: parsed.delta }))
                   );
                 }
-                if (typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0) {
-                  receivedMessageStop = true;
-                }
+                continue;
               }
+
+              if (eventType === 'response.completed') {
+                const completedResponse = parsed.response as
+                  | {
+                      model?: string;
+                      usage?: { input_tokens?: number; output_tokens?: number };
+                    }
+                  | undefined;
+
+                if (typeof completedResponse?.model === 'string') {
+                  resolvedModel = completedResponse.model;
+                }
+                if (completedResponse?.usage) {
+                  usage.input_tokens = completedResponse.usage.input_tokens ?? usage.input_tokens;
+                  usage.output_tokens =
+                    completedResponse.usage.output_tokens ?? usage.output_tokens;
+                }
+
+                receivedMessageStop = true;
+                controller.enqueue(
+                  encodeSseEvent(
+                    JSON.stringify({
+                      type: 'done',
+                      model: resolvedModel,
+                      usage,
+                    })
+                  )
+                );
+                controller.enqueue(encodeSseEvent('[DONE]'));
+              }
+
               continue;
             }
 

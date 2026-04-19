@@ -85,8 +85,11 @@ describe('ProviderRegistry', () => {
 
     it('prefers config overrides over process.env while preserving env fallback', () => {
       const envKey = 'T3X_TEST_PROVIDER_KEY';
+      const modelKey = 'T3X_TEST_PROVIDER_MODEL';
       const original = process.env[envKey];
+      const originalModel = process.env[modelKey];
       delete process.env[envKey];
+      delete process.env[modelKey];
 
       try {
         const reg = createProviderRegistry();
@@ -97,6 +100,8 @@ describe('ProviderRegistry', () => {
           name: 'Override Provider',
           role: 'generation',
           requiredEnvKeys: [envKey],
+          modelConfigKey: modelKey,
+          defaultModel: 'default-model',
           factory,
         });
 
@@ -105,25 +110,57 @@ describe('ProviderRegistry', () => {
         expect(factory).not.toHaveBeenCalled();
 
         process.env[envKey] = 'env-secret';
+        process.env[modelKey] = 'env-model';
         expect(reg.isConfigured('override-provider')).toBe(true);
 
         const envProvider = reg.getById('override-provider');
         expect(envProvider).not.toBeNull();
-        expect(factory).toHaveBeenCalledWith({ [envKey]: 'env-secret' });
+        expect(factory).toHaveBeenCalledWith(
+          { [envKey]: 'env-secret', [modelKey]: 'env-model' },
+          { defaultModel: 'env-model' }
+        );
 
-        reg.setConfigOverrides({ [envKey]: 'local-secret' });
+        reg.setConfigOverrides({ [envKey]: 'local-secret', [modelKey]: 'local-model' });
 
         expect(reg.isConfigured('override-provider')).toBe(true);
         const overrideProvider = reg.getById('override-provider');
         expect(overrideProvider).not.toBeNull();
-        expect(factory).toHaveBeenLastCalledWith({ [envKey]: 'local-secret' });
+        expect(factory).toHaveBeenLastCalledWith(
+          { [envKey]: 'local-secret', [modelKey]: 'local-model' },
+          { defaultModel: 'local-model' }
+        );
       } finally {
         if (original === undefined) {
           delete process.env[envKey];
         } else {
           process.env[envKey] = original;
         }
+        if (originalModel === undefined) {
+          delete process.env[modelKey];
+        } else {
+          process.env[modelKey] = originalModel;
+        }
       }
+    });
+
+    it('falls back to entry defaultModel when no model override exists', () => {
+      const reg = createProviderRegistry();
+      const factory = vi.fn(() => ({ id: 'default-provider', generate: vi.fn() }));
+
+      reg.register({
+        id: 'default-provider',
+        name: 'Default Provider',
+        role: 'generation',
+        requiredEnvKeys: [],
+        modelConfigKey: 'T3X_DEFAULT_PROVIDER_MODEL',
+        defaultModel: 'registry-default-model',
+        factory,
+      });
+
+      reg.getById('default-provider');
+
+      expect(factory).toHaveBeenCalledWith({}, { defaultModel: 'registry-default-model' });
+      expect(reg.getDefaultModel('default-provider')).toBe('registry-default-model');
     });
   });
 
@@ -265,6 +302,27 @@ describe('ProviderRegistry', () => {
   });
 
   describe('getProviderIdsForRole', () => {
+    it('uses a provider-test token floor compatible with modern LLM APIs', async () => {
+      const reg = createProviderRegistry();
+      const generate = vi.fn().mockResolvedValue({ text: 'ok' });
+
+      reg.register({
+        id: 'openai-like',
+        name: 'OpenAI-like',
+        role: 'generation',
+        requiredEnvKeys: [],
+        factory: () => ({ id: 'openai-like', generate }),
+      });
+
+      const result = await reg.testConnection('openai-like');
+
+      expect(result.ok).toBe(true);
+      expect(generate).toHaveBeenCalledWith('Say "ok"', {
+        maxTokens: 16,
+        temperature: 0,
+      });
+    });
+
     it('should return assigned provider IDs', () => {
       const reg = createProviderRegistry();
       reg.register({

@@ -3,7 +3,7 @@ import { createProviderForModel } from '../../llm/providerFactory';
 
 describe('createProviderForModel', () => {
   it('creates Anthropic provider for Claude model', () => {
-    const provider = createProviderForModel('claude-sonnet-4-20250514', {
+    const provider = createProviderForModel('claude-sonnet-4-6', {
       anthropic: 'sk-test',
       openai: undefined,
       google: undefined,
@@ -13,7 +13,7 @@ describe('createProviderForModel', () => {
   });
 
   it('creates OpenAI provider for GPT model', () => {
-    const provider = createProviderForModel('gpt-4o', {
+    const provider = createProviderForModel('gpt-5.4-mini', {
       anthropic: undefined,
       openai: 'sk-test',
       google: undefined,
@@ -23,7 +23,7 @@ describe('createProviderForModel', () => {
   });
 
   it('creates Google provider for Gemini model', () => {
-    const provider = createProviderForModel('gemini-2.5-flash', {
+    const provider = createProviderForModel('gemini-3-flash-preview', {
       anthropic: undefined,
       openai: undefined,
       google: 'test-key',
@@ -42,7 +42,7 @@ describe('createProviderForModel', () => {
   });
 
   it('returns null when API key missing for provider', () => {
-    const provider = createProviderForModel('claude-sonnet-4-20250514', {
+    const provider = createProviderForModel('claude-sonnet-4-6', {
       anthropic: undefined,
       openai: undefined,
       google: undefined,

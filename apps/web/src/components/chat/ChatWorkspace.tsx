@@ -7,6 +7,7 @@ import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
+import { useConversationModelSelection } from '@/hooks/conversations/useConversationModelSelection';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
@@ -94,13 +95,17 @@ export function ChatWorkspace({
   }, [resolvedProjectId, fetchPins]);
 
   // Model selection state
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(initialProvider ?? null);
-  const [selectedModel, setSelectedModel] = useState<string | null>(initialModel ?? null);
-
-  const handleModelChange = useCallback((provider: string, model: string) => {
-    setSelectedProvider(provider);
-    setSelectedModel(model);
-  }, []);
+  const {
+    selectedProvider,
+    selectedModel,
+    setSelectedProvider,
+    setSelectedModel,
+    handleModelChange,
+  } = useConversationModelSelection({
+    conversationId: resolvedConversationId,
+    initialProvider,
+    initialModel,
+  });
 
   const isSelectionReady = Boolean(selectedProvider && selectedModel && !modelsLoading);
 

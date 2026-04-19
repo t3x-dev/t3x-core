@@ -79,7 +79,7 @@ describe('Provider Routes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: 'sk-local-openai',
-        default_model: 'gpt-4o-mini',
+        default_model: 'gpt-5.4-mini',
       }),
     });
 
@@ -89,7 +89,7 @@ describe('Provider Routes', () => {
     expect(json.success).toBe(true);
     expect(json.data.provider).toBe('openai');
     expect(json.data.configured).toBe(true);
-    expect(json.data.default_model).toBe('gpt-4o-mini');
+    expect(json.data.default_model).toBe('gpt-5.4-mini');
     expect(JSON.stringify(json)).not.toContain('sk-local-openai');
   });
 
@@ -99,7 +99,7 @@ describe('Provider Routes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: 'sk-local-google',
-        default_model: 'gemini-2.0-flash',
+        default_model: 'gemini-3-flash-preview',
       }),
     });
 
@@ -108,7 +108,7 @@ describe('Provider Routes', () => {
     const json: ApiResponse = await res.json();
     expect(json.data.provider).toBe('google');
     expect(json.data.configured).toBe(true);
-    expect(json.data.default_model).toBe('gemini-2.0-flash');
+    expect(json.data.default_model).toBe('gemini-3-flash-preview');
   });
 
   it('normalizes blank default_model input to null', async () => {
@@ -134,7 +134,7 @@ describe('Provider Routes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: '   ',
-        default_model: 'gpt-4o-mini',
+        default_model: 'gpt-5.4-mini',
       }),
     });
 
@@ -155,7 +155,7 @@ describe('Provider Routes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: 'sk-local-anthropic',
-        default_model: 'claude-sonnet-4-20250514',
+        default_model: 'claude-sonnet-4-6',
       }),
     });
 
@@ -257,8 +257,8 @@ describe('Provider Routes', () => {
         configured: true,
         roles: ['generation'],
         requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-        defaultModel: 'gemini-2.0-flash',
-        availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro'],
+        defaultModel: 'gemini-3-flash-preview',
+        availableModels: ['gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'],
       },
       {
         id: 'openai',
@@ -267,8 +267,8 @@ describe('Provider Routes', () => {
         configured: true,
         roles: ['generation'],
         requiredEnvKeys: ['OPENAI_API_KEY'],
-        defaultModel: 'gpt-4o',
-        availableModels: ['gpt-4-turbo'],
+        defaultModel: 'gpt-5.4-mini',
+        availableModels: ['gpt-5.4-nano', 'gpt-5.4-mini'],
       },
       {
         id: 'deepseek',
