@@ -8,6 +8,7 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
+import { getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
@@ -158,6 +159,12 @@ const CHAT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ChatRuntimeProviderId> = {
   'google-ai': 'google-ai',
 };
 
+const CHAT_PROVIDER_RUNTIME_TO_CATALOG: Record<ChatRuntimeProviderId, 'anthropic' | 'openai' | 'google'> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
 const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
   anthropic: 'claude',
   openai: 'openai',
@@ -218,7 +225,20 @@ function findProviderForModel(
     }
   }
 
-  return null;
+  const catalogProvider = getModelInfo(model)?.provider;
+  if (!catalogProvider) {
+    return null;
+  }
+
+  const runtimeProvider = Object.entries(CHAT_PROVIDER_RUNTIME_TO_CATALOG).find(
+    ([, publicProvider]) => publicProvider === catalogProvider
+  )?.[0];
+
+  if (!runtimeProvider || !candidateProviders.includes(runtimeProvider)) {
+    return null;
+  }
+
+  return runtimeProvider as ChatRuntimeProviderId;
 }
 
 function getInvalidModelError(model: string) {
@@ -402,7 +422,7 @@ async function resolveChatRequestTarget(options: {
   }
 
   const model = options.model
-    ? stripProviderPrefixFromModel(options.model, providerId)
+    ? (getCanonicalModelId(stripProviderPrefixFromModel(options.model, providerId)) ?? null)
     : getModelDefaultForProvider(registry, providerId);
   if (!model) {
     return {

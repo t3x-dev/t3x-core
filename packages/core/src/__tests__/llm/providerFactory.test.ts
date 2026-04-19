@@ -13,7 +13,7 @@ describe('createProviderForModel', () => {
   });
 
   it('creates OpenAI provider for GPT model', () => {
-    const provider = createProviderForModel('gpt-4o', {
+    const provider = createProviderForModel('gpt-5.4', {
       anthropic: undefined,
       openai: 'sk-test',
       google: undefined,
@@ -23,13 +23,29 @@ describe('createProviderForModel', () => {
   });
 
   it('creates Google provider for Gemini model', () => {
-    const provider = createProviderForModel('gemini-2.5-flash', {
+    const provider = createProviderForModel('gemini-3.1-pro-preview', {
       anthropic: undefined,
       openai: undefined,
       google: 'test-key',
     });
     expect(provider).toBeDefined();
     expect(provider!.id).toBe('google-ai');
+  });
+
+  it('creates providers for legacy model ids after canonicalization', () => {
+    const openaiProvider = createProviderForModel('gpt-4o', {
+      anthropic: undefined,
+      openai: 'sk-test',
+      google: undefined,
+    });
+    const googleProvider = createProviderForModel('gemini-2.5-pro', {
+      anthropic: undefined,
+      openai: undefined,
+      google: 'test-key',
+    });
+
+    expect(openaiProvider?.id).toBe('openai');
+    expect(googleProvider?.id).toBe('google-ai');
   });
 
   it('returns null for unknown model', () => {

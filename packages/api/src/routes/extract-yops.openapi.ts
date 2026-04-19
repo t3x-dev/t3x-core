@@ -19,6 +19,8 @@ import {
   buildYOpsPrompt,
   DEFAULT_STYLE,
   type ExtractionTurn,
+  getCanonicalModelId,
+  getModelInfo,
   parseYOpsOutput,
 } from '@t3x-dev/core';
 import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
@@ -46,10 +48,89 @@ const FailingOpInput = z.object({
   detail: z.string().optional(),
 });
 
+type ExtractRuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
+
+const EXTRACT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ExtractRuntimeProviderId> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  openai: 'openai',
+  gpt: 'openai',
+  gemini: 'google-ai',
+  google: 'google-ai',
+  'google-ai': 'google-ai',
+};
+
+const EXTRACT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ExtractRuntimeProviderId, 'anthropic' | 'openai' | 'google'> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'google-ai': 'google',
+};
+
+const EXTRACT_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
+
+function normalizeExtractProvider(provider: string | undefined): ExtractRuntimeProviderId | null {
+  if (!provider) return null;
+  return EXTRACT_PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
+}
+
+function findProviderForModel(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  model: string,
+  candidateProviders: readonly string[]
+): ExtractRuntimeProviderId | null {
+  const providerPrefix = model.split(':', 1)[0];
+  if (providerPrefix && providerPrefix !== model) {
+    const normalizedPrefixedProvider = normalizeExtractProvider(providerPrefix);
+    if (normalizedPrefixedProvider && candidateProviders.includes(normalizedPrefixedProvider)) {
+      return normalizedPrefixedProvider;
+    }
+  }
+
+  for (const provider of registry.listProviders()) {
+    if (!candidateProviders.includes(provider.id)) continue;
+    if (provider.defaultModel === model || provider.availableModels?.includes(model)) {
+      return provider.id as ExtractRuntimeProviderId;
+    }
+  }
+
+  const catalogProvider = getModelInfo(model)?.provider;
+  if (!catalogProvider) {
+    return null;
+  }
+
+  const runtimeProvider = Object.entries(EXTRACT_PROVIDER_RUNTIME_TO_PUBLIC).find(
+    ([, publicProvider]) => publicProvider === catalogProvider
+  )?.[0];
+
+  if (!runtimeProvider || !candidateProviders.includes(runtimeProvider)) {
+    return null;
+  }
+
+  return runtimeProvider as ExtractRuntimeProviderId;
+}
+
+function stripProviderPrefixFromModel(model: string, providerId: ExtractRuntimeProviderId): string {
+  const separatorIndex = model.indexOf(':');
+  if (separatorIndex === -1) {
+    return model;
+  }
+
+  const providerPrefix = model.slice(0, separatorIndex);
+  const normalizedPrefixedProvider = normalizeExtractProvider(providerPrefix);
+  if (normalizedPrefixedProvider !== providerId) {
+    return model;
+  }
+
+  const providerModel = model.slice(separatorIndex + 1);
+  return providerModel || model;
+}
+
 const ExtractYopsRequest = z.object({
   conversation_id: z.string().min(1),
   turns: z.array(TurnInput),
   failing_ops: z.array(FailingOpInput).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
 });
 
 // Response schema — ops is opaque YOp[]; OpenAPI uses z.any() for the payload.
@@ -94,7 +175,8 @@ const route = createRoute({
 // ── Handler ──
 
 extractYopsRoutes.openapi(route, async (c) => {
-  const { conversation_id, turns, failing_ops } = c.req.valid('json');
+  const { conversation_id, turns, failing_ops, provider: requestedProvider, model: requestedModel } =
+    c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -149,26 +231,71 @@ extractYopsRoutes.openapi(route, async (c) => {
     // Combine system + user prompt (same pattern as YamlExtractionStrategy)
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
-    // Call the LLM via provider registry with fallback
+    // Call the LLM via the explicitly selected provider/model when available.
+    // Otherwise, fall back to the current generation-role default chain.
     const reg = await getProviderRegistry();
     let rawText: string;
     try {
-      const openaiProvider =
-        process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY
-          ? reg.getById<any>('openai')
-          : null;
+      const explicitProvider = normalizeExtractProvider(requestedProvider);
+      if (requestedProvider && !explicitProvider) {
+        return errorResponse(c, 'EXTRACTION_FAILED', `Unknown provider: ${requestedProvider}`);
+      }
 
-      const genResult = openaiProvider
-        ? await openaiProvider.generate(combinedPrompt, {
-            temperature: 0.1,
-            maxTokens: 8192,
-          })
-        : await reg.tryWithFallback('generation', (provider) =>
-            provider.generate(combinedPrompt, {
+      const modelProvider = requestedModel
+        ? findProviderForModel(reg, requestedModel, EXTRACT_PROVIDER_RUNTIME_IDS)
+        : null;
+      if (requestedModel && !modelProvider) {
+        return errorResponse(c, 'EXTRACTION_FAILED', `Unknown or unsupported model: ${requestedModel}`);
+      }
+
+      if (explicitProvider && modelProvider && explicitProvider !== modelProvider) {
+        return errorResponse(
+          c,
+          'EXTRACTION_FAILED',
+          `Model ${requestedModel} does not match provider: ${requestedProvider}`
+        );
+      }
+
+      const defaultProvider = reg
+        .getProviderIdsForRole('generation')
+        .find(
+          (id) =>
+            (EXTRACT_PROVIDER_RUNTIME_IDS as readonly string[]).includes(id) && reg.isConfigured(id)
+        ) as ExtractRuntimeProviderId | undefined;
+
+      const providerId = explicitProvider ?? modelProvider ?? defaultProvider ?? null;
+      if (!providerId) {
+        return errorResponse(c, 'EXTRACTION_FAILED', 'No configured extraction provider is available');
+      }
+
+      const provider = reg.getById<any>(providerId);
+      if (!provider) {
+        return errorResponse(c, 'EXTRACTION_FAILED', `Provider ${providerId} is unavailable`);
+      }
+
+      const model = requestedModel
+        ? (getCanonicalModelId(stripProviderPrefixFromModel(requestedModel, providerId)) ?? null)
+        : (reg.getEntry(providerId)?.defaultModel ?? null);
+      if (!model) {
+        return errorResponse(c, 'EXTRACTION_FAILED', `No default model configured for provider: ${providerId}`);
+      }
+
+      const genResult =
+        typeof provider.generateFromPrompt === 'function'
+          ? await provider.generateFromPrompt(
+              {
+                messages: [{ role: 'user', content: combinedPrompt }],
+              },
+              {
+                model,
+                temperature: 0.1,
+                maxTokens: 8192,
+              }
+            )
+          : await provider.generate(combinedPrompt, {
               temperature: 0.1,
               maxTokens: 8192,
-            })
-          );
+            });
       rawText = genResult.text;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LLM provider error';

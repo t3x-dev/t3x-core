@@ -1,8 +1,33 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  if (
+    typeof globalThis.localStorage !== 'object' ||
+    typeof globalThis.localStorage.setItem === 'function'
+  ) {
+    return;
+  }
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => store.clear(),
+      get length() {
+        return store.size;
+      },
+      key: (index: number) => [...store.keys()][index] ?? null,
+    },
+  });
+});
 
 const push = vi.fn();
 
@@ -49,9 +74,25 @@ vi.mock('@/components/chat/ChatInput', () => ({
 
 import ChatLandingPage from '@/app/chat/page';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
+import { useChatModelPreferencesStore } from '@/store/chatModelPreferencesStore';
+
+beforeEach(() => {
+  localStorage.removeItem('t3x-chat-model-preferences');
+  useChatModelPreferencesStore.setState({
+    selectedProvider: null,
+    selectedModel: null,
+    hydrated: true,
+  });
+});
 
 afterEach(() => {
   vi.clearAllMocks();
+  localStorage.removeItem('t3x-chat-model-preferences');
+  useChatModelPreferencesStore.setState({
+    selectedProvider: null,
+    selectedModel: null,
+    hydrated: true,
+  });
 });
 
 describe('ChatLandingPage', () => {
@@ -85,17 +126,23 @@ describe('ChatLandingPage', () => {
       loadModels: vi.fn(),
     });
 
-    render(<ChatLandingPage />);
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId('selected-model')).toHaveTextContent('claude-sonnet-4-20250514');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /select openai/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /select openai/i }));
+    });
     await waitFor(() => {
       expect(screen.getByTestId('selected-model')).toHaveTextContent('gpt-4.1');
     });
-    fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    });
 
     expect(push).toHaveBeenCalledWith(
       '/chat/new?firstMessage=hello+world&provider=openai&model=gpt-4.1'
@@ -112,13 +159,17 @@ describe('ChatLandingPage', () => {
       loadModels: vi.fn(),
     });
 
-    render(<ChatLandingPage />);
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
 
     expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
     expect(screen.getByTestId('chat-disabled')).toHaveTextContent('true');
     expect(screen.getByRole('button', { name: /capture meeting notes/i })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    });
     expect(push).not.toHaveBeenCalled();
   });
 });

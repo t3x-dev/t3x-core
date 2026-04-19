@@ -59,7 +59,7 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
 export interface ClaudeProviderConfig {
   /** Anthropic API key */
   apiKey: string;
-  /** Model to use (default: claude-sonnet-4-20250514) */
+  /** Model to use (default: claude-sonnet-4-6) */
   model?: string;
   /** Base URL (default: https://api.anthropic.com) */
   baseUrl?: string;
@@ -77,7 +77,7 @@ export class ClaudeProvider implements LLMProvider {
 
   constructor(config: ClaudeProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'claude-sonnet-4-20250514';
+    this.model = config.model ?? 'claude-sonnet-4-6';
     this.baseUrl = config.baseUrl ?? 'https://api.anthropic.com';
   }
 

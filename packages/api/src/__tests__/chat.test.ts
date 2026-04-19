@@ -171,13 +171,13 @@ describe('Chat Routes', () => {
           model: string;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('claude-sonnet-4-20250514');
+        expect(payload.model).toBe('claude-sonnet-4-6');
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello' }]);
 
         return new Response(
           JSON.stringify({
             content: [{ type: 'text', text: 'Anthropic says hi' }],
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             usage: { input_tokens: 11, output_tokens: 7 },
             stop_reason: 'end_turn',
           }),
@@ -220,7 +220,7 @@ describe('Chat Routes', () => {
           model: string;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('gpt-4o');
+        expect(payload.model).toBe('gpt-5.4');
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello from OpenAI' }]);
 
         return new Response(
@@ -246,7 +246,7 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.content).toBe('OpenAI says hi');
-      expect(data.data.model).toBe('gpt-4o');
+      expect(data.data.model).toBe('gpt-5.4');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
@@ -282,7 +282,7 @@ describe('Chat Routes', () => {
       delete process.env.OPENAI_API_KEY;
     });
 
-    it('strips the provider prefix before calling upstream for prefixed-model requests', async () => {
+    it('strips the provider prefix and normalizes legacy OpenAI model ids', async () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'openai',
         apiKey: 'sk-local-openai',
@@ -295,7 +295,7 @@ describe('Chat Routes', () => {
           model: string;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('gpt-4o');
+        expect(payload.model).toBe('gpt-5.4');
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello prefixed OpenAI' }]);
 
         return new Response(
@@ -321,7 +321,7 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.content).toBe('OpenAI prefixed model works');
-      expect(data.data.model).toBe('gpt-4o');
+      expect(data.data.model).toBe('gpt-5.4');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
@@ -349,6 +349,52 @@ describe('Chat Routes', () => {
       expect(data.error.code).toBe('PROVIDER_ERROR');
       expect(String(data.error.message)).toContain('anthropic');
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('normalizes retired Anthropic model ids before calling upstream chat', async () => {
+      await storage.upsertProviderCredential(mockDB, {
+        providerId: 'anthropic',
+        apiKey: 'sk-local-anthropic',
+      });
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe('https://api.anthropic.com/v1/messages');
+
+        const payload = JSON.parse(String(init?.body)) as {
+          model: string;
+          messages: Array<{ role: string; content: string }>;
+        };
+        expect(payload.model).toBe('claude-sonnet-4-6');
+        expect(payload.messages).toEqual([{ role: 'user', content: 'Hello canonical Claude' }]);
+
+        return new Response(
+          JSON.stringify({
+            content: [{ type: 'text', text: 'Claude canonical model works' }],
+            model: 'claude-sonnet-4-6',
+            usage: { input_tokens: 10, output_tokens: 5 },
+            stop_reason: 'end_turn',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const res = await app.request('/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-20250514',
+          messages: [{ role: 'user', content: 'Hello canonical Claude' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.content).toBe('Claude canonical model works');
+      expect(data.data.model).toBe('claude-sonnet-4-6');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('rejects thinking for non-anthropic providers instead of ignoring it', async () => {
@@ -505,7 +551,7 @@ describe('Chat Routes', () => {
             new TextEncoder().encode(
               [
                 'event: message_start',
-                'data: {"message":{"model":"claude-sonnet-4-20250514","usage":{"input_tokens":9}}}',
+                'data: {"message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":9}}}',
                 '',
                 'event: content_block_delta',
                 'data: {"delta":{"type":"text_delta","text":"Hello from stream"}}',
@@ -536,7 +582,7 @@ describe('Chat Routes', () => {
           stream: boolean;
           messages: Array<{ role: string; content: string }>;
         };
-        expect(payload.model).toBe('claude-sonnet-4-20250514');
+        expect(payload.model).toBe('claude-sonnet-4-6');
         expect(payload.stream).toBe(true);
         expect(payload.messages).toEqual([{ role: 'user', content: 'Hello stream' }]);
 
@@ -560,7 +606,7 @@ describe('Chat Routes', () => {
 
       const body = await res.text();
       expect(body).toContain('"type":"token","content":"Hello from stream"');
-      expect(body).toContain('"type":"done","model":"claude-sonnet-4-20250514"');
+      expect(body).toContain('"type":"done","model":"claude-sonnet-4-6"');
       expect(body).toContain('[DONE]');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });

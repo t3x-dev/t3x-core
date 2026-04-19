@@ -9,13 +9,13 @@ describe('LLM extended types', () => {
 
   it('ModelInfo has required fields', () => {
     const model: ModelInfo = {
-      id: 'claude-sonnet-4-20250514',
-      label: 'Claude Sonnet 4',
+      id: 'claude-sonnet-4-5-20250929',
+      label: 'Claude Sonnet 4.5',
       provider: 'anthropic',
       capabilities: ['tool_use'],
       maxOutputTokens: 8192,
     };
-    expect(model.id).toBe('claude-sonnet-4-20250514');
+    expect(model.id).toBe('claude-sonnet-4-5-20250929');
     expect(model.capabilities).toContain('tool_use');
   });
 
@@ -32,7 +32,7 @@ describe('LLM extended types', () => {
 
   it('LLMGenerateOptions includes stopSequences', () => {
     const opts: LLMGenerateOptions = {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       temperature: 0.1,
       maxTokens: 4096,
       stopSequences: ['```'],

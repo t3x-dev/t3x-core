@@ -2,7 +2,14 @@
  * LLM Provider exports
  */
 
-export { getAllModels, getModelInfo, getModelsByProvider, MODEL_CATALOG } from './catalog';
+export {
+  getAllModels,
+  getCanonicalModelId,
+  getModelInfo,
+  getModelsByProvider,
+  MODEL_CATALOG,
+  normalizeModelId,
+} from './catalog';
 export { normalizeLLMOutput } from './normalizer';
 export { createProviderForModel } from './providerFactory';
 export {
