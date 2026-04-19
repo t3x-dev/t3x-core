@@ -1,6 +1,28 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useWorkspaceStore, WORKSPACE_PANEL_EXPANDED_STORAGE_KEY } from '@/store/workspaceStore';
+
+if (
+  typeof globalThis.localStorage !== 'object' ||
+  typeof globalThis.localStorage.setItem !== 'function'
+) {
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => store.clear(),
+      get length() {
+        return store.size;
+      },
+      key: (index: number) => [...store.keys()][index] ?? null,
+    },
+  });
+}
 
 describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
@@ -89,5 +111,14 @@ describe('workspaceStore (state-only)', () => {
     expect(s.conversationId).toBeNull();
     expect(s.mode).toBe('idle');
     expect(s.lastError).toBeNull();
+  });
+
+  it('reset preserves the persisted workspace panel preference', () => {
+    localStorage.setItem(WORKSPACE_PANEL_EXPANDED_STORAGE_KEY, 'true');
+    useWorkspaceStore.getState().setPanelExpanded(false);
+
+    useWorkspaceStore.getState().reset();
+
+    expect(useWorkspaceStore.getState().panelExpanded).toBe(true);
   });
 });
