@@ -26,6 +26,32 @@ export const uniqueHandler: OpHandler = (doc, fields, index) => {
   const seen = new Set<string>();
   const deduped: YValue[] = [];
 
+  if (by !== undefined) {
+    for (const item of target) {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+        return {
+          doc,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `unique by "${by}" requires every item at "${path}" to be a mapping`,
+            index
+          ),
+        };
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(item, by)) {
+        return {
+          doc,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `unique by "${by}" requires every item at "${path}" to contain that key`,
+            index
+          ),
+        };
+      }
+    }
+  }
+
   for (const item of target) {
     let key: string;
     if (by !== undefined) {

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';
+import { validateOps, YOpSchema } from '../src/schema';
 
 describe('field validation', () => {
   it('rejects missing required field', () => {
@@ -60,5 +61,33 @@ describe('field validation', () => {
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(1);
     expect(result.error?.op_index).toBe(1);
+  });
+
+  it('rejects empty path at the schema layer', () => {
+    const result = YOpSchema.safeParse({ set: { path: '', value: 1 } });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects assert with no condition at the schema layer', () => {
+    const result = YOpSchema.safeParse({ assert: { path: 'a' } });
+    expect(result.success).toBe(false);
+  });
+
+  it('keeps applyYOps aligned with schema for empty-path ops', () => {
+    const ops = [{ set: { path: '', value: 1 } }] as any;
+    expect(validateOps(ops).valid).toBe(false);
+
+    const result = applyYOps({} as YValue, ops);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
+
+  it('keeps applyYOps aligned with schema for empty assert conditions', () => {
+    const ops = [{ assert: { path: 'a' } }] as any;
+    expect(validateOps(ops).valid).toBe(false);
+
+    const result = applyYOps({ a: 1 } as YValue, ops);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
   });
 });

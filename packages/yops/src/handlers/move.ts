@@ -6,6 +6,17 @@ export const moveHandler: OpHandler = (doc, fields, index) => {
   const from = fields.from as string;
   const to = fields.to as string;
 
+  if (to === from || to.startsWith(`${from}/`)) {
+    return {
+      doc,
+      error: yopsError(
+        YOPS_ERRORS.INVALID_PATH,
+        `Cannot move path "${from}" into its own subtree "${to}"`,
+        index
+      ),
+    };
+  }
+
   const sourceValue = resolvePath(doc, from);
   if (sourceValue === undefined) {
     return {

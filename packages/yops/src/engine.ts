@@ -10,6 +10,7 @@
 import { YOPS_ERRORS, yopsError } from './errors';
 import { deepClone } from './paths';
 import type { OpRegistry } from './registry';
+import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
 import type { YOp, YOpsResult, YValue } from './types';
 
@@ -81,7 +82,23 @@ export function createEngine(registry: OpRegistry) {
         return { ok: false, doc: current, applied: i, error: fieldError };
       }
 
-      // 3. Execute handler
+      // 3. Shape/type validation against the same public schema contract
+      const schemaResult = YOpSchema.safeParse(op);
+      if (!schemaResult.success) {
+        const issue = schemaResult.error.issues[0];
+        return {
+          ok: false,
+          doc: current,
+          applied: i,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            issue?.message ?? `${opName}: invalid operation shape`,
+            i
+          ),
+        };
+      }
+
+      // 4. Execute handler
       const result = handler(current, fields, i);
       if (result.error) {
         return {

@@ -300,9 +300,9 @@ Output a single YAML document with a \`yops:\` array. Each item is exactly one o
 **Structure changes (use when the conversation reveals the tree should be reorganized):**
 - \`rename: { path, to }\` — change a node's key name
 - \`move: { from, to }\` — move a node to a different parent path
-- \`nest: { path, under }\` — wrap a node inside a new parent (e.g., flat slot → nested group)
-- \`fold: { paths, into }\` — combine sibling nodes into one
-- \`merge: { from, into }\` — deep-merge one node into another
+- \`nest: { path, keys, under }\` — wrap selected sibling keys inside a new parent mapping
+- \`fold: { path }\` — collapse a single-child wrapper mapping
+- \`merge: { path, keys, into }\` — combine sibling mappings into one
 - \`split: { path, into }\` — split a node into multiple siblings
 - \`clone: { from, to }\` — deep-copy a node
 
@@ -317,7 +317,7 @@ Output a single YAML document with a \`yops:\` array. Each item is exactly one o
 - \`unrelate: { from, to, type }\` — remove a relation
 
 **Constraint:**
-- \`assert: { path, operator, value }\` — validate without mutating (\`operator\` ∈ exists, equals, type)
+- \`assert: { path, equals|exists|type }\` — validate without mutating; provide at least one condition
 
 Paths use \`/\` separator (e.g., \`trip/dining\`). Keys use snake_case.
 Values: descriptive text (short phrases, labels, numbers) — NOT full sentences, NOT booleans.

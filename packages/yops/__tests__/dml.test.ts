@@ -73,6 +73,14 @@ describe('unset', () => {
     expect(result.error).toBeUndefined();
     expect(result.doc).toEqual(doc);
   });
+
+  it('errors when unset targets a sequence index', () => {
+    const doc: YValue = { items: ['a', 'b', 'c'] };
+    const result = applyYOps(doc, [{ unset: { path: 'items/[1]' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('NOT_A_MAPPING');
+    expect(result.doc).toEqual(doc);
+  });
 });
 
 // ── populate ─────────────────────────────────────────────────────────────────

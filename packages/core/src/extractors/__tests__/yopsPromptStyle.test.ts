@@ -94,4 +94,42 @@ describe('buildYOpsPrompt — style integration', () => {
       expect(systemPrompt).toContain('Conclusions + Why');
     });
   });
+
+  describe('dsl alignment', () => {
+    const snapshot = {
+      trees: [{ key: 'trip', slots: { destination: 'Tokyo' }, children: [] }],
+      relations: [],
+    };
+
+    it('documents real op signatures for advanced ops', () => {
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+
+      expect(systemPrompt).toContain('`nest: { path, keys, under }`');
+      expect(systemPrompt).toContain('`fold: { path }`');
+      expect(systemPrompt).toContain('`merge: { path, keys, into }`');
+      expect(systemPrompt).toContain('`assert: { path, equals|exists|type }`');
+    });
+
+    it('does not describe drifted signatures for advanced ops', () => {
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+
+      expect(systemPrompt).not.toContain('`nest: { path, under }`');
+      expect(systemPrompt).not.toContain('`fold: { paths, into }`');
+      expect(systemPrompt).not.toContain('`merge: { from, into }`');
+      expect(systemPrompt).not.toContain('`assert: { path, operator, value }`');
+    });
+
+    it('presents core mutation ops as the default extraction subset', () => {
+      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+
+      expect(systemPrompt).toContain('Most common (use first)');
+      expect(systemPrompt).toContain('`define: { path }`');
+      expect(systemPrompt).toContain('`set: { path, value }`');
+      expect(systemPrompt).toContain('`populate: { path, values }`');
+      expect(systemPrompt).toContain('`unset: { path }`');
+      expect(systemPrompt).toContain('`drop: { path }`');
+      expect(systemPrompt).toContain('`append: { path, value }`');
+      expect(systemPrompt).toContain('**IMPORTANT: Prefer updating existing structure over adding new nodes.**');
+    });
+  });
 });

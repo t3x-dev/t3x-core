@@ -26,6 +26,32 @@ export const sortHandler: OpHandler = (doc, fields, index) => {
 
   const clonedArr = target.map((item) => deepClone(item));
 
+  if (by !== undefined) {
+    for (const item of clonedArr) {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+        return {
+          doc,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `sort by "${by}" requires every item at "${path}" to be a mapping`,
+            index
+          ),
+        };
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(item, by)) {
+        return {
+          doc,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `sort by "${by}" requires every item at "${path}" to contain that key`,
+            index
+          ),
+        };
+      }
+    }
+  }
+
   clonedArr.sort((a, b) => {
     let aVal: YValue;
     let bVal: YValue;
