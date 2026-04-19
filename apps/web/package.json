@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev",
+    "dev": "node ../../tools/dev-package-runner.mjs webui sh -c 'rm -rf .next && next dev'",
     "build": "next build",
     "start": "next start",
     "lint": "biome lint src",

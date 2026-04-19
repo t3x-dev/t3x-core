@@ -20,10 +20,28 @@ test('package.json dev scripts route through the source launcher', () => {
   assert.equal(packageJson.scripts['dev:webui'], 'node tools/dev-source-runner.mjs webui');
 });
 
+test('package-level dev scripts also apply source-dev defaults', () => {
+  const webPackageJson = readJson('apps/web/package.json');
+  const apiPackageJson = readJson('apps/api/package.json');
+
+  assert.equal(
+    webPackageJson.scripts.dev,
+    "node ../../tools/dev-package-runner.mjs webui sh -c 'rm -rf .next && next dev'"
+  );
+  assert.equal(
+    apiPackageJson.scripts.dev,
+    'node ../../tools/dev-package-runner.mjs api tsx watch src/index.ts'
+  );
+});
+
 test('docker-compose.yml defaults auth on for docker and self-hosted deployments', () => {
   const dockerCompose = readText('docker-compose.yml');
-  const apiSection = dockerCompose.match(/  t3x-api:\n([\s\S]*?)\n  # ============================================\n  # T3X WebUI/m)?.[1];
-  const webuiSection = dockerCompose.match(/  t3x-webui:\n([\s\S]*?)\n  # ============================================\n  # T3X Runner/m)?.[1];
+  const apiSection = dockerCompose.match(
+    / {2}t3x-api:\n([\s\S]*?)\n {2}# ============================================\n {2}# T3X WebUI/m
+  )?.[1];
+  const webuiSection = dockerCompose.match(
+    / {2}t3x-webui:\n([\s\S]*?)\n {2}# ============================================\n {2}# T3X Runner/m
+  )?.[1];
 
   assert.ok(apiSection, 'expected to find the t3x-api service section');
   assert.ok(webuiSection, 'expected to find the t3x-webui service section');
@@ -67,6 +85,11 @@ test('turbo dev tasks preserve source-dev environment defaults', () => {
   assert.ok(
     taskEnv.includes('NEXT_PUBLIC_API_URL') || globalEnv.includes('NEXT_PUBLIC_API_URL'),
     'expected turbo dev tasks to preserve NEXT_PUBLIC_API_URL'
+  );
+  assert.ok(
+    taskEnv.includes('NEXT_PUBLIC_AUTH_DISABLED') ||
+      globalEnv.includes('NEXT_PUBLIC_AUTH_DISABLED'),
+    'expected turbo dev tasks to preserve NEXT_PUBLIC_AUTH_DISABLED'
   );
 });
 

@@ -12,9 +12,13 @@ import { NextResponse } from 'next/server';
 const PUBLIC_PATHS = ['/login', '/api/auth', '/share'];
 
 export function proxy(request: NextRequest) {
+  const authDisabled =
+    process.env.AUTH_DISABLED?.toLowerCase() === 'true' ||
+    process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+
   // Auth is ENABLED by default (secure by default).
   // Only disabled when AUTH_DISABLED is explicitly set to 'true'.
-  if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
+  if (authDisabled) {
     return NextResponse.next();
   }
 

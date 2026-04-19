@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import { applySourceDevDefaults, getDevTargetFilter } from '../lib/sourceDevAuthDefaults.mjs';
 
@@ -30,6 +30,7 @@ test('applySourceDevDefaults adds the local API URL for webui when unset', () =>
     PATH: '/usr/bin',
     AUTH_DISABLED: 'true',
     NEXT_PUBLIC_API_URL: 'http://localhost:8000',
+    NEXT_PUBLIC_AUTH_DISABLED: 'true',
   });
 });
 
@@ -42,7 +43,10 @@ test('applySourceDevDefaults preserves explicit webui API URL values', () => {
 
   const result = applySourceDevDefaults('webui', env);
 
-  assert.deepEqual(result, env);
+  assert.deepEqual(result, {
+    ...env,
+    NEXT_PUBLIC_AUTH_DISABLED: 'true',
+  });
   assert.notStrictEqual(result, env);
 });
 

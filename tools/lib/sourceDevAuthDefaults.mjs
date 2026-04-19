@@ -9,6 +9,7 @@ const SOURCE_DEV_DEFAULTS = {
 
 const WEBUI_SOURCE_DEV_DEFAULTS = {
   NEXT_PUBLIC_API_URL: 'http://localhost:8000',
+  NEXT_PUBLIC_AUTH_DISABLED: 'true',
 };
 
 export function applySourceDevDefaults(target, env) {
@@ -20,6 +21,10 @@ export function applySourceDevDefaults(target, env) {
 
   if (target === 'webui' && nextEnv.NEXT_PUBLIC_API_URL === undefined) {
     nextEnv.NEXT_PUBLIC_API_URL = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_API_URL;
+  }
+
+  if (target === 'webui' && nextEnv.NEXT_PUBLIC_AUTH_DISABLED === undefined) {
+    nextEnv.NEXT_PUBLIC_AUTH_DISABLED = WEBUI_SOURCE_DEV_DEFAULTS.NEXT_PUBLIC_AUTH_DISABLED;
   }
 
   return nextEnv;
