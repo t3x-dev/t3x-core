@@ -163,6 +163,13 @@ const AssertOpSchema = z
         exists: z.boolean().optional(),
         type: z.enum(['mapping', 'sequence', 'scalar']).optional(),
       })
+      .refine(
+        (value) =>
+          value.equals !== undefined || value.exists !== undefined || value.type !== undefined,
+        {
+          message: 'assert: at least one of equals, exists, or type must be provided',
+        }
+      )
       .strict(),
     source: s,
   })

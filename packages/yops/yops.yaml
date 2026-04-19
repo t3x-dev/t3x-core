@@ -198,6 +198,7 @@ operations:
     rules:
       - idempotent — no error if key is already absent
       - parent must be a mapping
+      - final path segment must be a mapping key (not sequence index or match selector)
     errors:
       NOT_A_MAPPING: parent is not a mapping
     example:
@@ -212,6 +213,12 @@ operations:
         input: { a: 1 }
         ops: [{ unset: { path: missing } }]
         output: { a: 1 }
+      - name: errors on sequence index path
+        input: { items: [a, b, c] }
+        ops:
+          - unset:
+              path: "items/[1]"
+        error: NOT_A_MAPPING
 
   populate:
     category: dml
@@ -303,6 +310,7 @@ operations:
     errors:
       PATH_NOT_FOUND: source path does not exist
       ALREADY_EXISTS: destination path already exists
+      INVALID_PATH: destination cannot be inside the source subtree
     example:
       - move:
           from: config/old_db
@@ -316,6 +324,10 @@ operations:
         input: {}
         ops: [{ move: { from: missing, to: new } }]
         error: PATH_NOT_FOUND
+      - name: errors when moving into own subtree
+        input: { a: { child: { value: 1 } } }
+        ops: [{ move: { from: a, to: a/child/copied } }]
+        error: INVALID_PATH
 
   clone:
     category: dtl
@@ -407,6 +419,7 @@ operations:
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_MAPPING: target is not a mapping
+      INVALID_OP: a source key cannot be assigned to multiple split groups
     example:
       - split:
           path: config
@@ -418,6 +431,10 @@ operations:
         input: { config: { host: x, port: 5432, level: debug } }
         ops: [{ split: { path: config, into: { db: [host, port], log: [level] } } }]
         output: { config: { db: { host: x, port: 5432 }, log: { level: debug } } }
+      - name: errors on duplicate source-key assignment
+        input: { config: { host: x, port: 5432 } }
+        ops: [{ split: { path: config, into: { db: [host], dup: [host] } } }]
+        error: INVALID_OP
 
   fold:
     category: dtl
@@ -511,6 +528,7 @@ operations:
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
+      INVALID_OP: sort by requires every item to be a mapping containing the requested key
     example:
       - sort:
           path: users
@@ -521,6 +539,14 @@ operations:
         input: { items: [cherry, apple, banana] }
         ops: [{ sort: { path: items } }]
         output: { items: [apple, banana, cherry] }
+      - name: errors when sort by sees non-mapping item
+        input: { users: [{ name: alice }, bob] }
+        ops: [{ sort: { path: users, by: name } }]
+        error: INVALID_OP
+      - name: errors when sort by key is missing
+        input: { users: [{ name: alice }, { age: 30 }] }
+        ops: [{ sort: { path: users, by: name } }]
+        error: INVALID_OP
 
   unique:
     category: dtl
@@ -538,10 +564,12 @@ operations:
           Omit for sequences of scalars.
     rules:
       - target must exist and be a sequence
+      - if 'by' is provided, items must be mappings with that key
       - keeps first occurrence, removes subsequent duplicates
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
+      INVALID_OP: unique by requires every item to be a mapping containing the requested key
     example:
       - unique:
           path: tags
@@ -550,6 +578,14 @@ operations:
         input: { tags: [a, b, a, c, b] }
         ops: [{ unique: { path: tags } }]
         output: { tags: [a, b, c] }
+      - name: errors when unique by sees non-mapping item
+        input: { users: [{ name: alice }, bob] }
+        ops: [{ unique: { path: users, by: name } }]
+        error: INVALID_OP
+      - name: errors when unique by key is missing
+        input: { users: [{ name: alice }, { age: 30 }] }
+        ops: [{ unique: { path: users, by: name } }]
+        error: INVALID_OP
 
   pick:
     category: dtl
@@ -663,6 +699,10 @@ operations:
         input: { config: {} }
         ops: [{ assert: { path: config, exists: true } }]
         output: { config: {} }
+      - name: rejects assert with no condition
+        input: { config: {} }
+        ops: [{ assert: { path: config } }]
+        error: INVALID_OP
 
 # ----------------------------------------------------------------------------
 # Error Codes

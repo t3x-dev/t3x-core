@@ -101,11 +101,11 @@ describe('assert', () => {
     expect(result.error?.code).toBe('ASSERTION_FAILED');
   });
 
-  it('no-op when no condition is specified', () => {
+  it('rejects assert when no condition is specified', () => {
     const doc: YValue = { name: 'alice' };
     const result = applyYOps(doc, [{ assert: { path: 'name' } }]);
-    expect(result.ok).toBe(true);
-    expect(result.applied).toBe(1);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
     expect(result.doc).toEqual(doc);
   });
 

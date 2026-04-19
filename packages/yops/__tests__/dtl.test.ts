@@ -46,6 +46,14 @@ describe('move', () => {
     expect(result.error?.code).toBe('ALREADY_EXISTS');
     expect(result.error?.op_index).toBe(0);
   });
+
+  it('errors when moving a node into its own subtree', () => {
+    const doc: YValue = { a: { child: { value: 1 } } };
+    const result = applyYOps(doc, [{ move: { from: 'a', to: 'a/child/copied' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_PATH');
+    expect(result.doc).toEqual(doc);
+  });
 });
 
 // ── clone ─────────────────────────────────────────────────────────────────────
@@ -197,6 +205,24 @@ describe('split', () => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
+  });
+
+  it('errors if the same source key is assigned to multiple groups', () => {
+    const doc: YValue = { settings: { host: 'localhost', port: 5432 } };
+    const result = applyYOps(doc, [
+      {
+        split: {
+          path: 'settings',
+          into: {
+            db: ['host'],
+            duplicate: ['host'],
+          },
+        },
+      },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+    expect(result.doc).toEqual(doc);
   });
 });
 
@@ -392,6 +418,20 @@ describe('sort', () => {
     expect(result.error?.code).toBe('NOT_A_SEQUENCE');
     expect(result.error?.op_index).toBe(0);
   });
+
+  it('errors when sort by encounters a non-mapping item', () => {
+    const doc: YValue = { users: [{ name: 'alice' }, 'bob'] };
+    const result = applyYOps(doc, [{ sort: { path: 'users', by: 'name' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
+
+  it('errors when sort by encounters an item missing the key', () => {
+    const doc: YValue = { users: [{ name: 'alice' }, { age: 30 }] };
+    const result = applyYOps(doc, [{ sort: { path: 'users', by: 'name' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
 });
 
 // ── unique ────────────────────────────────────────────────────────────────────
@@ -447,6 +487,20 @@ describe('unique', () => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('NOT_A_SEQUENCE');
     expect(result.error?.op_index).toBe(0);
+  });
+
+  it('errors when unique by encounters a non-mapping item', () => {
+    const doc: YValue = { users: [{ name: 'alice' }, 'bob'] };
+    const result = applyYOps(doc, [{ unique: { path: 'users', by: 'name' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
+
+  it('errors when unique by encounters an item missing the key', () => {
+    const doc: YValue = { users: [{ name: 'alice' }, { age: 30 }] };
+    const result = applyYOps(doc, [{ unique: { path: 'users', by: 'name' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
   });
 });
 

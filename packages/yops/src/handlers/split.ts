@@ -23,6 +23,23 @@ export const splitHandler: OpHandler = (doc, fields, index) => {
 
   const targetMap = target as { [key: string]: YValue };
 
+  const seenSourceKeys = new Set<string>();
+  for (const groupKeys of Object.values(into)) {
+    for (const key of groupKeys) {
+      if (seenSourceKeys.has(key)) {
+        return {
+          doc,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `Key "${key}" cannot be assigned to multiple split groups`,
+            index
+          ),
+        };
+      }
+      seenSourceKeys.add(key);
+    }
+  }
+
   for (const groupKeys of Object.values(into)) {
     for (const key of groupKeys) {
       if (!(key in targetMap)) {
