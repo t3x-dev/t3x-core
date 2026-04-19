@@ -17,7 +17,7 @@ import {
   buildConversationContext,
   type ConversationData,
   flattenTrees,
-  getModelInfo,
+  getCanonicalModelId,
   type SemanticContent,
 } from '@t3x-dev/core';
 import {
@@ -461,9 +461,10 @@ const updateConversationRoute = createRoute({
 conversationRoutes.openapi(updateConversationRoute, async (c) => {
   const { id: conversationId } = c.req.valid('param');
   const body = c.req.valid('json');
+  const canonicalModel = body.model == null ? body.model : getCanonicalModelId(body.model);
 
   // Validate model against catalog if provided
-  if (body.model != null && !getModelInfo(body.model)) {
+  if (body.model != null && !canonicalModel) {
     return c.json(
       {
         success: false as const,
@@ -481,7 +482,7 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
       positionY: body.position_y,
       metadata: body.metadata,
       provider: body.provider,
-      model: body.model,
+      model: canonicalModel,
     });
 
     if (!conversation) {

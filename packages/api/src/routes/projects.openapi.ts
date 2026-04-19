@@ -2,7 +2,7 @@
  * Projects Routes with OpenAPI
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getModelInfo } from '@t3x-dev/core';
+import { getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   branches,
   commits,
@@ -367,6 +367,8 @@ const updateProjectRoute = createRoute({
 projectRoutes.openapi(updateProjectRoute, async (c) => {
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
+  const canonicalDefaultModel =
+    body.default_model == null ? body.default_model : getCanonicalModelId(body.default_model);
 
   try {
     const db = await getDB();
@@ -396,7 +398,7 @@ projectRoutes.openapi(updateProjectRoute, async (c) => {
             ? null
             : JSON.stringify(body.provider_config),
       defaultProvider: body.default_provider,
-      defaultModel: body.default_model,
+      defaultModel: canonicalDefaultModel,
       extractionStyle: body.extraction_style,
     });
 

@@ -192,7 +192,7 @@ export const SEMANTIC_REQUIRE_THRESHOLD = 0.85;
 export const SEMANTIC_EXCLUDE_THRESHOLD = 0.7;
 
 /** Default LLM model for generation */
-export const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+export const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 /** Default temperature for generation */
 export const DEFAULT_TEMPERATURE = 0.7;

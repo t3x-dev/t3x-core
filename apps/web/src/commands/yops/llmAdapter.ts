@@ -13,6 +13,8 @@ export interface CallExtractionLLMInput {
   conversationId: string;
   turns: ValidationTurn[];
   failingOps?: RetryFailingOp[];
+  provider?: string;
+  model?: string;
 }
 
 export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<SourcedYOp[]> {
@@ -20,6 +22,8 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
     conversation_id: input.conversationId,
     turns: input.turns,
     ...(input.failingOps ? { failing_ops: input.failingOps } : {}),
+    ...(input.provider ? { provider: input.provider } : {}),
+    ...(input.model ? { model: input.model } : {}),
   });
   if (!res.ok) {
     const text = typeof res.text === 'function' ? await res.text().catch(() => '') : '';

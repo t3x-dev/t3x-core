@@ -18,9 +18,15 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;
+  selectedProvider?: string | null;
+  selectedModel?: string | null;
 }
 
-export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
+export function useExtraction({
+  resolvedConversationId,
+  selectedProvider,
+  selectedModel,
+}: UseExtractionParams) {
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const tree = useWorkspaceStore((s) => s.tree);
 
@@ -48,6 +54,8 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
               conversationId: extractConvId,
               turns: input.turns,
               failingOps: input.failingOps,
+              provider: selectedProvider ?? undefined,
+              model: selectedModel ?? undefined,
             }),
         });
 
@@ -76,7 +84,7 @@ export function useExtraction({ resolvedConversationId }: UseExtractionParams) {
         }
       }
     },
-    [resolvedConversationId, isExtracting]
+    [resolvedConversationId, isExtracting, selectedProvider, selectedModel]
   );
 
   // Back-compat return shape for existing callers:

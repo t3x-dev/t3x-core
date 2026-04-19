@@ -8,9 +8,14 @@
 
 import { buildYOpsPrompt } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertProject } from '@t3x-dev/storage';
+import {
+  deleteProviderCredential,
+  insertConversation,
+  insertProject,
+  upsertProviderCredential,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 // Mock the database module before importing routes
@@ -22,6 +27,7 @@ vi.mock('../lib/db', () => ({
 }));
 
 // Import routes after mocking
+import { resetProviderRegistry } from '../lib/provider-registry';
 import { extractYopsRoutes } from '../routes/extract-yops.openapi';
 
 const app = new Hono();
@@ -42,6 +48,18 @@ describe('POST /v1/extract-yops', () => {
 
     const conversation = await insertConversation(mockDB, testData.conversation(testProjectId));
     testConversationId = conversation.conversationId;
+  });
+
+  beforeEach(async () => {
+    resetProviderRegistry();
+    vi.restoreAllMocks();
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GOOGLE_AI_STUDIO_KEY;
+
+    await deleteProviderCredential(mockDB, 'anthropic');
+    await deleteProviderCredential(mockDB, 'openai');
+    await deleteProviderCredential(mockDB, 'google');
   });
 
   afterAll(async () => {
@@ -129,6 +147,124 @@ describe('POST /v1/extract-yops', () => {
     if (!body.success) {
       expect(body.error.code).not.toBe('INVALID_REQUEST');
     }
+  });
+
+  it('uses the explicitly requested provider and model when provided', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'anthropic',
+      apiKey: 'sk-local-anthropic',
+    });
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://api.openai.com/v1/chat/completions');
+
+      const payload = JSON.parse(String(init?.body)) as { model: string };
+      expect(payload.model).toBe('gpt-5.4-mini');
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'yops:\n  - define:\n      path: trip\n' } }],
+          usage: { prompt_tokens: 12, completion_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'I prefer Tokyo for the trip' }],
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts Gemini models exposed by the public model catalog', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'google',
+      apiKey: 'sk-local-google',
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain('/models/gemini-3-flash-preview:generateContent');
+
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'yops:\n  - define:\n      path: trip\n' }] } }],
+          usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'I prefer Tokyo for the trip' }],
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes retired Anthropic model ids before calling upstream extraction', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'anthropic',
+      apiKey: 'sk-local-anthropic',
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://api.anthropic.com/v1/messages');
+
+      const payload = JSON.parse(String(init?.body)) as { model: string };
+      expect(payload.model).toBe('claude-sonnet-4-6');
+
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'yops:\n  - define:\n      path: trip\n' }],
+          usage: { input_tokens: 12, output_tokens: 5 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'I prefer Tokyo for the trip' }],
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('builds prompt with SOURCE_CONTRACT for incremental mode', () => {

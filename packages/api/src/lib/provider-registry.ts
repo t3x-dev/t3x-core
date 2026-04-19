@@ -149,10 +149,10 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude',
     role: 'generation',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'claude-sonnet-4-6',
     availableModels: [
-      'claude-sonnet-4-20250514',
-      'claude-opus-4-20250514',
+      'claude-sonnet-4-6',
+      'claude-opus-4-6',
       'claude-haiku-4-5-20251001',
     ],
     factory: (config) =>
@@ -167,8 +167,8 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'OpenAI',
     role: 'generation',
     requiredEnvKeys: ['OPENAI_API_KEY'],
-    defaultModel: 'gpt-4o',
-    availableModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'],
+    defaultModel: 'gpt-5.4',
+    availableModels: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
     factory: (config) =>
       createOpenAIProvider({
         apiKey: config.OPENAI_API_KEY!,
@@ -195,8 +195,12 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Google AI (Gemini)',
     role: 'generation',
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-    defaultModel: 'gemini-2.0-flash',
-    availableModels: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    defaultModel: 'gemini-3.1-pro-preview',
+    availableModels: [
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite-preview',
+    ],
     factory: (config) =>
       createGeminiProvider({
         apiKey: config.GOOGLE_AI_STUDIO_KEY!,
@@ -223,7 +227,7 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Anthropic Claude (Merge)',
     role: 'merge',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'claude-sonnet-4-6',
     factory: (config) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,

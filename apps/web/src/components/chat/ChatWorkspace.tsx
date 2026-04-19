@@ -11,10 +11,7 @@ import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useAutoProject } from '@/hooks/projects/useAutoProject';
-import {
-  resolveAvailableModelSelection,
-  useAvailableModels,
-} from '@/hooks/shared/useAvailableModels';
+import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
 import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { usePinsStore } from '@/store/pinsStore';
@@ -69,12 +66,16 @@ export function ChatWorkspace({
   const showAddForm = isReviewPhase && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
-    providers: availableProviders,
     loading: modelsLoading,
     hasConfiguredGenerationProvider,
-    defaultProvider,
-    defaultModel,
-  } = useAvailableModels();
+    selectedProvider,
+    selectedModel,
+    handleModelChange,
+    isSelectionReady,
+  } = useChatModelSelection({
+    initialProvider,
+    initialModel,
+  });
 
   // For "/chat/new" routes: auto-create project + conversation
   const isNewChat = conversationId === 'new';
@@ -92,39 +93,6 @@ export function ChatWorkspace({
   useEffect(() => {
     if (resolvedProjectId) fetchPins(resolvedProjectId);
   }, [resolvedProjectId, fetchPins]);
-
-  // Model selection state
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(initialProvider ?? null);
-  const [selectedModel, setSelectedModel] = useState<string | null>(initialModel ?? null);
-
-  const handleModelChange = useCallback((provider: string, model: string) => {
-    setSelectedProvider(provider);
-    setSelectedModel(model);
-  }, []);
-
-  const isSelectionReady = Boolean(selectedProvider && selectedModel && !modelsLoading);
-
-  const resolvedSelection = useMemo(
-    () =>
-      resolveAvailableModelSelection(
-        availableProviders,
-        selectedProvider,
-        selectedModel,
-        defaultProvider,
-        defaultModel
-      ),
-    [availableProviders, selectedProvider, selectedModel, defaultProvider, defaultModel]
-  );
-
-  useEffect(() => {
-    if (modelsLoading) return;
-    if (resolvedSelection.provider !== selectedProvider) {
-      setSelectedProvider(resolvedSelection.provider);
-    }
-    if (resolvedSelection.model !== selectedModel) {
-      setSelectedModel(resolvedSelection.model);
-    }
-  }, [modelsLoading, resolvedSelection, selectedProvider, selectedModel]);
 
   const {
     messages,
@@ -194,6 +162,8 @@ export function ChatWorkspace({
   // Extraction handler + related state
   const { handleExtract, isExtracting } = useExtraction({
     resolvedConversationId,
+    selectedProvider,
+    selectedModel,
   });
 
   // Precompute source map from sourceIndex — positions are already known

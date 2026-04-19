@@ -38,6 +38,27 @@ describe('callExtractionLLM', () => {
     expect(body.turns).toHaveLength(1);
   });
 
+  it('sends the selected provider and model when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { ops: [] } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await callExtractionLLM({
+      conversationId: 'c1',
+      turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body as string);
+    expect(body.provider).toBe('openai');
+    expect(body.model).toBe('gpt-4o-mini');
+  });
+
   it('sends failing_ops when retrying', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

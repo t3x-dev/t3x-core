@@ -2,13 +2,10 @@
 
 import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
-import {
-  resolveAvailableModelSelection,
-  useAvailableModels,
-} from '@/hooks/shared/useAvailableModels';
+import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 
 const STARTER_CARDS = [
   {
@@ -33,47 +30,25 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
-  const { providers, loading, hasConfiguredGenerationProvider, defaultProvider, defaultModel } =
-    useAvailableModels();
-  const [selection, setSelection] = useState<{
-    provider: string | null;
-    model: string;
-  }>({
-    provider: null,
-    model: '',
-  });
+  const {
+    loading,
+    hasConfiguredGenerationProvider,
+    selectedProvider,
+    selectedModel,
+    handleModelChange,
+  } = useChatModelSelection({});
 
   const handleSend = useCallback(
     (message: string) => {
       if (!message.trim() || !hasConfiguredGenerationProvider) return;
 
       const params = new URLSearchParams({ firstMessage: message });
-      if (selection.provider) params.set('provider', selection.provider);
-      if (selection.model) params.set('model', selection.model);
+      if (selectedProvider) params.set('provider', selectedProvider);
+      if (selectedModel) params.set('model', selectedModel);
       router.push(`/chat/new?${params.toString()}`);
     },
-    [router, hasConfiguredGenerationProvider, selection.model, selection.provider]
+    [router, hasConfiguredGenerationProvider, selectedModel, selectedProvider]
   );
-
-  useEffect(() => {
-    if (loading) return;
-    setSelection((current) => {
-      const resolved = resolveAvailableModelSelection(
-        providers,
-        current.provider,
-        current.model,
-        defaultProvider,
-        defaultModel
-      );
-      if (current.provider === resolved.provider && current.model === (resolved.model ?? '')) {
-        return current;
-      }
-      return {
-        provider: resolved.provider,
-        model: resolved.model ?? '',
-      };
-    });
-  }, [loading, providers, defaultProvider, defaultModel]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
@@ -108,9 +83,9 @@ export default function ChatLandingPage() {
         <ChatInput
           onSend={handleSend}
           placeholder="Start a conversation..."
-          selectedModel={selection.model}
+          selectedModel={selectedModel ?? ''}
           disabled={!hasConfiguredGenerationProvider || loading}
-          onModelChange={(provider, model) => setSelection({ provider, model })}
+          onModelChange={handleModelChange}
         />
       </div>
     </div>

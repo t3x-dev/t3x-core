@@ -61,7 +61,7 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config: GeminiProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'gemini-2.0-flash';
+    this.model = config.model ?? 'gemini-3.1-pro-preview';
     this.baseUrl = config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
   }
 
