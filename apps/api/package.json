@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node ../../tools/dev-package-runner.mjs api tsx watch src/index.ts",
     "build": "tsup src/index.ts --format esm --dts --clean",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",

@@ -2,8 +2,8 @@
 #
 # Default services:
 #   postgres   (5432)  PostgreSQL database
-#   t3x-api    (8000)  Core API (Hono + Zod OpenAPI)
-#   t3x-webui  (3000)  WebUI (Next.js)
+#   t3x-api    (8000)  Core API (Hono + Zod OpenAPI, auth-on by default)
+#   t3x-webui  (3000)  WebUI (Next.js, auth-on by default)
 #
 # Optional services (via profiles):
 #   t3x-runner   profile: runner      (8080)
@@ -59,7 +59,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
-      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - ANTHROPIC_API_KEY
       - GOOGLE_AI_STUDIO_KEY
     restart: unless-stopped
@@ -92,10 +92,10 @@ services:
       - NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
       # HOSTNAME must be 0.0.0.0 to override Docker's default container hostname
       - HOSTNAME=0.0.0.0
-      # Auth (disabled by default for local/self-hosted use)
-      # For team deployments, set AUTH_DISABLED=false in .env
+      # Auth is on by default for Docker/self-hosted use.
+      # Keep API and WebUI auth settings aligned if you override AUTH_DISABLED.
       # Users register via built-in username/password at /login
-      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - AUTH_DISABLED=${AUTH_DISABLED:-false}
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)
       - ANTHROPIC_API_KEY
     depends_on:
