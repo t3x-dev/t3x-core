@@ -128,8 +128,9 @@ export function ProviderCredentialDialog({
         <DialogHeader>
           <DialogTitle>{providerName} credentials</DialogTitle>
           <DialogDescription>
-            Save a local API key and optional default model for {providerName}. Stored keys are
-            never shown again after you submit them.
+            Save a local API key for {providerName}. You can optionally set a preferred model, but
+            model selection mainly happens in chat. Stored keys are never shown again after you
+            submit them.
           </DialogDescription>
         </DialogHeader>
 
@@ -140,7 +141,7 @@ export function ProviderCredentialDialog({
             </div>
             {status?.defaultModel && (
               <div className="mt-1 text-xs text-[var(--text-tertiary)]">
-                Current default model: {status.defaultModel}
+                Current preferred model: {status.defaultModel}
               </div>
             )}
             {status?.lastTestError && (
@@ -165,26 +166,24 @@ export function ProviderCredentialDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={defaultModelInputId}>Default model (optional)</Label>
+            <Label htmlFor={defaultModelInputId}>Preferred model (optional)</Label>
             <Input
               disabled={busy || statusLoading}
               id={defaultModelInputId}
               list={availableModels.length > 0 ? modelsListId : undefined}
               onChange={(event) => setDefaultModel(event.target.value)}
-              placeholder="Leave blank to use the provider default"
+              placeholder="Leave blank to choose in chat"
               value={defaultModel}
             />
+            <p className="text-xs text-[var(--text-tertiary)]">
+              Leave this blank if you want to pick models directly in chat.
+            </p>
             {availableModels.length > 0 && (
-              <>
-                <datalist id={modelsListId}>
-                  {availableModels.map((model) => (
-                    <option key={model} value={model} />
-                  ))}
-                </datalist>
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  Suggested models: {availableModels.join(', ')}
-                </p>
-              </>
+              <datalist id={modelsListId}>
+                {availableModels.map((model) => (
+                  <option key={model} value={model} />
+                ))}
+              </datalist>
             )}
           </div>
 

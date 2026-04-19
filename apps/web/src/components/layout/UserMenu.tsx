@@ -3,17 +3,18 @@
 /**
  * UserMenu — Avatar + dropdown menu for the sidebar bottom area.
  *
- * Collapsed: circular avatar with first letter of display name.
- * Expanded: avatar + username text.
- * Click: DropdownMenu with My Projects / Settings / Sign Out.
+ * Collapsed: avatar-only trigger.
+ * Expanded: avatar + display name.
+ * Click: DropdownMenu with Profile / Settings / Sign Out.
  *
- * Only renders when auth is enabled (AUTH_DISABLED !== 'true').
- * Reads from localStorage on mount, lazy-refreshes from /auth/me in background.
+ * In auth-enabled mode it reads from localStorage, listens for same-tab
+ * session profile updates, and lazy-refreshes from /auth/me in the background.
+ * In auth-disabled local dev it still renders a stable global settings entry.
  */
 
-import { Home, LogOut, Settings } from 'lucide-react';
-import Link from 'next/link';
+import { LogOut, Settings, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { UserAvatar } from '@/components/shared/UserAvatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,65 +26,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthMe } from '@/hooks/shared/useAuthMe';
 import { useSession } from '@/hooks/shared/useSession';
+import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { cn } from '@/utils/cn';
-
-// ============================================================
-// Avatar Colors — deterministic from string
-// ============================================================
-
-const AVATAR_COLORS = [
-  'bg-blue-600',
-  'bg-emerald-600',
-  'bg-violet-600',
-  'bg-amber-600',
-  'bg-rose-600',
-  'bg-cyan-600',
-  'bg-indigo-600',
-  'bg-teal-600',
-];
-
-function getAvatarColor(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash * 31 + str.charCodeAt(i)) | 0;
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitial(name: string | null, username: string | null): string {
-  const display = name || username || '?';
-  return display.charAt(0).toUpperCase();
-}
-
-// ============================================================
-// UserAvatar
-// ============================================================
-
-function UserAvatar({
-  name,
-  username,
-  size = 'md',
-}: {
-  name: string | null;
-  username: string | null;
-  size?: 'sm' | 'md';
-}) {
-  const initial = getInitial(name, username);
-  const colorClass = getAvatarColor(username || name || 'user');
-  const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm';
-
-  return (
-    <div
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-medium text-white',
-        colorClass,
-        sizeClass
-      )}
-    >
-      {initial}
-    </div>
-  );
-}
 
 // ============================================================
 // UserMenu
@@ -94,29 +38,58 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ collapsed }: UserMenuProps) {
-  const [user, setUser] = useState<{ name: string | null; username: string | null } | null>(null);
+  const [user, setMenuUser] = useState<{
+    avatar_url: string | null;
+    name: string | null;
+    username: string | null;
+  }>({
+    avatar_url: null,
+    name: 'Local Workspace',
+    username: null,
+  });
   const [authEnabled, setAuthEnabled] = useState(false);
   const { loadAuthMe } = useAuthMe();
-  const session = useSession();
+  const { clear, getKey, getUser, setUser } = useSession();
+  const openSettingsModal = useSettingsModalStore((state) => state.open);
+
+  const getFallbackUser = () => ({
+    avatar_url: null,
+    name: 'Local Workspace',
+    username: null,
+  });
 
   useEffect(() => {
     // Check if user has a session (auth is active)
-    const sessionKey = session.getKey();
-    if (!sessionKey) return;
+    const sessionKey = getKey();
+    if (!sessionKey) {
+      setAuthEnabled(false);
+      setMenuUser((current) => current ?? getFallbackUser());
+      return;
+    }
 
     setAuthEnabled(true);
 
+    const syncUserFromSession = () => {
+      const cached = getUser();
+      setMenuUser(
+        cached
+          ? {
+              name: cached.name,
+              username: cached.username,
+              avatar_url: cached.avatar_url ?? null,
+            }
+          : getFallbackUser()
+      );
+    };
+
     // Read cached user from localStorage
-    const cached = session.getUser();
-    if (cached) {
-      setUser({ name: cached.name, username: cached.username });
-    }
+    syncUserFromSession();
+    window.addEventListener('t3x-session-user-changed', syncUserFromSession);
 
     // Lazy refresh from API in background
     loadAuthMe()
       .then((data) => {
-        setUser({ name: data.name, username: data.username });
-        session.setUser({
+        setUser({
           id: data.id,
           name: data.name,
           username: data.username,
@@ -126,9 +99,11 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       .catch(() => {
         // Ignore — we already have cached data or no user
       });
-  }, [loadAuthMe, session]);
 
-  if (!authEnabled || !user) return null;
+    return () => {
+      window.removeEventListener('t3x-session-user-changed', syncUserFromSession);
+    };
+  }, [getKey, getUser, loadAuthMe, setUser]);
 
   const displayName = user.name || user.username || 'User';
 
@@ -144,7 +119,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           collapsed ? 'h-10 w-10 justify-center' : 'h-10 px-3'
         )}
       >
-        <UserAvatar name={user.name} username={user.username} />
+        <UserAvatar name={user.name} username={user.username} avatarUrl={user.avatar_url} />
         {!collapsed && <span className="text-sm font-medium truncate">{displayName}</span>}
       </button>
     </DropdownMenuTrigger>
@@ -162,39 +137,59 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       ) : (
         trigger
       )}
-      <DropdownMenuContent side="right" align="end" className="w-48">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex items-center gap-2">
-            <UserAvatar name={user.name} username={user.username} size="sm" />
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">{displayName}</span>
+      <DropdownMenuContent
+        side="top"
+        align={collapsed ? 'start' : 'center'}
+        sideOffset={10}
+        className="w-56 overflow-hidden rounded-2xl p-0"
+      >
+        <DropdownMenuLabel className="px-3 py-3 font-normal">
+          <div className="flex items-center gap-3">
+            <UserAvatar
+              name={user.name}
+              username={user.username}
+              avatarUrl={user.avatar_url}
+              size="sm"
+            />
+            <div className="min-w-0 flex flex-col">
+              <span className="truncate text-sm font-medium text-[var(--text-primary)]">
+                {displayName}
+              </span>
               {user.username && user.name && (
-                <span className="text-xs text-muted-foreground">@{user.username}</span>
+                <span className="truncate text-xs text-[var(--text-tertiary)]">
+                  @{user.username}
+                </span>
               )}
             </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/" className="flex items-center gap-2 cursor-pointer">
-            <Home className="h-4 w-4" />
-            My Projects
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="flex items-center gap-2 cursor-pointer">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => session.clear()}
-          className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+          onSelect={() => openSettingsModal('profile')}
+          className="mx-1 my-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5"
         >
-          <LogOut className="h-4 w-4" />
-          Sign Out
+          <User className="h-4 w-4" />
+          Profile
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => openSettingsModal('preferences')}
+          className="mx-1 mb-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5"
+        >
+          <Settings className="h-4 w-4" />
+          Settings
+        </DropdownMenuItem>
+        {authEnabled && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => clear()}
+              className="mx-1 my-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-destructive focus:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
 
@@ -291,6 +292,120 @@ describe('useAvailableModels', () => {
     expect(result.current.hasConfiguredGenerationProvider).toBe(false);
     expect(result.current.defaultProvider).toBeNull();
     expect(result.current.defaultModel).toBeNull();
+    unmount();
+  });
+
+  it('reloads available models after local provider credentials change', async () => {
+    vi.mocked(fetchLocalProviderStatus)
+      .mockResolvedValueOnce({
+        provider: 'anthropic',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        provider: 'openai',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        provider: 'google',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        provider: 'anthropic',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        provider: 'openai',
+        configured: true,
+        default_model: 'gpt-5.4-mini',
+        last_test_status: 'ok',
+        last_tested_at: null,
+        last_test_error: null,
+      } as never)
+      .mockResolvedValueOnce({
+        provider: 'google',
+        configured: false,
+        default_model: null,
+        last_test_status: null,
+        last_tested_at: null,
+        last_test_error: null,
+      } as never);
+
+    vi.mocked(fetchAvailableModels)
+      .mockResolvedValueOnce({
+        generation_provider_order: ['anthropic', 'google'],
+        default_provider: 'anthropic',
+        providers: [
+          {
+            name: 'anthropic',
+            label: 'Anthropic',
+            available: true,
+            models: [makeModel('claude-sonnet-4-6', 'Claude Sonnet 4.6')],
+          },
+          {
+            name: 'openai',
+            label: 'OpenAI',
+            available: false,
+            models: [],
+          },
+        ],
+      } as never)
+      .mockResolvedValueOnce({
+        generation_provider_order: ['openai', 'anthropic'],
+        default_provider: 'openai',
+        providers: [
+          {
+            name: 'anthropic',
+            label: 'Anthropic',
+            available: true,
+            models: [makeModel('claude-sonnet-4-6', 'Claude Sonnet 4.6')],
+          },
+          {
+            name: 'openai',
+            label: 'OpenAI',
+            available: true,
+            models: [
+              makeModel('gpt-5.4-mini', 'GPT-5.4 Mini'),
+              makeModel('gpt-5.4', 'GPT-5.4'),
+            ],
+          },
+        ],
+      } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.providers.map((provider) => provider.name)).toEqual(['anthropic']);
+
+    act(() => {
+      window.dispatchEvent(new Event('t3x-provider-credentials-updated'));
+    });
+    await waitForHook();
+    await waitForHook();
+
+    expect(result.current.providers.map((provider) => provider.name)).toEqual([
+      'openai',
+      'anthropic',
+    ]);
+    expect(result.current.defaultProvider).toBe('openai');
+    expect(result.current.defaultModel).toBe('gpt-5.4-mini');
+
     unmount();
   });
 });

@@ -1,13 +1,28 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
+import { useSettingsModalStore } from '@/store/settingsModalStore';
 
 describe('ProviderSetupBanner', () => {
-  it('links users to provider settings', () => {
-    const html = renderToStaticMarkup(<ProviderSetupBanner />);
+  beforeEach(() => {
+    useSettingsModalStore.setState({
+      isOpen: false,
+      selectedTab: 'profile',
+    });
+  });
 
-    expect(html).toContain('href="/settings/providers"');
-    expect(html).toContain('Set up a generation provider');
-    expect(html).toContain('Connect a provider in Settings to pick a model and start chatting.');
+  it('opens the global settings modal on the providers tab', () => {
+    render(<ProviderSetupBanner />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open provider settings' }));
+
+    expect(useSettingsModalStore.getState().isOpen).toBe(true);
+    expect(useSettingsModalStore.getState().selectedTab).toBe('providers');
+    expect(screen.getByText('Set up a generation provider')).not.toBeNull();
+    expect(
+      screen.getByText('Connect a provider in Settings to pick a model and start chatting.')
+    ).not.toBeNull();
   });
 });

@@ -19,8 +19,7 @@ function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive
 const tabsListVariants = cva('inline-flex w-fit items-center justify-center', {
   variants: {
     variant: {
-      default:
-        'bg-muted text-muted-foreground h-9 rounded-lg p-[3px] dark:bg-transparent dark:rounded-none dark:p-0 dark:border-b dark:border-[var(--stroke-divider)]',
+      default: 'bg-muted text-muted-foreground h-9 rounded-lg p-[3px]',
       pill: 'h-9 rounded-full border border-border/60 bg-muted/80 p-1 elevation-2 backdrop-blur-md',
     },
   },
@@ -51,10 +50,9 @@ const tabsTriggerVariants = cva(
       variant: {
         default: cn(
           'h-[calc(100%-1px)] flex-1 rounded-md border border-transparent px-2 py-1 text-sm',
-          'text-foreground dark:text-[var(--text-tertiary)]',
+          'text-foreground dark:text-[var(--text-secondary)]',
           'data-[state=active]:bg-background data-[state=active]:shadow-sm',
-          'dark:rounded-none dark:border-0 dark:border-b-2 dark:border-b-transparent dark:px-3 dark:py-1.5',
-          'dark:data-[state=active]:text-[var(--text-primary)] dark:data-[state=active]:border-b-[var(--accent-commit)] dark:data-[state=active]:bg-transparent dark:data-[state=active]:shadow-none',
+          'dark:data-[state=active]:text-[var(--text-primary)] dark:data-[state=active]:bg-[var(--surface-elevated)] dark:data-[state=active]:shadow-sm',
           'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring focus-visible:ring-[3px] focus-visible:outline-1'
         ),
         pill: cn(

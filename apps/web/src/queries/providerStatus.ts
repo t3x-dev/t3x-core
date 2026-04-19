@@ -3,8 +3,10 @@
  */
 
 import { getLocalProviderStatus } from '@/infrastructure/misc';
-import type { LocalProviderClientId } from '@/infrastructure/types';
+import type { LocalProviderClientId, LocalProviderStatus } from '@/infrastructure/types';
 
 export function fetchLocalProviderStatus(providerId: LocalProviderClientId | string) {
   return getLocalProviderStatus(providerId);
 }
+
+export type { LocalProviderStatus };

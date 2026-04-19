@@ -14,7 +14,7 @@ describe('ProviderCredentialDialog', () => {
     vi.clearAllMocks();
   });
 
-  it('submits api key and default model without echoing the raw key back into the page', async () => {
+  it('submits api key and preferred model without echoing the raw key back into the page', async () => {
     onSave.mockResolvedValue(undefined);
 
     render(
@@ -40,7 +40,7 @@ describe('ProviderCredentialDialog', () => {
     fireEvent.change(screen.getByLabelText('API Key'), {
       target: { value: 'sk-local-openai' },
     });
-    fireEvent.change(screen.getByLabelText('Default model (optional)'), {
+    fireEvent.change(screen.getByLabelText('Preferred model (optional)'), {
       target: { value: 'gpt-4o-mini' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));

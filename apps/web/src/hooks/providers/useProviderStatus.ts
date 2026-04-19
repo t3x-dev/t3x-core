@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PROVIDER_CREDENTIALS_UPDATED_EVENT } from '@/infrastructure/providerEvents';
 import type { LocalProviderId, LocalProviderStatus } from '@/infrastructure/types';
 import { fetchLocalProviderStatus } from '@/queries/providerStatus';
 
@@ -36,32 +37,47 @@ export function useProviderStatus(): UseProviderStatusResult {
   );
   const [loading, setLoading] = useState(true);
 
+  const loadStatuses = useCallback(async () => {
+    setLoading(true);
+
+    const settled = await Promise.allSettled(
+      SUPPORTED_LOCAL_GENERATION_PROVIDERS.map((provider) => fetchLocalProviderStatus(provider))
+    );
+
+    setStatuses(
+      settled.map((result, index) =>
+        result.status === 'fulfilled'
+          ? result.value
+          : createFallbackStatus(SUPPORTED_LOCAL_GENERATION_PROVIDERS[index])
+      )
+    );
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    void loadStatuses().catch(() => {
+      if (!cancelled) {
+        setStatuses(SUPPORTED_LOCAL_GENERATION_PROVIDERS.map(createFallbackStatus));
+        setLoading(false);
+      }
+    });
 
-    async function loadStatuses() {
-      const settled = await Promise.allSettled(
-        SUPPORTED_LOCAL_GENERATION_PROVIDERS.map((provider) => fetchLocalProviderStatus(provider))
-      );
-
-      if (cancelled) return;
-
-      setStatuses(
-        settled.map((result, index) =>
-          result.status === 'fulfilled'
-            ? result.value
-            : createFallbackStatus(SUPPORTED_LOCAL_GENERATION_PROVIDERS[index])
-        )
-      );
-      setLoading(false);
-    }
-
-    void loadStatuses();
+    const handleCredentialsUpdated = () => {
+      void loadStatuses().catch(() => {
+        if (!cancelled) {
+          setStatuses(SUPPORTED_LOCAL_GENERATION_PROVIDERS.map(createFallbackStatus));
+          setLoading(false);
+        }
+      });
+    };
+    window.addEventListener(PROVIDER_CREDENTIALS_UPDATED_EVENT, handleCredentialsUpdated);
 
     return () => {
       cancelled = true;
+      window.removeEventListener(PROVIDER_CREDENTIALS_UPDATED_EVENT, handleCredentialsUpdated);
     };
-  }, []);
+  }, [loadStatuses]);
 
   const configuredProviders = useMemo(
     () => statuses.filter((status) => status.configured),

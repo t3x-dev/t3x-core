@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { cn } from '@/utils/cn';
 
 interface ProviderSetupBannerProps {
@@ -9,6 +9,8 @@ interface ProviderSetupBannerProps {
 }
 
 export function ProviderSetupBanner({ className }: ProviderSetupBannerProps) {
+  const openSettingsModal = useSettingsModalStore((state) => state.open);
+
   return (
     <div
       className={cn(
@@ -27,8 +29,14 @@ export function ProviderSetupBanner({ className }: ProviderSetupBannerProps) {
           </p>
         </div>
 
-        <Button asChild variant="outline" size="sm" className="shrink-0">
-          <Link href="/settings/providers">Open provider settings</Link>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          onClick={() => openSettingsModal('providers')}
+        >
+          Open provider settings
         </Button>
       </div>
     </div>

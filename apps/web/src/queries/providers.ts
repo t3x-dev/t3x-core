@@ -6,6 +6,7 @@ import {
   getProjectProviderConfig,
   getProviderRoles,
   listProviders,
+  toLocalProviderId as toLocalProviderIdFromInfrastructure,
   type ProjectProviderConfig,
   type ProviderInfo,
   type RoleAssignment,
@@ -19,8 +20,14 @@ export function fetchProviderRoles(): Promise<RoleAssignment[]> {
   return getProviderRoles();
 }
 
+export function toLocalProviderId(providerId: string) {
+  return toLocalProviderIdFromInfrastructure(providerId);
+}
+
 export function fetchProjectProviderConfig(
   projectId: string
 ): Promise<ProjectProviderConfig | null> {
   return getProjectProviderConfig(projectId);
 }
+
+export type { ProviderInfo, RoleAssignment };

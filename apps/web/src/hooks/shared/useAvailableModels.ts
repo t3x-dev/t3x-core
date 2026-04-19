@@ -115,6 +115,21 @@ export function useAvailableModels(): {
   const [loading, setLoading] = useState(true);
   const { loading: providerStatusLoading, statuses } = useProviderStatus();
 
+  const reloadModels = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const data = await fetchAvailableModels();
+      setProviders(getUsableProviders(data));
+      setBackendDefaultProvider(data.default_provider);
+    } catch {
+      setProviders([]);
+      setBackendDefaultProvider(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const loadModels = useCallback(async () => {
     const data = await fetchAvailableModels();
     return { providers: getUsableProviders(data) };
@@ -126,30 +141,8 @@ export function useAvailableModels(): {
       return;
     }
 
-    let cancelled = false;
-
-    setLoading(true);
-    fetchAvailableModels()
-      .then((data) => {
-        if (!cancelled) {
-          setProviders(getUsableProviders(data));
-          setBackendDefaultProvider(data.default_provider);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setProviders([]);
-          setBackendDefaultProvider(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [providerStatusLoading]);
+    void reloadModels();
+  }, [providerStatusLoading, reloadModels]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {

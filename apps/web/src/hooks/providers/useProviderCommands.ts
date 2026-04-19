@@ -53,3 +53,12 @@ export function useProviderCommands() {
     saveProjectProviderConfig,
   };
 }
+
+export type {
+  LocalProviderCredentialInput,
+  LocalProviderId,
+  LocalProviderStatus,
+  ProjectProviderConfig,
+  RoleAssignment,
+  TestConnectionResult,
+};
