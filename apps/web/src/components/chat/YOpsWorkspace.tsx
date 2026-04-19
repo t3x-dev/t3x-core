@@ -4,7 +4,11 @@ import type { TreeNode } from '@t3x-dev/core';
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  readPersistedWorkspacePanelExpanded,
+  useWorkspaceStore,
+  writePersistedWorkspacePanelExpanded,
+} from '@/store/workspaceStore';
 import { AfterPanel } from './AfterPanel';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
@@ -42,6 +46,16 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const sidebarWasCollapsedRef = useRef(true);
 
   useEffect(() => {
+    if (readPersistedWorkspacePanelExpanded()) {
+      setPanelExpanded(true);
+    }
+  }, [setPanelExpanded]);
+
+  useEffect(() => {
+    writePersistedWorkspacePanelExpanded(panelExpanded);
+  }, [panelExpanded]);
+
+  useEffect(() => {
     if (panelExpanded === prevExpandedRef.current) return;
     prevExpandedRef.current = panelExpanded;
 
@@ -60,8 +74,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     const container = containerRef.current;
     if (!container) return;
 
-    const availableHeight =
-      container.clientHeight - WORKSPACE_TOPBAR_HEIGHT - SPLIT_HANDLE_HEIGHT;
+    const availableHeight = container.clientHeight - WORKSPACE_TOPBAR_HEIGHT - SPLIT_HANDLE_HEIGHT;
     if (availableHeight <= 0) return;
 
     const visibleRows = Math.max(countTreeRows((tree.trees as TreeNode[]) ?? []), 4);
@@ -113,7 +126,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     return (
       <div
         data-testid="yops-panel-collapsed"
-        className="flex h-full flex-col items-center justify-center gap-3 border-l border-[var(--stroke-default)] bg-[var(--panel)] py-4 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
+        className="flex h-full flex-col items-center justify-start gap-2 border-l border-[var(--stroke-default)] bg-[var(--panel)] py-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
         title="Expand workspace"

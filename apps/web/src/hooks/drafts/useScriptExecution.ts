@@ -15,7 +15,7 @@ export function useScriptExecution() {
 
   // Sync opsLog → scriptText when extraction produces new ops (not during manual edit)
   useEffect(() => {
-    if (!scriptDirty && opsLog.length > 0) {
+    if (!scriptDirty) {
       useWorkspaceStore.getState().setScriptText(serializeOpsToYaml(opsLog));
     }
   }, [opsLog, scriptDirty]);

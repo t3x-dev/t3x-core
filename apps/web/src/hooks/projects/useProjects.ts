@@ -27,6 +27,10 @@ export function useProjects(limit = 50): UseProjectsResult {
     try {
       const data = await listProjects(limit, 0);
       setProjects(data.projects ?? []);
+    } catch {
+      // Project list is sidebar chrome on chat routes. Keep the page usable when
+      // the background fetch fails instead of surfacing an unhandled rejection.
+      setProjects((previous) => previous);
     } finally {
       setLoading(false);
     }

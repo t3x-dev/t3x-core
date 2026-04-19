@@ -1,6 +1,22 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
 
+export const WORKSPACE_PANEL_EXPANDED_STORAGE_KEY = 't3x-workspace-panel-expanded';
+
+function getLocalStorage(): Storage | null {
+  const storageCandidate = globalThis.localStorage;
+  if (!storageCandidate || typeof storageCandidate.getItem !== 'function') return null;
+  return storageCandidate;
+}
+
+export function readPersistedWorkspacePanelExpanded(): boolean {
+  return getLocalStorage()?.getItem(WORKSPACE_PANEL_EXPANDED_STORAGE_KEY) === 'true';
+}
+
+export function writePersistedWorkspacePanelExpanded(expanded: boolean): void {
+  getLocalStorage()?.setItem(WORKSPACE_PANEL_EXPANDED_STORAGE_KEY, String(expanded));
+}
+
 export interface DriftInfo {
   relation?: string;
   new_topic?: string;
@@ -166,5 +182,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setScriptText: (scriptText) => set({ scriptText }),
   setScriptDirty: (scriptDirty) => set({ scriptDirty }),
 
-  reset: () => set(initialState()),
+  reset: () =>
+    set({
+      ...initialState(),
+      panelExpanded: readPersistedWorkspacePanelExpanded(),
+    }),
 }));
