@@ -95,153 +95,70 @@ const INCREMENTAL_TURNS = [
 // Mock LLM Responses
 // ============================================================
 
-/** First extraction: Extractor returns YAML tree format (current parser format) */
-const FIRST_EXTRACTION_FRAMES = `trip_plan:
-  destination: 杭州
-  duration: 3天2晚
-  group_size: 3
-  season: 春天
-  budget_per_person: 3000
-  constraints:
-    dietary: 小王花生过敏
-    avoid_places: 河坊街
-  activities:
-    must_visit: 西湖, 灵隐寺, 龙井茶园
-    interests: 摄影, 品茶
-  accommodation:
-    preference: 民宿
-    area: 西湖附近
-  food_plan:
-    must_try: 西湖醋鱼, 龙井虾仁, 东坡肉
-    avoid: 含花生的菜
----
-{
-  "slot_quotes": {
-    "destination": "想去杭州玩",
-    "duration": "计划三天两夜",
-    "budget_per_person": "每人预算 3000 左右",
-    "constraints.dietary": "小王花生过敏",
-    "constraints.avoid_places": "河坊街太商业化了，不想去",
-    "activities.must_visit": "西湖肯定要去，还有灵隐寺和龙井茶园",
-    "activities.interests": "喜欢摄影，也想去品茶",
-    "accommodation.preference": "想住民宿",
-    "accommodation.area": "最好在西湖附近",
-    "food_plan.must_try": "一定要尝西湖醋鱼和龙井虾仁"
-  },
-  "source_map": {
-    "trip_plan": "[T1:abc12345]"
-  },
-}`;
+const FIRST_EXTRACTION_DRAFT = JSON.stringify({
+  schema: 't3x/extraction-draft',
+  version: 1,
+  mode: 'bootstrap',
+  items: [
+    {
+      id: 'trip-plan',
+      intent: 'add',
+      confidence: 0.96,
+      reasoning_type: 'direct',
+      candidate: {
+        key: 'trip_plan',
+        values: {
+          destination: '杭州',
+          duration: '3天2晚',
+          group_size: 3,
+          budget_per_person: 3000,
+          dietary_constraint: '小王花生过敏',
+          avoid_places: '河坊街',
+        },
+      },
+      evidence: [{ turn_tag: 'T1', quote: '我和两个朋友想去杭州玩，计划三天两夜，每人预算 3000 左右。', role: 'primary' }],
+    },
+  ],
+});
 
-/** Incremental extraction: Extractor returns YOps list format (no --- metadata block) */
-const INCREMENTAL_DELTA = `yops:
-  - set:
-      path: trip_plan/budget_per_person
-      value: 5000
-      source: "预算提高到每人 5000"
-      from: T11
-  - set:
-      path: trip_plan/transportation
-      value: 自驾
-      source: "打算自驾去杭州"
-      from: T11`;
-
-// ── Pipeline agent mock responses ──
-
-const PIPELINE_RESPONSES = {
-  // dedup_checker: no duplicates
-  dedup: '{"decision": "keep_separate"}',
-  // topic_namer: set topic
-  topicName: 'hangzhou_spring_trip',
-  // topic_evolver: keep same name
-  topicEvolve: '{"verdict": "keep", "name": "hangzhou_spring_trip"}',
-  // slot_polisher: return empty slots → agent keeps originals
-  slotPolish: '{"slots": {}}',
-  // reviewer: approved
-  reviewer: '{"status": "approved", "issues": []}',
-  // coverage_checker step 1: all user points
-  coverageStep1: JSON.stringify({
-    points: [
-      { type: 'fact', text: '杭州三天两夜', quote: '计划三天两夜' },
-      { type: 'fact', text: '三人出行', quote: '我和两个朋友' },
-      { type: 'constraint', text: '花生过敏', quote: '小王花生过敏' },
-      { type: 'constraint', text: '避开河坊街', quote: '河坊街太商业化了' },
-      { type: 'preference', text: '摄影和品茶', quote: '喜欢摄影，也想去品茶' },
-      { type: 'preference', text: '民宿住宿', quote: '想住民宿' },
-      { type: 'fact', text: '预算3000每人', quote: '每人预算 3000 左右' },
-    ],
-  }),
-  // coverage_checker step 2: all covered
-  coverageStep2: '{"coverage_score": 1.0, "missing_points": []}',
-  // contradiction_checker: no contradictions
-  contradiction: '{"user_constraints": ["花生过敏", "避开河坊街"], "contradictions": []}',
-};
+const INCREMENTAL_DRAFT = JSON.stringify({
+  schema: 't3x/extraction-draft',
+  version: 1,
+  mode: 'incremental',
+  items: [
+    {
+      id: 'budget-update',
+      intent: 'update',
+      confidence: 0.92,
+      reasoning_type: 'direct',
+      target_ref: { path: 'trip_plan' },
+      candidate: {
+        values: {
+          budget_per_person: 5000,
+          transportation: '自驾',
+        },
+      },
+      evidence: [{ turn_tag: 'T1', quote: '预算提高到每人 5000 吧，我们打算自驾去杭州。', role: 'primary' }],
+    },
+  ],
+});
 
 /**
  * Create a mock LLM provider that returns appropriate responses
- * based on prompt content. Handles both FrameExtractor and pipeline agent calls.
+ * based on prompt content.
  */
 function createMockProvider(mode: 'full' | 'incremental' = 'full') {
   return {
-    id: 'test-provider',
+    id: 'anthropic',
     generate: vi.fn().mockImplementation(async (prompt: string) => {
       const usage = { inputTokens: 100, outputTokens: 50 };
 
-      // ── FrameExtractor ──
-      // Prompt contains extraction markers from yopsPrompt.ts
-      if (
-        prompt.includes('knowledge extraction engine') ||
-        prompt.includes('Extraction Priority')
-      ) {
-        if (mode === 'incremental' || prompt.includes('Current Tree')) {
-          return { text: INCREMENTAL_DELTA, usage: { inputTokens: 800, outputTokens: 300 } };
+      // ── v2 ExtractionDraft prompt ──
+      if (prompt.includes('Return a valid ExtractionDraft')) {
+        if (mode === 'incremental' || prompt.includes('Current knowledge snapshot')) {
+          return { text: INCREMENTAL_DRAFT, usage: { inputTokens: 800, outputTokens: 300 } };
         }
-        return { text: FIRST_EXTRACTION_FRAMES, usage: { inputTokens: 600, outputTokens: 400 } };
-      }
-
-      // ── Pipeline Agents ──
-
-      // dedup_checker
-      if (prompt.includes('two semantic frames describe the same concept')) {
-        return { text: PIPELINE_RESPONSES.dedup, usage };
-      }
-
-      // topic_namer
-      if (prompt.includes('name the main topic')) {
-        return { text: PIPELINE_RESPONSES.topicName, usage };
-      }
-
-      // topic_evolver
-      if (prompt.includes('topic name still fits')) {
-        return { text: PIPELINE_RESPONSES.topicEvolve, usage };
-      }
-
-      // slot_polisher
-      if (prompt.includes('clean up YAML key names')) {
-        return { text: PIPELINE_RESPONSES.slotPolish, usage };
-      }
-
-      // reviewer
-      if (prompt.includes('review a structured meaning document')) {
-        return { text: PIPELINE_RESPONSES.reviewer, usage };
-      }
-
-      // coverage_checker step 1 (extract points, no frames shown)
-      if (prompt.includes('extract ALL important points') || prompt.includes('You extract ALL')) {
-        return { text: PIPELINE_RESPONSES.coverageStep1, usage };
-      }
-
-      // coverage_checker step 2 (compare against frames)
-      if (
-        prompt.includes('compare a list of user-stated points') ||
-        prompt.includes('You compare')
-      ) {
-        return { text: PIPELINE_RESPONSES.coverageStep2, usage };
-      }
-
-      // contradiction_checker
-      if (prompt.includes('detect contradictions')) {
-        return { text: PIPELINE_RESPONSES.contradiction, usage };
+        return { text: FIRST_EXTRACTION_DRAFT, usage: { inputTokens: 600, outputTokens: 400 } };
       }
 
       // Fallback (unknown agent prompt)
@@ -259,13 +176,19 @@ function createMockProvider(mode: 'full' | 'incremental' = 'full') {
  * The registry's tryWithFallback passes a mock provider to the callback.
  */
 function setupMockRegistry(mode: 'full' | 'incremental' = 'full') {
+  const provider = createMockProvider(mode);
   mockGetProviderRegistry.mockResolvedValue({
-    tryWithFallback: vi
-      .fn()
-      .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
-        const provider = createMockProvider(mode);
-        return fn(provider);
-      }),
+    listProviders: vi.fn(() => [
+      {
+        id: 'anthropic',
+        defaultModel: 'claude-sonnet-4-6',
+        availableModels: ['claude-sonnet-4-6'],
+      },
+    ]),
+    getProviderIdsForRole: vi.fn(() => ['anthropic']),
+    isConfigured: vi.fn(() => true),
+    getById: vi.fn(() => provider),
+    getEntry: vi.fn(() => ({ defaultModel: 'claude-sonnet-4-6' })),
   });
 }
 
@@ -433,11 +356,12 @@ describe('Tree Extraction E2E — Hangzhou Trip', () => {
   // ── Test 5: LLM Not Configured ──
 
   it('returns 503 when no LLM provider is available', async () => {
-    const allProvidersError = new Error('No providers available');
-    allProvidersError.name = 'AllProvidersFailedError';
-
     mockGetProviderRegistry.mockResolvedValue({
-      tryWithFallback: vi.fn().mockRejectedValue(allProvidersError),
+      listProviders: vi.fn(() => []),
+      getProviderIdsForRole: vi.fn(() => []),
+      isConfigured: vi.fn(() => false),
+      getById: vi.fn(() => undefined),
+      getEntry: vi.fn(() => undefined),
     });
 
     const res = await app.request('/v1/extract/trees', {

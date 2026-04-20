@@ -16,7 +16,7 @@ import {
   type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
-import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
+import { normalizeGeminiStructuredData, toGeminiStructuredSchema } from './structuredSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -61,8 +61,20 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config: GeminiProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'gemini-3.1-pro-preview';
+    this.model = config.model ?? 'gemini-2.5-pro';
     this.baseUrl = config.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
+  }
+
+  private buildThinkingConfig(model: string): Record<string, unknown> | undefined {
+    if (model.includes('flash-lite') || model.includes('flash-preview')) {
+      return { thinkingBudget: 0 };
+    }
+
+    if (model.includes('3.1-pro')) {
+      return { thinkingBudget: 256 };
+    }
+
+    return undefined;
   }
 
   async generate(prompt: string, options?: LLMBasicGenerateOptions): Promise<LLMGenerateResult> {
@@ -220,7 +232,8 @@ export class GeminiProvider implements LLMProvider {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
-    const jsonSchema = zodToJsonSchema(schema);
+    const jsonSchema = toGeminiStructuredSchema(schema);
+    const thinkingConfig = this.buildThinkingConfig(model);
     const url = `${this.baseUrl}/models/${model}:generateContent`;
 
     const contents = prompt.messages.map((msg) => ({
@@ -235,6 +248,7 @@ export class GeminiProvider implements LLMProvider {
         maxOutputTokens: maxTokens,
         responseSchema: jsonSchema,
         responseMimeType: 'application/json',
+        ...(thinkingConfig && { thinkingConfig }),
         ...(options.stopSequences && { stopSequences: options.stopSequences }),
       },
     };
@@ -287,7 +301,7 @@ export class GeminiProvider implements LLMProvider {
         throw new LLMProviderError(this.id, undefined, 'Failed to parse response as JSON');
       }
       try {
-        const parsed = schema.parse(jsonData);
+        const parsed = schema.parse(normalizeGeminiStructuredData(jsonData));
         return { data: parsed, usage };
       } catch {
         throw new LLMProviderError(

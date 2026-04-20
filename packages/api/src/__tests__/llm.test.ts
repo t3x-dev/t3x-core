@@ -140,7 +140,7 @@ describe('GET /v1/llm/models', () => {
       ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']
     );
     expect(providers.find((provider) => provider.name === 'google')?.models.map((m) => m.id)).toEqual(
-      ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
+      ['gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
     );
   });
 });

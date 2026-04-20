@@ -14,7 +14,6 @@ export interface ExtractionStreamEvent {
 export interface ExtractionStreamRequest {
   conversation_id: string;
   turn_hashes?: string[];
-  drift_decision?: { choice: string; relation?: string; new_topic?: string };
   topic_id?: string;
   force_extract?: boolean;
 }

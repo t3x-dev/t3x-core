@@ -15,9 +15,8 @@
  *      same generator used by `/v1/extract` — and collect the final
  *      snapshot.
  *   3. Flatten the produced trees into SemanticPoint-shaped entries in
- *      the `ready` zone (the tree pipeline does not have a review
- *      phase; ambiguity is surfaced via drift/advisory events, not
- *      per-point zones).
+ *      the `ready` zone (the canonical tree pipeline does not expose a
+ *      per-point review phase).
  *   4. Persist the flattened points + cursor onto the draft so the
  *      workspace can re-open the same state.
  *   5. Return `{ ready_points, review_points, cursor, stats }`.
@@ -28,11 +27,12 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { SemanticContent, TreeNode } from '@t3x-dev/core';
-import { flattenTrees } from '@t3x-dev/core';
+import { collectResult, flattenTrees, runOperation } from '@t3x-dev/core';
 import { findConversationById, findDraftById, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { type PipelineEvent, runExtractionPipeline } from '../lib/extraction-pipeline';
+import { buildPipelineContext } from '../ops/context';
+import { extractOp } from '../ops/extract';
 import { ErrorResponseSchema } from '../schemas/common';
 import { IncrementalExtractRequest, IncrementalExtractResponse } from '../schemas/contracts';
 
@@ -150,7 +150,7 @@ const incrementalExtractRoute = createRoute({
   tags: ['Extract'],
   summary: 'Run incremental LLM extraction on a conversation for a draft',
   description:
-    'Adapter over the current tree extraction pipeline — returns the extracted snapshot as `SemanticPoint[]` in the `ready_points` array. `review_points` is always empty under the current pipeline (ambiguity is surfaced via drift/advisory events rather than per-point zones).',
+    'Adapter over the current tree extraction pipeline — returns the extracted snapshot as `SemanticPoint[]` in the `ready_points` array. `review_points` is always empty under the canonical pipeline.',
   request: {
     body: {
       content: { 'application/json': { schema: IncrementalExtractRequest } },
@@ -206,84 +206,30 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
       );
     }
 
-    // 3. Run the extraction pipeline (forceExtract → skip readiness/session gates)
-    const events: PipelineEvent[] = [];
-    for await (const event of runExtractionPipeline({
-      conversationId: conversation_id,
-      projectId: project_id,
-      forceExtract: true,
-    })) {
-      events.push(event);
+    // 3. Run the canonical extraction pipeline
+    const ctx = await buildPipelineContext(c, project_id);
+    const extraction = await collectResult(
+      runOperation(
+        extractOp,
+        {
+          conversationId: conversation_id,
+        },
+        ctx
+      )
+    );
+
+    if (!extraction.ok) {
+      if (extraction.kind === 'conversation_not_found') {
+        return errorResponse(c, 'NOT_FOUND', extraction.message);
+      }
+      if (extraction.kind === 'invalid_request') {
+        return errorResponse(c, 'INVALID_REQUEST', extraction.message);
+      }
+      return errorResponse(c, 'EXTRACTION_FAILED', extraction.message);
     }
 
-    const errorEvent = events.find((e) => e.type === 'error');
-    if (errorEvent) {
-      const code = String(errorEvent.data.code ?? 'EXTRACTION_FAILED');
-      const message = String(errorEvent.data.message ?? 'Extraction failed');
-      if (code === 'LLM_NOT_CONFIGURED') {
-        return c.json(
-          {
-            success: false as const,
-            error: {
-              code,
-              message,
-            },
-          },
-          503
-        );
-      }
-      if (code === 'CONVERSATION_NOT_FOUND') {
-        return errorResponse(c, 'NOT_FOUND', message);
-      }
-      return errorResponse(c, code, message);
-    }
-
-    const doneEvent = events.find((e) => e.type === 'done');
-    if (!doneEvent || !doneEvent.data.snapshot) {
-      // Pipeline could also 'skip' (readiness blocked, no extractable content).
-      // Treat skip as an empty successful extraction.
-      const skipEvent = events.find((e) => e.type === 'skipped');
-      if (skipEvent) {
-        const emptyCursor = {
-          cursors: {} as Record<string, { last_processed_turn: string; processed_at: string }>,
-        };
-        await updateDraft(
-          db,
-          draft_id,
-          {
-            semantic_points: [],
-            extraction_cursor: emptyCursor,
-            extraction_mode: 'llm',
-          },
-          draft.revision
-        );
-        return c.json(
-          {
-            success: true as const,
-            data: {
-              ready_points: [],
-              review_points: [],
-              cursor: emptyCursor,
-              stats: {
-                total_turns: 0,
-                new_turns: 0,
-                proposals: 0,
-                auto_landed: 0,
-                needs_review: 0,
-                rejected: 0,
-              },
-            },
-          },
-          200
-        );
-      }
-      return errorResponse(c, 'EXTRACTION_FAILED', 'Pipeline did not produce a result');
-    }
-
-    const snapshot = doneEvent.data.snapshot as SemanticContent;
-    const deltaYops = Array.isArray(doneEvent.data.delta)
-      ? (doneEvent.data.delta as unknown[])
-      : [];
+    const snapshot = extraction.snapshot as SemanticContent;
+    const deltaYops = extraction.ops;
 
     // 4. Convert snapshot → SemanticPoints (all ready under the tree pipeline)
     const readyPoints = contentToPoints(snapshot, conversation_id);
@@ -293,18 +239,10 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
     //    Derive from the latest turn_hash we can see in the snapshot's node
     //    sources; fall back to snapshot creation time.
     const flat = flattenTrees(snapshot.trees);
-    const lastTurnHash = (snapshot.trees as EnrichedTreeNode[])
-      .flatMap(function collect(t: EnrichedTreeNode): string[] {
-        const own = t.source ? [t.source] : [];
-        const kids = (t.children ?? []).flatMap(collect);
-        return [...own, ...kids];
-      })
-      .filter((s) => typeof s === 'string' && s.length > 0)
-      .pop();
     const cursor = {
       cursors: {
         [conversation_id]: {
-          last_processed_turn: lastTurnHash ?? '',
+          last_processed_turn: extraction.lastTurnHash,
           processed_at: new Date().toISOString(),
         },
       },

@@ -72,9 +72,11 @@ export function useExtraction({
                 ? `Extraction returned ops without provenance. Please retry.`
                 : err.reason === 'invalid_structure'
                   ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                : err.reason === 'llm_error'
-                  ? `LLM call failed: ${err.message}`
-                  : `Extraction failed after ${err.lastAttempt} attempts.`;
+                  : err.reason === 'llm_error'
+                    ? err.failureCode
+                      ? `Extraction failed (${err.failureCode}): ${err.message}`
+                      : `LLM call failed: ${err.message}`
+                    : `Extraction failed after ${err.lastAttempt} attempts.`;
           useWorkspaceStore.getState().setError(msg);
           toast.error(msg);
         } else {

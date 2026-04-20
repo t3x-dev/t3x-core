@@ -4,6 +4,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { ProviderExtractionDraftSchema } from '../../extractors/v2/providerDraft';
 import { LLMProviderError } from '../../llm/types';
 import { ClaudeProvider, createClaudeProvider } from '../../providers/llm/claude';
 
@@ -198,16 +199,9 @@ describe('ClaudeProvider.generateFromPrompt', () => {
 });
 
 describe('ClaudeProvider.generateStructured', () => {
-  it('sends tool definition and extracts tool input', async () => {
+  it('sends output_config.format and parses structured JSON text', async () => {
     const responseBody = {
-      content: [
-        {
-          type: 'tool_use',
-          id: 'tool_1',
-          name: 'extract_data',
-          input: { name: 'Alice', age: 30 },
-        },
-      ],
+      content: [{ type: 'text', text: '{"name":"Alice","age":30}' }],
       usage: { input_tokens: 20, output_tokens: 15 },
     };
 
@@ -232,10 +226,22 @@ describe('ClaudeProvider.generateStructured', () => {
 
     // Verify tools parameter was sent
     const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
-    expect(body.tools).toBeDefined();
-    expect(body.tools[0].name).toBe('extract_data');
-    expect(body.tools[0].input_schema).toBeDefined();
-    expect(body.tool_choice).toEqual({ type: 'tool', name: 'extract_data' });
+    expect(body.output_config).toEqual({
+      format: {
+        type: 'json_schema',
+        schema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            age: { type: 'number' },
+          },
+          required: ['name', 'age'],
+          additionalProperties: false,
+        },
+      },
+    });
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
   });
 
   it('falls back to text parsing when no tool_use in response', async () => {
@@ -262,5 +268,246 @@ describe('ClaudeProvider.generateStructured', () => {
     );
 
     expect(result.data).toEqual({ name: 'Bob', age: 25 });
+  });
+
+  it('normalizes provider draft child aliases before schema parsing', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'tool_1',
+                  name: 'extract_data',
+                  input: {
+                    schema: 't3x/provider-extraction-draft',
+                    version: 1,
+                    mode: 'bootstrap',
+                    items: [
+                      {
+                        id: 'item_1',
+                        intent: 'add',
+                        confidence: 0.9,
+                        reasoning_type: 'direct',
+                        target_ref: {
+                          node_key: null,
+                          path: null,
+                          existing_node_id: null,
+                        },
+                        candidate: {
+                          key: 'airport_issue',
+                          path_hint: 'airport_issue',
+                          slot: null,
+                          value_json: null,
+                          values_json: '{"summary":"SEA had a cyberattack"}',
+                          children_json:
+                            '[{\"area\":\"Baggage Handling\",\"description\":\"Automated baggage systems were disrupted\"}]',
+                        },
+                        evidence: [
+                          {
+                            turn_tag: 'T1',
+                            quote: 'Baggage Handling: The automated baggage systems were severely disrupted.',
+                            role: 'primary',
+                          },
+                        ],
+                      },
+                    ],
+                    warnings: [],
+                  },
+                },
+              ],
+              usage: { input_tokens: 12, output_tokens: 8 },
+            })
+          ),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'claude-sonnet-4-6' }
+    );
+
+    expect(result.data.items[0]?.candidate.children_json).toBe(
+      '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]'
+    );
+  });
+
+  it('folds child description into values when key is already present', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'tool_1',
+                  name: 'extract_data',
+                  input: {
+                    schema: 't3x/provider-extraction-draft',
+                    version: 1,
+                    mode: 'bootstrap',
+                    items: [
+                      {
+                        id: 'item_1',
+                        intent: 'add',
+                        confidence: 0.9,
+                        reasoning_type: 'direct',
+                        target_ref: {
+                          node_key: null,
+                          path: null,
+                          existing_node_id: null,
+                        },
+                        candidate: {
+                          key: 'airport_issue',
+                          path_hint: 'airport_issue',
+                          slot: null,
+                          value_json: null,
+                          values_json: '{"summary":"SEA had a cyberattack"}',
+                          children_json:
+                            '[{\"key\":\"Baggage Handling\",\"description\":\"Automated baggage systems were disrupted\"}]',
+                        },
+                        evidence: [
+                          {
+                            turn_tag: 'T1',
+                            quote: 'Baggage Handling: The automated baggage systems were severely disrupted.',
+                            role: 'primary',
+                          },
+                        ],
+                      },
+                    ],
+                    warnings: [],
+                  },
+                },
+              ],
+              usage: { input_tokens: 12, output_tokens: 8 },
+            })
+          ),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'claude-sonnet-4-6' }
+    );
+
+    expect(result.data.items[0]?.candidate.children_json).toBe(
+      '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]'
+    );
+  });
+
+  it('lowers provider draft schema to Claude structured-output subset', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [
+                {
+                  type: 'text',
+                  text: '{"schema":"t3x/provider-extraction-draft","version":1,"mode":"bootstrap","items":[],"warnings":[]}',
+                },
+              ],
+              usage: { input_tokens: 12, output_tokens: 8 },
+            })
+          ),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'claude-sonnet-4-6' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.output_config.format.schema.properties.version).toEqual({
+      type: 'integer',
+      enum: [1],
+    });
+    expect(body.output_config.format.schema.properties.items.items.properties.confidence).toEqual({
+      type: 'number',
+    });
+  });
+
+  it('flattens nested child value and children fields into supported child shape', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'tool_1',
+                  name: 'extract_data',
+                  input: {
+                    schema: 't3x/provider-extraction-draft',
+                    version: 1,
+                    mode: 'bootstrap',
+                    items: [
+                      {
+                        id: 'item_1',
+                        intent: 'add',
+                        confidence: 0.9,
+                        reasoning_type: 'direct',
+                        target_ref: {
+                          node_key: null,
+                          path: null,
+                          existing_node_id: null,
+                        },
+                        candidate: {
+                          key: 'airport_issue',
+                          path_hint: 'airport_issue',
+                          slot: null,
+                          value_json: null,
+                          values_json: '{"summary":"SEA had a cyberattack"}',
+                          children_json:
+                            '[{\"key\":\"Baggage Handling\",\"value\":\"Automated baggage systems were disrupted\"},{\"key\":\"Passenger Impact\",\"children\":[{\"key\":\"Long Lines\"},{\"key\":\"Manual Check-In\"}]}]',
+                        },
+                        evidence: [
+                          {
+                            turn_tag: 'T1',
+                            quote: 'Airlines were unable to use the airport’s common-use systems.',
+                            role: 'primary',
+                          },
+                        ],
+                      },
+                    ],
+                    warnings: [],
+                  },
+                },
+              ],
+              usage: { input_tokens: 12, output_tokens: 8 },
+            })
+          ),
+      })
+    );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'claude-sonnet-4-6' }
+    );
+
+    expect(result.data.items[0]?.candidate.children_json).toBe(
+      '[{"key":"Baggage Handling","values":{"value":"Automated baggage systems were disrupted"}},{"key":"Passenger Impact","values":{"children":[{"key":"Long Lines"},{"key":"Manual Check-In"}]}}]'
+    );
   });
 });

@@ -2,8 +2,7 @@
  * Extract Route — Integration Layer "Extract" Verb
  *
  * Composite endpoint that takes raw text, creates a conversation + turn,
- * runs the extraction pipeline, stores results as a draft, and optionally
- * detects drift from previous extractions.
+ * runs the canonical extraction pipeline, and stores the result as a draft.
  *
  * Endpoints:
  * - POST /v1/extract — Extract semantic trees from raw text
@@ -11,7 +10,7 @@
 
 import type { z } from '@hono/zod-openapi';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { serializeForPrompt } from '@t3x-dev/core';
+import { collectResult, runOperation, serializeForPrompt } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,
@@ -22,8 +21,9 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { type PipelineEvent, runExtractionPipeline } from '../lib/extraction-pipeline';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { buildPipelineContext } from '../ops/context';
+import { extractOp } from '../ops/extract';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   ExtractRequest,
@@ -57,8 +57,7 @@ const postExtractRoute = createRoute({
     '**What it does:**\n' +
     '1. Creates a conversation + turn from the raw text\n' +
     '2. Runs the LLM extraction pipeline (structure-aware, evidence-backed)\n' +
-    '3. Stores the result as a draft\n' +
-    '4. Detects drift from previous extractions in incremental mode\n\n' +
+    '3. Stores the result as a draft\n\n' +
     '**After extraction:** Use `GET /v1/drafts/{draft_id}` to see the extracted tree, ' +
     'then `POST /v1/drafts/{draft_id}/apply-yops` to edit it, ' +
     'then `POST /v1/drafts/{draft_id}/commit` to save it.\n\n' +
@@ -121,19 +120,11 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
     let conversationId: string;
 
     if (conversation_id) {
-      // Incremental mode: verify conversation exists and belongs to project
       const conversation = await findConversationById(db, conversation_id);
-      if (!conversation) {
+      if (!conversation || conversation.projectId !== project_id) {
         return errorResponse(c, 'NOT_FOUND', `Conversation ${conversation_id} not found`);
       }
-      if (conversation.projectId !== project_id) {
-        return errorResponse(
-          c,
-          'NOT_FOUND',
-          `Conversation ${conversation_id} not found in project ${project_id}`
-        );
-      }
-      conversationId = conversation_id;
+      conversationId = conversation.conversationId;
     } else {
       // One-shot mode: create a new conversation
       const title = source ? `API extract: ${source}` : 'API extract';
@@ -152,48 +143,33 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       content: text,
     });
 
-    // Step 4: Run the extraction pipeline
-    const events: PipelineEvent[] = [];
-    for await (const event of runExtractionPipeline({
-      conversationId,
-      projectId: project_id,
-      turnHashes: [turn.turnHash],
-      forceExtract: true, // Skip session/readiness gates for API calls
-    })) {
-      events.push(event);
+    // Step 4: Run the canonical extraction pipeline
+    const ctx = await buildPipelineContext(c, project_id);
+    const extraction = await collectResult(
+      runOperation(
+        extractOp,
+        {
+          conversationId,
+          turnHashes: [turn.turnHash],
+        },
+        ctx
+      )
+    );
+
+    if (!extraction.ok) {
+      if (extraction.kind === 'conversation_not_found') {
+        return errorResponse(c, 'NOT_FOUND', extraction.message);
+      }
+      if (extraction.kind === 'invalid_request') {
+        return errorResponse(c, 'INVALID_REQUEST', extraction.message);
+      }
+      return errorResponse(c, 'EXTRACTION_FAILED', extraction.message);
     }
 
-    // Check for pipeline errors
-    const errorEvent = events.find((e) => e.type === 'error');
-    if (errorEvent) {
-      const code = String(errorEvent.data.code ?? 'EXTRACTION_FAILED');
-      const message = String(errorEvent.data.message ?? 'Pipeline extraction failed');
-      return errorResponse(c, code, message);
-    }
-
-    // Get final snapshot from the done event
-    const doneEvent = events.find((e) => e.type === 'done');
-    if (!doneEvent || !doneEvent.data.snapshot) {
-      return errorResponse(c, 'EXTRACTION_FAILED', 'Pipeline did not produce a result');
-    }
-
-    const snapshot = doneEvent.data.snapshot as { trees: TreeNodeResult[]; relations: unknown[] };
+    const snapshot = extraction.snapshot as { trees: TreeNodeResult[]; relations: unknown[] };
     const trees = snapshot.trees;
     const yaml = serializeForPrompt(snapshot as Parameters<typeof serializeForPrompt>[0]);
-
-    // Check for drift events from the pipeline
-    const driftEvent = events.find((e) => e.type === 'drift');
-    let drift: { node_path: string; before: string; after: string }[] | undefined;
-    if (driftEvent) {
-      // Map pipeline drift info to API response format
-      drift = [
-        {
-          node_path: String(driftEvent.data.old_topic ?? ''),
-          before: String(driftEvent.data.old_topic ?? ''),
-          after: String(driftEvent.data.new_topic ?? ''),
-        },
-      ];
-    }
+    const drift: { node_path: string; before: string; after: string }[] | undefined = undefined;
 
     // Step 5: Create a user-facing draft with extracted trees
     const draft = await insertDraft(db, {
@@ -215,19 +191,6 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
       },
       project_id
     );
-
-    if (drift && drift.length > 0) {
-      webhookDispatcher.dispatch(
-        'extraction.drift',
-        {
-          project_id,
-          conversation_id: conversationId,
-          drift_count: drift.length,
-          drift,
-        },
-        project_id
-      );
-    }
 
     // Step 7: Build response
     const result: z.infer<typeof ExtractResponse> = {

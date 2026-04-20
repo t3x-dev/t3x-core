@@ -64,6 +64,69 @@ export type {
   AnchorType,
   Segment,
 } from './types';
+export {
+  compileExtractionDraft,
+  toCompiledMutationPlan,
+  type CompileResult,
+} from './v2/compiler';
+export {
+  createExtractionFailure,
+  EXTRACTION_FAILURE_CODES,
+  getRetryStrategy,
+  isRetryableFailure,
+  type ExtractionFailure,
+  type ExtractionFailureCode,
+  type RetryDecision,
+  type RetryStrategy,
+} from './v2/failures';
+export {
+  buildPromptTurnMap,
+  normalizeExtractionText,
+  type PromptTurn,
+  type PromptTurnInput,
+} from './v2/normalization';
+export {
+  buildOpenAIChatCompletionBody,
+  mapProviderErrorToExtractionFailure,
+  normalizeProviderDraftText,
+  type OpenAIChatCompletionBodyInput,
+  type OpenAIChatMessage,
+} from './v2/providerAdapters';
+export {
+  liftProviderDraftToExtractionDraft,
+  ProviderDraftCandidateSchema,
+  ProviderDraftEvidenceSchema,
+  ProviderDraftTargetRefSchema,
+  ProviderExtractionDraftItemSchema,
+  ProviderExtractionDraftSchema,
+  PROVIDER_EXTRACTION_DRAFT_SCHEMA,
+  type ProviderExtractionDraft,
+} from './v2/providerDraft';
+export {
+  runExtractionV2Pipeline,
+  type ExtractionV2PipelineInput,
+  type ExtractionV2PipelineResult,
+} from './v2/pipeline';
+export {
+  EXTRACTION_DRAFT_SCHEMA,
+  EXTRACTION_MODES,
+  DraftEvidenceSchema,
+  DraftIntentSchema,
+  EvidenceRoleSchema,
+  ExtractionDraftItemSchema,
+  ExtractionDraftSchema,
+  ExtractionModeSchema,
+  ReasoningTypeSchema,
+  TurnTagSchema,
+  type CompileInput,
+  type CompiledMutationPlan,
+  type DraftEvidence,
+  type DraftIntent,
+  type ExtractionDraft,
+  type ExtractionDraftItem,
+  type ExtractionMode,
+  type ReasoningType,
+} from './v2/types';
 // YOps Parser
 export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';
 // YOps Prompt Builder (YAML operations format for incremental extraction)

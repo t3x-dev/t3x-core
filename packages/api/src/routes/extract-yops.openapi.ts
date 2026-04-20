@@ -16,16 +16,13 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  buildYOpsPrompt,
-  DEFAULT_STYLE,
-  type ExtractionTurn,
   getCanonicalModelId,
   getModelInfo,
-  parseYOpsOutput,
+  runExtractionV2Pipeline,
 } from '@t3x-dev/core';
 import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { errorResponse, zodErrorHook } from '../lib/errors';
+import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
 import { getProviderRegistry } from '../lib/provider-registry';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -38,6 +35,7 @@ export const extractYopsRoutes = new OpenAPIHono({
 
 const TurnInput = z.object({
   turn_hash: z.string().min(1),
+  role: z.enum(['user', 'assistant', 'system', 'tool']).optional(),
   content: z.string(),
 });
 
@@ -138,6 +136,38 @@ const ExtractYopsResponse = z.object({
   ops: z.array(z.any()),
 });
 
+function mapExtractionFailureToApiError(
+  failure: { code: string; message: string; details?: Record<string, unknown> }
+): {
+  code: 'EXTRACTION_FAILED' | 'RATE_LIMITED' | 'AUTH_ERROR';
+  status?: 400 | 401 | 429;
+  details: Record<string, unknown>;
+} {
+  const statusCode = typeof failure.details?.statusCode === 'number' ? failure.details.statusCode : undefined;
+
+  if (failure.code === 'transport' && statusCode === 429) {
+    return {
+      code: 'RATE_LIMITED',
+      status: 429,
+      details: { failure_code: failure.code, ...failure.details },
+    };
+  }
+
+  if (failure.code === 'transport' && (statusCode === 401 || statusCode === 403)) {
+    return {
+      code: 'AUTH_ERROR',
+      status: 401,
+      details: { failure_code: failure.code, ...failure.details },
+    };
+  }
+
+  return {
+    code: 'EXTRACTION_FAILED',
+    status: 400,
+    details: { failure_code: failure.code, ...failure.details },
+  };
+}
+
 // ── Route ──
 
 const route = createRoute({
@@ -175,7 +205,7 @@ const route = createRoute({
 // ── Handler ──
 
 extractYopsRoutes.openapi(route, async (c) => {
-  const { conversation_id, turns, failing_ops, provider: requestedProvider, model: requestedModel } =
+  const { conversation_id, turns, provider: requestedProvider, model: requestedModel } =
     c.req.valid('json');
 
   try {
@@ -197,44 +227,13 @@ extractYopsRoutes.openapi(route, async (c) => {
     }
 
     // Load existing yops log and replay to get the current snapshot.
-    // If it's empty, fall back to a minimal non-empty snapshot so the prompt
-    // builder uses incremental mode (which includes SOURCE_CONTRACT).
     const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
     const replayedSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
-    const snapshot =
-      replayedSnapshot.trees.length > 0
-        ? replayedSnapshot
-        : {
-            trees: [{ key: '_root', slots: {}, children: [] }],
-            relations: [],
-          };
-
-    // Build prompt — use replayed snapshot to ensure incremental mode with SOURCE_CONTRACT
-    const extractionTurns: ExtractionTurn[] = turns.map((t) => ({
-      turn_hash: t.turn_hash,
-      role: 'user' as const,
-      content: t.content,
-    }));
-
-    const { systemPrompt, userPrompt } = buildYOpsPrompt(
-      {
-        turns: extractionTurns,
-        snapshot,
-        processedTurnCount: 0,
-      },
-      {
-        style: DEFAULT_STYLE,
-        failingOps: failing_ops ?? [],
-      }
-    );
-
-    // Combine system + user prompt (same pattern as YamlExtractionStrategy)
-    const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+    const mode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
     // Call the LLM via the explicitly selected provider/model when available.
     // Otherwise, fall back to the current generation-role default chain.
     const reg = await getProviderRegistry();
-    let rawText: string;
     try {
       const explicitProvider = normalizeExtractProvider(requestedProvider);
       if (requestedProvider && !explicitProvider) {
@@ -280,35 +279,32 @@ extractYopsRoutes.openapi(route, async (c) => {
         return errorResponse(c, 'EXTRACTION_FAILED', `No default model configured for provider: ${providerId}`);
       }
 
-      const genResult =
-        typeof provider.generateFromPrompt === 'function'
-          ? await provider.generateFromPrompt(
-              {
-                messages: [{ role: 'user', content: combinedPrompt }],
-              },
-              {
-                model,
-                temperature: 0.1,
-                maxTokens: 8192,
-              }
-            )
-          : await provider.generate(combinedPrompt, {
-              temperature: 0.1,
-              maxTokens: 8192,
-            });
-      rawText = genResult.text;
+      const pipelineResult = await runExtractionV2Pipeline({
+        turns: turns.map((turn) => ({
+          turn_hash: turn.turn_hash,
+          role: turn.role ?? 'user',
+          content: turn.content,
+        })),
+        mode,
+        providerId,
+        provider,
+        model,
+        snapshot: replayedSnapshot.trees.length > 0 ? replayedSnapshot : undefined,
+      });
+
+      if (!pipelineResult.ok) {
+        const apiFailure = mapExtractionFailureToApiError(pipelineResult.failure);
+        return errorJson(c, apiFailure.code, pipelineResult.failure.message, apiFailure.status, apiFailure.details);
+      }
+
+      return c.json(
+        { success: true as const, data: { ops: pipelineResult.compiled.ops } },
+        200
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LLM provider error';
       return errorResponse(c, 'EXTRACTION_FAILED', message);
     }
-
-    // Parse LLM output
-    const parseResult = parseYOpsOutput(rawText, { strictYopsList: true });
-    if (!parseResult.ok) {
-      return errorResponse(c, 'EXTRACTION_FAILED', `LLM output parse error: ${parseResult.error}`);
-    }
-
-    return c.json({ success: true as const, data: { ops: parseResult.yops ?? [] } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'EXTRACTION_FAILED', message);

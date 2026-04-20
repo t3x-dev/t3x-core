@@ -1,12 +1,10 @@
 /**
  * Tests for POST /v1/extract-yops
  *
- * These tests cover the request validation layer and 404 handling.
- * LLM-dependent paths (actual extraction) are covered by e2e tests
- * that mock the endpoint via page.route().
+ * These tests cover request validation, provider/model selection,
+ * and the v2 structured-draft extraction contract.
  */
 
-import { buildYOpsPrompt } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteProviderCredential,
@@ -32,6 +30,30 @@ import { extractYopsRoutes } from '../routes/extract-yops.openapi';
 
 const app = new Hono();
 app.route('/', extractYopsRoutes);
+
+const extractionDraft = {
+  schema: 't3x/extraction-draft',
+  version: 1,
+  mode: 'bootstrap',
+  items: [
+    {
+      id: 'item_1',
+      intent: 'add',
+      confidence: 0.9,
+      reasoning_type: 'direct',
+      candidate: {
+        key: 'trip',
+      },
+      evidence: [
+        {
+          turn_tag: 'T1',
+          quote: 'I prefer Tokyo for the trip',
+          role: 'primary',
+        },
+      ],
+    },
+  ],
+};
 
 describe('POST /v1/extract-yops', () => {
   let cleanup: () => Promise<void>;
@@ -120,9 +142,8 @@ describe('POST /v1/extract-yops', () => {
   });
 
   it('accepts optional failing_ops field', async () => {
-    // With a real conversation but turns that would trigger LLM — the LLM call will
-    // fail (no API key in test env), so we only verify the request is accepted up to
-    // the extraction step (not a 400 from schema validation).
+    // The field is retained for transport compatibility even though v2 no longer
+    // uses the client-owned retry semantics.
     const res = await app.request('/v1/extract-yops', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -139,11 +160,9 @@ describe('POST /v1/extract-yops', () => {
         ],
       }),
     });
-    // Either 500 (LLM not configured / call failed) or some other non-400 status
-    // We specifically want NOT 400 — that would indicate request schema rejection
+    // We specifically want NOT INVALID_REQUEST — that would indicate request schema rejection.
     expect(res.status).not.toBe(400);
     const body = await res.json();
-    // If 500, error code should be EXTRACTION_FAILED (not INVALID_REQUEST)
     if (!body.success) {
       expect(body.error.code).not.toBe('INVALID_REQUEST');
     }
@@ -162,12 +181,16 @@ describe('POST /v1/extract-yops', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe('https://api.openai.com/v1/chat/completions');
 
-      const payload = JSON.parse(String(init?.body)) as { model: string };
+      const payload = JSON.parse(String(init?.body)) as {
+        model: string;
+        response_format?: { type: string };
+      };
       expect(payload.model).toBe('gpt-5.4-mini');
+      expect(payload.response_format?.type).toBe('json_schema');
 
       return new Response(
         JSON.stringify({
-          choices: [{ message: { content: 'yops:\n  - define:\n      path: trip\n' } }],
+          choices: [{ message: { content: JSON.stringify(extractionDraft) } }],
           usage: { prompt_tokens: 12, completion_tokens: 5 },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -189,6 +212,15 @@ describe('POST /v1/extract-yops', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.data.ops).toEqual([
+      {
+        define: { path: 'trip' },
+        source: expect.objectContaining({
+          type: 'llm',
+          model: 'gpt-5.4-mini',
+        }),
+      },
+    ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -203,7 +235,7 @@ describe('POST /v1/extract-yops', () => {
 
       return new Response(
         JSON.stringify({
-          candidates: [{ content: { parts: [{ text: 'yops:\n  - define:\n      path: trip\n' }] } }],
+          candidates: [{ content: { parts: [{ text: JSON.stringify(extractionDraft) }] } }],
           usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 5 },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -242,7 +274,7 @@ describe('POST /v1/extract-yops', () => {
 
       return new Response(
         JSON.stringify({
-          content: [{ type: 'text', text: 'yops:\n  - define:\n      path: trip\n' }],
+          content: [{ type: 'text', text: JSON.stringify(extractionDraft) }],
           usage: { input_tokens: 12, output_tokens: 5 },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -267,17 +299,16 @@ describe('POST /v1/extract-yops', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('builds prompt with SOURCE_CONTRACT for incremental mode', () => {
-    // Verify that a non-empty snapshot triggers incremental mode, which includes
-    // SOURCE_CONTRACT (requiring the LLM to emit per-op `source` fields).
-    const snapshot = {
-      trees: [{ key: '_root', slots: {}, children: [] }],
-      relations: [],
-    };
-    const turns = [{ turn_hash: 'sha256:t1', role: 'user' as const, content: 'test' }];
-    const result = buildYOpsPrompt({ turns, snapshot, processedTurnCount: 0 });
-    const fullPrompt = `${result.systemPrompt}\n${result.userPrompt}`;
-    expect(fullPrompt).toContain('source');
-    expect(fullPrompt.toLowerCase()).toContain('verbatim');
+  it('accepts optional role on turn input for v2 callers', async () => {
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', role: 'assistant', content: 'hello world' }],
+      }),
+    });
+
+    expect(res.status).not.toBe(400);
   });
 });

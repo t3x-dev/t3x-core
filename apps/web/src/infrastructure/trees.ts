@@ -13,9 +13,7 @@ export interface TreeExtractResult {
   delta?: unknown;
   snapshot?: SemanticContent;
   yops_log_id?: string;
-  status: 'completed' | 'drift_detected' | 'skipped';
-  drift?: { relation?: string; new_topic?: string; old_topic?: string };
-  choices?: string[];
+  status: 'completed' | 'skipped';
   reason?: string;
 }
 
@@ -34,12 +32,9 @@ export interface TreeAnswerResult {
 export async function extractNodes(
   conversationId: string,
   turnHashes?: string[],
-  driftDecision?: { choice: string; relation?: string; new_topic?: string },
   opts?: {
     topicId?: string;
     forceExtract?: boolean;
-    sourcePinIds?: string[];
-    style?: { granularity?: string; quote_length?: string; update_stance?: string; tier3?: string };
   }
 ): Promise<TreeExtractResult> {
   const res = await fetchWithTimeout(
@@ -50,11 +45,8 @@ export async function extractNodes(
       body: JSON.stringify({
         conversation_id: conversationId,
         ...(turnHashes && { turn_hashes: turnHashes }),
-        ...(driftDecision && { drift_decision: driftDecision }),
         ...(opts?.topicId && { topic_id: opts.topicId }),
         ...(opts?.forceExtract && { force_extract: opts.forceExtract }),
-        ...(opts?.sourcePinIds?.length && { source_pin_ids: opts.sourcePinIds }),
-        ...(opts?.style && { style: opts.style }),
       }),
     },
     60_000

@@ -11,7 +11,7 @@
 
 import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { normalizeOpTurnHashes, repairOpQuotes, validateSource } from '@t3x-dev/core';
-import { ExtractionFailedError } from './errors';
+import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
 import type { LLMCallInput, RetryFailingOp } from './types';
@@ -61,8 +61,21 @@ export async function runExtraction({
     try {
       ops = await llm({ turns, failingOps: prevFailing });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
       attempt++;
+
+      if (e instanceof ExtractionRequestError) {
+        const retryDecision = e.failure.retry;
+        const exhausted =
+          !retryDecision.retryable ||
+          attempt >= retryDecision.maxAttempts ||
+          attempt > MAX_RETRIES;
+        if (exhausted) {
+          throw new ExtractionFailedError([], attempt, 'llm_error', e.message, e.failure.code);
+        }
+        continue;
+      }
+
+      const msg = e instanceof Error ? e.message : String(e);
       if (attempt > MAX_RETRIES) {
         throw new ExtractionFailedError([], attempt, 'llm_error', msg);
       }

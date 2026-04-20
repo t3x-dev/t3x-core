@@ -195,9 +195,9 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     name: 'Google AI (Gemini)',
     role: 'generation',
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-    defaultModel: 'gemini-3.1-pro-preview',
+    defaultModel: 'gemini-2.5-pro',
     availableModels: [
-      'gemini-3.1-pro-preview',
+      'gemini-2.5-pro',
       'gemini-3-flash-preview',
       'gemini-3.1-flash-lite-preview',
     ],

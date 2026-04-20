@@ -14,6 +14,7 @@
  * the pre-state via `setDerived(replay(pre-opsLog))`.
  */
 
+import type { ExtractionFailure, ExtractionFailureCode } from '@t3x-dev/core';
 import { CommandError } from '../CommandError';
 import type { RetryFailingOp } from './types';
 
@@ -27,10 +28,22 @@ export class ExtractionFailedError extends CommandError {
       | 'invalid_structure'
       | 'exhausted_retries'
       | 'llm_error',
-    message?: string
+    message?: string,
+    public failureCode?: ExtractionFailureCode
   ) {
     super('extraction_failed', message ?? `Extraction failed after ${lastAttempt} attempts`);
     this.name = 'ExtractionFailedError';
+  }
+}
+
+export class ExtractionRequestError extends CommandError {
+  constructor(
+    public failure: ExtractionFailure,
+    public status?: number,
+    public apiCode?: string
+  ) {
+    super('extraction_request', failure.message);
+    this.name = 'ExtractionRequestError';
   }
 }
 

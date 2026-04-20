@@ -15,7 +15,8 @@ import {
   type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
-import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
+import { buildOpenAIChatCompletionBody } from '../../extractors/v2/providerAdapters';
+import { toOpenAIStructuredSchema } from './structuredSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -79,13 +80,15 @@ export class OpenAIProvider implements LLMProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: maxTokens,
-          temperature,
-          messages: [{ role: 'user', content: prompt }],
-          ...(options?.stopSequences && { stop: options.stopSequences }),
-        }),
+        body: JSON.stringify(
+          buildOpenAIChatCompletionBody({
+            model: this.model,
+            maxTokens,
+            temperature,
+            messages: [{ role: 'user', content: prompt }],
+            stop: options?.stopSequences,
+          })
+        ),
         signal: controller.signal,
       });
 
@@ -156,13 +159,15 @@ export class OpenAIProvider implements LLMProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: options.model,
-          max_tokens: maxTokens,
-          temperature,
-          messages,
-          ...(options.stopSequences && { stop: options.stopSequences }),
-        }),
+        body: JSON.stringify(
+          buildOpenAIChatCompletionBody({
+            model: options.model,
+            maxTokens,
+            temperature,
+            messages,
+            stop: options.stopSequences,
+          })
+        ),
         signal: controller.signal,
       });
 
@@ -214,7 +219,7 @@ export class OpenAIProvider implements LLMProvider {
   ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
-    const jsonSchema = zodToJsonSchema(schema);
+    const jsonSchema = toOpenAIStructuredSchema(schema);
     const url = `${this.baseUrl}/chat/completions`;
 
     const messages: Array<{ role: string; content: string }> = [];
@@ -238,21 +243,23 @@ export class OpenAIProvider implements LLMProvider {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: options.model,
-          max_tokens: maxTokens,
-          temperature,
-          messages,
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: 'extract_data',
-              schema: jsonSchema,
-              strict: true,
+        body: JSON.stringify(
+          buildOpenAIChatCompletionBody({
+            model: options.model,
+            maxTokens,
+            temperature,
+            messages,
+            stop: options.stopSequences,
+            response_format: {
+              type: 'json_schema',
+              json_schema: {
+                name: 'extract_data',
+                schema: jsonSchema,
+                strict: true,
+              },
             },
-          },
-          ...(options.stopSequences && { stop: options.stopSequences }),
-        }),
+          })
+        ),
         signal: controller.signal,
       });
 

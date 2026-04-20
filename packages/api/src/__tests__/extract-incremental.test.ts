@@ -21,104 +21,21 @@ vi.mock('../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock('../lib/provider-registry', () => ({
+  getProviderRegistry: vi.fn(() => Promise.resolve({})),
+}));
+
 vi.mock('../lib/webhook-dispatcher', () => ({
   webhookDispatcher: { dispatch: vi.fn() },
 }));
 
-const { mockGetProviderRegistry } = vi.hoisted(() => ({
-  mockGetProviderRegistry: vi.fn(),
+const { mockRunApiExtractionV2 } = vi.hoisted(() => ({
+  mockRunApiExtractionV2: vi.fn(),
 }));
 
-vi.mock('../lib/provider-registry', () => ({
-  getProviderRegistry: mockGetProviderRegistry,
+vi.mock('../lib/extraction-v2', () => ({
+  runApiExtractionV2: mockRunApiExtractionV2,
 }));
-
-const EXTRACTION_YAML_FULL = `project:
-  deadline: next Friday
-  hires: 2 engineers
-  budget: $50k
----
-{
-  "slot_quotes": {
-    "deadline": "deadline is next Friday",
-    "hires": "hire two engineers",
-    "budget": "Budget is $50k"
-  },
-  "source_map": {
-    "project": "[T1:abc12345]"
-  }
-}`;
-
-const PIPELINE_RESPONSES = {
-  dedup: '{"decision": "keep_separate"}',
-  topicName: 'project_plan',
-  topicEvolve: '{"verdict": "keep", "name": "project_plan"}',
-  slotPolish: '{"slots": {}}',
-  reviewer: '{"status": "approved", "issues": []}',
-  coverageStep1: JSON.stringify({
-    points: [{ type: 'fact', text: 'project plan', quote: 'project' }],
-  }),
-  coverageStep2: '{"coverage_score": 1.0, "missing_points": []}',
-  contradiction: '{"user_constraints": [], "contradictions": []}',
-};
-
-function createMockProvider() {
-  return {
-    id: 'test-provider',
-    generate: vi.fn().mockImplementation(async (prompt: string) => {
-      const usage = { inputTokens: 100, outputTokens: 50 };
-      if (
-        prompt.includes('knowledge extraction engine') ||
-        prompt.includes('Extraction Priority')
-      ) {
-        return { text: EXTRACTION_YAML_FULL, usage };
-      }
-      if (prompt.includes('two semantic frames describe the same concept')) {
-        return { text: PIPELINE_RESPONSES.dedup, usage };
-      }
-      if (prompt.includes('name the main topic')) {
-        return { text: PIPELINE_RESPONSES.topicName, usage };
-      }
-      if (prompt.includes('topic name still fits')) {
-        return { text: PIPELINE_RESPONSES.topicEvolve, usage };
-      }
-      if (prompt.includes('clean up YAML key names')) {
-        return { text: PIPELINE_RESPONSES.slotPolish, usage };
-      }
-      if (prompt.includes('review a structured meaning document')) {
-        return { text: PIPELINE_RESPONSES.reviewer, usage };
-      }
-      if (prompt.includes('extract ALL important points') || prompt.includes('You extract ALL')) {
-        return { text: PIPELINE_RESPONSES.coverageStep1, usage };
-      }
-      if (
-        prompt.includes('compare a list of user-stated points') ||
-        prompt.includes('You compare')
-      ) {
-        return { text: PIPELINE_RESPONSES.coverageStep2, usage };
-      }
-      if (prompt.includes('detect contradictions')) {
-        return { text: PIPELINE_RESPONSES.contradiction, usage };
-      }
-      return { text: '{}', usage };
-    }),
-    resolveConflict: vi.fn().mockImplementation(async () => ({
-      text: '',
-      usage: { inputTokens: 0, outputTokens: 0 },
-    })),
-  };
-}
-
-function setupMockRegistry() {
-  mockGetProviderRegistry.mockResolvedValue({
-    tryWithFallback: vi
-      .fn()
-      .mockImplementation(async (_role: string, fn: (provider: unknown) => Promise<unknown>) => {
-        const provider = createMockProvider();
-        return fn(provider);
-      }),
-  });
-}
 
 // Import after mocks
 import { extractIncrementalRoutes } from '../routes/extract-incremental.openapi';
@@ -168,7 +85,16 @@ describe('POST /v1/extract/incremental', () => {
   });
 
   beforeEach(() => {
-    setupMockRegistry();
+    mockRunApiExtractionV2.mockResolvedValue({
+      ok: true,
+      mode: 'bootstrap',
+      snapshot: {
+        trees: [{ key: 'project', slots: { deadline: 'next Friday', budget: '$50k' }, children: [] }],
+        relations: [],
+      },
+      ops: [{ define: { path: 'project' }, source: { type: 'llm' } }],
+      lastTurnHash: 'sha256:last',
+    });
   });
 
   it('returns ready_points + empty review_points with expected envelope', async () => {
