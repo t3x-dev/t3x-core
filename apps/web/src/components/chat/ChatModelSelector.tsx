@@ -1,10 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
+import { useSettingsModalStore } from '@/store/settingsModalStore';
 
 interface ChatModelSelectorProps {
   conversationId: string | null;
@@ -15,6 +15,7 @@ interface ChatModelSelectorProps {
 export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const { providers } = useAvailableModels();
+  const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const hasProviders = providers.length > 0;
@@ -127,8 +128,17 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
                 <div className="text-xs leading-5" style={{ color: 'var(--text-tertiary)' }}>
                   No generation providers are configured yet.
                 </div>
-                <Button asChild variant="outline" size="sm" className="h-8 w-full justify-center">
-                  <Link href="/settings/providers">Open provider settings</Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full justify-center"
+                  onClick={() => {
+                    setOpen(false);
+                    openSettingsModal('providers');
+                  }}
+                >
+                  Open provider settings
                 </Button>
               </div>
             )}
