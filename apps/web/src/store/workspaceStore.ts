@@ -1,12 +1,6 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
 
-export interface DriftInfo {
-  relation?: string;
-  new_topic?: string;
-  old_topic?: string;
-}
-
 export interface WorkspaceTurn {
   turn_hash: string;
   content: string;
@@ -38,11 +32,6 @@ interface WorkspaceState {
   selectedSource: SelectionSource;
   scrollToCenter: boolean;
 
-  // ── Drift detection ──
-  driftDetected: boolean;
-  driftInfo: DriftInfo | null;
-  driftChoices: string[];
-
   // ── Extraction config ──
   extractionPreset: 'concise' | 'balanced' | 'detailed';
   lastExtractionPinIds: string[];
@@ -70,9 +59,6 @@ interface WorkspaceState {
   ) => void;
   clearSelection: () => void;
 
-  setDriftDetected: (info: DriftInfo, choices: string[]) => void;
-  clearDrift: () => void;
-
   setExtractionPreset: (preset: 'concise' | 'balanced' | 'detailed') => void;
   setLastExtractionPinIds: (ids: string[]) => void;
 
@@ -95,8 +81,6 @@ function initialState(): Omit<
   | 'setError'
   | 'select'
   | 'clearSelection'
-  | 'setDriftDetected'
-  | 'clearDrift'
   | 'setExtractionPreset'
   | 'setLastExtractionPinIds'
   | 'setScriptText'
@@ -118,9 +102,6 @@ function initialState(): Omit<
     selectedTurnIndex: null,
     selectedSource: null,
     scrollToCenter: false,
-    driftDetected: false,
-    driftInfo: null,
-    driftChoices: [],
     extractionPreset: 'balanced',
     lastExtractionPinIds: [],
     scriptText: '',
@@ -155,10 +136,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       selectedTurnIndex: null,
       scrollToCenter: false,
     }),
-
-  setDriftDetected: (info, choices) =>
-    set({ driftDetected: true, driftInfo: info, driftChoices: choices }),
-  clearDrift: () => set({ driftDetected: false, driftInfo: null, driftChoices: [] }),
 
   setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
   setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),

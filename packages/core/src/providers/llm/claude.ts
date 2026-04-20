@@ -19,7 +19,7 @@ import {
   type ToolDefinition,
   type ToolUseResult,
 } from '../../llm/types';
-import { zodToJsonSchema } from '../../llm/zodToJsonSchema';
+import { normalizeClaudeStructuredData, toClaudeStructuredSchema } from './structuredSchema';
 
 /**
  * Get proxy URL from environment variables
@@ -237,8 +237,7 @@ export class ClaudeProvider implements LLMProvider {
   ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
-    const toolName = 'extract_data';
-    const jsonSchema = zodToJsonSchema(schema);
+    const jsonSchema = toClaudeStructuredSchema(schema);
 
     const url = `${this.baseUrl}/v1/messages`;
 
@@ -259,14 +258,12 @@ export class ClaudeProvider implements LLMProvider {
           temperature,
           ...(prompt.system && { system: prompt.system }),
           messages: prompt.messages,
-          tools: [
-            {
-              name: toolName,
-              description: 'Extract structured data',
-              input_schema: jsonSchema,
+          output_config: {
+            format: {
+              type: 'json_schema',
+              schema: jsonSchema,
             },
-          ],
-          tool_choice: { type: 'tool', name: toolName },
+          },
           ...(options.stopSequences && { stop_sequences: options.stopSequences }),
         }),
         signal: controller.signal,
@@ -293,10 +290,10 @@ export class ClaudeProvider implements LLMProvider {
         outputTokens: data.usage?.output_tokens ?? 0,
       };
 
-      // Try to find tool_use block first
-      const toolUseBlock = data.content.find((c) => c.type === 'tool_use' && c.name === toolName);
+      // Backward-compatible fallback if the API still returns tool_use blocks.
+      const toolUseBlock = data.content.find((c) => c.type === 'tool_use' && c.name === 'extract_data');
       if (toolUseBlock?.input !== undefined) {
-        const parsed = schema.parse(toolUseBlock.input);
+        const parsed = schema.parse(normalizeClaudeStructuredData(toolUseBlock.input));
         return { data: parsed, usage };
       }
 
@@ -305,7 +302,7 @@ export class ClaudeProvider implements LLMProvider {
       if (textBlock?.text) {
         try {
           const jsonData = JSON.parse(textBlock.text);
-          const parsed = schema.parse(jsonData);
+          const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
           return { data: parsed, usage };
         } catch {
           // fall through to error

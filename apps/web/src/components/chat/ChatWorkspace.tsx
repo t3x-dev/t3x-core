@@ -2,7 +2,6 @@
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DriftPopup } from '@/components/chat/DriftPopup';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
@@ -254,9 +253,6 @@ export function ChatWorkspace({
 
   return (
     <div className={cn('flex flex-col h-full min-h-0 relative', className)}>
-      {/* Drift popup overlay */}
-      <DriftPopup />
-
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}

@@ -21,7 +21,7 @@ describe('Model Catalog', () => {
       'gpt-5.4-nano',
     ]);
     expect(getModelsByProvider('google').map((model) => model.id)).toEqual([
-      'gemini-3.1-pro-preview',
+      'gemini-2.5-pro',
       'gemini-3-flash-preview',
       'gemini-3.1-flash-lite-preview',
     ]);
@@ -82,8 +82,8 @@ describe('Model Catalog', () => {
     expect(getCanonicalModelId('gpt-4o-mini')).toBe('gpt-5.4-mini');
     expect(getModelInfo('gpt-4o')?.id).toBe('gpt-5.4');
 
-    expect(normalizeModelId('gemini-2.5-pro')).toBe('gemini-3.1-pro-preview');
+    expect(normalizeModelId('gemini-3.1-pro-preview')).toBe('gemini-2.5-pro');
     expect(getCanonicalModelId('gemini-2.5-flash')).toBe('gemini-3-flash-preview');
-    expect(getModelInfo('gemini-2.5-pro')?.id).toBe('gemini-3.1-pro-preview');
+    expect(getModelInfo('gemini-3.1-pro-preview')?.id).toBe('gemini-2.5-pro');
   });
 });

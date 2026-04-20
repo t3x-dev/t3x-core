@@ -81,4 +81,34 @@ describe('POST /v1/extract/trees — alias resolution', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('rejects retired drift/style request fields on the JSON route', async () => {
+    const res = await app.request('/v1/extract/trees', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        drift_decision: { choice: 'keep_old' },
+        source_pin_ids: ['pin_123'],
+        style: { granularity: 'balanced' },
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('INVALID_REQUEST');
+  });
+
+  it('rejects retired drift/style request fields on the stream route', async () => {
+    const res = await app.request('/v1/extract/trees/stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        drift_decision: { choice: 'keep_old' },
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe('INVALID_REQUEST');
+  });
 });

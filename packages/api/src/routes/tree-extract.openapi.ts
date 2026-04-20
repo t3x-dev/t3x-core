@@ -26,31 +26,15 @@ export const treeExtractRoutes = new OpenAPIHono({
 // Schemas
 // ============================================================
 
-const DriftDecisionSchema = z.object({
-  choice: z.enum(['keep_old', 'keep_new', 'keep_both_separate', 'keep_both_together']),
-  relation: z.string().optional(),
-  new_topic: z.string().optional(),
-});
-
-const ExtractionStyleSchema = z
+const TreeExtractRequest = z
   .object({
-    granularity: z.enum(['concise', 'balanced', 'detailed']).optional(),
-    quote_length: z.enum(['minimal', 'representative', 'contextual']).optional(),
-    update_stance: z.enum(['conservative', 'balanced', 'aggressive']).optional(),
-    tier3: z.enum(['skip', 'extract']).optional(),
+    conversation_id: z.string().min(1),
+    project_id: z.string().optional(),
+    turn_hashes: z.array(z.string().min(1)).optional(),
+    topic_id: z.string().optional(),
+    force_extract: z.boolean().optional(),
   })
-  .optional();
-
-const TreeExtractRequest = z.object({
-  conversation_id: z.string().min(1),
-  project_id: z.string().optional(),
-  turn_hashes: z.array(z.string().min(1)).optional(),
-  drift_decision: DriftDecisionSchema.optional(),
-  topic_id: z.string().optional(),
-  force_extract: z.boolean().optional(),
-  source_pin_ids: z.array(z.string().min(1)).optional(),
-  style: ExtractionStyleSchema,
-});
+  .strict();
 
 const DeltaResponseSchema = z.object({
   changes: z.array(z.any()),
@@ -68,17 +52,7 @@ const TreeExtractResponse = SuccessResponseSchema(
     delta: DeltaResponseSchema.optional(),
     snapshot: SnapshotResponseSchema.optional(),
     yops_log_id: z.string().optional(),
-    status: z.enum(['completed', 'drift_detected', 'skipped']),
-    drift: z
-      .object({
-        relation: z.string().optional(),
-        new_topic: z.string().optional(),
-        old_topic: z.string().optional(),
-      })
-      .optional(),
-    choices: z.array(z.string()).optional(),
-    gate_result: z.any().optional(),
-    advisory_questions: z.array(z.any()).optional(),
+    status: z.enum(['completed', 'skipped']),
     reason: z.string().optional(),
   })
 );
@@ -134,11 +108,8 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     conversation_id,
     project_id,
     turn_hashes,
-    drift_decision,
     topic_id,
     force_extract,
-    source_pin_ids,
-    style,
   } = c.req.valid('json');
 
   const db = await getDB();
@@ -167,12 +138,8 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
   // Consume pipeline generator, collect final result
   let finalSnapshot: unknown;
   let yopsLogId: string | undefined;
-  let gateResult: unknown;
-  let advisoryQuestions: unknown[] | undefined;
   const collectedYops: unknown[] = [];
-  let status: string = 'completed';
-  let drift: unknown;
-  let choices: string[] | undefined;
+  let status: 'completed' | 'skipped' = 'completed';
   let reason: string | undefined;
 
   try {
@@ -180,12 +147,9 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       conversationId: conversation.conversationId,
       projectId: conversation.projectId,
       turnHashes: turn_hashes,
-      driftDecision: drift_decision,
       topicId: topic_id,
       forceExtract: force_extract,
       userId: getUserId(c) ?? undefined,
-      sourcePinIds: source_pin_ids,
-      style: style as import('@t3x-dev/core').ExtractionStyleConfig | undefined,
     });
 
     for await (const event of pipeline) {
@@ -196,17 +160,6 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
         case 'done':
           finalSnapshot = event.data.snapshot;
           yopsLogId = event.data.yops_log_id as string;
-          break;
-        case 'gate':
-          gateResult = event.data;
-          break;
-        case 'advisory':
-          advisoryQuestions = (event.data as { questions: unknown[] }).questions;
-          break;
-        case 'drift':
-          status = 'drift_detected';
-          drift = event.data;
-          choices = (event.data as { choices: string[] }).choices;
           break;
         case 'skipped':
           status = 'skipped';
@@ -256,14 +209,10 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
     {
       success: true as const,
       data: {
-        status: status as 'completed' | 'drift_detected' | 'skipped',
+        status,
         delta: collectedYops,
         snapshot: finalSnapshot,
         yops_log_id: yopsLogId,
-        gate_result: gateResult,
-        advisory_questions: advisoryQuestions,
-        ...(drift && { drift }),
-        ...(choices && { choices }),
         ...(reason && { reason }),
       },
     },
@@ -287,17 +236,19 @@ function encodeSseEvent(event: string, payload: string): Uint8Array {
 // ============================================================
 
 treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
-  const body = await c.req.json();
+  const rawBody = await c.req.json();
+  const parsed = TreeExtractRequest.safeParse(rawBody);
+  if (!parsed.success) {
+    return errorResponse(c, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid request');
+  }
+
   const {
     conversation_id,
     project_id,
     turn_hashes,
-    drift_decision,
     topic_id,
     force_extract,
-    source_pin_ids,
-    style: streamStyle,
-  } = body;
+  } = parsed.data;
 
   // Validate conversation + project access
   const db = await getDB();
@@ -338,12 +289,9 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
           conversationId: conversation.conversationId,
           projectId: conversation.projectId,
           turnHashes: turn_hashes,
-          driftDecision: drift_decision,
           topicId: topic_id,
           forceExtract: force_extract,
           userId: getUserId(c) ?? undefined,
-          sourcePinIds: source_pin_ids,
-          style: streamStyle,
         });
 
         for await (const event of pipeline) {

@@ -10,7 +10,7 @@ const MODEL_ALIASES: Record<string, string> = {
   'gpt-4-turbo': 'gpt-5.4',
   o1: 'gpt-5.4',
   'o1-mini': 'gpt-5.4-mini',
-  'gemini-2.5-pro': 'gemini-3.1-pro-preview',
+  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
   'gemini-2.5-flash': 'gemini-3-flash-preview',
   'gemini-2.5-flash-lite': 'gemini-3.1-flash-lite-preview',
   'gemini-2.0-flash': 'gemini-3-flash-preview',
@@ -64,9 +64,9 @@ export const MODEL_CATALOG: Record<ProviderName, Record<string, ModelInfo>> = {
     },
   },
   google: {
-    'gemini-3.1-pro-preview': {
-      id: 'gemini-3.1-pro-preview',
-      label: 'Gemini 3.1 Pro Preview',
+    'gemini-2.5-pro': {
+      id: 'gemini-2.5-pro',
+      label: 'Gemini 2.5 Pro',
       provider: 'google',
       capabilities: ['function_calling', 'structured_output'],
       maxOutputTokens: 65536,

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { LLMProviderError } from '../../llm/types';
+import { ProviderExtractionDraftSchema } from '../../extractors/v2/providerDraft';
 import { GeminiProvider } from '../../providers/llm/gemini';
 
 vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -149,6 +150,7 @@ describe('GeminiProvider.generateStructured', () => {
     // Verify schema structure
     expect(body.generationConfig.responseSchema.type).toBe('object');
     expect(body.generationConfig.responseSchema.properties).toBeDefined();
+    expect(body.generationConfig.thinkingConfig).toBeUndefined();
   });
 
   it('sends systemInstruction with structured request when system is provided', async () => {
@@ -171,6 +173,28 @@ describe('GeminiProvider.generateStructured', () => {
 
     const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
     expect(body.systemInstruction).toEqual({ parts: [{ text: 'Extract structured data.' }] });
+  });
+
+  it('uses a low thinking budget for Gemini 3.1 Pro structured extraction', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(JSON.stringify(makeGeminiResponse('{"name":"Bob","age":25}'))),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gemini-3.1-pro-preview' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 256 });
   });
 
   it('throws LLMProviderError when JSON parsing fails', async () => {
@@ -226,5 +250,90 @@ describe('GeminiProvider.generateStructured', () => {
         model: 'gemini-2.0-flash',
       })
     ).rejects.toThrow(LLMProviderError);
+  });
+
+  it('lowers provider draft schema to the Gemini responseSchema subset', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify(
+              makeGeminiResponse(
+                '{"schema":"t3x/provider-extraction-draft","version":1,"mode":"bootstrap","items":[],"warnings":[]}'
+              )
+            )
+          ),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'gemini-3-flash-preview' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    const schema = body.generationConfig.responseSchema;
+    expect(schema.properties.schema).toMatchObject({
+      type: 'string',
+      enum: ['t3x/provider-extraction-draft'],
+    });
+    expect(schema.properties.version).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 1,
+    });
+    expect(schema.properties.mode).toMatchObject({
+      type: 'string',
+      enum: ['bootstrap', 'incremental'],
+    });
+    expect(schema.properties.items.items.properties.intent).toMatchObject({
+      type: 'string',
+      enum: ['add', 'update', 'remove', 'reinforce', 'noop'],
+    });
+    expect(schema.properties.items.items.properties.reasoning_type).toMatchObject({
+      type: 'string',
+      enum: ['direct', 'paraphrase', 'cross_turn', 'implicit'],
+    });
+    expect(
+      schema.properties.items.items.properties.evidence.items.properties.role
+    ).toMatchObject({
+      type: 'string',
+      enum: ['primary', 'supporting'],
+    });
+    expect(JSON.stringify(schema)).not.toContain('"const"');
+    expect(JSON.stringify(schema)).not.toContain('"additionalProperties"');
+    expect(JSON.stringify(schema.properties.version)).not.toContain('"enum"');
+  });
+
+  it('normalizes nested child values_json into canonical child values', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify(
+              makeGeminiResponse(
+                '{"schema":"t3x/provider-extraction-draft","version":1,"mode":"bootstrap","items":[{"id":"item_1","intent":"add","confidence":0.9,"reasoning_type":"direct","target_ref":{"node_key":null,"path":null,"existing_node_id":null},"candidate":{"key":"airport_issue","path_hint":"airport_issue","slot":null,"value_json":null,"values_json":"{\\"summary\\":\\"SEA had a cyberattack\\"}","children_json":"[{\\"key\\":\\"Baggage Handling\\",\\"values_json\\":\\"{\\\\\\"description\\\\\\":\\\\\\"Automated baggage systems were disrupted\\\\\\"}\\"}]"},"evidence":[{"turn_tag":"T1","quote":"Baggage Handling: The automated baggage systems were severely disrupted.","role":"primary"}]}],"warnings":[]}'
+              )
+            )
+          ),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'gemini-3-flash-preview' }
+    );
+
+    expect(result.data.items[0]?.candidate.children_json).toBe(
+      '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]'
+    );
   });
 });

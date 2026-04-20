@@ -2,7 +2,7 @@
  * hydrateConversationToStore — composite action that fetches a
  * conversation snapshot via a pure query and writes the derived
  * state to workspaceStore. Shared by useChatInit / useExtraction /
- * useRealtimeSync / useDriftResolver so each consumer does not
+ * useRealtimeSync so each consumer does not
  * duplicate the 5-line store-write boilerplate.
  *
  * Lives in hooks/ but is not itself a hook (no React state). Per v2

@@ -91,7 +91,7 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
         }
       }
 
-      const result: JsonSchema = { type: 'object', properties };
+      const result: JsonSchema = { type: 'object', properties, additionalProperties: false };
       if (required.length > 0) result.required = required;
       return result;
     }

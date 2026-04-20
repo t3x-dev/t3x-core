@@ -5,8 +5,15 @@
  * command layer so commands/ never contains a literal fetch().
  */
 
-import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
+import {
+  createExtractionFailure,
+  type ExtractionFailureCode,
+  EXTRACTION_FAILURE_CODES,
+  type SourcedYOp,
+  type ValidationTurn,
+} from '@t3x-dev/core';
 import { postExtractYops } from '@/infrastructure/llm';
+import { ExtractionRequestError } from './errors';
 import type { RetryFailingOp } from './types';
 
 export interface CallExtractionLLMInput {
@@ -17,6 +24,47 @@ export interface CallExtractionLLMInput {
   model?: string;
 }
 
+interface ExtractYopsErrorBody {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  };
+}
+
+function isExtractionFailureCode(value: unknown): value is ExtractionFailureCode {
+  return typeof value === 'string' && (EXTRACTION_FAILURE_CODES as readonly string[]).includes(value);
+}
+
+function buildRequestError(
+  status: number,
+  body: ExtractYopsErrorBody | null,
+  fallbackText: string
+): ExtractionRequestError {
+  const failureCode = body?.error.details?.failure_code;
+
+  if (isExtractionFailureCode(failureCode)) {
+    return new ExtractionRequestError(
+      createExtractionFailure(failureCode, body?.error.message ?? fallbackText, {
+        details: { statusCode: status, ...(body?.error.details ?? {}) },
+      }),
+      status,
+      body?.error.code
+    );
+  }
+
+  const fallbackFailure = createExtractionFailure(
+    status === 429 || status === 401 || status === 403 ? 'transport' : 'draft_parse',
+    body?.error.message ?? fallbackText,
+    {
+      details: { statusCode: status, ...(body?.error.details ?? {}) },
+    }
+  );
+
+  return new ExtractionRequestError(fallbackFailure, status, body?.error.code);
+}
+
 export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<SourcedYOp[]> {
   const res = await postExtractYops({
     conversation_id: input.conversationId,
@@ -25,15 +73,32 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
   });
-  if (!res.ok) {
-    const text = typeof res.text === 'function' ? await res.text().catch(() => '') : '';
-    throw new Error(`extract-yops HTTP ${res.status}: ${text}`);
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = await res.json();
+  } catch {
+    parsedBody = null;
   }
-  const body = (await res.json()) as
+
+  if (!res.ok) {
+    const text =
+      parsedBody && typeof parsedBody === 'object' ? JSON.stringify(parsedBody) : await res.text().catch(() => '');
+    throw buildRequestError(
+      res.status,
+      parsedBody && typeof parsedBody === 'object' ? (parsedBody as ExtractYopsErrorBody) : null,
+      `extract-yops HTTP ${res.status}: ${text}`
+    );
+  }
+  const body = parsedBody as
     | { success: true; data: { ops: SourcedYOp[] } }
-    | { success: false; error: { code: string; message: string } };
+    | ExtractYopsErrorBody;
   if (!body.success) {
-    throw new Error(`extract-yops ${body.error.code}: ${body.error.message}`);
+    throw buildRequestError(
+      res.status,
+      body,
+      `extract-yops ${body.error.code}: ${body.error.message}`
+    );
   }
   return body.data.ops;
 }

@@ -7,8 +7,7 @@
  * runs the deterministic replay, and returns the full derived snapshot.
  * `replayAppended` is a pure append-and-replay helper for optimistic-
  * update flows (used by useGoldEdit). Neither function touches any
- * Zustand store — callers (useChatInit, useGoldEdit, useDriftResolver)
- * own the store writes.
+ * Zustand store — callers (useChatInit, useGoldEdit) own the store writes.
  */
 
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
