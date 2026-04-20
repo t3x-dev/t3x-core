@@ -2,7 +2,8 @@
  * Tree Extraction Routes
  *
  * LLM-based semantic extraction from conversation turns.
- * Integrates Extractor (Track A) with the delta log (Track C).
+ * Delegates to the shared API extraction pipeline (v2) and appends the
+ * resulting delta to the delta log.
  *
  * Endpoints:
  * - POST /v1/extract/trees        - Extract semantic trees (JSON response)
@@ -67,9 +68,9 @@ const extractTreesRoute = createRoute({
   tags: ['Extract'],
   summary: 'Extract semantic trees from a conversation using LLM',
   description:
-    'Runs Extractor on conversation turns, appends the resulting delta to the delta log, ' +
-    'and returns the delta with the updated snapshot. The conversation_id field accepts ' +
-    'either a conv_xxx hash ID or a project-scoped alias; aliases require project_id.',
+    'Runs the v2 extraction pipeline on conversation turns, appends the resulting delta ' +
+    'to the delta log, and returns the delta with the updated snapshot. The conversation_id ' +
+    'field accepts either a conv_xxx hash ID or a project-scoped alias; aliases require project_id.',
   request: {
     body: {
       content: { 'application/json': { schema: TreeExtractRequest } },
