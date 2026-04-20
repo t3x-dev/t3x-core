@@ -5,14 +5,15 @@
  *
  * Collapsed: circular avatar with first letter of display name.
  * Expanded: avatar + username text.
- * Click: DropdownMenu with My Projects / Settings / Sign Out.
+ * Click: DropdownMenu with Profile / Settings / Sign Out.
  *
- * Only renders when auth is enabled (AUTH_DISABLED !== 'true').
- * Reads from localStorage on mount, lazy-refreshes from /auth/me in background.
+ * When local auth is disabled, still renders a local workspace menu so
+ * Settings remains reachable in source-dev and self-hosted local mode.
+ * Otherwise reads from localStorage on mount, lazy-refreshes from /auth/me
+ * in background, and hides until a session exists.
  */
 
-import { Home, LogOut, Settings } from 'lucide-react';
-import Link from 'next/link';
+import { LogOut, Settings, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   DropdownMenu,
@@ -25,29 +26,27 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthMe } from '@/hooks/shared/useAuthMe';
 import { useSession } from '@/hooks/shared/useSession';
+import { useSettingsModalStore } from '@/store/settingsModalStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
-
-// ============================================================
-// Avatar Colors — deterministic from string
-// ============================================================
-
-const AVATAR_COLORS = [
-  'bg-blue-600',
-  'bg-emerald-600',
-  'bg-violet-600',
-  'bg-amber-600',
-  'bg-rose-600',
-  'bg-cyan-600',
-  'bg-indigo-600',
-  'bg-teal-600',
-];
+import { getLocalWorkspaceAvatarClass } from '@/utils/localWorkspaceAvatar';
 
 function getAvatarColor(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = (hash * 31 + str.charCodeAt(i)) | 0;
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  const colors = [
+    'bg-blue-600',
+    'bg-emerald-600',
+    'bg-violet-600',
+    'bg-amber-600',
+    'bg-rose-600',
+    'bg-cyan-600',
+    'bg-indigo-600',
+    'bg-teal-600',
+  ];
+  return colors[Math.abs(hash) % colors.length];
 }
 
 function getInitial(name: string | null, username: string | null): string {
@@ -63,13 +62,15 @@ function UserAvatar({
   name,
   username,
   size = 'md',
+  avatarColor,
 }: {
   name: string | null;
   username: string | null;
   size?: 'sm' | 'md';
+  avatarColor?: string;
 }) {
   const initial = getInitial(name, username);
-  const colorClass = getAvatarColor(username || name || 'user');
+  const colorClass = avatarColor ?? getAvatarColor(username || name || 'user');
   const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm';
 
   return (
@@ -97,17 +98,23 @@ export function UserMenu({ collapsed }: UserMenuProps) {
   const [user, setUser] = useState<{ name: string | null; username: string | null } | null>(null);
   const [authEnabled, setAuthEnabled] = useState(false);
   const { loadAuthMe } = useAuthMe();
-  const session = useSession();
+  const { clear, getKey, getUser, setUser: persistUser } = useSession();
+  const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
+  const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
+  const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
 
   useEffect(() => {
+    if (authDisabled) return;
+
     // Check if user has a session (auth is active)
-    const sessionKey = session.getKey();
+    const sessionKey = getKey();
     if (!sessionKey) return;
 
     setAuthEnabled(true);
 
     // Read cached user from localStorage
-    const cached = session.getUser();
+    const cached = getUser();
     if (cached) {
       setUser({ name: cached.name, username: cached.username });
     }
@@ -116,7 +123,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
     loadAuthMe()
       .then((data) => {
         setUser({ name: data.name, username: data.username });
-        session.setUser({
+        persistUser({
           id: data.id,
           name: data.name,
           username: data.username,
@@ -126,11 +133,15 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       .catch(() => {
         // Ignore — we already have cached data or no user
       });
-  }, [loadAuthMe, session]);
+  }, [authDisabled, getKey, getUser, loadAuthMe, persistUser]);
 
-  if (!authEnabled || !user) return null;
+  const menuUser = authDisabled ? { name: localWorkspaceName, username: null } : user;
+  const showSignOut = !authDisabled;
 
-  const displayName = user.name || user.username || 'User';
+  if ((!authEnabled || !user) && !authDisabled) return null;
+  if (!menuUser) return null;
+
+  const displayName = menuUser.name || menuUser.username || 'User';
 
   const trigger = (
     <DropdownMenuTrigger asChild>
@@ -143,8 +154,13 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
           collapsed ? 'h-10 w-10 justify-center' : 'h-10 px-3'
         )}
+        aria-label={displayName}
       >
-        <UserAvatar name={user.name} username={user.username} />
+        <UserAvatar
+          name={menuUser.name}
+          username={menuUser.username}
+          avatarColor={authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined}
+        />
         {!collapsed && <span className="text-sm font-medium truncate">{displayName}</span>}
       </button>
     </DropdownMenuTrigger>
@@ -162,39 +178,55 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       ) : (
         trigger
       )}
-      <DropdownMenuContent side="right" align="end" className="w-48">
+      <DropdownMenuContent
+        side={collapsed ? 'right' : 'top'}
+        align={collapsed ? 'end' : 'start'}
+        sideOffset={collapsed ? 4 : 8}
+        className="w-48"
+      >
         <DropdownMenuLabel className="font-normal">
           <div className="flex items-center gap-2">
-            <UserAvatar name={user.name} username={user.username} size="sm" />
+            <UserAvatar
+              name={menuUser.name}
+              username={menuUser.username}
+              size="sm"
+              avatarColor={authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined}
+            />
             <div className="flex flex-col">
               <span className="text-sm font-medium">{displayName}</span>
-              {user.username && user.name && (
-                <span className="text-xs text-muted-foreground">@{user.username}</span>
+              {menuUser.username && menuUser.name && (
+                <span className="text-xs text-muted-foreground">@{menuUser.username}</span>
               )}
             </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/" className="flex items-center gap-2 cursor-pointer">
-            <Home className="h-4 w-4" />
-            My Projects
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="flex items-center gap-2 cursor-pointer">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => session.clear()}
-          className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+          onSelect={() => openSettingsModal('profile')}
+          className="flex items-center gap-2 cursor-pointer"
         >
-          <LogOut className="h-4 w-4" />
-          Sign Out
+          <User className="h-4 w-4" />
+          Profile
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => openSettingsModal('preferences')}
+          className="flex items-center gap-2 cursor-pointer"
+        >
+          <Settings className="h-4 w-4" />
+          Settings
+        </DropdownMenuItem>
+        {showSignOut && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => clear()}
+              className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

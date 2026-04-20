@@ -42,7 +42,14 @@ import { useSettingsStore } from '@/store/settingsStore';
 
 beforeEach(() => {
   // Reset store to initial state between tests
-  useSettingsStore.setState({ developerMode: false });
+  useSettingsStore.setState({
+    developerMode: false,
+    userExperience: 'general',
+    defaultView: 'timeline',
+    density: 'comfortable',
+    localWorkspaceName: 'Local Workspace',
+    localWorkspaceAvatarColor: 'blue',
+  });
   localStorage.removeItem('t3x-settings');
   vi.clearAllMocks();
 });
@@ -59,6 +66,8 @@ describe('settingsStore', () => {
   it('has developerMode = false by default', () => {
     const state = useSettingsStore.getState();
     expect(state.developerMode).toBe(false);
+    expect(state.localWorkspaceName).toBe('Local Workspace');
+    expect(state.localWorkspaceAvatarColor).toBe('blue');
   });
 
   it('toggleDeveloperMode toggles from false to true', () => {
@@ -112,6 +121,8 @@ describe('settingsStore', () => {
 
   it('partialize only persists developerMode (not functions)', () => {
     useSettingsStore.getState().setDeveloperMode(true);
+    useSettingsStore.getState().setLocalWorkspaceName('Meaning Studio');
+    useSettingsStore.getState().setLocalWorkspaceAvatarColor('violet');
 
     const raw = localStorage.getItem('t3x-settings');
     expect(raw).not.toBeNull();
@@ -119,9 +130,25 @@ describe('settingsStore', () => {
     const persisted = JSON.parse(raw!);
     const stateKeys = Object.keys(persisted.state);
     expect(stateKeys).toContain('developerMode');
+    expect(stateKeys).toContain('localWorkspaceName');
+    expect(stateKeys).toContain('localWorkspaceAvatarColor');
     // Functions should not be serialized by partialize
     expect(stateKeys).not.toContain('setDeveloperMode');
     expect(stateKeys).not.toContain('toggleDeveloperMode');
+    expect(stateKeys).not.toContain('setLocalWorkspaceName');
+    expect(stateKeys).not.toContain('setLocalWorkspaceAvatarColor');
+  });
+
+  it('persists local workspace profile customizations', () => {
+    useSettingsStore.getState().setLocalWorkspaceName('Meaning Studio');
+    useSettingsStore.getState().setLocalWorkspaceAvatarColor('teal');
+
+    const raw = localStorage.getItem('t3x-settings');
+    expect(raw).not.toBeNull();
+
+    const persisted = JSON.parse(raw!);
+    expect(persisted.state.localWorkspaceName).toBe('Meaning Studio');
+    expect(persisted.state.localWorkspaceAvatarColor).toBe('teal');
   });
 
   it('restores persisted state from localStorage', () => {

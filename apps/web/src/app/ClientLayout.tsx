@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDialog';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { showToast } from '@/components/layout/Toast';
 import { NotificationBell } from '@/components/shared/NotificationBell';
 import { VerificationBadge } from '@/components/shared/VerificationBadge';
@@ -123,6 +124,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           <Toaster position="bottom-right" richColors closeButton />
           <CommandPalette />
           <KeyboardShortcutsDialog />
+          <SettingsModal />
         </div>
       </ErrorBoundary>
     </ThemeProvider>
