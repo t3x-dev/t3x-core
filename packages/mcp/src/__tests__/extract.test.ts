@@ -52,55 +52,76 @@ const MOCK_UPDATED_DRAFT = {
   revision: 2,
 };
 
-// Mock extraction result
-const MOCK_EXTRACTION_RESULT = {
+// v2 pipeline mock results
+const MOCK_V2_SUCCESS = {
   ok: true as const,
-  yops: [
-    { define: { path: 'trip' } },
-    { populate: { path: 'trip', values: { budget: 5000, destination: 'Tokyo' } } },
-  ],
-  snapshot: {
-    trees: [
-      {
-        key: 'trip',
-        slots: { budget: 5000, destination: 'Tokyo' },
-        children: [],
-      },
+  draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
+  compiled: {
+    ops: [
+      { op: 'define', path: 'trip' },
+      { op: 'populate', path: 'trip', values: { budget: 5000, destination: 'Tokyo' } },
     ],
-    relations: [],
+    warnings: [],
   },
-  usage: { inputTokens: 100, outputTokens: 50 },
+  turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-const MOCK_EXTRACTION_EMPTY = {
+const MOCK_V2_EMPTY_TREES = {
   ok: true as const,
-  yops: [],
-  snapshot: { trees: [], relations: [] },
-  usage: { inputTokens: 100, outputTokens: 10 },
+  draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
+  compiled: { ops: [], warnings: [] },
+  turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-const MOCK_EXTRACTION_FAILED = {
+const MOCK_V2_FAILURE = {
   ok: false as const,
-  error: 'LLM returned invalid YAML',
-  usage: { inputTokens: 100, outputTokens: 0 },
+  failure: {
+    code: 'draft_schema',
+    message: 'LLM returned invalid draft shape',
+    retry: { retryable: false, strategy: 'none', maxAttempts: 0 },
+  },
+  turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-// Track mock calls
-const mockExtract = vi.fn();
+// applyYOps mock result matching the success case above
+const MOCK_APPLIED_SUCCESS = {
+  ok: true as const,
+  trees: [
+    {
+      key: 'trip',
+      slots: { budget: 5000, destination: 'Tokyo' },
+      children: [],
+    },
+  ],
+  relations: [],
+};
+
+const MOCK_APPLIED_EMPTY = {
+  ok: true as const,
+  trees: [],
+  relations: [],
+};
+
+const MOCK_APPLIED_FAILURE = {
+  ok: false as const,
+  error: { message: 'path not found' },
+};
+
+// Track mocks
+const mockRunV2 = vi.fn();
+const mockApplyYOps = vi.fn();
 
 vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
-    Extractor: vi.fn().mockImplementation(() => ({
-      extract: mockExtract,
-    })),
+    runExtractionV2Pipeline: (...args: unknown[]) => mockRunV2(...args),
+    applyYOps: (...args: unknown[]) => mockApplyYOps(...args),
     createProviderRegistry: vi.fn(() => ({
       register: vi.fn(),
       autoConfigureFromEnv: vi.fn(),
-      tryWithFallback: vi.fn(async (_role: string, fn: (provider: unknown) => Promise<unknown>) =>
-        fn({})
-      ),
+      getById: vi.fn(() => ({})),
+      getEntry: vi.fn(() => ({ defaultModel: 'claude-sonnet-4-20250514' })),
     })),
     createClaudeProvider: vi.fn(() => ({})),
   };
@@ -136,7 +157,8 @@ describe('t3x_extract handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
-    mockExtract.mockResolvedValue(MOCK_EXTRACTION_RESULT);
+    mockRunV2.mockResolvedValue(MOCK_V2_SUCCESS);
+    mockApplyYOps.mockReturnValue(MOCK_APPLIED_SUCCESS);
   });
 
   afterEach(() => {
@@ -205,18 +227,30 @@ describe('t3x_extract handler', () => {
 
   // ── Extraction failures ──
 
-  it('returns error when extraction fails', async () => {
-    mockExtract.mockResolvedValue(MOCK_EXTRACTION_FAILED);
+  it('returns error when v2 pipeline fails', async () => {
+    mockRunV2.mockResolvedValue(MOCK_V2_FAILURE);
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'plan a trip to Tokyo',
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Extraction failed');
+    expect(result.content[0].text).toContain('LLM returned invalid draft shape');
   });
 
-  it('returns error when extraction produces empty trees', async () => {
-    mockExtract.mockResolvedValue(MOCK_EXTRACTION_EMPTY);
+  it('returns error when applyYOps fails', async () => {
+    mockApplyYOps.mockReturnValue(MOCK_APPLIED_FAILURE);
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('failed to apply');
+  });
+
+  it('returns error when applied trees are empty', async () => {
+    mockRunV2.mockResolvedValue(MOCK_V2_EMPTY_TREES);
+    mockApplyYOps.mockReturnValue(MOCK_APPLIED_EMPTY);
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'hello',
@@ -269,7 +303,6 @@ describe('t3x_extract handler', () => {
       conversation_id: 'conv_existing',
     });
 
-    // Should NOT create a new conversation
     expect(insertConversation).not.toHaveBeenCalled();
 
     expect(result.isError).toBeUndefined();
@@ -298,7 +331,7 @@ describe('t3x_extract handler', () => {
       expect.objectContaining({
         nodes: expect.arrayContaining([expect.objectContaining({ key: 'trip' })]),
       }),
-      1 // initial draft revision
+      1
     );
   });
 
@@ -335,7 +368,6 @@ describe('t3x_extract handler', () => {
       text: 'plan a trip to Tokyo',
     });
 
-    // Extraction should still succeed — realtime sync is best-effort
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.draft_id).toBe('draft_ext1');
@@ -350,5 +382,24 @@ describe('t3x_extract handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.yops_count).toBe(2);
+  });
+
+  it('invokes the v2 pipeline with bootstrap mode and the Anthropic provider', async () => {
+    await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+
+    expect(mockRunV2).toHaveBeenCalledTimes(1);
+    const call = mockRunV2.mock.calls[0][0];
+    expect(call.mode).toBe('bootstrap');
+    expect(call.providerId).toBe('anthropic');
+    expect(call.model).toBe('claude-sonnet-4-20250514');
+    expect(call.turns).toEqual([
+      expect.objectContaining({
+        turn_hash: 'sha256:turn1',
+        role: 'user',
+      }),
+    ]);
   });
 });

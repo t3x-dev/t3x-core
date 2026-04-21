@@ -3,36 +3,32 @@
  *
  * The calling agent passes text; T3X handles:
  *   1. Conversation + turn creation (persisting the raw input)
- *   2. LLM extraction via the Extractor from @t3x-dev/core
- *   3. Post-extraction transforms (consolidation, nesting, contradiction detection)
- *   4. 4-layer YOps validation (parse, schema, engine, gates)
- *   5. Draft creation with the resulting tree
+ *   2. LLM extraction via the shared v2 pipeline from @t3x-dev/core
+ *   3. Applying the compiled YOps onto a snapshot
+ *   4. Draft creation with the resulting trees
  *
  * This is a simplified version of the full API extraction pipeline
- * (packages/api/src/lib/extraction-pipeline.ts). It omits:
+ * (packages/api/src/lib/extraction-v2.ts). It omits:
  *   - Drift detection (multi-topic management)
  *   - Session state / readiness gating
  *   - Ambiguity detection
  *   - YOps log persistence
- *   - Event bus / WebSocket broadcasting
- *   - Usage tracking
+ *   - Event bus usage-tracking telemetry (the extraction.done event
+ *     is still emitted, best-effort)
  *
  * These features live in the API layer and depend on API-specific
- * infrastructure (event bus, provider registry singleton, etc.).
- * A future refactoring could extract a shared pipeline into @t3x-dev/core
- * to allow both the API and MCP to share the full orchestration.
+ * infrastructure (yops_log table, provider registry singleton with DB
+ * credential overlay, usage tracker, etc.).
  */
 
 import {
+  applyYOps,
   createClaudeProvider,
   createProviderRegistry,
-  DEFAULT_STYLE,
-  type ExtractionResult,
-  type ExtractionTurn,
-  Extractor,
-  GateRunner,
   type LLMProvider,
-  runTransforms,
+  type Relation,
+  runExtractionV2Pipeline,
+  type TreeNode,
 } from '@t3x-dev/core';
 import {
   findConversationById,
@@ -57,9 +53,8 @@ export const extractDef: ToolDef = {
     'Pass raw text (conversation transcript, notes, document content) and T3X will:',
     '  1. Create a conversation record with the text as turns',
     '  2. Run LLM-based semantic extraction (requires ANTHROPIC_API_KEY)',
-    '  3. Apply post-extraction transforms (consolidation, nesting)',
-    '  4. Validate through 4-layer pipeline (parse, schema, engine, gates)',
-    '  5. Create a draft containing the extracted knowledge tree',
+    '  3. Compile the extraction into YOps and materialize the resulting trees',
+    '  4. Create a draft containing the extracted knowledge tree',
     '',
     'Returns a draft_id that you can then:',
     '  - Inspect with t3x_query { "target": "draft", "id": "<draft_id>" }',
@@ -67,7 +62,8 @@ export const extractDef: ToolDef = {
     '  - Commit with t3x_commit { "project_id": "...", "draft_id": "...", "message": "..." }',
     '',
     'If conversation_id is provided, the text is appended as new turns to that',
-    'conversation and extraction runs on all turns (incremental extraction).',
+    'conversation and extraction runs on all turns (bootstrap mode — MCP does',
+    'not persist snapshots between calls).',
   ].join('\n'),
   inputSchema: {
     type: 'object',
@@ -85,8 +81,8 @@ export const extractDef: ToolDef = {
       conversation_id: {
         type: 'string',
         description:
-          'Optional. Existing conversation ID to append to (for incremental extraction). ' +
-          'If omitted, a new conversation is created.',
+          'Optional. Existing conversation ID to append to. If omitted, a new ' +
+          'conversation is created.',
       },
       source: {
         type: 'string',
@@ -104,21 +100,22 @@ export const extractDef: ToolDef = {
 
 // ── Helpers ──
 
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
+
 /**
  * Build a provider registry with auto-configured providers from env vars.
- * This mirrors what packages/api/src/lib/provider-registry.ts does,
- * but without the DB-stored config overlay.
+ * Mirrors packages/api/src/lib/provider-registry.ts without the DB-stored
+ * config overlay.
  */
 function buildRegistry() {
   const reg = createProviderRegistry();
 
-  // Register the Anthropic provider (primary for extraction)
   reg.register({
     id: 'anthropic',
     name: 'Anthropic Claude',
     role: 'generation',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: DEFAULT_ANTHROPIC_MODEL,
     factory: (config) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
@@ -135,7 +132,6 @@ function buildRegistry() {
  * Attempts to detect user/assistant patterns; falls back to a single user turn.
  */
 function textToTurns(text: string): Array<{ role: 'user' | 'assistant'; content: string }> {
-  // Simple heuristic: look for "User:" / "Assistant:" patterns
   const lines = text.split('\n');
   const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   let currentRole: 'user' | 'assistant' = 'user';
@@ -164,7 +160,6 @@ function textToTurns(text: string): Array<{ role: 'user' | 'assistant'; content:
     }
   }
 
-  // Flush remaining content
   if (currentContent.length > 0) {
     const remaining = currentContent.join('\n').trim();
     if (remaining) {
@@ -172,7 +167,6 @@ function textToTurns(text: string): Array<{ role: 'user' | 'assistant'; content:
     }
   }
 
-  // If no turns were detected (or only whitespace), treat entire text as single user turn
   if (turns.length === 0) {
     return [{ role: 'user', content: text.trim() }];
   }
@@ -253,65 +247,55 @@ export const extractHandler: ToolHandler = async (args) => {
     limit: 500,
   });
 
-  const extractionTurns: ExtractionTurn[] = allTurns.map((t) => ({
-    role: t.role as ExtractionTurn['role'],
-    content: t.content,
-    turn_hash: t.turnHash,
-  }));
-
-  // ── Step 5: Run LLM extraction ──
+  // ── Step 5: Resolve provider + model ──
   const registry = buildRegistry();
-  const result = await registry.tryWithFallback<LLMProvider, ExtractionResult>(
-    'generation',
-    (provider) => {
-      const extractor = new Extractor(provider);
-      return extractor.extract({ turns: extractionTurns }, DEFAULT_STYLE);
-    }
-  );
+  const provider = registry.getById<LLMProvider>('anthropic');
+  if (!provider) {
+    return fail(
+      'Anthropic provider is not configured.\n' +
+        'Ensure ANTHROPIC_API_KEY is set in the environment.'
+    );
+  }
+  const model = registry.getEntry('anthropic')?.defaultModel ?? DEFAULT_ANTHROPIC_MODEL;
 
-  if (!result.ok) {
-    return fail(`Extraction failed: ${result.error}`);
+  // ── Step 6: Run v2 extraction pipeline ──
+  // MCP does not persist snapshots between calls, so we always run bootstrap
+  // mode on the full turn history. For incremental semantics, use the API
+  // /v1/extract routes which replay the yops_log to build a prior snapshot.
+  const v2Result = await runExtractionV2Pipeline({
+    turns: allTurns.map((t) => ({
+      turn_hash: t.turnHash,
+      role: t.role,
+      content: t.content,
+    })),
+    mode: 'bootstrap',
+    providerId: 'anthropic',
+    provider,
+    model,
+  });
+
+  if (!v2Result.ok) {
+    return fail(`Extraction failed: ${v2Result.failure.message}`);
   }
 
-  if (result.snapshot.trees.length === 0) {
+  // ── Step 7: Apply compiled YOps to materialize trees ──
+  const emptySnapshot = { trees: [] as TreeNode[], relations: [] as Relation[] };
+  const applied = applyYOps(emptySnapshot, v2Result.compiled.ops);
+  if (!applied.ok) {
+    return fail(
+      `Extraction produced YOps that failed to apply: ${applied.error?.message ?? 'unknown error'}`
+    );
+  }
+
+  if (applied.trees.length === 0) {
     return fail(
       'No extractable content found in the provided text.\n' +
         'The text may be too short, too vague, or not contain structured knowledge.'
     );
   }
 
-  // ── Step 6: Post-extraction transforms ──
-  let finalSnapshot = result.snapshot;
-  try {
-    const transformResult = runTransforms(
-      result.snapshot,
-      extractionTurns.map((t) => ({ role: t.role, content: t.content }))
-    );
-    finalSnapshot = transformResult.content;
-  } catch {
-    // Transforms are optional — raw extraction result is still valid
-  }
-
-  // ── Step 7: Structural validation (gate check) ──
-  let gateWarnings: string[] = [];
-  try {
-    const gateRunner = new GateRunner();
-    const gr = await gateRunner.run(finalSnapshot, {
-      turns: extractionTurns.map((t) => ({ role: t.role, content: t.content })),
-      skipSemantic: true,
-      skipBusiness: true,
-    });
-    if (!gr.structure.passed) {
-      gateWarnings = gr.structure.checks
-        .filter((c) => !c.passed)
-        .map((c) => `${c.name}: ${c.message ?? 'failed'}`);
-    }
-  } catch {
-    // Gate check is non-fatal
-  }
-
   // ── Step 8: Create draft with extracted trees ──
-  const draftNodes = finalSnapshot.trees.map((tree) => ({
+  const draftNodes = applied.trees.map((tree) => ({
     key: tree.key,
     slots: tree.slots,
     children: tree.children,
@@ -322,15 +306,14 @@ export const extractHandler: ToolHandler = async (args) => {
     title: source ? `Extract: ${source}` : 'MCP Extraction',
   });
 
-  // Persist the extracted nodes into the draft
   const { updateDraft } = await import('@t3x-dev/storage');
   await updateDraft(db, draft.id, { nodes: draftNodes }, draft.revision);
 
   // ── Step 9: Emit extraction.done event for WebUI realtime sync ──
   // Unlike simple CRUD events (which DB triggers handle), extraction.done
-  // carries semantic payload (source, node counts, model) that the trigger
-  // cannot synthesize. MCP runs out-of-process — wrap in try/catch so a
-  // transient events-table failure does not fail the user's extraction.
+  // carries semantic payload the trigger cannot synthesize. MCP runs
+  // out-of-process — wrap in try/catch so a transient events-table failure
+  // does not fail the user's extraction.
   try {
     await recordEvent(db, {
       type: 'extraction.done',
@@ -339,19 +322,17 @@ export const extractHandler: ToolHandler = async (args) => {
       payload: {
         draft_id: draft.id,
         node_count: draftNodes.length,
-        yops_count: result.yops.length,
+        yops_count: v2Result.compiled.ops.length,
         source: 'mcp',
       },
     });
   } catch (err) {
-    // Best-effort: realtime sync is a nice-to-have, not a correctness requirement.
-    // Log to stderr (stdio transport uses stdout) without failing the extraction.
     const message = err instanceof Error ? err.message : String(err);
     process.stderr.write(`[mcp:extract] failed to record extraction.done event: ${message}\n`);
   }
 
   // ── Build summary ──
-  const treeSummary = finalSnapshot.trees.map((t) => ({
+  const treeSummary = applied.trees.map((t) => ({
     key: t.key,
     slots: Object.keys(t.slots).length,
     children: t.children.length,
@@ -363,8 +344,7 @@ export const extractHandler: ToolHandler = async (args) => {
     is_new_conversation: isNewConversation,
     turns_count: allTurns.length,
     tree_summary: treeSummary,
-    yops_count: result.yops.length,
-    gate_warnings: gateWarnings.length > 0 ? gateWarnings : undefined,
+    yops_count: v2Result.compiled.ops.length,
     next_steps: [
       `Use t3x_query { "target": "draft", "id": "${draft.id}" } to inspect the extracted tree.`,
       `Use t3x_edit { "draft_id": "${draft.id}", "yops": "..." } to refine the extraction.`,
