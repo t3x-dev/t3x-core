@@ -21,11 +21,7 @@
  * credential overlay, usage tracker, etc.).
  */
 
-import {
-  createDefaultProviderRegistry,
-  extractAndApply,
-  type LLMProvider,
-} from '@t3x-dev/core';
+import { createDefaultProviderRegistry, extractAndApply, type LLMProvider } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,

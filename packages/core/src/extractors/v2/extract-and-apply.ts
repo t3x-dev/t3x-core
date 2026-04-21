@@ -1,13 +1,7 @@
-import { applyYOps } from '../../t3x-yops/engine';
 import type { SemanticContent } from '../../semantic/types';
-import {
-  createExtractionFailure,
-  type ExtractionFailure,
-} from './failures';
-import {
-  runExtractionV2Pipeline,
-  type ExtractionV2PipelineInput,
-} from './pipeline';
+import { applyYOps } from '../../t3x-yops/engine';
+import { createExtractionFailure, type ExtractionFailure } from './failures';
+import { type ExtractionV2PipelineInput, runExtractionV2Pipeline } from './pipeline';
 
 export interface ExtractAndApplyInput extends ExtractionV2PipelineInput {}
 
@@ -22,9 +16,7 @@ export type ExtractAndApplyResult =
       turnHashByTag: Record<string, string>;
     };
 
-export async function extractAndApply(
-  input: ExtractAndApplyInput
-): Promise<ExtractAndApplyResult> {
+export async function extractAndApply(input: ExtractAndApplyInput): Promise<ExtractAndApplyResult> {
   const result = await runExtractionV2Pipeline(input);
   if (!result.ok) {
     return result;

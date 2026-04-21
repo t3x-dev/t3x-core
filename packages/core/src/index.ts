@@ -73,7 +73,6 @@ export {
   type CompressionV2Usage,
   compileExtractionDraft,
   createExtractionFailure,
-  extractAndApply,
   EXTRACTION_DRAFT_SCHEMA,
   EXTRACTION_FAILURE_CODES,
   EXTRACTION_MODES,
@@ -84,6 +83,7 @@ export {
   type ExtractionFailure,
   type ExtractionFailureCode,
   type ExtractionMode,
+  extractAndApply,
   getRetryStrategy,
   isRetryableFailure,
   type NodeWithSignals,
@@ -267,8 +267,8 @@ export {
   cosineSimilarity,
   createCachedEmbeddingProvider,
   createClaudeProvider,
-  createDefaultProviderRegistry,
   createDeepSeekProvider,
+  createDefaultProviderRegistry,
   createGeminiProvider,
   createGoogleAIEmbeddingProvider,
   createOllamaEmbeddingProvider,
@@ -278,8 +278,8 @@ export {
   // Provider Registry
   createProviderRegistry,
   DeepSeekProvider,
-  type DefaultProviderRegistryOptions,
   type DeepSeekProviderConfig,
+  type DefaultProviderRegistryOptions,
   // Embedding Provider (interface)
   type EmbeddingProvider,
   EmbeddingProviderError,
@@ -299,10 +299,10 @@ export {
   type ProviderEntry,
   ProviderRegistry,
   type ProviderRole,
-  registerDefaultProviders,
   type RegistryConfig,
   type ResolvedConfig,
   type RoleAssignment,
+  registerDefaultProviders,
   type TestConnectionResult,
 } from './providers';
 // Semantic types (re-exported for convenience)

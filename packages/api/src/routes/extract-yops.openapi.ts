@@ -17,11 +17,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  extractAndApply,
-  getCanonicalModelId,
-  getModelInfo,
-} from '@t3x-dev/core';
+import { extractAndApply, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
