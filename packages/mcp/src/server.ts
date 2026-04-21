@@ -12,11 +12,14 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { getPrompt, PROMPT_DEFS } from './prompts/index.js';
 import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 // Advanced tools
 import { adminDef, adminHandler } from './tools/advanced/admin.js';
@@ -107,7 +110,7 @@ export function createMcpServer(options: McpServerOptions) {
   const server = new Server(
     { name: 't3x-mcp', version: '0.1.0' },
     {
-      capabilities: { tools: {}, resources: {} },
+      capabilities: { tools: {}, resources: {}, prompts: {} },
       instructions: SERVER_INSTRUCTIONS,
     }
   );
@@ -130,7 +133,16 @@ export function createMcpServer(options: McpServerOptions) {
     readResource(request.params.uri)
   );
 
-  // 6. Register CallTool handler
+  // 6. Register prompts handlers
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [...PROMPT_DEFS],
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) =>
+    getPrompt(request.params.name, request.params.arguments ?? {})
+  );
+
+  // 7. Register CallTool handler
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const handler = handlers.get(name);
