@@ -2,7 +2,10 @@ interface PromptDef {
   name: string;
   description: string;
   arguments?: Array<{ name: string; description: string; required?: boolean }>;
-  render: (args: Record<string, string>) => { description: string; messages: Array<{ role: 'user' | 'assistant'; content: { type: 'text'; text: string } }> };
+  render: (args: Record<string, string>) => {
+    description: string;
+    messages: Array<{ role: 'user' | 'assistant'; content: { type: 'text'; text: string } }>;
+  };
 }
 
 function formatResourceUri(uri: string) {
@@ -12,14 +15,20 @@ function formatResourceUri(uri: string) {
 const PROMPTS: PromptDef[] = [
   {
     name: 'extract_review_commit',
-    description: 'User entry for extracting text into a workbench draft, reviewing it, and committing it.',
+    description:
+      'User entry for extracting text into a workbench draft, reviewing it, and committing it.',
     arguments: [
-      { name: 'project_id', description: 'Project that will receive the extracted draft.', required: true },
+      {
+        name: 'project_id',
+        description: 'Project that will receive the extracted draft.',
+        required: true,
+      },
     ],
     render: (args) => {
       const projectId = args.project_id ?? '<project_id>';
       return {
-        description: 'Use this workflow to extract text into a workbench draft, inspect it, refine it, and commit it.',
+        description:
+          'Use this workflow to extract text into a workbench draft, inspect it, refine it, and commit it.',
         messages: [
           {
             role: 'user',
@@ -43,13 +52,12 @@ const PROMPTS: PromptDef[] = [
   {
     name: 'inspect_workbench_draft',
     description: 'User entry for opening a workbench draft and refining it safely.',
-    arguments: [
-      { name: 'draft_id', description: 'Workbench draft to inspect.', required: true },
-    ],
+    arguments: [{ name: 'draft_id', description: 'Workbench draft to inspect.', required: true }],
     render: (args) => {
       const draftId = args.draft_id ?? '<draft_id>';
       return {
-        description: 'Use this workflow to inspect a workbench draft, revise it with YOps, and verify the result.',
+        description:
+          'Use this workflow to inspect a workbench draft, revise it with YOps, and verify the result.',
         messages: [
           {
             role: 'user',
@@ -71,7 +79,8 @@ const PROMPTS: PromptDef[] = [
   },
   {
     name: 'prepare_resolve_merge',
-    description: 'User entry for comparing two commits, preparing a merge draft, and resolving conflicts.',
+    description:
+      'User entry for comparing two commits, preparing a merge draft, and resolving conflicts.',
     arguments: [
       { name: 'source_hash', description: 'Source commit hash for the merge.', required: true },
       { name: 'target_hash', description: 'Target commit hash for the merge.', required: true },
@@ -80,7 +89,8 @@ const PROMPTS: PromptDef[] = [
       const sourceHash = args.source_hash ?? '<source_hash>';
       const targetHash = args.target_hash ?? '<target_hash>';
       return {
-        description: 'Use this workflow to compare two commits, prepare a merge draft, and resolve conflicts before executing the merge.',
+        description:
+          'Use this workflow to compare two commits, prepare a merge draft, and resolve conflicts before executing the merge.',
         messages: [
           {
             role: 'user',
@@ -105,14 +115,16 @@ const PROMPTS: PromptDef[] = [
   },
   {
     name: 'generate_from_leaf',
-    description: 'User entry for reviewing a leaf and generating validated output from committed knowledge.',
+    description:
+      'User entry for reviewing a leaf and generating validated output from committed knowledge.',
     arguments: [
       { name: 'leaf_id', description: 'Leaf to inspect and generate from.', required: true },
     ],
     render: (args) => {
       const leafId = args.leaf_id ?? '<leaf_id>';
       return {
-        description: 'Use this workflow to inspect a leaf, generate output, and verify the result against leaf assertions.',
+        description:
+          'Use this workflow to inspect a leaf, generate output, and verify the result against leaf assertions.',
         messages: [
           {
             role: 'user',

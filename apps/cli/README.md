@@ -13,7 +13,7 @@ invariant.
 - To edit a draft interactively → use the WebUI.
 - To edit a draft from a shell, script, or CI job → author a YOps YAML
   document and pipe it to `t3x yops apply`.
-- To let an LLM agent edit a draft → use the MCP `t3x_apply_yops` tool.
+- To let an LLM agent edit a draft → use the MCP `t3x_edit` tool.
 
 All three paths end up at `POST /v1/drafts/:id/apply-yops`, which writes to
 `yops_log` for full audit / rebase traceability.
