@@ -34,9 +34,9 @@ export {
   runCompressionV2Pipeline,
 } from './v2/compress';
 export {
-  extractAndApply,
   type ExtractAndApplyInput,
   type ExtractAndApplyResult,
+  extractAndApply,
 } from './v2/extract-and-apply';
 export {
   createExtractionFailure,

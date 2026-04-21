@@ -70,7 +70,11 @@ export async function resolveProviderAndModel(
       }
     }
     if (!modelProvider) {
-      return { ok: false, code: 'model', message: `Unknown or unsupported model: ${requestedModel}` };
+      return {
+        ok: false,
+        code: 'model',
+        message: `Unknown or unsupported model: ${requestedModel}`,
+      };
     }
   }
 

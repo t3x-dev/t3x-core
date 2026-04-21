@@ -182,7 +182,10 @@ describe('MCP resources', () => {
       parents: ['sha256:parent'],
       author: { type: 'human', name: 'Test' },
       committed_at: '2026-04-21T11:00:00.000Z',
-      content: { trees: [{ key: 'budget', slots: { amount: '5000' }, children: [] }], relations: [] },
+      content: {
+        trees: [{ key: 'budget', slots: { amount: '5000' }, children: [] }],
+        relations: [],
+      },
       project_id: 'proj_123',
       message: 'Initial semantic commit',
       branch: 'main',

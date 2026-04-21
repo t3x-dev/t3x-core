@@ -1,8 +1,4 @@
-import {
-  extractAndApply,
-  type ExtractionFailure,
-  type ExtractionMode,
-} from '@t3x-dev/core';
+import { type ExtractionFailure, type ExtractionMode, extractAndApply } from '@t3x-dev/core';
 import {
   type AnyDB,
   deleteYOpsLogEntry,
