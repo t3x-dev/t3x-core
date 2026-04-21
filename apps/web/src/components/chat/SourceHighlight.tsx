@@ -14,7 +14,6 @@
  */
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface SourceHighlightProps {
   /** The display text (verbatim from chat message) */

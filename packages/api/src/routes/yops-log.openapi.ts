@@ -11,6 +11,8 @@
  * - DELETE /v1/conversations/:conversationId/yops/:yopsId - Delete a yops entry (undo)
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: yops log routes rebuild state through loosely typed DB transactions pending repository type cleanup */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import {

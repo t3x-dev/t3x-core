@@ -24,7 +24,7 @@ function mockProvider(responses: string[]): LLMProvider {
 const validTreeOutput = `travel_plan:\n  destination: Tokyo\n---\n{"slot_quotes":{"destination":"travel to Tokyo"},"source_map":{"travel_plan":"T1"}}`;
 
 // YOps-format: incremental define + populate
-const validYOpsAdd = `yops:\n  - define:\n      path: budget\n  - populate:\n      path: budget\n      values:\n        amount: 3000`;
+const _validYOpsAdd = `yops:\n  - define:\n      path: budget\n  - populate:\n      path: budget\n      values:\n        amount: 3000`;
 
 // YOps-format: incremental define + populate with relation
 const validYOpsAddWithRelation = `yops:\n  - define:\n      path: budget\n  - populate:\n      path: budget\n      values:\n        amount: 3000\n  - relate:\n      from: travel_plan\n      to: budget\n      type: depends`;

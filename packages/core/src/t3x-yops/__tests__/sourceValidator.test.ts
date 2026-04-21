@@ -136,7 +136,10 @@ describe('repairOpQuotes', () => {
           type: 'llm',
           model: 'm',
           at: '2026-04-12T00:00:00Z',
-          turn_ref: { turn_hash: 'sha256:def', quote: "Here's a suggested itinerary for your 5-day stay." },
+          turn_ref: {
+            turn_hash: 'sha256:def',
+            quote: "Here's a suggested itinerary for your 5-day stay.",
+          },
         },
       },
     ];

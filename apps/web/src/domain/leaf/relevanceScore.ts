@@ -1,5 +1,3 @@
-import type { TreeNode } from '@t3x-dev/core';
-
 /** Compatibility alias: FlatNode-like shape with an id field for relevance scoring */
 interface TreeNodeLike {
   id: string;

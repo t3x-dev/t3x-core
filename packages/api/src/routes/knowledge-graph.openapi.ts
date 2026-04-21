@@ -11,11 +11,12 @@
  * - DELETE /v1/projects/:projectId/knowledge-graph                 — Delete graph
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: knowledge graph route normalizes dynamic DB records pending dedicated graph DTOs */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 
 // Note: buildKnowledgeGraph removed in tree-primary refactor — uses frame-based approach now
-// biome-ignore lint/suspicious/noExplicitAny: stub for removed function
-function buildKnowledgeGraph(input: any): any {
+function buildKnowledgeGraph(_input: any): any {
   // Placeholder: returns empty graph
   return {
     nodes: [],

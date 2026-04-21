@@ -8,7 +8,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { errorResponse, zodErrorHook } from '../lib/errors';
+import { zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });

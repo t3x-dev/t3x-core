@@ -9,6 +9,8 @@
  * - evalEngine.evaluate(runRecord, rules) instead of evalEngine.evaluate(request)
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: runner route forwards dynamic runner payloads pending a stricter transport contract */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AgentConfigSchema,

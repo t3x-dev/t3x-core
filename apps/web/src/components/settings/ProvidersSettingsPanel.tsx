@@ -22,6 +22,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
+import { useProvidersSettingsData } from '@/hooks/providers/useProvidersSettingsData';
 import {
   type LocalProviderCredentialInput,
   type LocalProviderId,
@@ -31,8 +32,6 @@ import {
   type TestConnectionResult,
   toLocalProviderId,
 } from '@/infrastructure';
-import { fetchLocalProviderStatus } from '@/queries/providerStatus';
-import { fetchProviderRoles, fetchProviders as fetchProvidersQuery } from '@/queries/providers';
 import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
@@ -260,6 +259,7 @@ export function ProvidersSettingsPanel() {
     saveLocalProviderCredential,
     saveProviderRoles,
   } = useProviderCommands();
+  const { fetchProviderStatus, fetchProvidersWithRoles } = useProvidersSettingsData();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [dialogProvider, setDialogProvider] = useState<{
     id: LocalProviderId;
@@ -274,12 +274,10 @@ export function ProvidersSettingsPanel() {
   const [testResults, setTestResults] = useState<Record<string, TestConnectionResult | 'loading'>>(
     {}
   );
-  const [saving, setSaving] = useState(false);
-
   const fetchProviders = useCallback(async (): Promise<ProviderInfo[]> => {
-    const [data, roles] = await Promise.all([fetchProvidersQuery(), fetchProviderRoles()]);
+    const [data, roles] = await fetchProvidersWithRoles();
     return reorderByRoles(data, roles);
-  }, []);
+  }, [fetchProvidersWithRoles]);
 
   const loadProviders = useCallback(async () => {
     try {
@@ -319,7 +317,7 @@ export function ProvidersSettingsPanel() {
     setDialogStatusLoading(true);
     setDialogError(null);
 
-    void fetchLocalProviderStatus(dialogProvider.id)
+    void fetchProviderStatus(dialogProvider.id)
       .then((status) => {
         if (cancelled) return;
         setDialogStatus(status);
@@ -337,7 +335,7 @@ export function ProvidersSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [dialogProvider]);
+  }, [dialogProvider, fetchProviderStatus]);
 
   const handleTest = async (providerId: string) => {
     setTestResults((prev) => ({ ...prev, [providerId]: 'loading' }));
@@ -425,7 +423,6 @@ export function ProvidersSettingsPanel() {
     });
 
     try {
-      setSaving(true);
       const grouped = groupByRole(providers);
       grouped[role] = [...reordered, ...providers.filter((p) => p.role === role && !p.configured)];
 
@@ -438,8 +435,6 @@ export function ProvidersSettingsPanel() {
     } catch (err) {
       console.error('Failed to save provider order:', err);
       await loadProviders();
-    } finally {
-      setSaving(false);
     }
   };
 

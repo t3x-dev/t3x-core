@@ -4,13 +4,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
-import type { YValue } from '../src/types';
 import { validateOps, YOpSchema } from '../src/schema';
+import type { YValue } from '../src/types';
+
+type ApplyOpsInput = Parameters<typeof applyYOps>[1];
 
 describe('field validation', () => {
   it('rejects missing required field', () => {
     const doc: YValue = {};
-    const ops = [{ set: { path: 'x' } }] as any; // missing 'value'
+    const ops = [{ set: { path: 'x' } }] as unknown as ApplyOpsInput; // missing 'value'
     const result = applyYOps(doc, ops);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('INVALID_OP');
@@ -19,7 +21,7 @@ describe('field validation', () => {
 
   it('rejects unknown field', () => {
     const doc: YValue = {};
-    const ops = [{ set: { path: 'x', value: 1, bogus: true } }] as any;
+    const ops = [{ set: { path: 'x', value: 1, bogus: true } }] as unknown as ApplyOpsInput;
     const result = applyYOps(doc, ops);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('INVALID_OP');
@@ -28,7 +30,7 @@ describe('field validation', () => {
 
   it('rejects invalid enum value', () => {
     const doc: YValue = { items: [3, 1, 2] };
-    const ops = [{ sort: { path: 'items', order: 'sideways' } }] as any;
+    const ops = [{ sort: { path: 'items', order: 'sideways' } }] as unknown as ApplyOpsInput;
     const result = applyYOps(doc, ops);
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('INVALID_OP');
@@ -56,7 +58,7 @@ describe('field validation', () => {
     const ops = [
       { set: { path: 'y', value: 2 } }, // valid
       { set: { path: 'z' } }, // missing 'value'
-    ] as any;
+    ] as unknown as ApplyOpsInput;
     const result = applyYOps(doc, ops);
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(1);
@@ -74,7 +76,7 @@ describe('field validation', () => {
   });
 
   it('keeps applyYOps aligned with schema for empty-path ops', () => {
-    const ops = [{ set: { path: '', value: 1 } }] as any;
+    const ops = [{ set: { path: '', value: 1 } }] as unknown as ApplyOpsInput;
     expect(validateOps(ops).valid).toBe(false);
 
     const result = applyYOps({} as YValue, ops);
@@ -83,7 +85,7 @@ describe('field validation', () => {
   });
 
   it('keeps applyYOps aligned with schema for empty assert conditions', () => {
-    const ops = [{ assert: { path: 'a' } }] as any;
+    const ops = [{ assert: { path: 'a' } }] as unknown as ApplyOpsInput;
     expect(validateOps(ops).valid).toBe(false);
 
     const result = applyYOps({ a: 1 } as YValue, ops);

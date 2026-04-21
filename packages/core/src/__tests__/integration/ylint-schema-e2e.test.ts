@@ -290,7 +290,7 @@ rules:
 
     // 3. generic key "details" still there (no auto-fix, needs domain knowledge)
     // Note: after fold, the tree structure changed — check what remains
-    const genericKeys = reGeneral.warnings.filter((w) => w.rule === 'generic-container-key');
+    const _genericKeys = reGeneral.warnings.filter((w) => w.rule === 'generic-container-key');
     // May or may not be present depending on fold result
   });
 });

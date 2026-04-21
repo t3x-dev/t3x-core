@@ -258,10 +258,10 @@ export function ProvenanceGraph({
                 className="shrink-0"
                 role="presentation"
               >
-                {leaves.map((_, i) => {
+                {leaves.map((leaf, i) => {
                   const targetY = leaves.length === 1 ? 12 : (i / (leaves.length - 1)) * 16 + 4;
                   return (
-                    <g key={`edge-${i}`}>
+                    <g key={`edge-${leaf.id}`}>
                       <path
                         d={
                           leaves.length === 1

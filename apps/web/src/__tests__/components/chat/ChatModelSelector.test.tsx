@@ -21,9 +21,7 @@ describe('ChatModelSelector', () => {
   });
 
   it('opens provider settings in the modal when no models are configured', async () => {
-    render(
-      <ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />
-    );
+    render(<ChatModelSelector conversationId={null} selectedModel="" onModelChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /No models configured/i }));
     fireEvent.click(await screen.findByRole('button', { name: 'Open provider settings' }));

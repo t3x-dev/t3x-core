@@ -9,15 +9,7 @@ import {
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-function TreeRow({
-  node,
-  path,
-  depth = 0,
-}: {
-  node: TreeNode;
-  path: string;
-  depth?: number;
-}) {
+function TreeRow({ node, path, depth = 0 }: { node: TreeNode; path: string; depth?: number }) {
   const select = useWorkspaceStore((s) => s.select);
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const isSelected = selectedNodePath === path;

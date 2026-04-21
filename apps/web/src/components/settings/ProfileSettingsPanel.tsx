@@ -23,7 +23,9 @@ export function ProfileSettingsPanel() {
   const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
   const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
   const setLocalWorkspaceName = useSettingsStore((state) => state.setLocalWorkspaceName);
-  const setLocalWorkspaceAvatarColor = useSettingsStore((state) => state.setLocalWorkspaceAvatarColor);
+  const setLocalWorkspaceAvatarColor = useSettingsStore(
+    (state) => state.setLocalWorkspaceAvatarColor
+  );
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const [profile, setProfile] = useState<ProfileViewModel | null>(authDisabled ? null : null);
 
@@ -161,7 +163,9 @@ export function ProfileSettingsPanel() {
           {profile?.username && (
             <p className="text-xs text-[var(--text-secondary)]">@{profile.username}</p>
           )}
-          {profile?.email && <p className="text-xs text-[var(--text-secondary)]">{profile.email}</p>}
+          {profile?.email && (
+            <p className="text-xs text-[var(--text-secondary)]">{profile.email}</p>
+          )}
         </div>
 
         {profile ? (

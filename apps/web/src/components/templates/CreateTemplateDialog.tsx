@@ -256,8 +256,8 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
           {/* Syntax Errors */}
           {syntaxErrors.length > 0 && (
             <div className="rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error)]/5 p-3">
-              {syntaxErrors.map((err, i) => (
-                <p key={i} className="text-xs text-[var(--status-error)]">
+              {syntaxErrors.map((err) => (
+                <p key={err} className="text-xs text-[var(--status-error)]">
                   {err}
                 </p>
               ))}
@@ -280,7 +280,10 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
               </Button>
             </div>
             {form.variables.map((v, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div
+                key={`${v.name}-${v.description ?? ''}-${v.required ? 'required' : 'optional'}`}
+                className="flex items-center gap-2"
+              >
                 <Input
                   value={v.name}
                   onChange={(e) => updateVariable(i, { name: e.target.value })}

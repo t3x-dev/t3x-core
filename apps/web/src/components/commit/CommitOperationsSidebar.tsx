@@ -203,7 +203,7 @@ function LeafCard({
 
 export function CommitOperationsSidebar({
   projectId,
-  commitHash,
+  commitHash: _commitHash,
   leaves,
   onLeavesChange,
 }: CommitOperationsSidebarProps) {

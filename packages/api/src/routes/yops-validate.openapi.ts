@@ -9,6 +9,8 @@
  * - POST /v1/yops/validate - Validate YOps (dry-run)
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: validation route adapts permissive request payloads pending stricter tree DTOs */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { applyYOps } from '@t3x-dev/core';
 import { zodErrorHook } from '../lib/errors';

@@ -11,8 +11,10 @@
  * POST /v1/merge/drafts/:id/commit - Commit a merge draft
  * DELETE /v1/merge/drafts/:id - Delete a merge draft
  */
+
+/** biome-ignore-all lint/suspicious/noExplicitAny: merge route adapts dynamic draft payloads pending stricter merge DTOs */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { MergeSummaryData, SlotValue } from '@t3x-dev/core';
+import type { MergeSummaryData } from '@t3x-dev/core';
 import {
   collectResult,
   executeMerge,
@@ -715,7 +717,6 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
     // Save commit + update branch head + mark draft committed atomically
     let savedDraftCommitHash = '';
-    // biome-ignore lint/suspicious/noExplicitAny: AnyDB union doesn't expose .transaction() but all concrete types do
     await (db as any).transaction(async (tx: typeof db) => {
       const saved = await createCommit(tx, {
         parents: [draft.sourceHash, draft.targetHash],
@@ -982,7 +983,7 @@ mergeRoutes.openapi(suggestRoute, async (c) => {
   }
 
   // suggestFrameMerge removed in tree-primary refactor — merge uses direct tree comparison
-  const conflict = prepared.conflicts[idx];
+  const _conflict = prepared.conflicts[idx];
   const { provider: trackedLlm, usage } = wrapWithUsageTracking(llm);
   const suggestion = null;
 
@@ -1067,7 +1068,7 @@ const suggestFrameRoute = createRoute({
 
 mergeRoutes.openapi(suggestFrameRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
+  const _body = c.req.valid('json');
 
   const db = await getDB();
   const draft = await getMergeDraft(db, id);

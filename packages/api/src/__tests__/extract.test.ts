@@ -70,7 +70,9 @@ describe('Extract Routes', () => {
       ok: true,
       mode: 'bootstrap',
       snapshot: {
-        trees: [{ key: 'project', slots: { deadline: 'next Friday', budget: '$50k' }, children: [] }],
+        trees: [
+          { key: 'project', slots: { deadline: 'next Friday', budget: '$50k' }, children: [] },
+        ],
         relations: [],
       },
       ops: [{ define: { path: 'project' }, source: { type: 'llm' } }],

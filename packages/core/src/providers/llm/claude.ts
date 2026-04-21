@@ -291,7 +291,9 @@ export class ClaudeProvider implements LLMProvider {
       };
 
       // Backward-compatible fallback if the API still returns tool_use blocks.
-      const toolUseBlock = data.content.find((c) => c.type === 'tool_use' && c.name === 'extract_data');
+      const toolUseBlock = data.content.find(
+        (c) => c.type === 'tool_use' && c.name === 'extract_data'
+      );
       if (toolUseBlock?.input !== undefined) {
         const parsed = schema.parse(normalizeClaudeStructuredData(toolUseBlock.input));
         return { data: parsed, usage };

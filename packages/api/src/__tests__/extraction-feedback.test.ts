@@ -8,8 +8,9 @@
  * action response.
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use broad casts for compact mock assertions */
+
 // SemanticPoint removed from core; define locally
-// biome-ignore lint/suspicious/noExplicitAny: legacy test interface
 interface SemanticPoint {
   id: string;
   text: string;
@@ -31,7 +32,6 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
-// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 let mockDB: AnyDB;

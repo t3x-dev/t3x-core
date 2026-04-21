@@ -1,5 +1,4 @@
-import type { Relation, SlotValue, TreeNode } from '@t3x-dev/core';
-import type { CompatNode } from '@/domain/tree/treeCompat';
+import type { Relation, SlotValue } from '@t3x-dev/core';
 
 export function formatSlotValue(value: SlotValue | undefined): string {
   if (value === undefined) return '(none)';

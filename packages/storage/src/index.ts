@@ -38,6 +38,8 @@ export {
 } from './events';
 // Background jobs (events retention cleanup, etc.)
 export { type CleanupOptions, cleanupOldEvents } from './jobs/cleanup-events';
+// Query functions
+export * from './queries';
 // Local provider credentials stored in global_settings
 export {
   deleteProviderCredential,
@@ -49,8 +51,6 @@ export {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from './queries/provider-credentials';
-// Query functions
-export * from './queries';
 // Schema (table definitions and types)
 // (events outbox is already re-exported via schema.ts; do not add a duplicate line here)
 export * from './schema';

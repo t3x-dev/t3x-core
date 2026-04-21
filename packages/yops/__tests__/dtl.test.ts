@@ -2,6 +2,8 @@
  * DTL Operations Tests: move, clone, nest, split, fold, merge, sort, unique, pick, omit
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: DTL tests use broad casts for concise deep shape assertions */
+
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';

@@ -8,7 +8,7 @@
  * calls after the I/O resolves.
  */
 
-import type { Edge, Node } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
@@ -20,7 +20,7 @@ import { fetchTurn } from '@/queries/turns';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
 import { snapPosition } from '@/store/canvasStoreUtils';
-import type { Conversation, Leaf } from '@/types/api';
+import type { Leaf } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '@/types/nodes';
 
 export function useCanvasNodeActions() {

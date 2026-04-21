@@ -34,7 +34,10 @@ describe('YOpSchema', () => {
       },
     });
     expect(result.success).toBe(true);
-    expect((result as any).data.source.turn_ref.quote).toBe('五千块');
+    if (!result.success) {
+      throw new Error('Expected schema parse to succeed');
+    }
+    expect(result.data.source?.turn_ref?.quote).toBe('五千块');
   });
 
   it('accepts an op with valid human source', () => {
@@ -48,7 +51,10 @@ describe('YOpSchema', () => {
   it('accepts an op without source (optional)', () => {
     const result = YOpSchema.safeParse({ define: { path: 'trip' } });
     expect(result.success).toBe(true);
-    expect((result as any).data.source).toBeUndefined();
+    if (!result.success) {
+      throw new Error('Expected schema parse to succeed');
+    }
+    expect(result.data.source).toBeUndefined();
   });
 
   it('rejects an op with invalid source shape', () => {

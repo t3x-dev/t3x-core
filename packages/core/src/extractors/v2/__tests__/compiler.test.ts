@@ -22,7 +22,8 @@ const bootstrapDraft: ExtractionDraft = {
       evidence: [
         {
           turn_tag: 'T1',
-          quote: 'Seattle-Tacoma International Airport (SEA) has been dealing with a major, ongoing crisis',
+          quote:
+            'Seattle-Tacoma International Airport (SEA) has been dealing with a major, ongoing crisis',
           role: 'primary',
         },
       ],
@@ -96,7 +97,9 @@ describe('extractors/v2 compiler', () => {
               advisory: 'check with airlines',
             },
           },
-          evidence: [{ turn_tag: 'T2', quote: 'check with their specific airlines', role: 'primary' }],
+          evidence: [
+            { turn_tag: 'T2', quote: 'check with their specific airlines', role: 'primary' },
+          ],
         },
       ],
     };

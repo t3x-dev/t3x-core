@@ -122,7 +122,7 @@ describe('setAtPath', () => {
     const result = setAtPath(doc, 'config/host', 'remotehost');
     expect(result).toEqual({ config: { host: 'remotehost' } });
     // original not mutated
-    expect((doc as any).config.host).toBe('localhost');
+    expect(doc).toEqual({ config: { host: 'localhost' } });
   });
 
   it('create intermediate mappings for missing keys', () => {
@@ -145,8 +145,12 @@ describe('setAtPath', () => {
       ],
     };
     const result = setAtPath(doc, 'users/[name=alice]/role', 'admin');
-    expect((result as any).users[0].role).toBe('admin');
-    expect((result as any).users[1].role).toBe('viewer');
+    expect(result).toEqual({
+      users: [
+        { name: 'alice', role: 'admin' },
+        { name: 'bob', role: 'viewer' },
+      ],
+    });
   });
 
   it('set at root (empty path) replaces entire doc', () => {
@@ -169,7 +173,7 @@ describe('deleteAtPath', () => {
     const result = deleteAtPath(doc, 'b');
     expect(result).toEqual({ a: 1 });
     // original not mutated
-    expect((doc as any).b).toBe(2);
+    expect(doc).toEqual({ a: 1, b: 2 });
   });
 
   it('delete nested key', () => {
@@ -213,6 +217,6 @@ describe('deepClone', () => {
     const clone = deepClone(obj) as { [k: string]: YValue };
     expect(clone).toEqual(obj);
     expect(clone).not.toBe(obj);
-    expect(clone.a).not.toBe((obj as any).a);
+    expect(clone.a).not.toBe((obj as { a: YValue }).a);
   });
 });

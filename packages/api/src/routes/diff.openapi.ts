@@ -336,7 +336,7 @@ diffRoutes.onError((err, c) => {
 diffRoutes.openapi(twoWayRoute, async (c) => {
   const body = c.req.valid('json');
 
-  const threshold = body.threshold ?? 0.7;
+  const _threshold = body.threshold ?? 0.7;
   let baseId = '';
   let baseSegments: DiffSegment[] = [];
   let targetId = '';
@@ -442,7 +442,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     });
 
     // Wrap with cached provider if using turn_hash mode
-    let embeddingProvider;
+    let _embeddingProvider;
     let cacheStats = null;
 
     if (usedCache && baseTurnHashForCache && targetTurnHashForCache) {
@@ -454,10 +454,10 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
 
       const loaded = cachedProvider.setCacheFromRecords([...baseEmbeddings, ...targetEmbeddings]);
 
-      embeddingProvider = cachedProvider;
+      _embeddingProvider = cachedProvider;
       cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };
     } else {
-      embeddingProvider = baseProvider;
+      _embeddingProvider = baseProvider;
     }
 
     // Legacy node-level diff removed — use /v1/diff/frame endpoint instead
@@ -502,13 +502,13 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
 diffRoutes.openapi(threeWayRoute, async (c) => {
   const body = c.req.valid('json');
 
-  const threshold = body.threshold ?? 0.7;
+  const _threshold = body.threshold ?? 0.7;
   let baseId: string;
-  let baseSegments: DiffSegment[];
+  let _baseSegments: DiffSegment[];
   let sourceId: string;
-  let sourceSegments: DiffSegment[];
+  let _sourceSegments: DiffSegment[];
   let targetId: string;
-  let targetSegments: DiffSegment[];
+  let _targetSegments: DiffSegment[];
   let usedCache = false;
 
   const db = await getDB();
@@ -535,21 +535,21 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
     }
 
     baseId = (baseResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    baseSegments = (baseResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
+    _baseSegments = (baseResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
     sourceId = (sourceResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    sourceSegments = (sourceResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
+    _sourceSegments = (sourceResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
     targetId = (targetResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    targetSegments = (targetResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
+    _targetSegments = (targetResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
     usedCache = true;
   }
   // Mode 2: direct segments (legacy)
   else if (body.baseId && body.sourceId && body.targetId) {
     baseId = body.baseId;
-    baseSegments = body.baseSegments ?? [];
+    _baseSegments = body.baseSegments ?? [];
     sourceId = body.sourceId;
-    sourceSegments = body.sourceSegments ?? [];
+    _sourceSegments = body.sourceSegments ?? [];
     targetId = body.targetId;
-    targetSegments = body.targetSegments ?? [];
+    _targetSegments = body.targetSegments ?? [];
   } else {
     return errorResponse(
       c,
@@ -577,7 +577,7 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
     });
 
     // Wrap with cached provider if using turn_hash mode
-    let embeddingProvider;
+    let _embeddingProvider;
     let cacheStats = null;
 
     if (usedCache && body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) {
@@ -594,10 +594,10 @@ diffRoutes.openapi(threeWayRoute, async (c) => {
         ...targetEmbeddings,
       ]);
 
-      embeddingProvider = cachedProvider;
+      _embeddingProvider = cachedProvider;
       cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };
     } else {
-      embeddingProvider = baseProvider;
+      _embeddingProvider = baseProvider;
     }
 
     // Legacy node-level diff removed — use /v1/diff/frame endpoint instead

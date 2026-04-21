@@ -159,7 +159,9 @@ export function UserMenu({ collapsed }: UserMenuProps) {
         <UserAvatar
           name={menuUser.name}
           username={menuUser.username}
-          avatarColor={authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined}
+          avatarColor={
+            authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined
+          }
         />
         {!collapsed && <span className="text-sm font-medium truncate">{displayName}</span>}
       </button>
@@ -190,7 +192,9 @@ export function UserMenu({ collapsed }: UserMenuProps) {
               name={menuUser.name}
               username={menuUser.username}
               size="sm"
-              avatarColor={authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined}
+              avatarColor={
+                authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined
+              }
             />
             <div className="flex flex-col">
               <span className="text-sm font-medium">{displayName}</span>

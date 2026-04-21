@@ -4,7 +4,7 @@
  * Create test nodes, trees, relations, and SemanticContent with sensible defaults.
  */
 
-import { flattenTree, flattenTrees, unflattenToTrees } from '../../semantic/tree';
+import { unflattenToTrees } from '../../semantic/tree';
 import type { FlatNode, Relation, SemanticContent, TreeNode } from '../../semantic/types';
 
 let counter = 0;

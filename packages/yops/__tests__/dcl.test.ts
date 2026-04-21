@@ -2,6 +2,8 @@
  * DCL Operations Tests: assert
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: DCL tests use broad casts for concise deep shape assertions */
+
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import { resolvePath } from '../src/paths';

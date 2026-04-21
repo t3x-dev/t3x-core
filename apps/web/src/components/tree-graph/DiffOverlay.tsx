@@ -1,7 +1,7 @@
 'use client';
 
-import type { SemanticContent, TreeNode, WordDiffFn } from '@t3x-dev/core';
-import { diffCommits, flattenTrees } from '@t3x-dev/core';
+import type { SemanticContent, WordDiffFn } from '@t3x-dev/core';
+import { diffCommits } from '@t3x-dev/core';
 import { useEffect, useMemo } from 'react';
 import { wordDiff } from '@/domain/diff/diffUtils';
 import { treesToNodes } from '@/domain/tree/treeCompat';

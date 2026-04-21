@@ -5,6 +5,8 @@
  * Updated for frame-level merge (FrameMergeResult)
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use broad casts for compact mock assertions */
+
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
@@ -17,7 +19,6 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
-// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Mock the database module before importing routes

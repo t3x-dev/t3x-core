@@ -1,5 +1,5 @@
 import type { TreeNode as CoreTreeNode, SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
-import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
+import { treesToNodes } from '@/domain/tree/treeCompat';
 
 // ── Aligned tree list for split view ──
 

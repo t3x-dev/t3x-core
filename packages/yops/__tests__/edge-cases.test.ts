@@ -5,6 +5,8 @@
  * that the spec conformance tests and basic tests don't cover.
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: legacy edge-case assertions intentionally use broad casts for deep runtime shape checks */
+
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';
@@ -713,10 +715,10 @@ describe('unset — edge cases', () => {
   });
 
   // 8. Unset array element
-  it('removes array element by index', () => {
+  it('errors on array element by index', () => {
     const r = applyYOps({ items: [1, 2, 3] }, [{ unset: { path: 'items/[1]' } }]);
-    expect(r.ok).toBe(true);
-    expect((r.doc as any).items).toEqual([1, 3]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('NOT_A_MAPPING');
   });
 
   // 9. Unset sequence-valued key
@@ -766,12 +768,12 @@ describe('unset — edge cases', () => {
   });
 
   // 15. Unset via match path
-  it('removes array item via match', () => {
+  it('errors on array item via match', () => {
     const r = applyYOps({ users: [{ name: 'alice' }, { name: 'bob' }] }, [
       { unset: { path: 'users/[name=alice]' } },
     ]);
-    expect(r.ok).toBe(true);
-    expect((r.doc as any).users).toEqual([{ name: 'bob' }]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('NOT_A_MAPPING');
   });
 
   // 16. Unset empty string value key
@@ -2502,16 +2504,15 @@ describe('unique — edge cases', () => {
   });
 
   // 16. Unique by key with missing key on some items
-  it('by key: items without the key get undefined key', () => {
+  it('by key: errors when items are missing the key', () => {
     const r = applyYOps(
       {
         items: [{ id: 1 }, { name: 'no-id' }, { name: 'also-no-id' }],
       },
       [{ unique: { path: 'items', by: 'id' } }]
     );
-    expect(r.ok).toBe(true);
-    // Both no-id items have undefined id → same key → keep first
-    expect((r.doc as any).items).toHaveLength(2);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('INVALID_OP');
   });
 
   // 17. Unique strings

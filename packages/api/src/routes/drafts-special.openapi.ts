@@ -7,7 +7,7 @@
  * - POST /v1/drafts/:id/review-action - Perform review action on semantic point
  */
 
-import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import {
   ConflictError,
   findDraftById,

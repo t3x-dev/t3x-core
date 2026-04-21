@@ -1,6 +1,7 @@
 'use client';
 
 import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
+import NextImage from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useChatSessionStore } from '@/store/chatSessionStore';
@@ -199,9 +200,12 @@ export function ChatInput({
         <div className="flex gap-2 px-3 pt-2 flex-wrap">
           {attachedImages.map((img) => (
             <div key={img.id} className="relative group/img">
-              <img
+              <NextImage
                 src={img.preview}
                 alt="Attached"
+                unoptimized
+                width={64}
+                height={64}
                 className="h-16 w-16 object-cover rounded border border-[var(--border-primary)]"
               />
               <button

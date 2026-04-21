@@ -61,9 +61,9 @@ export function AssertionsSection({ violations, suggestion, className }: Asserti
       <CardContent>
         <div className="space-y-3">
           {/* Violations */}
-          {violations.map((v, i) => (
+          {violations.map((v) => (
             <div
-              key={`violation-${i}`}
+              key={`${v.rule_id}-${v.severity}-${v.message}`}
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3',
                 v.severity === 'error'

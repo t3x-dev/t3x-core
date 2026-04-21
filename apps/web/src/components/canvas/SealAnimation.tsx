@@ -79,6 +79,7 @@ export function SealAnimation({
         className="absolute inset-0"
         style={{ overflow: 'visible' }}
       >
+        <title>Seal animation border</title>
         <motion.path
           d={path}
           fill="none"

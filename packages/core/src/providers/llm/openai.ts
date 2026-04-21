@@ -5,6 +5,7 @@
  */
 
 import type { ZodType } from 'zod';
+import { buildOpenAIChatCompletionBody } from '../../extractors/v2/providerAdapters';
 import {
   type LLMBasicGenerateOptions,
   type LLMGenerateOptions,
@@ -15,7 +16,6 @@ import {
   type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
-import { buildOpenAIChatCompletionBody } from '../../extractors/v2/providerAdapters';
 import { toOpenAIStructuredSchema } from './structuredSchema';
 
 /**

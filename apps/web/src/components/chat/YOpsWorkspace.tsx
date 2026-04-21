@@ -60,8 +60,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     const container = containerRef.current;
     if (!container) return;
 
-    const availableHeight =
-      container.clientHeight - WORKSPACE_TOPBAR_HEIGHT - SPLIT_HANDLE_HEIGHT;
+    const availableHeight = container.clientHeight - WORKSPACE_TOPBAR_HEIGHT - SPLIT_HANDLE_HEIGHT;
     if (availableHeight <= 0) return;
 
     const visibleRows = Math.max(countTreeRows((tree.trees as TreeNode[]) ?? []), 4);

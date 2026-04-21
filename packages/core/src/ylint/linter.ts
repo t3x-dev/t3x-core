@@ -11,7 +11,6 @@
  *   Form 4: Depth Equals Specificity (tree shape)
  */
 
-import type { YOp } from '@t3x-dev/yops';
 import type { SemanticContent, SlotValue, TreeNode } from '../semantic/types';
 import type { LintConfig, LintResult, LintWarning } from './types';
 

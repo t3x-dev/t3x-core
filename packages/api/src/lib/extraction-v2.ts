@@ -6,12 +6,12 @@ import {
   type ExtractionMode,
 } from '@t3x-dev/core';
 import {
+  type AnyDB,
   deleteYOpsLogEntry,
   findConversationById,
   findTurnsByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
-  type AnyDB,
 } from '@t3x-dev/storage';
 import { getProviderRegistry } from './provider-registry';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
@@ -53,7 +53,7 @@ async function resolveProviderAndModel(
   requestedProvider?: string,
   requestedModel?: string
 ): Promise<
-  | { ok: true; providerId: RuntimeProviderId; provider: any; model: string }
+  | { ok: true; providerId: RuntimeProviderId; provider: AnyProvider; model: string }
   | { ok: false; code: 'provider' | 'model' | 'mismatch' | 'unavailable'; message: string }
 > {
   const reg = await getProviderRegistry();
@@ -66,7 +66,10 @@ async function resolveProviderAndModel(
   if (requestedModel) {
     for (const provider of reg.listProviders()) {
       if (!(PROVIDER_RUNTIME_IDS as readonly string[]).includes(provider.id)) continue;
-      if (provider.defaultModel === requestedModel || provider.availableModels?.includes(requestedModel)) {
+      if (
+        provider.defaultModel === requestedModel ||
+        provider.availableModels?.includes(requestedModel)
+      ) {
         modelProvider = provider.id as RuntimeProviderId;
         break;
       }
@@ -75,12 +78,17 @@ async function resolveProviderAndModel(
       const catalogProvider = getModelInfo(requestedModel)?.provider;
       if (catalogProvider) {
         modelProvider =
-          (Object.entries(PROVIDER_RUNTIME_TO_PUBLIC).find(([, publicId]) => publicId === catalogProvider)?.[0] as RuntimeProviderId | undefined) ??
-          null;
+          (Object.entries(PROVIDER_RUNTIME_TO_PUBLIC).find(
+            ([, publicId]) => publicId === catalogProvider
+          )?.[0] as RuntimeProviderId | undefined) ?? null;
       }
     }
     if (!modelProvider) {
-      return { ok: false, code: 'model', message: `Unknown or unsupported model: ${requestedModel}` };
+      return {
+        ok: false,
+        code: 'model',
+        message: `Unknown or unsupported model: ${requestedModel}`,
+      };
     }
   }
 
@@ -94,9 +102,9 @@ async function resolveProviderAndModel(
 
   const defaultProvider = reg
     .getProviderIdsForRole('generation')
-    .find((id) => (PROVIDER_RUNTIME_IDS as readonly string[]).includes(id) && reg.isConfigured(id)) as
-    | RuntimeProviderId
-    | undefined;
+    .find(
+      (id) => (PROVIDER_RUNTIME_IDS as readonly string[]).includes(id) && reg.isConfigured(id)
+    ) as RuntimeProviderId | undefined;
 
   const providerId = explicitProvider ?? modelProvider ?? defaultProvider ?? null;
   if (!providerId) {
@@ -107,7 +115,7 @@ async function resolveProviderAndModel(
     };
   }
 
-  const provider = reg.getById<any>(providerId);
+  const provider = reg.getById<AnyProvider>(providerId);
   if (!provider) {
     return { ok: false, code: 'unavailable', message: `Provider ${providerId} is unavailable` };
   }
@@ -140,7 +148,10 @@ export type ApiExtractionV2Result =
   | {
       ok: true;
       mode: ExtractionMode;
-      snapshot: { trees: import('@t3x-dev/core').TreeNode[]; relations: import('@t3x-dev/core').Relation[] };
+      snapshot: {
+        trees: import('@t3x-dev/core').TreeNode[];
+        relations: import('@t3x-dev/core').Relation[];
+      };
       ops: import('@t3x-dev/core').SourcedYOp[];
       lastTurnHash: string;
     }
@@ -151,7 +162,9 @@ export type ApiExtractionV2Result =
       failure?: ExtractionFailure;
     };
 
-export async function runApiExtractionV2(input: ApiExtractionV2Input): Promise<ApiExtractionV2Result> {
+export async function runApiExtractionV2(
+  input: ApiExtractionV2Input
+): Promise<ApiExtractionV2Result> {
   const conversation = await findConversationById(input.db, input.conversationId);
   if (!conversation) {
     return {

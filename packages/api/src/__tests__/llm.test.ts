@@ -136,11 +136,11 @@ describe('GET /v1/llm/models', () => {
       models: Array<{ id: string }>;
     }>;
 
-    expect(providers.find((provider) => provider.name === 'openai')?.models.map((m) => m.id)).toEqual(
-      ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']
-    );
-    expect(providers.find((provider) => provider.name === 'google')?.models.map((m) => m.id)).toEqual(
-      ['gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']
-    );
+    expect(
+      providers.find((provider) => provider.name === 'openai')?.models.map((m) => m.id)
+    ).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
+    expect(
+      providers.find((provider) => provider.name === 'google')?.models.map((m) => m.id)
+    ).toEqual(['gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview']);
   });
 });

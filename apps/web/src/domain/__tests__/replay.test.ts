@@ -1,7 +1,6 @@
 import type { SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { YOpsReplayError } from '@/commands/yops/errors';
-import { replay } from '../replay';
+import { replay, YOpsReplayError } from '../replay';
 
 const turns: ValidationTurn[] = [{ turn_hash: 'sha256:t1', content: 'Budget is $10k.' }];
 

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  EXTRACTION_FAILURE_CODES,
-  getRetryStrategy,
-  isRetryableFailure,
-} from '../failures';
+import { EXTRACTION_FAILURE_CODES, getRetryStrategy, isRetryableFailure } from '../failures';
 
 describe('extractors/v2 failures', () => {
   it('exposes the canonical failure taxonomy', () => {

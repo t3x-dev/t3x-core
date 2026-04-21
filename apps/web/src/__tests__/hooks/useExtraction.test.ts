@@ -22,7 +22,10 @@ vi.mock('@/hooks/conversations/hydrateConversationToStore', () => ({
 vi.mock('@/store/chatStore', () => ({
   useChatStore: Object.assign(
     (
-      selector: (state: { activeProjectId: string | null; activeConversationId: string | null }) => unknown
+      selector: (state: {
+        activeProjectId: string | null;
+        activeConversationId: string | null;
+      }) => unknown
     ) =>
       selector({
         activeProjectId: 'proj_123',
@@ -45,12 +48,14 @@ describe('useExtraction', () => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
-    runExtractionMock.mockImplementation(async ({ llm }: { llm: (input: unknown) => Promise<unknown> }) => {
-      await llm({
-        turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
-        failingOps: undefined,
-      });
-    });
+    runExtractionMock.mockImplementation(
+      async ({ llm }: { llm: (input: unknown) => Promise<unknown> }) => {
+        await llm({
+          turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+          failingOps: undefined,
+        });
+      }
+    );
     callExtractionLLMMock.mockResolvedValue([]);
     hydrateConversationToStoreMock.mockResolvedValue(undefined);
   });

@@ -9,6 +9,8 @@
  * - POST /v1/commit — Create commit from a draft
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: draft commit route adapts mixed node payload shapes pending stricter request schemas */
+
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';

@@ -96,7 +96,7 @@ const INCREMENTAL_TURNS = [
 // ============================================================
 
 const FIRST_EXTRACTION_DRAFT = JSON.stringify({
-  schema: 't3x/extraction-draft',
+  schema: 't3x/provider-extraction-draft',
   version: 1,
   mode: 'bootstrap',
   items: [
@@ -105,24 +105,34 @@ const FIRST_EXTRACTION_DRAFT = JSON.stringify({
       intent: 'add',
       confidence: 0.96,
       reasoning_type: 'direct',
+      target_ref: {
+        node_key: null,
+        path: null,
+        existing_node_id: null,
+      },
       candidate: {
         key: 'trip_plan',
-        values: {
-          destination: '杭州',
-          duration: '3天2晚',
-          group_size: 3,
-          budget_per_person: 3000,
-          dietary_constraint: '小王花生过敏',
-          avoid_places: '河坊街',
-        },
+        path_hint: 'trip_plan',
+        slot: null,
+        value_json: null,
+        values_json:
+          '{"destination":"杭州","duration":"3天2晚","group_size":3,"budget_per_person":3000,"dietary_constraint":"小王花生过敏","avoid_places":"河坊街"}',
+        children_json: null,
       },
-      evidence: [{ turn_tag: 'T1', quote: '我和两个朋友想去杭州玩，计划三天两夜，每人预算 3000 左右。', role: 'primary' }],
+      evidence: [
+        {
+          turn_tag: 'T1',
+          quote: '我和两个朋友想去杭州玩，计划三天两夜，每人预算 3000 左右。',
+          role: 'primary',
+        },
+      ],
     },
   ],
+  warnings: [],
 });
 
 const INCREMENTAL_DRAFT = JSON.stringify({
-  schema: 't3x/extraction-draft',
+  schema: 't3x/provider-extraction-draft',
   version: 1,
   mode: 'incremental',
   items: [
@@ -131,16 +141,25 @@ const INCREMENTAL_DRAFT = JSON.stringify({
       intent: 'update',
       confidence: 0.92,
       reasoning_type: 'direct',
-      target_ref: { path: 'trip_plan' },
-      candidate: {
-        values: {
-          budget_per_person: 5000,
-          transportation: '自驾',
-        },
+      target_ref: {
+        node_key: null,
+        path: 'trip_plan',
+        existing_node_id: null,
       },
-      evidence: [{ turn_tag: 'T1', quote: '预算提高到每人 5000 吧，我们打算自驾去杭州。', role: 'primary' }],
+      candidate: {
+        key: null,
+        path_hint: null,
+        slot: null,
+        value_json: null,
+        values_json: '{"budget_per_person":5000,"transportation":"自驾"}',
+        children_json: null,
+      },
+      evidence: [
+        { turn_tag: 'T1', quote: '预算提高到每人 5000 吧，我们打算自驾去杭州。', role: 'primary' },
+      ],
     },
   ],
+  warnings: [],
 });
 
 /**
@@ -153,8 +172,8 @@ function createMockProvider(mode: 'full' | 'incremental' = 'full') {
     generate: vi.fn().mockImplementation(async (prompt: string) => {
       const usage = { inputTokens: 100, outputTokens: 50 };
 
-      // ── v2 ExtractionDraft prompt ──
-      if (prompt.includes('Return a valid ExtractionDraft')) {
+      // ── v2 ProviderExtractionDraft prompt ──
+      if (prompt.includes('Return a valid ProviderExtractionDraft')) {
         if (mode === 'incremental' || prompt.includes('Current knowledge snapshot')) {
           return { text: INCREMENTAL_DRAFT, usage: { inputTokens: 800, outputTokens: 300 } };
         }

@@ -29,29 +29,25 @@ describe('queries/providers', () => {
   });
 
   it('hides unsupported generation providers from web provider reads', async () => {
-    vi.mocked(listProviders).mockResolvedValue(
-      [
-        { id: 'anthropic', role: 'generation' },
-        { id: 'openai', role: 'generation' },
-        { id: 'google-ai', role: 'generation' },
-        { id: 'deepseek', role: 'generation' },
-        { id: 'ollama', role: 'generation' },
-        { id: 'google-ai-embedding', role: 'embedding' },
-      ] as never
-    );
+    vi.mocked(listProviders).mockResolvedValue([
+      { id: 'anthropic', role: 'generation' },
+      { id: 'openai', role: 'generation' },
+      { id: 'google-ai', role: 'generation' },
+      { id: 'deepseek', role: 'generation' },
+      { id: 'ollama', role: 'generation' },
+      { id: 'google-ai-embedding', role: 'embedding' },
+    ] as never);
 
-    vi.mocked(getProviderRoles).mockResolvedValue(
-      [
-        {
-          role: 'generation',
-          provider_ids: ['anthropic', 'deepseek', 'openai', 'ollama', 'google-ai'],
-        },
-        {
-          role: 'embedding',
-          provider_ids: ['google-ai-embedding'],
-        },
-      ] as never
-    );
+    vi.mocked(getProviderRoles).mockResolvedValue([
+      {
+        role: 'generation',
+        provider_ids: ['anthropic', 'deepseek', 'openai', 'ollama', 'google-ai'],
+      },
+      {
+        role: 'embedding',
+        provider_ids: ['google-ai-embedding'],
+      },
+    ] as never);
 
     await expect(fetchProviders()).resolves.toEqual([
       { id: 'anthropic', role: 'generation' },

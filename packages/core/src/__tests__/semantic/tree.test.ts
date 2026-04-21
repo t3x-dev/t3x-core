@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BLOB_TYPES, flattenTree, isBlob, unflattenToTree, yamlToTree } from '../../semantic/tree';
-import type { FlatNode, TreeNode } from '../../semantic/types';
+import type { FlatNode, SlotValue, TreeNode } from '../../semantic/types';
 
 describe('flattenTree', () => {
   it('flattens a single root node to one frame', () => {
@@ -258,7 +258,7 @@ describe('yamlToTree — all blob types round-trip', () => {
     it(`${blobType} blob survives flatten + unflatten`, () => {
       const tree: TreeNode = {
         key: 'topic',
-        slots: { summary: 'test', content: blobData as any },
+        slots: { summary: 'test', content: blobData as SlotValue },
         children: [],
       };
 

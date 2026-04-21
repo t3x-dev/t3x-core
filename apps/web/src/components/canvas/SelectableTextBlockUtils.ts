@@ -25,7 +25,7 @@ export type TokenState =
 export function isTokenInAnchorCandidate(
   token: TextToken,
   candidates: AnchorCandidate[],
-  threshold: number
+  _threshold: number
 ): AnchorCandidate | null {
   for (const candidate of candidates) {
     // Check if token overlaps with candidate's character range

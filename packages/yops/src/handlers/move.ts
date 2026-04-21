@@ -6,7 +6,14 @@ export const moveHandler: OpHandler = (doc, fields, index) => {
   const from = fields.from as string;
   const to = fields.to as string;
 
-  if (to === from || to.startsWith(`${from}/`)) {
+  if (to === from) {
+    return {
+      doc,
+      error: yopsError(YOPS_ERRORS.ALREADY_EXISTS, `Path "${to}" already exists`, index),
+    };
+  }
+
+  if (to.startsWith(`${from}/`)) {
     return {
       doc,
       error: yopsError(

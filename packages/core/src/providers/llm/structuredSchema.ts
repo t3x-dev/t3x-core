@@ -163,7 +163,9 @@ export function toClaudeStructuredSchema<T>(schema: ZodType<T>): JsonSchema {
   return normalizeClaudeSchemaNode(zodToJsonSchema(schema)) as JsonSchema;
 }
 
-function normalizeProviderDraftChildren(candidate: Record<string, unknown>): Record<string, unknown> {
+function normalizeProviderDraftChildren(
+  candidate: Record<string, unknown>
+): Record<string, unknown> {
   const rawChildren = candidate.children_json;
   if (typeof rawChildren !== 'string') {
     return candidate;
@@ -243,12 +245,14 @@ function normalizeProviderDraftChildren(candidate: Record<string, unknown>): Rec
           : nextChild;
       }
 
-      const aliasEntry = Object.entries(child).find(([key, value]) => key !== 'description' && typeof value === 'string');
+      const aliasEntry = Object.entries(child).find(
+        ([key, value]) => key !== 'description' && typeof value === 'string'
+      );
       if (!aliasEntry) {
         return child;
       }
 
-      const [aliasKey, aliasValue] = aliasEntry;
+      const [_aliasKey, aliasValue] = aliasEntry;
       const description = typeof child.description === 'string' ? child.description : undefined;
       return {
         key: aliasValue,
@@ -266,7 +270,11 @@ function normalizeProviderDraftChildren(candidate: Record<string, unknown>): Rec
 }
 
 export function normalizeClaudeStructuredData<T>(data: T): T {
-  if (!isObject(data) || data.schema !== 't3x/provider-extraction-draft' || !Array.isArray(data.items)) {
+  if (
+    !isObject(data) ||
+    data.schema !== 't3x/provider-extraction-draft' ||
+    !Array.isArray(data.items)
+  ) {
     return data;
   }
 
@@ -284,7 +292,11 @@ export function normalizeClaudeStructuredData<T>(data: T): T {
 }
 
 export function normalizeGeminiStructuredData<T>(data: T): T {
-  if (!isObject(data) || data.schema !== 't3x/provider-extraction-draft' || !Array.isArray(data.items)) {
+  if (
+    !isObject(data) ||
+    data.schema !== 't3x/provider-extraction-draft' ||
+    !Array.isArray(data.items)
+  ) {
     return data;
   }
 

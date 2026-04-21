@@ -53,6 +53,7 @@ export function MergeDiffSection({
     <div className="border rounded-lg overflow-hidden elevation-1" data-merge-nav={navId}>
       {/* Section Header */}
       <button
+        type="button"
         onClick={() => setCollapsed(!collapsed)}
         className="w-full flex items-center gap-2 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
       >

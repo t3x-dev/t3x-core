@@ -41,7 +41,7 @@ export function MergeActionBar({
   saveStatus,
   message,
   onMessageChange,
-  onSave,
+  onSave: _onSave,
   onCommit,
   onCancel,
   canCommit,

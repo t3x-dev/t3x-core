@@ -8,6 +8,8 @@
  *   transform — call diffCommits() from @t3x-dev/core
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: diff op bridges DB helpers with wider runtime shapes pending stricter transaction typing */
+
 import type { Operation, PipelineEvent, TreeDiff } from '@t3x-dev/core';
 import { diffCommits } from '@t3x-dev/core';
 import { getCommitUnified } from '@t3x-dev/storage';

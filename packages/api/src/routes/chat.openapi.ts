@@ -159,7 +159,10 @@ const CHAT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ChatRuntimeProviderId> = {
   'google-ai': 'google-ai',
 };
 
-const CHAT_PROVIDER_RUNTIME_TO_CATALOG: Record<ChatRuntimeProviderId, 'anthropic' | 'openai' | 'google'> = {
+const CHAT_PROVIDER_RUNTIME_TO_CATALOG: Record<
+  ChatRuntimeProviderId,
+  'anthropic' | 'openai' | 'google'
+> = {
   anthropic: 'anthropic',
   openai: 'openai',
   'google-ai': 'google',

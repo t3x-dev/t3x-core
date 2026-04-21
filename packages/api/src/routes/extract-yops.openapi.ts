@@ -14,6 +14,8 @@
  * and the worker calls this endpoint again with `failing_ops` populated.
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   extractAndApply,
@@ -58,7 +60,10 @@ const EXTRACT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ExtractRuntimeProviderId
   'google-ai': 'google-ai',
 };
 
-const EXTRACT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ExtractRuntimeProviderId, 'anthropic' | 'openai' | 'google'> = {
+const EXTRACT_PROVIDER_RUNTIME_TO_PUBLIC: Record<
+  ExtractRuntimeProviderId,
+  'anthropic' | 'openai' | 'google'
+> = {
   anthropic: 'anthropic',
   openai: 'openai',
   'google-ai': 'google',
@@ -136,14 +141,17 @@ const ExtractYopsResponse = z.object({
   ops: z.array(z.any()),
 });
 
-function mapExtractionFailureToApiError(
-  failure: { code: string; message: string; details?: Record<string, unknown> }
-): {
+function mapExtractionFailureToApiError(failure: {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}): {
   code: 'EXTRACTION_FAILED' | 'RATE_LIMITED' | 'AUTH_ERROR';
   status?: 400 | 401 | 429;
   details: Record<string, unknown>;
 } {
-  const statusCode = typeof failure.details?.statusCode === 'number' ? failure.details.statusCode : undefined;
+  const statusCode =
+    typeof failure.details?.statusCode === 'number' ? failure.details.statusCode : undefined;
 
   if (failure.code === 'transport' && statusCode === 429) {
     return {
@@ -205,8 +213,12 @@ const route = createRoute({
 // ── Handler ──
 
 extractYopsRoutes.openapi(route, async (c) => {
-  const { conversation_id, turns, provider: requestedProvider, model: requestedModel } =
-    c.req.valid('json');
+  const {
+    conversation_id,
+    turns,
+    provider: requestedProvider,
+    model: requestedModel,
+  } = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -244,7 +256,11 @@ extractYopsRoutes.openapi(route, async (c) => {
         ? findProviderForModel(reg, requestedModel, EXTRACT_PROVIDER_RUNTIME_IDS)
         : null;
       if (requestedModel && !modelProvider) {
-        return errorResponse(c, 'EXTRACTION_FAILED', `Unknown or unsupported model: ${requestedModel}`);
+        return errorResponse(
+          c,
+          'EXTRACTION_FAILED',
+          `Unknown or unsupported model: ${requestedModel}`
+        );
       }
 
       if (explicitProvider && modelProvider && explicitProvider !== modelProvider) {
@@ -264,7 +280,11 @@ extractYopsRoutes.openapi(route, async (c) => {
 
       const providerId = explicitProvider ?? modelProvider ?? defaultProvider ?? null;
       if (!providerId) {
-        return errorResponse(c, 'EXTRACTION_FAILED', 'No configured extraction provider is available');
+        return errorResponse(
+          c,
+          'EXTRACTION_FAILED',
+          'No configured extraction provider is available'
+        );
       }
 
       const provider = reg.getById<any>(providerId);
@@ -276,7 +296,11 @@ extractYopsRoutes.openapi(route, async (c) => {
         ? (getCanonicalModelId(stripProviderPrefixFromModel(requestedModel, providerId)) ?? null)
         : (reg.getEntry(providerId)?.defaultModel ?? null);
       if (!model) {
-        return errorResponse(c, 'EXTRACTION_FAILED', `No default model configured for provider: ${providerId}`);
+        return errorResponse(
+          c,
+          'EXTRACTION_FAILED',
+          `No default model configured for provider: ${providerId}`
+        );
       }
 
       const pipelineResult = await extractAndApply({
@@ -294,13 +318,16 @@ extractYopsRoutes.openapi(route, async (c) => {
 
       if (!pipelineResult.ok) {
         const apiFailure = mapExtractionFailureToApiError(pipelineResult.failure);
-        return errorJson(c, apiFailure.code, pipelineResult.failure.message, apiFailure.status, apiFailure.details);
+        return errorJson(
+          c,
+          apiFailure.code,
+          pipelineResult.failure.message,
+          apiFailure.status,
+          apiFailure.details
+        );
       }
 
-      return c.json(
-        { success: true as const, data: { ops: pipelineResult.compiled.ops } },
-        200
-      );
+      return c.json({ success: true as const, data: { ops: pipelineResult.compiled.ops } }, 200);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LLM provider error';
       return errorResponse(c, 'EXTRACTION_FAILED', message);

@@ -92,13 +92,7 @@ vi.mock('@/components/ui/tabs', async () => {
     return <TabsContext.Provider value={{ value, onValueChange }}>{children}</TabsContext.Provider>;
   }
 
-  function TabsList({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) {
+  function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
     return (
       <div role="tablist" className={className}>
         {children}
@@ -129,13 +123,7 @@ vi.mock('@/components/ui/tabs', async () => {
     );
   }
 
-  function TabsContent({
-    children,
-    value,
-  }: {
-    children: React.ReactNode;
-    value: string;
-  }) {
+  function TabsContent({ children, value }: { children: React.ReactNode; value: string }) {
     const { value: activeValue } = React.useContext(TabsContext);
     if (activeValue !== value) return null;
     return <div>{children}</div>;

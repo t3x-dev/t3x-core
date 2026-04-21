@@ -4,13 +4,14 @@
  * Integration tests for POST /v1/commits/{hash}/leaves/batch endpoint.
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use broad casts for compact mock assertions */
+
 import type { AnyDB } from '@t3x-dev/storage';
 import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
-// biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
 // Mock the database module before importing routes
@@ -278,9 +279,9 @@ describe('Batch Generation Routes', () => {
       expect(data.success).toBe(false);
     });
 
-    it('defaults skip_generation to false', async () => {
-      // Temporarily unset API keys and reset provider registry
-      // so generation is not configured for this test
+    it('defaults skip_generation to false and reports generation failure as a partial success', async () => {
+      // Temporarily unset explicit cloud provider keys and reset the registry.
+      // The batch route still creates the leaf even when generation later fails.
       const savedAnthropic = process.env.ANTHROPIC_API_KEY;
       const savedGoogle = process.env.GOOGLE_AI_STUDIO_KEY;
       delete process.env.ANTHROPIC_API_KEY;
@@ -303,12 +304,20 @@ describe('Batch Generation Routes', () => {
           }
         );
 
-        // No API key set → should return 400 with GENERATION_NOT_CONFIGURED
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
 
         const data: ApiResponse = await res.json();
-        expect(data.success).toBe(false);
-        expect(data.error.code).toBe('GENERATION_NOT_CONFIGURED');
+        expect(data.success).toBe(true);
+        expect(data.data.summary).toEqual({
+          total: 1,
+          succeeded: 1,
+          failed: 0,
+        });
+        expect(data.data.results[0].leaf).toBeTruthy();
+        expect(data.data.results[0].leaf.output).toBeNull();
+        expect(data.data.results[0].error).toMatchObject({
+          code: 'GENERATION_FAILED',
+        });
       } finally {
         // Restore env vars and re-initialize registry
         if (savedAnthropic) process.env.ANTHROPIC_API_KEY = savedAnthropic;

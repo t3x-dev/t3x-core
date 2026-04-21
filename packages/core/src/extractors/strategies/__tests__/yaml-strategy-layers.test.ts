@@ -182,7 +182,7 @@ describe('L1: Gate', () => {
       path: trip`;
 
     const provider = mockProvider([dupDefine, correctedDefine]);
-    const result = await strategy.extract(baseInput, provider);
+    const _result = await strategy.extract(baseInput, provider);
 
     // At least 2 calls: main + correction
     expect(

@@ -1,3 +1,4 @@
+import type { YOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
 import { opsToYaml, parseYOpsScript } from '@/domain/yops/scriptParser';
 
@@ -40,8 +41,8 @@ describe('parseYOpsScript', () => {
 
 describe('opsToYaml', () => {
   it('serializes ops to YAML', () => {
-    const ops = [{ define: { parent: '', key: 'trip' } }];
-    const yaml = opsToYaml(ops as any);
+    const ops: YOp[] = [{ define: { path: 'trip' } }];
+    const yaml = opsToYaml(ops);
     expect(yaml).toContain('yops:');
     expect(yaml).toContain('define:');
     expect(yaml).toContain('trip');

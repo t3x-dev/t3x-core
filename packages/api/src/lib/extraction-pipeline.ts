@@ -6,10 +6,18 @@
  */
 
 import { createHash } from 'node:crypto';
-import { createTopic, findConversationById, insertYOpsLogEntry, listTopicsByConversation, recordEvent, setAliasIfNull, type AnyDB } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  createTopic,
+  findConversationById,
+  insertYOpsLogEntry,
+  listTopicsByConversation,
+  recordEvent,
+  setAliasIfNull,
+} from '@t3x-dev/storage';
 import { pinoLogger } from '../middleware/logger';
-import { rebuildTreesFromSnapshot } from './tree-state-sync';
 import { runApiExtractionV2 } from './extraction-v2';
+import { rebuildTreesFromSnapshot } from './tree-state-sync';
 
 const ALIAS_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
 
@@ -71,7 +79,9 @@ export interface ExtractionPipelineParams {
   userId?: string;
 }
 
-function mapFailureToEvent(result: Extract<Awaited<ReturnType<typeof runApiExtractionV2>>, { ok: false }>): PipelineEvent {
+function mapFailureToEvent(
+  result: Extract<Awaited<ReturnType<typeof runApiExtractionV2>>, { ok: false }>
+): PipelineEvent {
   if (result.kind === 'conversation_not_found') {
     return {
       type: 'error',

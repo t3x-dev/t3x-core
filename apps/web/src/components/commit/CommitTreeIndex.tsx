@@ -10,12 +10,10 @@
  * 4. Sources: conversation and leaf source links.
  */
 
-import type { TreeNode } from '@t3x-dev/core';
 import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import type { CompatNode } from '@/domain/tree/treeCompat';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';

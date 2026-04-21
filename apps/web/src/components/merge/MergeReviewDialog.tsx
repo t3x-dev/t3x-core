@@ -202,6 +202,7 @@ export function MergeReviewDialog({
                 />
                 {/* SVG animated checkmark */}
                 <svg width="40" height="40" viewBox="0 0 72 72" className="relative z-10">
+                  <title>Merge completed checkmark</title>
                   <defs>
                     <linearGradient id="check-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor="#f97316" />

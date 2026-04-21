@@ -41,18 +41,20 @@ const YValueSchema: z.ZodType<unknown> = z.lazy(() =>
 // ── Helpers ──
 // Inner op params keep .strict(); outer wrapper allows source alongside the op key.
 const s = SourceSchema.optional();
+const PathSchema = z.string().min(1);
+const RootablePathSchema = z.string();
 
 // ── DDL ──
 
 const DefineOpSchema = z
-  .object({ define: z.object({ path: z.string().min(1) }).strict(), source: s })
+  .object({ define: z.object({ path: PathSchema }).strict(), source: s })
   .strict();
 const DropOpSchema = z
-  .object({ drop: z.object({ path: z.string().min(1) }).strict(), source: s })
+  .object({ drop: z.object({ path: PathSchema }).strict(), source: s })
   .strict();
 const RenameOpSchema = z
   .object({
-    rename: z.object({ path: z.string().min(1), to: z.string().min(1) }).strict(),
+    rename: z.object({ path: PathSchema, to: z.string().min(1) }).strict(),
     source: s,
   })
   .strict();
@@ -60,22 +62,20 @@ const RenameOpSchema = z
 // ── DML ──
 
 const SetOpSchema = z
-  .object({ set: z.object({ path: z.string().min(1), value: YValueSchema }).strict(), source: s })
+  .object({ set: z.object({ path: PathSchema, value: YValueSchema }).strict(), source: s })
   .strict();
 const UnsetOpSchema = z
-  .object({ unset: z.object({ path: z.string().min(1) }).strict(), source: s })
+  .object({ unset: z.object({ path: PathSchema }).strict(), source: s })
   .strict();
 const PopulateOpSchema = z
   .object({
-    populate: z
-      .object({ path: z.string().min(1), values: z.record(z.string(), YValueSchema) })
-      .strict(),
+    populate: z.object({ path: PathSchema, values: z.record(z.string(), YValueSchema) }).strict(),
     source: s,
   })
   .strict();
 const AppendOpSchema = z
   .object({
-    append: z.object({ path: z.string().min(1), value: YValueSchema }).strict(),
+    append: z.object({ path: PathSchema, value: YValueSchema }).strict(),
     source: s,
   })
   .strict();
@@ -84,20 +84,20 @@ const AppendOpSchema = z
 
 const MoveOpSchema = z
   .object({
-    move: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(),
+    move: z.object({ from: PathSchema, to: z.string().min(1) }).strict(),
     source: s,
   })
   .strict();
 const CloneOpSchema = z
   .object({
-    clone: z.object({ from: z.string().min(1), to: z.string().min(1) }).strict(),
+    clone: z.object({ from: PathSchema, to: z.string().min(1) }).strict(),
     source: s,
   })
   .strict();
 const NestOpSchema = z
   .object({
     nest: z
-      .object({ path: z.string().min(1), keys: z.array(z.string()), under: z.string().min(1) })
+      .object({ path: RootablePathSchema, keys: z.array(z.string()), under: z.string().min(1) })
       .strict(),
     source: s,
   })
@@ -105,18 +105,18 @@ const NestOpSchema = z
 const SplitOpSchema = z
   .object({
     split: z
-      .object({ path: z.string().min(1), into: z.record(z.string(), z.array(z.string())) })
+      .object({ path: RootablePathSchema, into: z.record(z.string(), z.array(z.string())) })
       .strict(),
     source: s,
   })
   .strict();
 const FoldOpSchema = z
-  .object({ fold: z.object({ path: z.string().min(1) }).strict(), source: s })
+  .object({ fold: z.object({ path: PathSchema }).strict(), source: s })
   .strict();
 const MergeOpSchema = z
   .object({
     merge: z
-      .object({ path: z.string().min(1), keys: z.array(z.string()), into: z.string().min(1) })
+      .object({ path: RootablePathSchema, keys: z.array(z.string()), into: z.string().min(1) })
       .strict(),
     source: s,
   })
@@ -125,7 +125,7 @@ const SortOpSchema = z
   .object({
     sort: z
       .object({
-        path: z.string().min(1),
+        path: PathSchema,
         by: z.string().optional(),
         order: z.enum(['asc', 'desc']).optional(),
       })
@@ -135,19 +135,19 @@ const SortOpSchema = z
   .strict();
 const UniqueOpSchema = z
   .object({
-    unique: z.object({ path: z.string().min(1), by: z.string().optional() }).strict(),
+    unique: z.object({ path: PathSchema, by: z.string().optional() }).strict(),
     source: s,
   })
   .strict();
 const PickOpSchema = z
   .object({
-    pick: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(),
+    pick: z.object({ path: RootablePathSchema, keys: z.array(z.string()) }).strict(),
     source: s,
   })
   .strict();
 const OmitOpSchema = z
   .object({
-    omit: z.object({ path: z.string().min(1), keys: z.array(z.string()) }).strict(),
+    omit: z.object({ path: RootablePathSchema, keys: z.array(z.string()) }).strict(),
     source: s,
   })
   .strict();

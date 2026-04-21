@@ -1,4 +1,4 @@
-import { YOpsReplayError } from '@/commands/yops/errors';
+import { YOpsReplayError } from '@/domain/replay';
 
 export function formatWorkspaceError(err: unknown): string {
   if (err instanceof YOpsReplayError) {

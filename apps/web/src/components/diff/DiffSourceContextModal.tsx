@@ -62,17 +62,20 @@ export function TurnBubble({
 
     // When wordDiff is provided, highlight only changed words
     if (wordDiff && wordDiff.length > 0) {
+      let segmentOffset = 0;
       return (
         <>
           {before && <span className="text-[var(--text-tertiary)]">{before}</span>}
-          {wordDiff.map((seg, i) => {
+          {wordDiff.map((seg) => {
+            const segmentKey = `segment-${segmentOffset}-${seg.type}`;
+            segmentOffset += seg.text.length;
             if (seg.type === 'unchanged') {
-              return <span key={i}>{seg.text}</span>;
+              return <span key={segmentKey}>{seg.text}</span>;
             }
             if (seg.type === 'added') {
               return (
                 <mark
-                  key={i}
+                  key={segmentKey}
                   className="bg-[var(--status-success)] text-white font-medium px-0.5 rounded-sm"
                 >
                   {seg.text}
@@ -82,14 +85,14 @@ export function TurnBubble({
             if (seg.type === 'removed') {
               return (
                 <mark
-                  key={i}
+                  key={segmentKey}
                   className="bg-[var(--status-error)] text-white font-medium px-0.5 rounded-sm line-through"
                 >
                   {seg.text}
                 </mark>
               );
             }
-            return <span key={i}>{seg.text}</span>;
+            return <span key={segmentKey}>{seg.text}</span>;
           })}
           {after && <span className="text-[var(--text-tertiary)]">{after}</span>}
         </>

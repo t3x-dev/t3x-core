@@ -65,9 +65,9 @@ export type {
   Segment,
 } from './types';
 export {
+  type CompileResult,
   compileExtractionDraft,
   toCompiledMutationPlan,
-  type CompileResult,
 } from './v2/compiler';
 export {
   extractAndApply,
@@ -77,10 +77,10 @@ export {
 export {
   createExtractionFailure,
   EXTRACTION_FAILURE_CODES,
-  getRetryStrategy,
-  isRetryableFailure,
   type ExtractionFailure,
   type ExtractionFailureCode,
+  getRetryStrategy,
+  isRetryableFailure,
   type RetryDecision,
   type RetryStrategy,
 } from './v2/failures';
@@ -91,6 +91,11 @@ export {
   type PromptTurnInput,
 } from './v2/normalization';
 export {
+  type ExtractionV2PipelineInput,
+  type ExtractionV2PipelineResult,
+  runExtractionV2Pipeline,
+} from './v2/pipeline';
+export {
   buildOpenAIChatCompletionBody,
   mapProviderErrorToExtractionFailure,
   normalizeProviderDraftText,
@@ -99,38 +104,33 @@ export {
 } from './v2/providerAdapters';
 export {
   liftProviderDraftToExtractionDraft,
+  PROVIDER_EXTRACTION_DRAFT_SCHEMA,
   ProviderDraftCandidateSchema,
   ProviderDraftEvidenceSchema,
   ProviderDraftTargetRefSchema,
+  type ProviderExtractionDraft,
   ProviderExtractionDraftItemSchema,
   ProviderExtractionDraftSchema,
-  PROVIDER_EXTRACTION_DRAFT_SCHEMA,
-  type ProviderExtractionDraft,
 } from './v2/providerDraft';
 export {
-  runExtractionV2Pipeline,
-  type ExtractionV2PipelineInput,
-  type ExtractionV2PipelineResult,
-} from './v2/pipeline';
-export {
-  EXTRACTION_DRAFT_SCHEMA,
-  EXTRACTION_MODES,
+  type CompiledMutationPlan,
+  type CompileInput,
+  type DraftEvidence,
   DraftEvidenceSchema,
+  type DraftIntent,
   DraftIntentSchema,
   EvidenceRoleSchema,
-  ExtractionDraftItemSchema,
-  ExtractionDraftSchema,
-  ExtractionModeSchema,
-  ReasoningTypeSchema,
-  TurnTagSchema,
-  type CompileInput,
-  type CompiledMutationPlan,
-  type DraftEvidence,
-  type DraftIntent,
+  EXTRACTION_DRAFT_SCHEMA,
+  EXTRACTION_MODES,
   type ExtractionDraft,
   type ExtractionDraftItem,
+  ExtractionDraftItemSchema,
+  ExtractionDraftSchema,
   type ExtractionMode,
+  ExtractionModeSchema,
   type ReasoningType,
+  ReasoningTypeSchema,
+  TurnTagSchema,
 } from './v2/types';
 // YOps Parser
 export { parseYOpsOutput, type YOpsParseResult } from './yopsParser';

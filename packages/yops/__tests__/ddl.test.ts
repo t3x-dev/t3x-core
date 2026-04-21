@@ -2,6 +2,8 @@
  * DDL Operations Tests: define, drop, rename
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: DDL tests use broad casts for concise deep shape assertions */
+
 import { describe, expect, it } from 'vitest';
 import { applyYOps } from '../src/index';
 import type { YValue } from '../src/types';

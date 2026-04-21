@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: health route inspects dynamic provider runtime metadata pending stricter shared status types */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { findProjects } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';

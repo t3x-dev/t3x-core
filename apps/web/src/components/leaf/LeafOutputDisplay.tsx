@@ -318,10 +318,11 @@ export function LeafOutputDisplay({
         )}
       >
         {highlightedSegments
-          ? highlightedSegments.map((seg, i) =>
-              seg.constraintType ? (
+          ? highlightedSegments.map((seg, i) => {
+              const segmentKey = `${seg.nodeId ?? 'plain'}-${seg.constraintType ?? 'none'}-${seg.text}-${i}`;
+              return seg.constraintType ? (
                 <span
-                  key={`seg-${i}`}
+                  key={segmentKey}
                   className={cn(
                     'rounded px-0.5 -mx-0.5 transition-colors border-b',
                     seg.constraintType === 'require'
@@ -333,7 +334,7 @@ export function LeafOutputDisplay({
                 </span>
               ) : seg.nodeId ? (
                 <span
-                  key={`seg-${i}`}
+                  key={segmentKey}
                   className={cn(
                     'underline decoration-[var(--status-success)] decoration-2 underline-offset-[3px] cursor-pointer transition-colors',
                     hoveredNodeId === seg.nodeId && 'bg-[var(--status-success-muted)] rounded-sm'
@@ -344,9 +345,9 @@ export function LeafOutputDisplay({
                   {seg.text}
                 </span>
               ) : (
-                <span key={`seg-${i}`}>{seg.text}</span>
-              )
-            )
+                <span key={segmentKey}>{seg.text}</span>
+              );
+            })
           : output}
       </div>
     </div>

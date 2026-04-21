@@ -5,6 +5,8 @@
  * Stores the API key in a `t3x-session` cookie for authenticated requests.
  */
 
+/** biome-ignore-all lint/suspicious/noDocumentCookie: browser cookie storage is the intended session transport for local auth */
+
 const COOKIE_NAME = 't3x-session';
 const COOKIE_MAX_AGE_DAYS = 30;
 const USER_STORAGE_KEY = 't3x-user';

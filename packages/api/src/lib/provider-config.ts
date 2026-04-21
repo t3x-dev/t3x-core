@@ -1,4 +1,4 @@
-import { type ResolvedConfig } from '@t3x-dev/core';
+import type { ResolvedConfig } from '@t3x-dev/core';
 import { getProviderCredentialBundle } from '@t3x-dev/storage';
 import { getDB } from './db';
 

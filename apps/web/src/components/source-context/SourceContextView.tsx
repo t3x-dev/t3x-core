@@ -238,28 +238,31 @@ export function SourceContextView({
   const renderWordDiffContent = (contentBefore: string, contentAfter: string) => {
     const addedClass = `${highlightColorClasses.deepGreen} px-0.5 rounded-sm`;
     const removedClass = `${highlightColorClasses.deepRed} px-0.5 rounded-sm line-through`;
+    let segmentOffset = 0;
     return (
       <>
         {contentBefore && <span className="text-[var(--text-tertiary)]">{contentBefore}</span>}
-        {wordDiff!.map((seg, i) => {
+        {wordDiff!.map((seg) => {
+          const segmentKey = `segment-${segmentOffset}-${seg.type}`;
+          segmentOffset += seg.text.length;
           if (seg.type === 'unchanged') {
-            return <span key={i}>{seg.text}</span>;
+            return <span key={segmentKey}>{seg.text}</span>;
           }
           if (seg.type === 'added') {
             return (
-              <mark key={i} className={addedClass}>
+              <mark key={segmentKey} className={addedClass}>
                 {seg.text}
               </mark>
             );
           }
           if (seg.type === 'removed') {
             return (
-              <mark key={i} className={removedClass}>
+              <mark key={segmentKey} className={removedClass}>
                 {seg.text}
               </mark>
             );
           }
-          return <span key={i}>{seg.text}</span>;
+          return <span key={segmentKey}>{seg.text}</span>;
         })}
         {contentAfter && <span className="text-[var(--text-tertiary)]">{contentAfter}</span>}
       </>

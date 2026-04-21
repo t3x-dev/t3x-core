@@ -218,12 +218,12 @@ export function renderPhraseWithKeywords(
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
 
-  sortedKeywords.forEach((kw, idx) => {
+  sortedKeywords.forEach((kw) => {
     if (kw.startIndex > lastIndex) {
       const beforeText = text.slice(lastIndex, kw.startIndex);
       parts.push(
         <span
-          key={`text-${idx}`}
+          key={`text-${lastIndex}-${kw.startIndex}`}
           className="draft-svtz__phrase-text"
           onClick={(e) => {
             e.stopPropagation();

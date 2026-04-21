@@ -20,7 +20,9 @@ function usesOpenAICompletionTokenField(model: string): boolean {
   return /^gpt-5(\.|-|$)/.test(model);
 }
 
-export function buildOpenAIChatCompletionBody(input: OpenAIChatCompletionBodyInput): Record<string, unknown> {
+export function buildOpenAIChatCompletionBody(
+  input: OpenAIChatCompletionBodyInput
+): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: input.model,
     temperature: input.temperature,
@@ -63,4 +65,3 @@ export function mapProviderErrorToExtractionFailure(
     },
   });
 }
-

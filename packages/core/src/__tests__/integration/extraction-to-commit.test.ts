@@ -104,7 +104,7 @@ describe('extraction-to-commit integration', () => {
     const result = runTransforms(content, []);
 
     // budget should be nested under trip (not a root anymore)
-    const frames = flattenTrees(result.content.trees);
+    const _frames = flattenTrees(result.content.trees);
     // Relations consumed → empty
     expect(result.content.relations).toHaveLength(0);
   });

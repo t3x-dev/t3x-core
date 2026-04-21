@@ -14,14 +14,7 @@
  * - Relation changes: section at bottom
  */
 
-import type {
-  Relation,
-  SemanticContent,
-  SlotDiff,
-  SlotValue,
-  TreeDiff,
-  TreeNode,
-} from '@t3x-dev/core';
+import type { Relation, SemanticContent, SlotDiff, SlotValue, TreeDiff } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Equal, Minus, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
@@ -247,8 +240,8 @@ function RemovedNodeBlock({ node }: { node: CompatNode }) {
           ({node.id})
         </span>
       </div>
-      {renderNodeSlots(node).map((line, i) => (
-        <div key={i} className="px-2 py-0.5">
+      {renderNodeSlots(node).map((line) => (
+        <div key={`${node.id}-removed-${line}`} className="px-2 py-0.5">
           <pre
             className="m-0 text-[11px] leading-[18px] line-through"
             style={{ color: 'var(--status-error)', opacity: 0.75 }}
@@ -283,8 +276,8 @@ function AddedNodeBlock({ node }: { node: CompatNode }) {
           ({node.id})
         </span>
       </div>
-      {renderNodeSlots(node).map((line, i) => (
-        <div key={i} className="px-2 py-0.5">
+      {renderNodeSlots(node).map((line) => (
+        <div key={`${node.id}-added-${line}`} className="px-2 py-0.5">
           <pre
             className="m-0 text-[11px] leading-[18px]"
             style={{ color: 'var(--status-success)' }}
@@ -309,9 +302,9 @@ function RelationChanges({ added, removed }: { added: Relation[]; removed: Relat
       >
         Relation changes
       </div>
-      {removed.map((r, i) => (
+      {removed.map((r) => (
         <div
-          key={`rem-${i}`}
+          key={`rem-${r.from}-${r.type}-${r.to}`}
           className="px-2 py-0.5 rounded-sm"
           style={{ background: 'color-mix(in srgb, var(--status-error) 8%, transparent)' }}
         >
@@ -323,9 +316,9 @@ function RelationChanges({ added, removed }: { added: Relation[]; removed: Relat
           </pre>
         </div>
       ))}
-      {added.map((r, i) => (
+      {added.map((r) => (
         <div
-          key={`add-${i}`}
+          key={`add-${r.from}-${r.type}-${r.to}`}
           className="px-2 py-0.5 rounded-sm"
           style={{ background: 'color-mix(in srgb, var(--status-success) 8%, transparent)' }}
         >

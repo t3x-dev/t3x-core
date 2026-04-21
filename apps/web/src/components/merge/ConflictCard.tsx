@@ -15,7 +15,6 @@
 import type { SlotConflict, SlotValue, TreeNode } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
-import type { CompatNode } from '@/domain/tree/treeCompat';
 import { cn } from '@/utils/cn';
 
 // ============================================================================
@@ -57,14 +56,19 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
     return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
   }
   if (Array.isArray(value)) {
+    let itemOffset = 0;
     return (
       <span className="block">
-        {(value as SlotValue[]).map((item, i) => (
-          <span key={i} className="block pl-4 leading-relaxed">
-            <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
-            {renderSlotValue(item)}
-          </span>
-        ))}
+        {(value as SlotValue[]).map((item) => {
+          const itemKey = `item-${itemOffset}-${JSON.stringify(item)}`;
+          itemOffset += 1;
+          return (
+            <span key={itemKey} className="block pl-4 leading-relaxed">
+              <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
+              {renderSlotValue(item)}
+            </span>
+          );
+        })}
       </span>
     );
   }

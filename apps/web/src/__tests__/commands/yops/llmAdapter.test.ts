@@ -50,7 +50,11 @@ describe('callExtractionLLM', () => {
         turns: [],
       })
     ).rejects.toEqual(
-      new ExtractionRequestError(createExtractionFailure('draft_schema', 'Draft schema invalid'), 400, 'EXTRACTION_FAILED')
+      new ExtractionRequestError(
+        createExtractionFailure('draft_schema', 'Draft schema invalid'),
+        400,
+        'EXTRACTION_FAILED'
+      )
     );
   });
 });

@@ -59,27 +59,39 @@ function HighlightedText({
     }
   }
 
-  const parts: Array<{ text: string; highlighted: boolean }> = [];
+  const parts: Array<{ key: string; text: string; highlighted: boolean }> = [];
   let cursor = 0;
   for (const r of merged) {
     const start = Math.max(0, r.start);
     const end = Math.min(text.length, r.end);
     if (cursor < start) {
-      parts.push({ text: text.slice(cursor, start), highlighted: false });
+      parts.push({
+        key: `plain-${cursor}-${start}`,
+        text: text.slice(cursor, start),
+        highlighted: false,
+      });
     }
-    parts.push({ text: text.slice(start, end), highlighted: true });
+    parts.push({
+      key: `highlight-${start}-${end}`,
+      text: text.slice(start, end),
+      highlighted: true,
+    });
     cursor = end;
   }
   if (cursor < text.length) {
-    parts.push({ text: text.slice(cursor), highlighted: false });
+    parts.push({
+      key: `plain-${cursor}-${text.length}`,
+      text: text.slice(cursor),
+      highlighted: false,
+    });
   }
 
   return (
     <>
-      {parts.map((p, i) =>
+      {parts.map((p) =>
         p.highlighted ? (
           <mark
-            key={i}
+            key={p.key}
             style={{
               background: 'rgba(99, 102, 241, 0.25)',
               borderBottom: '2px solid rgb(99, 102, 241)',
@@ -91,7 +103,7 @@ function HighlightedText({
             {p.text}
           </mark>
         ) : (
-          <span key={i}>{p.text}</span>
+          <span key={p.key}>{p.text}</span>
         )
       )}
     </>
@@ -101,6 +113,7 @@ function HighlightedText({
 // ── Source-mapped text rendering (Chat → YAML direction) ──
 
 interface SourceSegment {
+  key: string;
   text: string;
   mapping: SourceMapping | null;
 }
@@ -110,7 +123,9 @@ interface SourceSegment {
  * Handles overlapping mappings by merging them.
  */
 function splitIntoSegments(content: string, mappings: SourceMapping[]): SourceSegment[] {
-  if (mappings.length === 0) return [{ text: content, mapping: null }];
+  if (mappings.length === 0) {
+    return [{ key: `plain-0-${content.length}`, text: content, mapping: null }];
+  }
 
   // Sort and deduplicate by position (multiple mappings at same position → pick first)
   const sorted = [...mappings].sort((a, b) => a.start - b.start || a.end - b.end);
@@ -124,14 +139,26 @@ function splitIntoSegments(content: string, mappings: SourceMapping[]): SourceSe
     if (start < cursor) continue; // skip overlapping
 
     if (cursor < start) {
-      segments.push({ text: content.slice(cursor, start), mapping: null });
+      segments.push({
+        key: `plain-${cursor}-${start}`,
+        text: content.slice(cursor, start),
+        mapping: null,
+      });
     }
-    segments.push({ text: content.slice(start, end), mapping: m });
+    segments.push({
+      key: `mapped-${m.treePath}-${m.slotKey ?? 'slot'}-${start}-${end}`,
+      text: content.slice(start, end),
+      mapping: m,
+    });
     cursor = end;
   }
 
   if (cursor < content.length) {
-    segments.push({ text: content.slice(cursor), mapping: null });
+    segments.push({
+      key: `plain-${cursor}-${content.length}`,
+      text: content.slice(cursor),
+      mapping: null,
+    });
   }
 
   return segments;
@@ -146,8 +173,6 @@ function SourceMappedText({
   content,
   mappings,
   hoveredNodeId,
-  onHoverSlot,
-  onLeaveSlot,
   onClickSlot,
   isReviewPhase,
   onDeleteSlot,
@@ -155,8 +180,6 @@ function SourceMappedText({
   content: string;
   mappings: SourceMapping[];
   hoveredNodeId: string | null;
-  onHoverSlot: (treePath: string, slotKey: string | null) => void;
-  onLeaveSlot: () => void;
   onClickSlot: (treePath: string, slotKey: string | null) => void;
   isReviewPhase: boolean;
   onDeleteSlot?: (nodeId: string, slotKey: string) => void;
@@ -165,9 +188,9 @@ function SourceMappedText({
 
   return (
     <>
-      {segments.map((seg, i) => {
+      {segments.map((seg) => {
         if (!seg.mapping) {
-          return <span key={i}>{seg.text}</span>;
+          return <span key={seg.key}>{seg.text}</span>;
         }
 
         const m = seg.mapping;
@@ -177,7 +200,7 @@ function SourceMappedText({
         if (isReviewPhase) {
           return (
             <SourceHighlight
-              key={i}
+              key={seg.key}
               text={seg.text}
               nodeId={m.treePath}
               slotKey={m.slotKey ?? ''}
@@ -203,7 +226,7 @@ function SourceMappedText({
 
         return (
           <span
-            key={i}
+            key={seg.key}
             data-tree-path={m.treePath}
             data-slot-key={m.slotKey}
             data-source-highlight={isActive ? 'active' : 'default'}
@@ -233,7 +256,7 @@ function CommittedHighlightText({
   highlights: CommittedHighlight[];
 }) {
   const sorted = [...highlights].sort((a, b) => a.start - b.start);
-  const parts: Array<{ text: string; highlight: CommittedHighlight | null }> = [];
+  const parts: Array<{ key: string; text: string; highlight: CommittedHighlight | null }> = [];
   let cursor = 0;
 
   for (const h of sorted) {
@@ -242,21 +265,33 @@ function CommittedHighlightText({
     if (start < cursor) continue;
 
     if (cursor < start) {
-      parts.push({ text: content.slice(cursor, start), highlight: null });
+      parts.push({
+        key: `plain-${cursor}-${start}`,
+        text: content.slice(cursor, start),
+        highlight: null,
+      });
     }
-    parts.push({ text: content.slice(start, end), highlight: h });
+    parts.push({
+      key: `highlight-${h.commitHash}-${h.nodeText}-${start}-${end}`,
+      text: content.slice(start, end),
+      highlight: h,
+    });
     cursor = end;
   }
 
   if (cursor < content.length) {
-    parts.push({ text: content.slice(cursor), highlight: null });
+    parts.push({
+      key: `plain-${cursor}-${content.length}`,
+      text: content.slice(cursor),
+      highlight: null,
+    });
   }
 
   return (
     <>
-      {parts.map((p, i) =>
+      {parts.map((p) =>
         p.highlight ? (
-          <CommittedHighlightTooltip key={i} highlight={p.highlight}>
+          <CommittedHighlightTooltip key={p.key} highlight={p.highlight}>
             <span
               style={{
                 borderBottom:
@@ -280,7 +315,7 @@ function CommittedHighlightText({
             </span>
           </CommittedHighlightTooltip>
         ) : (
-          <span key={i}>{p.text}</span>
+          <span key={p.key}>{p.text}</span>
         )
       )}
     </>
@@ -300,27 +335,39 @@ function CoverageText({
 }) {
   if (uncoveredRanges.length === 0) return <>{text}</>;
 
-  const parts: Array<{ text: string; uncovered: boolean }> = [];
+  const parts: Array<{ key: string; text: string; uncovered: boolean }> = [];
   let cursor = 0;
   for (const r of uncoveredRanges) {
     const start = Math.max(0, r.start);
     const end = Math.min(text.length, r.end);
     if (cursor < start) {
-      parts.push({ text: text.slice(cursor, start), uncovered: false });
+      parts.push({
+        key: `covered-${cursor}-${start}`,
+        text: text.slice(cursor, start),
+        uncovered: false,
+      });
     }
-    parts.push({ text: text.slice(start, end), uncovered: true });
+    parts.push({
+      key: `uncovered-${start}-${end}`,
+      text: text.slice(start, end),
+      uncovered: true,
+    });
     cursor = end;
   }
   if (cursor < text.length) {
-    parts.push({ text: text.slice(cursor), uncovered: false });
+    parts.push({
+      key: `covered-${cursor}-${text.length}`,
+      text: text.slice(cursor),
+      uncovered: false,
+    });
   }
 
   return (
     <>
-      {parts.map((p, i) =>
+      {parts.map((p) =>
         p.uncovered ? (
           <span
-            key={i}
+            key={p.key}
             style={{
               background: 'color-mix(in srgb, var(--text-tertiary) 8%, transparent)',
               borderBottom: '1px dashed var(--text-tertiary)',
@@ -331,7 +378,7 @@ function CoverageText({
             {p.text}
           </span>
         ) : (
-          <span key={i}>{p.text}</span>
+          <span key={p.key}>{p.text}</span>
         )
       )}
     </>
@@ -414,17 +461,6 @@ export function ChatMessage({
   const hasCommittedHighlights = (committedHighlights?.length ?? 0) > 0;
   // Whole-message tint: when this is the source message for hovered YAML
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
-
-  // ── Chat → YAML: source map interaction handlers ──
-  const handleHoverSlot = useCallback((treePath: string, slotKey: string | null) => {
-    useWorkspaceStore
-      .getState()
-      .select('chat', { nodePath: treePath, slotKey: slotKey ?? undefined });
-  }, []);
-
-  const handleLeaveSlot = useCallback(() => {
-    useWorkspaceStore.getState().clearSelection();
-  }, []);
 
   const handleClickSlot = useCallback((treePath: string, slotKey: string | null) => {
     useWorkspaceStore
@@ -539,8 +575,6 @@ export function ChatMessage({
                         content={content}
                         mappings={sourceMap!}
                         hoveredNodeId={hoveredNodeId}
-                        onHoverSlot={handleHoverSlot}
-                        onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
                         isReviewPhase={isReviewPhase}
                         onDeleteSlot={deleteSlot}
@@ -581,8 +615,6 @@ export function ChatMessage({
                         content={content}
                         mappings={sourceMap!}
                         hoveredNodeId={hoveredNodeId}
-                        onHoverSlot={handleHoverSlot}
-                        onLeaveSlot={handleLeaveSlot}
                         onClickSlot={handleClickSlot}
                         isReviewPhase={isReviewPhase}
                         onDeleteSlot={deleteSlot}

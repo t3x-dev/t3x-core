@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useChatModelPreferencesStore } from '@/store/chatModelPreferencesStore';
-import {
-  resolveAvailableModelSelection,
-  useAvailableModels,
-} from './useAvailableModels';
+import { resolveAvailableModelSelection, useAvailableModels } from './useAvailableModels';
 
 interface UseChatModelSelectionParams {
   initialProvider?: string | null;
@@ -89,10 +86,7 @@ export function useChatModelSelection({
     selectedModel: resolvedSelection.model,
     handleModelChange,
     isSelectionReady: Boolean(
-      preferencesHydrated &&
-        !modelsLoading &&
-        resolvedSelection.provider &&
-        resolvedSelection.model
+      preferencesHydrated && !modelsLoading && resolvedSelection.provider && resolvedSelection.model
     ),
   };
 }

@@ -1,22 +1,12 @@
-import type { LLMProvider, LLMPrompt } from '../../llm/types';
+import type { LLMPrompt, LLMProvider } from '../../llm/types';
 import { serializeForPrompt } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
 import { compileExtractionDraft } from './compiler';
-import {
-  createExtractionFailure,
-  type ExtractionFailure,
-} from './failures';
+import { createExtractionFailure, type ExtractionFailure } from './failures';
 import { buildPromptTurnMap, normalizeExtractionText, type PromptTurnInput } from './normalization';
-import {
-  type CompiledMutationPlan,
-  type ExtractionDraft,
-  type ExtractionMode,
-} from './types';
-import {
-  liftProviderDraftToExtractionDraft,
-  ProviderExtractionDraftSchema,
-} from './providerDraft';
 import { mapProviderErrorToExtractionFailure } from './providerAdapters';
+import { liftProviderDraftToExtractionDraft, ProviderExtractionDraftSchema } from './providerDraft';
+import type { CompiledMutationPlan, ExtractionDraft, ExtractionMode } from './types';
 
 export interface ExtractionV2PipelineInput {
   turns: PromptTurnInput[];
@@ -118,27 +108,31 @@ function buildDraftPrompt(input: {
 }
 
 function buildDraftParseFailure(message: string, rawText?: string): ExtractionFailure {
-  return createExtractionFailure('draft_parse', message, rawText ? { details: { rawText } } : undefined);
+  return createExtractionFailure(
+    'draft_parse',
+    message,
+    rawText ? { details: { rawText } } : undefined
+  );
 }
 
-function buildDraftSchemaFailure(message: string, rawText?: string): ExtractionFailure {
-  return createExtractionFailure('draft_schema', message, rawText ? { details: { rawText } } : undefined);
+function _buildDraftSchemaFailure(message: string, rawText?: string): ExtractionFailure {
+  return createExtractionFailure(
+    'draft_schema',
+    message,
+    rawText ? { details: { rawText } } : undefined
+  );
 }
 
 function buildSchemaFailureFromIssues(
   issues: Array<{ message: string; path?: PropertyKey[] }>,
   rawText?: string
 ): ExtractionFailure {
-  return createExtractionFailure(
-    'draft_schema',
-    issues.map((issue) => issue.message).join('; '),
-    {
-      details: {
-        issues,
-        ...(rawText ? { rawText } : {}),
-      },
-    }
-  );
+  return createExtractionFailure('draft_schema', issues.map((issue) => issue.message).join('; '), {
+    details: {
+      issues,
+      ...(rawText ? { rawText } : {}),
+    },
+  });
 }
 
 function buildTargetedReaskPrompt(
@@ -146,7 +140,9 @@ function buildTargetedReaskPrompt(
   failure: ExtractionFailure,
   turnHashByTag: Record<string, string>
 ): LLMPrompt {
-  const lines: string[] = ['Your previous ProviderExtractionDraft failed validation. Fix only these issues and return a full corrected draft.'];
+  const lines: string[] = [
+    'Your previous ProviderExtractionDraft failed validation. Fix only these issues and return a full corrected draft.',
+  ];
 
   if (failure.code === 'draft_schema' && Array.isArray(failure.details?.issues)) {
     const issues = failure.details.issues as Array<{ message?: string; path?: PropertyKey[] }>;
@@ -169,7 +165,9 @@ function buildTargetedReaskPrompt(
   } else if (failure.code === 'compile' && failure.details?.reaskable === true) {
     const intent = typeof failure.details?.intent === 'string' ? failure.details.intent : 'update';
     const path = typeof failure.details?.path === 'string' ? failure.details.path : 'target path';
-    lines.push(`- For ${intent} on ${path}, include either candidate.values_json as a JSON object string, or candidate.slot with candidate.value_json.`);
+    lines.push(
+      `- For ${intent} on ${path}, include either candidate.values_json as a JSON object string, or candidate.slot with candidate.value_json.`
+    );
     lines.push('- Do not leave both candidate.values_json and candidate.slot/value_json empty.');
   } else {
     lines.push(`- ${failure.message}`);
@@ -190,17 +188,18 @@ function buildTargetedReaskPrompt(
 async function generateDraft(
   input: ExtractionV2PipelineInput,
   prompt: LLMPrompt
-): Promise<
-  | { ok: true; draft: ExtractionDraft }
-  | { ok: false; failure: ExtractionFailure }
-> {
+): Promise<{ ok: true; draft: ExtractionDraft } | { ok: false; failure: ExtractionFailure }> {
   try {
     if (typeof input.provider.generateStructured === 'function') {
-      const result = await input.provider.generateStructured(prompt, ProviderExtractionDraftSchema, {
-        model: input.model,
-        temperature: 0.1,
-        maxTokens: 4096,
-      });
+      const result = await input.provider.generateStructured(
+        prompt,
+        ProviderExtractionDraftSchema,
+        {
+          model: input.model,
+          temperature: 0.1,
+          maxTokens: 4096,
+        }
+      );
 
       const validated = ProviderExtractionDraftSchema.safeParse(result.data);
       if (!validated.success) {
@@ -334,7 +333,10 @@ export async function runExtractionV2Pipeline(
 
   return {
     ok: false,
-    failure: createExtractionFailure('draft_schema', 'Extraction failed after targeted reask attempts'),
+    failure: createExtractionFailure(
+      'draft_schema',
+      'Extraction failed after targeted reask attempts'
+    ),
     turnHashByTag,
   };
 }
