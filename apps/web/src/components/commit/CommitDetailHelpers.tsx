@@ -101,7 +101,7 @@ export function DotIndicator({ status }: { status: string }) {
 // ConfidenceBadge
 // ============================================================================
 
-export function ConfidenceBadge({ value, pulse = false }: { value: number; pulse?: boolean }) {
+export function ConfidenceBadge({ value }: { value: number; pulse?: boolean }) {
   const pct = Math.round(value * 100);
   const color =
     pct >= 90

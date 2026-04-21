@@ -1,6 +1,6 @@
 import type { SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { YOpsReplayError } from '@/commands/yops/errors';
+import { YOpsReplayError } from '@/domain/replay';
 import * as loader from '@/infrastructure/conversationLoader';
 import { fetchConversationSnapshot, replayAppended } from '../loadConversation';
 

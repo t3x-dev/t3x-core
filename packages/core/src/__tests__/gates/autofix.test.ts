@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: gate tests intentionally use loose fixtures to verify autofix normalization */
+
 import { describe, expect, it } from 'vitest';
 import { autoFixPaths, autoFixYOp } from '../../ops/gates/autofix';
 import type { TreeNode } from '../../semantic/types';

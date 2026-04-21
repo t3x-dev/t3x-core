@@ -10,7 +10,6 @@
  */
 
 import type { Relation, SemanticContent, SlotValue } from '@t3x-dev/core';
-import { flattenTrees } from '@t3x-dev/core';
 
 /**
  * Internal extension of TreeNode used by tree-state persistence.

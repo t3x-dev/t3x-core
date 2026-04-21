@@ -1,6 +1,6 @@
 'use client';
 
-import type { SlotValue, TreeNode } from '@t3x-dev/core';
+import type { SlotValue } from '@t3x-dev/core';
 import type { ReactNode } from 'react';
 import type { CompatNode } from '@/domain/tree/treeCompat';
 
@@ -340,7 +340,8 @@ export function YAMLRenderer({
         overflow: 'auto',
       }}
     >
-      {yamlLines.map((line, i) => {
+      {yamlLines.map((line) => {
+        const lineKey = `${line.treeId}-${line.slotKey ?? 'node'}-${line.indent}-${line.text}-${line.isEmpty ? 'empty' : 'line'}`;
         // Blank separator
         if (line.isEmpty) {
           // After blank, render tree actions for this tree (once)
@@ -351,7 +352,7 @@ export function YAMLRenderer({
             const actions = node ? renderNodeActions(node.id, node.type) : null;
             if (actions) {
               return (
-                <div key={i}>
+                <div key={`${lineKey}-actions`}>
                   <div data-tree-actions={line.treeId} style={{ padding: '2px 8px 4px 8px' }}>
                     {actions}
                   </div>
@@ -360,7 +361,7 @@ export function YAMLRenderer({
               );
             }
           }
-          return <div key={i} style={{ height: 4 }} />;
+          return <div key={`${lineKey}-blank`} style={{ height: 4 }} />;
         }
 
         const meta = getTreeMeta?.(line.treeId);
@@ -376,7 +377,7 @@ export function YAMLRenderer({
 
         return (
           <div
-            key={i}
+            key={lineKey}
             data-tree-id={line.isNodeHeader ? line.treeId : undefined}
             onMouseEnter={() => onHoverNode?.(line.treeId)}
             onMouseLeave={() => onHoverNode?.(null)}

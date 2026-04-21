@@ -94,9 +94,9 @@ export function MergePanel() {
           </div>
           <p className="text-xs text-muted-foreground ml-6">{preparePhases[prepareStep].detail}</p>
           <div className="flex gap-1.5 mt-3 ml-6">
-            {preparePhases.map((_, i) => (
+            {preparePhases.map((phase, i) => (
               <div
-                key={`phase-${i}`}
+                key={phase.label}
                 className={`h-1.5 flex-1 rounded-full transition-colors duration-[var(--duration-slow)] ${
                   i <= prepareStep ? 'bg-primary' : 'bg-muted'
                 }`}

@@ -2,8 +2,8 @@
  * API client core infrastructure - shared utilities
  */
 
-import type { ApiCommitAnchors, ApiResponse } from './types';
 import { API_BASE as RESOLVED_API_BASE } from '@/utils/apiBase';
+import type { ApiCommitAnchors, ApiResponse } from './types';
 
 // Use standalone API if configured, otherwise fall back to embedded routes
 export const API_BASE = RESOLVED_API_BASE;

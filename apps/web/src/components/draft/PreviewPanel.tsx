@@ -46,7 +46,7 @@ function PreviewContent({ output, nodeIds }: { output: string; nodeIds: string[]
     <div className="space-y-2">
       {paragraphs.map((para, i) => (
         <p
-          key={i}
+          key={nodeIds[i] ?? para}
           data-node-id={nodeIds[i] ?? undefined}
           className="text-sm text-foreground whitespace-pre-wrap leading-relaxed"
         >

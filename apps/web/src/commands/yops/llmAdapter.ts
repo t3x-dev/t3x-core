@@ -7,8 +7,8 @@
 
 import {
   createExtractionFailure,
-  type ExtractionFailureCode,
   EXTRACTION_FAILURE_CODES,
+  type ExtractionFailureCode,
   type SourcedYOp,
   type ValidationTurn,
 } from '@t3x-dev/core';
@@ -34,7 +34,9 @@ interface ExtractYopsErrorBody {
 }
 
 function isExtractionFailureCode(value: unknown): value is ExtractionFailureCode {
-  return typeof value === 'string' && (EXTRACTION_FAILURE_CODES as readonly string[]).includes(value);
+  return (
+    typeof value === 'string' && (EXTRACTION_FAILURE_CODES as readonly string[]).includes(value)
+  );
 }
 
 function buildRequestError(
@@ -83,16 +85,16 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
 
   if (!res.ok) {
     const text =
-      parsedBody && typeof parsedBody === 'object' ? JSON.stringify(parsedBody) : await res.text().catch(() => '');
+      parsedBody && typeof parsedBody === 'object'
+        ? JSON.stringify(parsedBody)
+        : await res.text().catch(() => '');
     throw buildRequestError(
       res.status,
       parsedBody && typeof parsedBody === 'object' ? (parsedBody as ExtractYopsErrorBody) : null,
       `extract-yops HTTP ${res.status}: ${text}`
     );
   }
-  const body = parsedBody as
-    | { success: true; data: { ops: SourcedYOp[] } }
-    | ExtractYopsErrorBody;
+  const body = parsedBody as { success: true; data: { ops: SourcedYOp[] } } | ExtractYopsErrorBody;
   if (!body.success) {
     throw buildRequestError(
       res.status,

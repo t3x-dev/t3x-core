@@ -27,7 +27,6 @@ import { useCommitDraft } from '@/hooks/commits/useCommitDraft';
 import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
 import { useUpdateDraft } from '@/hooks/drafts/useUpdateDraft';
 import { useTerminology } from '@/hooks/shared/useTerminology';
-import { useCanvasStore } from '@/store/canvasStore';
 import type { DraftNode, WorkbenchDraft } from '@/types/api';
 
 interface DraftQuickSheetProps {

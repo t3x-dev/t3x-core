@@ -5,7 +5,6 @@
  * applies fixes, re-validates, and documents exactly what each layer caught.
  */
 
-import type { YValue } from '@t3x-dev/yops';
 import { applyYOps } from '@t3x-dev/yops';
 import type { Schema } from '@t3x-dev/yschema';
 import { parseSchemaObject } from '@t3x-dev/yschema';
@@ -227,7 +226,7 @@ describe('E2E 1: Catastrophic — everything wrong', () => {
 
   it('auto-fix resolves what it can, leaves rest for human', () => {
     const content = sc(trees);
-    const r1 = validateTree(content, { schema });
+    const _r1 = validateTree(content, { schema });
 
     // Apply fixes
     const fixed = iterativeFix(content, schema).content;
@@ -431,7 +430,7 @@ describe('E2E 3: Schema violations — right shape, wrong values', () => {
 
   it('auto-fix resolves enums, leaves missing slots for human', () => {
     const content = sc(trees);
-    const r1 = validateTree(content, { schema });
+    const _r1 = validateTree(content, { schema });
 
     const fixed = iterativeFix(content, schema).content;
     const r2 = validateTree(fixed, { schema });
@@ -514,7 +513,7 @@ describe('E2E 4: Almost correct — minor issues', () => {
 
   it('single fix resolves everything', () => {
     const content = sc(trees);
-    const r1 = validateTree(content, { schema });
+    const _r1 = validateTree(content, { schema });
 
     const fixed = iterativeFix(content, schema).content;
     const r2 = validateTree(fixed, { schema });

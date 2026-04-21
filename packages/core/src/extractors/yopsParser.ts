@@ -234,7 +234,9 @@ function parseYopsList(cleaned: string, options?: ParseYOpsOptions): YOpsParseRe
 
     // Autofix didn't help — skip this op (don't fail the entire parse)
     // Legacy callers may still tolerate partial parses.
-    console.warn(`[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`);
+    console.warn(
+      `[yopsParser] Skipping invalid yop at index ${i}: ${result.error.message.slice(0, 200)}`
+    );
   }
 
   return { ok: true, format: 'yops', yops: validated };

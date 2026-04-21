@@ -180,14 +180,19 @@ function SlotValueDisplay({ value }: { value: unknown }) {
   }
 
   if (Array.isArray(value)) {
+    let itemOffset = 0;
     return (
       <span className="flex flex-col gap-0.5">
-        {value.map((item, i) => (
-          <span key={`item-${i}`} className="flex items-start gap-1">
-            <span className="text-muted-foreground">•</span>
-            <SlotValueDisplay value={item} />
-          </span>
-        ))}
+        {value.map((item) => {
+          const itemKey = `item-${itemOffset}-${JSON.stringify(item)}`;
+          itemOffset += 1;
+          return (
+            <span key={itemKey} className="flex items-start gap-1">
+              <span className="text-muted-foreground">•</span>
+              <SlotValueDisplay value={item} />
+            </span>
+          );
+        })}
       </span>
     );
   }

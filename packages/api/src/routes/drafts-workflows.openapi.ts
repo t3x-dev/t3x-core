@@ -9,6 +9,8 @@
  * - POST /v1/drafts/:id/suggest  - Get node suggestions
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: workflow routes adapt heterogeneous draft and commit node payloads pending shared API types */
+
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { generateLeafOutput, generateNodeId, isGenerationConfigured } from '@t3x-dev/core';
@@ -216,7 +218,6 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
     const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
     if (includedNodes.length === 0) {
       return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
@@ -434,7 +435,6 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       });
     } else {
       // Deterministic mode: existing DraftNode flow
-      // biome-ignore lint/suspicious/noExplicitAny: draft.nodes is loosely typed from storage
       const includedNodes = (draft.nodes as any[]).filter((s: any) => s.included);
       if (includedNodes.length === 0) {
         return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');

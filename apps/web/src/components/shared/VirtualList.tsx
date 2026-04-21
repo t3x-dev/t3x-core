@@ -269,8 +269,7 @@ export function VirtualList<T>({
                     observedElementsRef.current.add(el);
                   }
                 }}
-                role={enableKeyboard ? 'option' : undefined}
-                aria-selected={isActive || undefined}
+                {...(enableKeyboard ? { role: 'option' as const, 'aria-selected': isActive } : {})}
                 className={
                   isActive ? 'ring-2 ring-[var(--accent-commit)] ring-inset rounded' : undefined
                 }

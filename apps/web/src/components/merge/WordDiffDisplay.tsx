@@ -21,16 +21,19 @@ interface WordDiffDisplayProps {
  * Renders: "Budget is [-$3000-] [+$3500+]"
  */
 export function WordDiffDisplay({ segments }: WordDiffDisplayProps) {
+  let segmentOffset = 0;
   return (
     <span className="font-mono text-sm">
-      {segments.map((segment, i) => {
+      {segments.map((segment) => {
+        const segmentKey = `segment-${segmentOffset}-${segment.type}`;
+        segmentOffset += segment.text.length;
         switch (segment.type) {
           case 'unchanged':
-            return <span key={i}>{segment.text}</span>;
+            return <span key={segmentKey}>{segment.text}</span>;
           case 'removed':
             return (
               <span
-                key={i}
+                key={segmentKey}
                 className="bg-[var(--diff-removed-word-bg)] text-[var(--diff-removed-text)] line-through px-0.5 rounded-sm"
               >
                 {segment.text}
@@ -39,7 +42,7 @@ export function WordDiffDisplay({ segments }: WordDiffDisplayProps) {
           case 'added':
             return (
               <span
-                key={i}
+                key={segmentKey}
                 className="bg-[var(--diff-added-word-bg)] text-[var(--diff-added-text)] px-0.5 rounded-sm"
               >
                 {segment.text}

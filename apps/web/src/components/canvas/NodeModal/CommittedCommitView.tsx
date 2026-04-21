@@ -438,9 +438,9 @@ export function CommittedCommitView({
                         <div className="p-3 bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-md min-h-[80px]">
                           {commitSourceExcerpt.length > 0 ? (
                             <div className="flex flex-col gap-2">
-                              {commitSourceExcerpt.map((excerpt, idx) => (
+                              {commitSourceExcerpt.map((excerpt) => (
                                 <div
-                                  key={idx}
+                                  key={`${data.commitHash ?? data.entryId ?? node.id}-excerpt-${excerpt}`}
                                   className="flex items-start gap-2 p-2 bg-[var(--surface-app)] rounded border border-[var(--stroke-divider)]"
                                 >
                                   <span className="text-[var(--text-tertiary)] font-bold shrink-0">
@@ -568,7 +568,7 @@ export function CommittedCommitView({
                             </span>
                           </h5>
                           <div className="p-2 flex flex-wrap gap-2">
-                            {facets.map((facet, idx) => {
+                            {facets.map((facet) => {
                               // Determine background color based on polarity
                               const polarityClass =
                                 facet.polarity === 1
@@ -595,7 +595,13 @@ export function CommittedCommitView({
 
                               return (
                                 <div
-                                  key={idx}
+                                  key={[
+                                    type,
+                                    facet.text ?? '',
+                                    facet.key ?? '',
+                                    facet.entity_type ?? '',
+                                    facet.turn_hash ?? '',
+                                  ].join(':')}
                                   className={cn(
                                     'inline-flex items-center gap-1.5 px-2 py-1 rounded text-sm',
                                     polarityClass

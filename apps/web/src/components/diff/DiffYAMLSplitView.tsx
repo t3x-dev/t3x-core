@@ -30,8 +30,8 @@ interface DiffYAMLSplitViewProps {
 function EmptyPlaceholderLines({ count }: { count: number }) {
   return (
     <>
-      {Array.from({ length: count }, (_, i) => (
-        <YAMLLine key={`empty-${i}`} status="empty">
+      {Array.from({ length: count }, (_, lineNumber) => lineNumber + 1).map((lineNumber) => (
+        <YAMLLine key={`empty-${lineNumber}`} status="empty">
           {null}
         </YAMLLine>
       ))}
@@ -42,7 +42,7 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
 // ── Pane content renderer ──
 
 /** Compute how many content lines a tree node takes on a given side */
-function computeNodeHeight(af: AlignedNode, side: 'left' | 'right', diff: TreeDiff): number {
+function computeNodeHeight(af: AlignedNode, side: 'left' | 'right', _diff: TreeDiff): number {
   const node = side === 'left' ? af.leftNode : af.rightNode;
   if (!node) {
     // Placeholder side: count from the other side
@@ -205,7 +205,7 @@ function PaneContent({
         );
       }
 
-      content = <>{lines}</>;
+      content = lines;
     } else if (hasNode) {
       content = (
         <YAMLNodeRenderer

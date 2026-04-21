@@ -25,7 +25,11 @@ interface ChatHeaderProps {
   onModelChange?: (provider: string, model: string) => void;
 }
 
-export function ChatHeader({ conversationTitle, projectName, conversationId }: ChatHeaderProps) {
+export function ChatHeader({
+  conversationTitle,
+  projectName: _projectName,
+  conversationId: _conversationId,
+}: ChatHeaderProps) {
   const {
     activeProjectId,
     activeBranch,
@@ -62,7 +66,8 @@ export function ChatHeader({ conversationTitle, projectName, conversationId }: C
     if (!dropdownOpen) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (dropdownRef.current?.contains(target) || dropdownMenuRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target) || dropdownMenuRef.current?.contains(target))
+        return;
       setDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);

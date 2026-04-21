@@ -1,7 +1,6 @@
 // apps/web/src/store/commitDetailStore.ts
 
 import type { TreeNode } from '@t3x-dev/core';
-import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { ApiCommit } from '@/types/api';
 

@@ -2,10 +2,7 @@
 
 import { createExtractionFailure } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ExtractionFailedError,
-  ExtractionRequestError,
-} from '@/commands/yops/errors';
+import { type ExtractionFailedError, ExtractionRequestError } from '@/commands/yops/errors';
 
 const commitOpsMock = vi.fn();
 const validateExecutableStructureMock = vi.fn();
@@ -29,10 +26,18 @@ describe('runExtraction', () => {
     const llm = vi
       .fn()
       .mockRejectedValueOnce(
-        new ExtractionRequestError(createExtractionFailure('transport', 'Rate limited'), 429, 'RATE_LIMITED')
+        new ExtractionRequestError(
+          createExtractionFailure('transport', 'Rate limited'),
+          429,
+          'RATE_LIMITED'
+        )
       )
       .mockRejectedValueOnce(
-        new ExtractionRequestError(createExtractionFailure('transport', 'Rate limited'), 429, 'RATE_LIMITED')
+        new ExtractionRequestError(
+          createExtractionFailure('transport', 'Rate limited'),
+          429,
+          'RATE_LIMITED'
+        )
       )
       .mockResolvedValueOnce([]);
 
@@ -51,9 +56,15 @@ describe('runExtraction', () => {
   });
 
   it('fails fast on non-retryable request failures', async () => {
-    const llm = vi.fn().mockRejectedValueOnce(
-      new ExtractionRequestError(createExtractionFailure('compile', 'Compiler rejected the draft'), 400, 'EXTRACTION_FAILED')
-    );
+    const llm = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ExtractionRequestError(
+          createExtractionFailure('compile', 'Compiler rejected the draft'),
+          400,
+          'EXTRACTION_FAILED'
+        )
+      );
 
     await expect(
       runExtraction({

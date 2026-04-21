@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
-import { ExtractionDraftSchema, ExtractionModeSchema, type ExtractionDraft } from './types';
+import { type ExtractionDraft, ExtractionDraftSchema, ExtractionModeSchema } from './types';
 
 export const PROVIDER_EXTRACTION_DRAFT_SCHEMA = 't3x/provider-extraction-draft' as const;
 
@@ -61,7 +61,10 @@ export type LiftProviderDraftResult =
   | { ok: true; draft: ExtractionDraft }
   | { ok: false; failure: ExtractionFailure };
 
-function parseJsonField(fieldName: string, raw: string | null): { ok: true; value: unknown } | { ok: false; failure: ExtractionFailure } {
+function parseJsonField(
+  fieldName: string,
+  raw: string | null
+): { ok: true; value: unknown } | { ok: false; failure: ExtractionFailure } {
   if (raw === null) {
     return { ok: true, value: undefined };
   }
@@ -71,9 +74,13 @@ function parseJsonField(fieldName: string, raw: string | null): { ok: true; valu
   } catch {
     return {
       ok: false,
-      failure: createExtractionFailure('draft_parse', `Provider field ${fieldName} is not valid JSON`, {
-        details: { field: fieldName, raw },
-      }),
+      failure: createExtractionFailure(
+        'draft_parse',
+        `Provider field ${fieldName} is not valid JSON`,
+        {
+          details: { field: fieldName, raw },
+        }
+      ),
     };
   }
 }
@@ -97,7 +104,9 @@ function omitNullish<T extends Record<string, unknown>>(input: T): Partial<T> {
   ) as Partial<T>;
 }
 
-export function liftProviderDraftToExtractionDraft(input: ProviderExtractionDraft): LiftProviderDraftResult {
+export function liftProviderDraftToExtractionDraft(
+  input: ProviderExtractionDraft
+): LiftProviderDraftResult {
   const items: unknown[] = [];
 
   for (const item of input.items) {

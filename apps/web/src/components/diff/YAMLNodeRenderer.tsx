@@ -1,7 +1,6 @@
 'use client';
 
 import type { SlotDiff, SlotValue, TreeNode } from '@t3x-dev/core';
-import type { CompatNode } from '@/domain/tree/treeCompat';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import { YAMLLine, type YAMLLineStatus } from './YAMLLine';
 
@@ -29,15 +28,20 @@ export function SlotValueSpan({ value }: { value: SlotValue }) {
     return <span style={{ color: YAML_COLORS.ref }}>*{(value as { ref: string }).ref}</span>;
   }
   if (Array.isArray(value)) {
+    let itemOffset = 0;
     return (
       <span>
         <span style={{ color: YAML_COLORS.bracket }}>[</span>
-        {(value as SlotValue[]).map((item, i) => (
-          <span key={i}>
-            {i > 0 && <span style={{ color: YAML_COLORS.bracket }}>, </span>}
-            <SlotValueSpan value={item} />
-          </span>
-        ))}
+        {(value as SlotValue[]).map((item) => {
+          const itemKey = `item-${itemOffset}-${JSON.stringify(item)}`;
+          itemOffset += 1;
+          return (
+            <span key={itemKey}>
+              {itemOffset > 1 && <span style={{ color: YAML_COLORS.bracket }}>, </span>}
+              <SlotValueSpan value={item} />
+            </span>
+          );
+        })}
         <span style={{ color: YAML_COLORS.bracket }}>]</span>
       </span>
     );
@@ -50,13 +54,16 @@ export function WordDiffSpan({
 }: {
   wordDiff: Array<{ type: 'unchanged' | 'added' | 'removed'; text: string }>;
 }) {
+  let segmentOffset = 0;
   return (
     <>
-      {wordDiff.map((seg, i) => {
+      {wordDiff.map((seg) => {
+        const segmentKey = `word-${segmentOffset}-${seg.type}`;
+        segmentOffset += seg.text.length;
         if (seg.type === 'added') {
           return (
             <span
-              key={i}
+              key={segmentKey}
               className="bg-[var(--dy-added-word)] text-white rounded-sm px-[2px] font-medium"
             >
               {seg.text}
@@ -66,7 +73,7 @@ export function WordDiffSpan({
         if (seg.type === 'removed') {
           return (
             <span
-              key={i}
+              key={segmentKey}
               className="bg-[var(--dy-removed-word)] text-white rounded-sm px-[2px] line-through"
               style={{ textDecorationColor: 'var(--text-tertiary)' }}
             >
@@ -75,7 +82,7 @@ export function WordDiffSpan({
           );
         }
         return (
-          <span key={i} style={{ color: YAML_COLORS.string }}>
+          <span key={segmentKey} style={{ color: YAML_COLORS.string }}>
             {seg.text}
           </span>
         );

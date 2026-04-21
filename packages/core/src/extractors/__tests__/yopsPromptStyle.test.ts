@@ -102,7 +102,11 @@ describe('buildYOpsPrompt — style integration', () => {
     };
 
     it('documents real op signatures for advanced ops', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+      const { systemPrompt } = buildYOpsPrompt({
+        turns: baseTurns,
+        snapshot,
+        processedTurnCount: 0,
+      });
 
       expect(systemPrompt).toContain('`nest: { path, keys, under }`');
       expect(systemPrompt).toContain('`fold: { path }`');
@@ -111,7 +115,11 @@ describe('buildYOpsPrompt — style integration', () => {
     });
 
     it('does not describe drifted signatures for advanced ops', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+      const { systemPrompt } = buildYOpsPrompt({
+        turns: baseTurns,
+        snapshot,
+        processedTurnCount: 0,
+      });
 
       expect(systemPrompt).not.toContain('`nest: { path, under }`');
       expect(systemPrompt).not.toContain('`fold: { paths, into }`');
@@ -120,7 +128,11 @@ describe('buildYOpsPrompt — style integration', () => {
     });
 
     it('presents core mutation ops as the default extraction subset', () => {
-      const { systemPrompt } = buildYOpsPrompt({ turns: baseTurns, snapshot, processedTurnCount: 0 });
+      const { systemPrompt } = buildYOpsPrompt({
+        turns: baseTurns,
+        snapshot,
+        processedTurnCount: 0,
+      });
 
       expect(systemPrompt).toContain('Most common (use first)');
       expect(systemPrompt).toContain('`define: { path }`');
@@ -129,7 +141,9 @@ describe('buildYOpsPrompt — style integration', () => {
       expect(systemPrompt).toContain('`unset: { path }`');
       expect(systemPrompt).toContain('`drop: { path }`');
       expect(systemPrompt).toContain('`append: { path, value }`');
-      expect(systemPrompt).toContain('**IMPORTANT: Prefer updating existing structure over adding new nodes.**');
+      expect(systemPrompt).toContain(
+        '**IMPORTANT: Prefer updating existing structure over adding new nodes.**'
+      );
     });
   });
 });

@@ -11,7 +11,7 @@
  *  - passive setters the hook calls after each I/O resolves
  */
 
-import type { MergeResult, TreeNode } from '@t3x-dev/core';
+import type { MergeResult } from '@t3x-dev/core';
 import { create } from 'zustand';
 import type { TreeResolution } from '@/components/merge/ConflictCard';
 import { getTerminology, type TermKey } from '@/hooks/shared/useTerminology';

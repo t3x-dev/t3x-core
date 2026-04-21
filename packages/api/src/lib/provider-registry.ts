@@ -150,11 +150,7 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     role: 'generation',
     requiredEnvKeys: ['ANTHROPIC_API_KEY'],
     defaultModel: 'claude-sonnet-4-6',
-    availableModels: [
-      'claude-sonnet-4-6',
-      'claude-opus-4-6',
-      'claude-haiku-4-5-20251001',
-    ],
+    availableModels: ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'],
     factory: (config) =>
       createClaudeProvider({
         apiKey: config.ANTHROPIC_API_KEY!,
@@ -196,11 +192,7 @@ function registerBuiltinProviders(reg: ProviderRegistry): void {
     role: 'generation',
     requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
     defaultModel: 'gemini-2.5-pro',
-    availableModels: [
-      'gemini-2.5-pro',
-      'gemini-3-flash-preview',
-      'gemini-3.1-flash-lite-preview',
-    ],
+    availableModels: ['gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview'],
     factory: (config) =>
       createGeminiProvider({
         apiKey: config.GOOGLE_AI_STUDIO_KEY!,

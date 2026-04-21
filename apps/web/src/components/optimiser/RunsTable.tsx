@@ -158,7 +158,7 @@ export function RunsTable({
   agents,
   maxRows = 15,
   compareModeEnabled = false,
-  projectId,
+  projectId: _projectId,
   activeRunId,
 }: RunsTableProps) {
   const router = useRouter();

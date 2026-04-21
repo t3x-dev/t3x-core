@@ -105,13 +105,7 @@ const extractTreesRoute = createRoute({
 // ============================================================
 
 treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
-  const {
-    conversation_id,
-    project_id,
-    turn_hashes,
-    topic_id,
-    force_extract,
-  } = c.req.valid('json');
+  const { conversation_id, project_id, turn_hashes, topic_id, force_extract } = c.req.valid('json');
 
   const db = await getDB();
 
@@ -240,16 +234,14 @@ treeExtractRoutes.post('/v1/extract/trees/stream', async (c) => {
   const rawBody = await c.req.json();
   const parsed = TreeExtractRequest.safeParse(rawBody);
   if (!parsed.success) {
-    return errorResponse(c, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid request');
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      parsed.error.issues[0]?.message ?? 'Invalid request'
+    );
   }
 
-  const {
-    conversation_id,
-    project_id,
-    turn_hashes,
-    topic_id,
-    force_extract,
-  } = parsed.data;
+  const { conversation_id, project_id, turn_hashes, topic_id, force_extract } = parsed.data;
 
   // Validate conversation + project access
   const db = await getDB();

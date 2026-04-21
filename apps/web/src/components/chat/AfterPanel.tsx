@@ -2,7 +2,7 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { AlertCircle, Play, Plus, X } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   TREE_BASE_PADDING,
@@ -13,8 +13,8 @@ import {
 } from '@/components/chat/treeRowMetrics';
 import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
-import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
+import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useCommitStore } from '@/store/commitStore';
@@ -46,20 +46,6 @@ function formatSlotValue(val: unknown): string {
       .join(', ');
   }
   return String(val);
-}
-
-function flattenNodes(trees: TreeNode[], prefix = ''): Map<string, TreeNode> {
-  const map = new Map<string, TreeNode>();
-  for (const node of trees) {
-    const path = prefix ? `${prefix}/${node.key}` : node.key;
-    map.set(path, node);
-    if (node.children?.length) {
-      for (const [childPath, childNode] of flattenNodes(node.children, path)) {
-        map.set(childPath, childNode);
-      }
-    }
-  }
-  return map;
 }
 
 function summarizeVisibleDiff(diff: TreeDiffResult | null): {
@@ -138,7 +124,9 @@ function buildRenderRows(
   );
   const orderedSlotKeys = [...resultSlotKeys, ...baseOnlySlotKeys];
 
-  const modifiedByKey = new Map((diff?.modifiedSlots[path] ?? []).map((entry) => [entry.key, entry]));
+  const modifiedByKey = new Map(
+    (diff?.modifiedSlots[path] ?? []).map((entry) => [entry.key, entry])
+  );
   const addedSlotSet = new Set(diff?.addedSlots[path] ?? []);
   const removedSlotSet = new Set(diff?.removedSlots[path] ?? []);
 
@@ -285,7 +273,9 @@ function SlotCell({
           onClick={() => (selected ? onClear() : onSelect())}
           onDoubleClick={handleStartEdit}
         >
-          <span className={cn('shrink-0 text-[var(--text-secondary)]', isRemoved && 'line-through')}>
+          <span
+            className={cn('shrink-0 text-[var(--text-secondary)]', isRemoved && 'line-through')}
+          >
             {row.slotKey}
           </span>
           <span className="shrink-0 text-[var(--text-tertiary)]">:</span>
@@ -305,7 +295,9 @@ function SlotCell({
                   {row.oldValue}
                 </span>
               )}
-              <span className={cn('truncate text-[var(--text-primary)]', isRemoved && 'line-through')}>
+              <span
+                className={cn('truncate text-[var(--text-primary)]', isRemoved && 'line-through')}
+              >
                 {displayValue ?? ''}
               </span>
             </>
@@ -316,7 +308,8 @@ function SlotCell({
                 className={cn(
                   'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[7px] font-semibold',
                   tag.kind === 'inherited' && 'text-[var(--text-tertiary)] bg-black/[0.03]',
-                  tag.kind === 'new' && 'text-[var(--status-success)] bg-[var(--status-success)]/10',
+                  tag.kind === 'new' &&
+                    'text-[var(--status-success)] bg-[var(--status-success)]/10',
                   tag.kind === 'modified' &&
                     'text-[var(--status-warning)] bg-[var(--status-warning)]/10',
                   tag.kind === 'removed' && 'text-[var(--status-error)] bg-[var(--status-error)]/10'
@@ -402,7 +395,12 @@ function NodeCell({
           onClick={() => (hasNode ? (selected ? onClear() : onSelect()) : undefined)}
         >
           {hasNode && <span className="text-[8px] text-[var(--text-tertiary)] mr-1">◆</span>}
-          <span className={cn('text-[var(--text-secondary)] font-semibold', isRemoved && 'line-through')}>
+          <span
+            className={cn(
+              'text-[var(--text-secondary)] font-semibold',
+              isRemoved && 'line-through'
+            )}
+          >
             {row.nodeKey}
           </span>
           <span className="text-[var(--text-tertiary)]">:</span>
@@ -478,6 +476,7 @@ export function AfterPanel({
   const isCommitting = useCommitStore((s) => s.isCommitting);
   const projectId = useCommitStore((s) => s.projectId);
   const { commit: commitTrees } = useCommitActions();
+  const commitInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -496,8 +495,11 @@ export function AfterPanel({
   const summary = useMemo(() => summarizeVisibleDiff(diff), [diff]);
   const parentMessage = parent?.message ?? null;
 
-  const baseMap = useMemo(() => flattenNodes(parentTrees), [parentTrees]);
-  const resultMap = useMemo(() => flattenNodes(trees), [trees]);
+  useEffect(() => {
+    if (!showCommitDialog) return;
+    commitInputRef.current?.focus();
+    commitInputRef.current?.select();
+  }, [showCommitDialog]);
 
   const rows = useMemo<RenderRow[]>(() => {
     const baseRoots = new Map(parentTrees.map((node) => [node.key, node]));
@@ -583,10 +585,7 @@ export function AfterPanel({
   }, [isCommitting, projectId]);
 
   return (
-    <div
-      data-testid="after-panel"
-      className="relative flex h-full min-h-0 w-full flex-1 flex-col"
-    >
+    <div data-testid="after-panel" className="relative flex h-full min-h-0 w-full flex-1 flex-col">
       <div
         className={cn(
           'grid shrink-0 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]',
@@ -599,7 +598,8 @@ export function AfterPanel({
               Before <span className="opacity-80">🔒</span>
             </span>
             <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60 truncate max-w-[150px]">
-              {parentMessage ?? (parent ? parent.hash.replace(/^sha256:/, '').slice(0, 6) : 'empty')}
+              {parentMessage ??
+                (parent ? parent.hash.replace(/^sha256:/, '').slice(0, 6) : 'empty')}
             </span>
           </div>
         )}
@@ -650,6 +650,7 @@ export function AfterPanel({
               const beforeCell =
                 row.kind === 'node' ? (
                   <NodeCell
+                    key={`${row.key}:before-node`}
                     side="before"
                     row={row}
                     selected={rowSelected}
@@ -658,6 +659,7 @@ export function AfterPanel({
                   />
                 ) : (
                   <SlotCell
+                    key={`${row.key}:before-slot`}
                     side="before"
                     row={row}
                     parentMessage={parentMessage}
@@ -670,6 +672,7 @@ export function AfterPanel({
               const afterCell =
                 row.kind === 'node' ? (
                   <NodeCell
+                    key={`${row.key}:after-node`}
                     side="after"
                     row={row}
                     selected={rowSelected}
@@ -682,43 +685,53 @@ export function AfterPanel({
                   />
                 ) : (
                   <SlotCell
+                    key={`${row.key}:after-slot`}
                     side="after"
                     row={row}
                     parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path, slotKey: row.slotKey })}
                     onClear={clearSelection}
-                    onDelete={row.afterValue !== null ? () => handleDeleteSlot(row.path, row.slotKey) : undefined}
-                    onEdit={row.afterValue !== null ? (newValue) => handleEditSlot(row.path, row.slotKey, newValue) : undefined}
+                    onDelete={
+                      row.afterValue !== null
+                        ? () => handleDeleteSlot(row.path, row.slotKey)
+                        : undefined
+                    }
+                    onEdit={
+                      row.afterValue !== null
+                        ? (newValue) => handleEditSlot(row.path, row.slotKey, newValue)
+                        : undefined
+                    }
                   />
                 );
 
-              return (
-                showBefore ? (
+              return showBefore ? (
+                <div
+                  key={row.key}
+                  className="grid w-full grid-cols-2"
+                  style={{ minHeight: TREE_ROW_HEIGHT }}
+                >
                   <div
-                    key={row.key}
-                    className="grid w-full grid-cols-2"
-                    style={{ minHeight: TREE_ROW_HEIGHT }}
+                    className="border-r border-[var(--stroke-default)] border-b border-black/[0.025]"
+                    style={{ height: TREE_ROW_HEIGHT }}
                   >
-                    <div
-                      className="border-r border-[var(--stroke-default)] border-b border-black/[0.025]"
-                      style={{ height: TREE_ROW_HEIGHT }}
-                    >
-                      {beforeCell}
-                    </div>
-                    <div className="border-b border-black/[0.025]" style={{ height: TREE_ROW_HEIGHT }}>
-                      {afterCell}
-                    </div>
+                    {beforeCell}
                   </div>
-                ) : (
                   <div
-                    key={row.key}
-                    className="w-full border-b border-black/[0.025]"
+                    className="border-b border-black/[0.025]"
                     style={{ height: TREE_ROW_HEIGHT }}
                   >
                     {afterCell}
                   </div>
-                )
+                </div>
+              ) : (
+                <div
+                  key={row.key}
+                  className="w-full border-b border-black/[0.025]"
+                  style={{ height: TREE_ROW_HEIGHT }}
+                >
+                  {afterCell}
+                </div>
               );
             })}
             {showBefore && rows.length === 0 && (
@@ -781,10 +794,15 @@ export function AfterPanel({
           className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg"
         >
           <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
-            <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5">
+            <label
+              htmlFor="after-panel-commit-message"
+              className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"
+            >
               Name this commit
             </label>
             <input
+              id="after-panel-commit-message"
+              ref={commitInputRef}
               type="text"
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
@@ -794,7 +812,6 @@ export function AfterPanel({
               }}
               className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
               placeholder="e.g. Budget & Attractions"
-              autoFocus
             />
             <div className="flex justify-end gap-1.5 mt-3">
               <button

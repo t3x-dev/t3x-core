@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { getGlobalSetting } from '../queries/global-settings';
 import * as queries from '../queries';
-import { createTestDB } from './setup';
+import { getGlobalSetting } from '../queries/global-settings';
 import {
   deleteProviderCredential,
   getProviderCredentialBundle,
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from '../queries/provider-credentials';
+import { createTestDB } from './setup';
 
 describe('provider credentials', () => {
   let db: AnyDB;

@@ -32,21 +32,24 @@ interface TemplatePreviewDialogProps {
 function HighlightedPrompt({ text }: { text: string }) {
   // Highlight {{variable}} and {{#variable}}...{{/variable}} blocks
   const parts = text.split(/(\{\{[#/]?[a-zA-Z_][a-zA-Z0-9_]*\}\})/g);
+  let partOffset = 0;
 
   return (
     <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[var(--text-secondary)]">
-      {parts.map((part, i) => {
+      {parts.map((part) => {
+        const partKey = `part-${partOffset}-${part}`;
+        partOffset += part.length;
         if (/^\{\{[#/]?[a-zA-Z_][a-zA-Z0-9_]*\}\}$/.test(part)) {
           return (
             <span
-              key={i}
+              key={partKey}
               className="rounded bg-[var(--status-info)]/10 px-1 py-0.5 text-[var(--status-info)]"
             >
               {part}
             </span>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={partKey}>{part}</span>;
       })}
     </pre>
   );

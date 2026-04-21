@@ -17,8 +17,6 @@ export function deriveSlotTag(input: {
   if (diffType === 'removed') return { kind: 'removed', label: 'Removed' };
   if (!parentMessage) return { kind: 'new', label: 'New' };
   const truncated =
-    parentMessage.length > MAX_LABEL
-      ? `${parentMessage.slice(0, MAX_LABEL - 1)}…`
-      : parentMessage;
+    parentMessage.length > MAX_LABEL ? `${parentMessage.slice(0, MAX_LABEL - 1)}…` : parentMessage;
   return { kind: 'inherited', label: `← ${truncated}` };
 }

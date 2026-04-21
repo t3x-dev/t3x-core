@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: op tests use broad casts for concise event fixture assertions */
+
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import { describe, expect, it, vi } from 'vitest';
@@ -92,7 +94,6 @@ describe('extractOp', () => {
     // Step wrapper events from extractOp
     expect(eventSummary).toContain('step_start:extract');
     expect(eventSummary).toContain('step_done:extract');
-
   });
 
   it('passes db, conversation scope, and user model parameters to runApiExtractionV2', async () => {
@@ -147,7 +148,9 @@ describe('extractOp', () => {
       }
     } while (!result.done);
 
-    const extractDone = events.find((event) => event.type === 'step_done' && event.step === 'extract');
+    const extractDone = events.find(
+      (event) => event.type === 'step_done' && event.step === 'extract'
+    );
     expect(extractDone?.data).toEqual({
       ok: false,
       kind: 'failure',

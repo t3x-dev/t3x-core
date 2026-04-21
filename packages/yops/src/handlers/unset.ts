@@ -1,5 +1,5 @@
-import { deepClone, deleteAtPath, parsePath, resolvePath } from '../paths';
 import { YOPS_ERRORS, yopsError } from '../errors';
+import { deepClone, deleteAtPath, parsePath, resolvePath } from '../paths';
 import type { OpHandler } from '../registry';
 
 export const unsetHandler: OpHandler = (doc, fields, index) => {
@@ -28,7 +28,10 @@ export const unsetHandler: OpHandler = (doc, fields, index) => {
     .join('/');
 
   const parent = parentPath === '' ? doc : resolvePath(doc, parentPath);
-  if (parent !== undefined && (parent === null || typeof parent !== 'object' || Array.isArray(parent))) {
+  if (
+    parent !== undefined &&
+    (parent === null || typeof parent !== 'object' || Array.isArray(parent))
+  ) {
     return {
       doc,
       error: yopsError(

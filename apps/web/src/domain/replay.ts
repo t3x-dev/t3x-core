@@ -12,11 +12,21 @@
 
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
-import { YOpsReplayError } from '@/commands/yops/errors';
 
 export interface ReplayResult {
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
+}
+
+export class YOpsReplayError extends Error {
+  constructor(
+    public opIndex: number,
+    public opError: string,
+    message?: string
+  ) {
+    super(message ?? `replay failed at op ${opIndex}: ${opError}`);
+    this.name = 'YOpsReplayError';
+  }
 }
 
 const EMPTY: SemanticContent = { trees: [], relations: [] };

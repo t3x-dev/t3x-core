@@ -16,14 +16,7 @@ import {
   DEFAULT_MAX_LENGTH,
   truncateLongContent,
 } from '@/domain/format/truncationUtils';
-import type { TurnContextData } from '@/types/api';
-import type {
-  HighlightRange,
-  NodeWithHighlight,
-  NodeWithSource,
-  TurnBubbleData,
-  TurnWithHighlights,
-} from '@/types/sourceContext';
+import type { NodeWithHighlight, TurnBubbleData, TurnWithHighlights } from '@/types/sourceContext';
 import { SourceNodeList } from './SourceNodeList';
 import { TurnBubble } from './TurnBubble';
 

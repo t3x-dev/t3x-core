@@ -11,9 +11,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProviderStatus } from '@/hooks/providers/useProviderStatus';
 import { toLocalProviderId } from '@/infrastructure/misc';
-import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
+import type {
+  LLMModelsResponse,
+  LLMProviderInfo,
+  LocalProviderStatus,
+} from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
-import type { LocalProviderStatus } from '@/infrastructure/types';
 
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];

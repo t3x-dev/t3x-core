@@ -1,9 +1,9 @@
-import type { SemanticContent, SourcedYOp } from '@t3x-dev/core';
+import type { SemanticContent, SourcedYOp, TreeNode } from '@t3x-dev/core';
 import { findNode, getParentPath } from '@t3x-dev/core';
 
 function getDefinedPaths(baseTree: SemanticContent): Set<string> {
   const paths = new Set<string>();
-  const walk = (path: string, node: { children?: Array<{ key: string; children?: any[] }> }) => {
+  const walk = (path: string, node: Pick<TreeNode, 'children'>) => {
     paths.add(path);
     for (const child of node.children ?? []) {
       walk(`${path}/${child.key}`, child);
@@ -34,9 +34,7 @@ export function repairMissingDefinesForPopulate(
       if (!knownPaths.has(targetPath)) {
         const parentPath = getParentPath(targetPath);
         const parentExists =
-          parentPath === '' ||
-          knownPaths.has(parentPath) ||
-          !!findNode(baseTree.trees, parentPath);
+          parentPath === '' || knownPaths.has(parentPath) || !!findNode(baseTree.trees, parentPath);
 
         if (parentExists) {
           repaired.push({

@@ -16,6 +16,12 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
+// Mock undici for proxy support.
+vi.mock('undici', () => ({
+  ProxyAgent: vi.fn(),
+  fetch: vi.fn(),
+}));
+
 // Mock the database module before importing routes
 let mockDB: AnyDB;
 
@@ -30,9 +36,19 @@ import { extractYopsRoutes } from '../routes/extract-yops.openapi';
 
 const app = new Hono();
 app.route('/', extractYopsRoutes);
+const originalEnv = { ...process.env };
+const envKeys = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GOOGLE_AI_STUDIO_KEY',
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+];
 
 const extractionDraft = {
-  schema: 't3x/extraction-draft',
+  schema: 't3x/provider-extraction-draft',
   version: 1,
   mode: 'bootstrap',
   items: [
@@ -41,8 +57,18 @@ const extractionDraft = {
       intent: 'add',
       confidence: 0.9,
       reasoning_type: 'direct',
+      target_ref: {
+        node_key: null,
+        path: null,
+        existing_node_id: null,
+      },
       candidate: {
         key: 'trip',
+        path_hint: 'trip',
+        slot: null,
+        value_json: null,
+        values_json: null,
+        children_json: null,
       },
       evidence: [
         {
@@ -53,6 +79,7 @@ const extractionDraft = {
       ],
     },
   ],
+  warnings: [],
 };
 
 describe('POST /v1/extract-yops', () => {
@@ -75,9 +102,9 @@ describe('POST /v1/extract-yops', () => {
   beforeEach(async () => {
     resetProviderRegistry();
     vi.restoreAllMocks();
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.GOOGLE_AI_STUDIO_KEY;
+    for (const key of envKeys) {
+      delete process.env[key];
+    }
 
     await deleteProviderCredential(mockDB, 'anthropic');
     await deleteProviderCredential(mockDB, 'openai');
@@ -85,6 +112,8 @@ describe('POST /v1/extract-yops', () => {
   });
 
   afterAll(async () => {
+    process.env = originalEnv;
+    vi.unstubAllGlobals();
     await cleanup();
   });
 

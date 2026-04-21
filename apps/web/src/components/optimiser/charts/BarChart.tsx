@@ -24,6 +24,14 @@ interface BarChartProps {
   className?: string;
 }
 
+interface CustomLabelProps {
+  x?: unknown;
+  y?: unknown;
+  width?: unknown;
+  height?: unknown;
+  value?: unknown;
+}
+
 // Map dimension keys to display labels
 const DIMENSION_LABELS: Record<keyof DimensionScores, string> = {
   task_completion: 'Task',
@@ -70,9 +78,7 @@ function CustomTooltip({
   );
 }
 
-// Custom label component - eslint-disable for recharts compatibility
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderCustomLabel(props: any) {
+function renderCustomLabel(props: CustomLabelProps) {
   const x = typeof props.x === 'number' ? props.x : 0;
   const y = typeof props.y === 'number' ? props.y : 0;
   const width = typeof props.width === 'number' ? props.width : 0;
@@ -121,8 +127,8 @@ export function BarChart({ scores, className }: BarChartProps) {
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={getScoreColor(entry.value)} />
+            {data.map((entry) => (
+              <Cell key={`cell-${entry.dimension}`} fill={getScoreColor(entry.value)} />
             ))}
             <LabelList dataKey="value" content={renderCustomLabel} />
           </Bar>

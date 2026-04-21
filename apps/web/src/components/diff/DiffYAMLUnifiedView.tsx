@@ -1,6 +1,6 @@
 'use client';
 
-import type { SemanticContent, SlotDiff, SlotValue, TreeDiff } from '@t3x-dev/core';
+import type { SemanticContent, SlotDiff, TreeDiff } from '@t3x-dev/core';
 import { cn } from '@/utils/cn';
 import { formatSlotValue, YAML_COLORS } from './DiffYAMLFormatters';
 import {
@@ -11,7 +11,7 @@ import {
   useDYTheme,
 } from './DiffYAMLShared';
 import { type AlignedNode, buildAlignedNodes } from './DiffYAMLUtils';
-import { SlotValueSpan, treeLineCount, WordDiffSpan } from './YAMLNodeRenderer';
+import { SlotValueSpan, WordDiffSpan } from './YAMLNodeRenderer';
 
 // ── Props ──
 
@@ -204,7 +204,6 @@ function UnifiedNodeContent({
     }
   } else {
     // Modified tree: show per-slot diffs
-    const sourceNode = aligned.leftNode!;
     const targetNode = aligned.rightNode!;
     const slotDiffMap = new Map<string, SlotDiff>();
     if (aligned.slotDiffs) {

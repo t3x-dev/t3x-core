@@ -6,7 +6,7 @@ const makeNode = (
   key: string,
   slots: Record<string, string> = {},
   children: TreeNode[] = []
-): TreeNode => ({ key, slots, children, source: {} }) as any;
+): TreeNode => ({ key, slots, children });
 
 describe('computeTreeDiff', () => {
   it('marks all nodes as added when base is empty', () => {

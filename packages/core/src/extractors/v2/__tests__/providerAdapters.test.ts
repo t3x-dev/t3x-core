@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { LLMProviderError } from '../../../llm/types';
+import { buildPromptTurnMap } from '../normalization';
 import {
   buildOpenAIChatCompletionBody,
   mapProviderErrorToExtractionFailure,
   normalizeProviderDraftText,
 } from '../providerAdapters';
-import { buildPromptTurnMap } from '../normalization';
 
 describe('extractors/v2 normalization', () => {
   it('uses deterministic T-tags while preserving the full turn hash map', () => {
@@ -27,7 +27,9 @@ describe('extractors/v2 normalization', () => {
 
 describe('extractors/v2 provider adapters', () => {
   it('normalizes syntax-only provider wrappers deterministically', () => {
-    expect(normalizeProviderDraftText('\uFEFF```yaml\r\nfoo: “bar”\r\n```\r\n')).toBe('foo: "bar"\n');
+    expect(normalizeProviderDraftText('\uFEFF```yaml\r\nfoo: “bar”\r\n```\r\n')).toBe(
+      'foo: "bar"\n'
+    );
   });
 
   it('maps provider transport errors to shared failure codes', () => {

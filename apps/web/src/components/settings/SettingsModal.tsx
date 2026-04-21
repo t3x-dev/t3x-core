@@ -1,15 +1,10 @@
 'use client';
 
 import { Settings, SlidersHorizontal, User } from 'lucide-react';
-import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel';
 import { PreferencesSettingsPanel } from '@/components/settings/PreferencesSettingsPanel';
+import { ProfileSettingsPanel } from '@/components/settings/ProfileSettingsPanel';
 import { ProvidersSettingsPanel } from '@/components/settings/ProvidersSettingsPanel';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type SettingsModalTab, useSettingsModalStore } from '@/store/settingsModalStore';
 import { cn } from '@/utils/cn';
@@ -75,10 +70,7 @@ export function SettingsModal() {
               </TabsList>
             </div>
 
-            <div
-              data-testid="settings-modal-panel"
-              className="min-w-0 flex-1 bg-white"
-            >
+            <div data-testid="settings-modal-panel" className="min-w-0 flex-1 bg-white">
               <TabsContent value="profile" className="m-0 h-full overflow-y-auto">
                 <section
                   data-testid="settings-modal-canvas"

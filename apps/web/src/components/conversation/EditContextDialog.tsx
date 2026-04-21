@@ -24,8 +24,8 @@ interface EditContextDialogProps {
 export function EditContextDialog({
   open,
   onOpenChange,
-  projectId,
-  conversationId,
+  projectId: _projectId,
+  conversationId: _conversationId,
   currentSelection,
   onSave,
 }: EditContextDialogProps) {

@@ -1,7 +1,5 @@
 'use client';
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
 import { truncate } from '@/domain/format/truncate';
 import type { NodeRelation } from '@/types/api';
 import { cn } from '@/utils/cn';

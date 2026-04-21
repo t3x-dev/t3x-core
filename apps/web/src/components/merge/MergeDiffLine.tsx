@@ -104,7 +104,7 @@ export function MergeDiffLine({
   };
 
   return (
-    <div className="space-y-0" data-merge-nav={navId} aria-label={`${type} node`}>
+    <section className="space-y-0" data-merge-nav={navId} aria-label={`${type} node`}>
       {/* Main diff line */}
       <div
         className={`
@@ -231,6 +231,6 @@ export function MergeDiffLine({
           />
         </div>
       )}
-    </div>
+    </section>
   );
 }

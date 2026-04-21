@@ -5,7 +5,6 @@ import {
   type ExtractionStyleConfig,
   matchPreset,
   PRESETS,
-  type PresetName,
   styleSummaryLine,
 } from '../../extractors/extractionStyleConfig';
 
@@ -15,7 +14,7 @@ describe('ExtractionStyleConfig', () => {
   });
 
   it('all presets have valid fields', () => {
-    for (const [name, preset] of Object.entries(PRESETS)) {
+    for (const [_name, preset] of Object.entries(PRESETS)) {
       expect(preset.granularity).toBeDefined();
       expect(preset.quote_length).toBeDefined();
       expect(preset.update_stance).toBeDefined();

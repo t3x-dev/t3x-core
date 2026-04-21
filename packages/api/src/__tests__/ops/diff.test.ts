@@ -1,3 +1,6 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: op tests use broad casts for concise event fixture assertions */
+/** biome-ignore-all lint/correctness/noUnusedFunctionParameters: mocked callbacks keep full signature for parity with production hooks */
+
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import { describe, expect, it, vi } from 'vitest';

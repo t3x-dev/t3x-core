@@ -305,12 +305,13 @@ describe('ClaudeProvider.generateStructured', () => {
                           value_json: null,
                           values_json: '{"summary":"SEA had a cyberattack"}',
                           children_json:
-                            '[{\"area\":\"Baggage Handling\",\"description\":\"Automated baggage systems were disrupted\"}]',
+                            '[{"area":"Baggage Handling","description":"Automated baggage systems were disrupted"}]',
                         },
                         evidence: [
                           {
                             turn_tag: 'T1',
-                            quote: 'Baggage Handling: The automated baggage systems were severely disrupted.',
+                            quote:
+                              'Baggage Handling: The automated baggage systems were severely disrupted.',
                             role: 'primary',
                           },
                         ],
@@ -373,12 +374,13 @@ describe('ClaudeProvider.generateStructured', () => {
                           value_json: null,
                           values_json: '{"summary":"SEA had a cyberattack"}',
                           children_json:
-                            '[{\"key\":\"Baggage Handling\",\"description\":\"Automated baggage systems were disrupted\"}]',
+                            '[{"key":"Baggage Handling","description":"Automated baggage systems were disrupted"}]',
                         },
                         evidence: [
                           {
                             turn_tag: 'T1',
-                            quote: 'Baggage Handling: The automated baggage systems were severely disrupted.',
+                            quote:
+                              'Baggage Handling: The automated baggage systems were severely disrupted.',
                             role: 'primary',
                           },
                         ],
@@ -478,7 +480,7 @@ describe('ClaudeProvider.generateStructured', () => {
                           value_json: null,
                           values_json: '{"summary":"SEA had a cyberattack"}',
                           children_json:
-                            '[{\"key\":\"Baggage Handling\",\"value\":\"Automated baggage systems were disrupted\"},{\"key\":\"Passenger Impact\",\"children\":[{\"key\":\"Long Lines\"},{\"key\":\"Manual Check-In\"}]}]',
+                            '[{"key":"Baggage Handling","value":"Automated baggage systems were disrupted"},{"key":"Passenger Impact","children":[{"key":"Long Lines"},{"key":"Manual Check-In"}]}]',
                         },
                         evidence: [
                           {

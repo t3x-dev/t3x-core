@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: op tests use broad casts for concise event fixture assertions */
+
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import { describe, expect, it, vi } from 'vitest';

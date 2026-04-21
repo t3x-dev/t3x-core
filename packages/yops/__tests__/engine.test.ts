@@ -11,7 +11,7 @@ describe('applyYOps — engine behavior', () => {
     const doc: YValue = { config: { host: 'old' } };
     const ops: YOp[] = [{ set: { path: 'config/host', value: 'new' } }];
     applyYOps(doc, ops);
-    expect((doc as Record<string, any>).config.host).toBe('old');
+    expect(doc).toEqual({ config: { host: 'old' } });
   });
 
   it('applies ops sequentially — each sees previous state', () => {
@@ -39,8 +39,7 @@ describe('applyYOps — engine behavior', () => {
     expect(result.applied).toBe(1);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(1);
-    expect((result.doc as Record<string, any>).b).toBe(2);
-    expect((result.doc as Record<string, any>).c).toBeUndefined();
+    expect(result.doc).toEqual({ a: 1, b: 2 });
   });
 
   it('returns applied: 0 for empty ops array', () => {

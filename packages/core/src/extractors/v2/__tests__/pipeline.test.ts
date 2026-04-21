@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LLMProviderError, type LLMProvider } from '../../../llm/types';
+import { type LLMProvider, LLMProviderError } from '../../../llm/types';
 import { runExtractionV2Pipeline } from '../pipeline';
 
 describe('extractors/v2 pipeline', () => {
@@ -167,7 +167,9 @@ describe('extractors/v2 pipeline', () => {
 
     expect(capturedPrompt).toContain('Return a valid ProviderExtractionDraft.');
     expect(capturedPrompt).toContain('Use value_json for scalar values and arrays');
-    expect(capturedPrompt).toContain('For update or reinforce items, always provide either candidate.values_json');
+    expect(capturedPrompt).toContain(
+      'For update or reinforce items, always provide either candidate.values_json'
+    );
     expect(capturedPrompt).toContain('Keep evidence quotes short and verbatim');
     expect(capturedPrompt).not.toContain('ProviderExtractionDraft JSON shape example');
   });
@@ -484,5 +486,4 @@ describe('extractors/v2 pipeline', () => {
     expect(secondPrompt).toContain('include either candidate.values_json as a JSON object string');
     expect(secondPrompt).toContain('airport_issue');
   });
-
 });

@@ -20,7 +20,7 @@ describe('settingsModalStore', () => {
     expect(useSettingsModalStore.getState().activeTab).toBe('providers');
   });
 
-  it("updates the active tab directly", () => {
+  it('updates the active tab directly', () => {
     useSettingsModalStore.getState().setActiveTab('profile');
 
     expect(useSettingsModalStore.getState().activeTab).toBe('profile');

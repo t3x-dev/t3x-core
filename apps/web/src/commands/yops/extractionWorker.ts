@@ -29,7 +29,10 @@ export interface ExtractionInput {
   llm: LLMCall;
 }
 
-function collectInsertedDefinePaths(originalOps: readonly SourcedYOp[], repairedOps: readonly SourcedYOp[]): string[] {
+function collectInsertedDefinePaths(
+  originalOps: readonly SourcedYOp[],
+  repairedOps: readonly SourcedYOp[]
+): string[] {
   const originalDefines = new Set(
     originalOps.flatMap((op) => ('define' in op && op.define?.path ? [op.define.path] : []))
   );
@@ -66,9 +69,7 @@ export async function runExtraction({
       if (e instanceof ExtractionRequestError) {
         const retryDecision = e.failure.retry;
         const exhausted =
-          !retryDecision.retryable ||
-          attempt >= retryDecision.maxAttempts ||
-          attempt > MAX_RETRIES;
+          !retryDecision.retryable || attempt >= retryDecision.maxAttempts || attempt > MAX_RETRIES;
         if (exhausted) {
           throw new ExtractionFailedError([], attempt, 'llm_error', e.message, e.failure.code);
         }
@@ -90,7 +91,11 @@ export async function runExtraction({
       prevFailing = sourceResult.failingOps;
 
       if (attempt > MAX_RETRIES) {
-        throw new ExtractionFailedError(sourceResult.failingOps, attempt, pickReason(sourceResult.failingOps));
+        throw new ExtractionFailedError(
+          sourceResult.failingOps,
+          attempt,
+          pickReason(sourceResult.failingOps)
+        );
       }
       continue;
     }
@@ -108,13 +113,16 @@ export async function runExtraction({
         const insertedDefinePaths = collectInsertedDefinePaths(ops, repairedOps);
         const repairedStructure = validateExecutableStructure(baseTree, repairedOps);
         if (insertedDefinePaths.length > 0 && repairedStructure.ok) {
-          console.warn('[extraction] applied last-resort repair for missing define-before-populate', {
-            conversationId,
-            attempt,
-            originalOps: ops.length,
-            repairedOps: repairedOps.length,
-            insertedDefinePaths,
-          });
+          console.warn(
+            '[extraction] applied last-resort repair for missing define-before-populate',
+            {
+              conversationId,
+              attempt,
+              originalOps: ops.length,
+              repairedOps: repairedOps.length,
+              insertedDefinePaths,
+            }
+          );
           await commitOps(conversationId, repairedOps);
           return;
         }

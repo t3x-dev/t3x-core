@@ -39,7 +39,10 @@ export function normalizeExtractionText(rawText: string): string {
     /^```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```$/u,
     '$1'
   );
-  const normalizedQuotes = strippedFences.replace(/[\u2018\u2019\u201C\u201D]/g, (match) => SMART_QUOTES[match] ?? match);
+  const normalizedQuotes = strippedFences.replace(
+    /[\u2018\u2019\u201C\u201D]/g,
+    (match) => SMART_QUOTES[match] ?? match
+  );
   const trimmed = normalizedQuotes.trim();
 
   if (trimmed.length === 0) {

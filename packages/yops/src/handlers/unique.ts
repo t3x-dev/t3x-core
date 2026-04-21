@@ -39,7 +39,7 @@ export const uniqueHandler: OpHandler = (doc, fields, index) => {
         };
       }
 
-      if (!Object.prototype.hasOwnProperty.call(item, by)) {
+      if (!Object.hasOwn(item, by)) {
         return {
           doc,
           error: yopsError(

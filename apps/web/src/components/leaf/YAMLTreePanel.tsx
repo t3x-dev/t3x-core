@@ -14,7 +14,6 @@ import Link from 'next/link';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
 import { contentToNodes } from '@/domain/tree/treeCompat';
-import { nestNodes } from '@/domain/tree/treeNesting';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import { cn } from '@/utils/cn';

@@ -107,7 +107,10 @@ async function readProviderCredential(
   db: AnyDB,
   providerId: LocalProviderId
 ): Promise<StoredProviderCredential | null> {
-  return (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ?? null;
+  return (
+    (await getGlobalSetting<StoredProviderCredential>(db, providerCredentialKey(providerId))) ??
+    null
+  );
 }
 
 async function writeProviderCredential(

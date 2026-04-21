@@ -176,7 +176,7 @@ export function RecipeForm({ recipe, onSubmit, onCancel, loading = false }: Reci
         <div className="flex flex-col gap-3">
           {steps.map((step, index) => (
             <div
-              key={`step-${index}`}
+              key={`step-${step.action}-${JSON.stringify(step.config)}-${index}`}
               className="rounded-lg border border-[var(--stroke-default)] p-3 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between">

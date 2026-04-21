@@ -13,7 +13,6 @@
 
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { usePendingCommitExtraction } from '@/hooks/canvas/usePendingCommitExtraction';
 import { usePendingCommitLayout } from '@/hooks/canvas/usePendingCommitLayout';
 import { usePendingCommitPostCommit } from '@/hooks/canvas/usePendingCommitPostCommit';

@@ -6,7 +6,6 @@
  * (Core merge/leaf behavior is tested in canvasStore.test.ts)
  */
 
-import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   selectCanExecuteMerge,
@@ -16,37 +15,12 @@ import {
 } from '@/store/canvasMergeSlice';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { MergeState } from '@/types/merge';
-import type { CanvasNodeData } from '@/types/nodes';
 
 // queries/leaves is now read-only (writes live in @/commands/leaves);
 // the slice no longer touches I/O — useCanvasLeafActions tests cover it.
 vi.mock('@/queries/leaves', () => ({
   fetchLeavesByProject: vi.fn().mockResolvedValue([]),
 }));
-
-const createCommittedUnitNode = (
-  id: string,
-  commitHash: string,
-  overrides: Partial<CanvasNodeData> = {}
-): Node<CanvasNodeData> => ({
-  id,
-  type: 'unit',
-  position: { x: 100, y: 0 },
-  data: {
-    kind: 'unit',
-    entryId: id,
-    title: 'Committed Unit',
-    summary: '3 facets',
-    status: 'committed',
-    timestamp: new Date().toISOString(),
-    tags: ['unit'],
-    commitStatus: 'committed',
-    commitHash,
-    conversationId: `conv_${id}`,
-    branchType: 'main',
-    ...overrides,
-  },
-});
 
 const makeMergeState = (overrides: Record<string, unknown> = {}) => ({
   sourceHash: 'sha256:a',

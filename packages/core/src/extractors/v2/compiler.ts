@@ -1,7 +1,11 @@
 import type { SourcedYOp, YValue } from '../../t3x-yops/types';
-import type { DraftEvidence, ExtractionDraftItem } from './types';
-import type { CompileInput, CompiledMutationPlan } from './types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
+import type {
+  CompiledMutationPlan,
+  CompileInput,
+  DraftEvidence,
+  ExtractionDraftItem,
+} from './types';
 
 export type CompileResult =
   | { ok: true; ops: SourcedYOp[]; warnings: string[] }
@@ -22,7 +26,10 @@ function normalizeYValue(value: unknown): YValue {
   }
 
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, normalizeYValue(entry)])
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      normalizeYValue(entry),
+    ])
   );
 }
 
@@ -59,11 +66,18 @@ function buildSource(
 }
 
 function resolveTargetPath(item: ExtractionDraftItem): string | null {
-  return item.target_ref?.path ?? item.target_ref?.node_key ?? item.candidate.path_hint ?? item.candidate.key ?? null;
+  return (
+    item.target_ref?.path ??
+    item.target_ref?.node_key ??
+    item.candidate.path_hint ??
+    item.candidate.key ??
+    null
+  );
 }
 
 function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileResult {
-  const primaryEvidence = item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
+  const primaryEvidence =
+    item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
   const source = buildSource(primaryEvidence, input);
   if ('code' in source) {
     return { ok: false, failure: source, warnings: [] };
@@ -78,7 +92,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     if (!path) {
       return {
         ok: false,
-        failure: createExtractionFailure('compile', 'add intent requires candidate.key or candidate.path_hint'),
+        failure: createExtractionFailure(
+          'compile',
+          'add intent requires candidate.key or candidate.path_hint'
+        ),
         warnings: [],
       };
     }
@@ -106,7 +123,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     if (!path) {
       return {
         ok: false,
-        failure: createExtractionFailure('compile', 'remove intent requires target_ref or candidate path'),
+        failure: createExtractionFailure(
+          'compile',
+          'remove intent requires target_ref or candidate path'
+        ),
         warnings: [],
       };
     }
@@ -119,7 +139,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     if (!path) {
       return {
         ok: false,
-        failure: createExtractionFailure('compile', `${item.intent} intent requires target_ref.path or target_ref.node_key`),
+        failure: createExtractionFailure(
+          'compile',
+          `${item.intent} intent requires target_ref.path or target_ref.node_key`
+        ),
         warnings: [],
       };
     }
@@ -183,7 +206,9 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   return { ok: true, ops, warnings };
 }
 
-export function toCompiledMutationPlan(result: Extract<CompileResult, { ok: true }>): CompiledMutationPlan {
+export function toCompiledMutationPlan(
+  result: Extract<CompileResult, { ok: true }>
+): CompiledMutationPlan {
   return {
     ops: result.ops,
     warnings: result.warnings,

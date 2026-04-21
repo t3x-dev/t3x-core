@@ -120,9 +120,9 @@ function LLMDetails({ llm }: { llm: NonNullable<StepRecord['llm']> }) {
       {llm.messages && llm.messages.length > 0 && (
         <div className="space-y-[var(--space-item)]">
           <p className="text-sm font-medium">Messages</p>
-          {llm.messages.map((msg, i) => (
+          {llm.messages.map((msg) => (
             <div
-              key={i}
+              key={`${msg.role}-${msg.content}`}
               className={cn(
                 'rounded-lg border p-3',
                 msg.role === 'user' && 'bg-[var(--status-info)]/5 border-[var(--status-info)]/20',
@@ -192,7 +192,7 @@ function RetrievalDetails({ retrieval }: { retrieval: NonNullable<StepRecord['re
       <div className="space-y-[var(--space-item)]">
         <p className="text-sm font-medium">Documents ({retrieval.documents.length})</p>
         {retrieval.documents.map((doc, i) => (
-          <div key={i} className="rounded-lg border p-3">
+          <div key={`${doc.content}-${doc.score ?? 'na'}-${i}`} className="rounded-lg border p-3">
             <div className="flex items-center justify-between mb-[var(--space-item)]">
               <span className="text-xs text-muted-foreground">Document {i + 1}</span>
               {doc.score !== undefined && (

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { LLMProviderError } from '../../llm/types';
 import { ProviderExtractionDraftSchema } from '../../extractors/v2/providerDraft';
+import { LLMProviderError } from '../../llm/types';
 import { OpenAIProvider } from '../../providers/llm/openai';
 
 vi.spyOn(console, 'log').mockImplementation(() => {});

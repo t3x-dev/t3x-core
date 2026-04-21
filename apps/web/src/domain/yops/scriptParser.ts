@@ -40,10 +40,11 @@ export function parseYOpsScript(text: string): ParseResult {
   let doc: unknown;
   try {
     doc = parseYaml(text);
-  } catch (e: any) {
-    const lineMatch = e.message?.match(/at line (\d+)/);
-    const line = lineMatch ? Number.parseInt(lineMatch[1]) : 1;
-    return { ops: null, errors: [{ line, message: `YAML syntax error: ${e.message}` }] };
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    const lineMatch = message.match(/at line (\d+)/);
+    const line = lineMatch ? Number.parseInt(lineMatch[1], 10) : 1;
+    return { ops: null, errors: [{ line, message: `YAML syntax error: ${message}` }] };
   }
 
   if (!doc || typeof doc !== 'object') {

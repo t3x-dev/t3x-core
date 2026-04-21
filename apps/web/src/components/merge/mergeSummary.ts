@@ -64,7 +64,7 @@ export function computeMergeSummary(
   let conflictSource = 0;
   let conflictTarget = 0;
   let kept_both = 0;
-  let unresolved = 0;
+  let _unresolved = 0;
 
   for (let i = 0; i < prepared.conflicts.length; i++) {
     const conflict = prepared.conflicts[i];
@@ -77,7 +77,7 @@ export function computeMergeSummary(
     } else if (resolutions[conflict.path] === 'target') {
       conflictTarget++;
     } else {
-      unresolved++;
+      _unresolved++;
     }
   }
 

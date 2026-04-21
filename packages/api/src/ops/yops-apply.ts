@@ -11,6 +11,8 @@
  *   persist — atomic transaction: insertYOpsLogEntry + syncYOpsToTrees
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
+
 import type { Operation, PipelineEvent } from '@t3x-dev/core';
 import { insertYOpsLogEntry } from '@t3x-dev/storage';
 import { syncYOpsToTrees } from '../lib/tree-state-sync';

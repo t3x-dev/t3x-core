@@ -30,7 +30,6 @@ describe('realtime sync e2e (real pg_notify)', () => {
   let pg: postgres.Sql;
   const received: RealtimeEvent[] = [];
 
-  // biome-ignore lint/suspicious/noExplicitAny: relay listener is private
   const broadcastListener = (event: RealtimeEvent) => {
     received.push(event);
   };

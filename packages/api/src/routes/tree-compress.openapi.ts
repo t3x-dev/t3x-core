@@ -8,6 +8,8 @@
  * - POST /v1/conversations/{conversationId}/compress - Compress trees in a conversation
  */
 
+/** biome-ignore-all lint/suspicious/noExplicitAny: compression route coordinates dynamic compressor outputs pending stricter DTOs */
+
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyYOps,
@@ -236,9 +238,7 @@ treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
     const reg = await getProviderRegistry();
     const trackedUsage = { inputTokens: 0, outputTokens: 0 };
     let trackedModel = 'unknown';
-    // biome-ignore lint/suspicious/noExplicitAny: compress result type
     const result: any = await reg.tryWithFallback('generation', (provider) => {
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
       const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
       trackedUsage.inputTokens = 0;
       trackedUsage.outputTokens = 0;

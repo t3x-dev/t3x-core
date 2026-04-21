@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import { applySourcedYOps, applyYOps } from '../engine';
-import type { SourcedYOp, YOp } from '../types';
+import type { SourcedYOp } from '../types';
 
 // ── Helpers ──
 

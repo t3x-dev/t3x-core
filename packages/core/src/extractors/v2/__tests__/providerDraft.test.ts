@@ -135,7 +135,8 @@ describe('extractors/v2 provider draft', () => {
             slot: null,
             value_json: null,
             values_json: '{"summary":"SEA had a cyberattack"}',
-            children_json: '{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}',
+            children_json:
+              '{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}',
           },
           evidence: [
             {

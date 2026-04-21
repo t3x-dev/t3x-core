@@ -55,7 +55,7 @@ describe('YamlExtractionStrategy — smart repair', () => {
   it('calls LLM twice when first response has YAML parse error and repair succeeds', async () => {
     const badYaml = 'trip:\n\tdestination: Tokyo'; // tab indent — YAML parse error
     const provider = mockProvider([badYaml, goodTreeYaml]);
-    const result = await strategy.extract(baseInput, provider);
+    const _result = await strategy.extract(baseInput, provider);
 
     // Provider should have been called twice: main + repair
     expect(provider.generate).toHaveBeenCalledTimes(2);

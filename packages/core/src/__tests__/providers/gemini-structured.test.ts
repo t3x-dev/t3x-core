@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { LLMProviderError } from '../../llm/types';
 import { ProviderExtractionDraftSchema } from '../../extractors/v2/providerDraft';
+import { LLMProviderError } from '../../llm/types';
 import { GeminiProvider } from '../../providers/llm/gemini';
 
 vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -180,8 +180,7 @@ describe('GeminiProvider.generateStructured', () => {
       Promise.resolve({
         ok: true,
         status: 200,
-        text: () =>
-          Promise.resolve(JSON.stringify(makeGeminiResponse('{"name":"Bob","age":25}'))),
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('{"name":"Bob","age":25}'))),
       })
     );
 
@@ -298,9 +297,7 @@ describe('GeminiProvider.generateStructured', () => {
       type: 'string',
       enum: ['direct', 'paraphrase', 'cross_turn', 'implicit'],
     });
-    expect(
-      schema.properties.items.items.properties.evidence.items.properties.role
-    ).toMatchObject({
+    expect(schema.properties.items.items.properties.evidence.items.properties.role).toMatchObject({
       type: 'string',
       enum: ['primary', 'supporting'],
     });
