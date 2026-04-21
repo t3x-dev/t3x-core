@@ -52,12 +52,10 @@ vi.mock('@t3x-dev/core', () => ({
   Extractor: vi.fn(),
   GateRunner: vi.fn(),
   runTransforms: vi.fn(),
-  createClaudeProvider: vi.fn(),
-  createProviderRegistry: vi.fn(() => ({
-    register: vi.fn(),
-    autoConfigureFromEnv: vi.fn(),
+  createDefaultProviderRegistry: vi.fn(() => ({
     tryWithFallback: vi.fn(),
   })),
+  extractAndApply: vi.fn(),
   DEFAULT_STYLE: {},
   collectLessonsFromAssertions: vi.fn(() => []),
   generateLeafOutput: vi.fn(),

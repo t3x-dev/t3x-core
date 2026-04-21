@@ -1,12 +1,60 @@
 # @t3x-dev/mcp
 
-T3X MCP Server -- semantic version control tools for AI agents.
+T3X MCP server for AI agents.
+
+This package is the runnable stdio wrapper around `@t3x-dev/mcp-lib`.
+
+## Current Surface
+
+The current MCP server exposes three protocol surfaces:
+
+- `Tools`
+- `Resources`
+- `Prompts`
+
+### Tools
+
+The tool surface is `tools-first` and uses 8 umbrella tools.
+
+Core:
+
+- `t3x_query`
+- `t3x_extract`
+- `t3x_edit`
+- `t3x_commit`
+- `t3x_generate`
+
+Advanced:
+
+- `t3x_diff`
+- `t3x_merge`
+- `t3x_admin`
+
+### Resources
+
+The server currently exposes these resource templates:
+
+- `t3x://projects/{project_id}`
+- `t3x://commits/{commit_hash}`
+- `t3x://workbench-drafts/{draft_id}`
+- `t3x://conversations/{conversation_id}`
+- `t3x://leaves/{leaf_id}`
+- `t3x://merge-drafts/{draft_id}`
+
+### Prompts
+
+The server currently exposes these workflow prompts:
+
+- `extract_review_commit`
+- `inspect_workbench_draft`
+- `prepare_resolve_merge`
+- `generate_from_leaf`
+
+Prompts are user-facing workflow entries for MCP hosts. Agent guidance still mainly comes from tool descriptions and server instructions.
 
 ## Installation
 
-### Claude Code
-
-Add to your MCP settings (`~/.claude.json` or project `.claude/settings.json`):
+Add the server to your MCP host using the published binary:
 
 ```json
 {
@@ -15,161 +63,71 @@ Add to your MCP settings (`~/.claude.json` or project `.claude/settings.json`):
       "command": "npx",
       "args": ["@t3x-dev/mcp"],
       "env": {
-        "T3X_API_URL": "http://localhost:8000/api",
-        "T3X_API_KEY": "your-api-key"
+        "T3X_TOOLSETS": "core,advanced",
+        "ANTHROPIC_API_KEY": "sk-ant-..."
       }
     }
   }
 }
 ```
 
-### Cursor
+For local development inside this repo, the committed root `.mcp.json` already points at `apps/mcp/dist/index.js`.
 
-Add to `.cursor/mcp.json` in your project:
+## Runtime Model
 
-```json
-{
-  "mcpServers": {
-    "t3x": {
-      "command": "npx",
-      "args": ["@t3x-dev/mcp"],
-      "env": {
-        "T3X_API_URL": "http://localhost:8000/api"
-      }
-    }
-  }
-}
-```
+This server currently runs over `stdio` only.
 
-## Tools (43)
+- `stdio` is implemented
+- `http` is not implemented yet
 
-### Core Workflow
+The server talks directly to T3X storage:
 
-| Tool | Description |
-|------|-------------|
-| `t3x_extract` | Extract semantic knowledge from text into YAML |
-| `t3x_show_draft` | Show draft content (trees + source quotes) |
-| `t3x_edit_draft` | Edit draft with YOps (YAML Operations) |
-| `t3x_commit` | Commit semantic knowledge as an immutable record |
-| `t3x_show` | Show current semantic knowledge for a project |
-| `t3x_check` | Validate text against leaf constraints |
-| `t3x_schema` | Get T3X JSON Schema for semantic content |
-| `t3x_validate` | Validate semantic content against schema |
-| `t3x_yops_schema` | Get JSON Schema for YOps operations |
+- if `DATABASE_URL` is set, it uses Postgres
+- otherwise it starts embedded Postgres under `.t3x/pg-data`
 
-### Projects
-
-| Tool | Description |
-|------|-------------|
-| `t3x_list_projects` | List all projects |
-| `t3x_create_project` | Create a new project |
-| `t3x_show_project` | Show project details and stats |
-| `t3x_delete_project` | Delete a project (soft/permanent) |
-| `t3x_restore_project` | Restore a soft-deleted project |
-
-### Version Control
-
-| Tool | Description |
-|------|-------------|
-| `t3x_list_commits` | List commits for a project |
-| `t3x_show_commit` | Show full commit content |
-| `t3x_diff` | Compare two commits (semantic diff) |
-| `t3x_create_branch` | Create a new branch |
-| `t3x_switch_branch` | Switch active branch |
-| `t3x_list_branches` | List all branches |
-| `t3x_current_branch` | Get the current active branch |
-
-### Merge
-
-| Tool | Description |
-|------|-------------|
-| `t3x_merge_prepare` | Analyze two commits for merging (conflicts, auto-kept, etc.) |
-| `t3x_merge_execute` | Execute merge with user decisions |
-
-### Conversations
-
-| Tool | Description |
-|------|-------------|
-| `t3x_list_conversations` | List conversations in a project |
-| `t3x_create_conversation` | Create a new conversation |
-| `t3x_get_conversation` | Get conversation details |
-| `t3x_delete_conversation` | Delete a conversation |
-| `t3x_add_turn` | Add a message to a conversation |
-| `t3x_list_turns` | List turns in a conversation |
-
-### Drafts
-
-| Tool | Description |
-|------|-------------|
-| `t3x_show_draft` | Show draft content |
-| `t3x_edit_draft` | Edit draft with YOps |
-| `t3x_list_drafts` | List drafts for a project |
-| `t3x_delete_draft` | Delete a draft |
-
-### Leaves
-
-| Tool | Description |
-|------|-------------|
-| `t3x_list_leaves` | List leaves for a project |
-| `t3x_create_leaf` | Create a leaf (output template) |
-| `t3x_show_leaf` | Show leaf details |
-| `t3x_delete_leaf` | Delete a leaf |
-| `t3x_generate` | Generate output from a leaf |
-
-### Import / Export
-
-| Tool | Description |
-|------|-------------|
-| `t3x_import_url` | Import conversation from URL |
-| `t3x_export` | Export project data as ledger |
-
-### Chat
-
-| Tool | Description |
-|------|-------------|
-| `t3x_chat` | LLM conversation through T3X |
-
-### Webhooks & Sharing
-
-| Tool | Description |
-|------|-------------|
-| `t3x_list_webhooks` | List webhooks |
-| `t3x_create_webhook` | Create a webhook |
-| `t3x_delete_webhook` | Delete a webhook |
-| `t3x_create_share` | Create a share token |
+This means the MCP server does not use `T3X_API_URL` or `T3X_API_KEY`.
 
 ## Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
-| `T3X_API_URL` | T3X API server URL | `http://localhost:8000/api` |
-| `T3X_WEB_URL` | T3X WebUI URL (for auth callback) | `http://localhost:3000` |
+| --- | --- | --- |
+| `T3X_TOOLSETS` | Comma-separated toolsets to enable | `core` |
+| `T3X_TRANSPORT` | MCP transport | `stdio` |
+| `DATABASE_URL` | Postgres connection string; when omitted, embedded Postgres is used | unset |
+| `T3X_DATA_DIR` | Embedded Postgres data directory | `.t3x/pg-data` |
+| `T3X_PG_PORT` | Embedded Postgres port | `5445` |
+| `ANTHROPIC_API_KEY` | Required for `t3x_extract` and `t3x_generate` | unset |
 
 ## Example Workflow
 
+```text
+Extract -> Inspect -> Edit -> Commit
+
+1. t3x_admin({ action: "create_project", name })         -> project_id
+2. t3x_extract({ project_id, text })                     -> draft_id
+3. t3x_query({ target: "draft", id: draft_id })          -> inspect workbench draft
+4. t3x_edit({ draft_id, yops, if_revision })             -> refine draft
+5. t3x_commit({ project_id, draft_id, message })         -> commit_hash
+
+Merge
+
+1. t3x_diff({ source_hash, target_hash })                -> semantic diff
+2. t3x_merge({ action: "prepare", source_hash, target_hash })
+3. t3x_query / resources/read merge draft for inspection
+4. t3x_merge({ action: "resolve", ... })
+5. t3x_merge({ action: "execute", ... })                 -> merge commit_hash
 ```
-Agent workflow: Extract → Triage → Edit → Commit
 
-1. t3x_list_projects()                           -> find project
-2. t3x_extract({ project_id, text })             -> extract knowledge, get draft_id
-3. t3x_show_draft({ draft_id })                  -> review extraction
-4. t3x_yops_schema()                             -> learn YOps format
-5. t3x_edit_draft({ draft_id, yops, if_revision }) -> fix errors
-6. t3x_commit({ project_id, draft_id })          -> commit knowledge
+## Build
 
-Merge workflow:
-1. t3x_merge_prepare({ source_hash, target_hash }) -> analyze conflicts
-2. t3x_merge_execute({ ..., decisions, message })   -> execute merge
+```bash
+pnpm build:core
+pnpm --filter @t3x-dev/mcp-lib build
+pnpm --filter @t3x-dev/mcp build
 ```
 
-## Self-Hosted / Docker
+## Development
 
-Point `T3X_API_URL` to your Docker instance:
-
-```json
-{
-  "env": {
-    "T3X_API_URL": "http://your-t3x-server:8000/api"
-  }
-}
+```bash
+pnpm --filter @t3x-dev/mcp dev
 ```

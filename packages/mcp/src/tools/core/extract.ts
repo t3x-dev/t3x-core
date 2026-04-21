@@ -22,13 +22,9 @@
  */
 
 import {
-  applyYOps,
-  createClaudeProvider,
-  createProviderRegistry,
+  createDefaultProviderRegistry,
+  extractAndApply,
   type LLMProvider,
-  type Relation,
-  runExtractionV2Pipeline,
-  type TreeNode,
 } from '@t3x-dev/core';
 import {
   findConversationById,
@@ -103,28 +99,17 @@ export const extractDef: ToolDef = {
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
 
 /**
- * Build a provider registry with auto-configured providers from env vars.
- * Mirrors packages/api/src/lib/provider-registry.ts without the DB-stored
- * config overlay.
+ * Build a default provider registry while preserving MCP's current Anthropic
+ * model pin for extraction.
  */
 function buildRegistry() {
-  const reg = createProviderRegistry();
-
-  reg.register({
-    id: 'anthropic',
-    name: 'Anthropic Claude',
-    role: 'generation',
-    requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: DEFAULT_ANTHROPIC_MODEL,
-    factory: (config) =>
-      createClaudeProvider({
-        apiKey: config.ANTHROPIC_API_KEY!,
-        baseUrl: process.env.ANTHROPIC_BASE_URL,
-      }),
+  return createDefaultProviderRegistry({
+    providerOverrides: {
+      anthropic: {
+        defaultModel: DEFAULT_ANTHROPIC_MODEL,
+      },
+    },
   });
-
-  reg.autoConfigureFromEnv();
-  return reg;
 }
 
 /**
@@ -262,7 +247,7 @@ export const extractHandler: ToolHandler = async (args) => {
   // MCP does not persist snapshots between calls, so we always run bootstrap
   // mode on the full turn history. For incremental semantics, use the API
   // /v1/extract routes which replay the yops_log to build a prior snapshot.
-  const v2Result = await runExtractionV2Pipeline({
+  const result = await extractAndApply({
     turns: allTurns.map((t) => ({
       turn_hash: t.turnHash,
       role: t.role,
@@ -274,20 +259,11 @@ export const extractHandler: ToolHandler = async (args) => {
     model,
   });
 
-  if (!v2Result.ok) {
-    return fail(`Extraction failed: ${v2Result.failure.message}`);
+  if (!result.ok) {
+    return fail(`Extraction failed: ${result.failure.message}`);
   }
 
-  // ── Step 7: Apply compiled YOps to materialize trees ──
-  const emptySnapshot = { trees: [] as TreeNode[], relations: [] as Relation[] };
-  const applied = applyYOps(emptySnapshot, v2Result.compiled.ops);
-  if (!applied.ok) {
-    return fail(
-      `Extraction produced YOps that failed to apply: ${applied.error?.message ?? 'unknown error'}`
-    );
-  }
-
-  if (applied.trees.length === 0) {
+  if (result.snapshot.trees.length === 0) {
     return fail(
       'No extractable content found in the provided text.\n' +
         'The text may be too short, too vague, or not contain structured knowledge.'
@@ -295,7 +271,7 @@ export const extractHandler: ToolHandler = async (args) => {
   }
 
   // ── Step 8: Create draft with extracted trees ──
-  const draftNodes = applied.trees.map((tree) => ({
+  const draftNodes = result.snapshot.trees.map((tree) => ({
     key: tree.key,
     slots: tree.slots,
     children: tree.children,
@@ -322,7 +298,7 @@ export const extractHandler: ToolHandler = async (args) => {
       payload: {
         draft_id: draft.id,
         node_count: draftNodes.length,
-        yops_count: v2Result.compiled.ops.length,
+        yops_count: result.compiled.ops.length,
         source: 'mcp',
       },
     });
@@ -332,7 +308,7 @@ export const extractHandler: ToolHandler = async (args) => {
   }
 
   // ── Build summary ──
-  const treeSummary = applied.trees.map((t) => ({
+  const treeSummary = result.snapshot.trees.map((t) => ({
     key: t.key,
     slots: Object.keys(t.slots).length,
     children: t.children.length,
@@ -344,7 +320,7 @@ export const extractHandler: ToolHandler = async (args) => {
     is_new_conversation: isNewConversation,
     turns_count: allTurns.length,
     tree_summary: treeSummary,
-    yops_count: v2Result.compiled.ops.length,
+    yops_count: result.compiled.ops.length,
     next_steps: [
       `Use t3x_query { "target": "draft", "id": "${draft.id}" } to inspect the extracted tree.`,
       `Use t3x_edit { "draft_id": "${draft.id}", "yops": "..." } to refine the extraction.`,

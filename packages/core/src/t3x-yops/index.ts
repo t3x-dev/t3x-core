@@ -15,7 +15,7 @@ export { findNode, getNodeKey, getParentPath } from './helpers';
 export { getYOpsJsonSchema } from './jsonSchema';
 export type { ReplayInput, ReplayResult, VerifyResult } from './replay';
 // ── Replay ──
-export { extractOpsFromEntries, replayYOps, verifyReplay } from './replay';
+export { extractOpsFromEntries, replayYOps, replayYOpsLog, verifyReplay } from './replay';
 // ── Schema ──
 export { YOpSchema, YOpsDocumentSchema } from './schema';
 // ── Source provenance ──
