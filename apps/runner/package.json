@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/runner",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "Apache-2.0",
   "publishConfig": {
