@@ -49,9 +49,7 @@ vi.mock('@t3x-dev/core', () => ({
   diffCommits: vi.fn(),
   prepareMerge: vi.fn(),
   executeMerge: vi.fn(),
-  Extractor: vi.fn(),
   GateRunner: vi.fn(),
-  runTransforms: vi.fn(),
   createDefaultProviderRegistry: vi.fn(() => ({
     tryWithFallback: vi.fn(),
   })),
