@@ -6,6 +6,7 @@
   "description": "T3X - Semantic extraction, diff, and merge for conversational AI",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
+    "prepare": "sh tools/hooks/install-hooks.sh",
     "build": "turbo run build",
     "build:core": "turbo run build --filter=@t3x-dev/core",
     "build:storage": "turbo run build --filter=@t3x-dev/storage",
