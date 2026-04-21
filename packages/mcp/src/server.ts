@@ -10,7 +10,14 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import { RESOURCE_TEMPLATES, readResource } from './resources/index.js';
 // Advanced tools
 import { adminDef, adminHandler } from './tools/advanced/admin.js';
 import { diffDef, diffHandler } from './tools/advanced/diff.js';
@@ -100,7 +107,7 @@ export function createMcpServer(options: McpServerOptions) {
   const server = new Server(
     { name: 't3x-mcp', version: '0.1.0' },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, resources: {} },
       instructions: SERVER_INSTRUCTIONS,
     }
   );
@@ -110,7 +117,20 @@ export function createMcpServer(options: McpServerOptions) {
     tools,
   }));
 
-  // 5. Register CallTool handler
+  // 5. Register resources handlers
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: [],
+  }));
+
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+    resourceTemplates: [...RESOURCE_TEMPLATES],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) =>
+    readResource(request.params.uri)
+  );
+
+  // 6. Register CallTool handler
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const handler = handlers.get(name);
