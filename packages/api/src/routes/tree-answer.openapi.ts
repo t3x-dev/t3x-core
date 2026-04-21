@@ -14,13 +14,9 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   applyAnswer,
   applyYOps,
-  type ExtractionResult,
-  type ExtractionTurn,
-  Extractor,
   flattenTrees,
   RELATION_TYPES,
   type RelationType,
-  runTransforms,
   type UserAnswer,
 } from '@t3x-dev/core';
 import {
@@ -34,9 +30,8 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { runApiExtractionV2 } from '../lib/extraction-v2';
 import { assertProjectAccess } from '../lib/project-access';
-import { getProviderRegistry } from '../lib/provider-registry';
-import { wrapWithUsageTracking } from '../lib/usage-tracking';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -249,64 +244,49 @@ async function handleDriftChoice4(
   yopsRecords: any[],
   driftContext?: { relation?: string; new_topic?: string }
 ) {
-  // 1. Fetch turns
-  const allTurns = await findTurnsByConversation(db, {
-    conversationId: conversation.conversationId,
-    limit: 500,
-  });
-
-  // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-  const extractionTurns: ExtractionTurn[] = allTurns.map((t: any) => ({
-    role: t.role as ExtractionTurn['role'],
-    content: t.content,
-    turn_hash: t.turnHash,
-  }));
-
-  // 2. Calculate processedTurnCount
-  let processedTurnCount: number | undefined;
+  // 1. Determine post-drift turn hashes so v2 extracts only the new material
+  //    (mirrors the legacy processedTurnCount semantics: turns strictly
+  //    after the last persisted extraction).
+  let postDriftTurnHashes: string[] | undefined;
   if (yopsRecords.length > 0) {
+    const allTurns = await findTurnsByConversation(db, {
+      conversationId: conversation.conversationId,
+      limit: 500,
+    });
     const lastEntry = yopsRecords[yopsRecords.length - 1];
     const lastExtractionTime = new Date(lastEntry.createdAt).getTime();
-    processedTurnCount = allTurns.filter(
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      (t: any) => new Date(t.createdAt).getTime() <= lastExtractionTime
-    ).length;
+    postDriftTurnHashes = allTurns
+      // biome-ignore lint/suspicious/noExplicitAny: generic row type
+      .filter((t: any) => new Date(t.createdAt).getTime() > lastExtractionTime)
+      // biome-ignore lint/suspicious/noExplicitAny: generic row type
+      .map((t: any) => t.turnHash);
+
+    if (postDriftTurnHashes.length === 0) {
+      return errorResponse(c, 'INVALID_REQUEST', 'No post-drift turns to extract');
+    }
   }
 
-  // 3. Extract frames via FrameExtractor
-  const reg = await getProviderRegistry();
-  const extractResult = (await reg.tryWithFallback(
-    'generation',
-    (provider): Promise<ExtractionResult> => {
-      // biome-ignore lint/suspicious/noExplicitAny: generic error handler
-      const { provider: tracked } = wrapWithUsageTracking(provider as any);
-      const extractor = new Extractor(tracked);
-      return extractor.extract({
-        turns: extractionTurns,
-        snapshot: currentSnapshot.trees.length > 0 ? currentSnapshot : undefined,
-        processedTurnCount,
-      });
-    }
-  )) as ExtractionResult;
+  // 2. Run the shared v2 extraction pipeline. runApiExtractionV2 replays the
+  //    yops log, resolves the provider, and applies the compiled ops.
+  const extractResult = await runApiExtractionV2({
+    db,
+    conversationId: conversation.conversationId,
+    turnHashes: postDriftTurnHashes,
+  });
 
   if (!extractResult.ok) {
-    return errorResponse(c, 'EXTRACTION_FAILED', extractResult.error);
+    const code =
+      extractResult.kind === 'conversation_not_found'
+        ? 'CONVERSATION_NOT_FOUND'
+        : 'EXTRACTION_FAILED';
+    return errorResponse(c, code, extractResult.message);
   }
 
-  // 4. Run post-extraction transforms (deterministic)
-  let organizedSnapshot = extractResult.snapshot;
-  try {
-    const transformResult = runTransforms(
-      extractResult.snapshot,
-      extractionTurns.map((t) => ({ role: t.role, content: t.content })),
-      currentSnapshot
-    );
-    organizedSnapshot = transformResult.content;
-  } catch {
-    // Transforms optional — raw extraction still valid
-  }
+  const organizedSnapshot = extractResult.snapshot;
 
-  // 5. Build connecting relation between old root → new root as a relate YOp
+  // 3. Build connecting relation between old root → new root as a relate YOp.
+  //    The new root is whatever top-level node v2 added that was not in the
+  //    current snapshot.
   const currentFlat = flattenTrees(currentSnapshot.trees);
   const organizedFlat = flattenTrees(organizedSnapshot.trees);
   const oldRootId = currentFlat[0]?.id;
@@ -315,8 +295,8 @@ async function handleDriftChoice4(
     .map((f) => f.id);
   const newRootId = newNodeIds[0];
 
-  // Append a relate YOp to the persisted ops (not direct mutation)
-  const allYops = [...extractResult.yops];
+  const extractedOps = extractResult.ops;
+  const allYops = [...extractedOps];
   if (oldRootId && newRootId) {
     const relationType =
       driftContext?.relation &&
@@ -332,16 +312,17 @@ async function handleDriftChoice4(
     });
   }
 
-  // Apply the relate op to get the final snapshot
+  // 4. Apply the appended relate op on top of the already-materialized
+  //    extraction snapshot to produce the final snapshot with the relation.
   const finalResult =
-    allYops.length > extractResult.yops.length
-      ? applyYOps(organizedSnapshot, allYops.slice(extractResult.yops.length))
+    allYops.length > extractedOps.length
+      ? applyYOps(organizedSnapshot, allYops.slice(extractedOps.length))
       : null;
   const finalSnapshot = finalResult?.ok
     ? { trees: finalResult.trees, relations: finalResult.relations }
     : organizedSnapshot;
 
-  // 6. Persist yops + snapshot
+  // 5. Persist the full op set (extraction + relation) as one pipeline entry.
   const record = await insertYOpsLogEntry(db, {
     conversationId: conversation.conversationId,
     projectId: conversation.projectId,
@@ -355,7 +336,7 @@ async function handleDriftChoice4(
       success: true as const,
       data: {
         applied: true,
-        delta: extractResult.yops,
+        delta: extractedOps,
         snapshot: finalSnapshot,
         yops_log_id: record.id,
       },
