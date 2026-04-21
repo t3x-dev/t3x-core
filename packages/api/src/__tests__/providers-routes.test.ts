@@ -23,6 +23,7 @@ const mockRegistry = {
   getProviderIdsForRole: vi.fn(() => []),
   isConfigured: vi.fn(() => false),
   exportConfig: vi.fn(() => ({ roles: [] })),
+  importConfig: vi.fn(),
   assignRole: vi.fn(),
   testConnection: vi.fn(),
   clearInstances: vi.fn(),
@@ -58,6 +59,7 @@ describe('Provider Routes', () => {
     mockRegistry.getProviderIdsForRole.mockReset();
     mockRegistry.isConfigured.mockReset();
     mockRegistry.exportConfig.mockReset();
+    mockRegistry.importConfig.mockReset();
     mockRegistry.assignRole.mockReset();
     mockRegistry.testConnection.mockReset();
     mockRegistry.clearInstances.mockReset();
@@ -301,10 +303,201 @@ describe('Provider Routes', () => {
         id: 'openai',
         available_models: getModelsByProvider('openai').map((model) => model.id),
       }),
-      expect.objectContaining({
-        id: 'deepseek',
-        available_models: ['deepseek-chat'],
-      }),
     ]);
+  });
+
+  it('hides non-supported generation providers from the provider list', async () => {
+    mockRegistry.listProviders.mockImplementation(() => [
+      {
+        id: 'anthropic',
+        name: 'Anthropic Claude',
+        role: 'generation',
+        configured: true,
+        roles: ['generation'],
+        requiredEnvKeys: ['ANTHROPIC_API_KEY'],
+        defaultModel: 'claude-sonnet-4-6',
+        availableModels: ['claude-sonnet-4-6'],
+      },
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        role: 'generation',
+        configured: true,
+        roles: ['generation'],
+        requiredEnvKeys: ['OPENAI_API_KEY'],
+        defaultModel: 'gpt-5.4',
+        availableModels: ['gpt-5.4'],
+      },
+      {
+        id: 'google-ai',
+        name: 'Google AI (Gemini)',
+        role: 'generation',
+        configured: true,
+        roles: ['generation'],
+        requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
+        defaultModel: 'gemini-2.5-pro',
+        availableModels: ['gemini-2.5-pro'],
+      },
+      {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        role: 'generation',
+        configured: false,
+        roles: ['generation'],
+        requiredEnvKeys: ['DEEPSEEK_API_KEY'],
+        defaultModel: 'deepseek-chat',
+        availableModels: ['deepseek-chat'],
+      },
+      {
+        id: 'ollama',
+        name: 'Ollama (Local)',
+        role: 'generation',
+        configured: false,
+        roles: ['generation'],
+        requiredEnvKeys: [],
+        defaultModel: 'llama3.1',
+        availableModels: ['llama3.1'],
+      },
+      {
+        id: 'google-ai-embedding',
+        name: 'Google AI Embedding',
+        role: 'embedding',
+        configured: true,
+        roles: ['embedding'],
+        requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
+        defaultModel: 'gemini-embedding-001',
+        availableModels: ['gemini-embedding-001'],
+      },
+    ]);
+
+    const res = await app.request('/v1/providers');
+
+    expect(res.status).toBe(200);
+    const json: ApiResponse = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.map((provider: { id: string }) => provider.id)).toEqual([
+      'anthropic',
+      'openai',
+      'google-ai',
+      'google-ai-embedding',
+    ]);
+  });
+
+  it('filters unsupported generation providers out of provider role reads', async () => {
+    mockRegistry.exportConfig.mockReturnValue({
+      roles: [
+        {
+          role: 'generation',
+          providerIds: ['anthropic', 'deepseek', 'openai', 'ollama', 'google-ai'],
+        },
+        { role: 'embedding', providerIds: ['google-ai-embedding', 'openai-embedding'] },
+        { role: 'merge', providerIds: ['anthropic-merge'] },
+      ],
+    });
+
+    const res = await app.request('/v1/providers/roles');
+
+    expect(res.status).toBe(200);
+    const json: ApiResponse = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data).toEqual([
+      {
+        role: 'generation',
+        provider_ids: ['anthropic', 'openai', 'google-ai'],
+      },
+      {
+        role: 'embedding',
+        provider_ids: ['google-ai-embedding', 'openai-embedding'],
+      },
+      {
+        role: 'merge',
+        provider_ids: ['anthropic-merge'],
+      },
+    ]);
+  });
+
+  it('drops unsupported generation providers when saving provider roles', async () => {
+    mockRegistry.exportConfig.mockReturnValue({
+      roles: [
+        { role: 'generation', providerIds: ['openai', 'google-ai'] },
+        { role: 'embedding', providerIds: ['google-ai-embedding'] },
+      ],
+    });
+
+    const res = await app.request('/v1/providers/roles', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roles: [
+          { role: 'generation', provider_ids: ['deepseek', 'openai', 'ollama', 'google-ai'] },
+          { role: 'embedding', provider_ids: ['google-ai-embedding'] },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockRegistry.assignRole).toHaveBeenCalledWith('generation', ['openai', 'google-ai']);
+    expect(mockRegistry.assignRole).toHaveBeenCalledWith('embedding', ['google-ai-embedding']);
+
+    const json: ApiResponse = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data).toEqual([
+      {
+        role: 'generation',
+        provider_ids: ['openai', 'google-ai'],
+      },
+      {
+        role: 'embedding',
+        provider_ids: ['google-ai-embedding'],
+      },
+    ]);
+  });
+
+  it('filters unsupported generation providers from provider config reads and writes', async () => {
+    mockRegistry.exportConfig.mockReturnValue({
+      roles: [
+        { role: 'generation', providerIds: ['anthropic', 'openai', 'google-ai'] },
+        { role: 'embedding', providerIds: ['google-ai-embedding'] },
+      ],
+    });
+
+    const getRes = await app.request('/v1/providers/config');
+    expect(getRes.status).toBe(200);
+
+    const getJson: ApiResponse = await getRes.json();
+    expect(getJson.data).toEqual({
+      roles: [
+        { role: 'generation', provider_ids: ['anthropic', 'openai', 'google-ai'] },
+        { role: 'embedding', provider_ids: ['google-ai-embedding'] },
+      ],
+    });
+
+    const putRes = await app.request('/v1/providers/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roles: [
+          { role: 'generation', provider_ids: ['anthropic', 'deepseek', 'openai', 'ollama'] },
+          { role: 'embedding', provider_ids: ['google-ai-embedding'] },
+        ],
+      }),
+    });
+
+    expect(putRes.status).toBe(200);
+    expect(mockRegistry.importConfig).toHaveBeenCalledWith({
+      roles: [
+        { role: 'generation', providerIds: ['anthropic', 'openai'] },
+        { role: 'embedding', providerIds: ['google-ai-embedding'] },
+      ],
+    });
+
+    const putJson: ApiResponse = await putRes.json();
+    expect(putJson.success).toBe(true);
+    expect(putJson.data).toEqual({
+      roles: [
+        { role: 'generation', provider_ids: ['anthropic', 'openai', 'google-ai'] },
+        { role: 'embedding', provider_ids: ['google-ai-embedding'] },
+      ],
+    });
   });
 });

@@ -92,6 +92,26 @@ const SHARED_GENERATION_PROVIDER_CATALOG: Partial<Record<string, ProviderName>> 
   'google-ai': 'google',
 };
 
+const VISIBLE_GENERATION_PROVIDER_IDS = new Set(['anthropic', 'openai', 'google-ai']);
+
+function isVisibleProvider(provider: { id: string; role: string }): boolean {
+  return provider.role !== 'generation' || VISIBLE_GENERATION_PROVIDER_IDS.has(provider.id);
+}
+
+function filterVisibleProviderIds(role: string, providerIds: string[]): string[] {
+  if (role !== 'generation') return providerIds;
+  return providerIds.filter((providerId) => VISIBLE_GENERATION_PROVIDER_IDS.has(providerId));
+}
+
+function serializeRoleAssignments(
+  roles: Array<{ role: string; providerIds: string[] }>
+): Array<{ role: string; provider_ids: string[] }> {
+  return roles.map((role) => ({
+    role: role.role,
+    provider_ids: filterVisibleProviderIds(role.role, role.providerIds),
+  }));
+}
+
 function getAvailableModelsForProvider(
   providerId: string,
   role: string,
@@ -133,7 +153,7 @@ const listProvidersRoute = createRoute({
 providersRoutes.openapi(listProvidersRoute, async (c) => {
   await refreshProviderRegistryConfig();
   const registry = await getProviderRegistry();
-  const providers = registry.listProviders();
+  const providers = registry.listProviders().filter(isVisibleProvider);
 
   return c.json({
     success: true as const,
@@ -177,10 +197,7 @@ providersRoutes.openapi(getRolesRoute, async (c) => {
 
   return c.json({
     success: true as const,
-    data: config.roles.map((r) => ({
-      role: r.role,
-      provider_ids: r.providerIds,
-    })),
+    data: serializeRoleAssignments(config.roles),
   });
 });
 
@@ -227,17 +244,14 @@ providersRoutes.openapi(updateRolesRoute, async (c) => {
 
   try {
     for (const { role, provider_ids } of body.roles) {
-      registry.assignRole(role, provider_ids);
+      registry.assignRole(role, filterVisibleProviderIds(role, provider_ids));
     }
     await saveRegistryConfig();
 
     const config = registry.exportConfig();
     return c.json({
       success: true as const,
-      data: config.roles.map((r) => ({
-        role: r.role,
-        provider_ids: r.providerIds,
-      })),
+      data: serializeRoleAssignments(config.roles),
     });
   } catch (err) {
     return c.json(
@@ -542,10 +556,7 @@ providersRoutes.openapi(getConfigRoute, async (c) => {
   return c.json({
     success: true as const,
     data: {
-      roles: config.roles.map((r) => ({
-        role: r.role,
-        provider_ids: r.providerIds,
-      })),
+      roles: serializeRoleAssignments(config.roles),
     },
   });
 });
@@ -595,7 +606,7 @@ providersRoutes.openapi(updateConfigRoute, async (c) => {
     registry.importConfig({
       roles: body.roles.map((r) => ({
         role: r.role,
-        providerIds: r.provider_ids,
+        providerIds: filterVisibleProviderIds(r.role, r.provider_ids),
       })),
     });
     await saveRegistryConfig();
@@ -604,10 +615,7 @@ providersRoutes.openapi(updateConfigRoute, async (c) => {
     return c.json({
       success: true as const,
       data: {
-        roles: config.roles.map((r) => ({
-          role: r.role,
-          provider_ids: r.providerIds,
-        })),
+        roles: serializeRoleAssignments(config.roles),
       },
     });
   } catch (err) {
