@@ -6,10 +6,16 @@ const {
   mockFindProjectById,
   mockGetCommit,
   mockFindDraftById,
+  mockFindConversationById,
+  mockFindLeafById,
+  mockGetMergeDraft,
 } = vi.hoisted(() => ({
   mockFindProjectById: vi.fn(),
   mockGetCommit: vi.fn(),
   mockFindDraftById: vi.fn(),
+  mockFindConversationById: vi.fn(),
+  mockFindLeafById: vi.fn(),
+  mockGetMergeDraft: vi.fn(),
 }));
 
 vi.mock('../db.js', () => ({
@@ -25,13 +31,14 @@ vi.mock('@t3x-dev/storage', () => ({
   findAgentDraftById: vi.fn(),
   findAgentDraftsByProject: vi.fn(),
   findBranchesByProject: vi.fn(),
-  findConversationById: vi.fn(),
+  findConversationById: mockFindConversationById,
   findConversationsByProject: vi.fn(),
-  findLeafById: vi.fn(),
+  findLeafById: mockFindLeafById,
   findLeavesByProject: vi.fn(),
   findPinById: vi.fn(),
   findPinsByProject: vi.fn(),
   getCommit: mockGetCommit,
+  getMergeDraft: mockGetMergeDraft,
   listCommits: vi.fn(),
   insertProject: vi.fn(),
   insertBranch: vi.fn(),
@@ -44,7 +51,6 @@ vi.mock('@t3x-dev/storage', () => ({
   createPin: vi.fn(),
   deletePin: vi.fn(),
   createMergeDraft: vi.fn(),
-  getMergeDraft: vi.fn(),
   updateMergeDraft: vi.fn(),
   cancelMergeDraft: vi.fn(),
   updateLeaf: vi.fn(),
@@ -115,6 +121,18 @@ describe('MCP resources', () => {
       expect.objectContaining({
         name: 'workbench_draft',
         uriTemplate: 't3x://workbench-drafts/{draft_id}',
+      }),
+      expect.objectContaining({
+        name: 'conversation',
+        uriTemplate: 't3x://conversations/{conversation_id}',
+      }),
+      expect.objectContaining({
+        name: 'leaf',
+        uriTemplate: 't3x://leaves/{leaf_id}',
+      }),
+      expect.objectContaining({
+        name: 'merge_draft',
+        uriTemplate: 't3x://merge-drafts/{draft_id}',
       }),
     ]);
 
@@ -228,6 +246,113 @@ describe('MCP resources', () => {
       node_count: 1,
       constraint_count: 0,
       target_branch: 'main',
+    });
+
+    await client.close();
+  });
+
+  it('reads a conversation resource from a stable URI', async () => {
+    mockFindConversationById.mockResolvedValue({
+      conversationId: 'conv_123',
+      projectId: 'proj_123',
+      title: 'Trip planning',
+      alias: 'trip_planning',
+      parentCommitHash: 'sha256:parent',
+      positionX: 100,
+      positionY: 200,
+      createdAt: new Date('2026-04-21T13:00:00.000Z'),
+      metadataJson: '{"channel":"chat"}',
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-20250514',
+    });
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://conversations/conv_123' });
+
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'conversation',
+      conversation_id: 'conv_123',
+      project_id: 'proj_123',
+      title: 'Trip planning',
+      alias: 'trip_planning',
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-20250514',
+      metadata: { channel: 'chat' },
+    });
+
+    await client.close();
+  });
+
+  it('reads a leaf resource from a stable URI', async () => {
+    mockFindLeafById.mockResolvedValue({
+      id: 'leaf_123',
+      commit_hash: 'sha256:commit123',
+      type: 'article',
+      title: 'Hangzhou article',
+      constraints: [{ id: 'cst_1', type: 'require', match_mode: 'exact', value: 'West Lake' }],
+      config: { model: 'claude-sonnet-4-20250514' },
+      output: 'A polished article',
+      generated_at: '2026-04-21T14:00:00.000Z',
+      assertions: [{ id: 'ast_1', constraint_id: 'cst_1', passed: true, details: 'Included' }],
+      runner_assertions: undefined,
+      project_id: 'proj_123',
+      created_at: '2026-04-21T13:30:00.000Z',
+      created_by: 'user_1',
+    });
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://leaves/leaf_123' });
+
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'leaf',
+      leaf_id: 'leaf_123',
+      project_id: 'proj_123',
+      commit_hash: 'sha256:commit123',
+      type: 'article',
+      title: 'Hangzhou article',
+      constraint_count: 1,
+      assertion_count: 1,
+      has_output: true,
+    });
+
+    await client.close();
+  });
+
+  it('reads a merge draft resource from a stable URI', async () => {
+    mockGetMergeDraft.mockResolvedValue({
+      draftId: 'merge_123',
+      projectId: 'proj_123',
+      sourceHash: 'sha256:source',
+      targetHash: 'sha256:target',
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+      preparedJson: JSON.stringify({
+        identical: ['budget'],
+        similarPairs: [{ source: 'hotel', target: 'lodging' }],
+      }),
+      status: 'pending',
+      message: 'Merge feature into main',
+      createdAt: new Date('2026-04-21T15:00:00.000Z'),
+      updatedAt: new Date('2026-04-21T15:10:00.000Z'),
+    });
+    const { client } = await connectClientAndServer();
+
+    const result = await client.readResource({ uri: 't3x://merge-drafts/merge_123' });
+
+    expect(JSON.parse(result.contents[0].text)).toMatchObject({
+      kind: 'merge_draft',
+      draft_id: 'merge_123',
+      project_id: 'proj_123',
+      source_hash: 'sha256:source',
+      target_hash: 'sha256:target',
+      source_branch: 'feature',
+      target_branch: 'main',
+      status: 'pending',
+      message: 'Merge feature into main',
+      prepared: {
+        identical: ['budget'],
+        similarPairs: [{ source: 'hotel', target: 'lodging' }],
+      },
     });
 
     await client.close();
