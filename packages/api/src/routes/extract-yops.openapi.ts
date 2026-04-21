@@ -16,9 +16,9 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
+  extractAndApply,
   getCanonicalModelId,
   getModelInfo,
-  runExtractionV2Pipeline,
 } from '@t3x-dev/core';
 import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -279,7 +279,7 @@ extractYopsRoutes.openapi(route, async (c) => {
         return errorResponse(c, 'EXTRACTION_FAILED', `No default model configured for provider: ${providerId}`);
       }
 
-      const pipelineResult = await runExtractionV2Pipeline({
+      const pipelineResult = await extractAndApply({
         turns: turns.map((turn) => ({
           turn_hash: turn.turn_hash,
           role: turn.role ?? 'user',

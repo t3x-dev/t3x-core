@@ -6,15 +6,7 @@
  */
 
 import {
-  createClaudeProvider,
-  createDeepSeekProvider,
-  createGeminiProvider,
-  createGoogleAIEmbeddingProvider,
-  createOllamaEmbeddingProvider,
-  createOllamaProvider,
-  createOpenAIEmbeddingProvider,
-  createOpenAIProvider,
-  createProviderRegistry,
+  createDefaultProviderRegistry,
   type EmbeddingProvider,
   type GenerateOptions,
   type GenerateResult,
@@ -59,16 +51,9 @@ export async function getProviderRegistry(): Promise<ProviderRegistry> {
 }
 
 async function initRegistry(): Promise<ProviderRegistry> {
-  const reg = createProviderRegistry();
-
-  // Register all built-in providers
-  registerBuiltinProviders(reg);
-
-  // Load local credential overrides first so runtime config uses stored secrets.
-  reg.setConfigOverrides(await loadResolvedProviderConfig());
-
-  // Auto-configure defaults from env and local overrides.
-  reg.autoConfigureFromEnv();
+  const reg = createDefaultProviderRegistry({
+    configOverrides: await loadResolvedProviderConfig(),
+  });
 
   // Load saved config from DB (overrides auto-config)
   try {
@@ -135,146 +120,6 @@ export async function refreshProviderRegistryConfig(): Promise<void> {
 export function resetProviderRegistry(): void {
   registry = null;
   registryInit = null;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Built-in Provider Definitions
-// ═══════════════════════════════════════════════════════════════════════════
-
-function registerBuiltinProviders(reg: ProviderRegistry): void {
-  // ─── LLM Providers (generation role) ───────────────────────────────
-
-  reg.register({
-    id: 'anthropic',
-    name: 'Anthropic Claude',
-    role: 'generation',
-    requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-6',
-    availableModels: [
-      'claude-sonnet-4-6',
-      'claude-opus-4-6',
-      'claude-haiku-4-5-20251001',
-    ],
-    factory: (config) =>
-      createClaudeProvider({
-        apiKey: config.ANTHROPIC_API_KEY!,
-        baseUrl: process.env.ANTHROPIC_BASE_URL,
-      }),
-  });
-
-  reg.register({
-    id: 'openai',
-    name: 'OpenAI',
-    role: 'generation',
-    requiredEnvKeys: ['OPENAI_API_KEY'],
-    defaultModel: 'gpt-5.4',
-    availableModels: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
-    factory: (config) =>
-      createOpenAIProvider({
-        apiKey: config.OPENAI_API_KEY!,
-        baseUrl: process.env.OPENAI_BASE_URL,
-      }),
-  });
-
-  reg.register({
-    id: 'deepseek',
-    name: 'DeepSeek',
-    role: 'generation',
-    requiredEnvKeys: ['DEEPSEEK_API_KEY'],
-    defaultModel: 'deepseek-chat',
-    availableModels: ['deepseek-chat', 'deepseek-reasoner'],
-    factory: (config) =>
-      createDeepSeekProvider({
-        apiKey: config.DEEPSEEK_API_KEY!,
-        baseUrl: process.env.DEEPSEEK_BASE_URL,
-      }),
-  });
-
-  reg.register({
-    id: 'google-ai',
-    name: 'Google AI (Gemini)',
-    role: 'generation',
-    requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-    defaultModel: 'gemini-2.5-pro',
-    availableModels: [
-      'gemini-2.5-pro',
-      'gemini-3-flash-preview',
-      'gemini-3.1-flash-lite-preview',
-    ],
-    factory: (config) =>
-      createGeminiProvider({
-        apiKey: config.GOOGLE_AI_STUDIO_KEY!,
-      }),
-  });
-
-  reg.register({
-    id: 'ollama',
-    name: 'Ollama (Local)',
-    role: 'generation',
-    requiredEnvKeys: [], // No key needed — local server
-    defaultModel: 'llama3.1',
-    availableModels: ['llama3.1', 'llama3.2', 'mistral', 'mixtral', 'qwen2.5', 'deepseek-r1'],
-    factory: () =>
-      createOllamaProvider({
-        baseUrl: process.env.OLLAMA_BASE_URL,
-      }),
-  });
-
-  // ─── LLM Providers (merge role) ────────────────────────────────────
-
-  reg.register({
-    id: 'anthropic-merge',
-    name: 'Anthropic Claude (Merge)',
-    role: 'merge',
-    requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-6',
-    factory: (config) =>
-      createClaudeProvider({
-        apiKey: config.ANTHROPIC_API_KEY!,
-        baseUrl: process.env.ANTHROPIC_BASE_URL,
-      }),
-  });
-
-  // ─── Embedding Providers ───────────────────────────────────────────
-
-  reg.register({
-    id: 'google-ai-embedding',
-    name: 'Google AI Embedding',
-    role: 'embedding',
-    requiredEnvKeys: ['GOOGLE_AI_STUDIO_KEY'],
-    defaultModel: 'gemini-embedding-001',
-    availableModels: ['gemini-embedding-001', 'text-embedding-004'],
-    factory: (config) =>
-      createGoogleAIEmbeddingProvider({
-        apiKey: config.GOOGLE_AI_STUDIO_KEY!,
-      }),
-  });
-
-  reg.register({
-    id: 'openai-embedding',
-    name: 'OpenAI Embedding',
-    role: 'embedding',
-    requiredEnvKeys: ['OPENAI_API_KEY'],
-    defaultModel: 'text-embedding-3-small',
-    availableModels: ['text-embedding-3-small', 'text-embedding-3-large'],
-    factory: (config) =>
-      createOpenAIEmbeddingProvider({
-        apiKey: config.OPENAI_API_KEY!,
-      }),
-  });
-
-  reg.register({
-    id: 'ollama-embedding',
-    name: 'Ollama Embedding (Local)',
-    role: 'embedding',
-    requiredEnvKeys: [],
-    defaultModel: 'nomic-embed-text',
-    availableModels: ['nomic-embed-text', 'mxbai-embed-large', 'all-minilm'],
-    factory: () =>
-      createOllamaEmbeddingProvider({
-        baseUrl: process.env.OLLAMA_BASE_URL,
-      }),
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

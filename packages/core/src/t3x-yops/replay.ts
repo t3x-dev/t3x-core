@@ -151,3 +151,22 @@ export function extractOpsFromEntries(entries: Array<{ id: string; yops: unknown
 
   return allOps;
 }
+
+/**
+ * Replay persisted yops_log entries into a SemanticContent snapshot.
+ * Invalid entries are skipped so callers can still reconstruct the last
+ * known-good tree state from partially bad history.
+ */
+export function replayYOpsLog(entries: Array<{ id: string; yops: unknown }>): SemanticContent {
+  const empty: SemanticContent = { trees: [], relations: [] };
+
+  return entries.reduce((snapshot, entry) => {
+    try {
+      const ops = extractOpsFromEntries([{ id: entry.id, yops: entry.yops }]);
+      const result = applyYOps(snapshot, ops);
+      return result.ok ? { trees: result.trees, relations: result.relations } : snapshot;
+    } catch {
+      return snapshot;
+    }
+  }, empty);
+}

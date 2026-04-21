@@ -10,8 +10,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
-const { runExtractionV2Pipeline } = vi.hoisted(() => ({
-  runExtractionV2Pipeline: vi.fn(),
+const { extractAndApply } = vi.hoisted(() => ({
+  extractAndApply: vi.fn(),
 }));
 
 vi.mock('../lib/db', () => ({
@@ -23,7 +23,7 @@ vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
-    runExtractionV2Pipeline,
+    extractAndApply,
   };
 });
 
@@ -52,7 +52,7 @@ describe('POST /v1/extract-yops (v2)', () => {
 
   beforeEach(async () => {
     resetProviderRegistry();
-    runExtractionV2Pipeline.mockReset();
+    extractAndApply.mockReset();
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.GOOGLE_AI_STUDIO_KEY;
@@ -72,7 +72,7 @@ describe('POST /v1/extract-yops (v2)', () => {
       apiKey: 'sk-local-openai',
     });
 
-    runExtractionV2Pipeline.mockResolvedValue({
+    extractAndApply.mockResolvedValue({
       ok: true,
       draft: {
         schema: 't3x/extraction-draft',
@@ -81,6 +81,7 @@ describe('POST /v1/extract-yops (v2)', () => {
         items: [],
       },
       compiled: { ops: [], warnings: [] },
+      snapshot: { trees: [], relations: [] },
       turnHashByTag: { T1: 'sha256:aabbcc' },
     });
 
@@ -96,8 +97,8 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(runExtractionV2Pipeline).toHaveBeenCalledTimes(1);
-    expect(runExtractionV2Pipeline.mock.calls[0][0]).toMatchObject({
+    expect(extractAndApply).toHaveBeenCalledTimes(1);
+    expect(extractAndApply.mock.calls[0][0]).toMatchObject({
       mode: 'bootstrap',
       providerId: 'openai',
       model: 'gpt-5.4',
@@ -111,7 +112,7 @@ describe('POST /v1/extract-yops (v2)', () => {
       apiKey: 'sk-local-openai',
     });
 
-    runExtractionV2Pipeline.mockResolvedValue({
+    extractAndApply.mockResolvedValue({
       ok: false,
       failure: {
         code: 'draft_schema',

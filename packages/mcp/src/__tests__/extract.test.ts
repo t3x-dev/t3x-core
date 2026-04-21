@@ -52,8 +52,7 @@ const MOCK_UPDATED_DRAFT = {
   revision: 2,
 };
 
-// v2 pipeline mock results
-const MOCK_V2_SUCCESS = {
+const MOCK_EXTRACT_SUCCESS = {
   ok: true as const,
   draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
   compiled: {
@@ -63,17 +62,28 @@ const MOCK_V2_SUCCESS = {
     ],
     warnings: [],
   },
+  snapshot: {
+    trees: [
+      {
+        key: 'trip',
+        slots: { budget: 5000, destination: 'Tokyo' },
+        children: [],
+      },
+    ],
+    relations: [],
+  },
   turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-const MOCK_V2_EMPTY_TREES = {
+const MOCK_EXTRACT_EMPTY_TREES = {
   ok: true as const,
   draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
   compiled: { ops: [], warnings: [] },
+  snapshot: { trees: [], relations: [] },
   turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-const MOCK_V2_FAILURE = {
+const MOCK_EXTRACT_FAILURE = {
   ok: false as const,
   failure: {
     code: 'draft_schema',
@@ -83,47 +93,18 @@ const MOCK_V2_FAILURE = {
   turnHashByTag: { T1: 'sha256:turn1' },
 };
 
-// applyYOps mock result matching the success case above
-const MOCK_APPLIED_SUCCESS = {
-  ok: true as const,
-  trees: [
-    {
-      key: 'trip',
-      slots: { budget: 5000, destination: 'Tokyo' },
-      children: [],
-    },
-  ],
-  relations: [],
-};
-
-const MOCK_APPLIED_EMPTY = {
-  ok: true as const,
-  trees: [],
-  relations: [],
-};
-
-const MOCK_APPLIED_FAILURE = {
-  ok: false as const,
-  error: { message: 'path not found' },
-};
-
 // Track mocks
-const mockRunV2 = vi.fn();
-const mockApplyYOps = vi.fn();
+const mockExtractAndApply = vi.fn();
 
 vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
-    runExtractionV2Pipeline: (...args: unknown[]) => mockRunV2(...args),
-    applyYOps: (...args: unknown[]) => mockApplyYOps(...args),
-    createProviderRegistry: vi.fn(() => ({
-      register: vi.fn(),
-      autoConfigureFromEnv: vi.fn(),
+    extractAndApply: (...args: unknown[]) => mockExtractAndApply(...args),
+    createDefaultProviderRegistry: vi.fn(() => ({
       getById: vi.fn(() => ({})),
       getEntry: vi.fn(() => ({ defaultModel: 'claude-sonnet-4-20250514' })),
     })),
-    createClaudeProvider: vi.fn(() => ({})),
   };
 });
 
@@ -157,8 +138,7 @@ describe('t3x_extract handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
-    mockRunV2.mockResolvedValue(MOCK_V2_SUCCESS);
-    mockApplyYOps.mockReturnValue(MOCK_APPLIED_SUCCESS);
+    mockExtractAndApply.mockResolvedValue(MOCK_EXTRACT_SUCCESS);
   });
 
   afterEach(() => {
@@ -228,7 +208,7 @@ describe('t3x_extract handler', () => {
   // ── Extraction failures ──
 
   it('returns error when v2 pipeline fails', async () => {
-    mockRunV2.mockResolvedValue(MOCK_V2_FAILURE);
+    mockExtractAndApply.mockResolvedValue(MOCK_EXTRACT_FAILURE);
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'plan a trip to Tokyo',
@@ -238,19 +218,26 @@ describe('t3x_extract handler', () => {
     expect(result.content[0].text).toContain('LLM returned invalid draft shape');
   });
 
-  it('returns error when applyYOps fails', async () => {
-    mockApplyYOps.mockReturnValue(MOCK_APPLIED_FAILURE);
+  it('returns error when extraction helper fails after compilation', async () => {
+    mockExtractAndApply.mockResolvedValue({
+      ok: false,
+      failure: {
+        code: 'executable_structure',
+        message: 'path not found',
+        retry: { retryable: false, strategy: 'none', maxAttempts: 0 },
+      },
+      turnHashByTag: { T1: 'sha256:turn1' },
+    });
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'plan a trip to Tokyo',
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('failed to apply');
+    expect(result.content[0].text).toContain('path not found');
   });
 
   it('returns error when applied trees are empty', async () => {
-    mockRunV2.mockResolvedValue(MOCK_V2_EMPTY_TREES);
-    mockApplyYOps.mockReturnValue(MOCK_APPLIED_EMPTY);
+    mockExtractAndApply.mockResolvedValue(MOCK_EXTRACT_EMPTY_TREES);
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'hello',
@@ -390,8 +377,8 @@ describe('t3x_extract handler', () => {
       text: 'plan a trip to Tokyo',
     });
 
-    expect(mockRunV2).toHaveBeenCalledTimes(1);
-    const call = mockRunV2.mock.calls[0][0];
+    expect(mockExtractAndApply).toHaveBeenCalledTimes(1);
+    const call = mockExtractAndApply.mock.calls[0][0];
     expect(call.mode).toBe('bootstrap');
     expect(call.providerId).toBe('anthropic');
     expect(call.model).toBe('claude-sonnet-4-20250514');

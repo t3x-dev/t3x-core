@@ -1,8 +1,7 @@
 import {
-  applyYOps,
+  extractAndApply,
   getCanonicalModelId,
   getModelInfo,
-  runExtractionV2Pipeline,
   type ExtractionFailure,
   type ExtractionMode,
 } from '@t3x-dev/core';
@@ -210,7 +209,7 @@ export async function runApiExtractionV2(input: ApiExtractionV2Input): Promise<A
   const replayedSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
   const mode: ExtractionMode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
-  const result = await runExtractionV2Pipeline({
+  const result = await extractAndApply({
     turns: selectedTurns.map((turn) => ({
       turn_hash: turn.turnHash,
       role: turn.role,
@@ -227,26 +226,11 @@ export async function runApiExtractionV2(input: ApiExtractionV2Input): Promise<A
     return { ok: false, kind: 'failure', message: result.failure.message, failure: result.failure };
   }
 
-  const baseSnapshot = replayedSnapshot.trees.length > 0 ? replayedSnapshot : { trees: [], relations: [] };
-  const applied = applyYOps(baseSnapshot, result.compiled.ops);
-  if (!applied.ok) {
-    return {
-      ok: false,
-      kind: 'failure',
-      message: applied.error?.message ?? 'Failed to apply compiled YOps',
-      failure: {
-        code: 'executable_structure',
-        message: applied.error?.message ?? 'Failed to apply compiled YOps',
-        retry: { retryable: false, strategy: 'none', maxAttempts: 0 },
-      },
-    };
-  }
-
   const lastTurnHash = selectedTurns[selectedTurns.length - 1]?.turnHash ?? '';
   return {
     ok: true,
     mode,
-    snapshot: { trees: applied.trees, relations: applied.relations },
+    snapshot: result.snapshot,
     ops: result.compiled.ops,
     lastTurnHash,
   };
