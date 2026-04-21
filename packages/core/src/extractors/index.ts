@@ -70,6 +70,13 @@ export {
   toCompiledMutationPlan,
 } from './v2/compiler';
 export {
+  type CompressionV2Metadata,
+  type CompressionV2PipelineInput,
+  type CompressionV2Result,
+  type CompressionV2Usage,
+  runCompressionV2Pipeline,
+} from './v2/compress';
+export {
   extractAndApply,
   type ExtractAndApplyInput,
   type ExtractAndApplyResult,
