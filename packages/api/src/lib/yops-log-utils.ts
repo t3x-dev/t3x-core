@@ -6,8 +6,7 @@
  */
 
 import {
-  applyYOps,
-  extractOpsFromEntries,
+  replayYOpsLog as replayCoreYOpsLog,
   type SemanticContent,
   type YOpsLogEntry,
 } from '@t3x-dev/core';
@@ -44,21 +43,4 @@ export function toYOpsLogEntries(records: YOpsLogRecord[]): YOpsLogEntry[] {
   return records.map(toYOpsLogEntry);
 }
 
-/**
- * Replay a sequence of YOpsLogEntries to build the current SemanticContent snapshot.
- * Uses extractOpsFromEntries for type-safe parsing of the yops field.
- * Entries with invalid ops are skipped (snapshot unchanged).
- */
-export function replayYOpsLog(entries: YOpsLogEntry[]): SemanticContent {
-  const empty: SemanticContent = { trees: [], relations: [] };
-  return entries.reduce((snap, entry) => {
-    try {
-      const ops = extractOpsFromEntries([{ id: entry.id, yops: entry.yops }]);
-      const result = applyYOps(snap, ops);
-      return result.ok ? { trees: result.trees, relations: result.relations } : snap;
-    } catch {
-      // Invalid ops — skip this entry
-      return snap;
-    }
-  }, empty);
-}
+export const replayYOpsLog = (entries: YOpsLogEntry[]): SemanticContent => replayCoreYOpsLog(entries);

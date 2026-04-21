@@ -128,14 +128,11 @@ vi.mock('@t3x-dev/core', async () => {
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,
-    createProviderRegistry: vi.fn(() => ({
-      register: vi.fn(),
-      autoConfigureFromEnv: vi.fn(),
+    createDefaultProviderRegistry: vi.fn(() => ({
       tryWithFallback: vi.fn(async (_role: string, fn: (provider: unknown) => Promise<unknown>) =>
         fn({})
       ),
     })),
-    createClaudeProvider: vi.fn(() => ({})),
     collectLessonsFromAssertions: vi.fn((leaves: Array<{ id: string; assertions: unknown[] }>) => {
       // Collect any lessons from assertions
       const lessons: string[] = [];

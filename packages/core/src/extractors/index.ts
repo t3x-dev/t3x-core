@@ -70,6 +70,11 @@ export {
   toCompiledMutationPlan,
 } from './v2/compiler';
 export {
+  extractAndApply,
+  type ExtractAndApplyInput,
+  type ExtractAndApplyResult,
+} from './v2/extract-and-apply';
+export {
   createExtractionFailure,
   EXTRACTION_FAILURE_CODES,
   type ExtractionFailure,

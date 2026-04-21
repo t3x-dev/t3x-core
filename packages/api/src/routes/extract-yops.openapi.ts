@@ -17,7 +17,11 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getCanonicalModelId, getModelInfo, runExtractionV2Pipeline } from '@t3x-dev/core';
+import {
+  extractAndApply,
+  getCanonicalModelId,
+  getModelInfo,
+} from '@t3x-dev/core';
 import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
@@ -299,7 +303,7 @@ extractYopsRoutes.openapi(route, async (c) => {
         );
       }
 
-      const pipelineResult = await runExtractionV2Pipeline({
+      const pipelineResult = await extractAndApply({
         turns: turns.map((turn) => ({
           turn_hash: turn.turn_hash,
           role: turn.role ?? 'user',

@@ -318,6 +318,30 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/mcp/src/read-models/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["../db.js", "../tools/**", "../prompts/**", "../resources/**"],
+                    "message": "read-models/ must stay pure and adapter-local. No DB access or protocol-layer imports."
+                  },
+                  {
+                    "group": ["@t3x-dev/storage", "@t3x-dev/storage/embedded"],
+                    "message": "read-models/ must not talk to storage directly. Accept plain input objects and return MCP-safe JSON."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

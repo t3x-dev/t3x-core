@@ -22,8 +22,7 @@
 
 import {
   collectLessonsFromAssertions,
-  createClaudeProvider,
-  createProviderRegistry,
+  createDefaultProviderRegistry,
   generateLeafOutput,
   type LLMProvider,
 } from '@t3x-dev/core';
@@ -88,27 +87,17 @@ export const generateDef: ToolDef = {
 // ── Helpers ──
 
 /**
- * Build a minimal provider registry wired to the Anthropic API key.
- * Mirrors the same pattern used by extract.ts.
+ * Build a default provider registry while preserving MCP's current Anthropic
+ * model pin for leaf generation.
  */
 function buildRegistry() {
-  const reg = createProviderRegistry();
-
-  reg.register({
-    id: 'anthropic',
-    name: 'Anthropic Claude',
-    role: 'generation',
-    requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-    defaultModel: 'claude-sonnet-4-20250514',
-    factory: (config) =>
-      createClaudeProvider({
-        apiKey: config.ANTHROPIC_API_KEY!,
-        baseUrl: process.env.ANTHROPIC_BASE_URL,
-      }),
+  return createDefaultProviderRegistry({
+    providerOverrides: {
+      anthropic: {
+        defaultModel: 'claude-sonnet-4-20250514',
+      },
+    },
   });
-
-  reg.autoConfigureFromEnv();
-  return reg;
 }
 
 // ── Handler ──
