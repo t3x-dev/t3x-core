@@ -10,6 +10,8 @@ vi.mock('../db.js', () => ({
 vi.mock('@t3x-dev/storage', () => ({
   findProjects: vi.fn(),
   findProjectById: vi.fn(),
+  findDraftById: vi.fn(),
+  listDraftsByProject: vi.fn(),
   findAgentDraftById: vi.fn(),
   findAgentDraftsByProject: vi.fn(),
   findBranchesByProject: vi.fn(),
@@ -29,7 +31,6 @@ vi.mock('@t3x-dev/storage', () => ({
   insertConversation: vi.fn(),
   insertTurn: vi.fn(),
   insertDraft: vi.fn(),
-  findDraftById: vi.fn(),
   updateDraft: vi.fn(),
   commitDraft: vi.fn(),
   createCommit: vi.fn(),

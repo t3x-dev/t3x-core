@@ -11,12 +11,28 @@ import {
   type RoleAssignment,
 } from '@/infrastructure/misc';
 
+const VISIBLE_GENERATION_PROVIDER_IDS = new Set(['anthropic', 'openai', 'google-ai']);
+
+function filterVisibleProviderIds(role: string, providerIds: string[]): string[] {
+  if (role !== 'generation') return providerIds;
+  return providerIds.filter((providerId) => VISIBLE_GENERATION_PROVIDER_IDS.has(providerId));
+}
+
+function isVisibleProvider(provider: ProviderInfo): boolean {
+  return provider.role !== 'generation' || VISIBLE_GENERATION_PROVIDER_IDS.has(provider.id);
+}
+
 export function fetchProviders(): Promise<ProviderInfo[]> {
-  return listProviders();
+  return listProviders().then((providers) => providers.filter(isVisibleProvider));
 }
 
 export function fetchProviderRoles(): Promise<RoleAssignment[]> {
-  return getProviderRoles();
+  return getProviderRoles().then((roles) =>
+    roles.map((role) => ({
+      ...role,
+      provider_ids: filterVisibleProviderIds(role.role, role.provider_ids),
+    }))
+  );
 }
 
 export function fetchProjectProviderConfig(

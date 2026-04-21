@@ -1,6 +1,7 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Settings, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -25,7 +26,6 @@ export function ChatSidebar() {
 
   const {
     sidebarCollapsed: collapsed,
-    toggleSidebar,
     activeConversationId,
     expandedProjectIds,
     toggleProjectExpanded,
@@ -284,8 +284,34 @@ export function ChatSidebar() {
             collapsed ? 'items-center px-2' : 'px-3'
           )}
         >
-          {/* User Menu (includes Settings in dropdown) */}
+          {/* User Menu */}
           <UserMenu collapsed={collapsed} />
+
+          {/* Settings */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/settings"
+                className={cn(
+                  'flex items-center gap-3 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
+                  'active:scale-95',
+                  collapsed ? 'h-10 w-10 justify-center' : 'h-10 w-full px-3',
+                  pathname.startsWith('/settings')
+                    ? 'border-l-2 border-[var(--accent-commit)] bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                )}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="text-sm font-medium">Settings</span>}
+              </Link>
+            </TooltipTrigger>
+            {collapsed && (
+              <TooltipContent side="right" sideOffset={8}>
+                Settings
+              </TooltipContent>
+            )}
+          </Tooltip>
         </div>
       </aside>
 

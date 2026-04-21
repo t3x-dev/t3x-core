@@ -6,6 +6,7 @@
  */
 
 import {
+  findDraftById,
   findAgentDraftById,
   findAgentDraftsByProject,
   findBranchesByProject,
@@ -18,6 +19,7 @@ import {
   findProjectById,
   findProjects,
   getCommit,
+  listDraftsByProject,
   listCommits,
 } from '@t3x-dev/storage';
 
@@ -26,10 +28,19 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // ── Targets ──
 
-const SINGULAR_TARGETS = ['project', 'draft', 'commit', 'leaf', 'pin', 'conversation'] as const;
+const SINGULAR_TARGETS = [
+  'project',
+  'draft',
+  'agent_draft',
+  'commit',
+  'leaf',
+  'pin',
+  'conversation',
+] as const;
 const PLURAL_TARGETS = [
   'projects',
   'drafts',
+  'agent_drafts',
   'commits',
   'leaves',
   'pins',
@@ -48,10 +59,14 @@ export const queryDef: ToolDef = {
     'Read any T3X resource.',
     '',
     'Singular targets (require `id`):',
-    '  project, draft, commit, leaf, pin, conversation',
+    '  project, draft, agent_draft, commit, leaf, pin, conversation',
     '',
     'Plural targets (require `project_id`, except `projects`):',
-    '  projects, drafts, commits, leaves, pins, branches, conversations',
+    '  projects, drafts, agent_drafts, commits, leaves, pins, branches, conversations',
+    '',
+    'Notes:',
+    '  draft / drafts = workbench drafts used by extract/edit/commit',
+    '  agent_draft / agent_drafts = agent draft objects',
     '',
     'Examples:',
     '  { "target": "projects" }',
@@ -129,8 +144,12 @@ export const queryHandler: ToolHandler = async (args) => {
         return project ? ok(project) : fail(`Project not found: ${id}`);
       }
       case 'draft': {
-        const draft = await findAgentDraftById(db, id);
+        const draft = await findDraftById(db, id);
         return draft ? ok(draft) : fail(`Draft not found: ${id}`);
+      }
+      case 'agent_draft': {
+        const draft = await findAgentDraftById(db, id);
+        return draft ? ok(draft) : fail(`Agent draft not found: ${id}`);
       }
       case 'commit': {
         const commit = await getCommit(db, id);
@@ -166,6 +185,13 @@ export const queryHandler: ToolHandler = async (args) => {
       return ok(rows);
     }
     case 'drafts': {
+      const rows = await listDraftsByProject(db, projectId!, {
+        limit,
+        offset,
+      });
+      return ok(rows);
+    }
+    case 'agent_drafts': {
       const rows = await findAgentDraftsByProject(db, {
         projectId: projectId!,
         limit,

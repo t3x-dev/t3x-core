@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 describe('useAvailableModels', () => {
-  it('keeps env-backed providers usable when no local credentials are stored', async () => {
+  it('hides env-backed providers when no local credentials are stored', async () => {
     vi.mocked(fetchLocalProviderStatus).mockImplementation(async (providerId: string) => {
       const defaults = {
         configured: false,
@@ -77,17 +77,10 @@ describe('useAvailableModels', () => {
     await waitForHook();
 
     expect(result.current.loading).toBe(false);
-    expect(result.current.hasConfiguredGenerationProvider).toBe(true);
-    expect(result.current.providers).toEqual([
-      {
-        name: 'openai',
-        label: 'OpenAI',
-        available: true,
-        models: [makeModel('gpt-4.1', 'GPT-4.1')],
-      },
-    ]);
-    expect(result.current.defaultProvider).toBe('openai');
-    expect(result.current.defaultModel).toBe('gpt-4.1');
+    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
+    expect(result.current.providers).toEqual([]);
+    expect(result.current.defaultProvider).toBeNull();
+    expect(result.current.defaultModel).toBeNull();
 
     const loaded = await result.current.loadModels();
     expect(loaded.providers).toEqual(result.current.providers);
@@ -143,10 +136,7 @@ describe('useAvailableModels', () => {
     await waitForHook();
     await waitForHook();
 
-    expect(result.current.providers.map((provider) => provider.name)).toEqual([
-      'anthropic',
-      'openai',
-    ]);
+    expect(result.current.providers.map((provider) => provider.name)).toEqual(['anthropic']);
     expect(result.current.defaultProvider).toBe('anthropic');
     expect(result.current.defaultModel).toBe('claude-sonnet-4-20250514');
     unmount();
@@ -207,13 +197,9 @@ describe('useAvailableModels', () => {
     await waitForHook();
     await waitForHook();
 
-    expect(result.current.providers.map((provider) => provider.name)).toEqual([
-      'google',
-      'openai',
-      'anthropic',
-    ]);
-    expect(result.current.defaultProvider).toBe('google');
-    expect(result.current.defaultModel).toBe('gemini-2.5-flash');
+    expect(result.current.providers.map((provider) => provider.name)).toEqual(['openai']);
+    expect(result.current.defaultProvider).toBe('openai');
+    expect(result.current.defaultModel).toBe('gpt-4o');
     unmount();
   });
 

@@ -13,6 +13,7 @@ import { useProviderStatus } from '@/hooks/providers/useProviderStatus';
 import { toLocalProviderId } from '@/infrastructure/misc';
 import type { LLMModelsResponse, LLMProviderInfo } from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
+import type { LocalProviderStatus } from '@/infrastructure/types';
 
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];
@@ -28,10 +29,17 @@ export interface AvailableModelSelection {
   model: string | null;
 }
 
-function filterUsableProviders(providers: LLMProviderInfo[]): LLMProviderInfo[] {
+function filterUsableProviders(
+  providers: LLMProviderInfo[],
+  statuses: LocalProviderStatus[]
+): LLMProviderInfo[] {
   return providers.filter((provider) => {
     const localProviderId = toLocalProviderId(provider.name);
-    return provider.available && provider.models.length > 0 && localProviderId !== null;
+    if (!provider.available || provider.models.length === 0 || localProviderId === null) {
+      return false;
+    }
+
+    return statuses.some((status) => status.provider === localProviderId && status.configured);
   });
 }
 
@@ -56,8 +64,14 @@ function orderProviders(
   });
 }
 
-function getUsableProviders(data: LLMModelsResponse): LLMProviderInfo[] {
-  return orderProviders(filterUsableProviders(data.providers), data.generation_provider_order);
+function getUsableProviders(
+  data: LLMModelsResponse,
+  statuses: LocalProviderStatus[]
+): LLMProviderInfo[] {
+  return orderProviders(
+    filterUsableProviders(data.providers, statuses),
+    data.generation_provider_order
+  );
 }
 
 export function resolveAvailableModelSelection(
@@ -117,8 +131,8 @@ export function useAvailableModels(): {
 
   const loadModels = useCallback(async () => {
     const data = await fetchAvailableModels();
-    return { providers: getUsableProviders(data) };
-  }, []);
+    return { providers: getUsableProviders(data, statuses) };
+  }, [statuses]);
 
   useEffect(() => {
     if (providerStatusLoading) {
@@ -132,7 +146,7 @@ export function useAvailableModels(): {
     fetchAvailableModels()
       .then((data) => {
         if (!cancelled) {
-          setProviders(getUsableProviders(data));
+          setProviders(getUsableProviders(data, statuses));
           setBackendDefaultProvider(data.default_provider);
         }
       })
@@ -149,7 +163,7 @@ export function useAvailableModels(): {
     return () => {
       cancelled = true;
     };
-  }, [providerStatusLoading]);
+  }, [providerStatusLoading, statuses]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {
