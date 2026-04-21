@@ -42,6 +42,6 @@
     "directory": "packages/api-client"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }

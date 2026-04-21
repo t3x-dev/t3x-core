@@ -46,6 +46,6 @@
     "directory": "packages/yschema"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }
