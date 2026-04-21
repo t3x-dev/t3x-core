@@ -8,28 +8,14 @@
  * - POST /v1/conversations/{conversationId}/compress - Compress trees in a conversation
  */
 
-/** biome-ignore-all lint/suspicious/noExplicitAny: compression route coordinates dynamic compressor outputs pending stricter DTOs */
-
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  applyYOps,
-  Compressor,
-  flattenTrees,
-  type NodeWithSignals,
-  type SemanticContent,
-} from '@t3x-dev/core';
-import {
-  findConversationById,
-  insertYOpsLogEntry,
-  listYOpsLogByConversation,
-} from '@t3x-dev/storage';
+import { insertYOpsLogEntry } from '@t3x-dev/storage';
+import { runApiCompressionV2 } from '../lib/compression-v2';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import { getProviderRegistry } from '../lib/provider-registry';
 import { rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
-import { getUserId, recordUsageFireAndForget, wrapWithUsageTracking } from '../lib/usage-tracking';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const treeCompressRoutes = new OpenAPIHono({
@@ -42,19 +28,17 @@ export const treeCompressRoutes = new OpenAPIHono({
 
 const CompressMetadataSchema = z.object({
   compress_summary: z.string(),
-  frames_before: z.number(),
-  frames_after: z.number(),
+  nodes_before: z.number(),
+  nodes_after: z.number(),
   merged_count: z.number(),
   removed_count: z.number(),
-  removed_frame_ids: z.array(z.string()),
+  removed_node_ids: z.array(z.string()),
 });
 
 const TreeCompressResponse = SuccessResponseSchema(
   z.object({
-    delta: z.object({
-      changes: z.array(z.any()),
-      remove_relations: z.array(z.any()).optional(),
-    }),
+    delta: z.array(z.any()),
+    snapshot: z.any(),
     metadata: CompressMetadataSchema,
     yops_log_id: z.string(),
   })
@@ -70,7 +54,7 @@ const compressTreesRoute = createRoute({
   tags: ['Extract'],
   summary: 'Compress semantic trees in a conversation using LLM',
   description:
-    'Runs Compressor on conversation nodes, merges redundant frames, removes low-value content, and appends the compress delta to the delta log.',
+    'Runs the v2 compression pipeline on conversation nodes, merges redundant frames, removes low-value content, and appends the compress YOps to the yops-log.',
   request: {
     params: z.object({
       conversationId: z.string().min(1),
@@ -100,219 +84,74 @@ const compressTreesRoute = createRoute({
   },
 });
 
-// ============================================================
-// Helper: Compute Frame Signals
-// ============================================================
-
-/**
- * Scan yops log to compute engagement signals for each node.
- * - has_manual_edit: true if any 'manual' yops entry touched this node
- * - last_touched: number of entries since last mention (0 = last entry)
- * - mention_count: how many entries referenced this node
- */
-function computeNodeSignals(
-  frameIds: string[],
-  yopsEntries: Array<{
-    source: string;
-    yops: unknown;
-  }>
-): Map<string, { has_manual_edit: boolean; last_touched: number; mention_count: number }> {
-  const signals = new Map<
-    string,
-    { has_manual_edit: boolean; last_touched: number; mention_count: number }
-  >();
-
-  // Initialize all frames
-  for (const fid of frameIds) {
-    signals.set(fid, {
-      has_manual_edit: false,
-      last_touched: yopsEntries.length,
-      mention_count: 0,
-    });
-  }
-
-  // Scan yops log from oldest to newest
-  for (let i = 0; i < yopsEntries.length; i++) {
-    const entry = yopsEntries[i];
-    const isManual = entry.source === 'manual';
-    const framesMentioned = new Set<string>();
-
-    // Extract touched node paths from YOp[] entries
-    const ops = Array.isArray(entry.yops) ? (entry.yops as Array<Record<string, unknown>>) : [];
-    for (const op of ops) {
-      let targetId: string | undefined;
-      if ('set' in op && op.set && typeof op.set === 'object') {
-        targetId = ((op.set as { path?: string }).path ?? '').split('/')[0];
-      } else if ('unset' in op && op.unset && typeof op.unset === 'object') {
-        targetId = ((op.unset as { path?: string }).path ?? '').split('/')[0];
-      } else if ('define' in op && op.define && typeof op.define === 'object') {
-        targetId = (op.define as { key?: string }).key;
-      } else if ('populate' in op && op.populate && typeof op.populate === 'object') {
-        targetId = ((op.populate as { path?: string }).path ?? '').split('/')[0];
-      } else if ('drop' in op && op.drop && typeof op.drop === 'object') {
-        targetId = ((op.drop as { path?: string }).path ?? '').split('/')[0];
-      } else if ('move' in op && op.move && typeof op.move === 'object') {
-        targetId = ((op.move as { path?: string }).path ?? '').split('/')[0];
-      } else if ('rename' in op && op.rename && typeof op.rename === 'object') {
-        targetId = ((op.rename as { path?: string }).path ?? '').split('/')[0];
-      }
-
-      if (targetId && signals.has(targetId)) {
-        framesMentioned.add(targetId);
-        if (isManual) {
-          signals.get(targetId)!.has_manual_edit = true;
-        }
-      }
-    }
-
-    // Update last_touched and mention_count
-    for (const fid of Array.from(framesMentioned)) {
-      const sig = signals.get(fid)!;
-      sig.last_touched = yopsEntries.length - i - 1; // Distance from end
-      sig.mention_count += 1;
-    }
-  }
-
-  return signals;
-}
-
-// ============================================================
-// Route Handler
-// ============================================================
-
 treeCompressRoutes.openapi(compressTreesRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
 
   try {
     const db = await getDB();
 
-    // 1. Validate conversation exists and get project_id
-    const conversation = await findConversationById(db, conversationId);
-    if (!conversation) {
-      return errorResponse(
-        c,
-        'CONVERSATION_NOT_FOUND',
-        `Conversation not found: ${conversationId}`
-      );
+    const result = await runApiCompressionV2({ db, conversationId });
+
+    if (!result.ok) {
+      if (result.kind === 'conversation_not_found') {
+        return errorResponse(c, 'CONVERSATION_NOT_FOUND', result.message);
+      }
+      if (result.projectId) {
+        const accessResult = await assertProjectAccess(c, db, result.projectId);
+        if (accessResult instanceof Response) return accessResult;
+      }
+      if (result.kind === 'insufficient_nodes' || result.kind === 'empty_result') {
+        return errorResponse(c, 'INVALID_REQUEST', result.message);
+      }
+      if (result.kind === 'provider_unavailable') {
+        return c.json(
+          {
+            success: false as const,
+            error: {
+              code: 'LLM_NOT_CONFIGURED',
+              message: result.message,
+            },
+          },
+          503
+        );
+      }
+      return errorResponse(c, 'EXTRACTION_FAILED', result.message);
     }
 
-    // 1b. Verify project access
-    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    const accessResult = await assertProjectAccess(c, db, result.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    // 2. Fetch existing yops log and build current snapshot
-    const yopsRecords = await listYOpsLogByConversation(db, conversationId);
-    const yopsEntries = toYOpsLogEntries(yopsRecords);
-    const currentSnapshot = replayYOpsLog(yopsEntries);
-    const currentFlat = flattenTrees(currentSnapshot.trees);
-
-    // 3. Require at least 2 nodes to compress
-    if (currentFlat.length < 2) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        `Not enough nodes to compress (need >= 2, have ${currentFlat.length})`
-      );
-    }
-
-    // 4. Compute engagement signals for all nodes
-    const nodeIds = currentFlat.map((f) => f.id);
-    const signalsMap = computeNodeSignals(nodeIds, yopsEntries);
-
-    // 5. Attach signals to nodes
-    const nodesWithSignals: NodeWithSignals[] = currentFlat.map((f) => {
-      const sig = signalsMap.get(f.id) ?? {
-        has_manual_edit: false,
-        last_touched: 0,
-        mention_count: 1,
-      };
-      return {
-        ...f,
-        has_manual_edit: sig.has_manual_edit,
-        last_touched: sig.last_touched,
-        mention_count: sig.mention_count,
-      };
-    });
-
-    // 6. Call Compressor via provider registry with fallback (usage tracked)
-    const reg = await getProviderRegistry();
-    const trackedUsage = { inputTokens: 0, outputTokens: 0 };
-    let trackedModel = 'unknown';
-    const result: any = await reg.tryWithFallback('generation', (provider) => {
-      const { provider: tracked, usage } = wrapWithUsageTracking(provider as any);
-      trackedUsage.inputTokens = 0;
-      trackedUsage.outputTokens = 0;
-      trackedModel = tracked.id;
-      const compressor = new Compressor(tracked);
-      return compressor
-        .compress({
-          frames: nodesWithSignals,
-          relations: currentSnapshot.relations,
-        })
-        .then((r: any) => {
-          trackedUsage.inputTokens = usage.inputTokens;
-          trackedUsage.outputTokens = usage.outputTokens;
-          return r;
-        });
-    });
-
-    // 7. Check compression result
-    if (!result.ok) {
-      return errorResponse(c, 'EXTRACTION_FAILED', result.error || 'Compression failed');
-    }
-
-    // 8. Skip if nothing was compressed (empty yops)
-    if (result.yops.length === 0) {
-      return errorResponse(
-        c,
-        'INVALID_REQUEST',
-        'No frames were compressed (yops is empty). All frames may be protected or already optimal.'
-      );
-    }
-
-    // Record usage (fire-and-forget)
-    if (trackedUsage.inputTokens || trackedUsage.outputTokens) {
+    if (result.usage.inputTokens || result.usage.outputTokens) {
       recordUsageFireAndForget(db, {
         user_id: getUserId(c) ?? undefined,
-        project_id: conversation.projectId,
+        project_id: result.projectId,
         endpoint: 'compress_frames',
-        model: trackedModel,
-        input_tokens: trackedUsage.inputTokens,
-        output_tokens: trackedUsage.outputTokens,
+        model: result.model,
+        input_tokens: result.usage.inputTokens,
+        output_tokens: result.usage.outputTokens,
       });
     }
 
-    // 9. Apply YOps to get compressed snapshot, then write yops_log + sync trees atomically
-    const compressedResult = applyYOps(currentSnapshot, result.yops);
-    const compressedSnapshot: SemanticContent = compressedResult.ok
-      ? { trees: compressedResult.trees, relations: compressedResult.relations }
-      : currentSnapshot; // fallback: keep current if apply fails
-
+    // biome-ignore lint/suspicious/noExplicitAny: Drizzle transaction typing
     const record = await (db as any).transaction(async (tx: any) => {
       const rec = await insertYOpsLogEntry(tx, {
         conversationId,
-        projectId: conversation.projectId,
+        projectId: result.projectId,
         source: 'compress',
-        yops: result.yops,
+        yops: result.ops,
         pipelineState: 'completed',
         metadata: result.metadata,
       });
-      await rebuildTreesFromSnapshot(
-        tx,
-        conversationId,
-        conversation.projectId,
-        compressedSnapshot
-      );
+      await rebuildTreesFromSnapshot(tx, conversationId, result.projectId, result.snapshot);
       return rec;
     });
 
-    // 10. Return yops + metadata + yops_log_id
     return c.json(
       {
         success: true as const,
         data: {
-          delta: result.yops,
-          snapshot: compressedSnapshot,
+          delta: result.ops,
+          snapshot: result.snapshot,
           metadata: result.metadata,
           yops_log_id: record.id,
         },

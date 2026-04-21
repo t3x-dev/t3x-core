@@ -1,7 +1,0 @@
-{
-  "minFrames": 3,
-  "maxFrames": 7,
-  "requiredFrameTypes": ["symptom"],
-  "requiredSlotKeys": {},
-  "requiredRelationTypes": ["elaborates"]
-}

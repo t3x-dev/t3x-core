@@ -61,28 +61,17 @@ export * from './emitters/index';
 // Extractors
 // ═══════════════════════════════════════════════════════════════════════════
 export {
-  type AdaptiveConfig,
-  type AdaptiveFeedbackStats,
-  type AdaptiveThresholds,
   // Anchor types
   type AnchorCandidate,
   type AnchorSource,
   type AnchorType,
-  // Correction prompt (batch validation feedback loop)
-  buildCorrectionPrompt,
-  // YOps extraction pipeline
-  buildYOpsPrompt,
   type CompiledMutationPlan,
   type CompileInput,
-  Compressor,
-  type CorrectionInput,
-  type CorrectionPromptResult,
-  // Post-extraction transforms (deterministic, replaces MeaningPipeline)
-  checkRegression,
+  type CompressionV2Metadata,
+  type CompressionV2PipelineInput,
+  type CompressionV2Result,
+  type CompressionV2Usage,
   compileExtractionDraft,
-  computeAdaptiveConfig,
-  computeAdaptiveThresholds,
-  consolidate,
   createExtractionFailure,
   extractAndApply,
   EXTRACTION_DRAFT_SCHEMA,
@@ -94,29 +83,18 @@ export {
   type ExtractionDraftItem,
   type ExtractionFailure,
   type ExtractionFailureCode,
-  type ExtractionInput,
   type ExtractionMode,
-  type ExtractionPromptResult,
-  type ExtractionResult,
-  type ExtractionTurn,
-  Extractor,
-  flagContradictions,
   getRetryStrategy,
   isRetryableFailure,
   type NodeWithSignals,
-  nest,
   PROVIDER_EXTRACTION_DRAFT_SCHEMA,
   type PromptTurn,
   type PromptTurnInput,
   type ProviderExtractionDraft,
   ProviderExtractionDraftSchema,
-  parseYOpsOutput,
-  type RegressionWarning,
+  runCompressionV2Pipeline,
   runExtractionV2Pipeline,
-  runTransforms,
   type Segment,
-  type TransformResult,
-  type YOpsParseResult,
 } from './extractors';
 // Extraction Style Config
 export {

@@ -1,7 +1,0 @@
-{
-  "minFrames": 3,
-  "maxFrames": 10,
-  "requiredFrameTypes": ["decision", "cost"],
-  "requiredSlotKeys": {},
-  "requiredRelationTypes": ["causes"]
-}
