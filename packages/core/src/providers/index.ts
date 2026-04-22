@@ -2,6 +2,11 @@
  * Provider exports
  */
 
+export {
+  createDefaultProviderRegistry,
+  type DefaultProviderRegistryOptions,
+  registerDefaultProviders,
+} from './default-registry';
 // Embedding Provider
 export {
   type CachedEmbeddingConfig,
@@ -52,8 +57,3 @@ export {
   type RoleAssignment,
   type TestConnectionResult,
 } from './registry';
-export {
-  createDefaultProviderRegistry,
-  type DefaultProviderRegistryOptions,
-  registerDefaultProviders,
-} from './default-registry';

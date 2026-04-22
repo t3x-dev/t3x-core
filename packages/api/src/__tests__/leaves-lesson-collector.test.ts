@@ -3,7 +3,7 @@
  *
  * Integration tests verifying that the POST /v1/leaves/:id/generate endpoint
  * correctly calls collectLessons with historical leaves and passes the
- * resulting lessons to generateWithFallback.
+ * resulting lessons to generateLeafOutput.
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
@@ -22,6 +22,11 @@ const { mockGenerateLeafOutput, mockIsGenerationConfigured, mockCollectLessonsFr
     mockIsGenerationConfigured: vi.fn(),
     mockCollectLessonsFromAssertions: vi.fn(),
   }));
+
+const { mockResolveProviderAndModel, mockCreateModelBoundProvider } = vi.hoisted(() => ({
+  mockResolveProviderAndModel: vi.fn(),
+  mockCreateModelBoundProvider: vi.fn(),
+}));
 
 // Mock the database module
 let mockDB: AnyDB;
@@ -42,15 +47,9 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
   };
 });
 
-// Mock provider-registry — generateWithFallback delegates to the mocked generateLeafOutput
-const { mockGenerateWithFallback } = vi.hoisted(() => ({
-  mockGenerateWithFallback: vi.fn(),
-}));
-
-vi.mock('../lib/provider-registry', () => ({
-  generateWithFallback: mockGenerateWithFallback,
-  getLLMProvider: vi.fn(() => Promise.resolve({ id: 'mock', generate: vi.fn() })),
-  getProviderRegistry: vi.fn(),
+vi.mock('../lib/provider-resolver', () => ({
+  resolveProviderAndModel: mockResolveProviderAndModel,
+  createModelBoundProvider: mockCreateModelBoundProvider,
 }));
 
 // Mock webhook dispatcher
@@ -108,10 +107,19 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     mockGenerateLeafOutput.mockReset();
     mockIsGenerationConfigured.mockReset();
     mockCollectLessonsFromAssertions.mockReset();
-    mockGenerateWithFallback.mockReset();
+    mockResolveProviderAndModel.mockReset();
+    mockCreateModelBoundProvider.mockReset();
 
     // Default: generation is configured
     mockIsGenerationConfigured.mockReturnValue(true);
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: true,
+      providerId: 'anthropic',
+      provider: { id: 'anthropic' },
+      model: 'claude-sonnet-4-20250514',
+      registry: {},
+    });
+    mockCreateModelBoundProvider.mockResolvedValue({ id: 'anthropic', generate: vi.fn() });
   });
 
   afterAll(async () => {
@@ -151,8 +159,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
       'Always include the main keyword in the first sentence',
     ]);
 
-    // generateWithFallback returns a successful result
-    mockGenerateWithFallback.mockResolvedValue({
+    mockGenerateLeafOutput.mockResolvedValue({
       output: 'Generated tweet with lessons applied',
       model: 'test-model',
       usage: { inputTokens: 100, outputTokens: 20 },
@@ -178,7 +185,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(ids).toContain(targetLeaf.id);
   });
 
-  it('passes collected lessons to generateWithFallback when lessons exist', async () => {
+  it('passes collected lessons to generateLeafOutput when lessons exist', async () => {
     // Create the target leaf
     const leaf = await createLeaf(mockDB, {
       commit_hash: testCommitHash,
@@ -194,7 +201,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     ];
     mockCollectLessonsFromAssertions.mockReturnValue(fakeLessons);
 
-    mockGenerateWithFallback.mockResolvedValue({
+    mockGenerateLeafOutput.mockResolvedValue({
       output: 'Generated email output',
       model: 'test-model',
       usage: { inputTokens: 200, outputTokens: 50 },
@@ -209,9 +216,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
 
     expect(res.status).toBe(200);
 
-    // generateWithFallback should receive the lessons array
-    expect(mockGenerateWithFallback).toHaveBeenCalledTimes(1);
-    expect(mockGenerateWithFallback).toHaveBeenCalledWith(
+    expect(mockGenerateLeafOutput).toHaveBeenCalledTimes(1);
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
         lessons: fakeLessons,
       })
@@ -230,7 +236,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // collectLessons returns empty — no failed assertions with lessons
     mockCollectLessonsFromAssertions.mockReturnValue([]);
 
-    mockGenerateWithFallback.mockResolvedValue({
+    mockGenerateLeafOutput.mockResolvedValue({
       output: 'Generated article output',
       model: 'test-model',
       usage: { inputTokens: 150, outputTokens: 30 },
@@ -246,8 +252,8 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(res.status).toBe(200);
 
     // When lessons is empty, the endpoint passes undefined (not [])
-    expect(mockGenerateWithFallback).toHaveBeenCalledTimes(1);
-    expect(mockGenerateWithFallback).toHaveBeenCalledWith(
+    expect(mockGenerateLeafOutput).toHaveBeenCalledTimes(1);
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
         lessons: undefined,
       })
@@ -279,7 +285,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     // collectLessons returns empty for a single leaf with no failed assertions
     mockCollectLessonsFromAssertions.mockReturnValue([]);
 
-    mockGenerateWithFallback.mockResolvedValue({
+    mockGenerateLeafOutput.mockResolvedValue({
       output: 'Generated solo output',
       model: 'test-model',
       usage: { inputTokens: 80, outputTokens: 15 },
@@ -305,14 +311,14 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(callArg[0].id).toBe(leaf.id);
 
     // lessons should be undefined since collectLessons returned []
-    expect(mockGenerateWithFallback).toHaveBeenCalledWith(
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
         lessons: undefined,
       })
     );
   });
 
-  it('forwards commit and leaf alongside lessons to generateWithFallback', async () => {
+  it('forwards commit and leaf alongside lessons to generateLeafOutput', async () => {
     const leaf = await createLeaf(mockDB, {
       commit_hash: testCommitHash,
       type: 'weibo',
@@ -325,7 +331,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     const fakeLessons = ['Keep it under 140 characters'];
     mockCollectLessonsFromAssertions.mockReturnValue(fakeLessons);
 
-    mockGenerateWithFallback.mockResolvedValue({
+    mockGenerateLeafOutput.mockResolvedValue({
       output: 'Concise weibo post',
       model: 'test-model',
       usage: { inputTokens: 120, outputTokens: 18 },
@@ -341,7 +347,7 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
     expect(res.status).toBe(200);
 
     // Verify all three key fields are passed together
-    expect(mockGenerateWithFallback).toHaveBeenCalledWith(
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
         knowledge: expect.objectContaining({ trees: expect.any(Array) }),
         leaf: expect.objectContaining({ id: leaf.id }),

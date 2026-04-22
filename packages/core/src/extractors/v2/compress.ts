@@ -1,10 +1,6 @@
 import type { LLMProvider } from '../../llm/types';
 import type { YOp } from '../../t3x-yops/types';
-import {
-  buildCompressPrompt,
-  type CompressInput,
-  type NodeWithSignals,
-} from '../compressPrompt';
+import { buildCompressPrompt, type CompressInput, type NodeWithSignals } from '../compressPrompt';
 
 const TEMPERATURE = 0.1;
 const MAX_TOKENS = 4096;

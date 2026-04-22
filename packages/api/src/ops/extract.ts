@@ -16,6 +16,7 @@ export interface ExtractInput {
   turnHashes?: string[];
   provider?: string;
   model?: string;
+  userId?: string;
 }
 
 export type ExtractOutput = ApiExtractionV2Result;
@@ -50,6 +51,7 @@ export const extractOp: Operation<ExtractInput, ExtractOutput> = {
       turnHashes: input.turnHashes,
       provider: input.provider,
       model: input.model,
+      userId: input.userId,
     });
 
     yield {

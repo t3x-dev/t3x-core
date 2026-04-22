@@ -280,6 +280,8 @@ export async function updateUser(
   data: {
     name?: string;
     avatar_url?: string;
+    default_provider?: string | null;
+    default_model?: string | null;
     default_extraction_style?: {
       granularity: 'concise' | 'balanced' | 'detailed';
       quote_length: 'minimal' | 'contextual';
@@ -291,6 +293,8 @@ export async function updateUser(
   const updates: Partial<{
     name: string;
     avatarUrl: string;
+    defaultProvider: string | null;
+    defaultModel: string | null;
     defaultExtractionStyle: {
       granularity: 'concise' | 'balanced' | 'detailed';
       quote_length: 'minimal' | 'contextual';
@@ -300,6 +304,8 @@ export async function updateUser(
   }> = {};
   if (data.name !== undefined) updates.name = data.name;
   if (data.avatar_url !== undefined) updates.avatarUrl = data.avatar_url;
+  if (data.default_provider !== undefined) updates.defaultProvider = data.default_provider;
+  if (data.default_model !== undefined) updates.defaultModel = data.default_model;
   if (data.default_extraction_style !== undefined)
     updates.defaultExtractionStyle = data.default_extraction_style;
 
@@ -364,6 +370,8 @@ function rowToUser(row: UserRecord): User {
     avatar_url: row.avatarUrl ?? null,
     username: row.username ?? null,
     created_at: row.createdAt.toISOString(),
+    default_provider: row.defaultProvider ?? null,
+    default_model: row.defaultModel ?? null,
     default_extraction_style: row.defaultExtractionStyle ?? null,
   };
 }

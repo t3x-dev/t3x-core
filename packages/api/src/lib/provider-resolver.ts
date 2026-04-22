@@ -1,4 +1,13 @@
-import { type AnyProvider, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
+import {
+  type AnyProvider,
+  createProviderForModel,
+  getCanonicalModelId,
+  getModelInfo,
+  type LLMProvider,
+  type RegistryConfig,
+} from '@t3x-dev/core';
+import { type AnyDB, findConversationById, findProjectById, findUserById } from '@t3x-dev/storage';
+import { loadResolvedProviderConfig } from './provider-config';
 import { getProviderRegistry } from './provider-registry';
 
 export type RuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
@@ -21,6 +30,31 @@ const PROVIDER_RUNTIME_TO_PUBLIC: Record<RuntimeProviderId, 'anthropic' | 'opena
 
 const PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
 
+interface SelectionLayer {
+  name: 'request' | 'conversation' | 'project' | 'user';
+  provider?: string | null;
+  model?: string | null;
+  strict: boolean;
+}
+
+export interface ResolveProviderInput {
+  db?: AnyDB;
+  requestedProvider?: string;
+  requestedModel?: string;
+  conversationId?: string;
+  projectId?: string;
+  userId?: string;
+  supportedProviders?: readonly RuntimeProviderId[];
+  unavailableMessage?: string;
+}
+
+function isSupportedProvider(
+  providerId: string,
+  supportedProviders: readonly RuntimeProviderId[]
+): providerId is RuntimeProviderId {
+  return supportedProviders.includes(providerId as RuntimeProviderId);
+}
+
 export function normalizeProvider(provider: string | undefined): RuntimeProviderId | null {
   if (!provider) return null;
   return PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
@@ -34,84 +68,283 @@ function stripProviderPrefixFromModel(model: string, providerId: RuntimeProvider
   return model.slice(separatorIndex + 1) || model;
 }
 
+function isBlank(value: string | null | undefined): boolean {
+  return value == null || value.trim().length === 0;
+}
+
+function normalizeModelInput(model: string | null | undefined): string | null {
+  if (isBlank(model)) return null;
+  const trimmed = model!.trim();
+  return getCanonicalModelId(trimmed) ?? trimmed;
+}
+
+function findProviderForModel(
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  model: string,
+  candidateProviders: readonly RuntimeProviderId[]
+): RuntimeProviderId | null {
+  const providerPrefix = model.split(':', 1)[0];
+  if (providerPrefix && providerPrefix !== model) {
+    const normalizedPrefixedProvider = normalizeProvider(providerPrefix);
+    if (normalizedPrefixedProvider && candidateProviders.includes(normalizedPrefixedProvider)) {
+      return normalizedPrefixedProvider;
+    }
+  }
+
+  for (const provider of registry.listProviders()) {
+    if (!candidateProviders.includes(provider.id as RuntimeProviderId)) continue;
+    if (provider.defaultModel === model || provider.availableModels?.includes(model)) {
+      return provider.id as RuntimeProviderId;
+    }
+  }
+
+  const catalogProvider = getModelInfo(model)?.provider;
+  if (!catalogProvider) return null;
+
+  const runtimeProvider =
+    (Object.entries(PROVIDER_RUNTIME_TO_PUBLIC).find(
+      ([, publicId]) => publicId === catalogProvider
+    )?.[0] as RuntimeProviderId | undefined) ?? null;
+
+  return runtimeProvider && candidateProviders.includes(runtimeProvider) ? runtimeProvider : null;
+}
+
+function getProjectGenerationProviderOrder(
+  project: Awaited<ReturnType<typeof findProjectById>>,
+  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
+  supportedProviders: readonly RuntimeProviderId[]
+): RuntimeProviderId[] {
+  const globalOrder = registry
+    .getProviderIdsForRole('generation')
+    .filter((id): id is RuntimeProviderId => isSupportedProvider(id, supportedProviders));
+
+  if (!project?.providerConfig) return globalOrder;
+
+  try {
+    const config = JSON.parse(project.providerConfig) as RegistryConfig;
+    const ids =
+      config.roles
+        ?.find((role) => role.role === 'generation')
+        ?.providerIds.filter((id): id is RuntimeProviderId =>
+          isSupportedProvider(id, supportedProviders)
+        ) ?? [];
+    return ids.length > 0 ? ids : globalOrder;
+  } catch {
+    return globalOrder;
+  }
+}
+
 export type ResolveProviderResult =
-  | { ok: true; providerId: RuntimeProviderId; provider: AnyProvider; model: string }
+  | {
+      ok: true;
+      registry: Awaited<ReturnType<typeof getProviderRegistry>>;
+      providerId: RuntimeProviderId;
+      provider: AnyProvider;
+      model: string;
+    }
   | { ok: false; code: 'provider' | 'model' | 'mismatch' | 'unavailable'; message: string };
 
+function unavailable(
+  message: string | undefined,
+  fallback: string
+): Extract<ResolveProviderResult, { ok: false }> {
+  return { ok: false, code: 'unavailable', message: message ?? fallback };
+}
+
+async function buildSelectionLayers(input: ResolveProviderInput) {
+  const projectIdFromInput = input.projectId ?? null;
+  const conversation =
+    input.db && input.conversationId
+      ? await findConversationById(input.db, input.conversationId)
+      : null;
+  const projectId = conversation?.projectId ?? projectIdFromInput;
+  const project = input.db && projectId ? await findProjectById(input.db, projectId) : null;
+  const user = input.db && input.userId ? await findUserById(input.db, input.userId) : null;
+
+  const layers: SelectionLayer[] = [];
+
+  if (input.requestedProvider !== undefined || input.requestedModel !== undefined) {
+    layers.push({
+      name: 'request',
+      provider: input.requestedProvider,
+      model: input.requestedModel,
+      strict: true,
+    });
+  }
+
+  if (conversation?.provider != null || conversation?.model != null) {
+    layers.push({
+      name: 'conversation',
+      provider: conversation.provider,
+      model: conversation.model,
+      strict: false,
+    });
+  }
+
+  if (project?.defaultProvider != null || project?.defaultModel != null) {
+    layers.push({
+      name: 'project',
+      provider: project.defaultProvider,
+      model: project.defaultModel,
+      strict: false,
+    });
+  }
+
+  if (user?.default_provider != null || user?.default_model != null) {
+    layers.push({
+      name: 'user',
+      provider: user.default_provider,
+      model: user.default_model,
+      strict: false,
+    });
+  }
+
+  return { conversation, project, user, layers };
+}
+
+function getLayerError(
+  layer: SelectionLayer,
+  code: Extract<ResolveProviderResult, { ok: false }>['code'],
+  message: string
+): Extract<ResolveProviderResult, { ok: false }> | null {
+  return layer.strict ? { ok: false, code, message } : null;
+}
+
 export async function resolveProviderAndModel(
-  requestedProvider?: string,
-  requestedModel?: string
+  input: ResolveProviderInput = {}
 ): Promise<ResolveProviderResult> {
-  const reg = await getProviderRegistry();
-  const explicitProvider = normalizeProvider(requestedProvider);
-  if (requestedProvider && !explicitProvider) {
-    return { ok: false, code: 'provider', message: `Unknown provider: ${requestedProvider}` };
-  }
+  const registry = await getProviderRegistry();
+  const supportedProviders = input.supportedProviders ?? PROVIDER_RUNTIME_IDS;
+  const { project, layers } = await buildSelectionLayers(input);
 
-  let modelProvider: RuntimeProviderId | null = null;
-  if (requestedModel) {
-    for (const provider of reg.listProviders()) {
-      if (!(PROVIDER_RUNTIME_IDS as readonly string[]).includes(provider.id)) continue;
-      if (
-        provider.defaultModel === requestedModel ||
-        provider.availableModels?.includes(requestedModel)
-      ) {
-        modelProvider = provider.id as RuntimeProviderId;
-        break;
+  for (const layer of layers) {
+    const normalizedProvider = isBlank(layer.provider)
+      ? null
+      : normalizeProvider(layer.provider ?? undefined);
+    if (layer.provider && !normalizedProvider) {
+      return (
+        getLayerError(layer, 'provider', `Unknown provider: ${layer.provider}`) ??
+        unavailable(input.unavailableMessage, 'No configured generation provider is available')
+      );
+    }
+
+    if (normalizedProvider && !supportedProviders.includes(normalizedProvider)) {
+      return (
+        getLayerError(layer, 'unavailable', `Provider ${normalizedProvider} not implemented`) ??
+        unavailable(input.unavailableMessage, 'No configured generation provider is available')
+      );
+    }
+
+    const normalizedModel = normalizeModelInput(layer.model);
+    if (layer.model && !normalizedModel) {
+      continue;
+    }
+
+    if (layer.model) {
+      const bareProviderAlias = normalizeProvider(layer.model);
+      if (bareProviderAlias) {
+        const err = getLayerError(layer, 'model', `Unknown or unsupported model: ${layer.model}`);
+        if (err) return err;
+        continue;
+      }
+
+      const separatorIndex = layer.model.indexOf(':');
+      if (separatorIndex !== -1 && layer.model.slice(separatorIndex + 1).trim().length === 0) {
+        const err = getLayerError(layer, 'model', `Unknown or unsupported model: ${layer.model}`);
+        if (err) return err;
+        continue;
       }
     }
-    if (!modelProvider) {
-      const catalogProvider = getModelInfo(requestedModel)?.provider;
-      if (catalogProvider) {
-        modelProvider =
-          (Object.entries(PROVIDER_RUNTIME_TO_PUBLIC).find(
-            ([, publicId]) => publicId === catalogProvider
-          )?.[0] as RuntimeProviderId | undefined) ?? null;
-      }
+
+    const modelProvider =
+      normalizedModel != null
+        ? findProviderForModel(registry, normalizedModel, supportedProviders)
+        : null;
+    if (normalizedModel && !modelProvider) {
+      const err = getLayerError(
+        layer,
+        'model',
+        `Unknown or unsupported model: ${layer.model ?? normalizedModel}`
+      );
+      if (err) return err;
+      continue;
     }
-    if (!modelProvider) {
-      return { ok: false, code: 'model', message: `Unknown or unsupported model: ${requestedModel}` };
+
+    if (normalizedProvider && modelProvider && normalizedProvider !== modelProvider) {
+      const err = getLayerError(
+        layer,
+        'mismatch',
+        `Model ${normalizedModel} does not match provider: ${layer.provider}`
+      );
+      if (err) return err;
+      continue;
     }
+
+    const providerId = normalizedProvider ?? modelProvider;
+    if (!providerId) continue;
+    if (!registry.isConfigured(providerId)) {
+      const err = getLayerError(
+        layer,
+        'unavailable',
+        `API key not configured for provider: ${providerId}`
+      );
+      if (err) return err;
+      continue;
+    }
+
+    const provider = registry.getById<AnyProvider>(providerId);
+    if (!provider) {
+      const err = getLayerError(layer, 'unavailable', `Provider ${providerId} is unavailable`);
+      if (err) return err;
+      continue;
+    }
+
+    const model = normalizedModel
+      ? (getCanonicalModelId(stripProviderPrefixFromModel(normalizedModel, providerId)) ??
+        normalizedModel)
+      : (registry.getEntry(providerId)?.defaultModel ?? null);
+    if (!model) {
+      const err = getLayerError(
+        layer,
+        'unavailable',
+        `No default model configured for provider: ${providerId}`
+      );
+      if (err) return err;
+      continue;
+    }
+
+    return { ok: true, registry, providerId, provider, model };
   }
 
-  if (explicitProvider && modelProvider && explicitProvider !== modelProvider) {
-    return {
-      ok: false,
-      code: 'mismatch',
-      message: `Model ${requestedModel} does not match provider: ${requestedProvider}`,
-    };
-  }
-
-  const defaultProvider = reg
-    .getProviderIdsForRole('generation')
-    .find(
-      (id) => (PROVIDER_RUNTIME_IDS as readonly string[]).includes(id) && reg.isConfigured(id)
-    ) as RuntimeProviderId | undefined;
-
-  const providerId = explicitProvider ?? modelProvider ?? defaultProvider ?? null;
+  const providerId =
+    getProjectGenerationProviderOrder(project, registry, supportedProviders).find((id) =>
+      registry.isConfigured(id)
+    ) ?? null;
   if (!providerId) {
-    return {
-      ok: false,
-      code: 'unavailable',
-      message: 'No configured extraction provider is available',
-    };
+    return unavailable(input.unavailableMessage, 'No configured generation provider is available');
   }
 
-  const provider = reg.getById<AnyProvider>(providerId);
+  const provider = registry.getById<AnyProvider>(providerId);
   if (!provider) {
-    return { ok: false, code: 'unavailable', message: `Provider ${providerId} is unavailable` };
+    return unavailable(input.unavailableMessage, `Provider ${providerId} is unavailable`);
   }
 
-  const model = requestedModel
-    ? (getCanonicalModelId(stripProviderPrefixFromModel(requestedModel, providerId)) ?? null)
-    : (reg.getEntry(providerId)?.defaultModel ?? null);
+  const model = registry.getEntry(providerId)?.defaultModel ?? null;
   if (!model) {
-    return {
-      ok: false,
-      code: 'unavailable',
-      message: `No default model configured for provider: ${providerId}`,
-    };
+    return unavailable(
+      input.unavailableMessage,
+      `No default model configured for provider: ${providerId}`
+    );
   }
 
-  return { ok: true, providerId, provider, model };
+  return { ok: true, registry, providerId, provider, model };
+}
+
+export async function createModelBoundProvider(model: string): Promise<LLMProvider | null> {
+  const overrides = await loadResolvedProviderConfig();
+  return createProviderForModel(model, {
+    anthropic: overrides.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY,
+    openai: overrides.OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
+    google: overrides.GOOGLE_AI_STUDIO_KEY ?? process.env.GOOGLE_AI_STUDIO_KEY,
+  });
 }

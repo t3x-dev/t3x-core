@@ -1,19 +1,15 @@
 import {
   applyYOps,
+  type CompressionV2Metadata,
+  type CompressionV2Usage,
   flattenTrees,
   type NodeWithSignals,
   type Relation,
   runCompressionV2Pipeline,
-  type CompressionV2Metadata,
-  type CompressionV2Usage,
   type SemanticContent,
   type SourcedYOp,
 } from '@t3x-dev/core';
-import {
-  findConversationById,
-  listYOpsLogByConversation,
-  type AnyDB,
-} from '@t3x-dev/storage';
+import { type AnyDB, findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
 
@@ -96,14 +92,12 @@ function computeNodeSignals(
       if (targetId && signals.has(targetId)) {
         mentioned.add(targetId);
         if (isManual) {
-          // biome-ignore lint/style/noNonNullAssertion: signals.has() guards access
           signals.get(targetId)!.has_manual_edit = true;
         }
       }
     }
 
     for (const id of mentioned) {
-      // biome-ignore lint/style/noNonNullAssertion: set was populated above
       const sig = signals.get(id)!;
       sig.last_touched = yopsEntries.length - i - 1;
       sig.mention_count += 1;

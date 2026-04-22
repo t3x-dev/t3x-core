@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 interface ChatModelPreferencesState {
   selectedProvider: string | null;
@@ -10,33 +9,20 @@ interface ChatModelPreferencesState {
   setHydrated: (hydrated: boolean) => void;
 }
 
-export const useChatModelPreferencesStore = create<ChatModelPreferencesState>()(
-  persist(
-    (set) => ({
+export const useChatModelPreferencesStore = create<ChatModelPreferencesState>()((set) => ({
+  selectedProvider: null,
+  selectedModel: null,
+  // Kept for compatibility with existing consumers/tests; this store is in-memory only.
+  hydrated: true,
+  setSelection: (provider, model) =>
+    set({
+      selectedProvider: provider,
+      selectedModel: model,
+    }),
+  clearSelection: () =>
+    set({
       selectedProvider: null,
       selectedModel: null,
-      hydrated: false,
-      setSelection: (provider, model) =>
-        set({
-          selectedProvider: provider,
-          selectedModel: model,
-        }),
-      clearSelection: () =>
-        set({
-          selectedProvider: null,
-          selectedModel: null,
-        }),
-      setHydrated: (hydrated) => set({ hydrated }),
     }),
-    {
-      name: 't3x-chat-model-preferences',
-      partialize: (state) => ({
-        selectedProvider: state.selectedProvider,
-        selectedModel: state.selectedModel,
-      }),
-      onRehydrateStorage: () => (state) => {
-        state?.setHydrated(true);
-      },
-    }
-  )
-);
+  setHydrated: (hydrated) => set({ hydrated }),
+}));

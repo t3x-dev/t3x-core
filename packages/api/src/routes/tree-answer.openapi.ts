@@ -31,7 +31,7 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { runApiExtractionV2 } from '../lib/extraction-v2';
-import { assertProjectAccess } from '../lib/project-access';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -272,6 +272,7 @@ async function handleDriftChoice4(
     db,
     conversationId: conversation.conversationId,
     turnHashes: postDriftTurnHashes,
+    userId: getUserId(c) ?? undefined,
   });
 
   if (!extractResult.ok) {

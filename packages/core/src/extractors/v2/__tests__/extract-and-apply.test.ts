@@ -67,6 +67,100 @@ describe('extractAndApply', () => {
     ]);
   });
 
+  it('applies bare scalar and array value_json payloads into the value slot', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_scalar',
+                intent: 'add',
+                confidence: 0.99,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'trip_duration_days',
+                  path_hint: 'trip.duration_days',
+                  slot: null,
+                  value_json: '5',
+                  values_json: null,
+                  children_json: null,
+                },
+                evidence: [
+                  {
+                    turn_tag: 'T1',
+                    quote: '5 days',
+                    role: 'primary',
+                  },
+                ],
+              },
+              {
+                id: 'item_array',
+                intent: 'add',
+                confidence: 0.98,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'must_visit_pois',
+                  path_hint: 'trip.preferences.must_visit_pois',
+                  slot: null,
+                  value_json: '["West Lake","Lingyin Temple"]',
+                  values_json: null,
+                  children_json: null,
+                },
+                evidence: [
+                  {
+                    turn_tag: 'T1',
+                    quote: 'West Lake and Lingyin Temple',
+                    role: 'primary',
+                  },
+                ],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 4, outputTokens: 2 },
+        };
+      },
+    };
+
+    const result = await extractAndApply({
+      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: '5 days in Hangzhou trip' }],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      provider,
+      model: 'gpt-5.4',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.trees).toEqual([
+      {
+        key: 'trip.duration_days',
+        slots: { value: 5 },
+        children: [],
+      },
+      {
+        key: 'trip.preferences.must_visit_pois',
+        slots: { value: ['West Lake', 'Lingyin Temple'] },
+        children: [],
+      },
+    ]);
+  });
+
   it('returns an executable_structure failure when compiled ops cannot be applied', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

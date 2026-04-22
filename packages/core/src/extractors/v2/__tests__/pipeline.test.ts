@@ -69,6 +69,103 @@ describe('extractors/v2 pipeline', () => {
     expect(result.compiled.ops).toHaveLength(2);
   });
 
+  it('compiles bare value_json add items into define plus value-slot set ops', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_1',
+                intent: 'add',
+                confidence: 0.99,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'trip_duration_days',
+                  path_hint: 'trip.duration_days',
+                  slot: null,
+                  value_json: '5',
+                  values_json: null,
+                  children_json: null,
+                },
+                evidence: [
+                  {
+                    turn_tag: 'T1',
+                    quote: '5 days',
+                    role: 'primary',
+                  },
+                ],
+              },
+              {
+                id: 'item_2',
+                intent: 'add',
+                confidence: 0.98,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'must_visit_pois',
+                  path_hint: 'trip.preferences.must_visit_pois',
+                  slot: null,
+                  value_json: '["West Lake","Lingyin Temple"]',
+                  values_json: null,
+                  children_json: null,
+                },
+                evidence: [
+                  {
+                    turn_tag: 'T1',
+                    quote: 'West Lake and Lingyin Temple',
+                    role: 'primary',
+                  },
+                ],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 10, outputTokens: 5 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: '5 days in Hangzhou.' }],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+      provider,
+      extractedAt: '2026-04-22T00:00:00.000Z',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.compiled.ops).toHaveLength(4);
+    expect(result.compiled.ops).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ define: { path: 'trip.duration_days' } }),
+        expect.objectContaining({ set: { path: 'trip.duration_days/value', value: 5 } }),
+        expect.objectContaining({ define: { path: 'trip.preferences.must_visit_pois' } }),
+        expect.objectContaining({
+          set: {
+            path: 'trip.preferences.must_visit_pois/value',
+            value: ['West Lake', 'Lingyin Temple'],
+          },
+        }),
+      ])
+    );
+  });
+
   it('preserves original turn roles in the provider prompt context', async () => {
     let capturedPrompt = '';
     const provider: Pick<LLMProvider, 'generateStructured'> = {

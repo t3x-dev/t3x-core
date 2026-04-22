@@ -10,7 +10,7 @@
  */
 
 import type { GenerationMode, Operation, PipelineEvent } from '@t3x-dev/core';
-import { collectLessonsFromAssertions, modeGenerate } from '@t3x-dev/core';
+import { collectLessonsFromAssertions, generateLeafOutput, modeGenerate } from '@t3x-dev/core';
 import {
   createLeafHistory,
   findLeafById,
@@ -19,7 +19,7 @@ import {
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
-import { generateWithFallback } from '../lib/provider-registry';
+import { createModelBoundProvider, resolveProviderAndModel } from '../lib/provider-resolver';
 import { recordUsageFireAndForget } from '../lib/usage-tracking';
 import { pinoLogger } from '../middleware/logger';
 import type { ApiPipelineContext } from './context';
@@ -67,7 +67,7 @@ export interface LeafGenOutput {
 export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
   name: 'leaf-generate',
   async *run(input: LeafGenInput, ctx): AsyncGenerator<PipelineEvent, LeafGenOutput> {
-    const { db, providerRegistry } = ctx as ApiPipelineContext;
+    const { db } = ctx as ApiPipelineContext;
     const { leafId, mode, userId, stylePreferences } = input;
 
     // ---- load ----
@@ -131,28 +131,37 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
         }
       | undefined;
 
+    const providerResolution = await resolveProviderAndModel({
+      db,
+      projectId: leaf.project_id,
+      userId,
+      unavailableMessage: 'No configured generation provider is available',
+    });
+    if (!providerResolution.ok) {
+      throw new Error(providerResolution.message);
+    }
+
+    const boundProvider = await createModelBoundProvider(providerResolution.model);
+    if (!boundProvider) {
+      throw new Error(`Provider ${providerResolution.providerId} is unavailable`);
+    }
+
     if (mode !== 'fast') {
-      // Multi-round pipeline via provider fallback
-      const reg = providerRegistry;
-      // biome-ignore lint/suspicious/noExplicitAny: provider type varies by registry
-      multiRoundResult = await reg.tryWithFallback('generation', async (provider: any) => {
-        const mrResult = await modeGenerate({
-          knowledge,
-          leaf,
-          provider,
-          mode,
-          stylePreferences: stylePreferences
-            ? {
-                tone: stylePreferences.tone,
-                length: stylePreferences.length,
-                formality: stylePreferences.formality,
-              }
-            : undefined,
-        });
-        return { ...mrResult, mode };
+      multiRoundResult = await modeGenerate({
+        knowledge,
+        leaf,
+        provider: boundProvider,
+        mode,
+        stylePreferences: stylePreferences
+          ? {
+              tone: stylePreferences.tone,
+              length: stylePreferences.length,
+              formality: stylePreferences.formality,
+            }
+          : undefined,
       });
       finalOutput = multiRoundResult.output;
-      generationModel = 'multi-round';
+      generationModel = providerResolution.model;
 
       // Record multi-round usage (fire-and-forget)
       // biome-ignore lint/suspicious/noExplicitAny: usage shape varies by provider
@@ -168,10 +177,11 @@ export const leafGenerateOp: Operation<LeafGenInput, LeafGenOutput> = {
         });
       }
     } else {
-      // Single-round generation with automatic provider fallback
-      const result = await generateWithFallback({
+      const result = await generateLeafOutput({
         knowledge,
         leaf,
+        model: providerResolution.model,
+        provider: boundProvider,
         lessons: lessons.length > 0 ? lessons : undefined,
         additionalInstructions:
           typeof leaf.config?.user_instruction === 'string'

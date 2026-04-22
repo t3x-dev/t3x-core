@@ -9,10 +9,19 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 type ApiResponse = any;
+
+const { mockGenerateLeafOutput } = vi.hoisted(() => ({
+  mockGenerateLeafOutput: vi.fn(),
+}));
+
+const { mockResolveProviderAndModel, mockCreateModelBoundProvider } = vi.hoisted(() => ({
+  mockResolveProviderAndModel: vi.fn(),
+  mockCreateModelBoundProvider: vi.fn(),
+}));
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
@@ -20,6 +29,19 @@ let mockDB: AnyDB;
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
   closeDB: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@t3x-dev/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@t3x-dev/core')>();
+  return {
+    ...actual,
+    generateLeafOutput: mockGenerateLeafOutput,
+  };
+});
+
+vi.mock('../lib/provider-resolver', () => ({
+  resolveProviderAndModel: mockResolveProviderAndModel,
+  createModelBoundProvider: mockCreateModelBoundProvider,
 }));
 
 // Import routes after mocking
@@ -60,6 +82,26 @@ describe('Batch Generation Routes', () => {
 
   afterAll(async () => {
     await cleanup();
+  });
+
+  beforeEach(() => {
+    mockGenerateLeafOutput.mockReset();
+    mockResolveProviderAndModel.mockReset();
+    mockCreateModelBoundProvider.mockReset();
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: true,
+      providerId: 'anthropic',
+      provider: { id: 'anthropic' },
+      model: 'claude-sonnet-4-20250514',
+      registry: {},
+    });
+    mockCreateModelBoundProvider.mockResolvedValue({ id: 'anthropic', generate: vi.fn() });
+    mockGenerateLeafOutput.mockResolvedValue({
+      output: 'Generated batch output',
+      model: 'claude-sonnet-4-20250514',
+      usage: { inputTokens: 100, outputTokens: 20 },
+      prompt: { system: 'sys', user: 'usr' },
+    });
   });
 
   describe('POST /v1/commits/{hash}/leaves/batch', () => {
@@ -280,50 +322,35 @@ describe('Batch Generation Routes', () => {
     });
 
     it('defaults skip_generation to false and reports generation failure as a partial success', async () => {
-      // Temporarily unset explicit cloud provider keys and reset the registry.
-      // The batch route still creates the leaf even when generation later fails.
-      const savedAnthropic = process.env.ANTHROPIC_API_KEY;
-      const savedGoogle = process.env.GOOGLE_AI_STUDIO_KEY;
-      delete process.env.ANTHROPIC_API_KEY;
-      delete process.env.GOOGLE_AI_STUDIO_KEY;
+      mockGenerateLeafOutput.mockRejectedValueOnce(new Error('provider offline'));
 
-      const { resetProviderRegistry } = await import('../lib/provider-registry');
-      resetProviderRegistry();
+      const res = await app.request(
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves/batch`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_id: testProjectId,
+            leaves: [{ type: 'tweet' }],
+            // skip_generation not provided, defaults to false
+          }),
+        }
+      );
 
-      try {
-        const res = await app.request(
-          `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves/batch`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              project_id: testProjectId,
-              leaves: [{ type: 'tweet' }],
-              // skip_generation not provided, defaults to false
-            }),
-          }
-        );
+      expect(res.status).toBe(200);
 
-        expect(res.status).toBe(200);
-
-        const data: ApiResponse = await res.json();
-        expect(data.success).toBe(true);
-        expect(data.data.summary).toEqual({
-          total: 1,
-          succeeded: 1,
-          failed: 0,
-        });
-        expect(data.data.results[0].leaf).toBeTruthy();
-        expect(data.data.results[0].leaf.output).toBeNull();
-        expect(data.data.results[0].error).toMatchObject({
-          code: 'GENERATION_FAILED',
-        });
-      } finally {
-        // Restore env vars and re-initialize registry
-        if (savedAnthropic) process.env.ANTHROPIC_API_KEY = savedAnthropic;
-        if (savedGoogle) process.env.GOOGLE_AI_STUDIO_KEY = savedGoogle;
-        resetProviderRegistry();
-      }
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.summary).toEqual({
+        total: 1,
+        succeeded: 1,
+        failed: 0,
+      });
+      expect(data.data.results[0].leaf).toBeTruthy();
+      expect(data.data.results[0].leaf.output).toBeNull();
+      expect(data.data.results[0].error).toMatchObject({
+        code: 'GENERATION_FAILED',
+      });
     });
 
     it('returns correct summary for single leaf', async () => {

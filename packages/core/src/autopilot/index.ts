@@ -1,4 +1,10 @@
 export {
+  type AdaptiveConfig,
+  type AdaptiveFeedbackStats,
+  type AdaptiveFeedbackTypeStats,
+  computeAdaptiveConfig,
+} from './adaptive';
+export {
   type AutoCommitCandidate,
   type AutoCommitPlan,
   type AutopilotConfig,

@@ -3,9 +3,10 @@
  */
 
 import { useCallback } from 'react';
-import { getAuthMe } from '@/infrastructure/auth';
+import { getAuthMe, type UpdateAuthMeInput, updateAuthMe } from '@/infrastructure/auth';
 
 export function useAuthMe() {
   const loadAuthMe = useCallback(async () => getAuthMe(), []);
-  return { loadAuthMe };
+  const saveAuthMe = useCallback(async (input: UpdateAuthMeInput) => updateAuthMe(input), []);
+  return { loadAuthMe, saveAuthMe };
 }

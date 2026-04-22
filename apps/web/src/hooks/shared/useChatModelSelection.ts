@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuthMe } from '@/hooks/shared/useAuthMe';
+import { useSession } from '@/hooks/shared/useSession';
 import { useChatModelPreferencesStore } from '@/store/chatModelPreferencesStore';
 import { resolveAvailableModelSelection, useAvailableModels } from './useAvailableModels';
 
@@ -11,6 +13,9 @@ export function useChatModelSelection({
   initialProvider = null,
   initialModel = null,
 }: UseChatModelSelectionParams) {
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+  const { loadAuthMe } = useAuthMe();
+  const { getKey } = useSession();
   const {
     providers,
     loading: modelsLoading,
@@ -18,16 +23,60 @@ export function useChatModelSelection({
     defaultProvider,
     defaultModel,
   } = useAvailableModels();
-  const persistedProvider = useChatModelPreferencesStore((s) => s.selectedProvider);
-  const persistedModel = useChatModelPreferencesStore((s) => s.selectedModel);
-  const preferencesHydrated = useChatModelPreferencesStore((s) => s.hydrated);
+  const sessionProvider = useChatModelPreferencesStore((s) => s.selectedProvider);
+  const sessionModel = useChatModelPreferencesStore((s) => s.selectedModel);
   const setSelection = useChatModelPreferencesStore((s) => s.setSelection);
+  const [userDefaultProvider, setUserDefaultProvider] = useState<string | null>(null);
+  const [userDefaultModel, setUserDefaultModel] = useState<string | null>(null);
+  const [userPreferenceLoading, setUserPreferenceLoading] = useState<boolean>(
+    !authDisabled && Boolean(getKey())
+  );
 
-  const candidateProvider = initialProvider ?? persistedProvider;
-  const candidateModel = initialModel ?? persistedModel;
+  useEffect(() => {
+    if (authDisabled) {
+      setUserDefaultProvider(null);
+      setUserDefaultModel(null);
+      setUserPreferenceLoading(false);
+      return;
+    }
+
+    if (!getKey()) {
+      setUserDefaultProvider(null);
+      setUserDefaultModel(null);
+      setUserPreferenceLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setUserPreferenceLoading(true);
+
+    loadAuthMe()
+      .then((user) => {
+        if (cancelled) return;
+        setUserDefaultProvider(user.default_provider ?? null);
+        setUserDefaultModel(user.default_model ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUserDefaultProvider(null);
+        setUserDefaultModel(null);
+      })
+      .finally(() => {
+        if (!cancelled) setUserPreferenceLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authDisabled, getKey, loadAuthMe]);
+
+  const candidateProvider = initialProvider ?? sessionProvider;
+  const candidateModel = initialModel ?? sessionModel;
+  const fallbackProvider = userDefaultProvider ?? defaultProvider;
+  const fallbackModel = userDefaultModel ?? defaultModel;
 
   const resolvedSelection = useMemo(() => {
-    if (!preferencesHydrated || modelsLoading) {
+    if (modelsLoading || userPreferenceLoading) {
       return { provider: null, model: null };
     }
 
@@ -35,25 +84,25 @@ export function useChatModelSelection({
       providers,
       candidateProvider,
       candidateModel,
-      defaultProvider,
-      defaultModel
+      fallbackProvider,
+      fallbackModel
     );
   }, [
     candidateModel,
     candidateProvider,
-    defaultModel,
-    defaultProvider,
+    fallbackModel,
+    fallbackProvider,
     modelsLoading,
-    preferencesHydrated,
     providers,
+    userPreferenceLoading,
   ]);
 
   useEffect(() => {
-    if (!preferencesHydrated || modelsLoading) return;
+    if (modelsLoading || userPreferenceLoading) return;
     if (!resolvedSelection.provider || !resolvedSelection.model) return;
     if (
-      persistedProvider === resolvedSelection.provider &&
-      persistedModel === resolvedSelection.model
+      sessionProvider === resolvedSelection.provider &&
+      sessionModel === resolvedSelection.model
     ) {
       return;
     }
@@ -61,12 +110,12 @@ export function useChatModelSelection({
     setSelection(resolvedSelection.provider, resolvedSelection.model);
   }, [
     modelsLoading,
-    persistedModel,
-    persistedProvider,
-    preferencesHydrated,
     resolvedSelection.model,
     resolvedSelection.provider,
+    sessionModel,
+    sessionProvider,
     setSelection,
+    userPreferenceLoading,
   ]);
 
   const handleModelChange = useCallback(
@@ -78,15 +127,18 @@ export function useChatModelSelection({
 
   return {
     providers,
-    loading: modelsLoading || !preferencesHydrated,
+    loading: modelsLoading || userPreferenceLoading,
     hasConfiguredGenerationProvider,
-    defaultProvider,
-    defaultModel,
+    defaultProvider: fallbackProvider,
+    defaultModel: fallbackModel,
     selectedProvider: resolvedSelection.provider,
     selectedModel: resolvedSelection.model,
     handleModelChange,
     isSelectionReady: Boolean(
-      preferencesHydrated && !modelsLoading && resolvedSelection.provider && resolvedSelection.model
+      !modelsLoading &&
+        !userPreferenceLoading &&
+        resolvedSelection.provider &&
+        resolvedSelection.model
     ),
   };
 }

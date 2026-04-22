@@ -10,11 +10,7 @@ import {
   createOllamaProvider,
   createOpenAIProvider,
 } from './llm';
-import {
-  createProviderRegistry,
-  type ProviderRegistry,
-  type ResolvedConfig,
-} from './registry';
+import { createProviderRegistry, type ProviderRegistry, type ResolvedConfig } from './registry';
 
 type ProviderId =
   | 'anthropic'
@@ -139,7 +135,11 @@ export function registerDefaultProviders(
       'google-ai',
       {
         defaultModel: 'gemini-2.5-pro',
-        availableModels: ['gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite-preview'],
+        availableModels: [
+          'gemini-2.5-pro',
+          'gemini-3-flash-preview',
+          'gemini-3.1-flash-lite-preview',
+        ],
       },
       providerOverrides
     );

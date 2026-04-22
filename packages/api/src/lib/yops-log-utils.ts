@@ -43,4 +43,5 @@ export function toYOpsLogEntries(records: YOpsLogRecord[]): YOpsLogEntry[] {
   return records.map(toYOpsLogEntry);
 }
 
-export const replayYOpsLog = (entries: YOpsLogEntry[]): SemanticContent => replayCoreYOpsLog(entries);
+export const replayYOpsLog = (entries: YOpsLogEntry[]): SemanticContent =>
+  replayCoreYOpsLog(entries);

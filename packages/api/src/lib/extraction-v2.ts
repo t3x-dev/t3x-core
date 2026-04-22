@@ -1,8 +1,4 @@
-import {
-  extractAndApply,
-  type ExtractionFailure,
-  type ExtractionMode,
-} from '@t3x-dev/core';
+import { type ExtractionFailure, type ExtractionMode, extractAndApply } from '@t3x-dev/core';
 import {
   type AnyDB,
   deleteYOpsLogEntry,
@@ -20,6 +16,7 @@ export interface ApiExtractionV2Input {
   turnHashes?: string[];
   provider?: string;
   model?: string;
+  userId?: string;
   topicId?: string;
   forceExtract?: boolean;
 }
@@ -79,7 +76,14 @@ export async function runApiExtractionV2(
     };
   }
 
-  const providerResolution = await resolveProviderAndModel(input.provider, input.model);
+  const providerResolution = await resolveProviderAndModel({
+    db: input.db,
+    requestedProvider: input.provider,
+    requestedModel: input.model,
+    conversationId: input.conversationId,
+    userId: input.userId,
+    unavailableMessage: 'No configured extraction provider is available',
+  });
   if (!providerResolution.ok) {
     return {
       ok: false,

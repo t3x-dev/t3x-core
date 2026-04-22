@@ -63,13 +63,17 @@ Add the server to your MCP host using the published binary:
       "command": "npx",
       "args": ["@t3x-dev/mcp"],
       "env": {
-        "T3X_TOOLSETS": "core,advanced",
-        "ANTHROPIC_API_KEY": "sk-ant-..."
+        "T3X_TOOLSETS": "core,advanced"
       }
     }
   }
 }
 ```
+
+Model-backed tools (`t3x_extract`, `t3x_generate`) now prefer the same
+DB-backed provider credentials used by the T3X app. If you have already
+configured providers in WebUI/API settings, MCP reuses them automatically.
+Environment variables remain available as a local fallback.
 
 For local development inside this repo, the committed root `.mcp.json` already points at `apps/mcp/dist/index.js`.
 
@@ -96,7 +100,9 @@ This means the MCP server does not use `T3X_API_URL` or `T3X_API_KEY`.
 | `DATABASE_URL` | Postgres connection string; when omitted, embedded Postgres is used | unset |
 | `T3X_DATA_DIR` | Embedded Postgres data directory | `.t3x/pg-data` |
 | `T3X_PG_PORT` | Embedded Postgres port | `5445` |
-| `ANTHROPIC_API_KEY` | Required for `t3x_extract` and `t3x_generate` | unset |
+| `ANTHROPIC_API_KEY` | Optional fallback for Anthropic-backed generation/extraction | unset |
+| `OPENAI_API_KEY` | Optional fallback for OpenAI-backed generation/extraction | unset |
+| `GOOGLE_AI_STUDIO_KEY` | Optional fallback for Gemini-backed generation/extraction | unset |
 
 ## Example Workflow
 

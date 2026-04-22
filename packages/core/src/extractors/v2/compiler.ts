@@ -7,6 +7,8 @@ import type {
   ExtractionDraftItem,
 } from './types';
 
+const DEFAULT_VALUE_SLOT = 'value';
+
 export type CompileResult =
   | { ok: true; ops: SourcedYOp[]; warnings: string[] }
   | { ok: false; failure: ExtractionFailure; warnings: string[] };
@@ -75,6 +77,14 @@ function resolveTargetPath(item: ExtractionDraftItem): string | null {
   );
 }
 
+function getTargetSlot(item: ExtractionDraftItem): string | null {
+  if (item.candidate.slot) {
+    return item.candidate.slot;
+  }
+
+  return item.candidate.value !== undefined ? DEFAULT_VALUE_SLOT : null;
+}
+
 function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileResult {
   const primaryEvidence =
     item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
@@ -108,9 +118,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
-    if (item.candidate.slot && item.candidate.value !== undefined) {
+    const targetSlot = getTargetSlot(item);
+    if (targetSlot && item.candidate.value !== undefined) {
       ops.push({
-        set: { path: `${path}/${item.candidate.slot}`, value: item.candidate.value },
+        set: { path: `${path}/${targetSlot}`, value: item.candidate.value },
         source,
       });
     }
@@ -155,9 +166,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
-    if (item.candidate.slot && item.candidate.value !== undefined) {
+    const targetSlot = getTargetSlot(item);
+    if (targetSlot && item.candidate.value !== undefined) {
       ops.push({
-        set: { path: `${path}/${item.candidate.slot}`, value: item.candidate.value },
+        set: { path: `${path}/${targetSlot}`, value: item.candidate.value },
         source,
       });
     }
@@ -167,7 +179,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
         ok: false,
         failure: createExtractionFailure(
           'compile',
-          `${item.intent} intent requires candidate.values or candidate.slot + candidate.value`,
+          `${item.intent} intent requires candidate.values or candidate.value`,
           {
             details: {
               reaskable: true,
