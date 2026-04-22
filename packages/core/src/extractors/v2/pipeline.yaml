@@ -343,6 +343,48 @@ architecture_review:
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
 
+  - id: regression_gate
+    severity: foundational
+    status: resolved_by_F15
+    site: packages/core/src/__tests__/v2-golden/
+    problem: >
+      The pipeline had no end-to-end regression test. Unit tests cover each
+      stage in isolation (compiler, lift, normalizer). The multi-model
+      harness covers real LLM behavior but is manual, expensive, and flaky
+      in CI. Nothing gated a structural PR against unintentional output drift.
+    progress: >
+      F15 introduces a golden-eval harness. Each golden is a directory with
+      three JSON files: turns.json (input), provider-response.json (mocked
+      LLM reply), expected.json (expected draft / op kinds / snapshot
+      trees). The harness (golden.test.ts) auto-discovers directories,
+      mocks the provider to replay the recorded response, runs
+      extractAndApply end-to-end, and asserts structural equality with the
+      expected file. Deterministic — no network, no API keys, no cost.
+      Initial seed: airport-issue (nested children) + trip-planning-minimal
+      (value_json array → value slot). Adding a new golden = drop a new
+      directory; no code change.
+
+  - id: openai_refusal_first_class
+    severity: observability
+    status: resolved_by_F14
+    site: packages/core/src/providers/llm/openai.ts + extract-and-apply-resilient.ts
+    problem: >
+      OpenAI's Structured Outputs API returns a `refusal` field on the
+      assistant message when the model declines to produce structured
+      output (safety, policy, ambiguity). The adapter previously collapsed
+      this into the generic "No content in response" path and routed it
+      through the plain-text retry — wasting a call and burying the
+      semantic signal under a generic "extraction failed" diagnostic.
+    progress: >
+      F14 detects message.refusal in the OpenAI structured response path
+      and throws an LLMProviderError with code='REFUSAL' and
+      details.refusalText = the refusal string. The outer
+      generateStructured catch does NOT route refusals into the plain-text
+      fallback (retrying the same prompt won't help). extractAndApplyResilient
+      promotes the failure to stage='refusal' in the degraded result and
+      carries the refusalText through for UI surfaces to render verbatim.
+      Users see WHY the model refused instead of a generic error.
+
   - id: reask_missing_prior_context
     severity: resilience
     status: resolved_by_F13

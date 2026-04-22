@@ -1,0 +1,68 @@
+{
+  "draft": {
+    "schema": "t3x/extraction-draft",
+    "version": 1,
+    "mode": "bootstrap",
+    "items": [
+      {
+        "id": "item_trip",
+        "intent": "add",
+        "confidence": 0.9,
+        "reasoning_type": "direct",
+        "candidate": {
+          "key": "trip",
+          "path_hint": "trip",
+          "values": {
+            "destination": "Hangzhou",
+            "duration_days": 5,
+            "month": "late May",
+            "travelers": 2
+          }
+        },
+        "evidence": [
+          {
+            "turn_tag": "T1",
+            "quote": "5 days in Hangzhou in late May with two travelers",
+            "role": "primary"
+          }
+        ]
+      },
+      {
+        "id": "item_sights",
+        "intent": "add",
+        "confidence": 0.85,
+        "reasoning_type": "direct",
+        "candidate": {
+          "key": "sights",
+          "path_hint": "sights",
+          "value": ["West Lake", "Lingyin Temple", "Longjing tea village"]
+        },
+        "evidence": [
+          {
+            "turn_tag": "T2",
+            "quote": "Stay near West Lake. Key sights: Lingyin Temple, Longjing tea village.",
+            "role": "primary"
+          }
+        ]
+      }
+    ]
+  },
+  "compiledOpKinds": ["define", "populate", "define", "set"],
+  "snapshotTrees": [
+    {
+      "key": "trip",
+      "slots": {
+        "destination": "Hangzhou",
+        "duration_days": 5,
+        "month": "late May",
+        "travelers": 2
+      },
+      "children": []
+    },
+    {
+      "key": "sights",
+      "slots": { "value": ["West Lake", "Lingyin Temple", "Longjing tea village"] },
+      "children": []
+    }
+  ]
+}

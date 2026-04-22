@@ -1,0 +1,35 @@
+{
+  "schema": "t3x/provider-extraction-draft",
+  "version": 1,
+  "mode": "bootstrap",
+  "items": [
+    {
+      "id": "item_1",
+      "intent": "add",
+      "confidence": 0.95,
+      "reasoning_type": "direct",
+      "target_ref": { "node_key": null, "path": null, "existing_node_id": null },
+      "candidate": {
+        "key": "airport_issue",
+        "path_hint": "airport_issue",
+        "slot": null,
+        "value_json": null,
+        "values_json": "{\"summary\":\"SEA had a cyberattack\",\"status\":\"stabilized\"}",
+        "children_json": "[{\"key\":\"Baggage Handling\",\"values\":{\"impact\":\"disrupted\"}},{\"key\":\"Check-in\",\"values\":{\"impact\":\"disrupted\"}}]"
+      },
+      "evidence": [
+        {
+          "turn_tag": "T2",
+          "quote": "Seattle-Tacoma International Airport (SEA) has been dealing with a major cyberattack",
+          "role": "primary"
+        },
+        {
+          "turn_tag": "T2",
+          "quote": "Status has now stabilized",
+          "role": "supporting"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

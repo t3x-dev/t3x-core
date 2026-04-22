@@ -166,4 +166,38 @@ describe('extractAndApplyResilient (F10)', () => {
     expect(result.snapshot).toEqual(baseSnapshot);
     expect(result.degraded?.stage).toBe('transport');
   });
+
+  it('F14: surfaces OpenAI refusal with a dedicated degradation stage and refusal text', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        // Shape mirrors what OpenAI's adapter throws on a structured-output
+        // refusal: a LLMProviderError with code 'REFUSAL' and details
+        // carrying the refusal text.
+        throw new LLMProviderError(
+          'openai',
+          undefined,
+          'Model refused to produce structured output: I cannot assist with that request.',
+          'REFUSAL',
+          { refusalText: 'I cannot assist with that request.' }
+        );
+      },
+    };
+
+    const result = await extractAndApplyResilient({
+      turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'something the model refuses' }],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      provider,
+      model: 'gpt-5.4',
+    });
+
+    expect(result.ok).toBe(true);
+    // Not 'transport' — refusal is first-class.
+    expect(result.degraded?.stage).toBe('refusal');
+    // UI surfaces this verbatim so the user sees why.
+    expect(result.degraded?.refusalText).toBe('I cannot assist with that request.');
+    // Nothing mutates when the model refuses.
+    expect(result.snapshot.trees).toEqual([]);
+    expect(result.compiled.ops).toEqual([]);
+  });
 });
