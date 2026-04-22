@@ -206,6 +206,12 @@ async function generateDraft(
 
       const validated = ProviderExtractionDraftSchema.safeParse(result.data);
       if (!validated.success) {
+        // F11: adapter returned data its own internal validation accepted
+        // but which fails the strict provider schema (typically optional-
+        // nullable fields left undefined). Try the loose normalizer before
+        // giving up.
+        const rescued = tryLooseNormalize(result.data);
+        if (rescued.ok) return rescued;
         return {
           ok: false,
           failure: buildSchemaFailureFromIssues(validated.error.issues),
@@ -214,6 +220,12 @@ async function generateDraft(
 
       const lifted = liftProviderDraftToExtractionDraft(validated.data);
       if (!lifted.ok) {
+        // F11: lift step can fail when the model's _json payloads
+        // structurally disagree with the canonical schema (e.g. array in
+        // values slot, child missing key). Retry via loose normalize which
+        // re-runs the lift's deterministic fixups.
+        const rescued = tryLooseNormalize(result.data);
+        if (rescued.ok) return rescued;
         return {
           ok: false,
           failure: lifted.failure,

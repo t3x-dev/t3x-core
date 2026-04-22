@@ -292,7 +292,19 @@ function canonicalizeChildShape(value: unknown): unknown {
     }
 
     const out: Record<string, unknown> = {};
-    if (keyCandidate !== undefined) out.key = keyCandidate;
+    if (keyCandidate !== undefined) {
+      out.key = keyCandidate;
+    } else {
+      // F11: synthesize a key from the first short string field when neither
+      // key nor name are present. Observed on openai structured output when
+      // emitting children_json as [{title: "x", …}] with no key.
+      const firstStringValue = Object.values(folded).find(
+        (v): v is string => typeof v === 'string' && v.length > 0 && v.length < 80
+      );
+      if (firstStringValue) {
+        out.key = firstStringValue;
+      }
+    }
     if (Object.keys(folded).length > 0) out.values = folded;
     return out;
   });
@@ -334,6 +346,26 @@ export function liftProviderDraftToExtractionDraft(
       return parsedChildren;
     }
 
+    // F11: when the model put an array (or scalar) inside values_json — the
+    // canonical ExtractionDraftSchema requires `values` to be a record — promote
+    // that payload into the `value` slot (which accepts any YValue) so the
+    // canonical shape validates. Observed on every Claude model and gemini
+    // flash when they conflated the two _json fields after F9 dropped the
+    // "use value_json for arrays" prompt rule.
+    let liftedValue = normalizeParsedJsonField('candidate.value_json', parsedValue.value);
+    let liftedValues = normalizeParsedJsonField('candidate.values_json', parsedValues.value);
+    const valuesIsRecord =
+      liftedValues !== undefined &&
+      liftedValues !== null &&
+      typeof liftedValues === 'object' &&
+      !Array.isArray(liftedValues);
+    if (liftedValues !== undefined && liftedValues !== null && !valuesIsRecord) {
+      if (liftedValue === undefined || liftedValue === null) {
+        liftedValue = liftedValues;
+      }
+      liftedValues = undefined;
+    }
+
     items.push({
       id: item.id,
       intent: item.intent,
@@ -347,8 +379,8 @@ export function liftProviderDraftToExtractionDraft(
         key: item.candidate.key,
         path_hint: item.candidate.path_hint,
         slot: item.candidate.slot,
-        value: normalizeParsedJsonField('candidate.value_json', parsedValue.value),
-        values: normalizeParsedJsonField('candidate.values_json', parsedValues.value),
+        value: liftedValue,
+        values: liftedValues,
         children: normalizeParsedJsonField('candidate.children_json', parsedChildren.value),
       }),
       evidence: item.evidence,

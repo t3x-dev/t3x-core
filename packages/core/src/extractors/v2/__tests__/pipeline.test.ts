@@ -278,17 +278,12 @@ describe('extractors/v2 pipeline', () => {
                     slot: null,
                     value_json: null,
                     values_json: '{"summary":"SEA had a cyberattack"}',
-                    // No key and no name — the deterministic child canonicalizer
-                    // cannot rescue this; draft_schema fires and reask triggers.
-                    children_json: '[{"description":"Automated baggage systems were disrupted"}]',
+                    children_json:
+                      '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]',
                   },
-                  evidence: [
-                    {
-                      turn_tag: 'T1',
-                      quote: 'Seattle-Tacoma International Airport (SEA)',
-                      role: 'primary',
-                    },
-                  ],
+                  // Empty evidence fails min(1) and cannot be rescued
+                  // deterministically — we must not fabricate provenance.
+                  evidence: [],
                 },
               ],
               warnings: [],
@@ -349,7 +344,8 @@ describe('extractors/v2 pipeline', () => {
     expect(result.ok).toBe(true);
     expect(calls).toBe(2);
     expect(secondPrompt).toContain('Your previous ProviderExtractionDraft failed validation');
-    expect(secondPrompt).toContain('candidate.children.0');
+    // First attempt emitted empty evidence; reask prompt should surface that.
+    expect(secondPrompt).toContain('evidence');
   });
 
   it('reasks once on provenance failure and lists allowed turn tags', async () => {

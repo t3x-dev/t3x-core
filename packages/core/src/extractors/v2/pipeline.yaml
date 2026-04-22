@@ -325,37 +325,40 @@ current_status:
     - packages/core/src/__tests__/fixtures/science-astronomy.json
     - packages/core/src/__tests__/fixtures/product-design.json
     - packages/core/src/__tests__/fixtures/recipe-cooking.json
-  last_run: 2026-04-22 (stability, 6 fixtures × 9 models = 54 runs)
+  last_run: 2026-04-22 (F11 stability, 6 fixtures × 9 models = 54 runs)
   harness: packages/core/scripts/e2e-multi-model.ts
-  pass_rate: 49/54 (90.7%) across fixtures; 9/9 on the original fixture alone
+  pass_rate: 51/54 (94.4%) strict; 54/54 (100%) resilient (F10 catches the rest)
+  progression:
+    - Pre-F1 (baseline): 3/9 on hots-conversation
+    - Post-F1–F5: 9/9 on hots-conversation
+    - Post-F1–F6 (stability review, 6 fixtures): 49/54
+    - Post-F9 (simplified prompt, no other changes): 42/54 (regression — prompt rules were load-bearing)
+    - Post-F11 (lift tolerance added): 51/54
   notes:
-    - All cataloged models extract end-to-end on the standard fixture.
-    - Zero per-provider prompt branches were introduced across F1–F5.
-    - F1 — deterministic children_json shape normalizer (providerDraft.ts).
-    - F2 — compiler dedupe of duplicate define ops (compiler.ts).
-    - F3 — value_json repairer for plain-scalar emissions (providerDraft.ts).
-    - F4 — explicit thinking budget for all Gemini `pro` models so output
-      has room under the maxOutputTokens cap (providers/llm/gemini.ts).
-    - F5 — Claude adapter fallback: if generateStructured returns no usable
-      structured data, retry via generateFromPrompt and extract JSON from
-      the text response. Opus no longer flakes. Harness gained --slo-ms
-      (default 10000) and per-model latency summary.
+    - F9 collapsed the prompt to one provider-agnostic template. The drift
+      rules the prompt used to carry are now handled deterministically by
+      F1/F3/F6/F8/F11 normalizers.
+    - F10 adds the resilient extractAndApplyResilient contract — callers
+      see ok:true on every call even when the strict pipeline fails.
+    - F11 adds lift-step tolerance: array-in-values → value slot, missing
+      child key → synthesized from first string value. Also added
+      safeParse → tryLooseNormalize rescue in pipeline.ts::generateDraft.
   results:
-    reliable_across_all_fixtures:
+    reliable_across_all_fixtures_f11:
+      - claude-opus-4-6
       - claude-haiku-4-5-20251001
       - gpt-5.4-mini
+      - gpt-5.4-nano
       - gemini-2.5-pro
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
-    flaky_on_some_fixtures:
-      - { model: claude-sonnet-4-6, passes: 5/6, fails_on: [trip-planning], cluster: claude_structured_schema_mismatch }
-      - { model: claude-opus-4-6, passes: 5/6, fails_on: [trip-planning], cluster: claude_structured_schema_mismatch }
-      - { model: gpt-5.4, passes: 5/6, fails_on: [product-design], cluster: openai_structured_non_json }
-      - { model: gpt-5.4-nano, passes: 4/6, fails_on: [product-design, react-debugging], clusters: [nano_add_missing_key, nano_update_on_missing_path] }
-  per_fixture_pass_rate:
-    hots-conversation: 9/9
-    react-debugging: 8/9
-    trip-planning: 7/9
+    flaky_on_some_fixtures_f11:
+      - { model: claude-sonnet-4-6, passes: 4/6, fails_on: [hots-conversation, product-design], cluster: nested_path_scalar_collision }
+      - { model: gpt-5.4, passes: 5/6, fails_on: [product-design], cluster: nested_path_scalar_collision }
+  per_fixture_pass_rate_f11:
+    hots-conversation: 8/9
+    react-debugging: 9/9
+    trip-planning: 9/9
     science-astronomy: 9/9
     product-design: 7/9
     recipe-cooking: 9/9
@@ -516,6 +519,34 @@ clusters:
       LLM's intended identifier) and passed through to the add path, which
       emits define + populate + set as needed. Nano × react-debugging
       verified 3/3 runs pass post-F8.
+
+  - id: nested_path_scalar_collision
+    status: open
+    discovered: 2026-04-22 (F11 stability matrix, 3/54 remaining failures)
+    affects: [claude-sonnet-4-6, gpt-5.4]
+    hypothesis: >
+      The model emits two items describing the same concept at different
+      granularities. The first populates a string at some slot (e.g.
+      `product/alerts` under `product`), the second item tries to `add` a
+      nested node at that same path (e.g. `product/alerts/slack`). Applying
+      the second item's `define` fails with "Path X already exists" because
+      resolvePath now finds a string, not an empty object — `define` can't
+      overwrite a scalar in place.
+    fix_strategy: deterministic_wrapper (F12 candidate)
+    candidates:
+      - At compile time — detect populate keys that collide with a later
+        item's path_hint segments and drop the conflicting slot so the
+        nested item's define owns that path.
+      - At apply time — relax YOps' define handler to convert a scalar at
+        the target path into an empty object shell (scope-sensitive; changes
+        engine semantics).
+      - Pre-process the item list — merge items whose path_hints are
+        prefixes of each other's into a single composite item.
+    fix_site: packages/core/src/extractors/v2/providerDraft.ts or compiler.ts
+    observability_note: >
+      Always handled at the user-facing level by extractAndApplyResilient
+      (F10), which converts the executable_structure failure into an empty
+      draft + diagnostic rather than broken.
 
   - id: anthropic_structured_output_empty
     status: resolved_by_F5

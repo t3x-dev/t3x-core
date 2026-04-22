@@ -529,3 +529,173 @@ describe('normalizeLooseProviderDraft (F6)', () => {
     expect(normalizeLooseProviderDraft([1, 2, 3])).toEqual([1, 2, 3]);
   });
 });
+
+describe('F11 lift-step tolerance', () => {
+  it('promotes an array payload in values_json to the value slot', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'heroes',
+            path_hint: 'heroes',
+            slot: null,
+            value_json: null,
+            // Array-shaped — the canonical schema rejects this in `values`.
+            values_json: '["arthas","jaina","thrall"]',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'heroes list', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.value).toEqual(['arthas', 'jaina', 'thrall']);
+    expect(lifted.draft.items[0]?.candidate.values).toBeUndefined();
+  });
+
+  it('promotes a scalar in values_json to the value slot', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'title',
+            path_hint: 'title',
+            slot: null,
+            value_json: null,
+            values_json: '"Heroes of the Storm"',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'the game', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.value).toBe('Heroes of the Storm');
+    expect(lifted.draft.items[0]?.candidate.values).toBeUndefined();
+  });
+
+  it('preserves a valid object in values_json (no promotion)', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'hero',
+            path_hint: 'hero',
+            slot: null,
+            value_json: null,
+            values_json: '{"name":"Arthas","role":"warrior"}',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'arthas', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.values).toEqual({
+      name: 'Arthas',
+      role: 'warrior',
+    });
+    expect(lifted.draft.items[0]?.candidate.value).toBeUndefined();
+  });
+
+  it('does not clobber a pre-existing value when values_json is also an array', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'thing',
+            path_hint: 'thing',
+            slot: null,
+            value_json: '"primary_value"',
+            values_json: '["extra1","extra2"]',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'thing', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    // value already had content; values (array) is dropped to satisfy schema.
+    expect(lifted.draft.items[0]?.candidate.value).toBe('primary_value');
+    expect(lifted.draft.items[0]?.candidate.values).toBeUndefined();
+  });
+
+  it('synthesizes a child key from a value when the model omitted key and name', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'team',
+            path_hint: 'team',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            // Children have values but no key/name.
+            children_json: '[{"title":"Arthas","role":"warrior"},{"title":"Jaina","role":"mage"}]',
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'team', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([
+      { key: 'Arthas', values: { title: 'Arthas', role: 'warrior' } },
+      { key: 'Jaina', values: { title: 'Jaina', role: 'mage' } },
+    ]);
+  });
+});
