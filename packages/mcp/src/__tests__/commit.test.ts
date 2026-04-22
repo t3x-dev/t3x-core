@@ -36,6 +36,12 @@ const MOCK_DRAFT_EMPTY = {
   nodes: [],
 };
 
+const MOCK_DRAFT_NO_PARENT = {
+  ...MOCK_DRAFT_EDITING,
+  id: 'draft_root',
+  parent_commit_hash: undefined,
+};
+
 const MOCK_DRAFT_OTHER_PROJECT = {
   ...MOCK_DRAFT_EDITING,
   id: 'draft_other',
@@ -63,6 +69,7 @@ vi.mock('@t3x-dev/storage', () => ({
       draft_abc: MOCK_DRAFT_EDITING,
       draft_done: MOCK_DRAFT_COMMITTED,
       draft_empty: MOCK_DRAFT_EMPTY,
+      draft_root: MOCK_DRAFT_NO_PARENT,
       draft_other: MOCK_DRAFT_OTHER_PROJECT,
     };
     return Promise.resolve(drafts[id] ?? null);
@@ -161,6 +168,18 @@ describe('t3x_commit handler', () => {
     expect(data.tree_count).toBe(2);
     expect(data.next_steps).toBeDefined();
     expect(Array.isArray(data.next_steps)).toBe(true);
+  });
+
+  it('creates a root commit when draft has no parent commit hash', async () => {
+    const result = await commitHandler({
+      project_id: 'proj_test1',
+      draft_id: 'draft_root',
+      message: 'Initial extraction',
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.parents).toEqual([]);
   });
 
   it('passes correct arguments to createCommit', async () => {

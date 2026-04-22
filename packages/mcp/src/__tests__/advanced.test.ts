@@ -195,6 +195,15 @@ import { mergeHandler } from '../tools/advanced/merge.js';
 // ================================================================
 
 describe('t3x_diff handler', () => {
+  it('rejects legacy source/target calls and requires base', async () => {
+    const result = await diffHandler({
+      source: 'sha256:aaa',
+      target: 'sha256:bbb',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"base" is required');
+  });
+
   it('returns error when base is missing', async () => {
     const result = await diffHandler({ target: 'sha256:bbb' });
     expect(result.isError).toBe(true);
@@ -359,6 +368,47 @@ describe('t3x_merge handler', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.commit_hash).toBe('sha256:merged');
     expect(data.parents).toEqual(['sha256:aaa', 'sha256:bbb']);
+  });
+
+  it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {
+    const { getMergeDraft, updateMergeDraft } = await import('@t3x-dev/storage');
+
+    vi.mocked(getMergeDraft)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
+    vi.mocked(updateMergeDraft).mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
+
+    const prepared = await mergeHandler({
+      action: 'prepare',
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+    });
+    expect(prepared.isError).toBeUndefined();
+    expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_test1');
+
+    const shown = await mergeHandler({ action: 'show_conflict', draft_id: 'md_test1', index: 0 });
+    expect(shown.isError).toBeUndefined();
+    expect(JSON.parse(shown.content[0].text).conflict.path).toBe('trip');
+
+    const resolved = await mergeHandler({
+      action: 'resolve',
+      draft_id: 'md_test1',
+      index: 0,
+      resolution: 'source',
+      reasoning: 'Original budget is correct',
+    });
+    expect(resolved.isError).toBeUndefined();
+    expect(JSON.parse(resolved.content[0].text).resolution).toBe('source');
+
+    const executed = await mergeHandler({
+      action: 'execute',
+      draft_id: 'md_test1',
+      message: 'Merge feature',
+    });
+    expect(executed.isError).toBeUndefined();
+    expect(JSON.parse(executed.content[0].text).commit_hash).toBe('sha256:merged');
   });
 
   // -- abort --
