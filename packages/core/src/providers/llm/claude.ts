@@ -54,6 +54,41 @@ async function fetchWithProxy(url: string, options: RequestInit): Promise<Respon
 }
 
 /**
+ * Extract the first balanced JSON object or array from a text blob.
+ * Handles: bare JSON, JSON inside ```json …``` fences, JSON after preamble.
+ * Returns null if no object or array is found.
+ */
+function extractJsonBlock(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return trimmed;
+
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch?.[1]) return fenceMatch[1].trim();
+
+  const openIndex = Math.min(
+    ...['{', '['].map((ch) => {
+      const idx = trimmed.indexOf(ch);
+      return idx === -1 ? Number.POSITIVE_INFINITY : idx;
+    })
+  );
+  if (!Number.isFinite(openIndex)) return null;
+
+  const open = trimmed[openIndex];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  for (let i = openIndex; i < trimmed.length; i += 1) {
+    const ch = trimmed[i];
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return trimmed.slice(openIndex, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
  * Claude provider configuration
  */
 export interface ClaudeProviderConfig {
@@ -235,6 +270,30 @@ export class ClaudeProvider implements LLMProvider {
     schema: ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
+    try {
+      return await this.generateStructuredViaOutputConfig(prompt, schema, options);
+    } catch (error) {
+      // Deterministic fallback: the Anthropic structured-output path
+      // intermittently returns a response with no tool_use block and no JSON
+      // text block (observed on opus reproducibly). Rather than failing, retry
+      // via the plain messages API and extract JSON from the text response.
+      // No prompt change — the prompt already instructs the model to return
+      // JSON only.
+      if (
+        error instanceof LLMProviderError &&
+        error.message.endsWith('No structured data found in response')
+      ) {
+        return this.generateStructuredViaText(prompt, schema, options);
+      }
+      throw error;
+    }
+  }
+
+  private async generateStructuredViaOutputConfig<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const jsonSchema = toClaudeStructuredSchema(schema);
@@ -324,6 +383,34 @@ export class ClaudeProvider implements LLMProvider {
         this.id,
         undefined,
         `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async generateStructuredViaText<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
+    const result = await this.generateFromPrompt(prompt, options);
+    const jsonText = extractJsonBlock(result.text);
+    if (!jsonText) {
+      throw new LLMProviderError(this.id, undefined, 'No structured data found in response');
+    }
+    let jsonData: unknown;
+    try {
+      jsonData = JSON.parse(jsonText);
+    } catch {
+      throw new LLMProviderError(this.id, undefined, 'Failed to parse response as JSON');
+    }
+    try {
+      const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
+      return { data: parsed, usage: result.usage };
+    } catch {
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Response JSON does not match expected schema'
       );
     }
   }

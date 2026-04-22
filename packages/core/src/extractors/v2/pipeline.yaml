@@ -149,7 +149,9 @@ providers:
       - id: claude-opus-4-6
         canonical: true
         known_issues:
-          - "Flaky: sometimes returns empty structured response (`transport: No structured data found`). Run-to-run variance observed."
+          - "(resolved by F5) Intermittently returned empty structured responses. Now caught by generateStructuredViaText fallback in the Claude adapter."
+        notes:
+          - "Slow: typical ~26s, up to ~58s when F5 fallback triggers a second HTTP call. Well above the 10s SLO."
       - id: claude-haiku-4-5-20251001
         canonical: true
         known_issues:
@@ -216,17 +218,21 @@ invariants:
 # evidence, not truth. Numbers are fixture-specific (hots-conversation, 8 turns).
 current_status:
   fixture: packages/core/src/__tests__/fixtures/hots-conversation.json
-  last_run: 2026-04-22 (post-F4)
+  last_run: 2026-04-22 (post-F5)
   harness: packages/core/scripts/e2e-multi-model.ts
-  pass_rate: 9/9 single-run
+  pass_rate: 9/9 single-run; opus verified 3/3
   notes:
     - All cataloged models extract end-to-end on the standard fixture.
-    - Zero per-provider prompt branches were introduced across F1–F4.
+    - Zero per-provider prompt branches were introduced across F1–F5.
     - F1 — deterministic children_json shape normalizer (providerDraft.ts).
     - F2 — compiler dedupe of duplicate define ops (compiler.ts).
     - F3 — value_json repairer for plain-scalar emissions (providerDraft.ts).
     - F4 — explicit thinking budget for all Gemini `pro` models so output
       has room under the maxOutputTokens cap (providers/llm/gemini.ts).
+    - F5 — Claude adapter fallback: if generateStructured returns no usable
+      structured data, retry via generateFromPrompt and extract JSON from
+      the text response. Opus no longer flakes. Harness gained --slo-ms
+      (default 10000) and per-model latency summary.
   results:
     passing:
       - claude-sonnet-4-6
@@ -239,6 +245,25 @@ current_status:
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
     failing: []
+
+# Latency expectations per model on the 8-turn hots-conversation fixture.
+# Values are typical single-run timings post-F5. "slo" marks whether the
+# model reliably stays under the default 10s SLO. Slow models are not
+# failures — they're a signal that either the provider is spending budget
+# on thinking/reasoning or the pipeline is doing extra work (e.g. F5 fallback).
+latency_profile:
+  slo_ms: 10000
+  fast: # ≤ 10s typical
+    - { model: gpt-5.4-mini, typical_ms: 5000 }
+    - { model: gpt-5.4-nano, typical_ms: 9600 }
+    - { model: gemini-3-flash-preview, typical_ms: 4400 }
+    - { model: gemini-3.1-flash-lite-preview, typical_ms: 3900 }
+  slow: # > 10s typical — worth watching
+    - { model: claude-haiku-4-5-20251001, typical_ms: 11000 }
+    - { model: gpt-5.4, typical_ms: 14700 }
+    - { model: gemini-2.5-pro, typical_ms: 15000 }
+    - { model: claude-opus-4-6, typical_ms: 26000, note: "May take 50s+ when F5 fallback kicks in" }
+    - { model: claude-sonnet-4-6, typical_ms: 37000 }
 
 # Failure clusters guide the fix plan. Each cluster = one follow-up PR.
 clusters:
@@ -294,17 +319,18 @@ clusters:
       is too strict to guess safely.
 
   - id: anthropic_structured_output_empty
+    status: resolved_by_F5
     affects: [claude-opus-4-6]
     hypothesis: >
       Opus sometimes returns an empty structured response (`transport: No
       structured data found in response`). Run-to-run flake. Anthropic's
-      structured output may be dropping content on ambiguous prompts.
-    fix_strategy: provider_adapter_or_retry
-    candidates:
-      - PREFERRED — Anthropic provider adapter: detect empty structured data
-        and retry with a plain generateFromPrompt + JSON parse fallback.
-      - AVOID — Anthropic-specific prompt branch.
-    fix_site: packages/core/src/providers/llm/claude.ts
+      structured output path drops content on some inputs.
+    fix_site: packages/core/src/providers/llm/claude.ts::generateStructuredViaText
+    resolution: >
+      Claude adapter now catches the "No structured data" failure and
+      transparently retries via generateFromPrompt + extractJsonBlock
+      (which handles bare JSON, ```json fences, and JSON-after-preamble).
+      No prompt change. Opus verified 3/3 runs pass post-F5.
 
   - id: gemini_pro_empty
     status: resolved_by_F4

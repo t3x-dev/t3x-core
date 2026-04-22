@@ -47,6 +47,7 @@ interface Args {
   fixturePath: string;
   runs: number;
   dumpDir: string;
+  sloMs: number;
 }
 
 function parseArgs(): Args {
@@ -54,6 +55,10 @@ function parseArgs(): Args {
     fixturePath: DEFAULT_FIXTURE,
     runs: 1,
     dumpDir: DEFAULT_DUMP_DIR,
+    // Typical extraction on the standard fixture should complete in ~10s.
+    // Runs exceeding this are flagged as slow — a yellow signal that either
+    // the model is burning budget on thinking or something is off upstream.
+    sloMs: 10000,
   };
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith('--model=')) args.modelFilter = arg.slice('--model='.length);
@@ -65,6 +70,8 @@ function parseArgs(): Args {
       args.runs = Math.max(1, Number.parseInt(arg.slice('--runs='.length), 10) || 1);
     } else if (arg.startsWith('--dump-dir=')) {
       args.dumpDir = resolve(arg.slice('--dump-dir='.length));
+    } else if (arg.startsWith('--slo-ms=')) {
+      args.sloMs = Math.max(0, Number.parseInt(arg.slice('--slo-ms='.length), 10) || 0);
     }
   }
   return args;
@@ -192,8 +199,9 @@ async function runOne(
   };
 }
 
-function printRow(r: RunResult): void {
+function printRow(r: RunResult, sloMs: number): void {
   const status = r.status === 'ok' ? '✓' : r.status === 'skipped' ? '-' : '✗';
+  const slow = r.durationMs > sloMs ? ' ⚠slow' : '';
   const time = r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s`.padStart(6) : '     -';
   const counts =
     r.status === 'ok'
@@ -202,7 +210,7 @@ function printRow(r: RunResult): void {
         ? `${r.failureCode}: ${r.failureMessage ?? ''}`
         : '';
   console.log(
-    `  ${status} ${r.provider.padEnd(10)} ${r.modelId.padEnd(36)} run${r.run} ${time}   ${counts}`
+    `  ${status} ${r.provider.padEnd(10)} ${r.modelId.padEnd(36)} run${r.run} ${time}${slow}   ${counts}`
   );
 }
 
@@ -214,9 +222,11 @@ interface AggregateRow {
   skipped: number;
   total: number;
   firstFailure?: { code: string; message: string };
+  durationsMs: number[];
+  slowCount: number;
 }
 
-function aggregate(results: RunResult[]): AggregateRow[] {
+function aggregate(results: RunResult[], sloMs: number): AggregateRow[] {
   const byModel = new Map<string, AggregateRow>();
   for (const r of results) {
     const row = byModel.get(r.modelId) ?? {
@@ -226,8 +236,12 @@ function aggregate(results: RunResult[]): AggregateRow[] {
       fail: 0,
       skipped: 0,
       total: 0,
+      durationsMs: [],
+      slowCount: 0,
     };
     row.total += 1;
+    row.durationsMs.push(r.durationMs);
+    if (r.durationMs > sloMs) row.slowCount += 1;
     if (r.status === 'ok') row.ok += 1;
     else if (r.status === 'skipped') row.skipped += 1;
     else {
@@ -244,6 +258,18 @@ function aggregate(results: RunResult[]): AggregateRow[] {
   return [...byModel.values()];
 }
 
+function summarizeDurations(durationsMs: number[]): {
+  medianMs: number;
+  maxMs: number;
+} {
+  if (durationsMs.length === 0) return { medianMs: 0, maxMs: 0 };
+  const sorted = [...durationsMs].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const medianMs =
+    sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+  return { medianMs, maxMs: sorted[sorted.length - 1] };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs();
   const apiKeys = loadApiKeys();
@@ -254,6 +280,7 @@ async function main(): Promise<void> {
   console.log(`\nFixture: ${args.fixturePath} (${turns.length} turns)`);
   console.log(`Dump dir: ${args.dumpDir}`);
   console.log(`Runs per model: ${args.runs}`);
+  console.log(`Latency SLO: ${args.sloMs}ms (runs over this are flagged ⚠slow)`);
   console.log('API keys:');
   for (const p of ['anthropic', 'openai', 'google'] as ProviderName[]) {
     console.log(`  ${p.padEnd(10)} ${apiKeys[p] ? 'set' : 'MISSING'}`);
@@ -280,12 +307,12 @@ async function main(): Promise<void> {
       process.stdout.write(`  … ${m.provider}/${m.id} run ${run}/${args.runs}\n`);
       const r = await runOne(m.id, m.provider, run, turns, apiKeys, args.dumpDir);
       results.push(r);
-      printRow(r);
+      printRow(r, args.sloMs);
     }
   }
 
   console.log('\n=== Aggregate (per model) ===');
-  const rows = aggregate(results);
+  const rows = aggregate(results, args.sloMs);
   for (const row of rows) {
     const rate = row.total > 0 ? `${row.ok}/${row.total}` : '0/0';
     const tag =
@@ -296,6 +323,9 @@ async function main(): Promise<void> {
           : row.ok === 0
             ? '✗'
             : '~';
+    const { medianMs, maxMs } = summarizeDurations(row.durationsMs);
+    const latency = `med=${(medianMs / 1000).toFixed(1)}s max=${(maxMs / 1000).toFixed(1)}s`;
+    const slowMarker = row.slowCount > 0 ? ` ⚠${row.slowCount}/${row.total} slow` : '';
     const detail =
       row.ok === row.total
         ? ''
@@ -303,7 +333,7 @@ async function main(): Promise<void> {
           ? `${row.firstFailure.code}: ${row.firstFailure.message}`
           : '';
     console.log(
-      `  ${tag} ${row.provider.padEnd(10)} ${row.modelId.padEnd(36)} ${rate.padStart(6)}  ${detail}`
+      `  ${tag} ${row.provider.padEnd(10)} ${row.modelId.padEnd(36)} ${rate.padStart(6)}  ${latency}${slowMarker}  ${detail}`
     );
   }
 
