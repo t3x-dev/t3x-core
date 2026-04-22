@@ -149,6 +149,7 @@ export async function* runExtractionPipeline(
       turnHashes: params.turnHashes,
       topicId: params.topicId,
       forceExtract: params.forceExtract,
+      userId: params.userId,
     });
 
     if (!extraction.ok) {

@@ -27,6 +27,14 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
   const { loadModels } = useAvailableModels();
 
   useEffect(() => {
+    setSelectedProvider(initialProvider ?? '');
+  }, [initialProvider]);
+
+  useEffect(() => {
+    setSelectedModel(initialModel ?? '');
+  }, [initialModel]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     loadModels()

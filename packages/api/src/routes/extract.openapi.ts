@@ -21,6 +21,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getUserId } from '../lib/project-access';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
 import { extractOp } from '../ops/extract';
@@ -151,6 +152,7 @@ extractRoutes.openapi(postExtractRoute, async (c) => {
         {
           conversationId,
           turnHashes: [turn.turnHash],
+          userId: getUserId(c),
         },
         ctx
       )

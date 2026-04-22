@@ -17,11 +17,10 @@
  *     is still emitted, best-effort)
  *
  * These features live in the API layer and depend on API-specific
- * infrastructure (yops_log table, provider registry singleton with DB
- * credential overlay, usage tracker, etc.).
+ * infrastructure (yops_log table, usage tracker, etc.).
  */
 
-import { createDefaultProviderRegistry, extractAndApply, type LLMProvider } from '@t3x-dev/core';
+import { extractAndApply } from '@t3x-dev/core';
 import {
   findConversationById,
   findProjectById,
@@ -33,6 +32,7 @@ import {
 } from '@t3x-dev/storage';
 
 import { getDB } from '../../db.js';
+import { resolveGenerationTarget } from '../../provider-runtime.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // ── Tool definition ──
@@ -44,7 +44,7 @@ export const extractDef: ToolDef = {
     '',
     'Pass raw text (conversation transcript, notes, document content) and T3X will:',
     '  1. Create a conversation record with the text as turns',
-    '  2. Run LLM-based semantic extraction (requires ANTHROPIC_API_KEY)',
+    '  2. Run LLM-based semantic extraction (requires a configured generation provider)',
     '  3. Compile the extraction into YOps and materialize the resulting trees',
     '  4. Create a draft containing the extracted knowledge tree',
     '',
@@ -91,22 +91,6 @@ export const extractDef: ToolDef = {
 };
 
 // ── Helpers ──
-
-const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
-
-/**
- * Build a default provider registry while preserving MCP's current Anthropic
- * model pin for extraction.
- */
-function buildRegistry() {
-  return createDefaultProviderRegistry({
-    providerOverrides: {
-      anthropic: {
-        defaultModel: DEFAULT_ANTHROPIC_MODEL,
-      },
-    },
-  });
-}
 
 /**
  * Split raw text into turns for extraction.
@@ -171,16 +155,6 @@ export const extractHandler: ToolHandler = async (args) => {
     return fail('"text" is required.\nProvide the raw text to extract knowledge from.');
   }
 
-  // ── Check LLM availability ──
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return fail(
-      'ANTHROPIC_API_KEY is not set.\n\n' +
-        'Extraction requires a configured LLM provider. Set the ANTHROPIC_API_KEY ' +
-        'environment variable to enable extraction.\n\n' +
-        'Example: export ANTHROPIC_API_KEY=sk-ant-...'
-    );
-  }
-
   const db = await getDB();
 
   // ── Step 1: Validate project ──
@@ -229,15 +203,14 @@ export const extractHandler: ToolHandler = async (args) => {
   });
 
   // ── Step 5: Resolve provider + model ──
-  const registry = buildRegistry();
-  const provider = registry.getById<LLMProvider>('anthropic');
-  if (!provider) {
-    return fail(
-      'Anthropic provider is not configured.\n' +
-        'Ensure ANTHROPIC_API_KEY is set in the environment.'
-    );
+  const resolvedTarget = await resolveGenerationTarget({
+    db,
+    projectId,
+    conversationId,
+  });
+  if (!resolvedTarget.ok) {
+    return fail(`Extraction failed: ${resolvedTarget.message}`);
   }
-  const model = registry.getEntry('anthropic')?.defaultModel ?? DEFAULT_ANTHROPIC_MODEL;
 
   // ── Step 6: Run v2 extraction pipeline ──
   // MCP does not persist snapshots between calls, so we always run bootstrap
@@ -250,9 +223,9 @@ export const extractHandler: ToolHandler = async (args) => {
       content: t.content,
     })),
     mode: 'bootstrap',
-    providerId: 'anthropic',
-    provider,
-    model,
+    providerId: resolvedTarget.providerId,
+    provider: resolvedTarget.provider,
+    model: resolvedTarget.model,
   });
 
   if (!result.ok) {

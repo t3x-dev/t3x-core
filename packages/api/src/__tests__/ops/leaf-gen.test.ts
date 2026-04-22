@@ -2,7 +2,7 @@
 
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiPipelineContext } from '../../ops/context';
 import type { LeafGenInput } from '../../ops/leaf-gen';
 import { leafGenerateOp } from '../../ops/leaf-gen';
@@ -60,6 +60,18 @@ const mockUpdatedLeaf = {
   generated_at: '2026-04-03T01:00:00.000Z',
 };
 
+const {
+  mockResolveProviderAndModel,
+  mockCreateModelBoundProvider,
+  mockGenerateLeafOutput,
+  mockModeGenerate,
+} = vi.hoisted(() => ({
+  mockResolveProviderAndModel: vi.fn(),
+  mockCreateModelBoundProvider: vi.fn(),
+  mockGenerateLeafOutput: vi.fn(),
+  mockModeGenerate: vi.fn(),
+}));
+
 vi.mock('@t3x-dev/storage', () => ({
   findLeafById: vi.fn(() => Promise.resolve(mockLeaf)),
   getCommitUnified: vi.fn(() => Promise.resolve(mockCommit)),
@@ -71,8 +83,9 @@ vi.mock('@t3x-dev/storage', () => ({
   createLeafHistory: vi.fn(() => Promise.resolve({ id: 'lhist_001' })),
 }));
 
-vi.mock('../../lib/provider-registry', () => ({
-  generateWithFallback: vi.fn(() => Promise.resolve(mockGenerateResult)),
+vi.mock('../../lib/provider-resolver', () => ({
+  resolveProviderAndModel: mockResolveProviderAndModel,
+  createModelBoundProvider: mockCreateModelBoundProvider,
 }));
 
 vi.mock('../../lib/usage-tracking', () => ({
@@ -88,6 +101,8 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
   return {
     ...actual,
     collectLessonsFromAssertions: vi.fn(() => ['lesson 1']),
+    generateLeafOutput: mockGenerateLeafOutput,
+    modeGenerate: mockModeGenerate,
   };
 });
 
@@ -115,6 +130,36 @@ const baseInput: LeafGenInput = {
 // ---------------------------------------------------------------------------
 
 describe('leafGenerateOp', () => {
+  beforeEach(() => {
+    mockResolveProviderAndModel.mockReset();
+    mockCreateModelBoundProvider.mockReset();
+    mockGenerateLeafOutput.mockReset();
+    mockModeGenerate.mockReset();
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: true,
+      providerId: 'anthropic',
+      provider: { id: 'anthropic' },
+      model: 'claude-3-haiku',
+      registry: {},
+    });
+    mockCreateModelBoundProvider.mockResolvedValue({ id: 'anthropic', generate: vi.fn() });
+    mockGenerateLeafOutput.mockResolvedValue(mockGenerateResult);
+    mockModeGenerate.mockResolvedValue({
+      output: 'Multi-round output',
+      rounds: [
+        {
+          name: 'draft',
+          round_number: 1,
+          constraints_passed: true,
+          failed_constraints: [],
+        },
+      ],
+      total_rounds: 1,
+      mode: 'standard',
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+  });
+
   it('has the correct name', () => {
     expect(leafGenerateOp.name).toBe('leaf-generate');
   });
@@ -169,32 +214,15 @@ describe('leafGenerateOp', () => {
   });
 
   it('passes mode through for standard mode (multi-round)', async () => {
-    const mockModeResult = {
-      output: 'Multi-round output',
-      rounds: [
-        {
-          name: 'draft',
-          round_number: 1,
-          constraints_passed: true,
-          failed_constraints: [],
-        },
-      ],
-      total_rounds: 1,
-      mode: 'standard' as const,
-    };
-
     const ctx = buildMockContext({
       providerRegistry: {
         tryWithFallback: vi.fn((_cap: string, fn: (p: any) => any) =>
-          fn({ generate: vi.fn() }).then
-            ? fn({ generate: vi.fn() })
-            : Promise.resolve(mockModeResult)
+          fn({ generate: vi.fn() }).then ? fn({ generate: vi.fn() }) : Promise.resolve(undefined)
         ),
       } as any,
     });
 
-    // Override tryWithFallback to return the multi-round result directly
-    (ctx.providerRegistry as any).tryWithFallback = vi.fn(() => Promise.resolve(mockModeResult));
+    (ctx.providerRegistry as any).tryWithFallback = vi.fn(() => Promise.resolve(undefined));
 
     const input: LeafGenInput = {
       leafId: 'leaf_001',

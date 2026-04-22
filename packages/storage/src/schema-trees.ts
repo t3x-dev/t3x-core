@@ -68,6 +68,12 @@ export const users = pgTable('users', {
     tier3: 'skip' | 'extract';
   }>(),
 
+  /** User's default generation provider (null = inherit global role order) */
+  defaultProvider: text('default_provider'),
+
+  /** User's default generation model (null = provider default model) */
+  defaultModel: text('default_model'),
+
   /** Creation time */
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

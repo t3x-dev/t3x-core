@@ -33,6 +33,7 @@ vi.mock('../lib/db', () => ({
 
 vi.mock('../lib/project-access', () => ({
   assertProjectAccess: vi.fn(() => Promise.resolve({ userId: 'user_test' })),
+  getUserId: vi.fn(() => 'user_test'),
 }));
 
 const { mockRunApiExtractionV2 } = vi.hoisted(() => ({

@@ -8,13 +8,14 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
-import { getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getUserId } from '../lib/project-access';
 import { loadResolvedProviderConfig } from '../lib/provider-config';
 import { getProviderRegistry, refreshProviderRegistryConfig } from '../lib/provider-registry';
+import { resolveProviderAndModel } from '../lib/provider-resolver';
 import { pinoLogger } from '../middleware/logger';
 import {
   ChatRequestBodySchema,
@@ -149,25 +150,6 @@ interface ChatResponse {
 
 type ChatRuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
 
-const CHAT_PROVIDER_ALIAS_TO_RUNTIME: Record<string, ChatRuntimeProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  openai: 'openai',
-  gpt: 'openai',
-  gemini: 'google-ai',
-  google: 'google-ai',
-  'google-ai': 'google-ai',
-};
-
-const CHAT_PROVIDER_RUNTIME_TO_CATALOG: Record<
-  ChatRuntimeProviderId,
-  'anthropic' | 'openai' | 'google'
-> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  'google-ai': 'google',
-};
-
 const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
   anthropic: 'claude',
   openai: 'openai',
@@ -191,80 +173,6 @@ function isSupportedStreamProviderId(
   value: string
 ): value is Extract<ChatRuntimeProviderId, 'anthropic' | 'openai'> {
   return (STREAM_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
-}
-
-function normalizeChatProvider(provider: string | undefined): ChatRuntimeProviderId | null {
-  if (!provider) return null;
-  return CHAT_PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
-}
-
-function getModelDefaultForProvider(
-  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
-  providerId: ChatRuntimeProviderId
-): string | null {
-  return registry.getEntry(providerId)?.defaultModel ?? null;
-}
-
-function findProviderForModel(
-  registry: Awaited<ReturnType<typeof getProviderRegistry>>,
-  model: string,
-  candidateProviders: readonly string[]
-): ChatRuntimeProviderId | null {
-  const providerPrefix = model.split(':', 1)[0];
-  if (providerPrefix && providerPrefix !== model) {
-    const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
-    if (normalizedPrefixedProvider && candidateProviders.includes(normalizedPrefixedProvider)) {
-      return normalizedPrefixedProvider;
-    }
-  }
-
-  for (const provider of registry.listProviders()) {
-    if (!candidateProviders.includes(provider.id)) {
-      continue;
-    }
-
-    if (provider.defaultModel === model || provider.availableModels?.includes(model)) {
-      return provider.id as ChatRuntimeProviderId;
-    }
-  }
-
-  const catalogProvider = getModelInfo(model)?.provider;
-  if (!catalogProvider) {
-    return null;
-  }
-
-  const runtimeProvider = Object.entries(CHAT_PROVIDER_RUNTIME_TO_CATALOG).find(
-    ([, publicProvider]) => publicProvider === catalogProvider
-  )?.[0];
-
-  if (!runtimeProvider || !candidateProviders.includes(runtimeProvider)) {
-    return null;
-  }
-
-  return runtimeProvider as ChatRuntimeProviderId;
-}
-
-function getInvalidModelError(model: string) {
-  return {
-    code: 'PROVIDER_ERROR',
-    message: `Unknown or unsupported model: ${model}`,
-  } as const;
-}
-
-function stripProviderPrefixFromModel(model: string, providerId: ChatRuntimeProviderId): string {
-  const separatorIndex = model.indexOf(':');
-  if (separatorIndex === -1) {
-    return model;
-  }
-
-  const providerPrefix = model.slice(0, separatorIndex);
-  const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
-  if (normalizedPrefixedProvider !== providerId) {
-    return model;
-  }
-
-  const providerModel = model.slice(separatorIndex + 1);
-  return providerModel || model;
 }
 
 async function resolveProviderApiKey(
@@ -313,134 +221,39 @@ function getUnsupportedChatFeatureError(options: {
 }
 
 async function resolveChatRequestTarget(options: {
+  db?: Awaited<ReturnType<typeof getDB>>;
   provider?: string;
   model?: string;
+  projectId?: string;
+  userId?: string;
   supportedProviders?: readonly string[];
 }) {
   await refreshProviderRegistryConfig();
-  const registry = await getProviderRegistry();
-  const supportedProviders = options.supportedProviders ?? CHAT_PROVIDER_RUNTIME_IDS;
-
-  const explicitProvider = normalizeChatProvider(options.provider);
-  if (options.provider && !explicitProvider) {
+  const resolution = await resolveProviderAndModel({
+    db: options.db,
+    requestedProvider: options.provider,
+    requestedModel: options.model,
+    projectId: options.projectId,
+    userId: options.userId,
+    supportedProviders:
+      (options.supportedProviders as readonly ChatRuntimeProviderId[] | undefined) ??
+      CHAT_PROVIDER_RUNTIME_IDS,
+    unavailableMessage: 'No configured chat provider is available',
+  });
+  if (!resolution.ok) {
     return {
       error: {
         code: 'PROVIDER_ERROR',
-        message: `Unknown provider: ${options.provider}`,
-      },
-    } as const;
-  }
-
-  if (options.model) {
-    const normalizedBareProviderAlias = normalizeChatProvider(options.model);
-    if (normalizedBareProviderAlias) {
-      return {
-        error: getInvalidModelError(options.model),
-      } as const;
-    }
-
-    const separatorIndex = options.model.indexOf(':');
-    if (separatorIndex !== -1) {
-      const providerPrefix = options.model.slice(0, separatorIndex);
-      const providerModel = options.model.slice(separatorIndex + 1);
-      const normalizedPrefixedProvider = normalizeChatProvider(providerPrefix);
-      if (normalizedPrefixedProvider && !providerModel) {
-        return {
-          error: getInvalidModelError(options.model),
-        } as const;
-      }
-    }
-  }
-
-  const modelProvider = options.model
-    ? findProviderForModel(registry, options.model, CHAT_PROVIDER_RUNTIME_IDS)
-    : null;
-
-  if (options.model && !modelProvider) {
-    return {
-      error: getInvalidModelError(options.model),
-    } as const;
-  }
-
-  if (modelProvider && !supportedProviders.includes(modelProvider)) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `Model ${options.model} requires provider: ${modelProvider}`,
-      },
-    } as const;
-  }
-
-  if (explicitProvider && modelProvider && explicitProvider !== modelProvider) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `Model ${options.model} does not match provider: ${options.provider}`,
-      },
-    } as const;
-  }
-
-  const defaultProvider = registry
-    .getProviderIdsForRole('generation')
-    .find((id) => supportedProviders.includes(id) && registry.isConfigured(id));
-
-  const providerId =
-    explicitProvider ?? modelProvider ?? (defaultProvider as ChatRuntimeProviderId | undefined);
-
-  if (!providerId) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: 'No configured chat provider is available',
-      },
-    } as const;
-  }
-
-  if (!supportedProviders.includes(providerId)) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `Provider ${providerId} not implemented`,
-      },
-    } as const;
-  }
-
-  if (!registry.isConfigured(providerId)) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `API key not configured for provider: ${providerId}`,
-      },
-    } as const;
-  }
-
-  const provider = registry.getById<LLMProvider>(providerId);
-  if (!provider) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `Provider ${providerId} is unavailable`,
-      },
-    } as const;
-  }
-
-  const model = options.model
-    ? (getCanonicalModelId(stripProviderPrefixFromModel(options.model, providerId)) ?? null)
-    : getModelDefaultForProvider(registry, providerId);
-  if (!model) {
-    return {
-      error: {
-        code: 'PROVIDER_ERROR',
-        message: `No default model configured for provider: ${providerId}`,
+        message: resolution.message,
       },
     } as const;
   }
 
   return {
-    registry,
-    provider,
-    providerId,
-    model,
+    registry: resolution.registry,
+    provider: resolution.provider as LLMProvider,
+    providerId: resolution.providerId,
+    model: resolution.model,
   } as const;
 }
 
@@ -725,9 +538,13 @@ chatRoutes.openapi(chatRoute, async (c) => {
     return errorResponse(c, 'INVALID_REQUEST', msgError);
   }
 
+  const db = await getDB();
   const target = await resolveChatRequestTarget({
+    db,
     provider: body.provider,
     model: body.model,
+    projectId: body.project_id,
+    userId: getUserId(c),
   });
   if ('error' in target) {
     return c.json({ success: false as const, error: target.error }, 400);
@@ -843,9 +660,13 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return errorResponse(c, 'INVALID_REQUEST', msgError);
   }
 
+  const db = await getDB();
   const target = await resolveChatRequestTarget({
+    db,
     provider: body.provider,
     model: body.model,
+    projectId: body.project_id,
+    userId: getUserId(c),
     supportedProviders: STREAM_PROVIDER_RUNTIME_IDS,
   });
   if ('error' in target) {

@@ -31,6 +31,16 @@ const MOCK_LEAF = {
   generated_at: null,
 };
 
+const MOCK_PROJECT = {
+  id: 'proj_test1',
+  name: 'Test Project',
+  description: null,
+  ownerId: 'user_test1',
+  defaultProvider: 'openai',
+  defaultModel: 'gpt-5.4',
+  providerConfig: null,
+};
+
 const MOCK_LEAF_NO_CONSTRAINTS = {
   ...MOCK_LEAF,
   id: 'leaf_test2',
@@ -123,15 +133,25 @@ const MOCK_GENERATION_RESULT_FAILED = {
   },
 };
 
+const mockRegistryGetById = vi.fn();
+const mockRegistryGetEntry = vi.fn();
+const mockRegistryGetProviderIdsForRole = vi.fn();
+const mockRegistryIsConfigured = vi.fn();
+const mockRegistryImportConfig = vi.fn();
+const mockRegistryListProviders = vi.fn();
+
 vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
   return {
     ...actual,
     generateLeafOutput: mockGenerateLeafOutput,
     createDefaultProviderRegistry: vi.fn(() => ({
-      tryWithFallback: vi.fn(async (_role: string, fn: (provider: unknown) => Promise<unknown>) =>
-        fn({})
-      ),
+      getById: (...args: unknown[]) => mockRegistryGetById(...args),
+      getEntry: (...args: unknown[]) => mockRegistryGetEntry(...args),
+      getProviderIdsForRole: (...args: unknown[]) => mockRegistryGetProviderIdsForRole(...args),
+      isConfigured: (...args: unknown[]) => mockRegistryIsConfigured(...args),
+      importConfig: (...args: unknown[]) => mockRegistryImportConfig(...args),
+      listProviders: (...args: unknown[]) => mockRegistryListProviders(...args),
     })),
     collectLessonsFromAssertions: vi.fn((leaves: Array<{ id: string; assertions: unknown[] }>) => {
       // Collect any lessons from assertions
@@ -147,6 +167,10 @@ vi.mock('@t3x-dev/core', async () => {
 });
 
 vi.mock('@t3x-dev/storage', () => ({
+  findProjectById: vi.fn((_db: unknown, id: string) => {
+    if (id === 'proj_test1') return Promise.resolve(MOCK_PROJECT);
+    return Promise.resolve(null);
+  }),
   findLeafById: vi.fn((_db: unknown, id: string) => {
     if (id === 'leaf_test1') return Promise.resolve(MOCK_LEAF);
     if (id === 'leaf_test2') return Promise.resolve(MOCK_LEAF_NO_CONSTRAINTS);
@@ -163,6 +187,45 @@ vi.mock('@t3x-dev/storage', () => ({
   updateLeaf: vi.fn((_db: unknown, _id: string, _input: unknown) =>
     Promise.resolve(MOCK_UPDATED_LEAF)
   ),
+  getProviderCredentialBundle: vi.fn(() =>
+    Promise.resolve({
+      secrets: { OPENAI_API_KEY: 'sk-db-openai' },
+      safe: {
+        anthropic: {
+          configured: false,
+          defaultModel: null,
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+        openai: {
+          configured: true,
+          defaultModel: 'gpt-5.4',
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+        google: {
+          configured: false,
+          defaultModel: null,
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+      },
+    })
+  ),
+  getGlobalSetting: vi.fn(() => Promise.resolve(null)),
+  findUserById: vi.fn((_db: unknown, id: string) => {
+    if (id === 'user_test1') {
+      return Promise.resolve({
+        id: 'user_test1',
+        default_provider: 'anthropic',
+        default_model: 'claude-sonnet-4-20250514',
+      });
+    }
+    return Promise.resolve(null);
+  }),
 }));
 
 // ── Import handler after mocks ──
@@ -173,11 +236,38 @@ import { generateHandler } from '../tools/core/generate.js';
 
 describe('t3x_generate handler', () => {
   const originalEnv = process.env.ANTHROPIC_API_KEY;
+  const originalOpenAIEnv = process.env.OPENAI_API_KEY;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { resetProviderRegistry } = await import('../provider-runtime.js');
+    const { findProjectById } = await import('@t3x-dev/storage');
+    resetProviderRegistry();
+    vi.mocked(findProjectById).mockImplementation((_db: unknown, id: string) => {
+      if (id === 'proj_test1') return Promise.resolve(MOCK_PROJECT);
+      return Promise.resolve(null);
+    });
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+    delete process.env.OPENAI_API_KEY;
     mockGenerateLeafOutput.mockResolvedValue(MOCK_GENERATION_RESULT);
+    mockRegistryGetById.mockImplementation((providerId: string) => ({ id: providerId }));
+    mockRegistryGetEntry.mockImplementation((providerId: string) => {
+      if (providerId === 'openai') return { defaultModel: 'gpt-5.4' };
+      if (providerId === 'anthropic') return { defaultModel: 'claude-sonnet-4-20250514' };
+      return undefined;
+    });
+    mockRegistryGetProviderIdsForRole.mockReturnValue(['openai', 'anthropic']);
+    mockRegistryIsConfigured.mockImplementation((id: string) =>
+      ['openai', 'anthropic'].includes(id)
+    );
+    mockRegistryListProviders.mockReturnValue([
+      { id: 'openai', defaultModel: 'gpt-5.4', availableModels: ['gpt-5.4'] },
+      {
+        id: 'anthropic',
+        defaultModel: 'claude-sonnet-4-20250514',
+        availableModels: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -185,6 +275,11 @@ describe('t3x_generate handler', () => {
       process.env.ANTHROPIC_API_KEY = originalEnv;
     } else {
       delete process.env.ANTHROPIC_API_KEY;
+    }
+    if (originalOpenAIEnv !== undefined) {
+      process.env.OPENAI_API_KEY = originalOpenAIEnv;
+    } else {
+      delete process.env.OPENAI_API_KEY;
     }
   });
 
@@ -196,12 +291,52 @@ describe('t3x_generate handler', () => {
     expect(result.content[0].text).toContain('"leaf_id" is required');
   });
 
-  it('returns error when ANTHROPIC_API_KEY is not set', async () => {
+  it('returns error when no generation provider is configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
+    const { findProjectById } = await import('@t3x-dev/storage');
+    vi.mocked(findProjectById).mockResolvedValue({
+      ...MOCK_PROJECT,
+      defaultProvider: null,
+      defaultModel: null,
+    });
+    mockRegistryGetProviderIdsForRole.mockReturnValue(['anthropic']);
+    mockRegistryIsConfigured.mockReturnValue(false);
+    mockRegistryGetById.mockReturnValue(null);
+
     const result = await generateHandler({ leaf_id: 'leaf_test1' });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('ANTHROPIC_API_KEY is not set');
-    expect(result.content[0].text).toContain('environment variable');
+    expect(result.content[0].text).toContain('No configured generation provider is available');
+  });
+
+  it('uses project default provider/model without requiring ANTHROPIC_API_KEY', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const result = await generateHandler({ leaf_id: 'leaf_test1' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-5.4',
+      })
+    );
+  });
+
+  it('uses project owner user defaults when project defaults are unset', async () => {
+    const { findProjectById } = await import('@t3x-dev/storage');
+    vi.mocked(findProjectById).mockResolvedValue({
+      ...MOCK_PROJECT,
+      defaultProvider: null,
+      defaultModel: null,
+    });
+
+    const result = await generateHandler({ leaf_id: 'leaf_test1' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'claude-sonnet-4-6',
+      })
+    );
   });
 
   it('returns error when leaf is not found', async () => {
@@ -296,7 +431,7 @@ describe('t3x_generate handler', () => {
 
     expect(mockGenerateLeafOutput).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'claude-opus-4-20250514',
+        model: 'claude-opus-4-6',
         maxTokens: 2048,
       })
     );

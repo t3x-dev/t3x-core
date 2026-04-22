@@ -63,6 +63,54 @@ describe('extractors/v2 provider draft', () => {
     });
   });
 
+  it('lifts bare value_json into candidate.value for scalar and array payloads', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_scalar',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'trip_duration_days',
+            path_hint: 'trip.duration_days',
+            slot: null,
+            value_json: '5',
+            values_json: null,
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: '5 days', role: 'primary' }],
+        },
+        {
+          id: 'item_array',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'must_visit_pois',
+            path_hint: 'trip.preferences.must_visit_pois',
+            slot: null,
+            value_json: '["West Lake","Lingyin Temple"]',
+            values_json: null,
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'West Lake and Lingyin Temple', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.value).toBe(5);
+    expect(lifted.draft.items[1]?.candidate.value).toEqual(['West Lake', 'Lingyin Temple']);
+  });
+
   it('repairs value_json emitted as a plain unquoted string into a string literal', () => {
     const lifted = liftProviderDraftToExtractionDraft({
       schema: 't3x/provider-extraction-draft',
