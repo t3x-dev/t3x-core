@@ -343,6 +343,27 @@ architecture_review:
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
 
+  - id: openai_refusal_first_class
+    severity: observability
+    status: resolved_by_F14
+    site: packages/core/src/providers/llm/openai.ts + extract-and-apply-resilient.ts
+    problem: >
+      OpenAI's Structured Outputs API returns a `refusal` field on the
+      assistant message when the model declines to produce structured
+      output (safety, policy, ambiguity). The adapter previously collapsed
+      this into the generic "No content in response" path and routed it
+      through the plain-text retry — wasting a call and burying the
+      semantic signal under a generic "extraction failed" diagnostic.
+    progress: >
+      F14 detects message.refusal in the OpenAI structured response path
+      and throws an LLMProviderError with code='REFUSAL' and
+      details.refusalText = the refusal string. The outer
+      generateStructured catch does NOT route refusals into the plain-text
+      fallback (retrying the same prompt won't help). extractAndApplyResilient
+      promotes the failure to stage='refusal' in the degraded result and
+      carries the refusalText through for UI surfaces to render verbatim.
+      Users see WHY the model refused instead of a generic error.
+
   - id: reask_missing_prior_context
     severity: resilience
     status: resolved_by_F13

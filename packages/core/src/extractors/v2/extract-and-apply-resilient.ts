@@ -26,6 +26,7 @@ import type { CompiledMutationPlan, ExtractionDraft } from './types';
 
 export type DegradationStage =
   | 'transport'
+  | 'refusal'
   | 'draft_parse'
   | 'draft_schema'
   | 'provenance'
@@ -39,6 +40,13 @@ export interface ExtractionDegradation {
   message: string;
   provider?: string;
   rawText?: string;
+  /**
+   * F14: when a provider explicitly refuses to produce structured output
+   * (OpenAI `message.refusal`), the refusal text is the most meaningful
+   * thing the UI can surface — far more useful than a generic
+   * "extraction failed" message. Populated only on refusal.
+   */
+  refusalText?: string;
 }
 
 export interface ResilientExtractAndApplyResult {
@@ -77,6 +85,31 @@ function buildDegradation(failure: ExtractionFailure): ExtractionDegradation {
     failure.details && typeof failure.details.rawText === 'string'
       ? failure.details.rawText
       : undefined;
+
+  // F14: OpenAI's REFUSAL code (via LLMProviderError → providerCode in
+  // failure.details) promotes the stage from generic "transport" to a
+  // dedicated "refusal" stage, and the refusal text is carried through
+  // for UI surfaces to render verbatim.
+  const providerCode =
+    failure.details && typeof failure.details.providerCode === 'string'
+      ? failure.details.providerCode
+      : undefined;
+  const refusalText =
+    failure.details && typeof failure.details.refusalText === 'string'
+      ? failure.details.refusalText
+      : undefined;
+
+  if (providerCode === 'REFUSAL' || refusalText) {
+    return {
+      stage: 'refusal',
+      code: failure.code,
+      message: failure.message,
+      provider: failure.provider,
+      rawText,
+      refusalText,
+    };
+  }
+
   return {
     stage: inferStage(failure.code),
     code: failure.code,

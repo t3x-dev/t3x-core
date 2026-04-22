@@ -295,4 +295,49 @@ describe('OpenAIProvider.generateStructured', () => {
     expect(JSON.stringify(schema)).not.toContain('"const"');
     expect(schema.additionalProperties).toBe(false);
   });
+
+  it('F14: surfaces OpenAI refusal with code=REFUSAL and refusalText in details', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    refusal: 'I cannot assist with that request.',
+                    content: null,
+                  },
+                },
+              ],
+              usage: { prompt_tokens: 12, completion_tokens: 0 },
+            })
+          ),
+      })
+    );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string() });
+
+    try {
+      await provider.generateStructured(
+        { messages: [{ role: 'user', content: 'refuse me' }] },
+        schema,
+        { model: 'gpt-5.4' }
+      );
+      throw new Error('expected refusal to be thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(LLMProviderError);
+      const e = err as LLMProviderError;
+      expect(e.code).toBe('REFUSAL');
+      expect(e.message).toContain('Model refused to produce structured output');
+      expect(e.details?.refusalText).toBe('I cannot assist with that request.');
+    }
+
+    // Refusals must NOT fall through to the plain-text retry path.
+    expect(mockFetchFn).toHaveBeenCalledTimes(1);
+  });
 });

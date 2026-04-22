@@ -302,7 +302,7 @@ export class OpenAIProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        choices: Array<{ message: { content: string } }>;
+        choices: Array<{ message: { content: string | null; refusal?: string | null } }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
 
@@ -310,6 +310,23 @@ export class OpenAIProvider implements LLMProvider {
         inputTokens: data.usage?.prompt_tokens ?? 0,
         outputTokens: data.usage?.completion_tokens ?? 0,
       };
+
+      // F14: refusal is a first-class signal from OpenAI's structured-output
+      // API — the model declined to produce structured output (safety,
+      // policy, ambiguity). Surface it with a dedicated `REFUSAL` code so
+      // the resilient contract can show the refusal text to the user
+      // instead of a generic "extraction failed" diagnostic. Also bail out
+      // of the plain-text fallback — retrying the same prompt won't help.
+      const refusal = data.choices?.[0]?.message?.refusal;
+      if (typeof refusal === 'string' && refusal.length > 0) {
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          `Model refused to produce structured output: ${refusal}`,
+          'REFUSAL',
+          { refusalText: refusal, rawText: responseText }
+        );
+      }
 
       const content = data.choices?.[0]?.message?.content;
       if (!content) {
