@@ -448,36 +448,36 @@ clusters:
       product-design verified 3/3 runs pass.
 
   - id: nano_add_missing_key
-    status: open
+    status: resolved_by_F8
     affects: [gpt-5.4-nano]
     discovered: 2026-04-22 (stability run, product-design fixture)
     hypothesis: >
       Nano emits `add` items where candidate.key and candidate.path_hint are
-      both null/missing. The compiler currently rejects with "add intent
+      both null/missing. The compiler previously hard-failed with "add intent
       requires candidate.key or candidate.path_hint".
-    fix_strategy: deterministic_wrapper
-    candidates:
-      - PREFERRED — If both key and path_hint are missing but candidate.values
-        has a clear headline field (e.g. first key with a short string value),
-        synthesize a path_hint from it. Emit a compile warning.
-      - ALSO — Make this a reaskable compile failure so the pipeline can retry.
-    fix_site: packages/core/src/extractors/v2/compiler.ts
+    fix_site: packages/core/src/extractors/v2/compiler.ts::synthesizeAddPath
+    resolution: >
+      The compiler now synthesizes a deterministic slug path from the first
+      short string value in candidate.values, falling back to item.id. A
+      compile warning documents the synthesis. Nano × product-design
+      verified 3/3 runs pass post-F8.
 
   - id: nano_update_on_missing_path
-    status: open
+    status: resolved_by_F8
     affects: [gpt-5.4-nano]
     discovered: 2026-04-22 (stability run, react-debugging fixture)
     hypothesis: >
       In bootstrap mode (empty starting snapshot), nano emits `update` or
       `reinforce` intents on paths that don't yet exist. The engine then
       fails `populate`/`set` with "Path X does not exist".
-    fix_strategy: deterministic_wrapper
-    candidates:
-      - PREFERRED — In bootstrap mode, the compiler should promote any
-        update/reinforce on a not-yet-defined path to an `add`. Bootstrap by
-        definition has an empty snapshot, so there is nothing to update.
-        Emit a compile warning.
-    fix_site: packages/core/src/extractors/v2/compiler.ts
+    fix_site: packages/core/src/extractors/v2/compiler.ts::compileItem (bootstrap promotion)
+    resolution: >
+      In bootstrap mode the compiler now promotes `update` and `reinforce`
+      intents to `add` — bootstrap has no pre-existing snapshot so the
+      distinction is meaningless. The path is resolved from target_ref (the
+      LLM's intended identifier) and passed through to the add path, which
+      emits define + populate + set as needed. Nano × react-debugging
+      verified 3/3 runs pass post-F8.
 
   - id: anthropic_structured_output_empty
     status: resolved_by_F5

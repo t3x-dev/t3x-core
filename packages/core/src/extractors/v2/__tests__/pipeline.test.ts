@@ -438,7 +438,7 @@ describe('extractors/v2 pipeline', () => {
           data: {
             schema: 't3x/provider-extraction-draft',
             version: 1,
-            mode: 'bootstrap',
+            mode: 'incremental',
             items: [
               {
                 id: 'item_1',
@@ -476,7 +476,7 @@ describe('extractors/v2 pipeline', () => {
 
     const result = await runExtractionV2Pipeline({
       turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
-      mode: 'bootstrap',
+      mode: 'incremental',
       providerId: 'openai',
       model: 'gpt-5.4-nano',
       provider,

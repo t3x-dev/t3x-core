@@ -75,6 +75,32 @@ function resolveTargetPath(item: ExtractionDraftItem): string | null {
   );
 }
 
+function synthesizeAddPath(item: ExtractionDraftItem): string {
+  // F8a: small models (nano) occasionally emit `add` items with neither key
+  // nor path_hint. Synthesize a deterministic, slug-safe path from the first
+  // short string value in candidate.values, falling back to item.id.
+  const pickString = (record: Record<string, unknown> | undefined): string | null => {
+    if (!record) return null;
+    for (const value of Object.values(record)) {
+      if (typeof value === 'string' && value.length > 0 && value.length < 80) {
+        return value;
+      }
+    }
+    return null;
+  };
+
+  const candidate = item.candidate.values
+    ? pickString(item.candidate.values as Record<string, unknown>)
+    : null;
+  const raw = candidate ?? item.id;
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+  return slug.length > 0 ? slug : 'item';
+}
+
 function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileResult {
   const primaryEvidence =
     item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
@@ -87,17 +113,39 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     return { ok: true, ops: [], warnings: [] };
   }
 
-  if (item.intent === 'add') {
-    const path = item.candidate.path_hint ?? item.candidate.key ?? null;
+  // F8b: In bootstrap mode there is no existing snapshot to update or
+  // reinforce against. Small models (e.g. gpt-5.4-nano) sometimes emit
+  // these intents anyway and the apply stage fails with
+  // `Path X does not exist`. Deterministically promote them to `add` so
+  // the node gets defined + populated on the way in.
+  let effectiveIntent = item.intent;
+  let promotedFrom: typeof item.intent | null = null;
+  if (
+    input.draft.mode === 'bootstrap' &&
+    (item.intent === 'update' || item.intent === 'reinforce')
+  ) {
+    effectiveIntent = 'add';
+    promotedFrom = item.intent;
+  }
+
+  if (effectiveIntent === 'add') {
+    const warnings: string[] = [];
+    let path =
+      item.candidate.path_hint ??
+      item.candidate.key ??
+      (promotedFrom ? resolveTargetPath(item) : null);
+
+    if (promotedFrom) {
+      warnings.push(`Promoted ${promotedFrom} to add in bootstrap mode for item ${item.id}`);
+    }
+
     if (!path) {
-      return {
-        ok: false,
-        failure: createExtractionFailure(
-          'compile',
-          'add intent requires candidate.key or candidate.path_hint'
-        ),
-        warnings: [],
-      };
+      // F8a: synthesize a deterministic path when the model omitted both key
+      // and path_hint instead of hard-failing compile.
+      path = synthesizeAddPath(item);
+      warnings.push(
+        `Synthesized path "${path}" for add intent (item ${item.id}) lacking candidate.key and path_hint`
+      );
     }
 
     const ops: SourcedYOp[] = [{ define: { path }, source }];
@@ -115,7 +163,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
-    return { ok: true, ops, warnings: [] };
+    return { ok: true, ops, warnings };
   }
 
   if (item.intent === 'remove') {
