@@ -440,6 +440,16 @@ describe('t3x_admin handler', () => {
     expect(result.content[0].text).toContain('Missing or invalid "action"');
   });
 
+  it('does not expose a create_leaf admin action', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      commit_hash: 'sha256:aaa',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid "action"');
+  });
+
   // -- create_project --
 
   it('create_project: returns error when name missing', async () => {

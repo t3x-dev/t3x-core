@@ -114,6 +114,7 @@ describe('createMcpServer', () => {
     expect(names).toContain('t3x_diff');
     expect(names).toContain('t3x_merge');
     expect(names).toContain('t3x_admin');
+    expect(names).not.toContain('t3x_create_leaf');
   });
 
   it('advanced-only toolset provides exactly 3 tools', () => {

@@ -291,6 +291,12 @@ describe('t3x_generate handler', () => {
     expect(result.content[0].text).toContain('"leaf_id" is required');
   });
 
+  it('does not allow generation directly from commit_hash without a leaf_id', async () => {
+    const result = await generateHandler({ commit_hash: 'sha256:commit1' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"leaf_id" is required');
+  });
+
   it('returns error when no generation provider is configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const { findProjectById } = await import('@t3x-dev/storage');
