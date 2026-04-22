@@ -19,6 +19,7 @@ import {
   type ToolDefinition,
   type ToolUseResult,
 } from '../../llm/types';
+import { extractJsonBlock } from './jsonExtract';
 import { normalizeClaudeStructuredData, toClaudeStructuredSchema } from './structuredSchema';
 
 /**
@@ -235,6 +236,30 @@ export class ClaudeProvider implements LLMProvider {
     schema: ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
+    try {
+      return await this.generateStructuredViaOutputConfig(prompt, schema, options);
+    } catch (error) {
+      // Deterministic fallback: the Anthropic structured-output path
+      // intermittently returns a response with no tool_use block and no JSON
+      // text block (observed on opus reproducibly). Rather than failing, retry
+      // via the plain messages API and extract JSON from the text response.
+      // No prompt change — the prompt already instructs the model to return
+      // JSON only.
+      if (
+        error instanceof LLMProviderError &&
+        error.message.endsWith('No structured data found in response')
+      ) {
+        return this.generateStructuredViaText(prompt, schema, options);
+      }
+      throw error;
+    }
+  }
+
+  private async generateStructuredViaOutputConfig<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const jsonSchema = toClaudeStructuredSchema(schema);
@@ -324,6 +349,54 @@ export class ClaudeProvider implements LLMProvider {
         this.id,
         undefined,
         `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async generateStructuredViaText<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
+    const result = await this.generateFromPrompt(prompt, options);
+    const jsonText = extractJsonBlock(result.text);
+    if (!jsonText) {
+      // F6: carry the raw response through so pipeline logs can diagnose
+      // why Claude produced no JSON, instead of silently dropping it.
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'No structured data found in response',
+        undefined,
+        { rawText: result.text }
+      );
+    }
+    let jsonData: unknown;
+    try {
+      jsonData = JSON.parse(jsonText);
+    } catch {
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Failed to parse response as JSON',
+        undefined,
+        { rawText: result.text, jsonText }
+      );
+    }
+    try {
+      const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
+      return { data: parsed, usage: result.usage };
+    } catch (schemaError) {
+      const issues =
+        schemaError && typeof schemaError === 'object' && 'issues' in schemaError
+          ? (schemaError as { issues: unknown }).issues
+          : undefined;
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Response JSON does not match expected schema',
+        undefined,
+        { rawText: result.text, jsonText, issues }
       );
     }
   }

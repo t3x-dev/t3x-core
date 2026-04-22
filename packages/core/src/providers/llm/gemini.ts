@@ -70,7 +70,11 @@ export class GeminiProvider implements LLMProvider {
       return { thinkingBudget: 0 };
     }
 
-    if (model.includes('3.1-pro')) {
+    // Pro models default to a large implicit thinking budget that can exhaust
+    // maxOutputTokens before producing any content (observed on gemini-2.5-pro
+    // via `No content in response`). Cap it explicitly so the model always has
+    // room for output.
+    if (model.includes('pro')) {
       return { thinkingBudget: 256 };
     }
 

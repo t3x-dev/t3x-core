@@ -136,7 +136,9 @@ describe('OpenAIProvider.generateStructured', () => {
     });
   });
 
-  it('throws LLMProviderError when JSON parsing fails', async () => {
+  it('throws LLMProviderError when both structured and plain-text fallback fail to produce JSON', async () => {
+    // First call: structured path returns non-JSON. Second call (fallback via
+    // generateFromPrompt): also returns non-JSON. Both paths fail → throws.
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({
         ok: true,
@@ -158,6 +160,101 @@ describe('OpenAIProvider.generateStructured', () => {
         model: 'gpt-4o',
       })
     ).rejects.toThrow(LLMProviderError);
+    // Both paths were tried.
+    expect(mockFetchFn.mock.calls.length).toBe(2);
+  });
+
+  it('falls back to plain-text JSON retry when structured path returns non-JSON content', async () => {
+    // First call: structured returns preamble + no JSON.
+    // Second call: plain generateFromPrompt returns JSON in a ```json fence.
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                choices: [{ message: { content: "I'll think about it…" } }],
+                usage: { prompt_tokens: 10, completion_tokens: 5 },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                choices: [
+                  {
+                    message: {
+                      content: 'Here is the answer:\n\n```json\n{"name":"Alice","age":30}\n```',
+                    },
+                  },
+                ],
+                usage: { prompt_tokens: 12, completion_tokens: 8 },
+              })
+            ),
+        })
+      );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gpt-5.4' }
+    );
+
+    expect(result.data).toEqual({ name: 'Alice', age: 30 });
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    // Second call must not use response_format (it's the plain chat path).
+    const secondBody = JSON.parse(mockFetchFn.mock.calls[1][1].body);
+    expect(secondBody.response_format).toBeUndefined();
+  });
+
+  it('falls back to plain-text retry when structured path returns no content', async () => {
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                choices: [{ message: { content: '' } }],
+                usage: { prompt_tokens: 10, completion_tokens: 0 },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                choices: [{ message: { content: '{"name":"Bob","age":25}' } }],
+                usage: { prompt_tokens: 10, completion_tokens: 8 },
+              })
+            ),
+        })
+      );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gpt-5.4' }
+    );
+
+    expect(result.data).toEqual({ name: 'Bob', age: 25 });
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
   });
 
   it('lowers provider draft schema to an OpenAI-compatible strict subset', async () => {

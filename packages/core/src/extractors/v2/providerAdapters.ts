@@ -55,6 +55,13 @@ export function mapProviderErrorToExtractionFailure(
 ) {
   const statusCode = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
   const providerCode = error instanceof Error && 'code' in error ? error.code : undefined;
+  const providerDetails =
+    error instanceof Error &&
+    'details' in error &&
+    error.details &&
+    typeof error.details === 'object'
+      ? (error.details as Record<string, unknown>)
+      : {};
 
   return createExtractionFailure('transport', error.message, {
     provider,
@@ -62,6 +69,7 @@ export function mapProviderErrorToExtractionFailure(
     details: {
       statusCode,
       providerCode,
+      ...providerDetails,
     },
   });
 }

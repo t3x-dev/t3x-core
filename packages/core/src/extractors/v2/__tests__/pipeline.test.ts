@@ -198,77 +198,69 @@ describe('extractors/v2 pipeline', () => {
     expect(capturedPrompt).toContain('[T1][user]');
     expect(capturedPrompt).toContain('[T2][assistant]');
     expect(capturedPrompt).toContain('ProviderExtractionDraft');
-    expect(capturedPrompt).toContain('value_json');
-    expect(capturedPrompt).toContain('values_json');
-    expect(capturedPrompt).toContain('children_json');
-    expect(capturedPrompt).toContain('schema, version, mode, items, warnings');
+    expect(capturedPrompt).toContain('Mode: incremental');
   });
 
-  it('uses a shorter Anthropic prompt profile without the verbose JSON example block', async () => {
-    let capturedPrompt = '';
-    const provider: Pick<LLMProvider, 'generateStructured'> = {
-      async generateStructured(prompt) {
-        capturedPrompt = prompt.messages[0].content as string;
-        return {
-          data: {
-            schema: 't3x/provider-extraction-draft',
-            version: 1,
-            mode: 'bootstrap',
-            items: [],
-            warnings: [],
-          },
-          usage: { inputTokens: 1, outputTokens: 1 },
-        };
-      },
+  it('uses one provider-agnostic prompt (F9): no per-provider branches, no shape rules', async () => {
+    // F9 removed the per-provider prompt branches and the redundant shape
+    // rules. All providers now receive the same short prompt; shape drift
+    // is fixed deterministically in providerDraft.ts.
+    const captured: Record<string, { system?: string; user: string }> = {};
+    const capture = (providerId: string): Pick<LLMProvider, 'generateStructured'> =>
+      ({
+        async generateStructured(prompt) {
+          captured[providerId] = {
+            system: prompt.system,
+            user: prompt.messages[0].content as string,
+          };
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      }) as Pick<LLMProvider, 'generateStructured'>;
+
+    const baseInput = {
+      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
+      mode: 'bootstrap' as const,
     };
 
     await runExtractionV2Pipeline({
-      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
-      mode: 'bootstrap',
+      ...baseInput,
       providerId: 'anthropic',
       model: 'claude-sonnet-4-6',
-      provider,
+      provider: capture('anthropic'),
     });
-
-    expect(capturedPrompt).toContain('Return a valid ProviderExtractionDraft.');
-    expect(capturedPrompt).toContain('children_json must always be a JSON array string');
-    expect(capturedPrompt).toContain('Use value_json for scalar values and arrays');
-    expect(capturedPrompt).not.toContain('ProviderExtractionDraft JSON shape example');
-  });
-
-  it('uses a shorter OpenAI prompt profile without the verbose JSON example block', async () => {
-    let capturedPrompt = '';
-    const provider: Pick<LLMProvider, 'generateStructured'> = {
-      async generateStructured(prompt) {
-        capturedPrompt = prompt.messages[0].content as string;
-        return {
-          data: {
-            schema: 't3x/provider-extraction-draft',
-            version: 1,
-            mode: 'bootstrap',
-            items: [],
-            warnings: [],
-          },
-          usage: { inputTokens: 1, outputTokens: 1 },
-        };
-      },
-    };
-
     await runExtractionV2Pipeline({
-      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
-      mode: 'bootstrap',
+      ...baseInput,
       providerId: 'openai',
       model: 'gpt-5.4',
-      provider,
+      provider: capture('openai'),
+    });
+    await runExtractionV2Pipeline({
+      ...baseInput,
+      providerId: 'google',
+      model: 'gemini-2.5-pro',
+      provider: capture('google'),
     });
 
-    expect(capturedPrompt).toContain('Return a valid ProviderExtractionDraft.');
-    expect(capturedPrompt).toContain('Use value_json for scalar values and arrays');
-    expect(capturedPrompt).toContain(
-      'For update or reinforce items, always provide either candidate.values_json'
-    );
-    expect(capturedPrompt).toContain('Keep evidence quotes short and verbatim');
-    expect(capturedPrompt).not.toContain('ProviderExtractionDraft JSON shape example');
+    // All three prompts must be identical.
+    expect(captured.anthropic).toEqual(captured.openai);
+    expect(captured.openai).toEqual(captured.google);
+
+    // And must not drag in the old rules the deterministic layer now handles.
+    const prompt = captured.anthropic.user;
+    expect(prompt).not.toContain('children_json must always be a JSON array string');
+    expect(prompt).not.toContain('Use value_json for scalar values and arrays');
+    expect(prompt).not.toContain('ProviderExtractionDraft JSON shape example');
+    expect(prompt).not.toContain('For update or reinforce items');
+    expect(prompt).not.toContain('schema, version, mode, items, warnings');
   });
 
   it('returns a typed draft_parse failure when provider JSON string fields are invalid', async () => {
@@ -384,15 +376,11 @@ describe('extractors/v2 pipeline', () => {
                     value_json: null,
                     values_json: '{"summary":"SEA had a cyberattack"}',
                     children_json:
-                      '[{"key":"Baggage Handling","value_json":"\\"Automated baggage systems were disrupted\\""}]',
+                      '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]',
                   },
-                  evidence: [
-                    {
-                      turn_tag: 'T1',
-                      quote: 'Seattle-Tacoma International Airport (SEA)',
-                      role: 'primary',
-                    },
-                  ],
+                  // Empty evidence fails min(1) and cannot be rescued
+                  // deterministically — we must not fabricate provenance.
+                  evidence: [],
                 },
               ],
               warnings: [],
@@ -453,7 +441,8 @@ describe('extractors/v2 pipeline', () => {
     expect(result.ok).toBe(true);
     expect(calls).toBe(2);
     expect(secondPrompt).toContain('Your previous ProviderExtractionDraft failed validation');
-    expect(secondPrompt).toContain('candidate.children.0');
+    // First attempt emitted empty evidence; reask prompt should surface that.
+    expect(secondPrompt).toContain('evidence');
   });
 
   it('reasks once on provenance failure and lists allowed turn tags', async () => {
@@ -534,7 +523,7 @@ describe('extractors/v2 pipeline', () => {
           data: {
             schema: 't3x/provider-extraction-draft',
             version: 1,
-            mode: 'bootstrap',
+            mode: 'incremental',
             items: [
               {
                 id: 'item_1',
@@ -572,7 +561,7 @@ describe('extractors/v2 pipeline', () => {
 
     const result = await runExtractionV2Pipeline({
       turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
-      mode: 'bootstrap',
+      mode: 'incremental',
       providerId: 'openai',
       model: 'gpt-5.4-nano',
       provider,

@@ -39,6 +39,12 @@ export {
   extractAndApply,
 } from './v2/extract-and-apply';
 export {
+  type DegradationStage,
+  type ExtractionDegradation,
+  extractAndApplyResilient,
+  type ResilientExtractAndApplyResult,
+} from './v2/extract-and-apply-resilient';
+export {
   createExtractionFailure,
   EXTRACTION_FAILURE_CODES,
   type ExtractionFailure,

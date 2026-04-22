@@ -512,4 +512,119 @@ describe('ClaudeProvider.generateStructured', () => {
       '[{"key":"Baggage Handling","values":{"value":"Automated baggage systems were disrupted"}},{"key":"Passenger Impact","values":{"children":[{"key":"Long Lines"},{"key":"Manual Check-In"}]}}]'
     );
   });
+
+  it('falls back to a plain-text JSON retry when structured output returns no content', async () => {
+    const draftJson = {
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'topic',
+            path_hint: 'topic',
+            slot: null,
+            value_json: null,
+            values_json: '{"summary":"hello"}',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'hello', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    };
+
+    // First call: structured output path returns content with no usable data.
+    // Second call: plain generateFromPrompt returns JSON in the text block.
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                content: [{ type: 'text', text: "I'll think about this…" }],
+                usage: { input_tokens: 12, output_tokens: 8 },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                content: [
+                  {
+                    type: 'text',
+                    text: `Here is the draft:\n\n\`\`\`json\n${JSON.stringify(draftJson)}\n\`\`\``,
+                  },
+                ],
+                usage: { input_tokens: 14, output_tokens: 10 },
+              })
+            ),
+        })
+      );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    const result = await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      ProviderExtractionDraftSchema,
+      { model: 'claude-opus-4-6' }
+    );
+
+    expect(mockFetchFn).toHaveBeenCalledTimes(2);
+    expect(result.data.items[0]?.id).toBe('item_1');
+
+    // Second call should be the plain messages API (no output_config).
+    const secondBody = JSON.parse(mockFetchFn.mock.calls[1][1].body);
+    expect(secondBody.output_config).toBeUndefined();
+  });
+
+  it('throws when fallback plain-text call also produces no extractable JSON', async () => {
+    mockFetchFn
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                content: [{ type: 'text', text: 'thinking...' }],
+                usage: { input_tokens: 12, output_tokens: 8 },
+              })
+            ),
+        })
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                content: [{ type: 'text', text: 'Still thinking, no JSON.' }],
+                usage: { input_tokens: 14, output_tokens: 10 },
+              })
+            ),
+        })
+      );
+
+    const provider = new ClaudeProvider({ apiKey: 'test-key' });
+    await expect(
+      provider.generateStructured(
+        { messages: [{ role: 'user', content: 'Extract' }] },
+        ProviderExtractionDraftSchema,
+        { model: 'claude-opus-4-6' }
+      )
+    ).rejects.toThrow(LLMProviderError);
+  });
 });

@@ -178,7 +178,8 @@ export class LLMProviderError extends Error {
     public readonly providerId: string,
     public readonly statusCode: number | undefined,
     message: string,
-    public readonly code: string = deriveCode(statusCode)
+    public readonly code: string = deriveCode(statusCode),
+    public readonly details: Record<string, unknown> = {}
   ) {
     super(`[${providerId}] ${message}`);
     this.name = 'LLMProviderError';

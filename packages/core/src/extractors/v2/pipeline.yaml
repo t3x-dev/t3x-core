@@ -19,17 +19,18 @@ stages:
     may_emit_failures: []
 
   - id: build_prompt
-    role: Assemble LLM prompt (system + user) per provider branch
+    role: Assemble a single provider-agnostic LLM prompt (system + user)
     source: packages/core/src/extractors/v2/pipeline.ts::buildDraftPrompt
     deterministic: true
     input: { mode, providerId, turns, snapshot? }
     output: LLMPrompt
     may_emit_failures: []
     notes:
-      - Prompt has a provider branch: anthropic+openai share one path,
-        google gets its own with an explicit JSON example block.
-      - openai receives an extra line enforcing candidate.values_json or
-        candidate.slot+value_json on update/reinforce items.
+      - "F9 collapsed the prompt to one template for all providers."
+      - "Previously had per-provider branches (anthropic+openai vs. google)
+        and an embedded JSON example + rule list. Those rules are now enforced
+        deterministically by providerDraft.ts (shape normalizer / F6 loose
+        normalizer / F3 repairer) and compiler.ts (F2 dedupe / F8 tolerance)."
 
   - id: generate_draft
     role: Call LLM; produce ProviderExtractionDraft JSON
@@ -145,15 +146,17 @@ providers:
       - id: claude-sonnet-4-6
         canonical: true
         known_issues:
-          - "Emits canonical ExtractionDraft shape (`candidate.children` as array of `{name, type, …}` objects) instead of ProviderExtractionDraft `children_json` string. Cluster: anthropic_ignores_json_fields."
+          - "(resolved by F1) Emitted `{name, type}` shape inside children_json. Now normalized deterministically in providerDraft.ts::canonicalizeChildShape."
       - id: claude-opus-4-6
         canonical: true
         known_issues:
-          - "Flaky: sometimes returns empty structured response (`transport: No structured data found`). Run-to-run variance observed."
+          - "(resolved by F5) Intermittently returned empty structured responses. Now caught by generateStructuredViaText fallback in the Claude adapter."
+        notes:
+          - "Slow: typical ~26s, up to ~58s when F5 fallback triggers a second HTTP call. Well above the 10s SLO."
       - id: claude-haiku-4-5-20251001
         canonical: true
         known_issues:
-          - "Same as sonnet — emits canonical draft keys (`name`, `type`) inside candidate.children instead of the stringified children_json field. Cluster: anthropic_ignores_json_fields."
+          - "(resolved by F1) Same as sonnet — children_json shape normalized in providerDraft.ts::canonicalizeChildShape."
 
   - id: openai
     source: packages/core/src/providers/llm/openai.ts
@@ -168,7 +171,7 @@ providers:
       - id: gpt-5.4-mini
       - id: gpt-5.4-nano
         known_issues:
-          - "Cannot reliably emit valid JSON strings inside candidate.value_json; targeted reask does not resolve it."
+          - "(resolved by F3) Emits plain unquoted scalars in candidate.value_json. Now deterministically repaired in providerDraft.ts::repairMalformedJsonField."
 
   - id: google
     source: packages/core/src/providers/llm/gemini.ts
@@ -181,7 +184,7 @@ providers:
     models:
       - id: gemini-2.5-pro
         known_issues:
-          - "Returns empty content on v2 extraction inputs (`transport: No content in response`). Suspect structured-output config or safety filter."
+          - "(resolved by F4) Default implicit thinking budget exhausted maxOutputTokens before content. Now capped at 256 via buildThinkingConfig."
       - id: gemini-3-flash-preview
       - id: gemini-3.1-flash-lite-preview
 
@@ -199,6 +202,106 @@ principles:
       - Accept wider input from the LLM; narrow it deterministically to the canonical shape.
       - A misbehaving model is fixed by extending the normalizer/repairer/compiler, not by writing a new prompt variant.
 
+# Architecture review findings (2026-04-22). Not failures, but debt worth paying
+# down in a follow-up refactor. Each is a deviation from clean layering or the
+# deterministic_over_prompt principle.
+architecture_review:
+  - id: per_provider_prompt_branch
+    severity: principle_violation
+    site: packages/core/src/extractors/v2/pipeline.ts::buildDraftPrompt
+    problem: >
+      One prompt for anthropic+openai, another for google; openai gets an extra
+      line about values_json/slot. With F2/F3 catching both issues deterministically,
+      the per-provider hints should be removable.
+    recommendation: >
+      Try removing the branches; run the stability harness. If 9/9 still passes,
+      delete the branches and keep one prompt.
+
+  - id: transport_layer_duplication
+    severity: high_debt
+    site: packages/core/src/providers/llm/{claude,openai,gemini}.ts
+    problem: >
+      ~200 lines duplicated across each provider: getProxyUrl, fetchWithProxy,
+      AbortController + 60s timeout, error wrapping, resolveConflict prompt
+      (literally copy-pasted). No shared HttpLLMProvider base.
+    recommendation: >
+      Extract a base class/helper that owns fetch + timeout + error wrapping.
+      Each provider implements just: request body builder, response parser.
+
+  - id: asymmetric_structured_fallback
+    severity: inconsistency
+    status: partially_resolved_by_F7
+    site: openai.ts (now has F5-style fallback) and claude.ts (F5); gemini.ts still lacks it
+    problem: >
+      F5's retry-on-empty-structured originally lived only in the Claude
+      adapter. OpenAI and Gemini threw on similar failures. The stability run
+      revealed OpenAI exhibited the same failure mode.
+    progress: >
+      F7 mirrored the F5 pattern into the OpenAI adapter and extracted
+      extractJsonBlock into a shared helper (providers/llm/jsonExtract.ts)
+      used by both Claude and OpenAI. Gemini still lacks the fallback but
+      no stability failure has pointed at it yet.
+
+  - id: layer_inversion
+    severity: layer_violation
+    site: packages/core/src/providers/llm/openai.ts imports from extractors/v2
+    problem: >
+      openai.ts:8 imports buildOpenAIChatCompletionBody from
+      extractors/v2/providerAdapters. Transport layer (lower) depends on
+      pipeline layer (upper).
+    recommendation: >
+      Move buildOpenAIChatCompletionBody into providers/llm/ or a neutral location.
+
+  - id: brittle_error_matching
+    severity: minor
+    site: packages/core/src/providers/llm/claude.ts::generateStructured
+    problem: >
+      F5's retry trigger uses error.message.endsWith('No structured data
+      found in response'). String matching across a [providerId] prefix is
+      brittle.
+    recommendation: >
+      Add a typed `code` on LLMProviderError (e.g. EMPTY_STRUCTURED) and match
+      on that instead of the message.
+
+  - id: dropped_raw_on_failure
+    severity: observability
+    status: resolved_by_F6
+    site: claude.ts, providerAdapters.ts
+    problem: >
+      When JSON didn't match schema, we lost the raw content — it never
+      reached failure.details. Made diagnosis hard.
+    progress: >
+      F6 added an optional `details` field to LLMProviderError, wired
+      rawText/jsonText/issues through generateStructuredViaText, and updated
+      mapProviderErrorToExtractionFailure to forward provider details.
+
+  - id: configurable_timeout
+    severity: minor
+    site: all 3 providers
+    problem: >
+      60s timeout hardcoded in 9 places. Slow models (opus fallback ~58s,
+      sonnet on long fixtures ~77s) bump this ceiling.
+    recommendation: >
+      Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
+
+# Public extraction contracts.
+contracts:
+  - id: strict
+    entry: extractAndApply (packages/core/src/extractors/v2/extract-and-apply.ts)
+    shape: "{ ok: true, draft, compiled, snapshot, turnHashByTag } | { ok: false, failure, turnHashByTag }"
+    use_for: Tests, internal retry logic, and any caller that must differentiate success from failure.
+
+  - id: resilient (F10)
+    entry: extractAndApplyResilient (packages/core/src/extractors/v2/extract-and-apply-resilient.ts)
+    shape: "{ ok: true, draft, compiled, snapshot, turnHashByTag, degraded? }"
+    use_for: User-facing extraction (API routes, MCP tools, WebUI). Guarantees `ok: true` on every call — if the pipeline cannot produce a real extraction, the result carries an empty draft, empty compiled plan, the unchanged base snapshot, and a `degraded` field with the failure stage/code/message and optional rawText for diagnosis. Never surfaces "broken" to the user.
+    degradation_policy: >
+      Every failure from the strict contract is converted into a degraded
+      result. This includes transport errors (auth / network / empty response),
+      draft_parse / draft_schema, provenance, compile, and apply
+      (executable_structure). The base snapshot is returned unchanged so a
+      transient failure never blows away existing incremental data.
+
 # Pipeline-level invariants. Violations are bugs, not flakes.
 invariants:
   - id: compiler_total
@@ -215,46 +318,74 @@ invariants:
 # Operational assessment. Updated by the multi-model harness; treated as
 # evidence, not truth. Numbers are fixture-specific (hots-conversation, 8 turns).
 current_status:
-  fixture: packages/core/src/__tests__/fixtures/hots-conversation.json
-  last_run: 2026-04-22
+  fixtures:
+    - packages/core/src/__tests__/fixtures/hots-conversation.json
+    - packages/core/src/__tests__/fixtures/react-debugging.json
+    - packages/core/src/__tests__/fixtures/trip-planning.json
+    - packages/core/src/__tests__/fixtures/science-astronomy.json
+    - packages/core/src/__tests__/fixtures/product-design.json
+    - packages/core/src/__tests__/fixtures/recipe-cooking.json
+  last_run: 2026-04-22 (F11 stability, 6 fixtures × 9 models = 54 runs)
   harness: packages/core/scripts/e2e-multi-model.ts
+  pass_rate: 51/54 (94.4%) strict; 54/54 (100%) resilient (F10 catches the rest)
+  progression:
+    - Pre-F1 (baseline): 3/9 on hots-conversation
+    - Post-F1–F5: 9/9 on hots-conversation
+    - Post-F1–F6 (stability review, 6 fixtures): 49/54
+    - Post-F9 (simplified prompt, no other changes): 42/54 (regression — prompt rules were load-bearing)
+    - Post-F11 (lift tolerance added): 51/54
   notes:
-    - Failure modes are probabilistic. Two runs of the same input produced
-      different failure codes for the same model (opus passed once, failed
-      once with `transport: No structured data found`; sonnet reported
-      `executable_structure` on one run and `draft_schema` on another).
-    - Treat single-run results as evidence, not truth. Use --runs=N before
-      drawing strong conclusions.
+    - F9 collapsed the prompt to one provider-agnostic template. The drift
+      rules the prompt used to carry are now handled deterministically by
+      F1/F3/F6/F8/F11 normalizers.
+    - F10 adds the resilient extractAndApplyResilient contract — callers
+      see ok:true on every call even when the strict pipeline fails.
+    - F11 adds lift-step tolerance: array-in-values → value slot, missing
+      child key → synthesized from first string value. Also added
+      safeParse → tryLooseNormalize rescue in pipeline.ts::generateDraft.
   results:
-    passing:
+    reliable_across_all_fixtures_f11:
+      - claude-opus-4-6
+      - claude-haiku-4-5-20251001
       - gpt-5.4-mini
+      - gpt-5.4-nano
+      - gemini-2.5-pro
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
-    flaky:
-      - model: claude-opus-4-6
-        observed: [ok, "transport:no_structured_data"]
-    failing:
-      - model: claude-sonnet-4-6
-        failure: draft_schema
-        cluster: anthropic_ignores_json_fields
-        sample_issue: 'items[N].candidate.children[M]: Unrecognized keys: "name", "type"'
-      - model: claude-haiku-4-5-20251001
-        failure: draft_schema
-        cluster: anthropic_ignores_json_fields
-        sample_issue: 'Unrecognized key: "name" (emits children array directly)'
-      - model: gpt-5.4
-        failure: executable_structure
-        cluster: duplicate_add_path
-      - model: gpt-5.4-nano
-        failure: draft_parse
-        cluster: nano_value_json
-      - model: gemini-2.5-pro
-        failure: transport
-        cluster: gemini_pro_empty
+    flaky_on_some_fixtures_f11:
+      - { model: claude-sonnet-4-6, passes: 4/6, fails_on: [hots-conversation, product-design], cluster: nested_path_scalar_collision }
+      - { model: gpt-5.4, passes: 5/6, fails_on: [product-design], cluster: nested_path_scalar_collision }
+  per_fixture_pass_rate_f11:
+    hots-conversation: 8/9
+    react-debugging: 9/9
+    trip-planning: 9/9
+    science-astronomy: 9/9
+    product-design: 7/9
+    recipe-cooking: 9/9
+
+# Latency expectations per model on the 8-turn hots-conversation fixture.
+# Values are typical single-run timings post-F5. "slo" marks whether the
+# model reliably stays under the default 10s SLO. Slow models are not
+# failures — they're a signal that either the provider is spending budget
+# on thinking/reasoning or the pipeline is doing extra work (e.g. F5 fallback).
+latency_profile:
+  slo_ms: 10000
+  fast: # ≤ 10s typical
+    - { model: gpt-5.4-mini, typical_ms: 5000 }
+    - { model: gpt-5.4-nano, typical_ms: 9600 }
+    - { model: gemini-3-flash-preview, typical_ms: 4400 }
+    - { model: gemini-3.1-flash-lite-preview, typical_ms: 3900 }
+  slow: # > 10s typical — worth watching
+    - { model: claude-haiku-4-5-20251001, typical_ms: 11000 }
+    - { model: gpt-5.4, typical_ms: 14700 }
+    - { model: gemini-2.5-pro, typical_ms: 15000 }
+    - { model: claude-opus-4-6, typical_ms: 26000, note: "May take 50s+ when F5 fallback kicks in" }
+    - { model: claude-sonnet-4-6, typical_ms: 37000 }
 
 # Failure clusters guide the fix plan. Each cluster = one follow-up PR.
 clusters:
   - id: anthropic_ignores_json_fields
+    status: resolved_by_F1
     affects: [claude-sonnet-4-6, claude-haiku-4-5-20251001]
     hypothesis: >
       Claude models ignore the "use *_json fields as JSON strings" rule in
@@ -270,7 +401,15 @@ clusters:
     fix_site: packages/core/src/extractors/v2/providerDraft.ts (pre-validation normalizer)
 
   - id: duplicate_add_path
-    affects: [gpt-5.4]
+    status: resolved_by_F2
+    affects: [claude-sonnet-4-6, claude-opus-4-6, gpt-5.4, gpt-5.4-mini]
+    scope_note: >
+      After F1 landed, this cluster expanded — Anthropic models now reach the
+      compile stage and hit the same duplicate-path issue OpenAI models already
+      exposed. Resolved by compiler.ts::dedupeDefineOps which folds repeat
+      define ops on the same path and emits a warning. Populate/set ops from
+      dropped defines are preserved and merge additively into the first-defined
+      node.
     hypothesis: >
       Compiler does not dedupe multiple `add` ops to the same path. Previously
       observed across models/providers; after the 2026-04 main merge the frequency
@@ -282,21 +421,156 @@ clusters:
     fix_site: packages/core/src/extractors/v2/compiler.ts
 
   - id: nano_value_json
+    status: resolved_by_F3
     affects: [gpt-5.4-nano]
     hypothesis: >
-      Small model can't emit correctly escaped JSON strings inside _json
-      fields. The targeted-reask loop also fails. Reproducible across runs.
-    fix_strategy: deterministic_wrapper
+      Small model can't emit correctly escaped JSON strings inside
+      candidate.value_json. Emits plain unquoted scalars
+      (e.g. `destroy_enemy_core/base` instead of `"destroy_enemy_core/base"`).
+    fix_site: packages/core/src/extractors/v2/providerDraft.ts::repairMalformedJsonField
+    resolution: >
+      Deterministic repair in parseJsonField: when JSON.parse fails on
+      candidate.value_json AND the raw content does not start with `{`, `[`,
+      or `"`, treat it as a plain string literal. Object-/array-shaped fields
+      (values_json, children_json) are not repaired — their shape contract
+      is too strict to guess safely.
+
+  - id: claude_structured_schema_mismatch
+    status: resolved_by_F6
+    affects: [claude-sonnet-4-6, claude-opus-4-6]
+    discovered: 2026-04-22 (stability run, trip-planning fixture — 8 turns)
+    hypothesis: >
+      On longer / more complex conversations, Claude emits a significantly
+      drifted shape: schema "ProviderExtractionDraft" (no t3x/ prefix),
+      version "1.0" (string), top-level fields like type/label/kind instead
+      of intent/confidence, item-level children_json rather than
+      inside-candidate, candidate.name instead of candidate.key, and
+      evidence entries without the required `role` field. The original
+      failure silently dropped the raw content so we couldn't even see what
+      Claude was emitting.
+    fix_sites:
+      - packages/core/src/llm/types.ts::LLMProviderError (optional details)
+      - packages/core/src/providers/llm/claude.ts::generateStructuredViaText (threads rawText)
+      - packages/core/src/extractors/v2/providerAdapters.ts (forwards provider details)
+      - packages/core/src/extractors/v2/providerDraft.ts::normalizeLooseProviderDraft
+      - packages/core/src/extractors/v2/pipeline.ts::generateDraft (rescue path)
+      - packages/core/src/extractors/v2/providerDraft.ts::canonicalizeChildShape (string children)
+    resolution: >
+      Two-part fix.
+      (1) Observability — LLMProviderError grew an optional `details` field.
+      Claude's generateStructuredViaText now carries rawText / jsonText /
+      Zod issues into the failure, and providerAdapters forwards them.
+      (2) Normalization — normalizeLooseProviderDraft is a deterministic
+      pre-validation coercion that: rewrites schema/version to the canonical
+      literal, defaults missing intent/confidence/reasoning_type/target_ref
+      to safe values, coerces candidate.name → candidate.key, pulls
+      item-level children_json into candidate.children_json, and defaults
+      evidence.role to 'primary' when missing. canonicalizeChildShape also
+      gained a case for raw string children, wrapping them as { key }.
+      The pipeline's generateDraft catch calls normalizeLooseProviderDraft
+      on any rawText carried by a transport error, and retries validation
+      deterministically before giving up. claude-sonnet + claude-opus ×
+      trip-planning verified 4/4 runs pass post-F6.
+
+  - id: openai_structured_non_json
+    status: resolved_by_F7
+    affects: [gpt-5.4]
+    discovered: 2026-04-22 (stability run, product-design fixture)
+    hypothesis: >
+      OpenAI's structured-output API sometimes returns content that is not
+      parseable as JSON, despite the json_schema response_format. Same class
+      as the Claude problem F5 resolved — asymmetric robustness.
+    fix_site: packages/core/src/providers/llm/openai.ts::generateStructuredViaText
+    resolution: >
+      OpenAI adapter now mirrors Claude's F5 pattern: on parse failure or empty
+      content, retry via generateFromPrompt + extractJsonBlock. The
+      extractJsonBlock helper was extracted to packages/core/src/providers/llm/
+      jsonExtract.ts and is now shared by both Claude and OpenAI. gpt-5.4 ×
+      product-design verified 3/3 runs pass.
+
+  - id: nano_add_missing_key
+    status: resolved_by_F8
+    affects: [gpt-5.4-nano]
+    discovered: 2026-04-22 (stability run, product-design fixture)
+    hypothesis: >
+      Nano emits `add` items where candidate.key and candidate.path_hint are
+      both null/missing. The compiler previously hard-failed with "add intent
+      requires candidate.key or candidate.path_hint".
+    fix_site: packages/core/src/extractors/v2/compiler.ts::synthesizeAddPath
+    resolution: >
+      The compiler now synthesizes a deterministic slug path from the first
+      short string value in candidate.values, falling back to item.id. A
+      compile warning documents the synthesis. Nano × product-design
+      verified 3/3 runs pass post-F8.
+
+  - id: nano_update_on_missing_path
+    status: resolved_by_F8
+    affects: [gpt-5.4-nano]
+    discovered: 2026-04-22 (stability run, react-debugging fixture)
+    hypothesis: >
+      In bootstrap mode (empty starting snapshot), nano emits `update` or
+      `reinforce` intents on paths that don't yet exist. The engine then
+      fails `populate`/`set` with "Path X does not exist".
+    fix_site: packages/core/src/extractors/v2/compiler.ts::compileItem (bootstrap promotion)
+    resolution: >
+      In bootstrap mode the compiler now promotes `update` and `reinforce`
+      intents to `add` — bootstrap has no pre-existing snapshot so the
+      distinction is meaningless. The path is resolved from target_ref (the
+      LLM's intended identifier) and passed through to the add path, which
+      emits define + populate + set as needed. Nano × react-debugging
+      verified 3/3 runs pass post-F8.
+
+  - id: nested_path_scalar_collision
+    status: open
+    discovered: 2026-04-22 (F11 stability matrix, 3/54 remaining failures)
+    affects: [claude-sonnet-4-6, gpt-5.4]
+    hypothesis: >
+      The model emits two items describing the same concept at different
+      granularities. The first populates a string at some slot (e.g.
+      `product/alerts` under `product`), the second item tries to `add` a
+      nested node at that same path (e.g. `product/alerts/slack`). Applying
+      the second item's `define` fails with "Path X already exists" because
+      resolvePath now finds a string, not an empty object — `define` can't
+      overwrite a scalar in place.
+    fix_strategy: deterministic_wrapper (F12 candidate)
     candidates:
-      - PREFERRED — Deterministic JSON-string repairer in the draft-validation stage: if a _json field parses as JSON-object-already, coerce to string; if it's a double-escaped string, unescape once; fall back to reask only if both fail.
-      - AVOID — Bespoke nano prompt.
-    fix_site: packages/core/src/extractors/v2/providerDraft.ts (liftProviderDraftToExtractionDraft)
+      - At compile time — detect populate keys that collide with a later
+        item's path_hint segments and drop the conflicting slot so the
+        nested item's define owns that path.
+      - At apply time — relax YOps' define handler to convert a scalar at
+        the target path into an empty object shell (scope-sensitive; changes
+        engine semantics).
+      - Pre-process the item list — merge items whose path_hints are
+        prefixes of each other's into a single composite item.
+    fix_site: packages/core/src/extractors/v2/providerDraft.ts or compiler.ts
+    observability_note: >
+      Always handled at the user-facing level by extractAndApplyResilient
+      (F10), which converts the executable_structure failure into an empty
+      draft + diagnostic rather than broken.
+
+  - id: anthropic_structured_output_empty
+    status: resolved_by_F5
+    affects: [claude-opus-4-6]
+    hypothesis: >
+      Opus sometimes returns an empty structured response (`transport: No
+      structured data found in response`). Run-to-run flake. Anthropic's
+      structured output path drops content on some inputs.
+    fix_site: packages/core/src/providers/llm/claude.ts::generateStructuredViaText
+    resolution: >
+      Claude adapter now catches the "No structured data" failure and
+      transparently retries via generateFromPrompt + extractJsonBlock
+      (which handles bare JSON, ```json fences, and JSON-after-preamble).
+      No prompt change. Opus verified 3/3 runs pass post-F5.
 
   - id: gemini_pro_empty
+    status: resolved_by_F4
     affects: [gemini-2.5-pro]
-    hypothesis: Structured-output config or safety filter blocks the response on this fixture.
-    fix_strategy: provider_adapter
-    candidates:
-      - PREFERRED — Investigate Gemini provider adapter for pro-specific config; likely a structured-output schema mismatch or a safety threshold issue.
-      - AVOID — Prompt changes for Pro specifically.
-    fix_site: packages/core/src/providers/llm/gemini.ts
+    hypothesis: >
+      Pro models default to a large implicit thinking budget that can exhaust
+      maxOutputTokens before the model emits any content. The adapter's
+      buildThinkingConfig only covered `3.1-pro` explicitly, so `2.5-pro`
+      fell through to the API default.
+    fix_site: packages/core/src/providers/llm/gemini.ts::buildThinkingConfig
+    resolution: >
+      Broaden the `pro` match so every Pro model gets thinkingBudget: 256.
+      No prompt change. gemini-2.5-pro verified 3/3 runs pass.

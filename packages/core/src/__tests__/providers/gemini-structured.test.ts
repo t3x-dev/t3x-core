@@ -196,6 +196,27 @@ describe('GeminiProvider.generateStructured', () => {
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 256 });
   });
 
+  it('caps the thinking budget for Gemini 2.5 Pro so output always has room', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(makeGeminiResponse('{"name":"Bob","age":25}'))),
+      })
+    );
+
+    const provider = new GeminiProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+    await provider.generateStructured(
+      { messages: [{ role: 'user', content: 'Extract' }] },
+      schema,
+      { model: 'gemini-2.5-pro' }
+    );
+
+    const body = JSON.parse(mockFetchFn.mock.calls[0][1].body);
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 256 });
+  });
+
   it('throws LLMProviderError when JSON parsing fails', async () => {
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({
