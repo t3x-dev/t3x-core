@@ -1,38 +1,60 @@
 /**
- * t3x_admin -- manage projects, branches, and pins.
+ * t3x_admin -- manage projects, branches, leaves, and pins.
  *
  * Actions:
  *   create_project  -- create a new project
  *   create_branch   -- create a branch in a project
+ *   create_leaf     -- create a leaf from an existing commit
  *   create_pin      -- pin an item (conversation or leaf)
  *   delete_pin      -- remove a pin
  */
 
-import type { PinType } from '@t3x-dev/core';
-import { createPin, deletePin, insertBranch, insertProject } from '@t3x-dev/storage';
+import {
+  ALL_LEAF_TYPES,
+  type AnyLeafType,
+  type Constraint,
+  type LeafConfig,
+  type PinType,
+} from '@t3x-dev/core';
+import {
+  createLeaf,
+  createPin,
+  deletePin,
+  getCommit,
+  insertBranch,
+  insertProject,
+} from '@t3x-dev/storage';
 
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // -- Tool definition --
 
-const ACTIONS = ['create_project', 'create_branch', 'create_pin', 'delete_pin'] as const;
+const ACTIONS = [
+  'create_project',
+  'create_branch',
+  'create_leaf',
+  'create_pin',
+  'delete_pin',
+] as const;
 type Action = (typeof ACTIONS)[number];
 
 export const adminDef: ToolDef = {
   name: 't3x_admin',
   description: [
-    'Manage projects, branches, and pins.',
+    'Manage projects, branches, leaves, and pins.',
     '',
     'Actions:',
     '  create_project  -- Create a new project.',
     '  create_branch   -- Create a branch in a project.',
+    '  create_leaf     -- Create a leaf from an existing commit.',
     '  create_pin      -- Pin a conversation or leaf for context.',
     '  delete_pin      -- Remove a pin by ID.',
     '',
     'Examples:',
     '  { "action": "create_project", "name": "My Project" }',
     '  { "action": "create_branch", "project_id": "proj_abc", "name": "feature-x" }',
+    '  { "action": "create_leaf", "project_id": "proj_abc", "commit_hash": "sha256:...", "leaf_type": "tweet" }',
     '  { "action": "create_pin", "project_id": "proj_abc", "type": "conversation", "ref_id": "conv_xyz" }',
     '  { "action": "delete_pin", "pin_id": "pin_abc" }',
   ].join('\n'),
@@ -59,6 +81,27 @@ export const adminDef: ToolDef = {
       description: {
         type: 'string',
         description: 'Description (optional, for create_branch).',
+      },
+      commit_hash: {
+        type: 'string',
+        description: 'Commit hash to attach the leaf to (for create_leaf).',
+      },
+      leaf_type: {
+        type: 'string',
+        enum: ALL_LEAF_TYPES as unknown as string[],
+        description: 'Leaf type (for create_leaf).',
+      },
+      title: {
+        type: 'string',
+        description: 'Optional title for create_leaf.',
+      },
+      constraints: {
+        type: 'array',
+        description: 'Optional output constraints for create_leaf.',
+      },
+      config: {
+        type: 'object',
+        description: 'Optional leaf config for create_leaf.',
       },
       type: {
         type: 'string',
@@ -96,6 +139,8 @@ export const adminHandler: ToolHandler = async (args) => {
       return handleCreateProject(args);
     case 'create_branch':
       return handleCreateBranch(args);
+    case 'create_leaf':
+      return handleCreateLeaf(args);
     case 'create_pin':
       return handleCreatePin(args);
     case 'delete_pin':
@@ -143,6 +188,71 @@ async function handleCreateBranch(args: Record<string, unknown>) {
     project_id: branch.projectId,
     parent_branch: branch.parentBranch,
     created_at: branch.createdAt,
+  });
+}
+
+async function handleCreateLeaf(args: Record<string, unknown>) {
+  const projectId = args.project_id as string | undefined;
+  const commitHash = args.commit_hash as string | undefined;
+  const leafType = args.leaf_type as string | undefined;
+  const title = args.title as string | undefined;
+  const constraints = args.constraints as Constraint[] | undefined;
+  const config = args.config as LeafConfig | undefined;
+
+  if (!projectId) return fail('"project_id" is required for create_leaf.');
+  if (!commitHash) return fail('"commit_hash" is required for create_leaf.');
+  if (!leafType) return fail('"leaf_type" is required for create_leaf.');
+
+  if (!(ALL_LEAF_TYPES as readonly string[]).includes(leafType)) {
+    return fail(`Invalid leaf type "${leafType}". Must be one of: ${ALL_LEAF_TYPES.join(', ')}.`);
+  }
+
+  if (title !== undefined && typeof title !== 'string') {
+    return fail('"title" must be a string for create_leaf.');
+  }
+  if (constraints !== undefined && !Array.isArray(constraints)) {
+    return fail('"constraints" must be an array for create_leaf.');
+  }
+  if (
+    config !== undefined &&
+    (typeof config !== 'object' || config === null || Array.isArray(config))
+  ) {
+    return fail('"config" must be an object for create_leaf.');
+  }
+
+  const db = await getDB();
+  const commit = await getCommit(db, commitHash);
+  if (!commit) {
+    return fail(`Commit not found: ${commitHash}`);
+  }
+  if (commit.project_id && commit.project_id !== projectId) {
+    return fail(`Commit ${commitHash} does not belong to project ${projectId}.`);
+  }
+
+  const leaf = await createLeaf(db, {
+    commit_hash: commitHash,
+    type: leafType as AnyLeafType,
+    title,
+    constraints: constraints ?? [],
+    config: config ?? {},
+    project_id: projectId,
+  });
+
+  return ok({
+    leaf_id: leaf.id,
+    commit_hash: leaf.commit_hash,
+    type: leaf.type,
+    title: leaf.title ?? null,
+    constraints: leaf.constraints ?? [],
+    config: leaf.config ?? {},
+    output: leaf.output ?? null,
+    assertions: leaf.assertions ?? [],
+    project_id: leaf.project_id,
+    created_at: leaf.created_at,
+    next_steps: [
+      `Use t3x_query { "target": "leaf", "id": "${leaf.id}" } to inspect the leaf.`,
+      `Use t3x_generate { "leaf_id": "${leaf.id}" } to generate output.`,
+    ],
   });
 }
 

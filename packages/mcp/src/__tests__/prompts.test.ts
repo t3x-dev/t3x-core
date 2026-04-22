@@ -32,6 +32,7 @@ vi.mock('@t3x-dev/storage', () => ({
   updateDraft: vi.fn(),
   commitDraft: vi.fn(),
   createCommit: vi.fn(),
+  createLeaf: vi.fn(),
   createPin: vi.fn(),
   deletePin: vi.fn(),
   createMergeDraft: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('@t3x-dev/storage', () => ({
 }));
 
 vi.mock('@t3x-dev/core', () => ({
+  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
   diffCommits: vi.fn(),
   prepareMerge: vi.fn(),
   executeMerge: vi.fn(),

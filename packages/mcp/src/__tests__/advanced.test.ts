@@ -114,6 +114,27 @@ const MOCK_PIN = {
   pinned_at: '2026-01-01T00:00:00.000Z',
 };
 
+const MOCK_LEAF = {
+  id: 'leaf_new',
+  commit_hash: 'sha256:aaa',
+  type: 'tweet',
+  title: 'Trip Summary',
+  constraints: [
+    {
+      id: 'cst_1',
+      type: 'require',
+      match_mode: 'exact',
+      value: 'Tokyo',
+    },
+  ],
+  config: { model: 'gpt-5.4' },
+  output: null,
+  assertions: [],
+  project_id: 'proj_test1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  created_by: null,
+};
+
 const MOCK_MERGED_COMMIT = {
   hash: 'sha256:merged',
   schema: 't3x/commit/v4',
@@ -150,6 +171,7 @@ vi.mock('@t3x-dev/storage', () => ({
   createCommit: vi.fn(() => Promise.resolve(MOCK_MERGED_COMMIT)),
   insertProject: vi.fn(() => Promise.resolve(MOCK_PROJECT)),
   insertBranch: vi.fn(() => Promise.resolve(MOCK_BRANCH)),
+  createLeaf: vi.fn(() => Promise.resolve(MOCK_LEAF)),
   createPin: vi.fn(() => Promise.resolve(MOCK_PIN)),
   deletePin: vi.fn((_db: unknown, id: string) => Promise.resolve(id === 'pin_new')),
 }));
@@ -157,6 +179,7 @@ vi.mock('@t3x-dev/storage', () => ({
 // -- Core mock --
 
 vi.mock('@t3x-dev/core', () => ({
+  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
   diffCommits: vi.fn(() => ({
     identical: [],
     modified: [
@@ -195,6 +218,15 @@ import { mergeHandler } from '../tools/advanced/merge.js';
 // ================================================================
 
 describe('t3x_diff handler', () => {
+  it('rejects legacy source/target calls and requires base', async () => {
+    const result = await diffHandler({
+      source: 'sha256:aaa',
+      target: 'sha256:bbb',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"base" is required');
+  });
+
   it('returns error when base is missing', async () => {
     const result = await diffHandler({ target: 'sha256:bbb' });
     expect(result.isError).toBe(true);
@@ -361,6 +393,47 @@ describe('t3x_merge handler', () => {
     expect(data.parents).toEqual(['sha256:aaa', 'sha256:bbb']);
   });
 
+  it('supports the documented prepare -> show_conflict -> resolve -> execute flow', async () => {
+    const { getMergeDraft, updateMergeDraft } = await import('@t3x-dev/storage');
+
+    vi.mocked(getMergeDraft)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT)
+      .mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
+    vi.mocked(updateMergeDraft).mockResolvedValueOnce(MOCK_MERGE_DRAFT_RESOLVED);
+
+    const prepared = await mergeHandler({
+      action: 'prepare',
+      project_id: 'proj_test1',
+      source_hash: 'sha256:aaa',
+      target_hash: 'sha256:bbb',
+    });
+    expect(prepared.isError).toBeUndefined();
+    expect(JSON.parse(prepared.content[0].text).draft_id).toBe('md_test1');
+
+    const shown = await mergeHandler({ action: 'show_conflict', draft_id: 'md_test1', index: 0 });
+    expect(shown.isError).toBeUndefined();
+    expect(JSON.parse(shown.content[0].text).conflict.path).toBe('trip');
+
+    const resolved = await mergeHandler({
+      action: 'resolve',
+      draft_id: 'md_test1',
+      index: 0,
+      resolution: 'source',
+      reasoning: 'Original budget is correct',
+    });
+    expect(resolved.isError).toBeUndefined();
+    expect(JSON.parse(resolved.content[0].text).resolution).toBe('source');
+
+    const executed = await mergeHandler({
+      action: 'execute',
+      draft_id: 'md_test1',
+      message: 'Merge feature',
+    });
+    expect(executed.isError).toBeUndefined();
+    expect(JSON.parse(executed.content[0].text).commit_hash).toBe('sha256:merged');
+  });
+
   // -- abort --
 
   it('abort: cancels a pending draft', async () => {
@@ -388,6 +461,85 @@ describe('t3x_admin handler', () => {
     const result = await adminHandler({});
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Missing or invalid "action"');
+  });
+
+  it('create_leaf: returns error when project_id is missing', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      commit_hash: 'sha256:aaa',
+      leaf_type: 'tweet',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"project_id" is required');
+  });
+
+  it('create_leaf: returns error when commit_hash is missing', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      leaf_type: 'tweet',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"commit_hash" is required');
+  });
+
+  it('create_leaf: returns error when leaf_type is missing', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      commit_hash: 'sha256:aaa',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"leaf_type" is required');
+  });
+
+  it('create_leaf: returns error for invalid leaf_type', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      commit_hash: 'sha256:aaa',
+      leaf_type: 'podcast',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid leaf type');
+  });
+
+  it('create_leaf: returns error when commit is not found', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      commit_hash: 'sha256:missing',
+      leaf_type: 'tweet',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Commit not found');
+  });
+
+  it('create_leaf: creates a leaf from an existing commit', async () => {
+    const result = await adminHandler({
+      action: 'create_leaf',
+      project_id: 'proj_test1',
+      commit_hash: 'sha256:aaa',
+      leaf_type: 'tweet',
+      title: 'Trip Summary',
+      constraints: [
+        {
+          type: 'require',
+          match_mode: 'exact',
+          value: 'Tokyo',
+        },
+      ],
+      config: { model: 'gpt-5.4' },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.leaf_id).toBe('leaf_new');
+    expect(data.commit_hash).toBe('sha256:aaa');
+    expect(data.type).toBe('tweet');
+    expect(data.project_id).toBe('proj_test1');
+    expect(data.constraints).toHaveLength(1);
+    expect(data.config).toEqual({ model: 'gpt-5.4' });
   });
 
   // -- create_project --

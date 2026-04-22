@@ -266,6 +266,12 @@ describe('t3x_extract handler', () => {
     expect(result.content[0].text).toContain('"text" is required');
   });
 
+  it('returns required error when text is an empty string', async () => {
+    const result = await extractHandler({ project_id: 'proj_test1', text: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"text" is required');
+  });
+
   it('returns error when no generation provider is configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const { findProjectById } = await import('@t3x-dev/storage');
@@ -407,7 +413,7 @@ describe('t3x_extract handler', () => {
     mockExtractAndApply.mockResolvedValue(MOCK_EXTRACT_EMPTY_TREES);
     const result = await extractHandler({
       project_id: 'proj_test1',
-      text: 'hello',
+      text: '!!! ???',
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('No extractable content');
@@ -462,6 +468,20 @@ describe('t3x_extract handler', () => {
     expect(result.isError).toBeUndefined();
     const data = JSON.parse(result.content[0].text);
     expect(data.is_new_conversation).toBe(false);
+  });
+
+  it('does not attach a parent commit hash when reusing conversation context', async () => {
+    const { insertDraft } = await import('@t3x-dev/storage');
+
+    await extractHandler({
+      project_id: 'proj_test1',
+      text: 'more details about the trip',
+      conversation_id: 'conv_existing',
+    });
+
+    const mock = insertDraft as ReturnType<typeof vi.fn>;
+    expect(mock).toHaveBeenCalled();
+    expect(mock.mock.calls[0]?.[1]).not.toHaveProperty('parent_commit_hash');
   });
 
   it('creates a draft with extracted nodes', async () => {
