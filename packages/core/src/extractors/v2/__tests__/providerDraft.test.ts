@@ -62,6 +62,103 @@ describe('extractors/v2 provider draft', () => {
     });
   });
 
+  it('repairs value_json emitted as a plain unquoted string into a string literal', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'victory',
+            path_hint: 'victory',
+            slot: 'objective',
+            // Nano emits this unquoted — would normally fail JSON.parse.
+            value_json: 'destroy_enemy_core/base',
+            values_json: null,
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'destroy the enemy core', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.value).toBe('destroy_enemy_core/base');
+  });
+
+  it('does not repair value_json when the raw content looks like attempted JSON', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'victory',
+            path_hint: 'victory',
+            slot: 'objective',
+            // Starts with `{` — looks like an attempted JSON object; do not repair.
+            value_json: '{malformed',
+            values_json: null,
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'objective', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(false);
+    if (lifted.ok) return;
+    expect(lifted.failure.code).toBe('draft_parse');
+    expect(lifted.failure.message).toContain('value_json');
+  });
+
+  it('does not repair values_json when malformed (shape too strict to guess)', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'victory',
+            path_hint: 'victory',
+            slot: null,
+            value_json: null,
+            values_json: 'not-json',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'objective', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(false);
+    if (lifted.ok) return;
+    expect(lifted.failure.code).toBe('draft_parse');
+    expect(lifted.failure.message).toContain('values_json');
+  });
+
   it('returns a typed parse failure when provider JSON fields are invalid', () => {
     const lifted = liftProviderDraftToExtractionDraft({
       schema: 't3x/provider-extraction-draft',

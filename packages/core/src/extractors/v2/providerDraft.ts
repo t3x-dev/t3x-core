@@ -61,6 +61,26 @@ export type LiftProviderDraftResult =
   | { ok: true; draft: ExtractionDraft }
   | { ok: false; failure: ExtractionFailure };
 
+function repairMalformedJsonField(fieldName: string, raw: string): unknown | undefined {
+  // Deterministic repair for fields where small models commonly emit a plain
+  // scalar instead of a JSON-encoded string (e.g. `abc/def` instead of `"abc/def"`).
+  // Only attempts repair for candidate.value_json, which accepts any scalar.
+  // Object- and array-shaped fields (values_json, children_json) are not
+  // repaired here — their shape contract is too strict to guess safely.
+  if (fieldName !== 'candidate.value_json') return undefined;
+
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+
+  // If it looks like an attempted JSON object/array/string, don't guess — the
+  // LLM tried to emit structured JSON and got it wrong; safer to fail and reask.
+  const firstChar = trimmed[0];
+  if (firstChar === '{' || firstChar === '[' || firstChar === '"') return undefined;
+
+  // Plain scalar text that wasn't JSON-escaped — treat as a string literal.
+  return raw;
+}
+
 function parseJsonField(
   fieldName: string,
   raw: string | null
@@ -72,6 +92,10 @@ function parseJsonField(
   try {
     return { ok: true, value: JSON.parse(raw) };
   } catch {
+    const repaired = repairMalformedJsonField(fieldName, raw);
+    if (repaired !== undefined) {
+      return { ok: true, value: repaired };
+    }
     return {
       ok: false,
       failure: createExtractionFailure(
