@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/core",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -57,6 +57,6 @@
     "directory": "packages/core"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   }
 }

@@ -54,6 +54,7 @@ venv/
 
 # Test results
 test-results/
+.v2-runs/
 
 # Test coverage
 coverage/
