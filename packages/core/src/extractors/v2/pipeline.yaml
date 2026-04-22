@@ -19,17 +19,18 @@ stages:
     may_emit_failures: []
 
   - id: build_prompt
-    role: Assemble LLM prompt (system + user) per provider branch
+    role: Assemble a single provider-agnostic LLM prompt (system + user)
     source: packages/core/src/extractors/v2/pipeline.ts::buildDraftPrompt
     deterministic: true
     input: { mode, providerId, turns, snapshot? }
     output: LLMPrompt
     may_emit_failures: []
     notes:
-      - Prompt has a provider branch: anthropic+openai share one path,
-        google gets its own with an explicit JSON example block.
-      - openai receives an extra line enforcing candidate.values_json or
-        candidate.slot+value_json on update/reinforce items.
+      - "F9 collapsed the prompt to one template for all providers."
+      - "Previously had per-provider branches (anthropic+openai vs. google)
+        and an embedded JSON example + rule list. Those rules are now enforced
+        deterministically by providerDraft.ts (shape normalizer / F6 loose
+        normalizer / F3 repairer) and compiler.ts (F2 dedupe / F8 tolerance)."
 
   - id: generate_draft
     role: Call LLM; produce ProviderExtractionDraft JSON
@@ -282,6 +283,24 @@ architecture_review:
       sonnet on long fixtures ~77s) bump this ceiling.
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
+
+# Public extraction contracts.
+contracts:
+  - id: strict
+    entry: extractAndApply (packages/core/src/extractors/v2/extract-and-apply.ts)
+    shape: "{ ok: true, draft, compiled, snapshot, turnHashByTag } | { ok: false, failure, turnHashByTag }"
+    use_for: Tests, internal retry logic, and any caller that must differentiate success from failure.
+
+  - id: resilient (F10)
+    entry: extractAndApplyResilient (packages/core/src/extractors/v2/extract-and-apply-resilient.ts)
+    shape: "{ ok: true, draft, compiled, snapshot, turnHashByTag, degraded? }"
+    use_for: User-facing extraction (API routes, MCP tools, WebUI). Guarantees `ok: true` on every call — if the pipeline cannot produce a real extraction, the result carries an empty draft, empty compiled plan, the unchanged base snapshot, and a `degraded` field with the failure stage/code/message and optional rawText for diagnosis. Never surfaces "broken" to the user.
+    degradation_policy: >
+      Every failure from the strict contract is converted into a degraded
+      result. This includes transport errors (auth / network / empty response),
+      draft_parse / draft_schema, provenance, compile, and apply
+      (executable_structure). The base snapshot is returned unchanged so a
+      transient failure never blows away existing incremental data.
 
 # Pipeline-level invariants. Violations are bugs, not flakes.
 invariants:
