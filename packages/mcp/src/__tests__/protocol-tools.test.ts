@@ -50,11 +50,31 @@ const { state, resetState } = vi.hoisted(() => {
     sources: null;
   };
 
+  type Leaf = {
+    id: string;
+    commit_hash: string;
+    type: string;
+    title: string;
+    constraints: Array<{
+      id: string;
+      type: 'require' | 'exclude';
+      match_mode: 'exact' | 'semantic';
+      value: string;
+    }>;
+    config: Record<string, unknown>;
+    output: string | null;
+    assertions: unknown[];
+    project_id: string;
+    created_at: string;
+    generated_at: string | null;
+  };
+
   const shared = {
     projects: new Map<string, Project>(),
     conversations: new Map<string, Conversation>(),
     drafts: new Map<string, Draft>(),
     commits: new Map<string, Commit>(),
+    leaves: new Map<string, Leaf>(),
     turns: [] as Array<{
       turnHash: string;
       projectId: string;
@@ -76,6 +96,7 @@ const { state, resetState } = vi.hoisted(() => {
     shared.conversations.clear();
     shared.drafts.clear();
     shared.commits.clear();
+    shared.leaves.clear();
     shared.turns = [];
     shared.counters = {
       project: 1,
@@ -171,7 +192,36 @@ vi.mock('@t3x-dev/core', () => ({
   prepareMerge: vi.fn(),
   executeMerge: vi.fn(),
   collectLessonsFromAssertions: vi.fn(() => []),
-  generateLeafOutput: vi.fn(),
+  generateLeafOutput: vi.fn(
+    async ({
+      leaf,
+      model,
+    }: {
+      leaf: { id: string };
+      model: string;
+    }) => ({
+      output: `Generated output for ${leaf.id}`,
+      model,
+      usage: {
+        inputTokens: 123,
+        outputTokens: 45,
+      },
+      attempts: 1,
+      validation: {
+        allPassed: true,
+        passedCount: 1,
+        failedCount: 0,
+        assertions: [
+          {
+            id: 'ast_1',
+            constraint_id: 'cst_1',
+            passed: true,
+            details: 'Constraint satisfied',
+          },
+        ],
+      },
+    })
+  ),
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
@@ -299,9 +349,13 @@ vi.mock('@t3x-dev/storage', () => ({
   listCommits: vi.fn(async (_db: unknown, { projectId }: { projectId: string }) =>
     [...state.commits.values()].filter((commit) => commit.project_id === projectId)
   ),
-  findLeafById: vi.fn(async () => null),
-  findLeavesByProject: vi.fn(async () => []),
-  findLeavesByCommit: vi.fn(async () => []),
+  findLeafById: vi.fn(async (_db: unknown, id: string) => state.leaves.get(id) ?? null),
+  findLeavesByProject: vi.fn(async (_db: unknown, projectId: string) =>
+    [...state.leaves.values()].filter((leaf) => leaf.project_id === projectId)
+  ),
+  findLeavesByCommit: vi.fn(async (_db: unknown, commitHash: string) =>
+    [...state.leaves.values()].filter((leaf) => leaf.commit_hash === commitHash)
+  ),
   findPinById: vi.fn(async () => null),
   findPinsByProject: vi.fn(async () => []),
   findAgentDraftById: vi.fn(async () => null),
@@ -314,8 +368,27 @@ vi.mock('@t3x-dev/storage', () => ({
   insertBranch: vi.fn(),
   createPin: vi.fn(),
   deletePin: vi.fn(),
-  updateLeaf: vi.fn(),
-  updateLeafOutput: vi.fn(),
+  updateLeaf: vi.fn(async (_db: unknown, leafId: string, patch: { assertions?: unknown[] }) => {
+    const leaf = state.leaves.get(leafId);
+    if (!leaf) return null;
+    const updated = {
+      ...leaf,
+      assertions: patch.assertions ?? leaf.assertions,
+    };
+    state.leaves.set(leafId, updated);
+    return updated;
+  }),
+  updateLeafOutput: vi.fn(async (_db: unknown, leafId: string, output: string) => {
+    const leaf = state.leaves.get(leafId);
+    if (!leaf) return null;
+    const updated = {
+      ...leaf,
+      output,
+      generated_at: '2026-04-22T00:00:00.000Z',
+    };
+    state.leaves.set(leafId, updated);
+    return updated;
+  }),
   recordEvent: vi.fn(async () => 1n),
   getProviderCredentialBundle: vi.fn(async () => ({
     secrets: { OPENAI_API_KEY: 'sk-openai' },
@@ -479,6 +552,82 @@ describe('MCP protocol tool flows', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('"leaf_id" is required');
+
+    await client.close();
+  });
+
+  it('generates output for an existing leaf over the MCP protocol', async () => {
+    const { client } = await connectClientAndServer();
+
+    const project = parseTextResult(
+      await client.callTool({
+        name: 't3x_admin',
+        arguments: { action: 'create_project', name: 'Protocol Generate Flow' },
+      })
+    );
+
+    const extract = parseTextResult(
+      await client.callTool({
+        name: 't3x_extract',
+        arguments: {
+          project_id: project.project_id,
+          text: 'Plan a Tokyo trip with budget 5000',
+        },
+      })
+    );
+
+    const commit = parseTextResult(
+      await client.callTool({
+        name: 't3x_commit',
+        arguments: {
+          project_id: project.project_id,
+          draft_id: extract.draft_id,
+          message: 'Snapshot for leaf generation',
+        },
+      })
+    );
+
+    state.leaves.set('leaf_1', {
+      id: 'leaf_1',
+      commit_hash: commit.commit_hash,
+      type: 'tweet',
+      title: 'Trip summary',
+      constraints: [
+        {
+          id: 'cst_1',
+          type: 'require',
+          match_mode: 'exact',
+          value: 'Tokyo',
+        },
+      ],
+      config: {},
+      output: null,
+      assertions: [],
+      project_id: project.project_id,
+      created_at: '2026-04-22T00:00:00.000Z',
+      generated_at: null,
+    });
+
+    const generated = parseTextResult(
+      await client.callTool({
+        name: 't3x_generate',
+        arguments: { leaf_id: 'leaf_1' },
+      })
+    );
+
+    expect(generated.leaf_id).toBe('leaf_1');
+    expect(generated.output).toBe('Generated output for leaf_1');
+    expect(generated.score).toEqual({
+      all_passed: true,
+      passed: 1,
+      failed: 0,
+      total: 1,
+    });
+    expect(generated.assertions[0].constraint_id).toBe('cst_1');
+    expect(generated.usage).toEqual({
+      input_tokens: 123,
+      output_tokens: 45,
+    });
 
     await client.close();
   });
