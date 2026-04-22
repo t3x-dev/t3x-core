@@ -1,0 +1,12 @@
+[
+  {
+    "turn_hash": "sha256:trip_user_1",
+    "role": "user",
+    "content": "I'm planning 5 days in Hangzhou in late May with two travelers."
+  },
+  {
+    "turn_hash": "sha256:trip_asst_1",
+    "role": "assistant",
+    "content": "Stay near West Lake. Key sights: Lingyin Temple, Longjing tea village."
+  }
+]

@@ -343,6 +343,27 @@ architecture_review:
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
 
+  - id: regression_gate
+    severity: foundational
+    status: resolved_by_F15
+    site: packages/core/src/__tests__/v2-golden/
+    problem: >
+      The pipeline had no end-to-end regression test. Unit tests cover each
+      stage in isolation (compiler, lift, normalizer). The multi-model
+      harness covers real LLM behavior but is manual, expensive, and flaky
+      in CI. Nothing gated a structural PR against unintentional output drift.
+    progress: >
+      F15 introduces a golden-eval harness. Each golden is a directory with
+      three JSON files: turns.json (input), provider-response.json (mocked
+      LLM reply), expected.json (expected draft / op kinds / snapshot
+      trees). The harness (golden.test.ts) auto-discovers directories,
+      mocks the provider to replay the recorded response, runs
+      extractAndApply end-to-end, and asserts structural equality with the
+      expected file. Deterministic — no network, no API keys, no cost.
+      Initial seed: airport-issue (nested children) + trip-planning-minimal
+      (value_json array → value slot). Adding a new golden = drop a new
+      directory; no code change.
+
   - id: openai_refusal_first_class
     severity: observability
     status: resolved_by_F14

@@ -1,0 +1,12 @@
+[
+  {
+    "turn_hash": "sha256:airport_user_1",
+    "role": "user",
+    "content": "What's happening with SEA airport today?"
+  },
+  {
+    "turn_hash": "sha256:airport_asst_1",
+    "role": "assistant",
+    "content": "Seattle-Tacoma International Airport (SEA) has been dealing with a major cyberattack. Baggage handling and check-in are disrupted. Status has now stabilized."
+  }
+]
