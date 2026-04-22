@@ -229,13 +229,17 @@ architecture_review:
 
   - id: asymmetric_structured_fallback
     severity: inconsistency
-    site: claude.ts (has F5 fallback) vs openai.ts + gemini.ts (no fallback)
+    status: partially_resolved_by_F7
+    site: openai.ts (now has F5-style fallback) and claude.ts (F5); gemini.ts still lacks it
     problem: >
-      F5's retry-on-empty-structured lives only in the Claude adapter. OpenAI
-      and Gemini throw on similar failures. The stability run revealed OpenAI
-      exhibits the same failure mode (gpt-5.4 × product-design).
-    recommendation: >
-      Lift the F5 pattern into a shared helper and apply to all three adapters.
+      F5's retry-on-empty-structured originally lived only in the Claude
+      adapter. OpenAI and Gemini threw on similar failures. The stability run
+      revealed OpenAI exhibited the same failure mode.
+    progress: >
+      F7 mirrored the F5 pattern into the OpenAI adapter and extracted
+      extractJsonBlock into a shared helper (providers/llm/jsonExtract.ts)
+      used by both Claude and OpenAI. Gemini still lacks the fallback but
+      no stability failure has pointed at it yet.
 
   - id: layer_inversion
     severity: layer_violation
@@ -428,19 +432,20 @@ clusters:
     fix_site: packages/core/src/providers/llm/claude.ts + pipeline.ts
 
   - id: openai_structured_non_json
-    status: open
+    status: resolved_by_F7
     affects: [gpt-5.4]
     discovered: 2026-04-22 (stability run, product-design fixture)
     hypothesis: >
       OpenAI's structured-output API sometimes returns content that is not
       parseable as JSON, despite the json_schema response_format. Same class
       as the Claude problem F5 resolved — asymmetric robustness.
-    fix_strategy: deterministic_wrapper
-    candidates:
-      - PREFERRED — Apply F5's pattern to the OpenAI adapter: on parse failure,
-        retry via generateFromPrompt + extractJsonBlock. Unify extractJsonBlock
-        as a shared helper used by all adapters.
-    fix_site: packages/core/src/providers/llm/openai.ts
+    fix_site: packages/core/src/providers/llm/openai.ts::generateStructuredViaText
+    resolution: >
+      OpenAI adapter now mirrors Claude's F5 pattern: on parse failure or empty
+      content, retry via generateFromPrompt + extractJsonBlock. The
+      extractJsonBlock helper was extracted to packages/core/src/providers/llm/
+      jsonExtract.ts and is now shared by both Claude and OpenAI. gpt-5.4 ×
+      product-design verified 3/3 runs pass.
 
   - id: nano_add_missing_key
     status: open

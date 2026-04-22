@@ -16,6 +16,7 @@ import {
   type LLMResult,
   type StructuredResult,
 } from '../../llm/types';
+import { extractJsonBlock } from './jsonExtract';
 import { toOpenAIStructuredSchema } from './structuredSchema';
 
 /**
@@ -217,6 +218,31 @@ export class OpenAIProvider implements LLMProvider {
     schema: ZodType<T>,
     options: LLMGenerateOptions
   ): Promise<StructuredResult<T>> {
+    try {
+      return await this.generateStructuredViaResponseFormat(prompt, schema, options);
+    } catch (error) {
+      // Deterministic fallback, mirrors the Claude adapter's F5 behavior.
+      // OpenAI's json_schema response_format occasionally returns non-JSON
+      // content (observed on gpt-5.4 × product-design, stability run).
+      // Retry via generateFromPrompt + extractJsonBlock so a plain-text JSON
+      // response still validates. No prompt change — the prompt already
+      // instructs the model to return JSON only.
+      if (
+        error instanceof LLMProviderError &&
+        (error.message.endsWith('Failed to parse structured response as JSON') ||
+          error.message.endsWith('No content in response'))
+      ) {
+        return this.generateStructuredViaText(prompt, schema, options);
+      }
+      throw error;
+    }
+  }
+
+  private async generateStructuredViaResponseFormat<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
     const temperature = options.temperature ?? 0.3;
     const maxTokens = options.maxTokens ?? 2048;
     const jsonSchema = toOpenAIStructuredSchema(schema);
@@ -310,6 +336,34 @@ export class OpenAIProvider implements LLMProvider {
         this.id,
         undefined,
         `Request failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async generateStructuredViaText<T>(
+    prompt: LLMPrompt,
+    schema: ZodType<T>,
+    options: LLMGenerateOptions
+  ): Promise<StructuredResult<T>> {
+    const result = await this.generateFromPrompt(prompt, options);
+    const jsonText = extractJsonBlock(result.text);
+    if (!jsonText) {
+      throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
+    }
+    let jsonData: unknown;
+    try {
+      jsonData = JSON.parse(jsonText);
+    } catch {
+      throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
+    }
+    try {
+      const parsed = schema.parse(jsonData);
+      return { data: parsed, usage: result.usage };
+    } catch {
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Response JSON does not match expected schema'
       );
     }
   }
