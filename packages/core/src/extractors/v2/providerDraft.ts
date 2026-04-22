@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import { type ExtractionDraft, ExtractionDraftSchema, ExtractionModeSchema } from './types';
 
@@ -242,24 +243,28 @@ function parseJsonField(
     return { ok: true, value: undefined };
   }
 
-  try {
-    return { ok: true, value: JSON.parse(raw) };
-  } catch {
-    const repaired = repairMalformedJsonField(fieldName, raw);
-    if (repaired !== undefined) {
-      return { ok: true, value: repaired };
-    }
-    return {
-      ok: false,
-      failure: createExtractionFailure(
-        'draft_parse',
-        `Provider field ${fieldName} is not valid JSON`,
-        {
-          details: { field: fieldName, raw },
-        }
-      ),
-    };
+  // F12: apply deterministic JSON repairs before giving up. Covers the
+  // common "model truncated mid-object" and "trailing comma" cases on
+  // inner _json fields — same pattern as the outer parse sites.
+  const repairedParse = tryParseWithRepair(raw);
+  if (repairedParse.ok) {
+    return { ok: true, value: repairedParse.value };
   }
+
+  const scalarRepair = repairMalformedJsonField(fieldName, raw);
+  if (scalarRepair !== undefined) {
+    return { ok: true, value: scalarRepair };
+  }
+  return {
+    ok: false,
+    failure: createExtractionFailure(
+      'draft_parse',
+      `Provider field ${fieldName} is not valid JSON`,
+      {
+        details: { field: fieldName, raw },
+      }
+    ),
+  };
 }
 
 function canonicalizeChildShape(value: unknown): unknown {

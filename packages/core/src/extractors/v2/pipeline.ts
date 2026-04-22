@@ -1,4 +1,5 @@
 import type { LLMPrompt, LLMProvider } from '../../llm/types';
+import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { serializeForPrompt } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
 import { compileExtractionDraft } from './compiler';
@@ -169,21 +170,18 @@ function extractProviderRawJson(error: unknown): unknown | null {
   const details = (error as { details?: Record<string, unknown> }).details;
   if (!details || typeof details !== 'object') return null;
 
+  // F12: use repair-aware parse so a transport error carrying slightly
+  // broken JSON (trailing commas, truncation) can still be rescued by the
+  // pipeline's loose normalizer.
   const jsonText = details.jsonText;
   if (typeof jsonText === 'string') {
-    try {
-      return JSON.parse(jsonText);
-    } catch {
-      // fall through to rawText
-    }
+    const repaired = tryParseWithRepair(jsonText);
+    if (repaired.ok) return repaired.value;
   }
   const rawText = details.rawText;
   if (typeof rawText === 'string') {
-    try {
-      return JSON.parse(rawText);
-    } catch {
-      return null;
-    }
+    const repaired = tryParseWithRepair(rawText);
+    if (repaired.ok) return repaired.value;
   }
   return null;
 }
@@ -253,16 +251,17 @@ async function generateDraft(
             maxTokens: 4096,
           });
 
+    // F12: the non-structured plain-text path benefits most from repairs —
+    // models that can't emit strict JSON often still produce near-valid output.
     const normalizedText = normalizeExtractionText(rawResult.text);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(normalizedText);
-    } catch {
+    const repaired = tryParseWithRepair(normalizedText);
+    if (!repaired.ok) {
       return {
         ok: false,
         failure: buildDraftParseFailure('Failed to parse provider output as JSON', normalizedText),
       };
     }
+    const parsed = repaired.value;
 
     const validated = ProviderExtractionDraftSchema.safeParse(parsed);
     if (!validated.success) {

@@ -17,6 +17,7 @@ import {
   type StructuredResult,
 } from '../../llm/types';
 import { extractJsonBlock } from './jsonExtract';
+import { tryParseWithRepair } from './jsonRepair';
 import { toOpenAIStructuredSchema } from './structuredSchema';
 
 /**
@@ -350,14 +351,14 @@ export class OpenAIProvider implements LLMProvider {
     if (!jsonText) {
       throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
     }
-    let jsonData: unknown;
-    try {
-      jsonData = JSON.parse(jsonText);
-    } catch {
+    // F12: JSON.parse + deterministic repairs (strip comments, close
+    // brackets, strip trailing commas).
+    const repaired = tryParseWithRepair(jsonText);
+    if (!repaired.ok) {
       throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
     }
     try {
-      const parsed = schema.parse(jsonData);
+      const parsed = schema.parse(repaired.value);
       return { data: parsed, usage: result.usage };
     } catch {
       throw new LLMProviderError(

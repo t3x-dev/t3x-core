@@ -20,6 +20,7 @@ import {
   type ToolUseResult,
 } from '../../llm/types';
 import { extractJsonBlock } from './jsonExtract';
+import { tryParseWithRepair } from './jsonRepair';
 import { normalizeClaudeStructuredData, toClaudeStructuredSchema } from './structuredSchema';
 
 /**
@@ -324,15 +325,17 @@ export class ClaudeProvider implements LLMProvider {
         return { data: parsed, usage };
       }
 
-      // Fallback: try text block with JSON
+      // Fallback: try text block with JSON (with F12 repair).
       const textBlock = data.content.find((c) => c.type === 'text' && c.text);
       if (textBlock?.text) {
-        try {
-          const jsonData = JSON.parse(textBlock.text);
-          const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
-          return { data: parsed, usage };
-        } catch {
-          // fall through to error
+        const repaired = tryParseWithRepair(textBlock.text);
+        if (repaired.ok) {
+          try {
+            const parsed = schema.parse(normalizeClaudeStructuredData(repaired.value));
+            return { data: parsed, usage };
+          } catch {
+            // fall through to error
+          }
         }
       }
 
@@ -371,10 +374,11 @@ export class ClaudeProvider implements LLMProvider {
         { rawText: result.text }
       );
     }
-    let jsonData: unknown;
-    try {
-      jsonData = JSON.parse(jsonText);
-    } catch {
+    // F12: try JSON.parse, and on failure apply deterministic repairs
+    // (strip comments, close brackets, strip trailing commas). Covers the
+    // common "near-valid JSON" cases without an extra LLM round-trip.
+    const repaired = tryParseWithRepair(jsonText);
+    if (!repaired.ok) {
       throw new LLMProviderError(
         this.id,
         undefined,
@@ -383,6 +387,7 @@ export class ClaudeProvider implements LLMProvider {
         { rawText: result.text, jsonText }
       );
     }
+    const jsonData = repaired.value;
     try {
       const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
       return { data: parsed, usage: result.usage };
