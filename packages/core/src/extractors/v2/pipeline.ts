@@ -48,6 +48,11 @@ function buildDraftPrompt(input: {
   turns: Array<{ turn_tag: string; role: string; content: string }>;
   snapshot?: SemanticContent;
 }): LLMPrompt {
+  // F9: one simple prompt for all providers. The shape drift we used to warn
+  // the model about (schema prefix, version type, _json field types, singleton
+  // arrays, candidate.name vs key, evidence.role, etc.) is now all handled
+  // deterministically by providerDraft.ts::normalizeLooseProviderDraft and the
+  // F3 repairers. The LLM's job is just "extract the knowledge; emit JSON."
   const turnsBlock = input.turns
     .map((turn) => `[${turn.turn_tag}][${turn.role}] ${turn.content}`)
     .join('\n');
@@ -57,55 +62,16 @@ function buildDraftPrompt(input: {
       ? `\nCurrent knowledge snapshot:\n${serializeForPrompt(input.snapshot)}\n`
       : '';
 
-  const exampleBlock =
-    'ProviderExtractionDraft JSON shape example:\n' +
-    '{"schema":"t3x/provider-extraction-draft","version":1,"mode":"bootstrap","items":[{"id":"item_1","intent":"add","confidence":0.9,"reasoning_type":"direct","target_ref":{"node_key":null,"path":null,"existing_node_id":null},"candidate":{"key":"airport_issue","path_hint":"airport_issue","slot":null,"value_json":null,"values_json":"{\\"summary\\":\\"SEA had a cyberattack\\"}","children_json":"[{\\"key\\":\\"Baggage Handling\\",\\"values\\":{\\"description\\":\\"Automated baggage systems were disrupted\\"}}]"},"evidence":[{"turn_tag":"T1","quote":"Baggage Handling: The automated baggage systems were severely disrupted.","role":"primary"}]}],"warnings":[]}\n';
-
-  if (input.providerId === 'anthropic' || input.providerId === 'openai') {
-    return {
-      system:
-        'You extract semantic knowledge into ProviderExtractionDraft JSON. ' +
-        'Use T-tags in evidence.turn_tag, keep items minimal, and return JSON only.',
-      messages: [
-        {
-          role: 'user',
-          content:
-            `Mode: ${input.mode}\n` +
-            `${snapshotBlock}` +
-            'Conversation turns:\n' +
-            `${turnsBlock}\n\n` +
-            'Return a valid ProviderExtractionDraft.\n' +
-            'Always include root fields schema, version, mode, items, warnings.\n' +
-            'candidate.value_json, values_json, and children_json must be JSON strings.\n' +
-            'Use value_json for scalar values and arrays. Use values_json only for object maps.\n' +
-            'children_json must always be a JSON array string, even for one child.\n' +
-            (input.providerId === 'openai'
-              ? 'For update or reinforce items, always provide either candidate.values_json or candidate.slot together with candidate.value_json.\n'
-              : '') +
-            'Keep evidence quotes short and verbatim.\n',
-        },
-      ],
-    };
-  }
-
   return {
     system:
-      'You extract semantic knowledge from conversation turns into a structured ProviderExtractionDraft. ' +
-      'Use turn tags like T1/T2 in evidence.turn_tag, quote verbatim text, and do not emit raw turn hashes. ' +
-      'Fields ending in _json must contain JSON-encoded strings.',
+      'You extract semantic knowledge from a conversation into a ProviderExtractionDraft JSON. ' +
+      'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.',
     messages: [
       {
         role: 'user',
         content:
-          `Mode: ${input.mode}\n` +
-          `${snapshotBlock}` +
-          'Conversation turns:\n' +
-          `${turnsBlock}\n\n` +
-          `${exampleBlock}\n` +
-          'Return a valid ProviderExtractionDraft with explicit evidence for every item.\n' +
-          'Use candidate.value_json for scalar or array/object JSON values, candidate.values_json for object maps, and candidate.children_json for child arrays.\n' +
-          'Do not return canonical ExtractionDraft fields like candidate.value or candidate.values directly.\n' +
-          'Always include the root fields schema, version, mode, items, and warnings.',
+          `Mode: ${input.mode}\n${snapshotBlock}Conversation turns:\n${turnsBlock}\n\n` +
+          'Extract the knowledge as a ProviderExtractionDraft. Return JSON only.',
       },
     ],
   };
