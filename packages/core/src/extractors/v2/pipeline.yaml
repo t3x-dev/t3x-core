@@ -181,7 +181,7 @@ providers:
     models:
       - id: gemini-2.5-pro
         known_issues:
-          - "Returns empty content on v2 extraction inputs (`transport: No content in response`). Suspect structured-output config or safety filter."
+          - "(resolved by F4) Default implicit thinking budget exhausted maxOutputTokens before content. Now capped at 256 via buildThinkingConfig."
       - id: gemini-3-flash-preview
       - id: gemini-3.1-flash-lite-preview
 
@@ -216,17 +216,17 @@ invariants:
 # evidence, not truth. Numbers are fixture-specific (hots-conversation, 8 turns).
 current_status:
   fixture: packages/core/src/__tests__/fixtures/hots-conversation.json
-  last_run: 2026-04-22 (post-F3)
+  last_run: 2026-04-22 (post-F4)
   harness: packages/core/scripts/e2e-multi-model.ts
-  pass_rate: 8/9 single-run
+  pass_rate: 9/9 single-run
   notes:
-    - Failure modes are probabilistic. Treat single-run results as evidence,
-      not truth. Use --runs=N before drawing strong conclusions.
-    - F1 (anthropic_ignores_json_fields) eliminated the `draft_schema` class.
-    - F2 (duplicate_add_path) eliminated the `executable_structure: Path
-      already exists` class via compiler dedupe.
-    - F3 (nano_value_json) deterministically repairs plain-scalar value_json
-      fields that small models emit unquoted. gpt-5.4-nano now passes 3/3.
+    - All cataloged models extract end-to-end on the standard fixture.
+    - Zero per-provider prompt branches were introduced across F1–F4.
+    - F1 — deterministic children_json shape normalizer (providerDraft.ts).
+    - F2 — compiler dedupe of duplicate define ops (compiler.ts).
+    - F3 — value_json repairer for plain-scalar emissions (providerDraft.ts).
+    - F4 — explicit thinking budget for all Gemini `pro` models so output
+      has room under the maxOutputTokens cap (providers/llm/gemini.ts).
   results:
     passing:
       - claude-sonnet-4-6
@@ -235,12 +235,10 @@ current_status:
       - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.4-nano
+      - gemini-2.5-pro
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
-    failing:
-      - model: gemini-2.5-pro
-        failure: transport
-        cluster: gemini_pro_empty
+    failing: []
 
 # Failure clusters guide the fix plan. Each cluster = one follow-up PR.
 clusters:
@@ -309,10 +307,14 @@ clusters:
     fix_site: packages/core/src/providers/llm/claude.ts
 
   - id: gemini_pro_empty
+    status: resolved_by_F4
     affects: [gemini-2.5-pro]
-    hypothesis: Structured-output config or safety filter blocks the response on this fixture.
-    fix_strategy: provider_adapter
-    candidates:
-      - PREFERRED — Investigate Gemini provider adapter for pro-specific config; likely a structured-output schema mismatch or a safety threshold issue.
-      - AVOID — Prompt changes for Pro specifically.
-    fix_site: packages/core/src/providers/llm/gemini.ts
+    hypothesis: >
+      Pro models default to a large implicit thinking budget that can exhaust
+      maxOutputTokens before the model emits any content. The adapter's
+      buildThinkingConfig only covered `3.1-pro` explicitly, so `2.5-pro`
+      fell through to the API default.
+    fix_site: packages/core/src/providers/llm/gemini.ts::buildThinkingConfig
+    resolution: >
+      Broaden the `pro` match so every Pro model gets thinkingBudget: 256.
+      No prompt change. gemini-2.5-pro verified 3/3 runs pass.
