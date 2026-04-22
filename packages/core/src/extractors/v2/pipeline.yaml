@@ -201,6 +201,82 @@ principles:
       - Accept wider input from the LLM; narrow it deterministically to the canonical shape.
       - A misbehaving model is fixed by extending the normalizer/repairer/compiler, not by writing a new prompt variant.
 
+# Architecture review findings (2026-04-22). Not failures, but debt worth paying
+# down in a follow-up refactor. Each is a deviation from clean layering or the
+# deterministic_over_prompt principle.
+architecture_review:
+  - id: per_provider_prompt_branch
+    severity: principle_violation
+    site: packages/core/src/extractors/v2/pipeline.ts::buildDraftPrompt
+    problem: >
+      One prompt for anthropic+openai, another for google; openai gets an extra
+      line about values_json/slot. With F2/F3 catching both issues deterministically,
+      the per-provider hints should be removable.
+    recommendation: >
+      Try removing the branches; run the stability harness. If 9/9 still passes,
+      delete the branches and keep one prompt.
+
+  - id: transport_layer_duplication
+    severity: high_debt
+    site: packages/core/src/providers/llm/{claude,openai,gemini}.ts
+    problem: >
+      ~200 lines duplicated across each provider: getProxyUrl, fetchWithProxy,
+      AbortController + 60s timeout, error wrapping, resolveConflict prompt
+      (literally copy-pasted). No shared HttpLLMProvider base.
+    recommendation: >
+      Extract a base class/helper that owns fetch + timeout + error wrapping.
+      Each provider implements just: request body builder, response parser.
+
+  - id: asymmetric_structured_fallback
+    severity: inconsistency
+    site: claude.ts (has F5 fallback) vs openai.ts + gemini.ts (no fallback)
+    problem: >
+      F5's retry-on-empty-structured lives only in the Claude adapter. OpenAI
+      and Gemini throw on similar failures. The stability run revealed OpenAI
+      exhibits the same failure mode (gpt-5.4 × product-design).
+    recommendation: >
+      Lift the F5 pattern into a shared helper and apply to all three adapters.
+
+  - id: layer_inversion
+    severity: layer_violation
+    site: packages/core/src/providers/llm/openai.ts imports from extractors/v2
+    problem: >
+      openai.ts:8 imports buildOpenAIChatCompletionBody from
+      extractors/v2/providerAdapters. Transport layer (lower) depends on
+      pipeline layer (upper).
+    recommendation: >
+      Move buildOpenAIChatCompletionBody into providers/llm/ or a neutral location.
+
+  - id: brittle_error_matching
+    severity: minor
+    site: packages/core/src/providers/llm/claude.ts::generateStructured
+    problem: >
+      F5's retry trigger uses error.message.endsWith('No structured data
+      found in response'). String matching across a [providerId] prefix is
+      brittle.
+    recommendation: >
+      Add a typed `code` on LLMProviderError (e.g. EMPTY_STRUCTURED) and match
+      on that instead of the message.
+
+  - id: dropped_raw_on_failure
+    severity: observability
+    site: claude.ts / openai.ts / pipeline.ts failure paths
+    problem: >
+      When JSON doesn't match schema (claude_structured_schema_mismatch
+      cluster), we lose the raw content — it never reaches failure.details.
+      Makes diagnosis hard.
+    recommendation: >
+      Thread rawText through to failure.details on every schema/parse path.
+
+  - id: configurable_timeout
+    severity: minor
+    site: all 3 providers
+    problem: >
+      60s timeout hardcoded in 9 places. Slow models (opus fallback ~58s,
+      sonnet on long fixtures ~77s) bump this ceiling.
+    recommendation: >
+      Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
+
 # Pipeline-level invariants. Violations are bugs, not flakes.
 invariants:
   - id: compiler_total
@@ -217,10 +293,16 @@ invariants:
 # Operational assessment. Updated by the multi-model harness; treated as
 # evidence, not truth. Numbers are fixture-specific (hots-conversation, 8 turns).
 current_status:
-  fixture: packages/core/src/__tests__/fixtures/hots-conversation.json
-  last_run: 2026-04-22 (post-F5)
+  fixtures:
+    - packages/core/src/__tests__/fixtures/hots-conversation.json
+    - packages/core/src/__tests__/fixtures/react-debugging.json
+    - packages/core/src/__tests__/fixtures/trip-planning.json
+    - packages/core/src/__tests__/fixtures/science-astronomy.json
+    - packages/core/src/__tests__/fixtures/product-design.json
+    - packages/core/src/__tests__/fixtures/recipe-cooking.json
+  last_run: 2026-04-22 (stability, 6 fixtures × 9 models = 54 runs)
   harness: packages/core/scripts/e2e-multi-model.ts
-  pass_rate: 9/9 single-run; opus verified 3/3
+  pass_rate: 49/54 (90.7%) across fixtures; 9/9 on the original fixture alone
   notes:
     - All cataloged models extract end-to-end on the standard fixture.
     - Zero per-provider prompt branches were introduced across F1–F5.
@@ -234,17 +316,24 @@ current_status:
       the text response. Opus no longer flakes. Harness gained --slo-ms
       (default 10000) and per-model latency summary.
   results:
-    passing:
-      - claude-sonnet-4-6
-      - claude-opus-4-6
+    reliable_across_all_fixtures:
       - claude-haiku-4-5-20251001
-      - gpt-5.4
       - gpt-5.4-mini
-      - gpt-5.4-nano
       - gemini-2.5-pro
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
-    failing: []
+    flaky_on_some_fixtures:
+      - { model: claude-sonnet-4-6, passes: 5/6, fails_on: [trip-planning], cluster: claude_structured_schema_mismatch }
+      - { model: claude-opus-4-6, passes: 5/6, fails_on: [trip-planning], cluster: claude_structured_schema_mismatch }
+      - { model: gpt-5.4, passes: 5/6, fails_on: [product-design], cluster: openai_structured_non_json }
+      - { model: gpt-5.4-nano, passes: 4/6, fails_on: [product-design, react-debugging], clusters: [nano_add_missing_key, nano_update_on_missing_path] }
+  per_fixture_pass_rate:
+    hots-conversation: 9/9
+    react-debugging: 8/9
+    trip-planning: 7/9
+    science-astronomy: 9/9
+    product-design: 7/9
+    recipe-cooking: 9/9
 
 # Latency expectations per model on the 8-turn hots-conversation fixture.
 # Values are typical single-run timings post-F5. "slo" marks whether the
@@ -317,6 +406,73 @@ clusters:
       or `"`, treat it as a plain string literal. Object-/array-shaped fields
       (values_json, children_json) are not repaired — their shape contract
       is too strict to guess safely.
+
+  - id: claude_structured_schema_mismatch
+    status: open
+    affects: [claude-sonnet-4-6, claude-opus-4-6]
+    discovered: 2026-04-22 (stability run, trip-planning fixture — 8 turns)
+    hypothesis: >
+      On longer / more complex conversations, the F5 fallback path extracts
+      a JSON block from the plain-text response but it does not validate as
+      a ProviderExtractionDraft. Likely causes: Claude sometimes returns a
+      different draft shape (e.g. canonical ExtractionDraft) or truncated
+      content. We lose diagnostic info today — the failure drops the raw
+      JSON on the floor.
+    fix_strategy: deterministic_wrapper
+    candidates:
+      - PREFERRED — Thread the raw JSON through to the failure details so we
+        can inspect it; then add a shape-normalizer that accepts canonical
+        draft shape and lifts to provider shape before schema validation.
+      - ALSO — Move JSON extraction into the pipeline layer (not the adapter)
+        so the pipeline's reask loop can re-ask on schema mismatch.
+    fix_site: packages/core/src/providers/llm/claude.ts + pipeline.ts
+
+  - id: openai_structured_non_json
+    status: open
+    affects: [gpt-5.4]
+    discovered: 2026-04-22 (stability run, product-design fixture)
+    hypothesis: >
+      OpenAI's structured-output API sometimes returns content that is not
+      parseable as JSON, despite the json_schema response_format. Same class
+      as the Claude problem F5 resolved — asymmetric robustness.
+    fix_strategy: deterministic_wrapper
+    candidates:
+      - PREFERRED — Apply F5's pattern to the OpenAI adapter: on parse failure,
+        retry via generateFromPrompt + extractJsonBlock. Unify extractJsonBlock
+        as a shared helper used by all adapters.
+    fix_site: packages/core/src/providers/llm/openai.ts
+
+  - id: nano_add_missing_key
+    status: open
+    affects: [gpt-5.4-nano]
+    discovered: 2026-04-22 (stability run, product-design fixture)
+    hypothesis: >
+      Nano emits `add` items where candidate.key and candidate.path_hint are
+      both null/missing. The compiler currently rejects with "add intent
+      requires candidate.key or candidate.path_hint".
+    fix_strategy: deterministic_wrapper
+    candidates:
+      - PREFERRED — If both key and path_hint are missing but candidate.values
+        has a clear headline field (e.g. first key with a short string value),
+        synthesize a path_hint from it. Emit a compile warning.
+      - ALSO — Make this a reaskable compile failure so the pipeline can retry.
+    fix_site: packages/core/src/extractors/v2/compiler.ts
+
+  - id: nano_update_on_missing_path
+    status: open
+    affects: [gpt-5.4-nano]
+    discovered: 2026-04-22 (stability run, react-debugging fixture)
+    hypothesis: >
+      In bootstrap mode (empty starting snapshot), nano emits `update` or
+      `reinforce` intents on paths that don't yet exist. The engine then
+      fails `populate`/`set` with "Path X does not exist".
+    fix_strategy: deterministic_wrapper
+    candidates:
+      - PREFERRED — In bootstrap mode, the compiler should promote any
+        update/reinforce on a not-yet-defined path to an `add`. Bootstrap by
+        definition has an empty snapshot, so there is nothing to update.
+        Emit a compile warning.
+    fix_site: packages/core/src/extractors/v2/compiler.ts
 
   - id: anthropic_structured_output_empty
     status: resolved_by_F5

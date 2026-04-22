@@ -1,0 +1,32 @@
+[
+  {
+    "role": "user",
+    "content": "I want to make a proper carbonara tonight. Not the creamy restaurant kind — the real Roman one. Walk me through it?",
+    "turn_hash": "sha256:f5ee11111111111111111111111111111111111111111111111111111111eeee"
+  },
+  {
+    "role": "assistant",
+    "content": "Real carbonara has four ingredients (five with salt): guanciale, pecorino romano, eggs, black pepper, pasta. No cream, no garlic, no onion, no peas.\n\nFor two people:\n- 200g spaghetti or rigatoni\n- 100g guanciale, cut into 1cm strips (pancetta if you must, never bacon)\n- 50g pecorino romano, finely grated\n- 2 whole eggs + 2 yolks\n- Freshly cracked black pepper (generous)\n- Salt for the pasta water\n\nThe sauce is never cooked in a pan — it's emulsified by residual heat from the pasta. Get that wrong and you get scrambled eggs.",
+    "turn_hash": "sha256:f5ee22222222222222222222222222222222222222222222222222222222eeee"
+  },
+  {
+    "role": "user",
+    "content": "Okay, step by step — what order?",
+    "turn_hash": "sha256:f5ee33333333333333333333333333333333333333333333333333333333eeee"
+  },
+  {
+    "role": "assistant",
+    "content": "1. Boil pasta water. Salt it lightly — the pecorino adds a lot of salt later.\n\n2. While water heats, render the guanciale in a cold, dry pan over medium-low heat. No oil. Let it crisp slowly in its own fat, 6–8 minutes. Turn off the heat when the fat is golden and the meat crisp but not burnt.\n\n3. In a bowl, whisk the eggs + yolks + pecorino + lots of black pepper into a thick paste. No salt.\n\n4. Cook the pasta until 1 minute shy of al dente. Reserve 1 cup of pasta water before draining.\n\n5. Drop the pasta into the guanciale pan (still off the heat). Toss for 30 seconds so it picks up the fat.\n\n6. Add a splash of pasta water to the egg mixture to temper it — raise its temp gently. Then pour it over the pasta and toss vigorously. The residual heat cooks the egg just enough to coat, not scramble.\n\n7. Add more pasta water as you go until the sauce is glossy and clings. Serve immediately with more pecorino and pepper on top.",
+    "turn_hash": "sha256:f5ee44444444444444444444444444444444444444444444444444444444eeee"
+  },
+  {
+    "role": "user",
+    "content": "What if I scramble the eggs anyway? How do I rescue it?",
+    "turn_hash": "sha256:f5ee55555555555555555555555555555555555555555555555555555555eeee"
+  },
+  {
+    "role": "assistant",
+    "content": "Scrambled carbonara is usually unrecoverable — once the egg proteins seize, you can't smooth them back out. The pan was too hot.\n\nBut here's what you can try before it goes past the point of no return:\n\n- At the first sign of curdling, immediately add cold pasta water (a few tablespoons) and toss hard. You're cooling the sauce below the scramble temperature.\n- Move the pan off the stove entirely. Counter, cold trivet, anywhere cooler.\n- If you catch it early, adding another raw egg yolk and a splash of pasta water can sometimes re-emulsify by giving the fat more to bind.\n\nIf it's fully scrambled, eat it and call it carbonara pasta salad. Next time: pan off the heat before the eggs touch it, always.",
+    "turn_hash": "sha256:f5ee66666666666666666666666666666666666666666666666666666666eeee"
+  }
+]

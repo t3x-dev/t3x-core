@@ -1,0 +1,42 @@
+[
+  {
+    "role": "user",
+    "content": "I'm planning a 5-day trip to Hangzhou in late May. Looking for a mix of classic sightseeing, food, and one day out in a tea village. Two travelers, moderate budget, no car.",
+    "turn_hash": "sha256:f2bb11111111111111111111111111111111111111111111111111111111bbbb"
+  },
+  {
+    "role": "assistant",
+    "content": "Late May in Hangzhou is great — warm days around 26°C, occasional rain, and the tea is freshly picked. For 5 days without a car, here's a strong shape:\n\nDay 1 — West Lake core: rent bikes and loop the lake (Su Causeway + Bai Causeway). Leifeng Pagoda at sunset.\nDay 2 — Hefang Street + Yue Fei Temple + boat across the lake.\nDay 3 — Longjing tea village (Meijiawu). Taxi out, walk the tea fields, lunch at a farmhouse.\nDay 4 — Lingyin Temple + Feilai Feng grottoes in the morning, museum or quiet afternoon.\nDay 5 — Xixi Wetland (quieter than the lake) or a bullet train day-trip to Wuzhen water town.\n\nFor food: stay around West Lake or Wulin for the evenings.",
+    "turn_hash": "sha256:f2bb22222222222222222222222222222222222222222222222222222222bbbb"
+  },
+  {
+    "role": "user",
+    "content": "Sounds great. What's a good neighborhood to stay in, close to metro and food?",
+    "turn_hash": "sha256:f2bb33333333333333333333333333333333333333333333333333333333bbbb"
+  },
+  {
+    "role": "assistant",
+    "content": "Two strong options:\n\n1. Wulin Square (武林广场): the central business and shopping district. Metro Line 1 and Line 2 cross here. Lots of mid-range hotels, short taxi to the lake, and walkable food everywhere (Hefang Street is 15 min by taxi).\n\n2. West Lake south shore (南山路): stay closer to the attractions themselves. Slightly fewer food options after 10pm, but you wake up 5 minutes from the water. Boutique hotels and guesthouses dominate here.\n\nWulin is better if you plan to bullet-train out to Wuzhen or Shanghai — Hangzhou East Station is three metro stops away. South shore is better if most days revolve around the lake and you want the scenery.",
+    "turn_hash": "sha256:f2bb44444444444444444444444444444444444444444444444444444444bbbb"
+  },
+  {
+    "role": "user",
+    "content": "Good to know. What about the tea village day — is Meijiawu better than Longjing village itself?",
+    "turn_hash": "sha256:f2bb55555555555555555555555555555555555555555555555555555555bbbb"
+  },
+  {
+    "role": "assistant",
+    "content": "Different vibes. Longjing village proper is the historical and cultural heart — Dragon Well itself, the old stone paths, more tea museums. It's also more touristy and crowded, especially weekends.\n\nMeijiawu is quieter, more working-farm-feeling. More open tea fields you can actually walk through, and the farmhouse restaurants feel more local. Less 'set piece,' more real.\n\nMy usual suggestion: take a taxi out to Longjing village in the morning (visit the well, see the old center), then walk or taxi over to Meijiawu for lunch and an afternoon in the fields. You get both.\n\nAvoid weekends if you can — Saturday traffic up the hill can add 40 minutes each way.",
+    "turn_hash": "sha256:f2bb66666666666666666666666666666666666666666666666666666666bbbb"
+  },
+  {
+    "role": "user",
+    "content": "Any must-try food beyond the usual Longjing shrimp and beggar's chicken?",
+    "turn_hash": "sha256:f2bb77777777777777777777777777777777777777777777777777777777bbbb"
+  },
+  {
+    "role": "assistant",
+    "content": "A few you should actively seek out:\n\n- Sister Song's fish soup (宋嫂鱼羹) — a silky, slightly sour soup tracing back to the Song dynasty, best at Louwailou on the lake. Order it fresh, not the hotel breakfast version.\n- Xihu lotus root powder (藕粉) — ignore the tourist packets. Get it fresh at a restaurant, mixed at the table, topped with osmanthus and nuts.\n- Pian'er chuan (片儿川) — a noodle dish with pickled greens, pork, and bamboo shoots. Cheap, local, filling. Kuiyuan Guan is the famous stall.\n- Street-side mooncake-style sweet treat 定胜糕 (dingsheng gao) around Hefang Street — pink sticky-rice cakes, eat them while walking.\n\nSkip: overpriced 'dragon well shrimp' set menus at lakefront hotels. Same dish is cheaper and better a block inland.",
+    "turn_hash": "sha256:f2bb88888888888888888888888888888888888888888888888888888888bbbb"
+  }
+]

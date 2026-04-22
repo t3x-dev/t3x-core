@@ -1,0 +1,32 @@
+[
+  {
+    "role": "user",
+    "content": "My React useEffect keeps firing in an infinite loop. It fetches user data but never stops. Here's my code: useEffect(() => { fetchUser().then(setUser); }, [user]); — any idea what's wrong?",
+    "turn_hash": "sha256:f1aa11111111111111111111111111111111111111111111111111111111aaaa"
+  },
+  {
+    "role": "assistant",
+    "content": "Classic dependency-array bug. You're listing `user` as a dependency, but the effect itself updates `user` via `setUser`. So: effect runs → sets user → user changed → effect runs again → forever.\n\nFix: fetch when the component needs fresh data, not when `user` changes. If you just want to fetch once on mount, pass an empty array:\n\nuseEffect(() => { fetchUser().then(setUser); }, []);\n\nIf you want to refetch when some *other* value changes (like a user ID from the URL), list that instead:\n\nuseEffect(() => { fetchUser(userId).then(setUser); }, [userId]);",
+    "turn_hash": "sha256:f1aa22222222222222222222222222222222222222222222222222222222aaaa"
+  },
+  {
+    "role": "user",
+    "content": "That makes sense. But if I use empty array, eslint yells at me about missing dependencies. What's the right way to silence it?",
+    "turn_hash": "sha256:f1aa33333333333333333333333333333333333333333333333333333333aaaa"
+  },
+  {
+    "role": "assistant",
+    "content": "Don't silence it — the rule is usually right. Three better options:\n\n1. If the function doesn't depend on props/state, move it outside the component so it has no closure over React state. Then it's not a dependency at all.\n\n2. If it does depend on a value, list that value explicitly. `useCallback` can stabilize a function reference if needed.\n\n3. If you really need 'run once on mount' semantics, use a ref guard:\n   const didFetch = useRef(false);\n   useEffect(() => { if (didFetch.current) return; didFetch.current = true; fetchUser().then(setUser); }, []);\n\nThe eslint rule catches real bugs. Disabling it with // eslint-disable-next-line is a last resort, and you should leave a comment explaining why.",
+    "turn_hash": "sha256:f1aa44444444444444444444444444444444444444444444444444444444aaaa"
+  },
+  {
+    "role": "user",
+    "content": "One more thing — React 18 StrictMode double-invokes effects in dev. Does that break the ref-guard pattern?",
+    "turn_hash": "sha256:f1aa55555555555555555555555555555555555555555555555555555555aaaa"
+  },
+  {
+    "role": "assistant",
+    "content": "Yes, StrictMode intentionally calls effects twice in development to help surface bugs (setup → cleanup → setup). A naive ref guard survives because `didFetch.current` persists across the remount.\n\nBut the lesson StrictMode teaches is better: write effects that are *safe to run multiple times*. An AbortController inside the effect, cleaned up on unmount, is the idiomatic pattern:\n\nuseEffect(() => {\n  const ctrl = new AbortController();\n  fetch('/user', { signal: ctrl.signal }).then(setUser).catch(() => {});\n  return () => ctrl.abort();\n}, []);\n\nThat way double-invocation is harmless: the first fetch gets aborted, the second one completes.",
+    "turn_hash": "sha256:f1aa66666666666666666666666666666666666666666666666666666666aaaa"
+  }
+]
