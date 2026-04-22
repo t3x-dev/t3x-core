@@ -61,6 +61,21 @@ vi.mock('@t3x-dev/core', () => ({
 
 import { createMcpServer } from '../server.js';
 
+function getCallToolHandler(toolsets: Array<'core' | 'advanced'>) {
+  const { server } = createMcpServer({ toolsets });
+  const handler = (server as unknown as { _requestHandlers: Map<string, Function> })._requestHandlers.get(
+    'tools/call'
+  );
+
+  expect(handler).toBeDefined();
+  return handler as (request: {
+    method: 'tools/call';
+    jsonrpc: '2.0';
+    id: number;
+    params: { name: string; arguments?: Record<string, unknown> };
+  }) => Promise<{ content: Array<{ text: string }>; isError?: boolean }>;
+}
+
 describe('createMcpServer', () => {
   it('returns a server instance and tools array', () => {
     const { server, tools } = createMcpServer({ toolsets: ['core'] });
@@ -151,5 +166,56 @@ describe('createMcpServer', () => {
     const { tools } = createMcpServer({ toolsets: [] });
 
     expect(tools).toHaveLength(0);
+  });
+
+  it('routes tool calls through the server call handler', async () => {
+    const callTool = getCallToolHandler(['core', 'advanced']);
+
+    const result = await callTool({
+      method: 'tools/call',
+      jsonrpc: '2.0',
+      id: 1,
+      params: {
+        name: 't3x_diff',
+        arguments: { source: 'sha256:aaa', target: 'sha256:bbb' },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"base" is required');
+  });
+
+  it('surfaces generate boundary errors through the server call handler', async () => {
+    const callTool = getCallToolHandler(['core']);
+
+    const result = await callTool({
+      method: 'tools/call',
+      jsonrpc: '2.0',
+      id: 2,
+      params: {
+        name: 't3x_generate',
+        arguments: { commit_hash: 'sha256:commit1' },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('"leaf_id" is required');
+  });
+
+  it('returns unknown tool errors from the server call handler', async () => {
+    const callTool = getCallToolHandler(['core']);
+
+    const result = await callTool({
+      method: 'tools/call',
+      jsonrpc: '2.0',
+      id: 3,
+      params: {
+        name: 't3x_create_leaf',
+        arguments: { commit_hash: 'sha256:commit1' },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Unknown tool: t3x_create_leaf');
   });
 });
