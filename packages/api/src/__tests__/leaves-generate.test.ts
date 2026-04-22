@@ -35,6 +35,11 @@ const { mockGenerateLeafOutput, mockIsGenerationConfigured, MockGenerationError 
   }
 );
 
+const { mockResolveProviderAndModel, mockCreateModelBoundProvider } = vi.hoisted(() => ({
+  mockResolveProviderAndModel: vi.fn(),
+  mockCreateModelBoundProvider: vi.fn(),
+}));
+
 // Mock the database module
 let mockDB: AnyDB;
 
@@ -55,17 +60,10 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
   };
 });
 
-// Mock provider-registry so generateWithFallback delegates to the mocked generateLeafOutput
-vi.mock('../lib/provider-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/provider-registry')>();
-  return {
-    ...actual,
-    getLLMProvider: vi.fn(() => Promise.resolve({ id: 'mock', generate: vi.fn() })),
-    generateWithFallback: vi.fn((options: Record<string, unknown>) =>
-      mockGenerateLeafOutput(options)
-    ),
-  };
-});
+vi.mock('../lib/provider-resolver', () => ({
+  resolveProviderAndModel: mockResolveProviderAndModel,
+  createModelBoundProvider: mockCreateModelBoundProvider,
+}));
 
 // Import routes after mocking
 import { leavesRoutes } from '../routes/leaves.openapi';
@@ -112,6 +110,16 @@ describe('POST /v1/leaves/:id/generate', () => {
     // Reset mocks
     mockGenerateLeafOutput.mockReset();
     mockIsGenerationConfigured.mockReset();
+    mockResolveProviderAndModel.mockReset();
+    mockCreateModelBoundProvider.mockReset();
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: true,
+      providerId: 'anthropic',
+      provider: { id: 'anthropic' },
+      model: 'claude-sonnet-4-20250514',
+      registry: {},
+    });
+    mockCreateModelBoundProvider.mockResolvedValue({ id: 'anthropic', generate: vi.fn() });
 
     // Create a fresh test leaf for each test
     const res = await app.request('/v1/leaves', {
@@ -236,6 +244,11 @@ describe('POST /v1/leaves/:id/generate', () => {
 
   it('returns 400 when generation not configured', async () => {
     mockIsGenerationConfigured.mockReturnValue(false);
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: false,
+      code: 'unavailable',
+      message: 'No configured generation provider is available',
+    });
 
     const res = await app.request(`/v1/leaves/${testLeafId}/generate`, {
       method: 'POST',

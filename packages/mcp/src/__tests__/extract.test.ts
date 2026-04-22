@@ -12,6 +12,10 @@ const MOCK_PROJECT = {
   id: 'proj_test1',
   name: 'Test Project',
   description: null,
+  ownerId: 'user_test1',
+  defaultProvider: 'openai',
+  defaultModel: 'gpt-5.4',
+  providerConfig: null,
 };
 
 const MOCK_CONVERSATION = {
@@ -19,6 +23,17 @@ const MOCK_CONVERSATION = {
   projectId: 'proj_test1',
   title: 'MCP Extraction',
   alias: null,
+  provider: null,
+  model: null,
+};
+
+const MOCK_EXISTING_CONVERSATION = {
+  conversationId: 'conv_existing',
+  projectId: 'proj_test1',
+  title: 'Existing conversation',
+  alias: null,
+  provider: 'anthropic',
+  model: 'claude-opus-4-20250514',
 };
 
 const MOCK_CONVERSATION_OTHER_PROJECT = {
@@ -26,6 +41,8 @@ const MOCK_CONVERSATION_OTHER_PROJECT = {
   projectId: 'proj_other',
   title: 'Other project conv',
   alias: null,
+  provider: null,
+  model: null,
 };
 
 const MOCK_TURN = {
@@ -95,6 +112,12 @@ const MOCK_EXTRACT_FAILURE = {
 
 // Track mocks
 const mockExtractAndApply = vi.fn();
+const mockRegistryGetById = vi.fn();
+const mockRegistryGetEntry = vi.fn();
+const mockRegistryGetProviderIdsForRole = vi.fn();
+const mockRegistryIsConfigured = vi.fn();
+const mockRegistryImportConfig = vi.fn();
+const mockRegistryListProviders = vi.fn();
 
 vi.mock('@t3x-dev/core', async () => {
   const actual = await vi.importActual<typeof import('@t3x-dev/core')>('@t3x-dev/core');
@@ -102,8 +125,12 @@ vi.mock('@t3x-dev/core', async () => {
     ...actual,
     extractAndApply: (...args: unknown[]) => mockExtractAndApply(...args),
     createDefaultProviderRegistry: vi.fn(() => ({
-      getById: vi.fn(() => ({})),
-      getEntry: vi.fn(() => ({ defaultModel: 'claude-sonnet-4-20250514' })),
+      getById: (...args: unknown[]) => mockRegistryGetById(...args),
+      getEntry: (...args: unknown[]) => mockRegistryGetEntry(...args),
+      getProviderIdsForRole: (...args: unknown[]) => mockRegistryGetProviderIdsForRole(...args),
+      isConfigured: (...args: unknown[]) => mockRegistryIsConfigured(...args),
+      importConfig: (...args: unknown[]) => mockRegistryImportConfig(...args),
+      listProviders: (...args: unknown[]) => mockRegistryListProviders(...args),
     })),
   };
 });
@@ -115,7 +142,7 @@ vi.mock('@t3x-dev/storage', () => ({
   }),
   insertConversation: vi.fn(() => Promise.resolve(MOCK_CONVERSATION)),
   findConversationById: vi.fn((_db: unknown, id: string) => {
-    if (id === 'conv_existing') return Promise.resolve(MOCK_CONVERSATION);
+    if (id === 'conv_existing') return Promise.resolve(MOCK_EXISTING_CONVERSATION);
     if (id === 'conv_other') return Promise.resolve(MOCK_CONVERSATION_OTHER_PROJECT);
     return Promise.resolve(null);
   }),
@@ -124,6 +151,45 @@ vi.mock('@t3x-dev/storage', () => ({
   insertDraft: vi.fn(() => Promise.resolve(MOCK_DRAFT)),
   updateDraft: vi.fn(() => Promise.resolve(MOCK_UPDATED_DRAFT)),
   recordEvent: vi.fn(() => Promise.resolve(1n)),
+  getProviderCredentialBundle: vi.fn(() =>
+    Promise.resolve({
+      secrets: { OPENAI_API_KEY: 'sk-db-openai' },
+      safe: {
+        anthropic: {
+          configured: false,
+          defaultModel: null,
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+        openai: {
+          configured: true,
+          defaultModel: 'gpt-5.4',
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+        google: {
+          configured: false,
+          defaultModel: null,
+          lastTestStatus: null,
+          lastTestedAt: null,
+          lastTestError: null,
+        },
+      },
+    })
+  ),
+  getGlobalSetting: vi.fn(() => Promise.resolve(null)),
+  findUserById: vi.fn((_db: unknown, id: string) => {
+    if (id === 'user_test1') {
+      return Promise.resolve({
+        id: 'user_test1',
+        default_provider: 'anthropic',
+        default_model: 'claude-sonnet-4-20250514',
+      });
+    }
+    return Promise.resolve(null);
+  }),
 }));
 
 // ── Import handler after mocks ──
@@ -134,11 +200,43 @@ import { extractHandler } from '../tools/core/extract.js';
 
 describe('t3x_extract handler', () => {
   const originalEnv = process.env.ANTHROPIC_API_KEY;
+  const originalOpenAIEnv = process.env.OPENAI_API_KEY;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { resetProviderRegistry } = await import('../provider-runtime.js');
+    const { findConversationById, findProjectById } = await import('@t3x-dev/storage');
+    resetProviderRegistry();
+    vi.mocked(findProjectById).mockImplementation((_db: unknown, id: string) => {
+      if (id === 'proj_test1') return Promise.resolve(MOCK_PROJECT);
+      return Promise.resolve(null);
+    });
+    vi.mocked(findConversationById).mockImplementation((_db: unknown, id: string) => {
+      if (id === 'conv_existing') return Promise.resolve(MOCK_EXISTING_CONVERSATION);
+      if (id === 'conv_other') return Promise.resolve(MOCK_CONVERSATION_OTHER_PROJECT);
+      return Promise.resolve(null);
+    });
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+    delete process.env.OPENAI_API_KEY;
     mockExtractAndApply.mockResolvedValue(MOCK_EXTRACT_SUCCESS);
+    mockRegistryGetById.mockImplementation((providerId: string) => ({ id: providerId }));
+    mockRegistryGetEntry.mockImplementation((providerId: string) => {
+      if (providerId === 'openai') return { defaultModel: 'gpt-5.4' };
+      if (providerId === 'anthropic') return { defaultModel: 'claude-sonnet-4-20250514' };
+      return undefined;
+    });
+    mockRegistryGetProviderIdsForRole.mockReturnValue(['openai', 'anthropic']);
+    mockRegistryIsConfigured.mockImplementation((id: string) =>
+      ['openai', 'anthropic'].includes(id)
+    );
+    mockRegistryListProviders.mockReturnValue([
+      { id: 'openai', defaultModel: 'gpt-5.4', availableModels: ['gpt-5.4'] },
+      {
+        id: 'anthropic',
+        defaultModel: 'claude-sonnet-4-20250514',
+        availableModels: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'],
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -146,6 +244,11 @@ describe('t3x_extract handler', () => {
       process.env.ANTHROPIC_API_KEY = originalEnv;
     } else {
       delete process.env.ANTHROPIC_API_KEY;
+    }
+    if (originalOpenAIEnv !== undefined) {
+      process.env.OPENAI_API_KEY = originalOpenAIEnv;
+    } else {
+      delete process.env.OPENAI_API_KEY;
     }
   });
 
@@ -163,15 +266,79 @@ describe('t3x_extract handler', () => {
     expect(result.content[0].text).toContain('"text" is required');
   });
 
-  it('returns error when ANTHROPIC_API_KEY is not set', async () => {
+  it('returns error when no generation provider is configured', async () => {
     delete process.env.ANTHROPIC_API_KEY;
+    const { findProjectById } = await import('@t3x-dev/storage');
+    vi.mocked(findProjectById).mockResolvedValue({
+      ...MOCK_PROJECT,
+      defaultProvider: null,
+      defaultModel: null,
+    });
+    mockRegistryGetProviderIdsForRole.mockReturnValue(['anthropic']);
+    mockRegistryIsConfigured.mockReturnValue(false);
+    mockRegistryGetById.mockReturnValue(null);
+
     const result = await extractHandler({
       project_id: 'proj_test1',
       text: 'plan a trip to Tokyo',
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('ANTHROPIC_API_KEY is not set');
-    expect(result.content[0].text).toContain('environment variable');
+    expect(result.content[0].text).toContain('No configured generation provider is available');
+  });
+
+  it('uses project default provider/model without requiring ANTHROPIC_API_KEY', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockExtractAndApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+  });
+
+  it('uses project owner user defaults when project defaults are unset', async () => {
+    const { findProjectById } = await import('@t3x-dev/storage');
+    vi.mocked(findProjectById).mockResolvedValue({
+      ...MOCK_PROJECT,
+      defaultProvider: null,
+      defaultModel: null,
+    });
+
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockExtractAndApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+      })
+    );
+  });
+
+  it('prefers conversation provider/model overrides over project defaults', async () => {
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'plan a trip to Tokyo',
+      conversation_id: 'conv_existing',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockExtractAndApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'anthropic',
+        model: 'claude-opus-4-6',
+      })
+    );
   });
 
   // ── Project / conversation lookup errors ──
@@ -371,7 +538,7 @@ describe('t3x_extract handler', () => {
     expect(data.yops_count).toBe(2);
   });
 
-  it('invokes the v2 pipeline with bootstrap mode and the Anthropic provider', async () => {
+  it('invokes the v2 pipeline with bootstrap mode and the resolved provider', async () => {
     await extractHandler({
       project_id: 'proj_test1',
       text: 'plan a trip to Tokyo',
@@ -380,8 +547,8 @@ describe('t3x_extract handler', () => {
     expect(mockExtractAndApply).toHaveBeenCalledTimes(1);
     const call = mockExtractAndApply.mock.calls[0][0];
     expect(call.mode).toBe('bootstrap');
-    expect(call.providerId).toBe('anthropic');
-    expect(call.model).toBe('claude-sonnet-4-20250514');
+    expect(call.providerId).toBe('openai');
+    expect(call.model).toBe('gpt-5.4');
     expect(call.turns).toEqual([
       expect.objectContaining({
         turn_hash: 'sha256:turn1',

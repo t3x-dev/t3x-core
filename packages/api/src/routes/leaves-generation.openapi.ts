@@ -12,30 +12,20 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AllProvidersFailedError,
-  collectLessonsFromAssertions,
   collectResult,
   GenerationError,
   type GenerationMode,
-  isGenerationConfigured,
   runOperation,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';
-import {
-  createLeaf,
-  createLeafHistory,
-  findLeafById,
-  findLeavesByCommit,
-  getCommitUnified,
-  updateLeaf,
-  updateLeafOutput,
-} from '@t3x-dev/storage';
+import { createLeaf, findLeafById, getCommitUnified, updateLeaf } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import { generateWithFallback, getLLMProvider } from '../lib/provider-registry';
-import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
+import { resolveProviderAndModel } from '../lib/provider-resolver';
+import { getUserId } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { buildPipelineContext } from '../ops/context';
 import { leafGenerateOp } from '../ops/leaf-gen';
@@ -88,7 +78,7 @@ const generateLeafRoute = createRoute({
       },
     },
     400: {
-      description: 'Generation not configured (ANTHROPIC_API_KEY not set)',
+      description: 'Generation not configured',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -104,7 +94,7 @@ const generateLeafRoute = createRoute({
       },
     },
     429: {
-      description: 'Rate limited by Anthropic API',
+      description: 'Rate limited by upstream model provider',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
@@ -246,15 +236,6 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
   const stylePreferences = body?.style_preferences;
 
   try {
-    // Check if any generation provider is configured
-    if (!isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
-      return errorResponse(
-        c,
-        'GENERATION_NOT_CONFIGURED',
-        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider.'
-      );
-    }
-
     const db = await getDB();
 
     // Pre-flight: verify leaf exists and project access before entering pipeline
@@ -264,6 +245,16 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     }
     const accessResult = await assertProjectAccess(c, db, leaf.project_id);
     if (accessResult instanceof Response) return accessResult;
+
+    const providerResolution = await resolveProviderAndModel({
+      db,
+      projectId: leaf.project_id,
+      userId: getUserId(c) ?? undefined,
+      unavailableMessage: 'No configured generation provider is available',
+    });
+    if (!providerResolution.ok) {
+      return errorResponse(c, 'GENERATION_NOT_CONFIGURED', providerResolution.message);
+    }
 
     // Run the unified pipeline operation
     const pipelineCtx = await buildPipelineContext(c, leaf.project_id);
@@ -476,17 +467,22 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
     if (!unifiedCommit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${decodedHash}`);
     }
-    const batchKnowledge = unifiedCommit.content;
-
     // 2. Check generation configuration if generation is needed
     const needsGeneration = !body.skip_generation;
-    if (needsGeneration && !isGenerationConfigured((await getLLMProvider()) ?? undefined)) {
-      return errorResponse(
-        c,
-        'GENERATION_NOT_CONFIGURED',
-        'No LLM provider configured. Set ANTHROPIC_API_KEY or configure a provider. Use skip_generation=true to create leaves without generating output.'
-      );
+    if (needsGeneration) {
+      const providerResolution = await resolveProviderAndModel({
+        db,
+        projectId: body.project_id,
+        userId: getUserId(c) ?? undefined,
+        unavailableMessage:
+          'No configured generation provider is available. Use skip_generation=true to create leaves without generating output.',
+      });
+      if (!providerResolution.ok) {
+        return errorResponse(c, 'GENERATION_NOT_CONFIGURED', providerResolution.message);
+      }
     }
+
+    const pipelineCtx = needsGeneration ? await buildPipelineContext(c, body.project_id) : null;
 
     // 3. Process each leaf config sequentially (avoid rate limiting)
     for (const leafConfig of body.leaves) {
@@ -505,62 +501,22 @@ leavesGenerationRoutes.openapi(batchGenerateRoute, async (c) => {
           project_id: body.project_id,
         });
 
-        // 3b. Generate output if not skipped (uses fallback across providers)
+        // 3b. Generate output if not skipped
         if (needsGeneration) {
           try {
-            // Collect lessons from historical leaves on the same commit
-            const batchHistLeaves = await findLeavesByCommit(db, leaf.commit_hash);
-            const batchLessons = collectLessonsFromAssertions(
-              batchHistLeaves.map((l) => ({ id: l.id, assertions: l.assertions }))
+            const result = await collectResult(
+              runOperation(
+                leafGenerateOp,
+                {
+                  leafId: leaf.id,
+                  mode: 'fast',
+                  userId: getUserId(c) ?? undefined,
+                },
+                pipelineCtx!
+              )
             );
-
-            const result = await generateWithFallback({
-              knowledge: batchKnowledge,
-              leaf,
-              lessons: batchLessons.length > 0 ? batchLessons : undefined,
-              additionalInstructions:
-                typeof leaf.config?.user_instruction === 'string'
-                  ? leaf.config.user_instruction
-                  : undefined,
-            });
-
-            // Record usage (fire-and-forget)
-            if (result.usage.inputTokens || result.usage.outputTokens) {
-              recordUsageFireAndForget(db, {
-                user_id: getUserId(c) ?? undefined,
-                project_id: body.project_id,
-                endpoint: 'leaf_batch_generate',
-                model: result.model,
-                input_tokens: result.usage.inputTokens,
-                output_tokens: result.usage.outputTokens,
-              });
-            }
-
-            // Update leaf with output
-            let updatedLeaf = await updateLeafOutput(db, leaf.id, result.output);
-
-            // If auto-validation produced assertions, store them on the leaf
-            if (result.validation && updatedLeaf) {
-              updatedLeaf =
-                (await updateLeaf(db, leaf.id, {
-                  assertions: result.validation.assertions,
-                })) ?? updatedLeaf;
-            }
-
-            // Save to history (non-blocking)
-            try {
-              await createLeafHistory(db, {
-                leaf_id: leaf.id,
-                output: result.output,
-                config: leaf.config ?? {},
-                model: result.model,
-              });
-            } catch {
-              // Log but don't fail - history is supplementary
-            }
-
             results.push({
-              leaf: updatedLeaf ? toApiLeaf(updatedLeaf) : toApiLeaf(leaf),
+              leaf: result.leaf ? toApiLeaf(result.leaf) : toApiLeaf(leaf),
               error: null,
             });
             succeeded++;

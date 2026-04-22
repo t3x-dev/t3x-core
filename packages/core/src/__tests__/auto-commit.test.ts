@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type AdaptiveFeedbackStats,
   type AutoCommitCandidate,
   type AutopilotConfig,
+  computeAdaptiveConfig,
   DEFAULT_AUTOPILOT_CONFIG,
   evaluateAutoCommit,
   mergeAutopilotConfig,
-} from '../autopilot/autoCommit';
+} from '../autopilot';
 
 /** Helper to create a candidate with sensible defaults. */
 const makeCandidate = (
@@ -182,5 +184,64 @@ describe('mergeAutopilotConfig', () => {
     };
     const result = mergeAutopilotConfig(full);
     expect(result).toEqual(full);
+  });
+});
+
+describe('computeAdaptiveConfig', () => {
+  it('suppresses inference types with low accept rate and enough judged samples', () => {
+    const stats: AdaptiveFeedbackStats = {
+      byInferenceType: {
+        direct: { total: 25, accepted: 8, edited: 5, rejected: 12 },
+        paraphrase: { total: 20, accepted: 12, edited: 3, rejected: 5 },
+        summary: { total: 19, accepted: 0, edited: 0, rejected: 19 },
+      },
+      overall: {
+        total: 64,
+        acceptRate: 20 / 64,
+        editRate: 8 / 64,
+        rejectRate: 36 / 64,
+      },
+    };
+
+    expect(computeAdaptiveConfig(stats)).toEqual({
+      suppressedTypes: ['direct'],
+      cosineThresholdDelta: 0,
+    });
+  });
+
+  it('ignores undo-inflated type totals and uses judged samples for suppression', () => {
+    const stats: AdaptiveFeedbackStats = {
+      byInferenceType: {
+        direct: { total: 30, accepted: 4, edited: 2, rejected: 10 },
+      },
+      overall: {
+        total: 16,
+        acceptRate: 4 / 16,
+        editRate: 2 / 16,
+        rejectRate: 10 / 16,
+      },
+    };
+
+    expect(computeAdaptiveConfig(stats)).toEqual({
+      suppressedTypes: [],
+      cosineThresholdDelta: 0,
+    });
+  });
+
+  it('suggests a lower cosine threshold when edit rate is above 30 percent', () => {
+    const stats: AdaptiveFeedbackStats = {
+      byInferenceType: {},
+      overall: {
+        total: 20,
+        acceptRate: 0.45,
+        editRate: 0.35,
+        rejectRate: 0.2,
+      },
+    };
+
+    expect(computeAdaptiveConfig(stats)).toEqual({
+      suppressedTypes: [],
+      cosineThresholdDelta: -0.02,
+    });
   });
 });

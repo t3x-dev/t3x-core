@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   username TEXT UNIQUE,
   password_hash TEXT,
+  default_provider TEXT,
+  default_model TEXT,
   default_extraction_style JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

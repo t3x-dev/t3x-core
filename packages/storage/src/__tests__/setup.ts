@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE,
   password_hash TEXT,
   default_extraction_style JSONB,
+  default_provider TEXT,
+  default_model TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

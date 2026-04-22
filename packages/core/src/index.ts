@@ -16,9 +16,13 @@
 // Autopilot (auto-commit evaluator)
 // ═══════════════════════════════════════════════════════════════════════════
 export {
+  type AdaptiveConfig,
+  type AdaptiveFeedbackStats,
+  type AdaptiveFeedbackTypeStats,
   type AutoCommitCandidate,
   type AutoCommitPlan,
   type AutopilotConfig,
+  computeAdaptiveConfig,
   DEFAULT_AUTOPILOT_CONFIG,
   evaluateAutoCommit,
   mergeAutopilotConfig,

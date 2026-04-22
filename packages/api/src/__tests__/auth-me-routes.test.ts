@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   username TEXT UNIQUE,
   password_hash TEXT,
+  default_provider TEXT,
+  default_model TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -136,6 +138,8 @@ describe('Auth Me Routes', () => {
       expect(data.data.name).toBe('Test User');
       expect(data.data.email).toBe('test@example.com');
       expect(data.data.avatar_url).toBe('https://example.com/avatar.png');
+      expect(data.data.default_provider).toBeNull();
+      expect(data.data.default_model).toBeNull();
 
       // Verify linked_accounts
       expect(Array.isArray(data.data.linked_accounts)).toBe(true);
@@ -221,6 +225,51 @@ describe('Auth Me Routes', () => {
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('Both Updated');
       expect(data.data.avatar_url).toBe('https://example.com/both.png');
+    });
+
+    it('updates default provider and model successfully', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_provider: 'openai', default_model: 'gpt-5.4' }),
+      });
+
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.default_provider).toBe('openai');
+      expect(data.data.default_model).toBe('gpt-5.4');
+    });
+
+    it('rejects unknown default model', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_model: 'not-a-real-model' }),
+      });
+
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('INVALID_MODEL');
+    });
+
+    it('rejects mismatched provider/model pairs', async () => {
+      const app = createAppWithAuth(testUserId);
+      const res = await app.request('/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          default_provider: 'anthropic',
+          default_model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('MODEL_PROVIDER_MISMATCH');
     });
 
     it('returns 401 when not authenticated', async () => {

@@ -15,26 +15,23 @@
  *   - Usage token metering
  *   - Webhook / push-notification dispatch
  *
- * These features require API-layer infrastructure (provider registry singleton,
- * webhook dispatcher, usage tracking). A future refactor could expose them via
- * shared library functions usable both by the API and by MCP.
+ * These features require API-layer infrastructure (webhook dispatcher, usage
+ * tracking). A future refactor could expose them via shared library functions
+ * usable both by the API and by MCP.
  */
 
-import {
-  collectLessonsFromAssertions,
-  createDefaultProviderRegistry,
-  generateLeafOutput,
-  type LLMProvider,
-} from '@t3x-dev/core';
+import { collectLessonsFromAssertions, generateLeafOutput } from '@t3x-dev/core';
 import {
   findLeafById,
   findLeavesByCommit,
+  findProjectById,
   getCommitUnified,
   updateLeaf,
   updateLeafOutput,
 } from '@t3x-dev/storage';
 
 import { getDB } from '../../db.js';
+import { resolveGenerationTarget } from '../../provider-runtime.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // ── Tool definition ──
@@ -51,7 +48,7 @@ export const generateDef: ToolDef = {
     '  4. Persists output + assertion results to the leaf record',
     '  5. Returns output, per-constraint assertions, and a pass/fail score summary',
     '',
-    'Requires ANTHROPIC_API_KEY to be set in the MCP server environment.',
+    'Requires a configured generation provider (DB-backed credentials or env fallback).',
     '',
     'Example:',
     '  { "leaf_id": "leaf_abc123" }',
@@ -84,22 +81,6 @@ export const generateDef: ToolDef = {
   },
 };
 
-// ── Helpers ──
-
-/**
- * Build a default provider registry while preserving MCP's current Anthropic
- * model pin for leaf generation.
- */
-function buildRegistry() {
-  return createDefaultProviderRegistry({
-    providerOverrides: {
-      anthropic: {
-        defaultModel: 'claude-sonnet-4-20250514',
-      },
-    },
-  });
-}
-
 // ── Handler ──
 
 export const generateHandler: ToolHandler = async (args) => {
@@ -110,16 +91,6 @@ export const generateHandler: ToolHandler = async (args) => {
   // ── Validate required params ──
   if (!leafId) {
     return fail('"leaf_id" is required.\nProvide the ID of the leaf to generate output for.');
-  }
-
-  // ── Check LLM availability ──
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return fail(
-      'ANTHROPIC_API_KEY is not set.\n\n' +
-        'Leaf generation requires a configured LLM provider. Set the ANTHROPIC_API_KEY ' +
-        'environment variable to enable generation.\n\n' +
-        'Example: export ANTHROPIC_API_KEY=sk-ant-...'
-    );
   }
 
   const db = await getDB();
@@ -139,6 +110,11 @@ export const generateHandler: ToolHandler = async (args) => {
   }
   const knowledge = unifiedCommit.content;
 
+  const project = await findProjectById(db, leaf.project_id);
+  if (!project) {
+    return fail(`Project not found: ${leaf.project_id}`);
+  }
+
   // ── Step 3: Collect lessons from historical leaves (optional improvement) ──
   let lessons: string[] | undefined;
   try {
@@ -153,24 +129,27 @@ export const generateHandler: ToolHandler = async (args) => {
     // Lessons are optional — proceed without them
   }
 
-  // ── Step 4: Run generation via provider registry ──
-  const registry = buildRegistry();
+  // ── Step 4: Resolve provider + model and run generation ──
+  const resolvedTarget = await resolveGenerationTarget({
+    db,
+    projectId: leaf.project_id,
+    requestedModel: model,
+  });
+  if (!resolvedTarget.ok) {
+    return fail(`Generation failed: ${resolvedTarget.message}`);
+  }
+
   let result: Awaited<ReturnType<typeof generateLeafOutput>>;
 
   try {
-    result = await registry.tryWithFallback<
-      LLMProvider,
-      Awaited<ReturnType<typeof generateLeafOutput>>
-    >('generation', (provider) =>
-      generateLeafOutput({
-        knowledge,
-        leaf,
-        provider,
-        lessons,
-        ...(model ? { model } : {}),
-        ...(maxTokens ? { maxTokens } : {}),
-      })
-    );
+    result = await generateLeafOutput({
+      knowledge,
+      leaf,
+      provider: resolvedTarget.provider,
+      lessons,
+      model: resolvedTarget.model,
+      ...(maxTokens ? { maxTokens } : {}),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return fail(`Generation failed: ${message}`);

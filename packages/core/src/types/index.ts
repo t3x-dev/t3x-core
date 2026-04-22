@@ -492,6 +492,12 @@ export interface User {
   /** When the user was created, ISO8601 */
   created_at: string;
 
+  /** Default generation provider (null = inherit global role order) */
+  default_provider?: string | null;
+
+  /** Default generation model (null = provider default model) */
+  default_model?: string | null;
+
   /** Default extraction style (null = system default) */
   default_extraction_style?: Record<string, unknown> | null;
 }

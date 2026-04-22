@@ -31,6 +31,7 @@ import { collectResult, flattenTrees, runOperation } from '@t3x-dev/core';
 import { findConversationById, findDraftById, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { getUserId } from '../lib/project-access';
 import { buildPipelineContext } from '../ops/context';
 import { extractOp } from '../ops/extract';
 import { ErrorResponseSchema } from '../schemas/common';
@@ -213,6 +214,7 @@ extractIncrementalRoutes.openapi(incrementalExtractRoute, async (c) => {
         extractOp,
         {
           conversationId: conversation_id,
+          userId: getUserId(c),
         },
         ctx
       )
