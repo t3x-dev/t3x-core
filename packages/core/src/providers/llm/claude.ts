@@ -361,22 +361,42 @@ export class ClaudeProvider implements LLMProvider {
     const result = await this.generateFromPrompt(prompt, options);
     const jsonText = extractJsonBlock(result.text);
     if (!jsonText) {
-      throw new LLMProviderError(this.id, undefined, 'No structured data found in response');
+      // F6: carry the raw response through so pipeline logs can diagnose
+      // why Claude produced no JSON, instead of silently dropping it.
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'No structured data found in response',
+        undefined,
+        { rawText: result.text }
+      );
     }
     let jsonData: unknown;
     try {
       jsonData = JSON.parse(jsonText);
     } catch {
-      throw new LLMProviderError(this.id, undefined, 'Failed to parse response as JSON');
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Failed to parse response as JSON',
+        undefined,
+        { rawText: result.text, jsonText }
+      );
     }
     try {
       const parsed = schema.parse(normalizeClaudeStructuredData(jsonData));
       return { data: parsed, usage: result.usage };
-    } catch {
+    } catch (schemaError) {
+      const issues =
+        schemaError && typeof schemaError === 'object' && 'issues' in schemaError
+          ? (schemaError as { issues: unknown }).issues
+          : undefined;
       throw new LLMProviderError(
         this.id,
         undefined,
-        'Response JSON does not match expected schema'
+        'Response JSON does not match expected schema',
+        undefined,
+        { rawText: result.text, jsonText, issues }
       );
     }
   }
