@@ -140,6 +140,103 @@ describe('extractors/v2 compiler', () => {
     ]);
   });
 
+  it('folds duplicate define ops on the same path and warns', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            key: 'game',
+            values: { title: 'Heroes of the Storm' },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Heroes of the Storm', role: 'primary' }],
+        },
+        {
+          id: 'item_2',
+          intent: 'add',
+          confidence: 0.85,
+          reasoning_type: 'cross_turn',
+          candidate: {
+            key: 'game',
+            values: { genre: 'MOBA' },
+          },
+          evidence: [{ turn_tag: 'T2', quote: 'HotS is a MOBA', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'claude-sonnet-4-6',
+      extractedAt: '2026-04-22T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1', T2: 'sha256:turn-2' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const defineOps = result.ops.filter((op) => 'define' in op);
+    const populateOps = result.ops.filter((op) => 'populate' in op);
+
+    expect(defineOps).toHaveLength(1);
+    expect(defineOps[0]).toMatchObject({ define: { path: 'game' } });
+    expect(populateOps).toHaveLength(2);
+    expect(populateOps[0]).toMatchObject({
+      populate: { path: 'game', values: { title: 'Heroes of the Storm' } },
+    });
+    expect(populateOps[1]).toMatchObject({
+      populate: { path: 'game', values: { genre: 'MOBA' } },
+    });
+
+    expect(result.warnings).toContain('Dropped duplicate define op for path "game"');
+  });
+
+  it('does not dedupe defines on different paths', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: { key: 'game', values: { title: 'Heroes of the Storm' } },
+          evidence: [{ turn_tag: 'T1', quote: 'HotS', role: 'primary' }],
+        },
+        {
+          id: 'item_2',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: { key: 'developer', values: { name: 'Blizzard' } },
+          evidence: [{ turn_tag: 'T1', quote: 'Blizzard', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'claude-sonnet-4-6',
+      extractedAt: '2026-04-22T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const defineOps = result.ops.filter((op) => 'define' in op);
+    expect(defineOps).toHaveLength(2);
+    expect(result.warnings).toEqual([]);
+  });
+
   it('returns a typed compile failure for unsupported draft shapes', () => {
     const result = compileExtractionDraft({
       draft: {

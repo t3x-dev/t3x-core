@@ -216,33 +216,29 @@ invariants:
 # evidence, not truth. Numbers are fixture-specific (hots-conversation, 8 turns).
 current_status:
   fixture: packages/core/src/__tests__/fixtures/hots-conversation.json
-  last_run: 2026-04-22 (post-F1)
+  last_run: 2026-04-22 (post-F2)
   harness: packages/core/scripts/e2e-multi-model.ts
+  pass_rate: 6/9 single-run
   notes:
-    - Failure modes are probabilistic. Two runs of the same input produced
-      different failure codes for the same model. Treat single-run results
-      as evidence, not truth. Use --runs=N before drawing strong conclusions.
-    - F1 (anthropic_ignores_json_fields) landed — no `draft_schema` failures
-      observed on the new run. Anthropic models now reach the compile stage
-      and expose the `duplicate_add_path` cluster, which was previously
-      masked by the earlier validation failure.
+    - Failure modes are probabilistic. Treat single-run results as evidence,
+      not truth. Use --runs=N before drawing strong conclusions.
+    - F1 (anthropic_ignores_json_fields) eliminated the `draft_schema` class.
+    - F2 (duplicate_add_path) eliminated the `executable_structure: Path already exists`
+      class via compiler dedupe. Four models moved from failing to passing
+      (sonnet, gpt-5.4) or reliably passing (haiku, gpt-5.4-mini).
   results:
     passing:
+      - claude-sonnet-4-6
       - claude-haiku-4-5-20251001
+      - gpt-5.4
+      - gpt-5.4-mini
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
     flaky:
       - model: claude-opus-4-6
-        observed: [ok, "executable_structure:duplicate_add_path", "transport:no_structured_data"]
-      - model: gpt-5.4-mini
-        observed: [ok, "executable_structure:duplicate_add_path"]
+        observed: [ok, "transport:no_structured_data"]
+        cluster: anthropic_structured_output_empty
     failing:
-      - model: claude-sonnet-4-6
-        failure: executable_structure
-        cluster: duplicate_add_path
-      - model: gpt-5.4
-        failure: executable_structure
-        cluster: duplicate_add_path
       - model: gpt-5.4-nano
         failure: draft_parse
         cluster: nano_value_json
@@ -269,8 +265,15 @@ clusters:
     fix_site: packages/core/src/extractors/v2/providerDraft.ts (pre-validation normalizer)
 
   - id: duplicate_add_path
+    status: resolved_by_F2
     affects: [claude-sonnet-4-6, claude-opus-4-6, gpt-5.4, gpt-5.4-mini]
-    scope_note: After F1 landed, this cluster expanded — Anthropic models now reach the compile stage and hit the same duplicate-path issue OpenAI models already exposed.
+    scope_note: >
+      After F1 landed, this cluster expanded — Anthropic models now reach the
+      compile stage and hit the same duplicate-path issue OpenAI models already
+      exposed. Resolved by compiler.ts::dedupeDefineOps which folds repeat
+      define ops on the same path and emits a warning. Populate/set ops from
+      dropped defines are preserved and merge additively into the first-defined
+      node.
     hypothesis: >
       Compiler does not dedupe multiple `add` ops to the same path. Previously
       observed across models/providers; after the 2026-04 main merge the frequency
@@ -291,6 +294,19 @@ clusters:
       - PREFERRED — Deterministic JSON-string repairer in the draft-validation stage: if a _json field parses as JSON-object-already, coerce to string; if it's a double-escaped string, unescape once; fall back to reask only if both fail.
       - AVOID — Bespoke nano prompt.
     fix_site: packages/core/src/extractors/v2/providerDraft.ts (liftProviderDraftToExtractionDraft)
+
+  - id: anthropic_structured_output_empty
+    affects: [claude-opus-4-6]
+    hypothesis: >
+      Opus sometimes returns an empty structured response (`transport: No
+      structured data found in response`). Run-to-run flake. Anthropic's
+      structured output may be dropping content on ambiguous prompts.
+    fix_strategy: provider_adapter_or_retry
+    candidates:
+      - PREFERRED — Anthropic provider adapter: detect empty structured data
+        and retry with a plain generateFromPrompt + JSON parse fallback.
+      - AVOID — Anthropic-specific prompt branch.
+    fix_site: packages/core/src/providers/llm/claude.ts
 
   - id: gemini_pro_empty
     affects: [gemini-2.5-pro]

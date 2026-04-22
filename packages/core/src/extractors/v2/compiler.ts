@@ -190,6 +190,26 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
   };
 }
 
+function dedupeDefineOps(ops: SourcedYOp[]): { ops: SourcedYOp[]; warnings: string[] } {
+  const defined = new Set<string>();
+  const kept: SourcedYOp[] = [];
+  const warnings: string[] = [];
+
+  for (const op of ops) {
+    if ('define' in op) {
+      const path = op.define.path;
+      if (defined.has(path)) {
+        warnings.push(`Dropped duplicate define op for path "${path}"`);
+        continue;
+      }
+      defined.add(path);
+    }
+    kept.push(op);
+  }
+
+  return { ops: kept, warnings };
+}
+
 export function compileExtractionDraft(input: CompileInput): CompileResult {
   const ops: SourcedYOp[] = [];
   const warnings: string[] = [];
@@ -203,7 +223,8 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     warnings.push(...compiled.warnings);
   }
 
-  return { ok: true, ops, warnings };
+  const deduped = dedupeDefineOps(ops);
+  return { ok: true, ops: deduped.ops, warnings: [...warnings, ...deduped.warnings] };
 }
 
 export function toCompiledMutationPlan(

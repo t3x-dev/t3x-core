@@ -67,6 +67,76 @@ describe('extractAndApply', () => {
     ]);
   });
 
+  it('applies cleanly when LLM emits two add items with the same path (compiler dedupes defines)', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_1',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'game',
+                  path_hint: 'game',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"title":"Heroes of the Storm"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'Heroes of the Storm', role: 'primary' }],
+              },
+              {
+                id: 'item_2',
+                intent: 'add',
+                confidence: 0.85,
+                reasoning_type: 'cross_turn',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'game',
+                  path_hint: 'game',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"genre":"MOBA"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'HotS is a MOBA', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 4, outputTokens: 2 },
+        };
+      },
+    };
+
+    const result = await extractAndApply({
+      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'HotS is a MOBA' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      provider,
+      model: 'claude-sonnet-4-6',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.trees).toEqual([
+      {
+        key: 'game',
+        slots: { title: 'Heroes of the Storm', genre: 'MOBA' },
+        children: [],
+      },
+    ]);
+    expect(result.compiled.warnings).toContain('Dropped duplicate define op for path "game"');
+  });
+
   it('returns an executable_structure failure when compiled ops cannot be applied', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {
