@@ -286,8 +286,9 @@ describe('extractors/v2 pipeline', () => {
                     slot: null,
                     value_json: null,
                     values_json: '{"summary":"SEA had a cyberattack"}',
-                    children_json:
-                      '[{"key":"Baggage Handling","value_json":"\\"Automated baggage systems were disrupted\\""}]',
+                    // No key and no name — the deterministic child canonicalizer
+                    // cannot rescue this; draft_schema fires and reask triggers.
+                    children_json: '[{"description":"Automated baggage systems were disrupted"}]',
                   },
                   evidence: [
                     {

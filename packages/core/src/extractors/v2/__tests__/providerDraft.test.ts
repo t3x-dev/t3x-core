@@ -113,6 +113,117 @@ describe('extractors/v2 provider draft', () => {
     expect(candidate.shape.children_json.safeParse('[{"key":"child"}]').success).toBe(true);
   });
 
+  it('canonicalizes children with {name,type} shape emitted by some providers', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: {
+            node_key: null,
+            path: null,
+            existing_node_id: null,
+          },
+          candidate: {
+            key: 'heroes',
+            path_hint: 'heroes',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            children_json: '[{"name":"Arthas","type":"warrior"},{"name":"Jaina","type":"mage"}]',
+          },
+          evidence: [
+            {
+              turn_tag: 'T1',
+              quote: 'Heroes like Arthas and Jaina',
+              role: 'primary',
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([
+      { key: 'Arthas', values: { type: 'warrior' } },
+      { key: 'Jaina', values: { type: 'mage' } },
+    ]);
+  });
+
+  it('folds unknown scalar fields into values while preserving existing values', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'maps',
+            path_hint: 'maps',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            children_json: '[{"key":"Cursed Hollow","values":{"role":"objective"},"type":"map"}]',
+          },
+          evidence: [
+            { turn_tag: 'T1', quote: 'Cursed Hollow is an objective map', role: 'primary' },
+          ],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([
+      { key: 'Cursed Hollow', values: { role: 'objective', type: 'map' } },
+    ]);
+  });
+
+  it('drops nested children on child shapes since canonical schema is flat', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'game',
+            path_hint: 'game',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            children_json: '[{"name":"modes","children":[{"name":"ranked"},{"name":"quick"}]}]',
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'game modes', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([{ key: 'modes' }]);
+  });
+
   it('coerces a singleton children_json object into a canonical child array', () => {
     const lifted = liftProviderDraftToExtractionDraft({
       schema: 't3x/provider-extraction-draft',

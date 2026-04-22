@@ -85,14 +85,41 @@ function parseJsonField(
   }
 }
 
+function canonicalizeChildShape(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((child) => {
+    if (!child || typeof child !== 'object' || Array.isArray(child)) return child;
+    const input = child as Record<string, unknown>;
+
+    const keyCandidate =
+      typeof input.key === 'string' && input.key.length > 0
+        ? input.key
+        : typeof input.name === 'string' && input.name.length > 0
+          ? input.name
+          : undefined;
+
+    const existingValues =
+      input.values && typeof input.values === 'object' && !Array.isArray(input.values)
+        ? (input.values as Record<string, unknown>)
+        : undefined;
+
+    const folded: Record<string, unknown> = { ...(existingValues ?? {}) };
+    for (const [k, v] of Object.entries(input)) {
+      if (k === 'key' || k === 'name' || k === 'values' || k === 'children') continue;
+      if (!(k in folded)) folded[k] = v;
+    }
+
+    const out: Record<string, unknown> = {};
+    if (keyCandidate !== undefined) out.key = keyCandidate;
+    if (Object.keys(folded).length > 0) out.values = folded;
+    return out;
+  });
+}
+
 function normalizeParsedJsonField(fieldName: string, value: unknown): unknown {
-  if (
-    fieldName === 'candidate.children_json' &&
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
-  ) {
-    return [value];
+  if (fieldName === 'candidate.children_json') {
+    const arrayed = value && typeof value === 'object' && !Array.isArray(value) ? [value] : value;
+    return canonicalizeChildShape(arrayed);
   }
 
   return value;
