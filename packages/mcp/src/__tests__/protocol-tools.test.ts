@@ -87,6 +87,7 @@ const { state, resetState } = vi.hoisted(() => {
       conversation: 1,
       draft: 1,
       commit: 1,
+      leaf: 1,
       turn: 1,
     },
   };
@@ -103,6 +104,7 @@ const { state, resetState } = vi.hoisted(() => {
       conversation: 1,
       draft: 1,
       commit: 1,
+      leaf: 1,
       turn: 1,
     };
   };
@@ -116,6 +118,7 @@ vi.mock('../db.js', () => ({
 }));
 
 vi.mock('@t3x-dev/core', () => ({
+  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
   createDefaultProviderRegistry: vi.fn(() => ({
     getById: vi.fn((providerId: string) => ({ id: providerId })),
     getEntry: vi.fn(() => ({ defaultModel: 'gpt-5.4' })),
@@ -333,6 +336,44 @@ vi.mock('@t3x-dev/storage', () => ({
     state.commits.set(hash, commit);
     return commit;
   }),
+  createLeaf: vi.fn(
+    async (
+      _db: unknown,
+      input: {
+        commit_hash: string;
+        type: string;
+        title?: string;
+        constraints?: Array<{
+          id?: string;
+          type: 'require' | 'exclude';
+          match_mode: 'exact' | 'semantic';
+          value: string;
+        }>;
+        config?: Record<string, unknown>;
+        project_id: string;
+      }
+    ) => {
+      const leafId = `leaf_${state.counters.leaf++}`;
+      const leaf = {
+        id: leafId,
+        commit_hash: input.commit_hash,
+        type: input.type,
+        title: input.title ?? undefined,
+        constraints: (input.constraints ?? []).map((constraint, index) => ({
+          id: constraint.id ?? `cst_${index + 1}`,
+          ...constraint,
+        })),
+        config: input.config ?? {},
+        output: null,
+        assertions: [],
+        project_id: input.project_id,
+        created_at: '2026-04-22T00:00:00.000Z',
+        generated_at: null,
+      };
+      state.leaves.set(leafId, leaf);
+      return leaf;
+    }
+  ),
   commitDraft: vi.fn(async (_db: unknown, draftId: string, hash: string) => {
     const draft = state.drafts.get(draftId);
     if (draft) {
@@ -587,36 +628,37 @@ describe('MCP protocol tool flows', () => {
       })
     );
 
-    state.leaves.set('leaf_1', {
-      id: 'leaf_1',
-      commit_hash: commit.commit_hash,
-      type: 'tweet',
-      title: 'Trip summary',
-      constraints: [
-        {
-          id: 'cst_1',
-          type: 'require',
-          match_mode: 'exact',
-          value: 'Tokyo',
+    const leaf = parseTextResult(
+      await client.callTool({
+        name: 't3x_admin',
+        arguments: {
+          action: 'create_leaf',
+          project_id: project.project_id,
+          commit_hash: commit.commit_hash,
+          leaf_type: 'tweet',
+          title: 'Trip summary',
+          constraints: [
+            {
+              type: 'require',
+              match_mode: 'exact',
+              value: 'Tokyo',
+            },
+          ],
         },
-      ],
-      config: {},
-      output: null,
-      assertions: [],
-      project_id: project.project_id,
-      created_at: '2026-04-22T00:00:00.000Z',
-      generated_at: null,
-    });
+      })
+    );
 
     const generated = parseTextResult(
       await client.callTool({
         name: 't3x_generate',
-        arguments: { leaf_id: 'leaf_1' },
+        arguments: { leaf_id: leaf.leaf_id },
       })
     );
 
-    expect(generated.leaf_id).toBe('leaf_1');
-    expect(generated.output).toBe('Generated output for leaf_1');
+    expect(leaf.type).toBe('tweet');
+    expect(leaf.commit_hash).toBe(commit.commit_hash);
+    expect(generated.leaf_id).toBe(leaf.leaf_id);
+    expect(generated.output).toBe(`Generated output for ${leaf.leaf_id}`);
     expect(generated.score).toEqual({
       all_passed: true,
       passed: 1,

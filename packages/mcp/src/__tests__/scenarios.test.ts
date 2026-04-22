@@ -107,6 +107,7 @@ vi.mock('../db.js', () => ({
 }));
 
 vi.mock('@t3x-dev/core', () => ({
+  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
   createDefaultProviderRegistry: vi.fn(() => ({
     getById: vi.fn((providerId: string) => ({ id: providerId })),
     getEntry: vi.fn((providerId: string) =>
