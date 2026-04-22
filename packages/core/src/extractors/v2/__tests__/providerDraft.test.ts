@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   liftProviderDraftToExtractionDraft,
+  normalizeLooseProviderDraft,
   ProviderExtractionDraftSchema,
 } from '../providerDraft';
 
@@ -290,6 +291,42 @@ describe('extractors/v2 provider draft', () => {
     ]);
   });
 
+  it('wraps string children as { key } when children_json is an array of strings', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'tea_villages',
+            path_hint: 'tea_villages',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            // Claude sometimes emits children_json as an array of raw strings.
+            children_json: '["Meijiawu","Longjing","Baochu"]',
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'tea villages', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([
+      { key: 'Meijiawu' },
+      { key: 'Longjing' },
+      { key: 'Baochu' },
+    ]);
+  });
+
   it('drops nested children on child shapes since canonical schema is flat', () => {
     const lifted = liftProviderDraftToExtractionDraft({
       schema: 't3x/provider-extraction-draft',
@@ -367,5 +404,128 @@ describe('extractors/v2 provider draft', () => {
         values: { description: 'Automated baggage systems were disrupted' },
       },
     ]);
+  });
+});
+
+describe('normalizeLooseProviderDraft (F6)', () => {
+  it('coerces loose Claude-style draft into a valid ProviderExtractionDraft', () => {
+    // Shape taken directly from a claude-sonnet-4-6 dump on trip-planning.
+    const loose = {
+      schema: 'ProviderExtractionDraft',
+      version: '1.0',
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'dest_hangzhou',
+          type: 'destination',
+          label: 'Hangzhou',
+          candidate: { value_json: '"Hangzhou"' },
+          evidence: [{ turn_tag: 'T1', quote: '5-day trip to Hangzhou', role: 'primary' }],
+          children_json: '[]',
+        },
+      ],
+    };
+
+    const normalized = normalizeLooseProviderDraft(loose);
+    const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.schema).toBe('t3x/provider-extraction-draft');
+    expect(parsed.data.version).toBe(1);
+    expect(parsed.data.items[0]).toMatchObject({
+      id: 'dest_hangzhou',
+      intent: 'add',
+      reasoning_type: 'direct',
+      candidate: {
+        key: null,
+        path_hint: null,
+        slot: null,
+        value_json: '"Hangzhou"',
+        values_json: null,
+        children_json: '[]', // lifted from item level
+      },
+    });
+    expect(parsed.data.items[0]?.confidence).toBeCloseTo(0.8);
+  });
+
+  it('lifts candidate.name to candidate.key when drifted', () => {
+    const loose = {
+      items: [
+        {
+          candidate: { name: 'trip_overview', kind: 'object' },
+          evidence: [{ turn_tag: 'T1', quote: 'overview', role: 'primary' }],
+        },
+      ],
+    };
+
+    const normalized = normalizeLooseProviderDraft(loose);
+    const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.items[0]?.candidate.key).toBe('trip_overview');
+  });
+
+  it('pulls item-level children_json into candidate.children_json when absent', () => {
+    const loose = {
+      items: [
+        {
+          candidate: { name: 'trip' },
+          evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
+          children_json: '[{"key":"day1"}]',
+        },
+      ],
+    };
+    const normalized = normalizeLooseProviderDraft(loose);
+    const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.items[0]?.candidate.children_json).toBe('[{"key":"day1"}]');
+  });
+
+  it('synthesizes missing ids as item_<index+1>', () => {
+    const loose = {
+      items: [
+        {
+          candidate: { name: 'a' },
+          evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
+        },
+        {
+          candidate: { name: 'b' },
+          evidence: [{ turn_tag: 'T1', quote: 'y', role: 'primary' }],
+        },
+      ],
+    };
+    const normalized = normalizeLooseProviderDraft(loose);
+    const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.items[0]?.id).toBe('item_1');
+    expect(parsed.data.items[1]?.id).toBe('item_2');
+  });
+
+  it('defaults invalid intent/reasoning_type without losing data', () => {
+    const loose = {
+      items: [
+        {
+          candidate: { key: 'x' },
+          intent: 'classify', // invalid
+          reasoning_type: 'hallucinate', // invalid
+          evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
+        },
+      ],
+    };
+    const normalized = normalizeLooseProviderDraft(loose);
+    const parsed = ProviderExtractionDraftSchema.safeParse(normalized);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.items[0]?.intent).toBe('add');
+    expect(parsed.data.items[0]?.reasoning_type).toBe('direct');
+  });
+
+  it('returns raw value unchanged for non-object input (safe pass-through)', () => {
+    expect(normalizeLooseProviderDraft(null)).toBeNull();
+    expect(normalizeLooseProviderDraft('string')).toBe('string');
+    expect(normalizeLooseProviderDraft([1, 2, 3])).toEqual([1, 2, 3]);
   });
 });

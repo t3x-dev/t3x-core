@@ -5,7 +5,11 @@ import { compileExtractionDraft } from './compiler';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import { buildPromptTurnMap, normalizeExtractionText, type PromptTurnInput } from './normalization';
 import { mapProviderErrorToExtractionFailure } from './providerAdapters';
-import { liftProviderDraftToExtractionDraft, ProviderExtractionDraftSchema } from './providerDraft';
+import {
+  liftProviderDraftToExtractionDraft,
+  normalizeLooseProviderDraft,
+  ProviderExtractionDraftSchema,
+} from './providerDraft';
 import type { CompiledMutationPlan, ExtractionDraft, ExtractionMode } from './types';
 
 export interface ExtractionV2PipelineInput {
@@ -185,6 +189,39 @@ function buildTargetedReaskPrompt(
   };
 }
 
+function tryLooseNormalize(raw: unknown): { ok: true; draft: ExtractionDraft } | { ok: false } {
+  const normalized = normalizeLooseProviderDraft(raw);
+  const reparsed = ProviderExtractionDraftSchema.safeParse(normalized);
+  if (!reparsed.success) return { ok: false };
+  const lifted = liftProviderDraftToExtractionDraft(reparsed.data);
+  if (!lifted.ok) return { ok: false };
+  return { ok: true, draft: lifted.draft };
+}
+
+function extractProviderRawJson(error: unknown): unknown | null {
+  if (!error || typeof error !== 'object' || !('details' in error)) return null;
+  const details = (error as { details?: Record<string, unknown> }).details;
+  if (!details || typeof details !== 'object') return null;
+
+  const jsonText = details.jsonText;
+  if (typeof jsonText === 'string') {
+    try {
+      return JSON.parse(jsonText);
+    } catch {
+      // fall through to rawText
+    }
+  }
+  const rawText = details.rawText;
+  if (typeof rawText === 'string') {
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function generateDraft(
   input: ExtractionV2PipelineInput,
   prompt: LLMPrompt
@@ -251,6 +288,10 @@ async function generateDraft(
 
     const validated = ProviderExtractionDraftSchema.safeParse(parsed);
     if (!validated.success) {
+      // F6: try loose normalization on the parsed JSON before surfacing
+      // the schema error.
+      const rescued = tryLooseNormalize(parsed);
+      if (rescued.ok) return rescued;
       return {
         ok: false,
         failure: buildSchemaFailureFromIssues(validated.error.issues, normalizedText),
@@ -267,6 +308,17 @@ async function generateDraft(
 
     return { ok: true, draft: lifted.draft };
   } catch (error) {
+    // F6: if the provider adapter attached the raw JSON it extracted (either
+    // from generateStructuredViaText fallback or elsewhere), try to coerce it
+    // into a valid ProviderExtractionDraft before giving up. Deterministic —
+    // no further LLM calls.
+    const rawJson = extractProviderRawJson(error);
+    if (rawJson !== null) {
+      const rescued = tryLooseNormalize(rawJson);
+      if (rescued.ok) {
+        return { ok: true, draft: rescued.draft };
+      }
+    }
     return {
       ok: false,
       failure: mapProviderErrorToExtractionFailure(input.providerId, error as Error),

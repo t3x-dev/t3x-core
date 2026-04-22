@@ -264,13 +264,15 @@ architecture_review:
 
   - id: dropped_raw_on_failure
     severity: observability
-    site: claude.ts / openai.ts / pipeline.ts failure paths
+    status: resolved_by_F6
+    site: claude.ts, providerAdapters.ts
     problem: >
-      When JSON doesn't match schema (claude_structured_schema_mismatch
-      cluster), we lose the raw content — it never reaches failure.details.
-      Makes diagnosis hard.
-    recommendation: >
-      Thread rawText through to failure.details on every schema/parse path.
+      When JSON didn't match schema, we lost the raw content — it never
+      reached failure.details. Made diagnosis hard.
+    progress: >
+      F6 added an optional `details` field to LLMProviderError, wired
+      rawText/jsonText/issues through generateStructuredViaText, and updated
+      mapProviderErrorToExtractionFailure to forward provider details.
 
   - id: configurable_timeout
     severity: minor
@@ -412,24 +414,41 @@ clusters:
       is too strict to guess safely.
 
   - id: claude_structured_schema_mismatch
-    status: open
+    status: resolved_by_F6
     affects: [claude-sonnet-4-6, claude-opus-4-6]
     discovered: 2026-04-22 (stability run, trip-planning fixture — 8 turns)
     hypothesis: >
-      On longer / more complex conversations, the F5 fallback path extracts
-      a JSON block from the plain-text response but it does not validate as
-      a ProviderExtractionDraft. Likely causes: Claude sometimes returns a
-      different draft shape (e.g. canonical ExtractionDraft) or truncated
-      content. We lose diagnostic info today — the failure drops the raw
-      JSON on the floor.
-    fix_strategy: deterministic_wrapper
-    candidates:
-      - PREFERRED — Thread the raw JSON through to the failure details so we
-        can inspect it; then add a shape-normalizer that accepts canonical
-        draft shape and lifts to provider shape before schema validation.
-      - ALSO — Move JSON extraction into the pipeline layer (not the adapter)
-        so the pipeline's reask loop can re-ask on schema mismatch.
-    fix_site: packages/core/src/providers/llm/claude.ts + pipeline.ts
+      On longer / more complex conversations, Claude emits a significantly
+      drifted shape: schema "ProviderExtractionDraft" (no t3x/ prefix),
+      version "1.0" (string), top-level fields like type/label/kind instead
+      of intent/confidence, item-level children_json rather than
+      inside-candidate, candidate.name instead of candidate.key, and
+      evidence entries without the required `role` field. The original
+      failure silently dropped the raw content so we couldn't even see what
+      Claude was emitting.
+    fix_sites:
+      - packages/core/src/llm/types.ts::LLMProviderError (optional details)
+      - packages/core/src/providers/llm/claude.ts::generateStructuredViaText (threads rawText)
+      - packages/core/src/extractors/v2/providerAdapters.ts (forwards provider details)
+      - packages/core/src/extractors/v2/providerDraft.ts::normalizeLooseProviderDraft
+      - packages/core/src/extractors/v2/pipeline.ts::generateDraft (rescue path)
+      - packages/core/src/extractors/v2/providerDraft.ts::canonicalizeChildShape (string children)
+    resolution: >
+      Two-part fix.
+      (1) Observability — LLMProviderError grew an optional `details` field.
+      Claude's generateStructuredViaText now carries rawText / jsonText /
+      Zod issues into the failure, and providerAdapters forwards them.
+      (2) Normalization — normalizeLooseProviderDraft is a deterministic
+      pre-validation coercion that: rewrites schema/version to the canonical
+      literal, defaults missing intent/confidence/reasoning_type/target_ref
+      to safe values, coerces candidate.name → candidate.key, pulls
+      item-level children_json into candidate.children_json, and defaults
+      evidence.role to 'primary' when missing. canonicalizeChildShape also
+      gained a case for raw string children, wrapping them as { key }.
+      The pipeline's generateDraft catch calls normalizeLooseProviderDraft
+      on any rawText carried by a transport error, and retries validation
+      deterministically before giving up. claude-sonnet + claude-opus ×
+      trip-planning verified 4/4 runs pass post-F6.
 
   - id: openai_structured_non_json
     status: resolved_by_F7
