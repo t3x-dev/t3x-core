@@ -349,7 +349,7 @@ describe('extractors/v2 pipeline', () => {
       async generateStructured(prompt) {
         calls += 1;
         if (calls === 2) {
-          secondPrompt = prompt.messages[1]?.content as string;
+          secondPrompt = prompt.messages[prompt.messages.length - 1]?.content as string;
         }
 
         if (calls === 1) {
@@ -445,6 +445,103 @@ describe('extractors/v2 pipeline', () => {
     expect(secondPrompt).toContain('evidence');
   });
 
+  it('F13: the reask prompt replays the prior draft as an assistant message', async () => {
+    let calls = 0;
+    let secondPromptMessages: Array<{ role: string; content: unknown }> = [];
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        calls += 1;
+        if (calls === 2) {
+          secondPromptMessages = prompt.messages as Array<{ role: string; content: unknown }>;
+        }
+
+        if (calls === 1) {
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [
+                {
+                  id: 'item_1',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'airport_issue',
+                    path_hint: 'airport_issue',
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"summary":"SEA had a cyberattack"}',
+                    children_json: null,
+                  },
+                  // First attempt: empty evidence triggers draft_schema failure.
+                  evidence: [],
+                },
+              ],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        }
+
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_1',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'airport_issue',
+                  path_hint: 'airport_issue',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"summary":"SEA had a cyberattack"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'SEA cyberattack', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'SEA had a cyberattack.' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toBe(2);
+    // The reask conversation should be: [original user prompt, assistant replay
+    // of prior draft, user correction]. Assistant replay carries what the model
+    // previously emitted so it can fix incrementally.
+    expect(secondPromptMessages.length).toBeGreaterThanOrEqual(3);
+    const assistantReplay = secondPromptMessages.find((m) => m.role === 'assistant');
+    expect(assistantReplay).toBeDefined();
+    // The replay should quote back the item structure verbatim.
+    expect(String(assistantReplay?.content)).toContain('airport_issue');
+    // The final message should be the user correction.
+    const last = secondPromptMessages[secondPromptMessages.length - 1];
+    expect(last.role).toBe('user');
+    expect(String(last.content)).toContain(
+      'Your previous ProviderExtractionDraft failed validation'
+    );
+  });
+
   it('reasks once on provenance failure and lists allowed turn tags', async () => {
     let calls = 0;
     let secondPrompt = '';
@@ -452,7 +549,7 @@ describe('extractors/v2 pipeline', () => {
       async generateStructured(prompt) {
         calls += 1;
         if (calls === 2) {
-          secondPrompt = prompt.messages[1]?.content as string;
+          secondPrompt = prompt.messages[prompt.messages.length - 1]?.content as string;
         }
 
         return {
@@ -516,7 +613,7 @@ describe('extractors/v2 pipeline', () => {
       async generateStructured(prompt) {
         calls += 1;
         if (calls === 2) {
-          secondPrompt = prompt.messages[1]?.content as string;
+          secondPrompt = prompt.messages[prompt.messages.length - 1]?.content as string;
         }
 
         return {

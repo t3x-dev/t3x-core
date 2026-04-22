@@ -96,14 +96,29 @@ function _buildDraftSchemaFailure(message: string, rawText?: string): Extraction
 
 function buildSchemaFailureFromIssues(
   issues: Array<{ message: string; path?: PropertyKey[] }>,
-  rawText?: string
+  rawText?: string,
+  priorPayload?: unknown
 ): ExtractionFailure {
+  // F13: capture the raw draft the model emitted so the reask can show it
+  // back to the model verbatim. Falls back to JSON.stringify of a parsed
+  // object when we don't have the original text.
+  const priorDraftText =
+    rawText ?? (priorPayload !== undefined ? safeStringify(priorPayload) : undefined);
   return createExtractionFailure('draft_schema', issues.map((issue) => issue.message).join('; '), {
     details: {
       issues,
       ...(rawText ? { rawText } : {}),
+      ...(priorDraftText ? { priorDraftText } : {}),
     },
   });
+}
+
+function safeStringify(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return undefined;
+  }
 }
 
 function buildTargetedReaskPrompt(
@@ -144,16 +159,27 @@ function buildTargetedReaskPrompt(
     lines.push(`- ${failure.message}`);
   }
 
-  return {
-    ...prompt,
-    messages: [
-      ...prompt.messages,
-      {
-        role: 'user',
-        content: lines.join('\n'),
-      },
-    ],
-  };
+  // F13: include the prior output as an assistant turn so the model can
+  // see what it actually emitted and fix incrementally, mirroring the
+  // Pydantic AI / Instructor `ModelRetry` pattern. The assistant turn is
+  // appended before the user correction so the conversation reads as:
+  //   user:        (original extraction prompt)
+  //   assistant:   (prior draft, possibly malformed)
+  //   user:        "Your previous draft failed validation. Fix: …"
+  const priorDraftText =
+    typeof failure.details?.priorDraftText === 'string'
+      ? failure.details.priorDraftText
+      : typeof failure.details?.rawText === 'string'
+        ? failure.details.rawText
+        : undefined;
+
+  const messages: LLMPrompt['messages'] = [...prompt.messages];
+  if (priorDraftText) {
+    messages.push({ role: 'assistant', content: priorDraftText });
+  }
+  messages.push({ role: 'user', content: lines.join('\n') });
+
+  return { ...prompt, messages };
 }
 
 function tryLooseNormalize(raw: unknown): { ok: true; draft: ExtractionDraft } | { ok: false } {
@@ -212,7 +238,7 @@ async function generateDraft(
         if (rescued.ok) return rescued;
         return {
           ok: false,
-          failure: buildSchemaFailureFromIssues(validated.error.issues),
+          failure: buildSchemaFailureFromIssues(validated.error.issues, undefined, result.data),
         };
       }
 
@@ -271,7 +297,7 @@ async function generateDraft(
       if (rescued.ok) return rescued;
       return {
         ok: false,
-        failure: buildSchemaFailureFromIssues(validated.error.issues, normalizedText),
+        failure: buildSchemaFailureFromIssues(validated.error.issues, normalizedText, parsed),
       };
     }
 
