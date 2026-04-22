@@ -747,3 +747,75 @@ describe('F11 lift-step tolerance', () => {
     ]);
   });
 });
+
+describe('F12 inner _json repair', () => {
+  it('repairs a truncated children_json payload via closeUnbalancedBrackets', () => {
+    // Real-world: observed from gpt-5.4 × trip-planning where the model
+    // ran out of output tokens mid-children_json string.
+    const truncated = '[{"key":"Wulin Square","values":{"metro":"Lines 1 and 2"';
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'stay',
+            path_hint: 'stay',
+            slot: null,
+            value_json: null,
+            values_json: null,
+            children_json: truncated,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Wulin Square', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.children).toEqual([
+      { key: 'Wulin Square', values: { metro: 'Lines 1 and 2' } },
+    ]);
+  });
+
+  it('repairs a values_json payload with trailing commas', () => {
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.8,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'hero',
+            path_hint: 'hero',
+            slot: null,
+            value_json: null,
+            values_json: '{"name":"Arthas","role":"warrior",}',
+            children_json: null,
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Arthas', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    expect(lifted.draft.items[0]?.candidate.values).toEqual({
+      name: 'Arthas',
+      role: 'warrior',
+    });
+  });
+});

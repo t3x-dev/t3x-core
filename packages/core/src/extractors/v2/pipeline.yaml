@@ -284,6 +284,25 @@ architecture_review:
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
 
+  - id: json_level_coercion
+    severity: resilience
+    status: resolved_by_F12
+    site: packages/core/src/providers/llm/jsonRepair.ts
+    problem: >
+      LLM-emitted JSON routinely contains trailing commas, // or /* */ comments,
+      or gets truncated mid-object so closing brackets are missing. JSON.parse
+      rejects these outright even when the underlying structure is obvious.
+      BAML's Schema-Aligned Parser (SAP) popularised the idea that a repair
+      pass before strict validation absorbs most of these at near-zero cost.
+    progress: >
+      F12 adds jsonRepair.ts with three narrow, string-aware, idempotent
+      repair passes — stripJsonComments, stripTrailingCommas,
+      closeUnbalancedBrackets — and a tryParseWithRepair helper that reports
+      which repairs fired. Wired into Claude's generateStructuredViaOutputConfig
+      text-block fallback, both adapters' generateStructuredViaText paths, and
+      pipeline.ts's plain-text + extractProviderRawJson paths. Preserves raw
+      JSON.parse semantics for valid input (no repairs applied).
+
 # Public extraction contracts.
 contracts:
   - id: strict
@@ -325,42 +344,48 @@ current_status:
     - packages/core/src/__tests__/fixtures/science-astronomy.json
     - packages/core/src/__tests__/fixtures/product-design.json
     - packages/core/src/__tests__/fixtures/recipe-cooking.json
-  last_run: 2026-04-22 (F11 stability, 6 fixtures × 9 models = 54 runs)
+  last_run: 2026-04-22 (F12 stability, 6 fixtures × 9 models = 54 runs)
   harness: packages/core/scripts/e2e-multi-model.ts
-  pass_rate: 51/54 (94.4%) strict; 54/54 (100%) resilient (F10 catches the rest)
+  pass_rate: 54/54 (100%) strict; 54/54 (100%) resilient
   progression:
     - Pre-F1 (baseline): 3/9 on hots-conversation
     - Post-F1–F5: 9/9 on hots-conversation
     - Post-F1–F6 (stability review, 6 fixtures): 49/54
     - Post-F9 (simplified prompt, no other changes): 42/54 (regression — prompt rules were load-bearing)
     - Post-F11 (lift tolerance added): 51/54
+    - Post-F12 (JSON repair on outer + inner _json fields): **54/54** ← current
   notes:
     - F9 collapsed the prompt to one provider-agnostic template. The drift
       rules the prompt used to carry are now handled deterministically by
-      F1/F3/F6/F8/F11 normalizers.
+      F1/F3/F6/F8/F11/F12 normalizers and repairers.
     - F10 adds the resilient extractAndApplyResilient contract — callers
       see ok:true on every call even when the strict pipeline fails.
     - F11 adds lift-step tolerance: array-in-values → value slot, missing
-      child key → synthesized from first string value. Also added
-      safeParse → tryLooseNormalize rescue in pipeline.ts::generateDraft.
+      child key → synthesized from first string value.
+    - F12 adds BAML-SAP-style deterministic JSON repair (strip comments,
+      strip trailing commas, close unbalanced brackets) to every LLM→JSON
+      parse site — outer JSON.parse + inner _json field parses.
+      nested_path_scalar_collision cluster dissolved once inner _json
+      repair caught the truncated-children cases that had been surfacing
+      as downstream apply-time conflicts.
   results:
-    reliable_across_all_fixtures_f11:
+    reliable_across_all_fixtures_f12:
+      - claude-sonnet-4-6
       - claude-opus-4-6
       - claude-haiku-4-5-20251001
+      - gpt-5.4
       - gpt-5.4-mini
       - gpt-5.4-nano
       - gemini-2.5-pro
       - gemini-3-flash-preview
       - gemini-3.1-flash-lite-preview
-    flaky_on_some_fixtures_f11:
-      - { model: claude-sonnet-4-6, passes: 4/6, fails_on: [hots-conversation, product-design], cluster: nested_path_scalar_collision }
-      - { model: gpt-5.4, passes: 5/6, fails_on: [product-design], cluster: nested_path_scalar_collision }
-  per_fixture_pass_rate_f11:
-    hots-conversation: 8/9
+    flaky_on_some_fixtures_f12: []
+  per_fixture_pass_rate_f12:
+    hots-conversation: 9/9
     react-debugging: 9/9
     trip-planning: 9/9
     science-astronomy: 9/9
-    product-design: 7/9
+    product-design: 9/9
     recipe-cooking: 9/9
 
 # Latency expectations per model on the 8-turn hots-conversation fixture.
@@ -521,32 +546,29 @@ clusters:
       verified 3/3 runs pass post-F8.
 
   - id: nested_path_scalar_collision
-    status: open
+    status: dissolved_by_F12
     discovered: 2026-04-22 (F11 stability matrix, 3/54 remaining failures)
     affects: [claude-sonnet-4-6, gpt-5.4]
     hypothesis: >
       The model emits two items describing the same concept at different
-      granularities. The first populates a string at some slot (e.g.
-      `product/alerts` under `product`), the second item tries to `add` a
-      nested node at that same path (e.g. `product/alerts/slack`). Applying
-      the second item's `define` fails with "Path X already exists" because
-      resolvePath now finds a string, not an empty object — `define` can't
-      overwrite a scalar in place.
-    fix_strategy: deterministic_wrapper (F12 candidate)
-    candidates:
-      - At compile time — detect populate keys that collide with a later
-        item's path_hint segments and drop the conflicting slot so the
-        nested item's define owns that path.
-      - At apply time — relax YOps' define handler to convert a scalar at
-        the target path into an empty object shell (scope-sensitive; changes
-        engine semantics).
-      - Pre-process the item list — merge items whose path_hints are
-        prefixes of each other's into a single composite item.
-    fix_site: packages/core/src/extractors/v2/providerDraft.ts or compiler.ts
+      granularities. The first populates a string at some slot, the second
+      tries to `add` a nested node at that same path. Was thought to be an
+      apply-time structural conflict.
+    resolution: >
+      After F12 extended tryParseWithRepair to the inner _json field parse,
+      the F11 matrix's 3 remaining failures ALL went away on the F12 re-run.
+      Retrospect: those runs' inner children_json / values_json had been
+      silently truncating mid-object (model hitting max_tokens), which the
+      outer path had been tolerating but the inner path was not. The
+      "already exists" error was a downstream symptom of upstream truncation
+      producing short/partial strings that the model then re-described in a
+      later item at a different granularity. Repairing the inner parse
+      lets the first item land fully, and the collision never materializes.
     observability_note: >
-      Always handled at the user-facing level by extractAndApplyResilient
-      (F10), which converts the executable_structure failure into an empty
-      draft + diagnostic rather than broken.
+      If this pattern ever resurfaces with a genuinely-structural collision
+      (not truncation-driven), the fix options remain documented above:
+      compile-time conflict detection, apply-time scalar-to-object coercion,
+      or item-list merge-by-prefix.
 
   - id: anthropic_structured_output_empty
     status: resolved_by_F5
