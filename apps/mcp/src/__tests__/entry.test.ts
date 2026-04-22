@@ -96,9 +96,7 @@ describe('apps/mcp entrypoint', () => {
 
     expect(mockCreateMcpServer).toHaveBeenCalledWith({ toolsets: ['core'] });
     expect(mockConnect).not.toHaveBeenCalled();
-    expect(mockConsoleError).toHaveBeenCalledWith(
-      'HTTP transport not yet implemented. Use stdio.'
-    );
+    expect(mockConsoleError).toHaveBeenCalledWith('HTTP transport not yet implemented. Use stdio.');
   });
 
   it('fails fast for unknown transports', async () => {

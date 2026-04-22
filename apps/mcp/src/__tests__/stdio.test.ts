@@ -1,9 +1,9 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { afterEach, describe, expect, it } from 'vitest';
 
 type McpServerConfig = {
   command: string;
@@ -65,11 +65,7 @@ function createRealE2EEnv(): Record<string, string> {
     T3X_PG_PORT: String(6400 + Math.floor(Math.random() * 500)),
   };
 
-  const passthroughKeys = [
-    'ANTHROPIC_API_KEY',
-    'OPENAI_API_KEY',
-    'GOOGLE_AI_STUDIO_KEY',
-  ] as const;
+  const passthroughKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_AI_STUDIO_KEY'] as const;
 
   for (const key of passthroughKeys) {
     const value = process.env[key];
@@ -84,9 +80,7 @@ function createRealE2EEnv(): Record<string, string> {
 const runRealE2E =
   process.env.T3X_RUN_REAL_MCP_E2E === '1' &&
   Boolean(
-    process.env.ANTHROPIC_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      process.env.GOOGLE_AI_STUDIO_KEY
+    process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_AI_STUDIO_KEY
   );
 
 const maybeRealE2E = runRealE2E ? it : it.skip;

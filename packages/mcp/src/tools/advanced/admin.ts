@@ -9,15 +9,34 @@
  *   delete_pin      -- remove a pin
  */
 
-import { ALL_LEAF_TYPES, type AnyLeafType, type Constraint, type LeafConfig, type PinType } from '@t3x-dev/core';
-import { createLeaf, createPin, deletePin, getCommit, insertBranch, insertProject } from '@t3x-dev/storage';
+import {
+  ALL_LEAF_TYPES,
+  type AnyLeafType,
+  type Constraint,
+  type LeafConfig,
+  type PinType,
+} from '@t3x-dev/core';
+import {
+  createLeaf,
+  createPin,
+  deletePin,
+  getCommit,
+  insertBranch,
+  insertProject,
+} from '@t3x-dev/storage';
 
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
 // -- Tool definition --
 
-const ACTIONS = ['create_project', 'create_branch', 'create_leaf', 'create_pin', 'delete_pin'] as const;
+const ACTIONS = [
+  'create_project',
+  'create_branch',
+  'create_leaf',
+  'create_pin',
+  'delete_pin',
+] as const;
 type Action = (typeof ACTIONS)[number];
 
 export const adminDef: ToolDef = {

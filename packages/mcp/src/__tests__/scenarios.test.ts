@@ -36,7 +36,10 @@ const { mockState, resetMockState } = vi.hoisted(() => {
     parents: string[];
     author: { type: 'human'; name: 'mcp' };
     committed_at: string;
-    content: { trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>; relations: unknown[] };
+    content: {
+      trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+      relations: unknown[];
+    };
     project_id: string;
     message: string;
     branch: string;
@@ -121,47 +124,41 @@ vi.mock('@t3x-dev/core', () => ({
     ]),
   })),
   getCanonicalModelId: vi.fn((model: string) => model),
-  getModelInfo: vi.fn((model: string) =>
-    model === 'gpt-5.4' ? { provider: 'openai' } : null
-  ),
-  extractAndApply: vi.fn(
-    ({ turns }: { turns: Array<{ content: string }> }) => {
-      const text = turns.map((turn) => turn.content).join('\n');
-      if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(text)) {
-        return Promise.resolve({
-          ok: true,
-          draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
-          compiled: { ops: [], warnings: [] },
-          snapshot: { trees: [], relations: [] },
-          turnHashByTag: {},
-        });
-      }
-
-      const budgetMatches = [...text.matchAll(/(\d{3,5})/g)];
-      const budget = budgetMatches.length
-        ? Number(budgetMatches[budgetMatches.length - 1][1])
-        : 5000;
-      const destination = text.includes('Kyoto')
-        ? 'Kyoto'
-        : text.includes('Hangzhou')
-          ? 'Hangzhou'
-          : 'Tokyo';
-
+  getModelInfo: vi.fn((model: string) => (model === 'gpt-5.4' ? { provider: 'openai' } : null)),
+  extractAndApply: vi.fn(({ turns }: { turns: Array<{ content: string }> }) => {
+    const text = turns.map((turn) => turn.content).join('\n');
+    if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(text)) {
       return Promise.resolve({
         ok: true,
         draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
-        compiled: {
-          ops: [{ op: 'populate', path: 'trip', values: { budget, destination } }],
-          warnings: [],
-        },
-        snapshot: {
-          trees: [{ key: 'trip', slots: { budget, destination }, children: [] }],
-          relations: [],
-        },
-        turnHashByTag: { T1: 'sha256:turn-seeded' },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: {},
       });
     }
-  ),
+
+    const budgetMatches = [...text.matchAll(/(\d{3,5})/g)];
+    const budget = budgetMatches.length ? Number(budgetMatches[budgetMatches.length - 1][1]) : 5000;
+    const destination = text.includes('Kyoto')
+      ? 'Kyoto'
+      : text.includes('Hangzhou')
+        ? 'Hangzhou'
+        : 'Tokyo';
+
+    return Promise.resolve({
+      ok: true,
+      draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
+      compiled: {
+        ops: [{ op: 'populate', path: 'trip', values: { budget, destination } }],
+        warnings: [],
+      },
+      snapshot: {
+        trees: [{ key: 'trip', slots: { budget, destination }, children: [] }],
+        relations: [],
+      },
+      turnHashByTag: { T1: 'sha256:turn-seeded' },
+    });
+  }),
   diffCommits: vi.fn(
     (
       base: { trees: Array<{ slots: Record<string, unknown> }> },
@@ -202,7 +199,8 @@ vi.mock('@t3x-dev/core', () => ({
     ) => ({
       autoKept: [],
       conflicts:
-        JSON.stringify(source.trees[0]?.slots ?? {}) === JSON.stringify(target.trees[0]?.slots ?? {})
+        JSON.stringify(source.trees[0]?.slots ?? {}) ===
+        JSON.stringify(target.trees[0]?.slots ?? {})
           ? []
           : [
               {
@@ -226,8 +224,14 @@ vi.mock('@t3x-dev/core', () => ({
   executeMerge: vi.fn(
     (
       _base: unknown,
-      source: { trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>; relations: unknown[] },
-      target: { trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>; relations: unknown[] },
+      source: {
+        trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+        relations: unknown[];
+      },
+      target: {
+        trees: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+        relations: unknown[];
+      },
       _prepared: unknown,
       decisions: { conflictResolutions: Record<string, 'source' | 'target' | 'both'> }
     ) => {
@@ -251,9 +255,7 @@ vi.mock('../validate/pipeline.js', () => ({
       const valueMatch = yopsYaml.match(/value:\s*(\d+)/);
       const nextBudget = valueMatch ? Number(valueMatch[1]) : 5000;
       const nextTrees = currentContent.trees.map((tree) =>
-        tree.key === 'trip'
-          ? { ...tree, slots: { ...tree.slots, budget: nextBudget } }
-          : tree
+        tree.key === 'trip' ? { ...tree, slots: { ...tree.slots, budget: nextBudget } } : tree
       );
 
       return {
@@ -364,7 +366,9 @@ vi.mock('@t3x-dev/storage', () => ({
     async (
       _db: unknown,
       draftId: string,
-      patch: { nodes?: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }> },
+      patch: {
+        nodes?: Array<{ key: string; slots: Record<string, unknown>; children: unknown[] }>;
+      },
       _revision: number
     ) => {
       const draft = mockState.drafts.get(draftId);
@@ -378,19 +382,24 @@ vi.mock('@t3x-dev/storage', () => ({
       return updated;
     }
   ),
-  createCommit: vi.fn(async (_db: unknown, input: Omit<Commit, 'hash' | 'schema' | 'committed_at' | 'yops_log_ids' | 'sources'>) => {
-    const hash = `sha256:commit${mockState.counters.commit++}`;
-    const commit = {
-      hash,
-      schema: 't3x/commit',
-      committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
-      yops_log_ids: [],
-      sources: null,
-      ...input,
-    };
-    mockState.commits.set(hash, commit);
-    return commit;
-  }),
+  createCommit: vi.fn(
+    async (
+      _db: unknown,
+      input: Omit<Commit, 'hash' | 'schema' | 'committed_at' | 'yops_log_ids' | 'sources'>
+    ) => {
+      const hash = `sha256:commit${mockState.counters.commit++}`;
+      const commit = {
+        hash,
+        schema: 't3x/commit',
+        committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
+        yops_log_ids: [],
+        sources: null,
+        ...input,
+      };
+      mockState.commits.set(hash, commit);
+      return commit;
+    }
+  ),
   commitDraft: vi.fn(async (_db: unknown, draftId: string, hash: string) => {
     const draft = mockState.drafts.get(draftId);
     if (draft) {
@@ -403,7 +412,9 @@ vi.mock('@t3x-dev/storage', () => ({
     return true;
   }),
   getCommit: vi.fn(async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null),
-  getCommitUnified: vi.fn(async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null),
+  getCommitUnified: vi.fn(
+    async (_db: unknown, hash: string) => mockState.commits.get(hash) ?? null
+  ),
   listCommits: vi.fn(async (_db: unknown, { projectId }: { projectId: string }) =>
     [...mockState.commits.values()].filter((commit) => commit.project_id === projectId)
   ),
@@ -487,15 +498,22 @@ vi.mock('@t3x-dev/storage', () => ({
 
 import { createMcpServer } from '../server.js';
 
+type CallToolHandler = (request: {
+  method: 'tools/call';
+  jsonrpc: '2.0';
+  id: number;
+  params: { name: string; arguments?: Record<string, unknown> };
+}) => Promise<{ content: Array<{ text: string }>; isError?: boolean }>;
+
 function getCallTool() {
   const { server } = createMcpServer({ toolsets: ['core', 'advanced'] });
-  const handler = (server as unknown as { _requestHandlers: Map<string, Function> })._requestHandlers.get(
-    'tools/call'
-  );
+  const handler = (
+    server as unknown as { _requestHandlers: Map<string, CallToolHandler> }
+  )._requestHandlers.get('tools/call');
   expect(handler).toBeDefined();
 
   return async (name: string, args?: Record<string, unknown>) =>
-    (handler as Function)({
+    (handler as CallToolHandler)({
       method: 'tools/call',
       jsonrpc: '2.0',
       id: 1,

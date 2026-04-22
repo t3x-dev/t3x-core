@@ -63,19 +63,21 @@ vi.mock('@t3x-dev/core', () => ({
 
 import { createMcpServer } from '../server.js';
 
+type CallToolHandler = (request: {
+  method: 'tools/call';
+  jsonrpc: '2.0';
+  id: number;
+  params: { name: string; arguments?: Record<string, unknown> };
+}) => Promise<{ content: Array<{ text: string }>; isError?: boolean }>;
+
 function getCallToolHandler(toolsets: Array<'core' | 'advanced'>) {
   const { server } = createMcpServer({ toolsets });
-  const handler = (server as unknown as { _requestHandlers: Map<string, Function> })._requestHandlers.get(
-    'tools/call'
-  );
+  const handler = (
+    server as unknown as { _requestHandlers: Map<string, CallToolHandler> }
+  )._requestHandlers.get('tools/call');
 
   expect(handler).toBeDefined();
-  return handler as (request: {
-    method: 'tools/call';
-    jsonrpc: '2.0';
-    id: number;
-    params: { name: string; arguments?: Record<string, unknown> };
-  }) => Promise<{ content: Array<{ text: string }>; isError?: boolean }>;
+  return handler as CallToolHandler;
 }
 
 describe('createMcpServer', () => {

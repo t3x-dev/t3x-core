@@ -130,40 +130,36 @@ vi.mock('@t3x-dev/core', () => ({
     ]),
   })),
   getCanonicalModelId: vi.fn((model: string) => model),
-  getModelInfo: vi.fn((model: string) =>
-    model === 'gpt-5.4' ? { provider: 'openai' } : null
-  ),
-  extractAndApply: vi.fn(
-    ({ turns }: { turns: Array<{ content: string }> }) => {
-      const text = turns.map((turn) => turn.content).join('\n');
-      if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(text)) {
-        return Promise.resolve({
-          ok: true,
-          draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
-          compiled: { ops: [], warnings: [] },
-          snapshot: { trees: [], relations: [] },
-          turnHashByTag: {},
-        });
-      }
-
-      const budget = text.includes('8000') ? 8000 : 5000;
-      const destination = text.includes('Kyoto') ? 'Kyoto' : 'Tokyo';
-
+  getModelInfo: vi.fn((model: string) => (model === 'gpt-5.4' ? { provider: 'openai' } : null)),
+  extractAndApply: vi.fn(({ turns }: { turns: Array<{ content: string }> }) => {
+    const text = turns.map((turn) => turn.content).join('\n');
+    if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(text)) {
       return Promise.resolve({
         ok: true,
         draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
-        compiled: {
-          ops: [{ op: 'populate', path: 'trip', values: { budget, destination } }],
-          warnings: [],
-        },
-        snapshot: {
-          trees: [{ key: 'trip', slots: { budget, destination }, children: [] }],
-          relations: [],
-        },
-        turnHashByTag: { T1: 'sha256:turn1' },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: {},
       });
     }
-  ),
+
+    const budget = text.includes('8000') ? 8000 : 5000;
+    const destination = text.includes('Kyoto') ? 'Kyoto' : 'Tokyo';
+
+    return Promise.resolve({
+      ok: true,
+      draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
+      compiled: {
+        ops: [{ op: 'populate', path: 'trip', values: { budget, destination } }],
+        warnings: [],
+      },
+      snapshot: {
+        trees: [{ key: 'trip', slots: { budget, destination }, children: [] }],
+        relations: [],
+      },
+      turnHashByTag: { T1: 'sha256:turn1' },
+    });
+  }),
   diffCommits: vi.fn(
     (
       base: { trees: Array<{ slots: Record<string, unknown> }> },
@@ -195,36 +191,28 @@ vi.mock('@t3x-dev/core', () => ({
   prepareMerge: vi.fn(),
   executeMerge: vi.fn(),
   collectLessonsFromAssertions: vi.fn(() => []),
-  generateLeafOutput: vi.fn(
-    async ({
-      leaf,
-      model,
-    }: {
-      leaf: { id: string };
-      model: string;
-    }) => ({
-      output: `Generated output for ${leaf.id}`,
-      model,
-      usage: {
-        inputTokens: 123,
-        outputTokens: 45,
-      },
-      attempts: 1,
-      validation: {
-        allPassed: true,
-        passedCount: 1,
-        failedCount: 0,
-        assertions: [
-          {
-            id: 'ast_1',
-            constraint_id: 'cst_1',
-            passed: true,
-            details: 'Constraint satisfied',
-          },
-        ],
-      },
-    })
-  ),
+  generateLeafOutput: vi.fn(async ({ leaf, model }: { leaf: { id: string }; model: string }) => ({
+    output: `Generated output for ${leaf.id}`,
+    model,
+    usage: {
+      inputTokens: 123,
+      outputTokens: 45,
+    },
+    attempts: 1,
+    validation: {
+      allPassed: true,
+      passedCount: 1,
+      failedCount: 0,
+      assertions: [
+        {
+          id: 'ast_1',
+          constraint_id: 'cst_1',
+          passed: true,
+          details: 'Constraint satisfied',
+        },
+      ],
+    },
+  })),
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
@@ -323,19 +311,27 @@ vi.mock('@t3x-dev/storage', () => ({
   listDraftsByProject: vi.fn(async (_db: unknown, projectId: string) =>
     [...state.drafts.values()].filter((draft) => draft.project_id === projectId)
   ),
-  createCommit: vi.fn(async (_db: unknown, input: Omit<(typeof state.commits extends Map<string, infer T> ? T : never), 'hash' | 'schema' | 'committed_at' | 'yops_log_ids' | 'sources'>) => {
-    const hash = `sha256:commit${state.counters.commit++}`;
-    const commit = {
-      hash,
-      schema: 't3x/commit',
-      committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
-      yops_log_ids: [],
-      sources: null,
-      ...input,
-    };
-    state.commits.set(hash, commit);
-    return commit;
-  }),
+  createCommit: vi.fn(
+    async (
+      _db: unknown,
+      input: Omit<
+        typeof state.commits extends Map<string, infer T> ? T : never,
+        'hash' | 'schema' | 'committed_at' | 'yops_log_ids' | 'sources'
+      >
+    ) => {
+      const hash = `sha256:commit${state.counters.commit++}`;
+      const commit = {
+        hash,
+        schema: 't3x/commit',
+        committed_at: new Date('2026-04-22T00:00:00.000Z').toISOString(),
+        yops_log_ids: [],
+        sources: null,
+        ...input,
+      };
+      state.commits.set(hash, commit);
+      return commit;
+    }
+  ),
   createLeaf: vi.fn(
     async (
       _db: unknown,
