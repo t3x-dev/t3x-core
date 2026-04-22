@@ -188,6 +188,65 @@ providers:
       - id: gemini-3-flash-preview
       - id: gemini-3.1-flash-lite-preview
 
+# Five-layer framework abstraction (extracted from F1–F13).
+# This is the pattern the pipeline has converged on. New work should slot
+# into one of these layers; if it doesn't, it's a signal the abstraction
+# needs to grow rather than a leaky bypass.
+framework:
+  - layer: transport
+    role: One simple LLM command per provider. No prompt engineering for
+      drift — adapters handle provider quirks in code.
+    primitives:
+      - packages/core/src/providers/llm/{claude,openai,gemini}.ts
+      - LLMProviderError with typed `code` + optional `details` payload
+      - shared helpers — jsonExtract (find JSON in text), jsonRepair (F12
+        BAML-SAP-inspired repairs — comments, trailing commas, unbalanced
+        brackets)
+  - layer: shape_recovery
+    role: >
+      Narrow wider-than-expected LLM output to the strict canonical shape.
+      Applied progressively, cheap to expensive; each step is
+      string-aware, idempotent, and testable in isolation.
+    primitives:
+      - extractJsonBlock (fences, preamble, balanced scan)
+      - tryParseWithRepair (F12: JSON.parse + progressive repairs)
+      - normalizeLooseProviderDraft (F6: schema/version/item shape
+        coercion from drifted Claude output)
+      - canonicalizeChildShape (F1: children_json shape coercion)
+      - repairMalformedJsonField (F3: plain-scalar value_json for small
+        models)
+      - liftProviderDraftToExtractionDraft (provider→canonical lift with
+        F11 array-to-value and child-key synthesis)
+  - layer: pipeline_orchestration
+    role: Named stages with typed failure codes and bounded retry. Every
+      failure code has a documented retry policy.
+    primitives:
+      - 6 stages (normalize → buildPrompt → generateDraft → validateDraft
+        → compile → apply)
+      - ExtractionFailureCode union + per-code RetryDecision
+      - buildTargetedReaskPrompt (F13: includes prior assistant draft +
+        structured issue bullets, max 2 attempts)
+      - dedupeDefineOps (F2: compiler-level collision handling)
+      - synthesizeAddPath + bootstrap update→add promotion (F8)
+  - layer: contract_choice
+    role: Caller picks strict vs resilient based on UX needs.
+    primitives:
+      - extractAndApply — strict `{ok} | {ok:false,failure}` for tests
+        and internal retry
+      - extractAndApplyResilient (F10) — always `{ok:true,degraded?}`
+        for user-facing callers; base snapshot preserved unchanged on
+        degrade
+  - layer: observability
+    role: Diagnostic context flows end-to-end so failures are explainable.
+    primitives:
+      - LLMProviderError.details carries rawText / jsonText / issues /
+        priorDraftText
+      - mapProviderErrorToExtractionFailure forwards those details
+      - this pipeline.yaml as runtime source-of-truth for stages /
+        failure codes / clusters / principles
+      - harness (--fixtures-dir, --runs=N, --slo-ms, --dump-dir) for
+        empirical validation
+
 # Architectural principles. These bind the fix strategy.
 principles:
   - id: deterministic_over_prompt
@@ -283,6 +342,24 @@ architecture_review:
       sonnet on long fixtures ~77s) bump this ceiling.
     recommendation: >
       Add timeoutMs to LLMGenerateOptions, default 60000, allow override.
+
+  - id: reask_missing_prior_context
+    severity: resilience
+    status: resolved_by_F13
+    site: packages/core/src/extractors/v2/pipeline.ts::buildTargetedReaskPrompt
+    problem: >
+      The targeted-reask prompt listed validation issues but did not include
+      the prior assistant output. The model had to re-derive the whole draft
+      from scratch — losing whatever was correct in the first attempt.
+      Pydantic AI's ModelRetry and Instructor's retry-on-ValidationError
+      both feed the prior output back so the model can fix incrementally.
+    progress: >
+      F13 threads a priorDraftText through the draft_schema failure path
+      (captured from the adapter-returned payload when rawText isn't
+      available) and prepends it as an assistant message in the reask
+      prompt, before the user correction. The conversation now reads
+      user → assistant (prior draft) → user (fix: …), matching the
+      Pydantic AI / Instructor reask shape.
 
   - id: json_level_coercion
     severity: resilience
