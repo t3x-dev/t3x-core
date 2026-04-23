@@ -4,7 +4,7 @@
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "Apache-2.0",
   "publishConfig": {
-    "access": "public"
+    "access": "restricted"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

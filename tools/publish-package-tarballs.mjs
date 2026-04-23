@@ -63,9 +63,14 @@ try {
     const tarball = parsePackFilename(packOutput, packageDir);
     const tarballPath = path.join(packDir, tarball);
     const publishArgs = ['publish', tarballPath];
+    const access = packageJson.publishConfig?.access;
 
     if (registry) {
       publishArgs.push('--registry', registry);
+    }
+
+    if (access === 'public' || access === 'restricted') {
+      publishArgs.push('--access', access);
     }
 
     if (tag) {
