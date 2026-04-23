@@ -9,8 +9,9 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { postLogin, postRegister } from '@/infrastructure/auth';
+import { ApiError } from '@/infrastructure/core';
 import { setSessionKey, setSessionUser } from '@/infrastructure/session';
-import { API_BASE } from '@/utils/apiBase';
 
 function LoginForm() {
   const router = useRouter();
@@ -29,25 +30,11 @@ function LoginForm() {
     setError('');
     setLoading(true);
 
-    const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
-    const body =
-      mode === 'login' ? { username, password } : { username, password, ...(name ? { name } : {}) };
-
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.success) {
-        setError(json.error?.message || 'Something went wrong');
-        return;
-      }
-
-      const apiKey: string = json.data.api_key;
+      const session =
+        mode === 'login'
+          ? await postLogin({ username, password })
+          : await postRegister({ username, password, ...(name ? { name } : {}) });
 
       // MCP callback: redirect token to local MCP server instead of storing cookie
       const mcpCallback = searchParams.get('mcp_callback');
@@ -55,14 +42,14 @@ function LoginForm() {
 
       if (mcpCallback && state) {
         try {
-          const callbackUrl = new URL(mcpCallback);
-          if (callbackUrl.hostname !== '127.0.0.1' && callbackUrl.hostname !== 'localhost') {
+          const callbackTarget = new URL(mcpCallback);
+          if (callbackTarget.hostname !== '127.0.0.1' && callbackTarget.hostname !== 'localhost') {
             setError('Invalid callback address: only localhost is allowed');
             return;
           }
-          callbackUrl.searchParams.set('token', apiKey);
-          callbackUrl.searchParams.set('state', state);
-          window.location.href = callbackUrl.toString();
+          callbackTarget.searchParams.set('token', session.api_key);
+          callbackTarget.searchParams.set('state', state);
+          window.location.href = callbackTarget.toString();
         } catch {
           setError('Invalid callback URL');
         }
@@ -70,15 +57,19 @@ function LoginForm() {
       }
 
       // Normal flow: store session and redirect
-      setSessionKey(apiKey);
+      setSessionKey(session.api_key);
       setSessionUser({
-        id: json.data.id,
-        name: json.data.name ?? null,
-        username: json.data.username ?? null,
+        id: session.id,
+        name: session.name ?? null,
+        username: session.username ?? null,
       });
       router.push(callbackUrl);
-    } catch {
-      setError('Failed to connect to server');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message || 'Something went wrong');
+      } else {
+        setError('Failed to connect to server');
+      }
     } finally {
       setLoading(false);
     }
