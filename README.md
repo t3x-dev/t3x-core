@@ -219,6 +219,22 @@ Built-in structural rules that run without a schema &mdash; checks key naming, v
 <project>/.t3x/config.json  # Project-specific settings
 ```
 
+For one-machine local product use, CLI (`t3x auth/config`) and MCP read the
+machine-level `~/.t3x/config.json`, and WebUI (`/settings/access`) manages that
+same file through the standalone API. Effective lookup order is:
+
+```text
+T3X_API_URL / T3X_API_KEY (environment)
+-> ~/.t3x/config.json
+-> built-in defaults
+```
+
+Environment variables always win over the shared file.
+
+After changing local access settings, use `t3x auth check` or the WebUI
+`Test Access` action in `/settings/access` to verify the effective API URL, and
+whether the current deployment requires or accepts the configured key.
+
 Copy `.env.example` to `.env` to add provider keys for source development or to make auth settings explicit for Docker and other self-hosted deployments.
 
 The core engine works without any API key. To use extraction or chat, add an Anthropic, OpenAI, or Google AI Studio key.

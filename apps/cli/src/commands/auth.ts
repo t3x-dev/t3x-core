@@ -1,5 +1,10 @@
 import type { Command } from 'commander';
-import { clearStoredApiKey, resolveLocalConfigState, updateLocalConfig } from '../local-config.js';
+import {
+  checkLocalAccess,
+  clearStoredApiKey,
+  resolveLocalConfigState,
+  updateLocalConfig,
+} from '../local-config.js';
 import { success } from '../utils.js';
 
 export function registerAuthCommands(parent: Command): void {
@@ -34,5 +39,24 @@ export function registerAuthCommands(parent: Command): void {
     .action(() => {
       clearStoredApiKey();
       success('Cleared stored local API key');
+    });
+
+  parent
+    .command('check')
+    .description('Check whether the current API URL and key can access the target API')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => {
+      const result = await checkLocalAccess();
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`Result: ${result.ok ? 'ok' : 'failed'}`);
+      console.log(`Code: ${result.code}`);
+      console.log(`Auth Mode: ${result.auth_mode}`);
+      console.log(`API URL: ${result.api_url}`);
+      console.log(`Key Source: ${result.api_key_source}`);
+      console.log(`Message: ${result.message}`);
     });
 }

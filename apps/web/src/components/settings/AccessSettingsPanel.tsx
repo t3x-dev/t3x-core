@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAccessSettings } from '@/hooks/access/useAccessSettings';
-import type { LocalConfigState } from '@/infrastructure/local-config';
+import type { LocalAccessCheckResult, LocalConfigState } from '@/infrastructure/local-config';
 
 function formatSourceLabel(source: LocalConfigState['api_url_source'] | LocalConfigState['api_key_source']): string {
   switch (source) {
@@ -22,13 +22,16 @@ function formatSourceLabel(source: LocalConfigState['api_url_source'] | LocalCon
 }
 
 export function AccessSettingsPanel() {
-  const { fetchLocalConfig, saveLocalConfig, clearLocalApiKey } = useAccessSettings();
+  const { fetchLocalConfig, saveLocalConfig, clearLocalApiKey, checkLocalAccess } =
+    useAccessSettings();
   const [config, setConfig] = useState<LocalConfigState | null>(null);
+  const [accessCheck, setAccessCheck] = useState<LocalAccessCheckResult | null>(null);
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +67,7 @@ export function AccessSettingsPanel() {
         ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
       });
       setConfig(nextConfig);
+      setAccessCheck(null);
       setApiUrl(nextConfig.api_url);
       setApiKey('');
       toast.success('Shared access updated');
@@ -80,6 +84,7 @@ export function AccessSettingsPanel() {
     try {
       const nextConfig = await clearLocalApiKey();
       setConfig(nextConfig);
+      setAccessCheck(null);
       setApiUrl(nextConfig.api_url);
       setApiKey('');
       toast.success('Stored API key cleared');
@@ -90,12 +95,43 @@ export function AccessSettingsPanel() {
     }
   }
 
+  async function handleCheckAccess() {
+    setIsChecking(true);
+    try {
+      const result = await checkLocalAccess();
+      setAccessCheck(result);
+      if (result.ok) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to test shared access');
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Local Shared Access</h2>
         <p className="text-xs text-[var(--text-tertiary)]">
-          WebUI, CLI, and MCP read the same local API URL and key on this machine.
+          This page manages the standalone API host&apos;s local API URL and key. In a one-machine
+          setup, CLI and MCP can point at the same shared file.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+        <p className="font-medium text-[var(--text-primary)]">CLI fallback</p>
+        <p className="mt-1">
+          You can set the same shared values from the terminal with{' '}
+          <span className="font-mono text-[var(--text-primary)]">t3x auth use-key &lt;key&gt;</span>{' '}
+          and{' '}
+          <span className="font-mono text-[var(--text-primary)]">
+            t3x config set api-url &lt;url&gt;
+          </span>
+          .
         </p>
       </div>
 
@@ -172,6 +208,15 @@ export function AccessSettingsPanel() {
             <Button
               type="button"
               variant="outline"
+              disabled={isChecking}
+              onClick={() => void handleCheckAccess()}
+            >
+              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Test Access
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               disabled={isClearing}
               onClick={() => void handleClearStoredKey()}
             >
@@ -179,6 +224,15 @@ export function AccessSettingsPanel() {
               Clear Stored Key
             </Button>
           </div>
+
+          {accessCheck ? (
+            <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+              <p className="font-medium text-[var(--text-primary)]">
+                Access check: {accessCheck.code}
+              </p>
+              <p className="mt-1">{accessCheck.message}</p>
+            </div>
+          ) : null}
         </form>
       )}
     </section>

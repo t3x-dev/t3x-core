@@ -92,3 +92,8 @@ export function clearStoredApiKey(): LocalConfigState {
   writeFileConfig(next);
   return resolveLocalConfigState();
 }
+
+export function getEffectiveApiKey(): string | undefined {
+  const fileConfig = readFileConfig();
+  return process.env.T3X_API_KEY || fileConfig.api_key;
+}

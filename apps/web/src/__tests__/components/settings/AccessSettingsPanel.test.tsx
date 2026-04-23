@@ -37,6 +37,7 @@ describe('AccessSettingsPanel', () => {
       fetchLocalConfig,
       saveLocalConfig: vi.fn(),
       clearLocalApiKey: vi.fn(),
+      checkLocalAccess: vi.fn(),
     });
 
     render(<AccessSettingsPanel />);
@@ -46,8 +47,46 @@ describe('AccessSettingsPanel', () => {
     });
 
     expect(screen.getByText('Local Shared Access')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This page manages the standalone API host's local API URL and key. In a one-machine setup, CLI and MCP can point at the same shared file."
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText('API key not configured')).toBeInTheDocument();
     expect(screen.getByText('/Users/test/.t3x/config.json')).toBeInTheDocument();
+    expect(screen.getByText('CLI fallback')).toBeInTheDocument();
+    expect(screen.getByText('t3x auth use-key <key>')).toBeInTheDocument();
+    expect(screen.getByText('t3x config set api-url <url>')).toBeInTheDocument();
+  });
+
+  it('shows env override guidance when file config is not the effective source', async () => {
+    const fetchLocalConfig = vi.fn().mockResolvedValue({
+      api_url: 'http://env.example/api',
+      api_url_source: 'env',
+      api_key_present: true,
+      api_key_source: 'env',
+      api_key_preview: 't3xk_env...',
+      config_path: '/Users/test/.t3x/config.json',
+    });
+
+    vi.mocked(useAccessSettings).mockReturnValue({
+      fetchLocalConfig,
+      saveLocalConfig: vi.fn(),
+      clearLocalApiKey: vi.fn(),
+      checkLocalAccess: vi.fn(),
+    });
+
+    render(<AccessSettingsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('http://env.example/api')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        'Environment variables currently override part of this local config. File changes stay saved, but they will not take effect until the override is removed.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('saves api url and api key, then clears the stored key', async () => {
@@ -75,11 +114,21 @@ describe('AccessSettingsPanel', () => {
       api_key_preview: null,
       config_path: '/Users/test/.t3x/config.json',
     });
+    const checkLocalAccess = vi.fn().mockResolvedValue({
+      ok: true,
+      code: 'ACCESS_OK',
+      auth_mode: 'protected',
+      message: 'Configured key is accepted by the target API.',
+      api_url: 'http://127.0.0.1:8100/api',
+      api_key_present: true,
+      api_key_source: 'file',
+    });
 
     vi.mocked(useAccessSettings).mockReturnValue({
       fetchLocalConfig,
       saveLocalConfig,
       clearLocalApiKey,
+      checkLocalAccess,
     });
 
     render(<AccessSettingsPanel />);
@@ -107,6 +156,12 @@ describe('AccessSettingsPanel', () => {
 
     await waitFor(() => {
       expect(clearLocalApiKey).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Access' }));
+
+    await waitFor(() => {
+      expect(checkLocalAccess).toHaveBeenCalled();
     });
   });
 });

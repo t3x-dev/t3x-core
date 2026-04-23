@@ -26,6 +26,42 @@ invariant.
 - `T3X_DRAFT` — default draft ID used when a command's `[draft-id]` positional
   is omitted by `show draft`, `delete draft`, `yops apply`, and `commit`
 
+## Local Shared Access
+
+For a one-machine local setup, the CLI and MCP read one machine-local config
+file, and WebUI can manage that same file through the standalone API:
+
+```text
+~/.t3x/config.json
+```
+
+This file stores the current `api_url` and the single active `api_key` for this
+machine. The effective lookup order is:
+
+```text
+T3X_API_URL / T3X_API_KEY (environment)
+-> ~/.t3x/config.json
+-> built-in defaults
+```
+
+That means environment variables always win. File changes still persist, but
+they will not take effect until the environment override is removed.
+
+Use the CLI to inspect or update the shared config:
+
+```bash
+t3x auth use-key t3xk_xxx
+t3x auth status
+t3x auth check
+t3x config set api-url http://localhost:8000/api
+t3x config show
+```
+
+The same shared values are also visible in WebUI under `/settings/access` when
+WebUI is pointed at the same standalone API instance. Use `t3x auth check`
+after changing either value to confirm whether the target API is reachable, and
+whether that deployment requires or accepts the configured key.
+
 ## Main Path
 
 ```bash

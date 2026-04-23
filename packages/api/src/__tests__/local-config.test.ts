@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
 
 describe('Local Config Routes', () => {
@@ -12,6 +12,10 @@ describe('Local Config Routes', () => {
   let tempDir: string;
   let configPath: string;
 
+  function createLocalConfigApp() {
+    return createApp({ enableLocalConfigRoutes: true, skipBuiltinAuth: true });
+  }
+
   beforeEach(() => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), 't3x-local-config-'));
     configPath = path.join(tempDir, 'config.json');
@@ -21,6 +25,8 @@ describe('Local Config Routes', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
+
     if (originalConfigPath === undefined) delete process.env.T3X_CONFIG_PATH;
     else process.env.T3X_CONFIG_PATH = originalConfigPath;
 
@@ -34,7 +40,7 @@ describe('Local Config Routes', () => {
   });
 
   it('returns default local config state when no env or file config exists', async () => {
-    const { app } = createApp({ enableLocalConfigRoutes: true });
+    const { app } = createLocalConfigApp();
     const res = await app.request('/api/v1/local-config');
 
     expect(res.status).toBe(200);
@@ -60,7 +66,7 @@ describe('Local Config Routes', () => {
   });
 
   it('writes api url and api key to the shared config file', async () => {
-    const { app } = createApp({ enableLocalConfigRoutes: true });
+    const { app } = createLocalConfigApp();
     const res = await app.request('/api/v1/local-config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -100,7 +106,7 @@ describe('Local Config Routes', () => {
   });
 
   it('reports env values as the effective source over file config', async () => {
-    const { app } = createApp({ enableLocalConfigRoutes: true });
+    const { app } = createLocalConfigApp();
     await app.request('/api/v1/local-config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -135,15 +141,98 @@ describe('Local Config Routes', () => {
     expect(json.data.api_key_preview).toBe('t3xk_env...');
   });
 
-  it('is reachable without an Authorization header', async () => {
-    const { app } = createApp({ enableLocalConfigRoutes: true });
+  it('is reachable when builtin auth is explicitly skipped', async () => {
+    const { app } = createLocalConfigApp();
     const res = await app.request('/api/v1/local-config');
 
     expect(res.status).toBe(200);
   });
 
+  it('requires authentication when builtin auth is enabled', async () => {
+    const { app } = createApp({ enableLocalConfigRoutes: true });
+    const res = await app.request('/api/v1/local-config');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('reports open-access deployments without requiring a key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { app } = createLocalConfigApp();
+    const res = await app.request('/api/v1/local-config/check', { method: 'POST' });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      success: boolean;
+      data: {
+        ok: boolean;
+        code: string;
+        auth_mode: string;
+        message: string;
+      };
+    };
+
+    expect(json.success).toBe(true);
+    expect(json.data.ok).toBe(true);
+    expect(json.data.code).toBe('AUTH_NOT_REQUIRED');
+    expect(json.data.auth_mode).toBe('open');
+    expect(json.data.message).toContain('does not currently require a key');
+  });
+
+  it('reports a missing key when the target api requires auth', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { app } = createLocalConfigApp();
+    const res = await app.request('/api/v1/local-config/check', { method: 'POST' });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      success: boolean;
+      data: {
+        ok: boolean;
+        code: string;
+        auth_mode: string;
+      };
+    };
+
+    expect(json.success).toBe(true);
+    expect(json.data.ok).toBe(false);
+    expect(json.data.code).toBe('MISSING_API_KEY');
+    expect(json.data.auth_mode).toBe('protected');
+  });
+
+  it('reports an invalid key when auth is required and the bearer check is rejected', async () => {
+    process.env.T3X_API_KEY = 't3xk_invalid_key';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { app } = createLocalConfigApp();
+    const res = await app.request('/api/v1/local-config/check', { method: 'POST' });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      success: boolean;
+      data: {
+        ok: boolean;
+        code: string;
+        auth_mode: string;
+      };
+    };
+
+    expect(json.success).toBe(true);
+    expect(json.data.ok).toBe(false);
+    expect(json.data.code).toBe('INVALID_API_KEY');
+    expect(json.data.auth_mode).toBe('protected');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('is not mounted by default on generic createApp consumers', async () => {
-    const { app } = createApp();
+    const { app } = createApp({ skipBuiltinAuth: true });
     const res = await app.request('/api/v1/local-config');
 
     expect(res.status).toBe(404);

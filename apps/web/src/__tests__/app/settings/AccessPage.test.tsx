@@ -15,7 +15,14 @@ describe('Access settings page', () => {
 
     expect(screen.getByRole('heading', { name: 'API Access' })).toBeInTheDocument();
     expect(
-      screen.getByText('Configure the shared local API URL and key used by WebUI, CLI, and MCP.')
+      screen.getByText(
+        "Configure the standalone API host's local API URL and key. In a one-machine setup, WebUI, CLI, and MCP can share the same file."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Environment variables override the shared file, so this page shows the effective state before you save.'
+      )
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Access Settings Panel')).toBeInTheDocument();
   });

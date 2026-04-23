@@ -84,4 +84,17 @@ describe('auth commands', () => {
     expect(stored.api_url).toBe('http://127.0.0.1:9000/api');
     expect(stored.api_key).toBeUndefined();
   });
+
+  it('reports when the target api does not require a key', async () => {
+    const program = createProgram();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const logSpy = vi.spyOn(console, 'log');
+
+    await program.parseAsync(['node', 'test', 'auth', 'check']);
+
+    const lines = logSpy.mock.calls.map((call) => String(call[0]));
+    expect(lines.some((line) => line.includes('AUTH_NOT_REQUIRED'))).toBe(true);
+    expect(lines.some((line) => line.includes('does not currently require a key'))).toBe(true);
+  });
 });
