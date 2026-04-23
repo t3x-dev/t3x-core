@@ -16,6 +16,7 @@ interface TreeNodeDataWithState extends TreeNodeData {
   updatedSlots?: string[];
   onSlotEdit?: (treeId: string, key: string, value: SlotValue) => void;
   onTypeEdit?: (treeId: string, newType: string) => void;
+  onSlotDelete?: (treeId: string, key: string) => void;
 }
 
 type TreeNodeProps = NodeProps & { data: TreeNodeDataWithState };
@@ -235,7 +236,8 @@ function EditableSlotValue({
 // ── TreeNodeView Component ──
 
 function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
-  const { treeType, slots, source, state, updatedSlots, onSlotEdit, onTypeEdit } = data;
+  const { treeType, slots, source, state, updatedSlots, onSlotEdit, onTypeEdit, onSlotDelete } =
+    data;
   const updatedSet = new Set(updatedSlots ?? []);
 
   // State-based container classes
@@ -320,12 +322,34 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
             <div
               key={key}
               className={cn(
-                'flex items-start gap-1.5 text-xs font-mono',
+                'group flex items-start gap-1.5 text-xs font-mono',
                 updatedSet.has(key) && 'bg-[var(--status-warning-muted)] -mx-1 px-1 rounded'
               )}
             >
               <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{key}:</span>
-              <EditableSlotValue treeId={id} slotKey={key} value={value} onSlotEdit={onSlotEdit} />
+              <div className="flex-1 min-w-0">
+                <EditableSlotValue
+                  treeId={id}
+                  slotKey={key}
+                  value={value}
+                  onSlotEdit={onSlotEdit}
+                />
+              </div>
+              {onSlotDelete && (
+                <button
+                  type="button"
+                  aria-label={`Remove slot ${key}`}
+                  title="Remove slot"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSlotDelete(id, key);
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="opacity-0 group-hover:opacity-100 shrink-0 text-[10px] leading-none text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded px-1 py-0.5 transition-opacity"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>

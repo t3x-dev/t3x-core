@@ -163,6 +163,14 @@ function TreeGraphInner({
     [onBatchCreated]
   );
 
+  const handleSlotDelete = useCallback(
+    (treeId: string, key: string) => {
+      if (!onBatchCreated) return;
+      onBatchCreated([{ unset: { path: `${treeId}/${key}` } }], 'manual');
+    },
+    [onBatchCreated]
+  );
+
   const handleTypeEdit = useCallback(
     (treeId: string, newType: string) => {
       if (!onBatchCreated) return;
@@ -299,7 +307,13 @@ function TreeGraphInner({
           ...node.data,
           ...(changeState?.[node.id] ? { state: changeState[node.id] } : {}),
           ...(updatedSlots?.[node.id] ? { updatedSlots: updatedSlots[node.id] } : {}),
-          ...(onBatchCreated ? { onSlotEdit: handleSlotEdit, onTypeEdit: handleTypeEdit } : {}),
+          ...(onBatchCreated
+            ? {
+                onSlotEdit: handleSlotEdit,
+                onTypeEdit: handleTypeEdit,
+                onSlotDelete: handleSlotDelete,
+              }
+            : {}),
         },
       }));
 
