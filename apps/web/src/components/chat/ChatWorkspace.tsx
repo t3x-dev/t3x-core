@@ -16,11 +16,11 @@ import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
-import { ChatAddForm } from './ChatAddForm';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
+import { ChatSpanActions } from './ChatSpanActions';
 import { CommittedBar } from './CommittedBar';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
 import { SourceMaterialPanel } from './SourceMaterialPanel';
@@ -414,8 +414,10 @@ export function ChatWorkspace({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Add-to-extraction form (visible in Review phase when text is selected) */}
-      {showAddForm && selection && <ChatAddForm selection={selection} onDone={clearSelection} />}
+      {/* Span Add/Remove actions (visible in Review phase when text is selected) */}
+      {showAddForm && selection && (
+        <ChatSpanActions selection={selection} onDone={clearSelection} />
+      )}
 
       {/* Input area — committed bar replaces input after commit */}
       {isCommitted ? (
