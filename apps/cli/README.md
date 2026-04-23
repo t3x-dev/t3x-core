@@ -2,6 +2,15 @@
 
 Command-line interface for T3X — semantic version control for AI conversations.
 
+## First-Stage Scope
+
+This CLI currently only promises one main path:
+
+`create project -> extract -> show draft -> yops apply -> commit -> create leaf -> generate leaf`
+
+The `commit` command is part of that path and commits a draft, not a local
+YAML/JSON file.
+
 ## Core Rule
 
 **CLI mutations to drafts go through YOps.** The CLI is a YOps pipeline, not a
@@ -10,61 +19,48 @@ semantic editor. It does **not** offer convenience commands like `slot set` or
 to YOps and break the project's "all tree mutation goes through YOps"
 invariant.
 
-- To edit a draft interactively → use the WebUI.
-- To edit a draft from a shell, script, or CI job → author a YOps YAML
-  document and pipe it to `t3x yops apply`.
-- To let an LLM agent edit a draft → use the MCP `t3x_edit` tool.
-
-All three paths end up at `POST /v1/drafts/:id/apply-yops`, which writes to
-`yops_log` for full audit / rebase traceability.
-
 ## Environment
 
-- `T3X_API_URL` — API base URL (default `http://localhost:8000/api`).
-- `T3X_API_KEY` — Bearer token for authenticated endpoints.
+- `T3X_API_URL` — API base URL (default `http://localhost:8000/api`)
+- `T3X_API_KEY` — Bearer token for authenticated endpoints
 - `T3X_DRAFT` — default draft ID used when a command's `[draft-id]` positional
-  is omitted. Commands that honour it: `yops apply`, `show draft`,
-  `delete draft`.
+  is omitted by `show draft`, `delete draft`, `yops apply`, and `commit`
 
-## Draft Management
+## Main Path
 
 ```bash
-# List drafts in a project
-t3x list drafts --project proj_abc
+# 1. Create a project
+t3x create project "Travel Notes"
 
-# Show a single draft (uses T3X_DRAFT if omitted)
+# 2. Extract text into a draft
+t3x extract -p proj_abc --text "I have 5000 yuan and want a 5-day Hangzhou trip."
+
+# 3. Inspect the draft
 t3x show draft draft_xyz
-t3x show draft --json
+export T3X_DRAFT=draft_xyz
 
-# Delete a draft
-t3x delete draft draft_xyz            # prompts for confirmation
-t3x delete draft draft_xyz --force    # no prompt
-t3x delete draft --json               # implies --force, prints JSON
+# 4. Apply YOps to the draft
+t3x yops apply --file ops.yaml
+
+# 5. Commit the draft
+t3x commit -p proj_abc -m "Refine travel plan"
+
+# 6. Create a leaf from the commit
+t3x create leaf -p proj_abc -c sha256:commit_hash -t article --title "Hangzhou plan"
+
+# 7. Generate the leaf output
+t3x generate leaf leaf_abc
+```
+
+## Draft Commands
+
+```bash
+t3x list drafts --project proj_abc
+t3x show draft draft_xyz
+t3x delete draft draft_xyz --force
 ```
 
 ## YOps
-
-```bash
-# Validate a YOps document (dry-run; does not modify the draft)
-t3x yops validate --file ops.yaml
-cat ops.yaml | t3x yops validate --stdin
-
-# Apply a YOps document to a draft
-t3x yops apply draft_xyz --file ops.yaml
-cat ops.yaml | t3x yops apply draft_xyz --stdin
-
-# With T3X_DRAFT set, the positional is optional:
-export T3X_DRAFT=draft_xyz
-t3x yops apply --file ops.yaml
-
-# Explicit optimistic-locking revision (skips auto-fetch):
-t3x yops apply draft_xyz --file ops.yaml --if-revision 7
-
-# View YOps history for a conversation
-t3x yops log -c conv_abc
-```
-
-### YOps YAML format
 
 ```yaml
 yops:
@@ -74,15 +70,15 @@ yops:
   - drop:      { path: trip/old_plan }
 ```
 
-See `packages/yops/yops.yaml` for the full 18-operation spec. Use
-`t3x schema yops` to print the JSON Schema.
-
-## Revision handling (`--if-revision`)
+```bash
+t3x yops validate --file ops.yaml
+t3x yops apply draft_xyz --file ops.yaml
+export T3X_DRAFT=draft_xyz
+t3x yops apply --file ops.yaml
+t3x yops apply draft_xyz --file ops.yaml --if-revision 7
+```
 
 `POST /v1/drafts/:id/apply-yops` requires an `if_revision` for optimistic
 locking. When `--if-revision` is omitted, the CLI fetches the draft first,
 reads its current `revision`, and applies — two round-trips but zero
 arguments to think about.
-
-For concurrent or CI workloads where you want a deterministic conflict
-failure, pass `--if-revision <n>` explicitly.

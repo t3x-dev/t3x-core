@@ -7,7 +7,7 @@
  * Action-first command style (kubectl-like):
  *   t3x list projects      t3x show commit <hash>
  *   t3x create project      t3x delete project <id>
- *   t3x commit <file>       t3x generate leaf <id>
+ *   t3x commit <draft-id>   t3x generate leaf <id>
  */
 import { Command } from 'commander';
 
@@ -58,9 +58,7 @@ const program = new Command();
 program
   .name('t3x')
   .description('T3X CLI - Semantic version control for AI conversations')
-  .version('0.1.0')
-  .option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)')
-  .option('--api-key <key>', 'API key for authentication (or set T3X_API_KEY env var)');
+  .version('0.1.0');
 
 // ── Action-group commands (kubectl-style) ──────────────────────────
 

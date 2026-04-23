@@ -2,13 +2,12 @@
  * Leaf Commands
  */
 
-import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
 import {
   createSpinner,
   error,
   formatDate,
-  getApiUrl,
+  getClientWithAuth,
   printTable,
   success,
   truncate,
@@ -22,14 +21,14 @@ export function registerListLeaves(parent: Command): void {
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
-      const spinner = createSpinner('Fetching leaves...');
-      spinner.start();
+      const spinner = options.json ? null : createSpinner('Fetching leaves...');
+      spinner?.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const leaves = await client.listLeaves(options.project);
 
-        spinner.stop();
+        spinner?.stop();
 
         if (options.json) {
           console.log(JSON.stringify(leaves, null, 2));
@@ -52,7 +51,7 @@ export function registerListLeaves(parent: Command): void {
           ]),
         });
       } catch (err) {
-        spinner.stop();
+        spinner?.stop();
         error(`Failed to list leaves: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
       }
@@ -66,14 +65,14 @@ export function registerShowLeaf(parent: Command): void {
     .description('Show leaf details')
     .option('--json', 'Output as JSON')
     .action(async (id: string, options) => {
-      const spinner = createSpinner('Fetching leaf...');
-      spinner.start();
+      const spinner = options.json ? null : createSpinner('Fetching leaf...');
+      spinner?.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const leaf = await client.getLeaf(id);
 
-        spinner.stop();
+        spinner?.stop();
 
         if (options.json) {
           console.log(JSON.stringify(leaf, null, 2));
@@ -87,14 +86,14 @@ export function registerShowLeaf(parent: Command): void {
         console.log(`Commit: ${leaf.commit_hash}`);
         console.log(`Created: ${formatDate(leaf.created_at)}`);
         console.log(`Constraints: ${leaf.constraints.length}`);
-        console.log(`Assertions: ${leaf.assertions.length}`);
+        console.log(`Assertions: ${Array.isArray(leaf.assertions) ? leaf.assertions.length : 0}`);
         if (leaf.output) {
           console.log();
           console.log('Output:');
           console.log(truncate(leaf.output, 500));
         }
       } catch (err) {
-        spinner.stop();
+        spinner?.stop();
         error(`Failed to get leaf: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
       }
@@ -112,11 +111,11 @@ export function registerCreateLeaf(parent: Command): void {
     .option('--title <title>', 'Leaf title')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
-      const spinner = createSpinner('Creating leaf...');
-      spinner.start();
+      const spinner = options.json ? null : createSpinner('Creating leaf...');
+      spinner?.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const leaf = await client.createLeaf({
           project_id: options.project,
           commit_hash: options.commit,
@@ -124,7 +123,7 @@ export function registerCreateLeaf(parent: Command): void {
           title: options.title,
         });
 
-        spinner.stop();
+        spinner?.stop();
 
         if (options.json) {
           console.log(JSON.stringify(leaf, null, 2));
@@ -133,7 +132,7 @@ export function registerCreateLeaf(parent: Command): void {
 
         success(`Leaf created: ${leaf.id}`);
       } catch (err) {
-        spinner.stop();
+        spinner?.stop();
         error(`Failed to create leaf: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
       }
@@ -149,17 +148,17 @@ export function registerGenerateLeaf(parent: Command): void {
     .option('--provider <provider>', 'Provider to use')
     .option('--json', 'Output as JSON')
     .action(async (id: string, options) => {
-      const spinner = createSpinner('Generating leaf output...');
-      spinner.start();
+      const spinner = options.json ? null : createSpinner('Generating leaf output...');
+      spinner?.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const leaf = await client.generateLeaf(id, {
           model: options.model,
           provider: options.provider,
         });
 
-        spinner.stop();
+        spinner?.stop();
 
         if (options.json) {
           console.log(JSON.stringify(leaf, null, 2));
@@ -172,7 +171,7 @@ export function registerGenerateLeaf(parent: Command): void {
           console.log(truncate(leaf.output, 500));
         }
       } catch (err) {
-        spinner.stop();
+        spinner?.stop();
         error(`Failed to generate leaf: ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
       }
@@ -195,7 +194,7 @@ export function registerDeleteLeaf(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         await client.deleteLeaf(id);
 
         spinner.stop();

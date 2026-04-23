@@ -28,6 +28,8 @@ describe('t3x --help', () => {
 
     // Commander prints "Usage: t3x ..." at the top.
     expect(out.toLowerCase()).toMatch(/usage/);
+    expect(out).not.toContain('--api-url');
+    expect(out).not.toContain('--api-key');
 
     // Action-group commands (kubectl-style) registered in apps/cli/src/index.ts.
     const expected = [
