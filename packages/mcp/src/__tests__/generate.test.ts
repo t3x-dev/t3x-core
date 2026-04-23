@@ -244,14 +244,6 @@ import { generateHandler } from '../tools/core/generate.js';
 const originalBackend = process.env.T3X_MCP_BACKEND;
 
 describe('t3x_generate handler', () => {
-  afterEach(() => {
-    if (originalBackend === undefined) {
-      delete process.env.T3X_MCP_BACKEND;
-    } else {
-      process.env.T3X_MCP_BACKEND = originalBackend;
-    }
-  });
-
   const originalEnv = process.env.ANTHROPIC_API_KEY;
   const originalOpenAIEnv = process.env.OPENAI_API_KEY;
 
@@ -288,6 +280,11 @@ describe('t3x_generate handler', () => {
   });
 
   afterEach(() => {
+    if (originalBackend === undefined) {
+      delete process.env.T3X_MCP_BACKEND;
+    } else {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    }
     if (originalEnv !== undefined) {
       process.env.ANTHROPIC_API_KEY = originalEnv;
     } else {

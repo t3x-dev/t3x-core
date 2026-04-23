@@ -10,7 +10,7 @@
  *   t3x commit <draft-id>   t3x generate leaf <id>
  */
 import { Command } from 'commander';
-
+import { registerAuthCommands } from './commands/auth.js';
 // Action-group handlers (refactored from resource-first)
 import {
   registerCreateBranch,
@@ -18,7 +18,6 @@ import {
   registerListBranches,
   registerSwitchBranch,
 } from './commands/branches.js';
-import { registerAuthCommands } from './commands/auth.js';
 // New commit command
 import { registerCommitCommand } from './commands/commit.js';
 import { registerListCommits, registerShowCommit } from './commands/commits.js';

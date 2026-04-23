@@ -29,7 +29,11 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { registerCreateLeaf, registerGenerateLeaf, registerShowLeaf } from '../../commands/leaves.js';
+import {
+  registerCreateLeaf,
+  registerGenerateLeaf,
+  registerShowLeaf,
+} from '../../commands/leaves.js';
 
 function createProgram() {
   const program = new Command();

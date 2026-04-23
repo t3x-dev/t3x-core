@@ -153,13 +153,13 @@ export const editHandler: ToolHandler = async (args) => {
     }
 
     const revision = ifRevision ?? Number(draft.revision ?? 0);
-    const draftNodes = ((draft.nodes ?? []) as Array<{
+    const draftNodes = (draft.nodes ?? []) as Array<{
       key?: string;
       id?: string;
       slots?: Record<string, unknown>;
       text?: string;
       children?: unknown[];
-    }>);
+    }>;
     const currentContent = draftNodesToContent(draftNodes);
     const validation = await validateYOps(yopsYaml, currentContent);
 

@@ -80,7 +80,10 @@ describe('auth commands', () => {
 
     await program.parseAsync(['node', 'test', 'auth', 'logout']);
 
-    const stored = JSON.parse(readFileSync(configPath, 'utf8')) as { api_url?: string; api_key?: string };
+    const stored = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      api_url?: string;
+      api_key?: string;
+    };
     expect(stored.api_url).toBe('http://127.0.0.1:9000/api');
     expect(stored.api_key).toBeUndefined();
   });

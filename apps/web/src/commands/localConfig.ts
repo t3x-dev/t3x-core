@@ -1,7 +1,7 @@
 import {
   checkLocalAccess as checkLocalAccessInfra,
-  type LocalAccessCheckResult,
   deleteLocalApiKey,
+  type LocalAccessCheckResult,
   type LocalConfigState,
   type UpdateLocalConfigInput,
   updateLocalConfig,
