@@ -53,6 +53,8 @@
     "verify:versions:no-manifest": "node tools/verify-versions.mjs --no-manifest",
     "version-packages": "changeset version",
     "publish-packages": "pnpm verify:versions && pnpm build && node tools/publish-package-tarballs.mjs",
+    "publish-runtime-release": "node tools/publish-runtime-release.mjs",
+    "publish-release": "pnpm publish-runtime-release && pnpm publish-packages",
     "smoke:local-install": "node tools/smoke-local-install.mjs"
   },
   "engines": {
