@@ -1,6 +1,6 @@
 'use client';
 
-import { Blocks, LogOut, Settings, SlidersHorizontal } from 'lucide-react';
+import { Blocks, KeyRound, LogOut, Settings, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -8,6 +8,7 @@ import { clearSession, getSessionKey } from '@/infrastructure/session';
 import { cn } from '@/utils/cn';
 
 const NAV_ITEMS = [
+  { href: '/settings/access', label: 'Access', icon: KeyRound },
   { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
   { href: '/settings/providers', label: 'Providers', icon: Blocks },
 ] as const;

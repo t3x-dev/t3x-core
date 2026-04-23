@@ -5,6 +5,7 @@ import { createClient, type T3xClient } from '@t3x-dev/api-client';
 import chalk from 'chalk';
 import ora from 'ora';
 import { table } from 'table';
+import { getFileApiKey, resolveLocalConfigState } from './local-config.js';
 
 export interface TableConfig {
   columns: string[];
@@ -74,14 +75,14 @@ export function truncate(str: string, maxLength: number): string {
  * Get API URL from environment or default
  */
 export function getApiUrl(): string {
-  return process.env.T3X_API_URL || 'http://localhost:8000/api';
+  return resolveLocalConfigState().api_url;
 }
 
 /**
  * Get API key from environment
  */
 export function getApiKey(): string | undefined {
-  return process.env.T3X_API_KEY;
+  return process.env.T3X_API_KEY || getFileApiKey();
 }
 
 /**

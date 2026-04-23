@@ -24,6 +24,8 @@ const PUBLIC_PATHS = [
   '/api/docs',
   '/api/openapi.json',
   '/api/v1/llm/models',
+  '/api/v1/local-config',
+  '/api/v1/local-config/api-key',
   // /ws owns its own auth via ?token= query param (headers are not settable
   // on browser WebSocket handshakes, so we cannot use Authorization: Bearer).
   '/ws',

@@ -57,6 +57,7 @@ import {
   knowledgeGraphRoutes,
   leavesRoutes,
   llmRoutes,
+  localConfigRoutes,
   mergeRoutes,
   notificationsRoutes,
   pinsRoutes,
@@ -87,6 +88,8 @@ export interface CreateAppOptions {
   skipLocalAuth?: boolean;
   /** Skip built-in API Key auth middleware. Set true when cloud repo provides its own auth. */
   skipBuiltinAuth?: boolean;
+  /** Enable machine-local config routes that read/write ~/.t3x state for standalone local apps only. */
+  enableLocalConfigRoutes?: boolean;
   /** Additional middleware inserted between rateLimitL1 and rateLimitL2 (e.g., auth) */
   middleware?: MiddlewareHandler[];
   /** Additional routes mounted on the OpenAPI router (e.g., auth callback) */
@@ -188,6 +191,9 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', searchRoutes);
   api.route('/', knowledgeGraphRoutes);
   api.route('/', llmRoutes);
+  if (options?.enableLocalConfigRoutes) {
+    api.route('/', localConfigRoutes);
+  }
   api.route('/', autopilotRoutes);
   api.route('/', checkRoutes);
   api.route('/', contextRoutes);
