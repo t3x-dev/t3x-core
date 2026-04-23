@@ -20,6 +20,7 @@ import {
   updateMergeDraft,
 } from '@t3x-dev/storage';
 
+import { isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
@@ -106,6 +107,12 @@ export const mergeHandler: ToolHandler = async (args) => {
 
   if (!action || !ACTIONS.includes(action as Action)) {
     return fail(`Missing or invalid "action". Must be one of: ${ACTIONS.join(', ')}.`);
+  }
+
+  if (isApiBackend()) {
+    return fail(
+      't3x_merge is not yet implemented for the API backend. Use the storage backend for merge workflows.'
+    );
   }
 
   switch (action) {

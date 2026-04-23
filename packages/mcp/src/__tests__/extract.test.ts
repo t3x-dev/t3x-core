@@ -3,9 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // ── Mocks ──
 
 const mockDB = {};
+const mockApiClient = {
+  extract: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 const MOCK_PROJECT = {
@@ -201,6 +208,7 @@ import { extractHandler } from '../tools/core/extract.js';
 describe('t3x_extract handler', () => {
   const originalEnv = process.env.ANTHROPIC_API_KEY;
   const originalOpenAIEnv = process.env.OPENAI_API_KEY;
+  const originalBackend = process.env.T3X_MCP_BACKEND;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -250,6 +258,11 @@ describe('t3x_extract handler', () => {
     } else {
       delete process.env.OPENAI_API_KEY;
     }
+    if (originalBackend !== undefined) {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    } else {
+      delete process.env.T3X_MCP_BACKEND;
+    }
   });
 
   // ── Validation errors ──
@@ -258,6 +271,38 @@ describe('t3x_extract handler', () => {
     const result = await extractHandler({ text: 'some text' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('"project_id" is required');
+  });
+
+  it('uses api client extraction when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.extract.mockResolvedValueOnce({
+      conversation_id: 'conv_api1',
+      draft_id: 'draft_api1',
+      trees: [{ key: 'trip', slots: { destination: 'Hangzhou' }, children: [] }],
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await extractHandler({
+      project_id: 'proj_test1',
+      text: 'Plan a Hangzhou trip',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.extract).toHaveBeenCalledWith({
+      project_id: 'proj_test1',
+      text: 'Plan a Hangzhou trip',
+      conversation_id: undefined,
+      source: undefined,
+    });
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      conversation_id: 'conv_api1',
+      draft_id: 'draft_api1',
+      trees: [{ key: 'trip', slots: { destination: 'Hangzhou' }, children: [] }],
+    });
   });
 
   it('returns error when text is missing', async () => {

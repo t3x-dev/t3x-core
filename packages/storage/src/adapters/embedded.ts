@@ -37,21 +37,38 @@ let ownsProcess = false;
 let connectionPort = DEFAULT_PORT;
 let connectionDatabase = DEFAULT_DATABASE;
 
+type PortProbeResult =
+  | { status: 'in_use' }
+  | { status: 'free' }
+  | { status: 'blocked'; code?: string; message: string };
+
 /**
  * Check if a port is already in use (another embedded-postgres instance running).
  */
-function isPortInUse(port: number): Promise<boolean> {
+function probePort(port: number): Promise<PortProbeResult> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(500);
     socket.once('connect', () => {
       socket.destroy();
-      resolve(true);
+      resolve({ status: 'in_use' });
     });
-    socket.once('error', () => resolve(false));
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      const code = error.code;
+      if (code === 'ECONNREFUSED') {
+        resolve({ status: 'free' });
+        return;
+      }
+
+      resolve({
+        status: 'blocked',
+        code,
+        message: error.message,
+      });
+    });
     socket.once('timeout', () => {
       socket.destroy();
-      resolve(false);
+      resolve({ status: 'free' });
     });
     socket.connect(port, '127.0.0.1');
   });
@@ -97,7 +114,17 @@ export async function createEmbeddedStorage(config: EmbeddedConfig = {}): Promis
   connectionDatabase = database;
 
   // Check if PostgreSQL is already running on this port (e.g., another T3X process started it)
-  const alreadyRunning = await isPortInUse(port);
+  const portProbe = await probePort(port);
+
+  if (portProbe.status === 'blocked') {
+    const errorCode = portProbe.code ? ` (${portProbe.code})` : '';
+    throw new Error(
+      `Cannot probe embedded PostgreSQL port ${port}${errorCode}: ${portProbe.message}. ` +
+        'Refusing to start another embedded PostgreSQL process because local connectivity is blocked in this environment.'
+    );
+  }
+
+  const alreadyRunning = portProbe.status === 'in_use';
 
   if (!alreadyRunning) {
     pg = new EmbeddedPostgres({

@@ -645,6 +645,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.28.0(zod@4.2.1)
+      '@t3x-dev/api-client':
+        specifier: workspace:*
+        version: link:../api-client
       '@t3x-dev/core':
         specifier: workspace:*
         version: link:../core

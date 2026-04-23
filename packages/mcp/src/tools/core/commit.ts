@@ -8,6 +8,7 @@
 
 import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
@@ -70,6 +71,25 @@ export const commitHandler: ToolHandler = async (args) => {
   }
   if (!message) {
     return fail('"message" is required.\nProvide a commit message describing this snapshot.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    const result = await client.commitFromDraft({
+      project_id: projectId,
+      draft_id: draftId,
+      message,
+      branch,
+    });
+
+    return ok({
+      ...result,
+      next_steps: [
+        'Use t3x_query { "target": "commit", "id": "<hash>" } to inspect the commit.',
+        'Use t3x_query { "target": "commits", "project_id": "..." } to list all commits.',
+        'Create a leaf from this commit, or continue editing with a new extract.',
+      ],
+    });
   }
 
   const db = await getDB();

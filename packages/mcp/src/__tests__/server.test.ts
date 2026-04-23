@@ -222,4 +222,30 @@ describe('createMcpServer', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Unknown tool: t3x_create_leaf');
   });
+
+  it('formats nested database errors instead of returning an empty message', async () => {
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    getDBMock.mockRejectedValueOnce(
+      new AggregateError([new Error('connect EPERM 127.0.0.1:5445')], '')
+    );
+
+    const callTool = getCallToolHandler(['core']);
+    const result = await callTool({
+      method: 'tools/call',
+      jsonrpc: '2.0',
+      id: 4,
+      params: {
+        name: 't3x_query',
+        arguments: {
+          target: 'projects',
+        },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('connect EPERM 127.0.0.1:5445');
+    expect(result.content[0].text).not.toBe('Error: ');
+    expect(result.content[0].text).not.toBe('Error: undefined');
+  });
 });

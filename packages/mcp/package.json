@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/yops": "workspace:*",
     "@t3x-dev/storage": "workspace:*"

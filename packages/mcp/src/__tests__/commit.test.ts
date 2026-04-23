@@ -1,11 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ──
 
 const mockDB = {};
+const mockApiClient = {
+  commitFromDraft: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 const MOCK_DRAFT_EDITING = {
@@ -84,7 +91,17 @@ import { commitHandler } from '../tools/core/commit.js';
 
 // ── Tests ──
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 describe('t3x_commit handler', () => {
+  afterEach(() => {
+    if (originalBackend === undefined) {
+      delete process.env.T3X_MCP_BACKEND;
+    } else {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    }
+  });
+
   // ── Validation errors ──
 
   it('returns error when project_id is missing', async () => {
@@ -103,6 +120,39 @@ describe('t3x_commit handler', () => {
     const result = await commitHandler({ project_id: 'proj_test1', draft_id: 'draft_abc' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('"message" is required');
+  });
+
+  it('uses api client commitFromDraft when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.commitFromDraft.mockResolvedValueOnce({
+      commit_hash: 'sha256:api-commit',
+      tree_count: 1,
+      branch: 'main',
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await commitHandler({
+      project_id: 'proj_test1',
+      draft_id: 'draft_abc',
+      message: 'API commit',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.commitFromDraft).toHaveBeenCalledWith({
+      project_id: 'proj_test1',
+      draft_id: 'draft_abc',
+      message: 'API commit',
+      branch: 'main',
+    });
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({
+      commit_hash: 'sha256:api-commit',
+      tree_count: 1,
+      branch: 'main',
+    });
   });
 
   // ── Draft lookup errors ──

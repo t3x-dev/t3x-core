@@ -160,10 +160,30 @@ export function createMcpServer(options: McpServerOptions) {
     try {
       return (await handler(args ?? {})) as unknown as Record<string, unknown>;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = formatErrorMessage(error);
       return errorResult(`Error: ${message}`);
     }
   });
 
   return { server, tools };
+}
+
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof AggregateError) {
+    const nested = error.errors.map((entry) => formatErrorMessage(entry)).filter(Boolean);
+    if (nested.length > 0) {
+      return nested.join('; ');
+    }
+    return error.message || error.name || 'AggregateError';
+  }
+
+  if (error instanceof Error) {
+    return error.message || error.name || 'Unknown error';
+  }
+
+  const text = String(error);
+  if (!text || text === 'undefined') {
+    return 'Unknown error';
+  }
+  return text;
 }

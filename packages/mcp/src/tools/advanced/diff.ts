@@ -8,6 +8,7 @@
 import { diffCommits } from '@t3x-dev/core';
 import { getCommit } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
@@ -59,6 +60,16 @@ export const diffHandler: ToolHandler = async (args) => {
   }
   if (!target) {
     return fail('"target" is required.\nProvide the commit hash of the target (newer) commit.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.twoWayDiff({
+        base_commit_hash: base,
+        target_commit_hash: target,
+      })
+    );
   }
 
   const db = await getDB();
