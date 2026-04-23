@@ -20,10 +20,6 @@ jobs:
         include:
           - platform: darwin-arm64
             runner: macos-14
-          - platform: linux-arm64
-            runner: ubuntu-24.04-arm
-          - platform: linux-x64
-            runner: ubuntu-24.04
 
     steps:
       - name: Checkout
