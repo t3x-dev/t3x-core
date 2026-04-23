@@ -5,9 +5,13 @@ import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
+import { YOpsLogPanel } from './YOpsLogPanel';
+
+type TopView = 'ops' | 'script';
 
 const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 48;
@@ -35,6 +39,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const tree = useWorkspaceStore((s) => s.tree);
   const [splitRatio, setSplitRatio] = useState(0.3);
   const [showBefore, setShowBefore] = useState(false);
+  const [topView, setTopView] = useState<TopView>('ops');
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const hasManualSplitRef = useRef(false);
@@ -135,9 +140,39 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
 
       <div
         style={{ height: `${splitRatio * 100}%` }}
-        className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-default)]"
+        className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-default)] flex flex-col"
       >
-        <ScriptEditor />
+        <div
+          role="tablist"
+          aria-label="Workspace top view"
+          className="flex items-center gap-0 border-b border-[var(--stroke-default)] bg-[var(--panel)] px-2"
+        >
+          {(
+            [
+              { id: 'ops', label: 'Ops' },
+              { id: 'script', label: 'Script' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={topView === tab.id}
+              onClick={() => setTopView(tab.id)}
+              className={cn(
+                'px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors',
+                topView === tab.id
+                  ? 'text-[var(--text-primary)] border-b-2 border-[var(--source)] -mb-px'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {topView === 'ops' ? <YOpsLogPanel /> : <ScriptEditor />}
+        </div>
       </div>
 
       <div
