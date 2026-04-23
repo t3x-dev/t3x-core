@@ -7,10 +7,10 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { truncate } from '@/domain/format/truncate';
-import type { NodeRelation } from '@/types/api';
+import type { Relation } from '@/types/api';
 
 interface RelationsGraphProps {
-  relations: NodeRelation[];
+  relations: Relation[];
   nodes: Array<{ id: string; text: string }>;
 }
 

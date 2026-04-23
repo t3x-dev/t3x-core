@@ -9,11 +9,6 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 export type { Relation, RelationType };
 
 /**
- * @deprecated Use Relation from @t3x-dev/core. Kept as alias for backward compatibility.
- */
-export type NodeRelation = Relation;
-
-/**
  * Get relations for a commit (from content.relations).
  */
 export async function getCommitRelations(hash: string): Promise<{ relations: Relation[] }> {
