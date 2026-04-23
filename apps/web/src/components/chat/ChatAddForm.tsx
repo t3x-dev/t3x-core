@@ -9,10 +9,11 @@
  */
 
 import type { YOp } from '@t3x-dev/core';
-import { Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
+import { useSpanActions } from '@/hooks/shared/useSpanActions';
 import type { TextSelectionResult } from '@/hooks/shared/useTextSelection';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -24,6 +25,7 @@ interface ChatAddFormProps {
 export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   const draft = useWorkspaceStore((s) => s.tree);
   const { applyEdit, enabled } = useGoldEdit();
+  const { previewRemoveSpan, removeSpan } = useSpanActions();
 
   const nodeOptions = useMemo(() => draft.trees.map((t) => t.key), [draft.trees]);
 
@@ -31,8 +33,21 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
   const [slotKey, setSlotKey] = useState('');
   const [slotValue, setSlotValue] = useState(selection.text.slice(0, 80));
   const [submitting, setSubmitting] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const overlappingMatches = useMemo(
+    () =>
+      previewRemoveSpan({
+        turnHash: selection.turnHash,
+        start: selection.startChar,
+        end: selection.endChar,
+      }),
+    [previewRemoveSpan, selection.turnHash, selection.startChar, selection.endChar]
+  );
+  const hasOverlap = overlappingMatches.length > 0;
 
   const canSubmit = !!targetNode && !!slotKey && enabled && !submitting;
+  const canRemove = enabled && hasOverlap && !removing;
 
   async function handleAdd() {
     if (!canSubmit) return;
@@ -51,8 +66,51 @@ export function ChatAddForm({ selection, onDone }: ChatAddFormProps) {
     }
   }
 
+  async function handleRemove() {
+    if (!canRemove) return;
+    setRemoving(true);
+    try {
+      const removed = await removeSpan({
+        turnHash: selection.turnHash,
+        start: selection.startChar,
+        end: selection.endChar,
+      });
+      toast.success(`Removed ${removed} mapping${removed === 1 ? '' : 's'}`);
+      onDone();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Remove failed';
+      toast.error(msg);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <div className="mx-3 my-2 p-2.5 bg-[var(--surface-panel)] border border-[var(--status-info)]/30 rounded-lg">
+      {/* Remove sweep — appears only when selection overlaps existing mappings */}
+      {hasOverlap && (
+        <div className="mb-2 pb-2 border-b border-[var(--stroke-default)]/40">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] text-[var(--text-tertiary)]">
+              This span maps to{' '}
+              <span className="font-semibold text-[var(--text-primary)]">
+                {overlappingMatches.length}
+              </span>{' '}
+              slot{overlappingMatches.length === 1 ? '' : 's'} in the tree.
+            </div>
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={!canRemove}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[var(--status-error)]/40 text-[var(--status-error)] text-[10px] font-semibold hover:bg-[var(--status-error)]/10 disabled:opacity-50"
+            >
+              <Minus className="w-3 h-3" />
+              {removing ? 'Removing…' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-1 text-[10px] font-semibold text-[var(--status-info)] mb-1.5">
         <Plus className="w-3 h-3" />
