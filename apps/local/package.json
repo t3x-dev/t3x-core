@@ -1,0 +1,57 @@
+{
+  "name": "@t3x-dev/local",
+  "version": "0.1.1",
+  "description": "T3X local entry package",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "t3x-local": "./dist/bin/t3x-local.js",
+    "t3x": "./dist/bin/t3x.js",
+    "t3x-mcp": "./dist/bin/t3x-mcp.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "scripts",
+    "runtime-manifest.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t3x-dev/t3x-core.git",
+    "directory": "apps/local"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/bin/t3x-local.ts src/bin/t3x.ts src/bin/t3x-mcp.ts --format esm --dts --clean",
+    "dev": "tsx src/bin/t3x-local.ts",
+    "prepare:runtime": "node ./scripts/prepare-runtime.mjs",
+    "generate:runtime-manifest": "node ./scripts/generate-runtime-manifest.mjs",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs",
+    "start": "node dist/bin/t3x-local.js start",
+    "test": "vitest run --passWithNoTests",
+    "lint": "biome lint src",
+    "postinstall": "node ./scripts/postinstall-download.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.15.2",
+    "@t3x-dev/api": "workspace:0.1.1",
+    "@t3x-dev/cli": "workspace:0.1.1",
+    "@t3x-dev/mcp": "workspace:0.1.1",
+    "@t3x-dev/storage": "workspace:0.1.1",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

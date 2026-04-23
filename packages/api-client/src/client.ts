@@ -5,6 +5,7 @@
  */
 
 import type {
+  ApiErrorResponse,
   ApiResponse,
   ApiSuccessResponse,
   ApplyYOpsResult,
@@ -147,7 +148,32 @@ export class T3xClient {
     const response = await this.fetchFn(`${this.rootUrl}/health`, {
       headers: this.headers,
     });
-    return response.json() as Promise<HealthResponse>;
+    const json = (await response.json()) as
+      | HealthResponse
+      | ApiSuccessResponse<HealthResponse>
+      | ApiErrorResponse;
+
+    if (!response.ok) {
+      if ('success' in json && !json.success) {
+        throw new T3xApiError(json.error.code, json.error.message, response.status);
+      }
+
+      throw new T3xApiError(
+        'UNKNOWN',
+        response.statusText || 'Health check failed',
+        response.status
+      );
+    }
+
+    if ('success' in json) {
+      if (!json.success) {
+        throw new T3xApiError(json.error.code, json.error.message, response.status);
+      }
+
+      return json.data;
+    }
+
+    return json;
   }
 
   async status(): Promise<StatusResponse> {

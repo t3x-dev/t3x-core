@@ -108,7 +108,7 @@ export function createMcpServer(options: McpServerOptions) {
 
   // 3. Create the MCP server
   const server = new Server(
-    { name: 't3x-mcp', version: '0.1.0' },
+    { name: 't3x-mcp', version: '0.1.1' },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
       instructions: SERVER_INSTRUCTIONS,

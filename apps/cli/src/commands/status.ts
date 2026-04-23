@@ -25,19 +25,8 @@ export function registerStatusCommands(program: Command): void {
         const statusColor = health.status === 'ok' ? chalk.green : chalk.red;
         console.log();
         console.log(`Status: ${statusColor(health.status)}`);
-        console.log(`Service: ${health.service}`);
-        console.log(`Timestamp: ${health.timestamp}`);
-
-        if (health.database) {
-          console.log();
-          console.log('Database:');
-          console.log(
-            `  Connected: ${health.database.connected ? chalk.green('Yes') : chalk.red('No')}`
-          );
-          if (health.database.latency_ms !== undefined) {
-            console.log(`  Latency: ${health.database.latency_ms}ms`);
-          }
-        }
+        console.log(`Version: ${health.version}`);
+        console.log(`Uptime: ${health.uptime}s`);
       } catch (err) {
         spinner.stop();
         error(`Health check failed: ${err instanceof Error ? err.message : String(err)}`);

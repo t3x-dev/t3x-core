@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 1,
+  "packageVersion": "0.1.1",
+  "fixedVersion": "0.1.1",
+  "generatedAt": "2026-04-23T05:24:38.638Z",
+  "dependencies": {
+    "@t3x-dev/yops": "0.1.1",
+    "@t3x-dev/yschema": "0.1.1",
+    "@t3x-dev/core": "0.1.1",
+    "@t3x-dev/storage": "0.1.1",
+    "@t3x-dev/api": "0.1.1",
+    "@t3x-dev/api-client": "0.1.1",
+    "@t3x-dev/cli": "0.1.1",
+    "@t3x-dev/mcp": "0.1.1",
+    "@t3x-dev/local": "0.1.1",
+    "web": "0.1.0"
+  },
+  "platforms": {
+    "darwin-arm64": {
+      "fileName": "t3x-local-runtime-0.1.1-darwin-arm64.tar.gz",
+      "url": "https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.1.1/t3x-local-runtime-0.1.1-darwin-arm64.tar.gz",
+      "sha256": "95337bd5181106b2b3a888f24d122e7662571b931794fcd11fa8ffbf239959a4",
+      "size": 20513674
+    }
+  }
+}
