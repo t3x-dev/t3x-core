@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/yschema",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "YSchema — YAML schema validation with YOps auto-fix for the T3X ecosystem",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@t3x-dev/yops": "workspace:*",

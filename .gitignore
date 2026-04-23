@@ -6,6 +6,9 @@ node_modules/
 
 # Build output
 dist/
+apps/local/runtime/
+apps/local/runtime-artifacts/
+**/.pack-package.json.backup
 dist-ssr/
 build/
 *.tsbuildinfo

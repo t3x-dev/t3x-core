@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/api-client",
-  "version": "0.0.1",
+  "version": "0.1.2",
   "license": "Apache-2.0",
   "description": "TypeScript client for T3X API",
   "type": "module",
@@ -16,7 +16,9 @@
     "build": "tsup src/index.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts --format esm --dts --watch",
     "test": "vitest run --passWithNoTests",
-    "lint": "biome lint src"
+    "lint": "biome lint src",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "zod": "^4.2.1"

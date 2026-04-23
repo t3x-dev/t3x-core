@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/yops",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Declarative YAML operations — 18 atomic ops for any YAML document",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -17,7 +17,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {},
   "devDependencies": {

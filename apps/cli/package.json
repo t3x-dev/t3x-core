@@ -1,7 +1,6 @@
 {
   "name": "@t3x-dev/cli",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.2",
   "description": "T3X Command Line Interface",
   "type": "module",
   "bin": {
@@ -14,7 +13,9 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
-    "lint": "biome lint src"
+    "lint": "biome lint src",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@t3x-dev/api-client": "workspace:*",
@@ -45,6 +46,9 @@
     "ai"
   ],
   "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "restricted"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/t3x-dev/t3x-core.git",

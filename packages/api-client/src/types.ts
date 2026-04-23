@@ -357,12 +357,8 @@ export interface ExportLedgerInput {
 // Health types
 export interface HealthResponse {
   status: 'ok' | 'degraded' | 'error';
-  service: string;
-  timestamp: string;
-  database?: {
-    connected: boolean;
-    latency_ms?: number;
-  };
+  version: string;
+  uptime: number;
 }
 
 // Status types

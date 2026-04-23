@@ -1,10 +1,5 @@
 name: Release
 
-# Minimal release flow — Changesets only.
-# Build and tests are expected to pass locally before merging to main.
-# `publish-packages` script already runs `pnpm build` before publishing,
-# so there is no explicit build step here.
-
 on:
   push:
     branches: [main]
@@ -16,9 +11,15 @@ permissions:
   pull-requests: write
 
 jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
+  build-runtime:
+    name: Build Runtime (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-14
 
     steps:
       - name: Checkout
@@ -35,15 +36,73 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify fixed versions
+        run: pnpm verify:versions:no-manifest
+
+      - name: Build local package
+        run: pnpm build:local
+
+      - name: Build API server
+        run: pnpm build:api-server
+
+      - name: Build Web UI
+        run: pnpm build:webui
+
+      - name: Prepare runtime tarball
+        env:
+          T3X_LOCAL_RUNTIME_PLATFORM: ${{ matrix.platform }}
+        run: pnpm --filter @t3x-dev/local prepare:runtime
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.platform }}
+          path: apps/local/runtime-artifacts/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: build-runtime
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download runtime artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: runtime-*
+          path: apps/local/runtime-artifacts
+          merge-multiple: true
+
+      - name: Generate full runtime manifest
+        run: pnpm --filter @t3x-dev/local generate:runtime-manifest
+
+      - name: Verify fixed versions
+        run: pnpm verify:versions
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
-          publish: pnpm publish-packages
-          createGithubReleases: true
+          publish: pnpm publish-release
+          createGithubReleases: false
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
