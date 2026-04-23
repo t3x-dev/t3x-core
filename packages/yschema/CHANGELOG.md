@@ -1,5 +1,12 @@
 # @t3x-dev/yschema
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/yops@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
