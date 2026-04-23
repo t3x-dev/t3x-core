@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { checkLocalAccess } from '../lib/local-config-check';
 import { clearStoredApiKey, resolveLocalConfigState, updateLocalConfig } from '../lib/local-config';
+import { checkLocalAccess } from '../lib/local-config-check';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const LocalConfigStateSchema = z.object({

@@ -5,10 +5,12 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { LocalAccessCheckResult, LocalConfigState } from '@/domain/accessConfig';
 import { useAccessSettings } from '@/hooks/access/useAccessSettings';
-import type { LocalAccessCheckResult, LocalConfigState } from '@/infrastructure/local-config';
 
-function formatSourceLabel(source: LocalConfigState['api_url_source'] | LocalConfigState['api_key_source']): string {
+function formatSourceLabel(
+  source: LocalConfigState['api_url_source'] | LocalConfigState['api_key_source']
+): string {
   switch (source) {
     case 'env':
       return 'Environment variable';
@@ -197,7 +199,8 @@ export function AccessSettingsPanel() {
           ) : null}
 
           <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-            Config path: <span className="font-mono text-[var(--text-primary)]">{config?.config_path}</span>
+            Config path:{' '}
+            <span className="font-mono text-[var(--text-primary)]">{config?.config_path}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

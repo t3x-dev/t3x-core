@@ -3,7 +3,14 @@
  */
 
 import type { Command } from 'commander';
-import { createSpinner, error, formatDate, getClientWithAuth, printTable, success } from '../utils.js';
+import {
+  createSpinner,
+  error,
+  formatDate,
+  getClientWithAuth,
+  printTable,
+  success,
+} from '../utils.js';
 
 /** Register: t3x list projects */
 export function registerListProjects(parent: Command): void {

@@ -1,6 +1,6 @@
+import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ log(
       HOME: childEnv.HOME ?? null,
       PATH: childEnv.PATH ?? null,
     },
-  }),
+  })
 );
 
 const child = spawn(process.execPath, childArgs, {
@@ -57,7 +57,7 @@ child.on('error', (error) => {
       name: error.name,
       message: error.message,
       stack: error.stack,
-    }),
+    })
   );
 });
 
@@ -68,7 +68,7 @@ process.on('uncaughtException', (error) => {
       name: error.name,
       message: error.message,
       stack: error.stack,
-    }),
+    })
   );
   process.exitCode = 1;
 });
@@ -78,7 +78,7 @@ process.on('unhandledRejection', (reason) => {
     JSON.stringify({
       event: 'wrapper_unhandled_rejection',
       reason: String(reason),
-    }),
+    })
   );
   process.exitCode = 1;
 });

@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-      "t3x": {
-        "command": "node",
-        "args": ["./tmp/mcp-codex-wrapper.mjs"],
-        "cwd": ".",
-        "env": {
-          "T3X_TOOLSETS": "core,advanced",
+    "t3x": {
+      "command": "node",
+      "args": ["./tmp/mcp-codex-wrapper.mjs"],
+      "cwd": ".",
+      "env": {
+        "T3X_TOOLSETS": "core,advanced",
         "T3X_MCP_BACKEND": "api",
         "T3X_API_URL": "http://localhost:8000/api"
       }

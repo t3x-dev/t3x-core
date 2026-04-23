@@ -38,14 +38,20 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as never);
 
 import { Command } from 'commander';
-import { CreateLeafRequest, LeafResponse } from '../../../../../packages/api/src/schemas/contracts.ts';
-import { ExtractResponse, CommitFromDraftResponse } from '../../../../../packages/api/src/schemas/integration-contracts.ts';
+import {
+  CreateLeafRequest,
+  LeafResponse,
+} from '../../../../../packages/api/src/schemas/contracts.ts';
+import {
+  CommitFromDraftResponse,
+  ExtractResponse,
+} from '../../../../../packages/api/src/schemas/integration-contracts.ts';
 import { ProjectSchema } from '../../../../../packages/api/src/schemas/projects.ts';
 import { registerCommitCommand } from '../../commands/commit.js';
-import { registerCreateLeaf, registerGenerateLeaf } from '../../commands/leaves.js';
-import { registerCreateProject } from '../../commands/projects.js';
 import { registerShowDraft } from '../../commands/drafts.js';
 import { registerExtractCommands } from '../../commands/extract.js';
+import { registerCreateLeaf, registerGenerateLeaf } from '../../commands/leaves.js';
+import { registerCreateProject } from '../../commands/projects.js';
 import { registerYopsCommands } from '../../commands/yops.js';
 
 function createProgram() {

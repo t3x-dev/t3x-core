@@ -168,14 +168,19 @@ export const queryHandler: ToolHandler = async (args) => {
       case 'projects':
         return ok(unwrapListPayload(await client.listProjects({ limit, offset }), 'projects'));
       case 'drafts':
-        return ok(unwrapListPayload(await client.listDrafts(projectId!, { limit, offset }), 'drafts'));
+        return ok(
+          unwrapListPayload(await client.listDrafts(projectId!, { limit, offset }), 'drafts')
+        );
       case 'agent_drafts':
         return ok(
           unwrapListPayload(await client.listAgentDrafts(projectId!, { limit, offset }), 'drafts')
         );
       case 'commits':
         return ok(
-          unwrapListPayload(await client.listCommits(projectId!, branch, { limit, offset }), 'commits')
+          unwrapListPayload(
+            await client.listCommits(projectId!, branch, { limit, offset }),
+            'commits'
+          )
         );
       case 'leaves':
         return ok(unwrapListPayload(await client.listLeaves(projectId!), 'leaves'));
