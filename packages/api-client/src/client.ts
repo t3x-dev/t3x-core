@@ -520,6 +520,10 @@ export class T3xClient {
     return this.request<Pin>('POST', `/v1/projects/${projectId}/pins`, input);
   }
 
+  async getPin(id: string): Promise<Pin> {
+    return this.request<Pin>('GET', `/v1/pins/${id}`);
+  }
+
   async deletePin(id: string): Promise<{ deleted: boolean }> {
     return this.request<{ deleted: boolean }>('DELETE', `/v1/pins/${id}`);
   }

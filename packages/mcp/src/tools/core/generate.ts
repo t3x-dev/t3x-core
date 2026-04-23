@@ -30,6 +30,7 @@ import {
   updateLeafOutput,
 } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { resolveGenerationTarget } from '../../provider-runtime.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
@@ -91,6 +92,16 @@ export const generateHandler: ToolHandler = async (args) => {
   // ── Validate required params ──
   if (!leafId) {
     return fail('"leaf_id" is required.\nProvide the ID of the leaf to generate output for.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.generateLeaf(leafId, {
+        model,
+        provider: undefined,
+      })
+    );
   }
 
   const db = await getDB();

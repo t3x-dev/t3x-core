@@ -2,19 +2,23 @@
  * CLI Project Commands Tests
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock @t3x-dev/api-client
-const mockClient = {
-  listProjects: vi.fn(),
-  getProject: vi.fn(),
-  createProject: vi.fn(),
-  deleteProject: vi.fn(),
-  restoreProject: vi.fn(),
-};
+const { mockClient, createClientMock } = vi.hoisted(() => ({
+  mockClient: {
+    listProjects: vi.fn(),
+    getProject: vi.fn(),
+    createProject: vi.fn(),
+    deleteProject: vi.fn(),
+    restoreProject: vi.fn(),
+  },
+  createClientMock: vi.fn(),
+}));
+
+createClientMock.mockImplementation(() => mockClient);
 
 vi.mock('@t3x-dev/api-client', () => ({
-  createClient: vi.fn(() => mockClient),
+  createClient: createClientMock,
 }));
 
 // Mock ora spinner
@@ -62,8 +66,16 @@ function createProgram() {
 }
 
 describe('Project commands (kubectl-style)', () => {
+  const originalApiKey = process.env.T3X_API_KEY;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.T3X_API_KEY;
+  });
+
+  afterEach(() => {
+    if (originalApiKey === undefined) delete process.env.T3X_API_KEY;
+    else process.env.T3X_API_KEY = originalApiKey;
   });
 
   describe('list projects', () => {
@@ -146,6 +158,19 @@ describe('Project commands (kubectl-style)', () => {
       await program.parseAsync(['node', 'test', 'create', 'project', 'New Project']);
 
       expect(mockClient.createProject).toHaveBeenCalledWith({ name: 'New Project' });
+    });
+
+    it('passes bearer auth headers when creating a project', async () => {
+      process.env.T3X_API_KEY = 't3xk_test';
+      mockClient.createProject.mockResolvedValue({ project_id: 'proj_new' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'create', 'project', 'New Project']);
+
+      expect(createClientMock).toHaveBeenCalledWith({
+        baseUrl: 'http://localhost:8000/api',
+        headers: { Authorization: 'Bearer t3xk_test' },
+      });
     });
 
     it('handles error', async () => {

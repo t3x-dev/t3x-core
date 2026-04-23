@@ -75,7 +75,9 @@ DB-backed provider credentials used by the T3X app. If you have already
 configured providers in WebUI/API settings, MCP reuses them automatically.
 Environment variables remain available as a local fallback.
 
-For local development inside this repo, the committed root `.mcp.json` already points at `apps/mcp/dist/index.js`.
+For local development inside this repo, the committed root `.mcp.json` already points at
+`apps/mcp/dist/index.js` and defaults to the `api` backend so MCP follows the same
+API path as CLI.
 
 ## Runtime Model
 
@@ -84,12 +86,17 @@ This server currently runs over `stdio` only.
 - `stdio` is implemented
 - `http` is not implemented yet
 
-The server talks directly to T3X storage:
+The server supports two backends:
 
-- if `DATABASE_URL` is set, it uses Postgres
-- otherwise it starts embedded Postgres under `.t3x/pg-data`
+- `storage`
+  - if `DATABASE_URL` is set, it uses Postgres
+  - otherwise it starts embedded Postgres under `.t3x/pg-data`
+- `api`
+  - talks to the T3X API via `T3X_API_URL`
+  - reuses `T3X_API_KEY` or the shared `~/.t3x/config.json` key when present
 
-This means the MCP server does not use `T3X_API_URL` or `T3X_API_KEY`.
+Local Codex/Cursor development should prefer the `api` backend so MCP and CLI
+see the same data without each process trying to own embedded Postgres.
 
 ## Environment Variables
 
@@ -97,6 +104,9 @@ This means the MCP server does not use `T3X_API_URL` or `T3X_API_KEY`.
 | --- | --- | --- |
 | `T3X_TOOLSETS` | Comma-separated toolsets to enable | `core` |
 | `T3X_TRANSPORT` | MCP transport | `stdio` |
+| `T3X_MCP_BACKEND` | Backend mode: `storage` or `api` | `storage` |
+| `T3X_API_URL` | Base API URL for `api` backend | `http://localhost:8000/api` |
+| `T3X_API_KEY` | Optional API key for `api` backend | unset |
 | `DATABASE_URL` | Postgres connection string; when omitted, embedded Postgres is used | unset |
 | `T3X_DATA_DIR` | Embedded Postgres data directory | `.t3x/pg-data` |
 | `T3X_PG_PORT` | Embedded Postgres port | `5445` |

@@ -2,11 +2,15 @@
  * CLI Utils Tests
  */
 
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSpinner,
   error,
   formatDate,
+  getApiKey,
   getApiUrl,
   getDraftId,
   info,
@@ -65,6 +69,17 @@ describe('CLI Utils', () => {
   // =========================================================================
   describe('getApiUrl', () => {
     const originalEnv = process.env.T3X_API_URL;
+    const originalApiKey = process.env.T3X_API_KEY;
+    const originalConfigPath = process.env.T3X_CONFIG_PATH;
+    let tempDir: string;
+    let configPath: string;
+
+    beforeEach(() => {
+      tempDir = mkdtempSync(path.join(os.tmpdir(), 't3x-utils-config-'));
+      configPath = path.join(tempDir, 'config.json');
+      process.env.T3X_CONFIG_PATH = configPath;
+      delete process.env.T3X_API_KEY;
+    });
 
     afterEach(() => {
       if (originalEnv !== undefined) {
@@ -72,6 +87,20 @@ describe('CLI Utils', () => {
       } else {
         delete process.env.T3X_API_URL;
       }
+
+      if (originalApiKey !== undefined) {
+        process.env.T3X_API_KEY = originalApiKey;
+      } else {
+        delete process.env.T3X_API_KEY;
+      }
+
+      if (originalConfigPath !== undefined) {
+        process.env.T3X_CONFIG_PATH = originalConfigPath;
+      } else {
+        delete process.env.T3X_CONFIG_PATH;
+      }
+
+      rmSync(tempDir, { recursive: true, force: true });
     });
 
     it('returns default when env not set', () => {
@@ -82,6 +111,18 @@ describe('CLI Utils', () => {
     it('returns env value when set', () => {
       process.env.T3X_API_URL = 'http://custom:9000/api';
       expect(getApiUrl()).toBe('http://custom:9000/api');
+    });
+
+    it('falls back to file config when env not set', () => {
+      writeFileSync(
+        configPath,
+        `${JSON.stringify({ api_url: 'http://file-config:8001/api', api_key: 't3xk_file' }, null, 2)}\n`,
+        'utf8'
+      );
+
+      delete process.env.T3X_API_URL;
+      expect(getApiUrl()).toBe('http://file-config:8001/api');
+      expect(getApiKey()).toBe('t3xk_file');
     });
   });
 

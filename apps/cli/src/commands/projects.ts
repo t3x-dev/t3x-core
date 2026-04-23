@@ -2,9 +2,8 @@
  * Project Commands
  */
 
-import { createClient } from '@t3x-dev/api-client';
 import type { Command } from 'commander';
-import { createSpinner, error, formatDate, getApiUrl, printTable, success } from '../utils.js';
+import { createSpinner, error, formatDate, getClientWithAuth, printTable, success } from '../utils.js';
 
 /** Register: t3x list projects */
 export function registerListProjects(parent: Command): void {
@@ -19,7 +18,7 @@ export function registerListProjects(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const result = await client.listProjects({
           limit: parseInt(options.limit, 10),
           offset: parseInt(options.offset, 10),
@@ -54,7 +53,7 @@ export function registerShowProject(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const project = await client.getProject(id);
 
         spinner.stop();
@@ -88,7 +87,7 @@ export function registerCreateProject(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const project = await client.createProject({ name });
 
         spinner.stop();
@@ -123,7 +122,7 @@ export function registerDeleteProject(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         await client.deleteProject(id, { permanent: options.permanent });
 
         spinner.stop();
@@ -150,7 +149,7 @@ export function registerRestoreProject(parent: Command): void {
       spinner.start();
 
       try {
-        const client = createClient({ baseUrl: getApiUrl() });
+        const client = getClientWithAuth();
         const project = await client.restoreProject(id);
 
         spinner.stop();

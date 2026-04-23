@@ -32,6 +32,7 @@ export { ingestRoutes } from './ingest.openapi';
 export { knowledgeGraphRoutes } from './knowledge-graph.openapi';
 export { leavesRoutes } from './leaves.openapi';
 export { llmRoutes } from './llm.openapi';
+export { localConfigRoutes } from './local-config.openapi';
 export { mergeRoutes } from './merge.openapi';
 export { notificationsRoutes } from './notifications.openapi';
 export { pinsRoutes } from './pins.openapi';

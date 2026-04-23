@@ -1,11 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // -- Mocks --
 
 const mockDB = {};
+const mockApiClient = {
+  createProject: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 // -- Mock data --
@@ -212,6 +219,16 @@ vi.mock('@t3x-dev/core', () => ({
 import { adminHandler } from '../tools/advanced/admin.js';
 import { diffHandler } from '../tools/advanced/diff.js';
 import { mergeHandler } from '../tools/advanced/merge.js';
+
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
+afterEach(() => {
+  if (originalBackend === undefined) {
+    delete process.env.T3X_MCP_BACKEND;
+  } else {
+    process.env.T3X_MCP_BACKEND = originalBackend;
+  }
+});
 
 // ================================================================
 // t3x_diff
@@ -556,6 +573,30 @@ describe('t3x_admin handler', () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.project_id).toBe('proj_new');
     expect(data.name).toBe('New Project');
+  });
+
+  it('create_project: uses api client when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.createProject.mockResolvedValueOnce({
+      project_id: 'proj_api1',
+      name: 'API Project',
+      created_at: '2026-04-23T00:00:00.000Z',
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await adminHandler({ action: 'create_project', name: 'API Project' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.createProject).toHaveBeenCalledWith({ name: 'API Project' });
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      project_id: 'proj_api1',
+      name: 'API Project',
+      created_at: '2026-04-23T00:00:00.000Z',
+    });
   });
 
   // -- create_branch --

@@ -25,6 +25,7 @@ import {
   insertProject,
 } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
@@ -155,6 +156,11 @@ async function handleCreateProject(args: Record<string, unknown>) {
 
   if (!name) return fail('"name" is required for create_project.');
 
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(await client.createProject({ name }));
+  }
+
   const db = await getDB();
   const project = await insertProject(db, { name });
 
@@ -173,6 +179,18 @@ async function handleCreateBranch(args: Record<string, unknown>) {
 
   if (!projectId) return fail('"project_id" is required for create_branch.');
   if (!name) return fail('"name" is required for create_branch.');
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.createBranch({
+        project_id: projectId,
+        name,
+        parent_branch: parentBranch,
+        description,
+      } as Record<string, unknown>)
+    );
+  }
 
   const db = await getDB();
   const branch = await insertBranch(db, {
@@ -218,6 +236,20 @@ async function handleCreateLeaf(args: Record<string, unknown>) {
     (typeof config !== 'object' || config === null || Array.isArray(config))
   ) {
     return fail('"config" must be an object for create_leaf.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.createLeaf({
+        commit_hash: commitHash,
+        type: leafType,
+        title,
+        constraints: constraints ?? [],
+        config: (config as Record<string, unknown> | undefined) ?? {},
+        project_id: projectId,
+      })
+    );
   }
 
   const db = await getDB();
@@ -270,6 +302,16 @@ async function handleCreatePin(args: Record<string, unknown>) {
     return fail(`Invalid pin type "${type}". Must be one of: ${validTypes.join(', ')}.`);
   }
 
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.createPin(projectId, {
+        type: type as PinType,
+        ref_id: refId,
+      })
+    );
+  }
+
   const db = await getDB();
   const pin = await createPin(db, {
     project_id: projectId,
@@ -290,6 +332,11 @@ async function handleDeletePin(args: Record<string, unknown>) {
   const pinId = args.pin_id as string | undefined;
 
   if (!pinId) return fail('"pin_id" is required for delete_pin.');
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(await client.deletePin(pinId));
+  }
 
   const db = await getDB();
   const deleted = await deletePin(db, pinId);

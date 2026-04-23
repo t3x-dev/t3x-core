@@ -160,6 +160,8 @@ export interface CreateBranchInput {
   project_id: string;
   name: string;
   head_commit_hash?: string;
+  parent_branch?: string;
+  description?: string;
 }
 
 export interface ListBranchesResponse {

@@ -31,6 +31,7 @@ import {
   recordEvent,
 } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { resolveGenerationTarget } from '../../provider-runtime.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
@@ -153,6 +154,18 @@ export const extractHandler: ToolHandler = async (args) => {
   }
   if (!text) {
     return fail('"text" is required.\nProvide the raw text to extract knowledge from.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    return ok(
+      await client.extract({
+        project_id: projectId,
+        text,
+        conversation_id: conversationId,
+        source,
+      })
+    );
   }
 
   const db = await getDB();

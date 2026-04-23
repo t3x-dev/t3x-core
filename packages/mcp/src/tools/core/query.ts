@@ -23,6 +23,7 @@ import {
   listDraftsByProject,
 } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend, unwrapListPayload } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 
@@ -122,12 +123,81 @@ export const queryHandler: ToolHandler = async (args) => {
     );
   }
 
-  const db = await getDB();
   const id = args.id as string | undefined;
   const projectId = args.project_id as string | undefined;
   const limit = (args.limit as number | undefined) ?? 20;
   const offset = (args.offset as number | undefined) ?? 0;
   const branch = args.branch as string | undefined;
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+
+    if ((SINGULAR_TARGETS as readonly string[]).includes(target)) {
+      if (!id) {
+        return fail(
+          `"id" is required for target="${target}".\nProvide the resource ID, e.g. { "target": "${target}", "id": "..." }.`
+        );
+      }
+
+      switch (target) {
+        case 'project':
+          return ok(await client.getProject(id));
+        case 'draft':
+          return ok((await client.getDraft(id)) as Record<string, unknown>);
+        case 'agent_draft':
+          return ok((await client.getAgentDraft(id)) as Record<string, unknown>);
+        case 'commit':
+          return ok(await client.getCommit(id));
+        case 'leaf':
+          return ok(await client.getLeaf(id));
+        case 'pin':
+          return ok(await client.getPin(id));
+        case 'conversation':
+          return ok(await client.getConversation(id));
+      }
+    }
+
+    const needsProject = target !== 'projects';
+    if (needsProject && !projectId) {
+      return fail(
+        `"project_id" is required for target="${target}".\nProvide the project scope, e.g. { "target": "${target}", "project_id": "proj_..." }.`
+      );
+    }
+
+    switch (target) {
+      case 'projects':
+        return ok(unwrapListPayload(await client.listProjects({ limit, offset }), 'projects'));
+      case 'drafts':
+        return ok(unwrapListPayload(await client.listDrafts(projectId!, { limit, offset }), 'drafts'));
+      case 'agent_drafts':
+        return ok(
+          unwrapListPayload(await client.listAgentDrafts(projectId!, { limit, offset }), 'drafts')
+        );
+      case 'commits':
+        return ok(
+          unwrapListPayload(await client.listCommits(projectId!, branch, { limit, offset }), 'commits')
+        );
+      case 'leaves':
+        return ok(unwrapListPayload(await client.listLeaves(projectId!), 'leaves'));
+      case 'pins':
+        return ok(unwrapListPayload(await client.listPins(projectId!), 'pins'));
+      case 'branches':
+        return ok(
+          unwrapListPayload(await client.listBranches(projectId!, { limit, offset }), 'branches')
+        );
+      case 'conversations':
+        return ok(
+          unwrapListPayload(
+            await client.listConversations(projectId!, { limit, offset }),
+            'conversations'
+          )
+        );
+      default:
+        return fail(`Unhandled target: ${target}`);
+    }
+  }
+
+  const db = await getDB();
 
   // ── Singular targets ──
 

@@ -9,9 +9,16 @@ const { mockGenerateLeafOutput } = vi.hoisted(() => ({
 // ── Mocks ──
 
 const mockDB = {};
+const mockApiClient = {
+  generateLeaf: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 // Mock leaf record
@@ -234,7 +241,17 @@ import { generateHandler } from '../tools/core/generate.js';
 
 // ── Tests ──
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 describe('t3x_generate handler', () => {
+  afterEach(() => {
+    if (originalBackend === undefined) {
+      delete process.env.T3X_MCP_BACKEND;
+    } else {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    }
+  });
+
   const originalEnv = process.env.ANTHROPIC_API_KEY;
   const originalOpenAIEnv = process.env.OPENAI_API_KEY;
 
@@ -289,6 +306,43 @@ describe('t3x_generate handler', () => {
     const result = await generateHandler({});
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('"leaf_id" is required');
+  });
+
+  it('uses api client generateLeaf when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.generateLeaf.mockResolvedValueOnce({
+      output: 'Hangzhou trip summary',
+      generated_at: '2026-04-23T00:00:00.000Z',
+      validation: {
+        all_passed: true,
+        passed: 1,
+        failed: 0,
+        assertions: [],
+      },
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await generateHandler({ leaf_id: 'leaf_test1', model: 'gpt-5.4' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.generateLeaf).toHaveBeenCalledWith('leaf_test1', {
+      model: 'gpt-5.4',
+      provider: undefined,
+    });
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      output: 'Hangzhou trip summary',
+      generated_at: '2026-04-23T00:00:00.000Z',
+      validation: {
+        all_passed: true,
+        passed: 1,
+        failed: 0,
+        assertions: [],
+      },
+    });
   });
 
   it('does not allow generation directly from commit_hash without a leaf_id', async () => {

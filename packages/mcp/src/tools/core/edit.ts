@@ -14,6 +14,7 @@
 import type { SemanticContent, TreeNode } from '@t3x-dev/core';
 import { findDraftById, updateDraft } from '@t3x-dev/storage';
 
+import { getApiClient, isApiBackend } from '../../backend.js';
 import { getDB } from '../../db.js';
 import { validateYOps } from '../../validate/pipeline.js';
 import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
@@ -135,6 +136,65 @@ export const editHandler: ToolHandler = async (args) => {
   }
   if (!yopsYaml) {
     return fail('"yops" is required.\nProvide a YAML string containing YOps operations.');
+  }
+
+  if (isApiBackend()) {
+    const client = getApiClient();
+    const draft = (await client.getDraft(draftId)) as Record<string, unknown>;
+    const status = draft.status as string | undefined;
+
+    if (status !== 'editing') {
+      return fail(
+        `Draft status is "${status}", must be "editing".\n` +
+          (status === 'committed'
+            ? `This draft was already committed as ${String(draft.committed_as ?? '')}.`
+            : 'Only drafts in "editing" status can be edited.')
+      );
+    }
+
+    const revision = ifRevision ?? Number(draft.revision ?? 0);
+    const draftNodes = ((draft.nodes ?? []) as Array<{
+      key?: string;
+      id?: string;
+      slots?: Record<string, unknown>;
+      text?: string;
+      children?: unknown[];
+    }>);
+    const currentContent = draftNodesToContent(draftNodes);
+    const validation = await validateYOps(yopsYaml, currentContent);
+
+    if (!validation.ok) {
+      return fail(
+        JSON.stringify(
+          {
+            applied: false,
+            errors: validation.errors,
+            auto_fixes: validation.auto_fixes,
+            warnings: validation.warnings,
+            fix_hint:
+              'Fix the errors above and retry. Use t3x_query { "target": "draft", "id": "..." } to see current tree state.',
+          },
+          null,
+          2
+        )
+      );
+    }
+
+    const result = await client.applyYOps(draftId, validation.parsed_yops ?? [], revision);
+    return ok({
+      applied: true,
+      applied_count: result.applied_count,
+      revision: result.revision,
+      trees: result.trees,
+      tree_count: result.tree_count,
+      slot_count: result.slot_count,
+      auto_fixes: validation.auto_fixes,
+      warnings: validation.warnings,
+      next_steps: [
+        'Use t3x_query { "target": "draft", "id": "..." } to review the updated tree.',
+        'Apply more edits with t3x_edit, or commit with t3x_commit.',
+      ],
+    });
   }
 
   const db = await getDB();

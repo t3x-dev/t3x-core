@@ -1,11 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ──
 
 const mockDB = {};
+const mockApiClient = {
+  getDraft: vi.fn(),
+  applyYOps: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 const MOCK_DRAFT_EDITING = {
@@ -65,7 +73,17 @@ import { editHandler } from '../tools/core/edit.js';
 
 // ── Tests ──
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 describe('t3x_edit handler', () => {
+  afterEach(() => {
+    if (originalBackend === undefined) {
+      delete process.env.T3X_MCP_BACKEND;
+    } else {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    }
+  });
+
   // ── Validation errors ──
 
   it('returns error when draft_id is missing', async () => {
@@ -78,6 +96,61 @@ describe('t3x_edit handler', () => {
     const result = await editHandler({ draft_id: 'draft_abc' });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('"yops" is required');
+  });
+
+  it('uses api client applyYOps when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.getDraft.mockResolvedValueOnce({
+      id: 'draft_abc',
+      project_id: 'proj_test1',
+      status: 'editing',
+      revision: 3,
+      nodes: [{ key: 'trip', slots: { budget: 5000 }, children: [] }],
+    });
+    mockApiClient.applyYOps.mockResolvedValueOnce({
+      draft_id: 'draft_abc',
+      revision: 4,
+      trees: [{ key: 'trip', slots: { budget: 8000 }, children: [] }],
+      applied_count: 1,
+      tree_count: 1,
+      slot_count: 1,
+    });
+    mockValidateYOps.mockResolvedValueOnce({
+      ok: true,
+      errors: [],
+      auto_fixes: [],
+      warnings: [],
+      parsed_yops: [{ set: { path: 'trip/budget', value: 8000 } }],
+      result_doc: {
+        trees: [{ key: 'trip', slots: { budget: 8000 }, children: [] }],
+        relations: [],
+      },
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await editHandler({
+      draft_id: 'draft_abc',
+      yops: 'yops:\n  - set:\n      path: trip/budget\n      value: 8000',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.getDraft).toHaveBeenCalledWith('draft_abc');
+    expect(mockApiClient.applyYOps).toHaveBeenCalledWith(
+      'draft_abc',
+      [{ set: { path: 'trip/budget', value: 8000 } }],
+      3
+    );
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({
+      applied: true,
+      applied_count: 1,
+      revision: 4,
+      tree_count: 1,
+      slot_count: 1,
+    });
   });
 
   // ── Draft lookup errors ──

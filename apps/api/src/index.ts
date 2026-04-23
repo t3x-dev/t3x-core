@@ -90,7 +90,7 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 // Open-source: built-in local auth (username/password)
-const { app, injectWebSocket } = createApp();
+const { app, injectWebSocket } = createApp({ enableLocalConfigRoutes: true });
 
 // Server startup
 const port = parseInt(process.env.PORT || '8000', 10);

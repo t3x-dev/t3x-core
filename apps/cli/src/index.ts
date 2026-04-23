@@ -7,7 +7,7 @@
  * Action-first command style (kubectl-like):
  *   t3x list projects      t3x show commit <hash>
  *   t3x create project      t3x delete project <id>
- *   t3x commit <file>       t3x generate leaf <id>
+ *   t3x commit <draft-id>   t3x generate leaf <id>
  */
 import { Command } from 'commander';
 
@@ -18,10 +18,12 @@ import {
   registerListBranches,
   registerSwitchBranch,
 } from './commands/branches.js';
+import { registerAuthCommands } from './commands/auth.js';
 // New commit command
 import { registerCommitCommand } from './commands/commit.js';
 import { registerListCommits, registerShowCommit } from './commands/commits.js';
 import { registerComposeCommands } from './commands/compose.js';
+import { registerConfigCommands } from './commands/config.js';
 // Diff command
 import { registerDiffCommand } from './commands/diff.js';
 import { registerDeleteDraft, registerListDrafts, registerShowDraft } from './commands/drafts.js';
@@ -52,6 +54,23 @@ import { registerShowContent } from './commands/show.js';
 import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
+
+type HiddenCommand = Command & { _hidden?: boolean };
+
+function hideCommand(command: Command | undefined): void {
+  if (!command) return;
+  (command as HiddenCommand)._hidden = true;
+}
+
+function findCommand(parent: Command, name: string): Command | undefined {
+  return parent.commands.find((command) => command.name() === name);
+}
+
+function hideSubcommands(parent: Command, names: string[]): void {
+  for (const name of names) {
+    hideCommand(findCommand(parent, name));
+  }
+}
 
 const program = new Command();
 
@@ -109,6 +128,13 @@ registerCommitCommand(program);
 registerSwitchBranch(program);
 registerCurrentBranch(program);
 
+// t3x auth / config
+const authCmd = program.command('auth').description('Manage local shared authentication');
+registerAuthCommands(authCmd);
+
+const configCmd = program.command('config').description('Manage local shared config');
+registerConfigCommands(configCmd);
+
 // Independent commands (no rename needed)
 registerStatusCommands(program);
 registerExtractCommands(program);
@@ -122,6 +148,27 @@ registerYopsCommands(program);
 registerDiffCommand(program);
 registerMergeCommands(program);
 registerComposeCommands(program);
+
+// First-stage help surface:
+// keep the main path visible, but retain secondary commands for direct invocation.
+hideCommand(deleteCmd);
+hideCommand(restoreCmd);
+hideSubcommands(listCmd, ['projects', 'commits', 'branches', 'leaves']);
+hideSubcommands(showCmd, ['project', 'commit', 'leaf', 'content']);
+hideSubcommands(createCmd, ['branch']);
+hideCommand(findCommand(program, 'switch-branch'));
+hideCommand(findCommand(program, 'current-branch'));
+hideCommand(findCommand(program, 'health'));
+hideCommand(findCommand(program, 'status'));
+hideCommand(findCommand(program, 'share'));
+hideCommand(findCommand(program, 'gate'));
+hideCommand(findCommand(program, 'export'));
+hideCommand(findCommand(program, 'import'));
+hideCommand(findCommand(program, 'schema'));
+hideCommand(findCommand(program, 'validate'));
+hideCommand(findCommand(program, 'diff'));
+hideCommand(findCommand(program, 'merge'));
+hideCommand(findCommand(program, 'compose'));
 
 // Parse arguments
 program.parse();

@@ -22,6 +22,7 @@ export * from './health';
 export * from './knowledge-graph';
 export * from './leaves';
 export * from './llm';
+export * from './local-config';
 // merge.ts moved to @/infrastructure/mergeApi per doc §2 L1 (Phase 4).
 // Consumers must import merge ops from @/queries/mergeApi (L3).
 export * from './misc';

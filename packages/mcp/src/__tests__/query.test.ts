@@ -1,11 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mocks ──
 
 const mockDB = {};
+const mockApiClient = {
+  getProject: vi.fn(),
+  listProjects: vi.fn(),
+};
 
 vi.mock('../db.js', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
+}));
+
+vi.mock('@t3x-dev/api-client', () => ({
+  createClient: vi.fn(() => mockApiClient),
 }));
 
 const MOCK_PROJECT = {
@@ -107,7 +115,17 @@ import { queryHandler } from '../tools/core/query.js';
 
 // ── Tests ──
 
+const originalBackend = process.env.T3X_MCP_BACKEND;
+
 describe('t3x_query handler', () => {
+  afterEach(() => {
+    if (originalBackend === undefined) {
+      delete process.env.T3X_MCP_BACKEND;
+    } else {
+      process.env.T3X_MCP_BACKEND = originalBackend;
+    }
+  });
+
   // ── Validation errors ──
 
   it('returns error when target is missing', async () => {
@@ -202,6 +220,30 @@ describe('t3x_query handler', () => {
     expect(Array.isArray(data)).toBe(true);
     expect(data).toHaveLength(1);
     expect(data[0].projectId).toBe('proj_test1');
+  });
+
+  it('uses api client for project queries when api backend is enabled', async () => {
+    process.env.T3X_MCP_BACKEND = 'api';
+    mockApiClient.getProject.mockResolvedValueOnce({
+      id: 'proj_api1',
+      project_id: 'proj_api1',
+      name: 'API Project',
+    });
+
+    const { getDB } = await import('../db.js');
+    const getDBMock = getDB as ReturnType<typeof vi.fn>;
+    const beforeCalls = getDBMock.mock.calls.length;
+
+    const result = await queryHandler({ target: 'project', id: 'proj_api1' });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockApiClient.getProject).toHaveBeenCalledWith('proj_api1');
+    expect(getDBMock.mock.calls.length).toBe(beforeCalls);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      id: 'proj_api1',
+      project_id: 'proj_api1',
+      name: 'API Project',
+    });
   });
 
   it('lists drafts by project', async () => {

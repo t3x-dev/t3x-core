@@ -48,6 +48,28 @@ WebUI calls the standalone Hono API service via the
 |-------------|-------------|
 | Development | `http://localhost:8000/api/v1` |
 
+## Local Shared Access
+
+In a one-machine local setup, WebUI can manage the standalone API host's
+machine-local API URL and API key from `/settings/access`, and CLI/MCP can read
+that same file.
+
+Source precedence is:
+
+```text
+T3X_API_URL / T3X_API_KEY (environment)
+-> ~/.t3x/config.json
+-> built-in defaults
+```
+
+This means the settings page shows the effective values, not just the file
+contents. If an environment variable is present, UI saves still update the
+shared file, but the environment value remains active until removed.
+
+The same page now includes a `Test Access` action so local users can confirm
+whether the configured API is reachable, and whether the current deployment
+requires or accepts the configured key.
+
 ## State Management
 
 | Store | Purpose |
