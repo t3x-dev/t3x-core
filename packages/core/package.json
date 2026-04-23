@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/core",
-  "version": "0.0.5",
+  "version": "0.1.1",
   "description": "T3X Core - Deterministic semantic extraction, diff, and merge engine",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -18,7 +18,9 @@
     "test:llm": "vitest run src/__tests__/golden/ src/__tests__/compare-engines.test.ts",
     "test:changed": "vitest run --changed",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@t3x-dev/yops": "workspace:*",
@@ -57,6 +59,6 @@
     "directory": "packages/core"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }

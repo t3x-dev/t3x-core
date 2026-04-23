@@ -4,7 +4,7 @@
   "description": "T3X Runner - Grey-box agent evaluation, CI/CD, and workflow orchestration",
   "license": "Apache-2.0",
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,7 +30,9 @@
     "schema:check": "node ./scripts/schema_check.mjs",
     "docker:build": "docker build -t t3x-runner .",
     "docker:up": "docker compose up",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

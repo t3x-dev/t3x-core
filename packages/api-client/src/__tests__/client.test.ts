@@ -136,6 +136,15 @@ describe('T3xClient', () => {
       expect(result).toEqual(healthData);
       expect(fn).toHaveBeenCalledWith('http://localhost:8000/health', expect.any(Object));
     });
+
+    it('unwraps success envelopes from /health', async () => {
+      const healthData = { status: 'ok', service: 't3x-api', timestamp: '2024-01-01T00:00:00Z' };
+      const fn = mockFetch(successResponse(healthData));
+      const client = createTestClient(fn);
+
+      const result = await client.health();
+      expect(result).toEqual(healthData);
+    });
   });
 
   describe('status', () => {

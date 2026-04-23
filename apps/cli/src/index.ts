@@ -58,7 +58,7 @@ const program = new Command();
 program
   .name('t3x')
   .description('T3X CLI - Semantic version control for AI conversations')
-  .version('0.1.0')
+  .version('0.1.1')
   .option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)')
   .option('--api-key <key>', 'API key for authentication (or set T3X_API_KEY env var)');
 

@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@t3x-dev/yops": "workspace:*",
@@ -46,6 +48,6 @@
     "directory": "packages/yschema"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }

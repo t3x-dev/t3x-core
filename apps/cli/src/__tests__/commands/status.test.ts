@@ -41,9 +41,8 @@ describe('registerStatusCommands', () => {
     it('shows healthy status', async () => {
       mockClient.health.mockResolvedValue({
         status: 'ok',
-        service: 't3x-api',
-        timestamp: '2024-01-01T00:00:00Z',
-        database: { connected: true, latency_ms: 5 },
+        version: '1.0.0',
+        uptime: 5,
       });
 
       const program = createProgram();
@@ -56,9 +55,8 @@ describe('registerStatusCommands', () => {
     it('shows unhealthy status', async () => {
       mockClient.health.mockResolvedValue({
         status: 'error',
-        service: 't3x-api',
-        timestamp: '2024-01-01T00:00:00Z',
-        database: { connected: false },
+        version: '1.0.0',
+        uptime: 5,
       });
 
       const program = createProgram();
@@ -67,11 +65,11 @@ describe('registerStatusCommands', () => {
       expect(mockSpinner.stop).toHaveBeenCalled();
     });
 
-    it('handles missing database info', async () => {
+    it('handles health payload without extra fields', async () => {
       mockClient.health.mockResolvedValue({
         status: 'ok',
-        service: 't3x-api',
-        timestamp: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        uptime: 5,
       });
 
       const program = createProgram();

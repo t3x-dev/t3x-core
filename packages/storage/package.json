@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/storage",
-  "version": "0.0.5",
+  "version": "0.1.1",
   "description": "T3X Storage - PostgreSQL persistence layer with Drizzle ORM",
   "license": "Apache-2.0",
   "main": "dist/index.js",
@@ -50,7 +50,9 @@
     "test": "vitest run",
     "test:changed": "vitest run --changed",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
+    "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
     "@t3x-dev/core": "workspace:*",
@@ -84,6 +86,6 @@
     "directory": "packages/storage"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }
