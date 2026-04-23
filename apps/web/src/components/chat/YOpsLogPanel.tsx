@@ -3,7 +3,7 @@
 /**
  * YOpsLogPanel — ledger view of the current draft's opsLog.
  *
- * Replaces the "大片空 YAML" feel of ScriptEditor with a stack of action
+ * Replaces the sparse YAML feel of ScriptEditor with a stack of action
  * blocks: each op gets a plain-language header, an origin badge, and an
  * expandable body showing YOps core + source meta (per §3a.6d of the
  * YOps change-request UX design doc).
