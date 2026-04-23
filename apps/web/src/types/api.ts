@@ -74,7 +74,7 @@ export type {
   RecipeTrigger,
   UpdateRecipeInput,
 } from '@/infrastructure/recipes';
-export type { NodeRelation, RelationType } from '@/infrastructure/relations';
+export type { Relation, RelationType } from '@/infrastructure/relations';
 export type { EngineRun } from '@/infrastructure/runner';
 export type { CommitMeta, DiffResponse } from '@/infrastructure/treeDiff';
 export type { TurnContextData } from '@/infrastructure/turns';

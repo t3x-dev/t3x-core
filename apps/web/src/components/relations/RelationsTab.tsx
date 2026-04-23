@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCommitRelations } from '@/hooks/commits/useCommitRelations';
-import type { NodeRelation, RelationType } from '@/types/api';
+import type { Relation, RelationType } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { RelationsGraph } from './RelationsGraph';
 import { RelationsList } from './RelationsList';
@@ -17,7 +17,7 @@ interface RelationsTabProps {
 const ALL_TYPES: RelationType[] = ['causes', 'conditions', 'contrasts', 'follows', 'depends'];
 
 export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
-  const [relations, setRelations] = useState<NodeRelation[]>([]);
+  const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilters, setTypeFilters] = useState<Set<RelationType>>(() => new Set(ALL_TYPES));

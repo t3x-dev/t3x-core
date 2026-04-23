@@ -1,11 +1,11 @@
 'use client';
 
 import { truncate } from '@/domain/format/truncate';
-import type { NodeRelation } from '@/types/api';
+import type { Relation } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 interface RelationsListProps {
-  relations: NodeRelation[];
+  relations: Relation[];
   nodes: Array<{ id: string; text: string }>;
 }
 
