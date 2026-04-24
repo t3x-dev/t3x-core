@@ -16,6 +16,7 @@ import { useCallback, useState } from 'react';
 import { addSpanAsYOps } from '@/commands/yops/addSpanCommand';
 import { replayAppended } from '@/queries/loadConversation';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { useUndoTracker } from './useUndo';
 
 export interface AddSpanTarget {
   turnHash: string;
@@ -26,6 +27,7 @@ export interface AddSpanTarget {
 
 export function useAddSpan() {
   const convId = useWorkspaceStore((s) => s.conversationId);
+  const { trackAction } = useUndoTracker();
   const [adding, setAdding] = useState(false);
 
   const addSpan = useCallback(
@@ -44,6 +46,10 @@ export function useAddSpan() {
 
         if (ops.length === 0) return 0;
 
+        // Snapshot BEFORE we mutate the store so undo rolls back this batch.
+        const preview = target.text.length > 40 ? `${target.text.slice(0, 40)}…` : target.text;
+        trackAction(`Add "${preview}"`);
+
         const state = useWorkspaceStore.getState();
         const next = replayAppended(state.opsLog, state.turns, ops);
         if (next) {
@@ -54,7 +60,7 @@ export function useAddSpan() {
         setAdding(false);
       }
     },
-    [convId]
+    [convId, trackAction]
   );
 
   return { addSpan, adding, enabled: !!convId };

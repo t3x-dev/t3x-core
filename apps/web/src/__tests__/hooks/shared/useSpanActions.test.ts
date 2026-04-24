@@ -11,6 +11,7 @@ vi.mock('@/hooks/shared/useGoldEdit', () => ({
 }));
 
 import { useSpanActions } from '@/hooks/shared/useSpanActions';
+import { useUndoStore } from '@/store/undoStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function llmSource(turnHash: string, start: number, end: number, quote: string): Source {
@@ -27,6 +28,7 @@ describe('useSpanActions', () => {
     applyEditMock.mockReset();
     applyEditMock.mockResolvedValue(undefined);
     useWorkspaceStore.getState().reset();
+    useUndoStore.getState().clear();
   });
 
   it('previewRemoveSpan reflects the current sourceIndex', () => {
@@ -98,5 +100,26 @@ describe('useSpanActions', () => {
     });
     expect(removed).toBe(0);
     expect(applyEditMock).not.toHaveBeenCalled();
+    // Also no undo snapshot for a no-op sweep.
+    expect(useUndoStore.getState().stack).toHaveLength(0);
+  });
+
+  it('pushes one undo snapshot per sweep, labeled with the mapping count', async () => {
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map<string, Source>([
+        ['trip/destination', llmSource('t1', 0, 10, 'Hangzhou')],
+        ['trip/month', llmSource('t1', 20, 30, 'late May')],
+      ]),
+      opsLog: [],
+    });
+
+    const { result } = renderHook(() => useSpanActions());
+    await act(async () => {
+      await result.current.removeSpan({ turnHash: 't1', start: 0, end: 35 });
+    });
+    const stack = useUndoStore.getState().stack;
+    expect(stack).toHaveLength(1);
+    expect(stack[0].label).toBe('Remove 2 mappings');
   });
 });

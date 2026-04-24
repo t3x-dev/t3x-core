@@ -13,6 +13,7 @@ import { useAutoProject } from '@/hooks/projects/useAutoProject';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
 import { useTextSelection } from '@/hooks/shared/useTextSelection';
+import { useUndo } from '@/hooks/shared/useUndo';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
@@ -54,6 +55,7 @@ export function ChatWorkspace({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
+  useUndo({ bindKeyboard: true });
   const wsMode = useWorkspaceStore((s) => s.mode);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';

@@ -11,6 +11,7 @@ vi.mock('@/commands/yops/addSpanCommand', () => ({
 }));
 
 import { useAddSpan } from '@/hooks/shared/useAddSpan';
+import { useUndoStore } from '@/store/undoStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function makeOp(): SourcedYOp {
@@ -38,6 +39,7 @@ describe('useAddSpan', () => {
     useWorkspaceStore
       .getState()
       .setTurns([{ turn_hash: 'sha256:t1', content: 'Stay near West Lake. Lingyin Temple.' }]);
+    useUndoStore.getState().clear();
   });
 
   it('delegates to addSpanAsYOps with the selection payload and current conversation id', async () => {
@@ -110,5 +112,35 @@ describe('useAddSpan', () => {
         end: 37,
       })
     ).rejects.toThrow('No active conversation');
+  });
+
+  it('pushes one undo snapshot per successful add, labeled with the selection preview', async () => {
+    addSpanAsYOpsMock.mockResolvedValue([makeOp()]);
+    const { result } = renderHook(() => useAddSpan());
+    await act(async () => {
+      await result.current.addSpan({
+        turnHash: 'sha256:t1',
+        text: 'Lingyin Temple',
+        start: 23,
+        end: 37,
+      });
+    });
+    const stack = useUndoStore.getState().stack;
+    expect(stack).toHaveLength(1);
+    expect(stack[0].label).toBe('Add "Lingyin Temple"');
+  });
+
+  it('does not push an undo snapshot when the LLM yields no ops', async () => {
+    addSpanAsYOpsMock.mockResolvedValue([]);
+    const { result } = renderHook(() => useAddSpan());
+    await act(async () => {
+      await result.current.addSpan({
+        turnHash: 'sha256:t1',
+        text: 'Lingyin Temple',
+        start: 23,
+        end: 37,
+      });
+    });
+    expect(useUndoStore.getState().stack).toHaveLength(0);
   });
 });
