@@ -167,13 +167,26 @@ const INCREMENTAL_DRAFT = JSON.stringify({
  * based on prompt content.
  */
 function createMockProvider(mode: 'full' | 'incremental' = 'full') {
+  const structuredDraft =
+    mode === 'incremental'
+      ? JSON.parse(INCREMENTAL_DRAFT)
+      : JSON.parse(FIRST_EXTRACTION_DRAFT);
   return {
     id: 'anthropic',
+    generateStructured: vi.fn().mockImplementation(async () => ({
+      data: structuredDraft,
+      usage: mode === 'incremental'
+        ? { inputTokens: 800, outputTokens: 300 }
+        : { inputTokens: 600, outputTokens: 400 },
+    })),
     generate: vi.fn().mockImplementation(async (prompt: string) => {
       const usage = { inputTokens: 100, outputTokens: 50 };
 
       // ── v2 ProviderExtractionDraft prompt ──
-      if (prompt.includes('Return a valid ProviderExtractionDraft')) {
+      if (
+        prompt.includes('ProviderExtractionDraft') ||
+        prompt.includes('Current knowledge snapshot')
+      ) {
         if (mode === 'incremental' || prompt.includes('Current knowledge snapshot')) {
           return { text: INCREMENTAL_DRAFT, usage: { inputTokens: 800, outputTokens: 300 } };
         }

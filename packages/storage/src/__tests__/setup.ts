@@ -623,6 +623,8 @@ function getDbUrl(dbName: string): string {
   return `postgresql://${TEST_USER}:${TEST_PASSWORD}@${TEST_HOST}:${TEST_PORT}/${dbName}`;
 }
 
+function ignoreNotice(_notice: postgres.Notice): void {}
+
 /**
  * Create a fresh isolated test database.
  * Each call creates a new PostgreSQL database, runs schema setup, and returns
@@ -639,37 +641,39 @@ export async function createTestDB(): Promise<{
 }> {
   const suffix = Math.random().toString(36).slice(2, 10);
   const dbName = `test_${suffix}`;
+  const connectionString = getDbUrl(dbName);
 
   // Create the database via admin connection
-  const adminSql = postgres(getAdminUrl(), { max: 1 });
+  const adminSql = postgres(getAdminUrl(), { max: 1, onnotice: ignoreNotice });
   await adminSql.unsafe(`CREATE DATABASE "${dbName}"`);
   await adminSql.end();
 
-  // Connect to the new database and run schema setup
-  const schemaSql = postgres(getDbUrl(dbName), { max: 1 });
-  await schemaSql.unsafe(CREATE_TABLES_SQL);
-
-  // Try to create vector tables (graceful — skipped if pgvector unavailable)
-  try {
-    await schemaSql.unsafe('CREATE EXTENSION IF NOT EXISTS vector;');
-    await schemaSql.unsafe(CREATE_VECTOR_TABLES_SQL);
-  } catch {
-    // pgvector not available — node vector tests will be skipped
-  }
-  await schemaSql.end();
+  // Let the real adapter own schema bootstrap so tests exercise production init once.
+  const db = await createPostgresStorage({
+    connectionString,
+    onnotice: ignoreNotice,
+  });
 
   // Keep a raw sql connection for tests that need direct SQL access
-  const rawSql = postgres(getDbUrl(dbName), { max: 5 });
+  const rawSql = postgres(connectionString, { max: 5, onnotice: ignoreNotice });
 
-  // Create Drizzle instance via postgres adapter
-  const db = await createPostgresStorage({ connectionString: getDbUrl(dbName) });
+  if (CREATE_VECTOR_TABLES_SQL.trim()) {
+    const [{ available = false } = {}] = await rawSql.unsafe<{ available: boolean }[]>(
+      "SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') AS available"
+    );
+
+    if (available) {
+      await rawSql.unsafe('CREATE EXTENSION IF NOT EXISTS vector;');
+      await rawSql.unsafe(CREATE_VECTOR_TABLES_SQL);
+    }
+  }
 
   // Cleanup: close connection and drop the database
   const cleanup = async () => {
     await closePostgresStorage();
     await rawSql.end();
 
-    const dropSql = postgres(getAdminUrl(), { max: 1 });
+    const dropSql = postgres(getAdminUrl(), { max: 1, onnotice: ignoreNotice });
     try {
       // Terminate any remaining connections to the test database
       await dropSql.unsafe(

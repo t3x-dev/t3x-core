@@ -17,11 +17,7 @@ import { sql } from 'drizzle-orm';
 import type postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventBus, type RealtimeEvent } from '../lib/event-bus';
-import {
-  defaultFetchEventById,
-  startRealtimeListener,
-  stopRealtimeListener,
-} from '../lib/realtime-listener';
+import { startRealtimeListener, stopRealtimeListener } from '../lib/realtime-listener';
 import { setupTestDB } from './setup';
 
 describe('realtime sync e2e (real pg_notify)', () => {
@@ -44,9 +40,27 @@ describe('realtime sync e2e (real pg_notify)', () => {
     await startRealtimeListener({
       pg,
       fetchEventById: async (id) => {
-        // Use the same default fetcher pattern but bound to OUR sql client
-        // (defaultFetchEventById uses getPostgresDB() which is set by createTestDB)
-        return defaultFetchEventById(id);
+        const rows = await pg<
+          Array<{
+            id: string;
+            type: string;
+            project_id: string;
+            conversation_id: string | null;
+            payload: Record<string, unknown> | null;
+            created_at: Date;
+          }>
+        >`SELECT id, type, project_id, conversation_id, payload, created_at
+          FROM events WHERE id = ${id.toString()}::bigint LIMIT 1`;
+        const row = rows[0];
+        if (!row) return null;
+        return {
+          id: BigInt(row.id),
+          type: row.type,
+          projectId: row.project_id,
+          conversationId: row.conversation_id,
+          payload: row.payload,
+          createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
+        };
       },
     });
 
