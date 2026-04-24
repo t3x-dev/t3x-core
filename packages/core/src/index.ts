@@ -141,7 +141,9 @@ export {
   DEFAULT_TEMPERATURE,
   // Default templates
   DEFAULT_TEMPLATES,
+  deriveLeafSemanticPoints,
   formatConstraints,
+  formatSelectedSemanticPoints,
   type GenerateOptions,
   type GenerateResult,
   GenerationError,
@@ -151,8 +153,10 @@ export {
   generateLeafOutput,
   getAllDefaultTemplates,
   getDefaultTemplate,
+  getIncludedLeafSemanticPoints,
   getTypeInstructions,
   isGenerationConfigured,
+  type LeafSemanticPoint,
   type LeafTemplate,
   type ModeGenerateOptions,
   type MultiRoundOptions,
@@ -494,6 +498,8 @@ export {
   type LeafConfig,
   // Leaf History
   type LeafHistory,
+  type LeafSemanticPointOverride,
+  type LeafSemanticPointState,
   type LeafType,
   // Merge summary
   type MergeSummaryData,

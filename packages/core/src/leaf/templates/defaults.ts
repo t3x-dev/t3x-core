@@ -36,6 +36,7 @@ Format: Twitter/X post
 Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## Context
@@ -55,6 +56,12 @@ Generate the tweet content based on the above source knowledge and constraints.`
       name: 'formattedKnowledge',
       description: 'YAML-like formatted knowledge',
       required: true,
+    },
+    {
+      name: 'formattedSemanticPoints',
+      description: 'Selected semantic points section',
+      required: false,
+      defaultValue: '',
     },
     {
       name: 'formattedConstraints',
@@ -100,6 +107,7 @@ Format: Article/Blog post
 Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## Context
@@ -119,6 +127,12 @@ Generate the article content based on the above source knowledge and constraints
       name: 'formattedKnowledge',
       description: 'YAML-like formatted knowledge',
       required: true,
+    },
+    {
+      name: 'formattedSemanticPoints',
+      description: 'Selected semantic points section',
+      required: false,
+      defaultValue: '',
     },
     {
       name: 'formattedConstraints',
@@ -163,6 +177,7 @@ Format: Email
 Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## Context
@@ -182,6 +197,12 @@ Generate the email content based on the above source knowledge and constraints.`
       name: 'formattedKnowledge',
       description: 'YAML-like formatted knowledge',
       required: true,
+    },
+    {
+      name: 'formattedSemanticPoints',
+      description: 'Selected semantic points section',
+      required: false,
+      defaultValue: '',
     },
     {
       name: 'formattedConstraints',
@@ -226,6 +247,7 @@ Format: Weibo post (微博)
 请基于以下知识作为素材：
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## 背景
@@ -242,6 +264,12 @@ Format: Weibo post (微博)
 根据以上来源知识和约束条件，生成微博内容。`,
   variables: [
     { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
+    {
+      name: 'formattedSemanticPoints',
+      description: '已选语义要点部分',
+      required: false,
+      defaultValue: '',
+    },
     {
       name: 'formattedConstraints',
       description: '格式化的约束部分',
@@ -280,6 +308,7 @@ Format: WeChat article/message (微信)
 请基于以下知识作为素材：
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## 背景
@@ -296,6 +325,12 @@ Format: WeChat article/message (微信)
 根据以上来源知识和约束条件，生成微信内容。`,
   variables: [
     { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
+    {
+      name: 'formattedSemanticPoints',
+      description: '已选语义要点部分',
+      required: false,
+      defaultValue: '',
+    },
     {
       name: 'formattedConstraints',
       description: '格式化的约束部分',
@@ -334,6 +369,7 @@ Format: Slack message
 Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
+{{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
 ## Context
@@ -353,6 +389,12 @@ Generate the Slack message based on the above source knowledge and constraints.`
       name: 'formattedKnowledge',
       description: 'YAML-like formatted knowledge',
       required: true,
+    },
+    {
+      name: 'formattedSemanticPoints',
+      description: 'Selected semantic points section',
+      required: false,
+      defaultValue: '',
     },
     {
       name: 'formattedConstraints',

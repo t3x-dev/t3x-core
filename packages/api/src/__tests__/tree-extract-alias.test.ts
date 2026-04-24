@@ -5,6 +5,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
 
 let mockDB: AnyDB;
+const { mockRunExtractionPipeline } = vi.hoisted(() => ({
+  mockRunExtractionPipeline: vi.fn(async function* () {
+    yield {
+      type: 'done',
+      data: { snapshot: { trees: [], relations: [] }, yops_log_id: 'yops_test' },
+    };
+  }),
+}));
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -12,9 +20,7 @@ vi.mock('../lib/db', () => ({
 
 // Stub the actual extraction work — we only care about resolution here.
 vi.mock('../lib/extraction-pipeline', () => ({
-  runExtractionPipeline: vi.fn(async function* () {
-    yield { type: 'done', data: { snapshot: { trees: [] }, yops_log_id: 'yops_test' } };
-  }),
+  runExtractionPipeline: mockRunExtractionPipeline,
 }));
 
 import { treeExtractRoutes } from '../routes/tree-extract.openapi';
@@ -42,6 +48,41 @@ describe('POST /v1/extract/trees — alias resolution', () => {
 
   afterAll(async () => {
     await cleanup();
+  });
+
+  it('returns skipped with snapshot + empty delta when the pipeline reports no-op extraction', async () => {
+    mockRunExtractionPipeline.mockImplementationOnce(async function* () {
+      yield {
+        type: 'skipped',
+        data: {
+          reason: 'No semantic changes detected from the selected turns.',
+          snapshot: { trees: [{ key: 'trip_plan', slots: {}, children: [] }], relations: [] },
+          delta: [],
+        },
+      };
+    });
+
+    const res = await app.request('/v1/extract/trees', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ conversation_id: conversationId }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: {
+        status: 'completed' | 'skipped';
+        reason?: string;
+        delta: unknown[];
+        snapshot: { trees: Array<{ key: string }>; relations: unknown[] };
+        yops_log_id?: string;
+      };
+    };
+    expect(body.data.status).toBe('skipped');
+    expect(body.data.reason).toBe('No semantic changes detected from the selected turns.');
+    expect(body.data.delta).toEqual([]);
+    expect(body.data.snapshot.trees[0]?.key).toBe('trip_plan');
+    expect(body.data.yops_log_id).toBeUndefined();
   });
 
   it('resolves a conv_ id without project_id', async () => {

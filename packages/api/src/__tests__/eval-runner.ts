@@ -347,13 +347,36 @@ function formatSnapshotToMarkdown(snapshot: SemanticContent): string {
   return lines.join('\n');
 }
 
+function getDeltaChangeCount(delta: unknown): number {
+  if (Array.isArray(delta)) return delta.length;
+  if (
+    delta &&
+    typeof delta === 'object' &&
+    Array.isArray((delta as { changes?: unknown[] }).changes)
+  ) {
+    return (delta as { changes: unknown[] }).changes.length;
+  }
+  return 0;
+}
+
+function getDeltaRelationCount(delta: unknown): number {
+  if (
+    delta &&
+    typeof delta === 'object' &&
+    Array.isArray((delta as { new_relations?: unknown[] }).new_relations)
+  ) {
+    return (delta as { new_relations: unknown[] }).new_relations.length;
+  }
+  return 0;
+}
+
 function generateScenarioMarkdown(
   scenario: Scenario,
   snapshot: SemanticContent,
-  delta: { changes: unknown[]; new_relations?: unknown[] },
+  delta: unknown,
   durationMs: number,
   secondSnapshot?: SemanticContent,
-  secondDelta?: { changes: unknown[]; new_relations?: unknown[] },
+  secondDelta?: unknown,
   secondDurationMs?: number
 ): string {
   const lines: string[] = [];
@@ -377,13 +400,13 @@ function generateScenarioMarkdown(
   if (scenario.splitAt) {
     lines.push('## First Extraction Result\n');
     lines.push(`_Extraction time: ${durationMs}ms_\n`);
-    lines.push(`_Delta changes: ${delta.changes.length}_\n`);
+    lines.push(`_Delta changes: ${getDeltaChangeCount(delta)}_\n`);
     lines.push(formatSnapshotToMarkdown(snapshot));
 
     if (secondSnapshot) {
       lines.push('## Second Extraction Result (Incremental)\n');
       lines.push(`_Extraction time: ${secondDurationMs ?? 0}ms_\n`);
-      lines.push(`_Delta changes: ${secondDelta?.changes.length ?? 0}_\n`);
+      lines.push(`_Delta changes: ${getDeltaChangeCount(secondDelta)}_\n`);
       lines.push(formatSnapshotToMarkdown(secondSnapshot));
 
       lines.push('## Incremental Stability Analysis\n');
@@ -399,7 +422,7 @@ function generateScenarioMarkdown(
     lines.push('## Extraction Result\n');
     lines.push(`_Extraction time: ${durationMs}ms_\n`);
     lines.push(
-      `_Delta changes: ${delta.changes.length}, New relations: ${(delta.new_relations as unknown[])?.length ?? 0}_\n`
+      `_Delta changes: ${getDeltaChangeCount(delta)}, New relations: ${getDeltaRelationCount(delta)}_\n`
     );
     lines.push(formatSnapshotToMarkdown(snapshot));
   }
@@ -498,10 +521,10 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
   const body1 = (await res1.json()) as {
     success: boolean;
     // biome-ignore lint/suspicious/noExplicitAny: test helper
-    data: { delta: any; snapshot: SemanticContent; yops_log_id: string };
+    data: { delta: any; snapshot: SemanticContent; yops_log_id?: string };
   };
   console.log(
-    `  First extraction: ${flattenTrees(body1.data.snapshot.trees).length} frames, ${body1.data.delta.changes.length} changes (${durationMs}ms)`
+    `  First extraction: ${flattenTrees(body1.data.snapshot.trees).length} frames, ${getDeltaChangeCount(body1.data.delta)} changes (${durationMs}ms)`
   );
 
   let secondSnapshot: SemanticContent | undefined;
@@ -537,12 +560,12 @@ async function runScenario(app: Hono, scenario: Scenario): Promise<void> {
       const body2 = (await res2.json()) as {
         success: boolean;
         // biome-ignore lint/suspicious/noExplicitAny: test helper
-        data: { delta: any; snapshot: SemanticContent; yops_log_id: string };
+        data: { delta: any; snapshot: SemanticContent; yops_log_id?: string };
       };
       secondSnapshot = body2.data.snapshot;
       secondDelta = body2.data.delta;
       console.log(
-        `  Incremental extraction: ${flattenTrees(secondSnapshot.trees).length} frames, ${secondDelta.changes.length} changes (${secondDurationMs}ms)`
+        `  Incremental extraction: ${flattenTrees(secondSnapshot.trees).length} frames, ${getDeltaChangeCount(secondDelta)} changes (${secondDurationMs}ms)`
       );
     }
   }

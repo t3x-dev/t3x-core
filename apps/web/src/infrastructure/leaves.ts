@@ -54,10 +54,21 @@ export interface Assertion {
   lesson?: string;
 }
 
+export type LeafSemanticPointState = 'included' | 'excluded';
+
+export interface LeafSemanticPointOverride {
+  point_id: string;
+  state: LeafSemanticPointState;
+}
+
 export interface LeafConfig {
   prompt_template?: string;
+  template_id?: string;
+  use_template?: boolean;
   model?: string;
   max_tokens?: number;
+  user_instruction?: string;
+  semantic_point_overrides?: LeafSemanticPointOverride[];
   [key: string]: unknown;
 }
 

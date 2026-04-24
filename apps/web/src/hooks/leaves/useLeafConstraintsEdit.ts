@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { setLeafSemanticPointIncluded } from '@/domain/leaf/semanticPoints';
 import { updateLeaf } from '@/infrastructure';
 import type { Constraint, Leaf } from '@/types/api';
 
@@ -16,6 +17,7 @@ export interface UseLeafConstraintsEditReturn {
   saving: boolean;
   savingInstruction: boolean;
   savingModel: boolean;
+  savingSemanticPoints: boolean;
   modelError: string | null;
   handleUpdateConstraints: (constraints: Constraint[], optimisticLeaf?: Leaf) => Promise<void>;
   handleRemoveConstraint: (constraintId: string) => void;
@@ -31,6 +33,7 @@ export interface UseLeafConstraintsEditReturn {
   ) => void;
   handleUpdateUserInstruction: (instruction: string) => Promise<void>;
   handleUpdateModel: (model: string | undefined) => Promise<void>;
+  handleSetSemanticPointIncluded: (pointId: string, included: boolean) => Promise<void>;
 }
 
 export function useLeafConstraintsEdit(
@@ -42,6 +45,7 @@ export function useLeafConstraintsEdit(
   const [saving, setSaving] = useState(false);
   const [savingInstruction, setSavingInstruction] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
+  const [savingSemanticPoints, setSavingSemanticPoints] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const constraintAbortRef = useRef<AbortController | null>(null);
 
@@ -174,10 +178,36 @@ export function useLeafConstraintsEdit(
     [leafId, leafRef, setLeaf]
   );
 
+  const handleSetSemanticPointIncluded = useCallback(
+    async (pointId: string, included: boolean) => {
+      const current = leafRef.current;
+      if (!current) return;
+
+      const previousLeaf = current;
+      const updatedConfig = setLeafSemanticPointIncluded(current.config ?? {}, pointId, included);
+      const optimisticLeaf = { ...current, config: updatedConfig };
+
+      setLeaf(optimisticLeaf);
+      setSavingSemanticPoints(true);
+
+      try {
+        const updated = await updateLeaf(leafId, { config: updatedConfig });
+        setLeaf(updated);
+      } catch (err) {
+        setLeaf(previousLeaf);
+        setError(err instanceof Error ? err : new Error('Failed to update semantic points'));
+      } finally {
+        setSavingSemanticPoints(false);
+      }
+    },
+    [leafId, leafRef, setLeaf, setError]
+  );
+
   return {
     saving,
     savingInstruction,
     savingModel,
+    savingSemanticPoints,
     modelError,
     handleUpdateConstraints,
     handleRemoveConstraint,
@@ -185,5 +215,6 @@ export function useLeafConstraintsEdit(
     handleAddConstraintFromSource,
     handleUpdateUserInstruction,
     handleUpdateModel,
+    handleSetSemanticPointIncluded,
   };
 }

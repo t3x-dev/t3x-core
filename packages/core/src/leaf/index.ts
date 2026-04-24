@@ -69,6 +69,12 @@ export {
   type StylePreferences,
   validateConstraintsSimple,
 } from './multi-round-generate';
+export type { LeafSemanticPoint } from './semantic-points';
+export {
+  deriveLeafSemanticPoints,
+  formatSelectedSemanticPoints,
+  getIncludedLeafSemanticPoints,
+} from './semantic-points';
 export type { RenderTemplateOptions } from './template';
 export {
   buildTemplateContext,

@@ -11,6 +11,7 @@
 import { escapeConstraintValue } from '../llm/sanitize';
 import { serializeForPrompt } from '../semantic/serialize';
 import type { AnyLeafType, Constraint } from '../types';
+import { formatSelectedSemanticPoints, getIncludedLeafSemanticPoints } from './semantic-points';
 import type { BuildPromptOptions, BuiltPrompt, LeafTemplate } from './types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -159,6 +160,20 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
   userPromptParts.push('Use the following knowledge as your source material:\n');
   userPromptParts.push(knowledgeText);
   userPromptParts.push('');
+
+  const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config);
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
+  const formattedSemanticPoints = formatSelectedSemanticPoints(
+    selectedSemanticPoints,
+    '## Selected Semantic Points',
+    hasExcludedSemanticPoints
+  );
+  if (formattedSemanticPoints) {
+    userPromptParts.push(formattedSemanticPoints.trimEnd());
+    userPromptParts.push('');
+  }
 
   // Add constraints if any
   if (requireCount > 0 || excludeCount > 0) {

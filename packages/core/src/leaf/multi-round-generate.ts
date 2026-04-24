@@ -18,6 +18,7 @@ import type { LLMProvider } from '../llm/types';
 import { flattenTrees } from '../semantic/tree';
 import type { FlatNode, SemanticContent } from '../semantic/types';
 import type { Leaf } from '../types';
+import { formatSelectedSemanticPoints, getIncludedLeafSemanticPoints } from './semantic-points';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -93,7 +94,11 @@ export interface StylePreferences {
 export function buildRound1Prompt(
   nodes: Array<{ text: string }>,
   constraints: Array<{ type: string; value: string; match_mode: string }>,
-  config?: { promptTemplate?: string }
+  config?: {
+    promptTemplate?: string;
+    selectedSemanticPoints?: string[];
+    hasExcludedSemanticPoints?: boolean;
+  }
 ): string {
   const parts: string[] = [];
 
@@ -109,6 +114,18 @@ export function buildRound1Prompt(
     parts.push(`${i + 1}. ${nodes[i].text}`);
   }
   parts.push('');
+
+  const selectedSemanticPoints = config?.selectedSemanticPoints ?? [];
+  if (selectedSemanticPoints.length > 0) {
+    parts.push(
+      formatSelectedSemanticPoints(
+        selectedSemanticPoints.map((label) => ({ id: label, label })),
+        '## Selected Semantic Points',
+        config?.hasExcludedSemanticPoints === true
+      ).trimEnd()
+    );
+    parts.push('');
+  }
 
   const requires = constraints.filter((c) => c.type === 'require');
   const excludes = constraints.filter((c) => c.type === 'exclude');
@@ -343,6 +360,12 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
     value: string;
     match_mode: 'exact' | 'semantic';
   }>;
+  const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config).map(
+    (point) => point.label
+  );
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
 
   const results: RoundResult[] = [];
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
@@ -351,13 +374,12 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   const contextPrefix = `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".\n\n`;
   const round1Prompt =
     contextPrefix +
-    buildRound1Prompt(
-      nodes,
-      constraints,
-      leaf.config?.prompt_template
-        ? { promptTemplate: leaf.config.prompt_template as string }
-        : undefined
-    );
+    buildRound1Prompt(nodes, constraints, {
+      promptTemplate:
+        typeof leaf.config?.prompt_template === 'string' ? leaf.config.prompt_template : undefined,
+      selectedSemanticPoints,
+      hasExcludedSemanticPoints,
+    });
 
   const round1Result = await provider.generate(round1Prompt, {
     temperature,
@@ -527,6 +549,10 @@ function buildRoundPrompt(
     .map((f: FlatNode) => `${f.type}: ${Object.values(f.slots).join(' ')}`)
     .join('\n');
   const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
+  const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config);
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
 
   const parts: string[] = [];
 
@@ -534,6 +560,15 @@ function buildRoundPrompt(
     `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".`
   );
   parts.push(`\nKnowledge base:\n${nodeTexts}`);
+
+  const formattedSemanticPoints = formatSelectedSemanticPoints(
+    selectedSemanticPoints,
+    '## Selected Semantic Points',
+    hasExcludedSemanticPoints
+  );
+  if (formattedSemanticPoints) {
+    parts.push(`\n${formattedSemanticPoints.trimEnd()}`);
+  }
 
   if (constraints) {
     parts.push(`\nConstraints:\n${constraints}`);

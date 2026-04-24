@@ -191,7 +191,6 @@ Schema is sharded for manageability — each file hosts a group of related table
 | `schema.ts` | `projects`, `conversations`, `turns`, `branches`, `agent_drafts`, `drafts`, `leaves`, `leaf_history`, `leaf_output_edits`, `pins`, `conversation_contexts`, `merge_drafts`, `deploy_agents`, `runs`, `segment_embeddings`, `saved_comparisons`, `templates`, `recipes`, `webhooks`, `share_tokens`, `users`, `accounts`, `api_keys`, `notifications`, `global_settings`, `yops_log` |
 | `schema-commits.ts` | `commits`, `commit_rewrites`, `frame_lineage` |
 | `schema-trees.ts` | `trees`, `tree_relations`, `knowledge_nodes`, `knowledge_edges`, `knowledge_node_members` |
-| `schema-knowledge-conflicts.ts` | `knowledge_conflicts` |
 | `schema-node-modifications.ts` | `node_modifications` |
 | `schema-extraction-feedback.ts` | `extraction_feedback` |
 | `schema-metrics.ts` | `metrics_events`, `token_usage`, `topics` |

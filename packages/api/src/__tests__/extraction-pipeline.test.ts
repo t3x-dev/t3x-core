@@ -147,6 +147,34 @@ describe('runExtractionPipeline', () => {
 
     expect(events.map((event) => event.type)).toEqual(['status', 'skipped']);
     expect(events[1].data.reason).toBe('No extractable content found in the conversation.');
+    expect(mockRecordEvent).not.toHaveBeenCalled();
+    expect(mockInsertYOpsLogEntry).not.toHaveBeenCalled();
+  });
+
+  it('yields skipped with the current snapshot when the v2 pipeline returns no semantic changes', async () => {
+    mockRunApiExtractionV2.mockResolvedValueOnce({
+      ok: true,
+      mode: 'incremental',
+      snapshot: {
+        trees: [{ key: 'trip_plan', slots: { destination: 'Hangzhou' }, children: [] }],
+        relations: [],
+      },
+      ops: [],
+      lastTurnHash: 'sha256:turn2',
+    });
+
+    const events = await collectEvents(baseParams);
+
+    expect(events.map((event) => event.type)).toEqual(['status', 'skipped']);
+    expect(events[1].data).toEqual({
+      reason: 'No semantic changes detected from the selected turns.',
+      snapshot: {
+        trees: [{ key: 'trip_plan', slots: { destination: 'Hangzhou' }, children: [] }],
+        relations: [],
+      },
+      delta: [],
+    });
+    expect(mockRecordEvent).not.toHaveBeenCalled();
     expect(mockInsertYOpsLogEntry).not.toHaveBeenCalled();
   });
 

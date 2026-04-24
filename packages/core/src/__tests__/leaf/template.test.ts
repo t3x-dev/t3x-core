@@ -58,6 +58,13 @@ const createTestLeaf = (
 const createTestContext = (): TemplateContext => ({
   knowledge: ['user_preference: theme=dark mode', 'language: primary=English'],
   formattedKnowledge: 'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English',
+  formattedSemanticPoints: `## Selected Semantic Points
+
+- user_preference
+- user_preference.theme = dark mode
+- language
+- language.primary = English
+`,
   requires: ['- MUST include EXACTLY: "test value"'],
   excludes: ['- MUST NOT include exactly: "excluded value"'],
   formattedConstraints: `## Constraints
@@ -192,6 +199,27 @@ describe('buildTemplateContext', () => {
     const context = buildTemplateContext(knowledge, leaf);
 
     expect(context.typeInstructions).toContain('280 characters');
+  });
+
+  it('builds formatted selected semantic points from included point overrides', () => {
+    const knowledge = createTestKnowledge([
+      { type: 'trip', slots: { city: 'Kyoto', duration: '2 days', pace: 'quiet' } },
+    ]);
+    const leaf = {
+      ...createTestLeaf('tweet'),
+      config: {
+        semantic_point_overrides: [{ point_id: 'trip/duration', state: 'excluded' }],
+      },
+    };
+
+    const context = buildTemplateContext(knowledge, leaf);
+
+    expect(context.formattedSemanticPoints).toContain('## Selected Semantic Points');
+    expect(context.formattedSemanticPoints).toContain('trip.city = Kyoto');
+    expect(context.formattedSemanticPoints).not.toContain('trip.duration = 2 days');
+    expect(context.formattedSemanticPoints).toContain(
+      'Treat unlisted source facts as deselected background context'
+    );
   });
 });
 

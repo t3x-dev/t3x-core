@@ -105,7 +105,7 @@ export async function exportConversationContext(
 
 /**
  * Fetch the plain-text memory representation of a conversation
- * (used for copy-to-clipboard in ContextPanel). Distinct from
+ * for clipboard/export style flows. Distinct from
  * `@/infrastructure/pins.getConversationMemory`, which returns the
  * structured BuiltContext used by chat context assembly.
  */

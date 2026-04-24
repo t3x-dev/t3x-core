@@ -208,6 +208,7 @@ export const DEFAULT_TEMPERATURE = 0.7;
 export const TEMPLATE_VARIABLE_NAMES = [
   'knowledge', // 原始知识条目数组
   'formattedKnowledge', // 格式化后的知识（YAML-like）
+  'formattedSemanticPoints', // 选中的语义要点
   'requires', // require 约束数组
   'excludes', // exclude 约束数组
   'formattedConstraints', // 格式化后的约束文本
@@ -275,6 +276,9 @@ export interface TemplateContext {
   /** Formatted knowledge in YAML-like format (格式化后的知识) */
   formattedKnowledge: string;
 
+  /** Selected semantic points derived from source knowledge (选中的来源语义要点) */
+  formattedSemanticPoints: string;
+
   /** Formatted require constraints (必须包含的约束列表) */
   requires: string[];
 
@@ -329,6 +333,13 @@ export const TEMPLATE_VARIABLES: Record<TemplateVariableName, TemplateVariable> 
     name: 'formattedKnowledge',
     description: 'YAML-like formatted knowledge for display (格式化的YAML知识列表)',
     required: true,
+  },
+  formattedSemanticPoints: {
+    name: 'formattedSemanticPoints',
+    description:
+      'Selected semantic points section derived from source knowledge (来源知识派生的已选语义要点部分)',
+    required: false,
+    defaultValue: '',
   },
   requires: {
     name: 'requires',

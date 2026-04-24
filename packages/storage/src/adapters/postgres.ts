@@ -17,6 +17,8 @@ export interface PostgresConfig {
   connectionString: string;
   /** Maximum connections in pool */
   maxConnections?: number;
+  /** Optional notice handler (useful for idempotent test bootstrap) */
+  onnotice?: (notice: postgres.Notice) => void;
 }
 
 let client: postgres.Sql | null = null;
@@ -29,6 +31,7 @@ export async function createPostgresStorage(config: PostgresConfig): Promise<Pos
   // Create postgres.js client
   client = postgres(config.connectionString, {
     max: config.maxConnections || 10,
+    onnotice: config.onnotice,
   });
 
   // Create Drizzle instance

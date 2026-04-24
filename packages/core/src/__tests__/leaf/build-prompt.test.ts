@@ -347,4 +347,26 @@ describe('buildLeafPrompt', () => {
 
     expect(result.userPrompt).not.toContain('Lessons Learned');
   });
+
+  it('includes selected semantic points and omits excluded point labels from that section', () => {
+    const knowledge = createTestKnowledge([
+      { type: 'trip', slots: { city: 'Kyoto', duration: '2 days', pace: 'quiet' } },
+    ]);
+    const leaf = {
+      ...createTestLeaf('tweet'),
+      config: {
+        semantic_point_overrides: [{ point_id: 'trip/duration', state: 'excluded' }],
+      },
+    };
+
+    const result = buildLeafPrompt({ knowledge, leaf });
+
+    expect(result.userPrompt).toContain('## Selected Semantic Points');
+    expect(result.userPrompt).toContain('trip.city = Kyoto');
+    expect(result.userPrompt).toContain('trip.pace = quiet');
+    expect(result.userPrompt).not.toContain('trip.duration = 2 days');
+    expect(result.userPrompt).toContain(
+      'Treat unlisted source facts as deselected background context'
+    );
+  });
 });

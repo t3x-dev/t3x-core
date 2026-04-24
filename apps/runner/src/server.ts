@@ -2,6 +2,7 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
+import { isEnabledEnv, isTrustedLoopbackRequest } from './debug-access.js';
 import {
   getEngineCallbackUrl,
   getEngineUrl,
@@ -31,6 +32,51 @@ import { fetchWithRetry } from './utils/retry.js';
 
 const app: Express = express();
 
+function areDebugRoutesEnabled(): boolean {
+  return isEnabledEnv(process.env.RUNNER_ENABLE_DEBUG_ROUTES);
+}
+
+function ensureDebugAccess(req: Request, res: Response): boolean {
+  if (!areDebugRoutesEnabled()) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Route not found' },
+    });
+    return false;
+  }
+
+  if (
+    isTrustedLoopbackRequest({
+      host: req.headers.host,
+      remoteAddress: req.socket.remoteAddress,
+    })
+  ) {
+    return true;
+  }
+
+  const debugToken = process.env.RUNNER_DEBUG_TOKEN;
+  if (!debugToken) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'DEBUG_AUTH_NOT_CONFIGURED',
+        message: 'RUNNER_DEBUG_TOKEN must be set when exposing debug routes off localhost',
+      },
+    });
+    return false;
+  }
+
+  if (req.header('authorization') !== `Bearer ${debugToken}`) {
+    res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Missing or invalid debug bearer token' },
+    });
+    return false;
+  }
+
+  return true;
+}
+
 // CORS - whitelist origins (extend via CORS_ORIGINS env var if needed)
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
@@ -51,20 +97,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Root route - service info
 app.get('/', (_req, res) => {
+  const endpoints: Record<string, string> = {
+    health: 'GET /health',
+    agents: 'POST /agents',
+    run: 'POST /run',
+    runs: 'POST /runs (Engine → n8n flow)',
+    callbacks: 'POST /callbacks/n8n',
+  };
+  if (areDebugRoutesEnabled()) {
+    endpoints.debug_n8n = 'GET /debug/n8n-check';
+  }
+
   res.json({
     success: true,
     data: {
       service: 't3x-runner',
       version: '0.2.0',
-      endpoints: {
-        health: 'GET /health',
-        debug_n8n: 'GET /debug/n8n-check',
-        agents: 'POST /agents',
-        run: 'POST /run',
-        runs: 'POST /runs (Engine → n8n flow)',
-        callbacks: 'POST /callbacks/n8n',
-      },
-      docs: 'https://github.com/anthropics/t3x/tree/main/t3x-runner',
+      endpoints,
+      docs: 'https://github.com/t3x-dev/t3x-core/tree/main/apps/runner/docs',
     },
   });
 });
@@ -101,7 +151,9 @@ app.get('/ready', async (_req, res) => {
 });
 
 // Debug: n8n API connectivity check
-app.get('/debug/n8n-check', async (_req, res) => {
+app.get('/debug/n8n-check', async (req, res) => {
+  if (!ensureDebugAccess(req, res)) return;
+
   const apiUrl = process.env.N8N_API_URL || process.env.N8N_BASE_URL || 'http://n8n:5678';
   const hasKey = !!process.env.N8N_API_KEY;
 
@@ -855,19 +907,23 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 // Start Server
 // ============================================
 
-const PORT = process.env.PORT || 8080;
+export function startServer(port: number | string = process.env.PORT || 8080) {
+  return app.listen(port, () => {
+    logger.info({ port }, 'T3X Runner started');
+    logger.info('Endpoints:');
+    logger.info('  GET  /health        - Health check');
+    logger.info('  GET  /ready         - Readiness check');
+    logger.info('  POST /agents        - Register agent');
+    logger.info('  POST /run           - Execute agent run (SDK proxy)');
+    logger.info('  POST /run/:id/step  - Add step to running run');
+    logger.info('  POST /runs          - Engine triggers n8n workflow');
+    logger.info('  POST /callbacks/n8n - n8n callback');
+    logger.info('  POST /eval          - Direct evaluation');
+  });
+}
 
-app.listen(PORT, () => {
-  logger.info({ port: PORT }, 'T3X Runner started');
-  logger.info('Endpoints:');
-  logger.info('  GET  /health        - Health check');
-  logger.info('  GET  /ready         - Readiness check');
-  logger.info('  POST /agents        - Register agent');
-  logger.info('  POST /run           - Execute agent run (SDK proxy)');
-  logger.info('  POST /run/:id/step  - Add step to running run');
-  logger.info('  POST /runs          - Engine triggers n8n workflow');
-  logger.info('  POST /callbacks/n8n - n8n callback');
-  logger.info('  POST /eval          - Direct evaluation');
-});
+if (require.main === module) {
+  startServer();
+}
 
 export { app };

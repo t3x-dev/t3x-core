@@ -23,6 +23,14 @@ vi.mock('../../lib/db', () => ({
   closeDB: vi.fn(() => Promise.resolve()),
 }));
 
+// Mock the webhook dispatcher so route tests stay isolated from background side effects.
+const mockDispatch = vi.fn();
+vi.mock('../../lib/webhook-dispatcher', () => ({
+  webhookDispatcher: {
+    dispatch: (...args: unknown[]) => mockDispatch(...args),
+  },
+}));
+
 // Import routes after mocking
 import { mergeRoutes } from '../../routes/merge.openapi';
 

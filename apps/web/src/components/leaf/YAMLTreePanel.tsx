@@ -13,6 +13,7 @@ import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { YAMLRenderer } from '@/components/shared/YAMLRenderer';
+import type { LeafSemanticPointSummary } from '@/domain/leaf/semanticPoints';
 import { contentToNodes } from '@/domain/tree/treeCompat';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
@@ -35,6 +36,7 @@ interface YAMLTreePanelProps {
     value: string,
     sourceNodeId: string
   ) => void;
+  semanticPointSummaryByNode?: Map<string, LeafSemanticPointSummary>;
   /** ID of constraint/tree being hovered in QualityPanel */
   highlightedConstraintId?: string | null;
   onHoverNode?: (treeId: string | null) => void;
@@ -53,6 +55,7 @@ export function YAMLTreePanel({
   commitHash,
   projectId,
   onAddConstraintFromSource,
+  semanticPointSummaryByNode,
   highlightedConstraintId,
   onHoverNode,
 }: YAMLTreePanelProps) {
@@ -80,14 +83,20 @@ export function YAMLTreePanel({
   const renderNodeActions = useCallback(
     (treeId: string, treeType: string): ReactNode => {
       if (mode === 'generate') {
-        const node = content.trees.find((f) => f.key === treeId);
+        const node = nested.find((entry) => entry.id === treeId);
         const nodeValue = node
           ? Object.entries(node.slots)
               .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
               .join('; ')
           : '';
+        const semanticSummary = semanticPointSummaryByNode?.get(treeId);
         return (
-          <div className="mt-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {semanticSummary && (
+              <span className="rounded-full bg-[var(--surface-elevated)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+                {semanticSummary.included}/{semanticSummary.total} included
+              </span>
+            )}
             <button
               type="button"
               className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-transparent hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] text-[var(--status-success)] transition-colors"
@@ -140,7 +149,15 @@ export function YAMLTreePanel({
 
       return null;
     },
-    [mode, content.trees, constraints, assertions, saving, onAddConstraintFromSource]
+    [
+      mode,
+      nested,
+      semanticPointSummaryByNode,
+      constraints,
+      assertions,
+      saving,
+      onAddConstraintFromSource,
+    ]
   );
 
   const getTreeMeta = useCallback((_treeId: string) => {

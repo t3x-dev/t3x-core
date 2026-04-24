@@ -18,6 +18,7 @@ import type { SemanticContent } from '../semantic/types';
 import type { AnyLeafType, Constraint, Leaf } from '../types';
 import { isGenerationLeaf } from '../types';
 import { formatConstraints, getTypeInstructions } from './build-prompt';
+import { formatSelectedSemanticPoints, getIncludedLeafSemanticPoints } from './semantic-points';
 import { getDefaultTemplate } from './templates';
 import type {
   LeafTemplate,
@@ -53,6 +54,14 @@ export function buildTemplateContext(
         .join(', ')}`
   );
   const formattedKnowledge = serializeForPrompt(knowledge);
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
+  const formattedSemanticPoints = formatSelectedSemanticPoints(
+    getIncludedLeafSemanticPoints(knowledge, leaf.config),
+    '## Selected Semantic Points',
+    hasExcludedSemanticPoints
+  );
 
   // Format constraints
   const { requires, excludes } = formatConstraintsForTemplate(leaf.constraints);
@@ -64,6 +73,7 @@ export function buildTemplateContext(
   return {
     knowledge: knowledgeItems,
     formattedKnowledge,
+    formattedSemanticPoints,
     requires,
     excludes,
     formattedConstraints,
@@ -201,6 +211,8 @@ function getContextValue(
       return context.knowledge;
     case 'formattedKnowledge':
       return context.formattedKnowledge;
+    case 'formattedSemanticPoints':
+      return context.formattedSemanticPoints;
     case 'requires':
       return context.requires;
     case 'excludes':
@@ -370,6 +382,15 @@ export function previewTemplate(template: LeafTemplate, leafType: AnyLeafType): 
     ],
     formattedKnowledge:
       'user_preference:\n  theme: dark mode\nlanguage:\n  primary: English\ngoal:\n  task: complete project',
+    formattedSemanticPoints: `## Selected Semantic Points
+
+- user_preference
+- user_preference.theme = dark mode
+- language
+- language.primary = English
+- goal
+- goal.task = complete project
+`,
     requires: ['- MUST include EXACTLY: "sample requirement"'],
     excludes: ['- MUST NOT include exactly: "sample exclusion"'],
     formattedConstraints: `## Constraints

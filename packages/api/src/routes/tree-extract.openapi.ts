@@ -37,21 +37,17 @@ const TreeExtractRequest = z
   })
   .strict();
 
-const DeltaResponseSchema = z.object({
-  changes: z.array(z.any()),
-  new_relations: z.array(z.any()).optional(),
-  remove_relations: z.array(z.any()).optional(),
-});
+const DeltaResponseSchema = z.array(z.any());
 
 const SnapshotResponseSchema = z.object({
-  frames: z.array(z.any()),
+  trees: z.array(z.any()),
   relations: z.array(z.any()),
 });
 
 const TreeExtractResponse = SuccessResponseSchema(
   z.object({
-    delta: DeltaResponseSchema.optional(),
-    snapshot: SnapshotResponseSchema.optional(),
+    delta: DeltaResponseSchema,
+    snapshot: SnapshotResponseSchema,
     yops_log_id: z.string().optional(),
     status: z.enum(['completed', 'skipped']),
     reason: z.string().optional(),
@@ -159,6 +155,10 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
         case 'skipped':
           status = 'skipped';
           reason = (event.data as { reason: string }).reason;
+          finalSnapshot = (event.data as { snapshot?: unknown }).snapshot ?? {
+            trees: [],
+            relations: [],
+          };
           break;
         case 'error': {
           const errData = event.data as { code?: string; message: string };
@@ -206,7 +206,7 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
       data: {
         status,
         delta: collectedYops,
-        snapshot: finalSnapshot,
+        snapshot: finalSnapshot ?? { trees: [], relations: [] },
         yops_log_id: yopsLogId,
         ...(reason && { reason }),
       },

@@ -133,7 +133,6 @@ export class N8nClient {
             execution_id: executionId,
             api_url: `${baseUrl}/api/v1/executions/${executionId}`,
             has_api_key: !!this.apiKey,
-            api_key_prefix: this.apiKey ? `${this.apiKey.slice(0, 4)}...` : '(none)',
           },
           'n8n API: first fetch attempt'
         );

@@ -206,42 +206,9 @@ test.describe('V4 WebUI Flow', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 5: Context panel shows pins
+  // Scenario 5: Export context works
   // ─────────────────────────────────────────────────────────────────────────
-  test('5. Context panel shows pins', async ({ page, request }) => {
-    // Create a conversation
-    const convResponse = await request.post('http://localhost:8000/api/v1/conversations', {
-      data: {
-        project_id: projectId,
-        title: 'E2E Test Conversation',
-      },
-    });
-
-    const convData = await convResponse.json();
-    expect(convData.success).toBe(true);
-    const conversationId = convData.data.conversation_id;
-
-    // Navigate to conversation page (chat route, no projectId in URL)
-    await page.goto(`/chat/${conversationId}`);
-
-    // Wait for page content to load
-    await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
-
-    // Look for Context panel
-    const contextPanel = page.locator('text=Context').first();
-    const hasContextPanel = await contextPanel.isVisible();
-
-    if (hasContextPanel) {
-      // Check for pinned items display
-      const pinsText = page.locator('text=Using').or(page.locator('text=pins'));
-      await pinsText.first().isVisible();
-    }
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Scenario 6: Export context works
-  // ─────────────────────────────────────────────────────────────────────────
-  test('6. Export context works', async ({ request }) => {
+  test('5. Export context works', async ({ request }) => {
     // Create a conversation for export test
     const convResponse = await request.post('http://localhost:8000/api/v1/conversations', {
       data: {

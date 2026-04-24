@@ -137,11 +137,6 @@ export async function* runExtractionPipeline(
     }
 
     yield { type: 'status', data: { step: 'extracting' } };
-    await recordEvent(db, {
-      type: 'extraction.started',
-      projectId: conversation.projectId,
-      conversationId: conversation.conversationId,
-    });
 
     const extraction = await runApiExtractionV2({
       db,
@@ -157,13 +152,26 @@ export async function* runExtractionPipeline(
       return;
     }
 
-    if (extraction.ops.length === 0 && extraction.snapshot.trees.length === 0) {
+    if (extraction.ops.length === 0) {
       yield {
         type: 'skipped',
-        data: { reason: 'No extractable content found in the conversation.' },
+        data: {
+          reason:
+            extraction.snapshot.trees.length === 0
+              ? 'No extractable content found in the conversation.'
+              : 'No semantic changes detected from the selected turns.',
+          snapshot: extraction.snapshot,
+          delta: [],
+        },
       };
       return;
     }
+
+    await recordEvent(db, {
+      type: 'extraction.started',
+      projectId: conversation.projectId,
+      conversationId: conversation.conversationId,
+    });
 
     for (let index = 0; index < extraction.ops.length; index++) {
       yield {
