@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, MessageSquare, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -107,7 +107,6 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const isSettings = pathname.startsWith('/settings');
   const isHome =
     pathname === '/' || pathname.startsWith('/project') || pathname.startsWith('/chat');
 
@@ -144,13 +143,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <NavItem href="/chat" label="Chats" isActive={isHome} collapsed={collapsed}>
             <MessageSquare className="h-5 w-5" />
           </NavItem>
-
-          <NavItem href="/settings" label="Settings" isActive={isSettings} collapsed={collapsed}>
-            <Settings className="h-5 w-5" />
-          </NavItem>
         </nav>
 
-        {/* User Menu */}
+        {/* User Menu — Settings lives in this dropdown (Profile / Settings / Sign Out) */}
         <div className={cn('mt-auto', collapsed ? 'flex justify-center' : '')}>
           <UserMenu collapsed={collapsed} />
         </div>
