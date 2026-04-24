@@ -15,6 +15,10 @@ import { QualityPanel } from '@/components/leaf/QualityPanel';
 import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDialog';
 import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
+import {
+  buildLeafSemanticPointSummaryByNode,
+  deriveLeafSemanticPointItems,
+} from '@/domain/leaf/semanticPoints';
 import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import type { Constraint, SuggestedConstraint } from '@/infrastructure';
@@ -60,6 +64,7 @@ export default function LeafDetailPage() {
     saving,
     savingInstruction,
     savingModel,
+    savingSemanticPoints,
     modelError,
     isGenerating,
     generatePhase,
@@ -81,6 +86,7 @@ export default function LeafDetailPage() {
     handleAddConstraintFromSource,
     handleUpdateUserInstruction,
     handleUpdateModel,
+    handleSetSemanticPointIncluded,
     handleGenerate,
     handleValidate,
     handleExport,
@@ -122,6 +128,14 @@ export default function LeafDetailPage() {
   );
 
   const reflectedCount = Array.from(nodeCoverage.values()).filter((c) => c.reflected).length;
+  const semanticPointItems = useMemo(
+    () => (leaf && semanticContent ? deriveLeafSemanticPointItems(semanticContent, leaf.config) : []),
+    [leaf, semanticContent]
+  );
+  const semanticPointSummaryByNode = useMemo(
+    () => buildLeafSemanticPointSummaryByNode(semanticPointItems),
+    [semanticPointItems]
+  );
 
   // Keyboard navigation for nodes
   const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
@@ -298,6 +312,7 @@ export default function LeafDetailPage() {
             commitHash={leaf.commit_hash}
             projectId={projectId}
             onAddConstraintFromSource={handleAddConstraintFromSource}
+            semanticPointSummaryByNode={semanticPointSummaryByNode}
             highlightedConstraintId={hoveredNodeId}
             onHoverNode={setHoveredNodeId}
           />
@@ -381,8 +396,10 @@ export default function LeafDetailPage() {
         {mode === 'generate' ? (
           <LeafInspector
             leaf={leaf}
+            semanticContent={semanticContent}
             mode={mode}
             saving={saving}
+            savingSemanticPoints={savingSemanticPoints}
             collapsed={inspectorCollapsed}
             onRemoveConstraint={handleRemoveConstraint}
             onAddConstraint={handleAddConstraint}
@@ -391,6 +408,7 @@ export default function LeafDetailPage() {
             toggleAssertion={toggleAssertion}
             onRetune={onRetune}
             retuning={retuning}
+            onToggleSemanticPoint={handleSetSemanticPointIncluded}
           />
         ) : (
           <QualityPanel

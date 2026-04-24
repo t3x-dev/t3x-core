@@ -234,9 +234,22 @@ export interface Leaf {
   created_by?: string;
 }
 
+export type LeafSemanticPointState = 'included' | 'excluded';
+
+export interface LeafSemanticPointOverride {
+  point_id: string;
+  state: LeafSemanticPointState;
+}
+
 export interface LeafConfig {
   /** Prompt template for generation */
   prompt_template?: string;
+
+  /** Saved template selection */
+  template_id?: string;
+
+  /** Whether to render prompt via template mode */
+  use_template?: boolean;
 
   /** LLM model to use */
   model?: string;
@@ -246,6 +259,12 @@ export interface LeafConfig {
 
   /** Semantic similarity threshold for constraint validation (0-1) */
   semantic_threshold?: number;
+
+  /** User-authored guidance appended to generation prompts */
+  user_instruction?: string;
+
+  /** Per-leaf overrides for commit-derived semantic point inclusion */
+  semantic_point_overrides?: LeafSemanticPointOverride[];
 
   /** Allow extension */
   [key: string]: unknown;

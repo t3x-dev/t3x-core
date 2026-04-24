@@ -32,6 +32,12 @@ export {
   formatConstraints,
   getTypeInstructions,
 } from './build-prompt';
+export type { LeafSemanticPoint } from './semantic-points';
+export {
+  deriveLeafSemanticPoints,
+  formatSelectedSemanticPoints,
+  getIncludedLeafSemanticPoints,
+} from './semantic-points';
 // ═══════════════════════════════════════════════════════════════════════════
 // Constraint Suggestion Exports
 // ═══════════════════════════════════════════════════════════════════════════

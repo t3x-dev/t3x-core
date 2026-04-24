@@ -203,20 +203,31 @@ const LeafTypeEnum = z.enum(LEAF_TYPES);
 // All valid types stored in leaves table (generation + deploy)
 const AnyLeafTypeEnum = z.enum(ALL_LEAF_TYPES);
 
+const LeafSemanticPointStateSchema = z.enum(['included', 'excluded']);
+
+const LeafSemanticPointOverrideSchema = z.object({
+  point_id: z.string(),
+  state: LeafSemanticPointStateSchema,
+});
+
+// LeafConfig schema (matches LeafConfig type from @t3x-dev/core)
+const LeafConfigSchema = z
+  .object({
+    prompt_template: z.string().optional(),
+    model: z.string().optional(),
+    max_tokens: z.number().optional(),
+    user_instruction: z.string().optional(),
+    semantic_point_overrides: z.array(LeafSemanticPointOverrideSchema).optional(),
+  })
+  .passthrough();
+
 // POST /v1/leaves
 export const CreateLeafRequest = z.object({
   commit_hash: z.string(),
   type: AnyLeafTypeEnum,
   title: z.string().optional(),
   constraints: z.array(ConstraintSchema).default([]),
-  config: z
-    .object({
-      prompt_template: z.string().optional(),
-      model: z.string().optional(),
-      max_tokens: z.number().optional(),
-    })
-    .passthrough()
-    .default({}),
+  config: LeafConfigSchema.default({}),
   project_id: z.string(),
 });
 
@@ -226,7 +237,7 @@ export const LeafResponse = z.object({
   type: AnyLeafTypeEnum,
   title: z.string().nullable(),
   constraints: z.array(ConstraintSchema),
-  config: z.record(z.string(), z.unknown()),
+  config: LeafConfigSchema,
   output: z.string().nullable(),
   generated_at: z.string().nullable(),
   assertions: z.array(AssertionSchema).nullable(),
@@ -244,14 +255,7 @@ export const ListLeavesResponse = SuccessResponse(z.array(LeafResponse));
 export const UpdateLeafRequest = z.object({
   title: z.string().max(500).optional(),
   constraints: z.array(ConstraintSchema).max(100).optional(),
-  config: z
-    .object({
-      prompt_template: z.string().optional(),
-      model: z.string().optional(),
-      max_tokens: z.number().optional(),
-    })
-    .passthrough()
-    .optional(),
+  config: LeafConfigSchema.optional(),
   output: z.string().max(1_000_000).nullable().optional(),
 });
 
@@ -332,15 +336,6 @@ export const ValidateLeafOutputResponse = SuccessResponse(
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf History API
 // ═══════════════════════════════════════════════════════════════════════════
-
-// LeafConfig schema (matches LeafConfig type from @t3x-dev/core)
-const LeafConfigSchema = z
-  .object({
-    prompt_template: z.string().optional(),
-    model: z.string().optional(),
-    max_tokens: z.number().optional(),
-  })
-  .passthrough();
 
 // GET /v1/leaves/:id/history
 export const LeafHistoryResponse = z.object({

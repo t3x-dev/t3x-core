@@ -288,6 +288,35 @@ describe('validateConstraintsSimple', () => {
   });
 });
 
+describe('buildRound1Prompt', () => {
+  it('includes selected semantic points before the task section', () => {
+    const prompt = buildRound1Prompt(
+      [{ text: 'trip Kyoto 2 days quiet walkable' }],
+      [{ type: 'require', value: 'Kyoto', match_mode: 'exact' }],
+      {
+        selectedSemanticPoints: ['trip.city = Kyoto', 'trip.pace = walkable'],
+      }
+    );
+
+    expect(prompt).toContain('## Selected Semantic Points');
+    expect(prompt).toContain('trip.city = Kyoto');
+    expect(prompt).toContain('trip.pace = walkable');
+  });
+
+  it('tells the model to ignore deselected source facts when some points were excluded', () => {
+    const prompt = buildRound1Prompt(
+      [{ text: 'trip Kyoto 2 days quiet walkable' }],
+      [{ type: 'require', value: 'Kyoto', match_mode: 'exact' }],
+      {
+        selectedSemanticPoints: ['trip.city = Kyoto', 'trip.pace = walkable'],
+        hasExcludedSemanticPoints: true,
+      }
+    );
+
+    expect(prompt).toContain('Treat unlisted source facts as deselected background context');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // buildRound1Prompt
 // ═══════════════════════════════════════════════════════════════════════════

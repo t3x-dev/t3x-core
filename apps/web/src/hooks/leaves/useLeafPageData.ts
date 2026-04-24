@@ -57,6 +57,7 @@ export interface UseLeafPageDataReturn {
   saving: boolean;
   savingInstruction: boolean;
   savingModel: boolean;
+  savingSemanticPoints: boolean;
   modelError: string | null;
 
   // Generate states
@@ -99,6 +100,7 @@ export interface UseLeafPageDataReturn {
   ) => void;
   handleUpdateUserInstruction: (instruction: string) => Promise<void>;
   handleUpdateModel: (model: string | undefined) => Promise<void>;
+  handleSetSemanticPointIncluded: (pointId: string, included: boolean) => Promise<void>;
   handleGenerate: () => Promise<void>;
   handleValidate: () => Promise<void>;
   handleExport: (format: ExportFormat) => Promise<void>;
@@ -136,6 +138,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     saving: constraintsEdit.saving,
     savingInstruction: constraintsEdit.savingInstruction,
     savingModel: constraintsEdit.savingModel,
+    savingSemanticPoints: constraintsEdit.savingSemanticPoints,
     modelError: constraintsEdit.modelError,
 
     // Generate
@@ -170,6 +173,7 @@ export function useLeafPageData(projectId: string, leafId: string): UseLeafPageD
     handleAddConstraintFromSource: constraintsEdit.handleAddConstraintFromSource,
     handleUpdateUserInstruction: constraintsEdit.handleUpdateUserInstruction,
     handleUpdateModel: constraintsEdit.handleUpdateModel,
+    handleSetSemanticPointIncluded: constraintsEdit.handleSetSemanticPointIncluded,
     handleGenerate: generate.handleGenerate,
     handleValidate: validate.handleValidate,
     handleExport: exportFns.handleExport,

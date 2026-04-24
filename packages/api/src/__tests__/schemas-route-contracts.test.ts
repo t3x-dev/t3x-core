@@ -5,6 +5,12 @@ import {
   ProvidersResponseDataSchema,
 } from '../schemas/chat';
 import {
+  CreateLeafRequest,
+  LeafHistoryResponse,
+  LeafResponse,
+  UpdateLeafRequest,
+} from '../schemas/contracts';
+import {
   LocalProviderStatusSchema,
   LocalProviderWriteSchema,
   ProviderListSchema,
@@ -133,5 +139,69 @@ describe('route contract schemas', () => {
         default_model: 'gpt-4.1',
       })
     ).toMatchObject({ api_key: 'sk-test' });
+  });
+
+  it('validates leaf semantic point override config explicitly', () => {
+    const validConfig = {
+      prompt_template: 'Write a concise update',
+      user_instruction: 'Keep it grounded in the selected points.',
+      semantic_point_overrides: [
+        { point_id: 'trip/city', state: 'included' },
+        { point_id: 'trip/duration', state: 'excluded' },
+      ],
+    };
+
+    expect(
+      CreateLeafRequest.parse({
+        commit_hash: 'sha256:test',
+        type: 'tweet',
+        project_id: 'proj_test',
+        config: validConfig,
+      }).config
+    ).toMatchObject(validConfig);
+
+    expect(
+      UpdateLeafRequest.parse({
+        config: validConfig,
+      }).config
+    ).toMatchObject(validConfig);
+
+    expect(
+      LeafResponse.parse({
+        id: 'leaf_test',
+        commit_hash: 'sha256:test',
+        type: 'tweet',
+        title: 'Trip Leaf',
+        constraints: [],
+        config: validConfig,
+        output: null,
+        generated_at: null,
+        assertions: null,
+        runner_assertions: null,
+        project_id: 'proj_test',
+        created_at: '2026-04-24T00:00:00.000Z',
+        created_by: null,
+      }).config
+    ).toMatchObject(validConfig);
+
+    expect(
+      LeafHistoryResponse.parse({
+        id: 'lhist_test',
+        leaf_id: 'leaf_test',
+        output: 'Sample output',
+        config: validConfig,
+        model: 'claude-sonnet-4-6',
+        generated_at: '2026-04-24T00:00:00.000Z',
+        created_by: null,
+      }).config
+    ).toMatchObject(validConfig);
+
+    const invalidUpdate = UpdateLeafRequest.safeParse({
+      config: {
+        semantic_point_overrides: [{ point_id: 'trip/city', state: 'invalid' }],
+      },
+    });
+
+    expect(invalidUpdate.success).toBe(false);
   });
 });

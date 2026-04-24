@@ -1,5 +1,6 @@
 'use client';
 
+import type { SemanticContent } from '@t3x-dev/core';
 import {
   Check,
   CheckCircle,
@@ -13,7 +14,9 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { deriveLeafSemanticPointItems } from '@/domain/leaf/semanticPoints';
+import { LeafSemanticPointsPanel } from '@/components/leaf/LeafSemanticPointsPanel';
 import { Button } from '@/components/ui/button';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint, Leaf } from '@/types/api';
@@ -25,8 +28,10 @@ import { cn } from '@/utils/cn';
 
 interface LeafInspectorProps {
   leaf: Leaf;
+  semanticContent: SemanticContent | null;
   mode: WorkspaceMode;
   saving: boolean;
+  savingSemanticPoints: boolean;
   collapsed: boolean;
   onRemoveConstraint: (id: string) => void;
   onAddConstraint: (
@@ -40,6 +45,7 @@ interface LeafInspectorProps {
   toggleAssertion?: (id: string) => void;
   onRetune?: () => Promise<void>;
   retuning?: boolean;
+  onToggleSemanticPoint: (pointId: string, included: boolean) => void;
 }
 
 // ============================================================================
@@ -230,8 +236,10 @@ function AssertionRow({
 
 export function LeafInspector({
   leaf,
+  semanticContent,
   mode,
   saving,
+  savingSemanticPoints,
   collapsed,
   onRemoveConstraint,
   onAddConstraint,
@@ -240,10 +248,15 @@ export function LeafInspector({
   toggleAssertion,
   onRetune,
   retuning,
+  onToggleSemanticPoint,
 }: LeafInspectorProps) {
   if (collapsed) return null;
 
   const editable = mode === 'generate';
+  const semanticPoints = useMemo(
+    () => (semanticContent ? deriveLeafSemanticPointItems(semanticContent, leaf.config) : []),
+    [semanticContent, leaf.config]
+  );
   const requireConstraints = leaf.constraints.filter((c) => c.type === 'require');
   const excludeConstraints = leaf.constraints.filter((c) => c.type === 'exclude');
   const assertions = leaf.assertions ?? [];
@@ -258,6 +271,14 @@ export function LeafInspector({
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}
     >
+      {semanticContent && (
+        <LeafSemanticPointsPanel
+          points={semanticPoints}
+          saving={savingSemanticPoints}
+          onTogglePoint={onToggleSemanticPoint}
+        />
+      )}
+
       {/* Constraints */}
       <div className="p-3 border-b border-[var(--stroke-divider)]">
         <div className="flex items-center justify-between mb-2">
