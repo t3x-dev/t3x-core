@@ -100,7 +100,7 @@ export function PinnedSourcesSection({
 
 /**
  * Memory Context sidebar section.
- * Shows pin counts and allows opening EditContextDialog.
+ * Shows pin counts and memory controls.
  */
 export function MemoryContextSidebar({
   projectId,

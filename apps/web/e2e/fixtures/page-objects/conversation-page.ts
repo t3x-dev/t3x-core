@@ -65,11 +65,6 @@ export class ConversationPage {
       .catch(() => false);
   }
 
-  async hasContextPanel(): Promise<boolean> {
-    const panel = this.page.locator('aside').filter({ hasText: 'Context' }).first();
-    return panel.isVisible().catch(() => false);
-  }
-
   /** #13: Locate back button by its navigation behavior, not generic SVG. */
   getBackButton(): Locator {
     return this.page

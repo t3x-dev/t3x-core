@@ -28,10 +28,9 @@ export default defineConfig({
       exclude: ['src/__tests__/**', 'src/**/*.test.ts', 'src/**/*.test.tsx'],
     },
     // Per-file isolation prevents cross-test pollution of
-    // localStorage / zustand-persist state (seen in
-    // settingsStore.test.ts + ExtractionStylePanel.test.tsx before
-    // this switch — full-suite runs flaked while isolated runs were
-    // green). Cost: small worker-startup overhead; benefit: CI stability.
+    // localStorage / zustand-persist state seen before
+    // this switch. Cost: small worker-startup overhead;
+    // benefit: CI stability.
     isolate: true,
     // Longer timeout for database operations
     testTimeout: 10000,
