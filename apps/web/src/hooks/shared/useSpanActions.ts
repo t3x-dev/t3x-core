@@ -18,6 +18,7 @@ import { useCallback } from 'react';
 import { buildSweepOps, findPathsOverlappingSpan } from '@/domain/spanSweep';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useGoldEdit } from './useGoldEdit';
+import { useUndoTracker } from './useUndo';
 
 export interface SpanTarget {
   turnHash: string;
@@ -27,6 +28,7 @@ export interface SpanTarget {
 
 export function useSpanActions() {
   const { applyEdit, enabled } = useGoldEdit();
+  const { trackAction } = useUndoTracker();
 
   const previewRemoveSpan = useCallback((target: SpanTarget) => {
     const { sourceIndex } = useWorkspaceStore.getState();
@@ -42,13 +44,16 @@ export function useSpanActions() {
         target.start,
         target.end
       );
+      if (matches.length === 0) return 0;
       const ops = buildSweepOps(matches);
+      // One undo per span-remove (not per op), so snapshot before the first apply.
+      trackAction(`Remove ${matches.length} mapping${matches.length === 1 ? '' : 's'}`);
       for (const op of ops) {
         await applyEdit(op);
       }
       return matches.length;
     },
-    [applyEdit]
+    [applyEdit, trackAction]
   );
 
   return { previewRemoveSpan, removeSpan, enabled };
