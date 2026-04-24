@@ -14,6 +14,9 @@ function createFallbackStatus(provider: LocalProviderId): LocalProviderStatus {
     last_test_status: null,
     last_tested_at: null,
     last_test_error: null,
+    api_key_source: 'none',
+    api_key_preview: null,
+    env_overrides_stored: false,
   };
 }
 

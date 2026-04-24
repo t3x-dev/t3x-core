@@ -1,23 +1,21 @@
 'use client';
 
 /**
- * ProvidersSettingsPanel — 3 cards, one API key each.
+ * ProvidersSettingsPanel — 3 cards, one API key each, with explicit source.
  *
- * T3X ships three LLM generation providers: Anthropic, OpenAI, Google.
- * Each card exposes a single API-key field (via `ProviderCredentialDialog`)
- * and a connection-test button. Model selection happens per-call in
- * the chat input, not here.
+ * Answers the four questions the local-shared-access plan says the team
+ * should never have to ask again:
  *
- * Embedding and fallback-ordering used to live in this panel. They're
- * intentionally gone:
- *   - Embedding providers are auto-derived from the same API key
- *     (OpenAI key → openai-embedding, Google key → google-ai-embedding,
- *     Ollama is a local-only fallback that needs no key).
- *   - Fallback ordering is a role-registry concern, not a per-user
- *     concern; the backend resolves a single provider for each call.
+ *   1. "Where's the current config?"          → source chip per card
+ *   2. "Where do I change it?"                 → `Manage` button per card
+ *   3. "How do I confirm it took effect?"     → `Test` button + source + preview
+ *   4. "If .env overrides me, can I tell?"    → amber override banner per card
+ *
+ * Key lifecycle (create / list / revoke) is intentionally not here — this
+ * panel is the usage-path surface, not a key-management console.
  */
 
-import { CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -25,6 +23,7 @@ import { useProvidersSettingsData } from '@/hooks/providers/useProvidersSettings
 import {
   type LocalProviderCredentialInput,
   type LocalProviderId,
+  type LocalProviderKeySource,
   type LocalProviderStatus,
   type ProviderInfo,
   type TestConnectionResult,
@@ -35,96 +34,149 @@ import { cn } from '@/utils/cn';
 /** Only these three provider ids are shown in the settings UI. */
 const GENERATION_PROVIDER_ORDER: readonly string[] = ['anthropic', 'openai', 'google-ai'];
 
+const SOURCE_LABEL: Record<LocalProviderKeySource, string> = {
+  env: 'from .env',
+  file: 'Stored locally',
+  none: 'Not configured',
+};
+
+const SOURCE_CHIP_CLASS: Record<LocalProviderKeySource, string> = {
+  env: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30',
+  file: 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30',
+  none: 'bg-[var(--surface-secondary)] text-[var(--text-tertiary)] border-[var(--stroke-divider)]',
+};
+
 function displayName(provider: ProviderInfo): string {
-  // Strip "AI (Gemini)" style suffixes when possible; Google reads cleaner in the UI.
   const local = toLocalProviderId(provider.id);
   if (local === 'google') return 'Google';
   return provider.name;
 }
 
+function SourceChip({
+  source,
+  preview,
+}: {
+  source: LocalProviderKeySource;
+  preview: string | null;
+}) {
+  const label = SOURCE_LABEL[source];
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+        SOURCE_CHIP_CLASS[source]
+      )}
+      title={source === 'env' ? 'Loaded from an environment variable' : undefined}
+    >
+      {label}
+      {preview && <span className="font-mono opacity-80">· {preview}</span>}
+    </span>
+  );
+}
+
 function ProviderCard({
   provider,
+  status,
   testResult,
   onTest,
   onManageCredentials,
 }: {
   provider: ProviderInfo;
+  status: LocalProviderStatus | null;
   testResult: TestConnectionResult | 'loading' | undefined;
   onTest: (id: string) => void;
   onManageCredentials: (provider: ProviderInfo) => void;
 }) {
   const isTesting = testResult === 'loading';
   const result = testResult && testResult !== 'loading' ? testResult : null;
+  // Trust status.api_key_source as the single source of truth for "is this
+  // provider live". It already folds env + stored into one answer.
+  const source: LocalProviderKeySource = status?.api_key_source ?? 'none';
+  const configured = source !== 'none';
+  const envOverridesStored = status?.env_overrides_stored === true;
 
   return (
     <div
       className={cn(
-        'flex items-center justify-between rounded-lg border px-4 py-3 border-[var(--stroke-divider)]',
-        provider.configured
-          ? 'bg-[var(--surface-primary)]'
-          : 'bg-[var(--surface-secondary)] opacity-70'
+        'rounded-lg border border-[var(--stroke-divider)]',
+        configured ? 'bg-[var(--surface-primary)]' : 'bg-[var(--surface-secondary)] opacity-80'
       )}
     >
-      <div className="flex items-center gap-3">
-        {provider.configured ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-        ) : (
-          <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
-        )}
-        <div>
-          <div className="text-sm font-medium text-[var(--text-primary)]">
-            {displayName(provider)}
-          </div>
-          <div className="text-xs text-[var(--text-tertiary)]">
-            {provider.configured ? (
-              <>
-                <span>Key configured</span>
-                {result && (
-                  <span className="ml-2">
-                    {result.ok ? (
-                      <span className="text-[var(--status-success)]">
-                        Connected ({result.latency_ms}ms)
-                      </span>
-                    ) : (
-                      <span className="text-[var(--status-error)]">{result.error}</span>
-                    )}
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {configured ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          ) : (
+            <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-[var(--text-primary)]">
+                {displayName(provider)}
+              </span>
+              <SourceChip source={source} preview={status?.api_key_preview ?? null} />
+            </div>
+            {result && (
+              <div className="mt-0.5 text-xs">
+                {result.ok ? (
+                  <span className="text-[var(--status-success)]">
+                    Connected ({result.latency_ms}ms)
                   </span>
+                ) : (
+                  <span className="text-[var(--status-error)]">{result.error}</span>
                 )}
-              </>
-            ) : (
-              <span>No API key set</span>
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onManageCredentials(provider)}
-          className={cn(
-            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-            'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-          )}
-        >
-          {provider.configured ? 'Manage' : 'Connect'}
-        </button>
-        {provider.configured && (
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => onTest(provider.id)}
-            disabled={isTesting}
+            onClick={() => onManageCredentials(provider)}
             className={cn(
               'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-              'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-              'disabled:cursor-not-allowed disabled:opacity-50'
+              'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
           >
-            {isTesting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-            Test
+            {source === 'none' ? 'Connect' : 'Manage'}
           </button>
-        )}
+          {configured && (
+            <button
+              type="button"
+              onClick={() => onTest(provider.id)}
+              disabled={isTesting}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
+                'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                'disabled:cursor-not-allowed disabled:opacity-50'
+              )}
+            >
+              {isTesting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Zap className="h-3 w-3" />
+              )}
+              Test
+            </button>
+          )}
+        </div>
       </div>
+
+      {envOverridesStored && (
+        <div
+          className={cn(
+            'flex items-start gap-2 border-t border-[var(--accent-pending)]/30 px-4 py-2 text-xs',
+            'bg-[var(--accent-pending)]/5 text-[var(--accent-pending)]'
+          )}
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            An environment variable is overriding your stored key. The Manage dialog still edits the
+            stored value, but it won&apos;t take effect until the env var is unset.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -134,6 +186,11 @@ export function ProvidersSettingsPanel() {
     useProviderCommands();
   const { fetchProviderStatus, fetchProvidersWithRoles } = useProvidersSettingsData();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [statuses, setStatuses] = useState<Record<LocalProviderId, LocalProviderStatus | null>>({
+    anthropic: null,
+    openai: null,
+    google: null,
+  });
   const [dialogProvider, setDialogProvider] = useState<{
     id: LocalProviderId;
     name: string;
@@ -148,20 +205,35 @@ export function ProvidersSettingsPanel() {
     {}
   );
 
-  // We still fetch roles alongside providers because the backend contract is
-  // `[providers, roles]` — but we only consume the providers list here and
-  // keep only the three generation ids in canonical order.
+  const loadAll = useCallback(async () => {
+    const [[data], anthropicStatus, openaiStatus, googleStatus] = await Promise.all([
+      fetchProvidersWithRoles(),
+      fetchProviderStatus('anthropic').catch(() => null),
+      fetchProviderStatus('openai').catch(() => null),
+      fetchProviderStatus('google').catch(() => null),
+    ]);
+    const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
+      data.find((p) => p.id === id && p.role === 'generation')
+    ).filter((p): p is ProviderInfo => p !== undefined);
+    return {
+      providers: generationOnly,
+      statuses: {
+        anthropic: anthropicStatus,
+        openai: openaiStatus,
+        google: googleStatus,
+      } as Record<LocalProviderId, LocalProviderStatus | null>,
+    };
+  }, [fetchProviderStatus, fetchProvidersWithRoles]);
+
   const loadProviders = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
       setTestResults({});
 
-      const [data] = await fetchProvidersWithRoles();
-      const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
-        data.find((p) => p.id === id && p.role === 'generation')
-      ).filter((p): p is ProviderInfo => p !== undefined);
-      setProviders(generationOnly);
+      const { providers: nextProviders, statuses: nextStatuses } = await loadAll();
+      setProviders(nextProviders);
+      setStatuses(nextStatuses);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load providers';
       setLoadError(message);
@@ -169,15 +241,13 @@ export function ProvidersSettingsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [fetchProvidersWithRoles]);
+  }, [loadAll]);
 
   const refreshProvidersSilently = useCallback(async () => {
-    const [data] = await fetchProvidersWithRoles();
-    const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
-      data.find((p) => p.id === id && p.role === 'generation')
-    ).filter((p): p is ProviderInfo => p !== undefined);
-    setProviders(generationOnly);
-  }, [fetchProvidersWithRoles]);
+    const { providers: nextProviders, statuses: nextStatuses } = await loadAll();
+    setProviders(nextProviders);
+    setStatuses(nextStatuses);
+  }, [loadAll]);
 
   useEffect(() => {
     loadProviders();
@@ -315,20 +385,26 @@ export function ProvidersSettingsPanel() {
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Providers</h2>
           <p className="text-xs text-[var(--text-tertiary)]">
-            One API key per provider. Model selection happens in the chat.
+            One API key per provider. Resolved as <strong>.env &gt; stored &gt; none</strong>. Model
+            selection happens in the chat.
           </p>
         </div>
 
         <div className="space-y-2">
-          {providers.map((provider) => (
-            <ProviderCard
-              key={provider.id}
-              provider={provider}
-              testResult={testResults[provider.id]}
-              onTest={handleTest}
-              onManageCredentials={handleManageCredentials}
-            />
-          ))}
+          {providers.map((provider) => {
+            const localId = toLocalProviderId(provider.id);
+            const status = localId ? statuses[localId] : null;
+            return (
+              <ProviderCard
+                key={provider.id}
+                provider={provider}
+                status={status}
+                testResult={testResults[provider.id]}
+                onTest={handleTest}
+                onManageCredentials={handleManageCredentials}
+              />
+            );
+          })}
         </div>
       </section>
 

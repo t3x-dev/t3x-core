@@ -34,6 +34,24 @@ vi.mock('@/components/settings/ProviderCredentialDialog', () => ({
   ProviderCredentialDialog: () => null,
 }));
 
+function status(
+  provider: 'anthropic' | 'openai' | 'google',
+  overrides: Partial<Record<string, unknown>> = {}
+) {
+  return {
+    provider,
+    configured: true,
+    default_model: null,
+    last_test_status: null,
+    last_tested_at: null,
+    last_test_error: null,
+    api_key_source: 'file',
+    api_key_preview: '…abcd',
+    env_overrides_stored: false,
+    ...overrides,
+  };
+}
+
 describe('ProvidersSettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,8 +63,6 @@ describe('ProvidersSettingsPanel', () => {
       saveProviderRoles: vi.fn(),
     });
 
-    // Backend still returns the full mix of generation + embedding providers;
-    // the panel must filter to just the three generation ids it recognises.
     mockFetchProviders.mockResolvedValue([
       {
         id: 'anthropic',
@@ -61,7 +77,7 @@ describe('ProvidersSettingsPanel', () => {
         id: 'openai',
         name: 'OpenAI',
         role: 'generation',
-        configured: false,
+        configured: true,
         default_model: null,
         required_env_keys: ['OPENAI_API_KEY'],
         available_models: ['gpt-5.4'],
@@ -70,8 +86,8 @@ describe('ProvidersSettingsPanel', () => {
         id: 'google-ai',
         name: 'Google AI (Gemini)',
         role: 'generation',
-        configured: true,
-        default_model: 'gemini-2.5-pro',
+        configured: false,
+        default_model: null,
         required_env_keys: ['GOOGLE_AI_STUDIO_KEY'],
         available_models: ['gemini-2.5-pro'],
       },
@@ -86,7 +102,29 @@ describe('ProvidersSettingsPanel', () => {
       },
     ]);
     mockFetchProviderRoles.mockResolvedValue([]);
-    mockFetchLocalProviderStatus.mockResolvedValue(null);
+
+    // Per-provider status matches the "env > file > none" resolution the API
+    // exposes. The panel fetches these three in parallel on mount.
+    mockFetchLocalProviderStatus.mockImplementation(async (provider: string) => {
+      if (provider === 'anthropic') {
+        return status('anthropic', { api_key_source: 'env', api_key_preview: '…JnYA' });
+      }
+      if (provider === 'openai') {
+        return status('openai', {
+          api_key_source: 'env',
+          api_key_preview: '…XfPq',
+          env_overrides_stored: true,
+        });
+      }
+      if (provider === 'google') {
+        return status('google', {
+          configured: false,
+          api_key_source: 'none',
+          api_key_preview: null,
+        });
+      }
+      return null;
+    });
   });
 
   it('renders a single Providers section with the three generation cards', async () => {
@@ -98,12 +136,28 @@ describe('ProvidersSettingsPanel', () => {
 
     expect(screen.getByText('Anthropic Claude')).toBeInTheDocument();
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    // Google card renames to "Google" in the UI.
     expect(screen.getByText('Google')).toBeInTheDocument();
+  });
 
-    // Configured cards show "Key configured"; unconfigured show "No API key set".
-    expect(screen.getAllByText('Key configured').length).toBe(2);
-    expect(screen.getByText('No API key set')).toBeInTheDocument();
+  it('shows source chip + preview for each provider', async () => {
+    render(<ProvidersSettingsPanel />);
+    await waitFor(() => screen.getByRole('heading', { name: 'Providers' }));
+
+    // Anthropic + OpenAI both come from env; Google is not configured.
+    expect(screen.getAllByText('from .env').length).toBe(2);
+    expect(screen.getByText('Not configured')).toBeInTheDocument();
+
+    // Previews render alongside the chip (last-4-char tails).
+    expect(screen.getByText(/…JnYA/)).toBeInTheDocument();
+    expect(screen.getByText(/…XfPq/)).toBeInTheDocument();
+  });
+
+  it('renders the env-overrides-stored warning exactly where applicable', async () => {
+    render(<ProvidersSettingsPanel />);
+    await waitFor(() => screen.getByRole('heading', { name: 'Providers' }));
+
+    const banners = screen.getAllByText(/environment variable is overriding/i);
+    expect(banners).toHaveLength(1);
   });
 
   it('does not render the retired LLM Generation / Embedding section headings', async () => {
@@ -114,7 +168,7 @@ describe('ProvidersSettingsPanel', () => {
     expect(screen.queryByRole('heading', { name: 'Embedding' })).not.toBeInTheDocument();
   });
 
-  it('filters out embedding providers from the displayed cards', async () => {
+  it('filters embedding providers out of the displayed cards', async () => {
     render(<ProvidersSettingsPanel />);
     await waitFor(() => screen.getByRole('heading', { name: 'Providers' }));
 

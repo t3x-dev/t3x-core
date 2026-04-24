@@ -45,6 +45,15 @@ export const LocalProviderStatusSchema = z.object({
   last_test_status: z.enum(['ok', 'error']).nullable(),
   last_tested_at: z.string().nullable(),
   last_test_error: z.string().nullable(),
+  // Which layer produced the currently-active key: 'env' (process env var
+  // wins), 'file' (stored DB credential wins), or 'none' (nothing set).
+  api_key_source: z.enum(['env', 'file', 'none']),
+  // Last 4 chars of the active key (env → stored), or null. Surfaced so the
+  // user can confirm "yes this is the key I expect" without exposing the key.
+  api_key_preview: z.string().nullable(),
+  // True when both env + stored exist and env is masking the file. Used by
+  // the UI to render an "env overrides stored" warning.
+  env_overrides_stored: z.boolean(),
 });
 
 export const LocalProviderWriteSchema = z.object({

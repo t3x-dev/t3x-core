@@ -65,18 +65,66 @@ function getRuntimeProviderId(provider: LocalProviderId): 'anthropic' | 'openai'
   return provider === 'google' ? 'google-ai' : provider;
 }
 
+const ENV_KEY_BY_LOCAL_PROVIDER: Record<LocalProviderId, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  google: 'GOOGLE_AI_STUDIO_KEY',
+};
+
+function previewOfKey(key: string): string {
+  // Last 4 chars; providers always emit opaque key strings like
+  // "sk-ant-api03-…JnYA", so showing the tail identifies the key
+  // without leaking it.
+  const trimmed = key.trim();
+  if (trimmed.length === 0) return '';
+  if (trimmed.length <= 4) return trimmed;
+  return `…${trimmed.slice(-4)}`;
+}
+
+/**
+ * Resolve which tier currently supplies the active key (env > file > none)
+ * and return a preview + override flag. Read-only; does not mutate state.
+ */
+function resolveKeyProvenance(
+  bundle: Awaited<ReturnType<typeof getProviderCredentialBundle>>,
+  provider: LocalProviderId
+): { source: 'env' | 'file' | 'none'; preview: string | null; envOverridesStored: boolean } {
+  const envName = ENV_KEY_BY_LOCAL_PROVIDER[provider];
+  const envKey = process.env[envName];
+  const storedKey = bundle.secrets[envName as keyof typeof bundle.secrets];
+
+  if (envKey && envKey.trim().length > 0) {
+    return {
+      source: 'env',
+      preview: previewOfKey(envKey),
+      envOverridesStored: Boolean(storedKey && storedKey.trim().length > 0),
+    };
+  }
+  if (storedKey && storedKey.trim().length > 0) {
+    return { source: 'file', preview: previewOfKey(storedKey), envOverridesStored: false };
+  }
+  return { source: 'none', preview: null, envOverridesStored: false };
+}
+
 function toSafeLocalProviderStatus(
   bundle: Awaited<ReturnType<typeof getProviderCredentialBundle>>,
   provider: LocalProviderId
 ) {
   const safe = bundle.safe[provider];
+  const provenance = resolveKeyProvenance(bundle, provider);
   return {
     provider,
-    configured: safe.configured,
+    // A provider is "configured" for runtime purposes if either the env or
+    // stored key is present — mirror that here instead of file-only so the
+    // UI's green dot matches what the resolver will actually use.
+    configured: provenance.source !== 'none',
     default_model: safe.defaultModel,
     last_test_status: safe.lastTestStatus,
     last_tested_at: safe.lastTestedAt,
     last_test_error: safe.lastTestError,
+    api_key_source: provenance.source,
+    api_key_preview: provenance.preview,
+    env_overrides_stored: provenance.envOverridesStored,
   };
 }
 
