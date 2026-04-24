@@ -155,8 +155,8 @@ export {
   getDefaultTemplate,
   getIncludedLeafSemanticPoints,
   getTypeInstructions,
-  type LeafSemanticPoint,
   isGenerationConfigured,
+  type LeafSemanticPoint,
   type LeafTemplate,
   type ModeGenerateOptions,
   type MultiRoundOptions,
@@ -496,10 +496,10 @@ export {
   LEAF_TYPES,
   type Leaf,
   type LeafConfig,
-  type LeafSemanticPointOverride,
-  type LeafSemanticPointState,
   // Leaf History
   type LeafHistory,
+  type LeafSemanticPointOverride,
+  type LeafSemanticPointState,
   type LeafType,
   // Merge summary
   type MergeSummaryData,

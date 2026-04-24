@@ -1,6 +1,9 @@
 'use client';
 
-import { buildLeafSemanticPointSummary, type LeafSemanticPointItem } from '@/domain/leaf/semanticPoints';
+import {
+  buildLeafSemanticPointSummary,
+  type LeafSemanticPointItem,
+} from '@/domain/leaf/semanticPoints';
 import { cn } from '@/utils/cn';
 
 interface LeafSemanticPointsPanelProps {

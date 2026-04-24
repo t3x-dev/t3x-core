@@ -162,8 +162,9 @@ export function buildLeafPrompt(options: BuildPromptOptions): BuiltPrompt {
   userPromptParts.push('');
 
   const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config);
-  const hasExcludedSemanticPoints =
-    (leaf.config?.semantic_point_overrides ?? []).some((override) => override.state === 'excluded');
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
   const formattedSemanticPoints = formatSelectedSemanticPoints(
     selectedSemanticPoints,
     '## Selected Semantic Points',

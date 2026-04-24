@@ -365,6 +365,8 @@ describe('buildLeafPrompt', () => {
     expect(result.userPrompt).toContain('trip.city = Kyoto');
     expect(result.userPrompt).toContain('trip.pace = quiet');
     expect(result.userPrompt).not.toContain('trip.duration = 2 days');
-    expect(result.userPrompt).toContain('Treat unlisted source facts as deselected background context');
+    expect(result.userPrompt).toContain(
+      'Treat unlisted source facts as deselected background context'
+    );
   });
 });

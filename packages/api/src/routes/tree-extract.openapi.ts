@@ -155,8 +155,10 @@ treeExtractRoutes.openapi(extractTreesRoute, async (c) => {
         case 'skipped':
           status = 'skipped';
           reason = (event.data as { reason: string }).reason;
-          finalSnapshot =
-            (event.data as { snapshot?: unknown }).snapshot ?? { trees: [], relations: [] };
+          finalSnapshot = (event.data as { snapshot?: unknown }).snapshot ?? {
+            trees: [],
+            relations: [],
+          };
           break;
         case 'error': {
           const errData = event.data as { code?: string; message: string };

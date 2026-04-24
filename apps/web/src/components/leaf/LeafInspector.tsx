@@ -15,9 +15,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { deriveLeafSemanticPointItems } from '@/domain/leaf/semanticPoints';
 import { LeafSemanticPointsPanel } from '@/components/leaf/LeafSemanticPointsPanel';
 import { Button } from '@/components/ui/button';
+import { deriveLeafSemanticPointItems } from '@/domain/leaf/semanticPoints';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint, Leaf } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -250,8 +250,6 @@ export function LeafInspector({
   retuning,
   onToggleSemanticPoint,
 }: LeafInspectorProps) {
-  if (collapsed) return null;
-
   const editable = mode === 'generate';
   const semanticPoints = useMemo(
     () => (semanticContent ? deriveLeafSemanticPointItems(semanticContent, leaf.config) : []),
@@ -262,6 +260,8 @@ export function LeafInspector({
   const assertions = leaf.assertions ?? [];
   const passedCount = assertions.filter((a) => a.passed).length;
   const constraintMap = new Map(leaf.constraints.map((c) => [c.id, c]));
+
+  if (collapsed) return null;
 
   return (
     <aside

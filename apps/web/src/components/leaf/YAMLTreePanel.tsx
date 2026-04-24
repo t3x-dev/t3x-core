@@ -149,7 +149,15 @@ export function YAMLTreePanel({
 
       return null;
     },
-    [mode, nested, semanticPointSummaryByNode, constraints, assertions, saving, onAddConstraintFromSource]
+    [
+      mode,
+      nested,
+      semanticPointSummaryByNode,
+      constraints,
+      assertions,
+      saving,
+      onAddConstraintFromSource,
+    ]
   );
 
   const getTreeMeta = useCallback((_treeId: string) => {

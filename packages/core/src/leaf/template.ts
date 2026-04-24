@@ -54,8 +54,9 @@ export function buildTemplateContext(
         .join(', ')}`
   );
   const formattedKnowledge = serializeForPrompt(knowledge);
-  const hasExcludedSemanticPoints =
-    (leaf.config?.semantic_point_overrides ?? []).some((override) => override.state === 'excluded');
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
   const formattedSemanticPoints = formatSelectedSemanticPoints(
     getIncludedLeafSemanticPoints(knowledge, leaf.config),
     '## Selected Semantic Points',

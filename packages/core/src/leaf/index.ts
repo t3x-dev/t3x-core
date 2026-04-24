@@ -32,12 +32,6 @@ export {
   formatConstraints,
   getTypeInstructions,
 } from './build-prompt';
-export type { LeafSemanticPoint } from './semantic-points';
-export {
-  deriveLeafSemanticPoints,
-  formatSelectedSemanticPoints,
-  getIncludedLeafSemanticPoints,
-} from './semantic-points';
 // ═══════════════════════════════════════════════════════════════════════════
 // Constraint Suggestion Exports
 // ═══════════════════════════════════════════════════════════════════════════
@@ -75,6 +69,12 @@ export {
   type StylePreferences,
   validateConstraintsSimple,
 } from './multi-round-generate';
+export type { LeafSemanticPoint } from './semantic-points';
+export {
+  deriveLeafSemanticPoints,
+  formatSelectedSemanticPoints,
+  getIncludedLeafSemanticPoints,
+} from './semantic-points';
 export type { RenderTemplateOptions } from './template';
 export {
   buildTemplateContext,

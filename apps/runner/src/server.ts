@@ -2,6 +2,7 @@ import cors from 'cors';
 import { randomUUID } from 'crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import { type GenerateAssertionsResult, llmAsserter } from './asserter.js';
+import { isEnabledEnv, isTrustedLoopbackRequest } from './debug-access.js';
 import {
   getEngineCallbackUrl,
   getEngineUrl,
@@ -9,7 +10,6 @@ import {
   type ParsedRun,
 } from './engine-client.js';
 import { evalEngine } from './evaluator/index.js';
-import { isEnabledEnv, isTrustedLoopbackRequest } from './debug-access.js';
 import { logger } from './lib/logger.js';
 import { triggerN8nWorkflow } from './n8n.js';
 import { observer } from './observer.js';
@@ -45,10 +45,12 @@ function ensureDebugAccess(req: Request, res: Response): boolean {
     return false;
   }
 
-  if (isTrustedLoopbackRequest({
-    host: req.headers.host,
-    remoteAddress: req.socket.remoteAddress,
-  })) {
+  if (
+    isTrustedLoopbackRequest({
+      host: req.headers.host,
+      remoteAddress: req.socket.remoteAddress,
+    })
+  ) {
     return true;
   }
 

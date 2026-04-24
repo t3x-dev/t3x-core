@@ -25,7 +25,9 @@ export function deriveLeafSemanticPointItems(
   );
 
   return deriveLeafSemanticPoints(content).map((point) => {
-    const ownerPath = nodeIds.has(point.id) ? point.id : point.id.slice(0, point.id.lastIndexOf('/'));
+    const ownerPath = nodeIds.has(point.id)
+      ? point.id
+      : point.id.slice(0, point.id.lastIndexOf('/'));
     return {
       ...point,
       included: overrides.get(point.id) !== 'excluded',

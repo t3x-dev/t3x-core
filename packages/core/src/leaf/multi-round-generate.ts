@@ -363,8 +363,9 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config).map(
     (point) => point.label
   );
-  const hasExcludedSemanticPoints =
-    (leaf.config?.semantic_point_overrides ?? []).some((override) => override.state === 'excluded');
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
 
   const results: RoundResult[] = [];
   const totalUsage = { inputTokens: 0, outputTokens: 0 };
@@ -373,16 +374,12 @@ export async function modeGenerate(options: ModeGenerateOptions): Promise<MultiR
   const contextPrefix = `You are generating content for a "${leaf.type}" leaf titled "${leaf.title ?? 'Untitled'}".\n\n`;
   const round1Prompt =
     contextPrefix +
-    buildRound1Prompt(
-      nodes,
-      constraints,
-      {
-        promptTemplate:
-          typeof leaf.config?.prompt_template === 'string' ? leaf.config.prompt_template : undefined,
-        selectedSemanticPoints,
-        hasExcludedSemanticPoints,
-      }
-    );
+    buildRound1Prompt(nodes, constraints, {
+      promptTemplate:
+        typeof leaf.config?.prompt_template === 'string' ? leaf.config.prompt_template : undefined,
+      selectedSemanticPoints,
+      hasExcludedSemanticPoints,
+    });
 
   const round1Result = await provider.generate(round1Prompt, {
     temperature,
@@ -553,8 +550,9 @@ function buildRoundPrompt(
     .join('\n');
   const constraints = (leaf.constraints ?? []).map((c) => `[${c.type}] ${c.value}`).join('\n');
   const selectedSemanticPoints = getIncludedLeafSemanticPoints(knowledge, leaf.config);
-  const hasExcludedSemanticPoints =
-    (leaf.config?.semantic_point_overrides ?? []).some((override) => override.state === 'excluded');
+  const hasExcludedSemanticPoints = (leaf.config?.semantic_point_overrides ?? []).some(
+    (override) => override.state === 'excluded'
+  );
 
   const parts: string[] = [];
 

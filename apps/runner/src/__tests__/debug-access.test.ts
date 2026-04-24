@@ -29,12 +29,12 @@ describe('debug access guards', () => {
   });
 
   it('requires both loopback host and loopback remote address to bypass auth', () => {
-    expect(
-      isTrustedLoopbackRequest({ host: 'localhost:8080', remoteAddress: '127.0.0.1' })
-    ).toBe(true);
-    expect(
-      isTrustedLoopbackRequest({ host: 'localhost:8080', remoteAddress: '203.0.113.8' })
-    ).toBe(false);
+    expect(isTrustedLoopbackRequest({ host: 'localhost:8080', remoteAddress: '127.0.0.1' })).toBe(
+      true
+    );
+    expect(isTrustedLoopbackRequest({ host: 'localhost:8080', remoteAddress: '203.0.113.8' })).toBe(
+      false
+    );
     expect(
       isTrustedLoopbackRequest({ host: 'runner.example.com', remoteAddress: '127.0.0.1' })
     ).toBe(false);

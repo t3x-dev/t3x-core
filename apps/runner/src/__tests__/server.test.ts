@@ -13,7 +13,7 @@ const { app } = await import('../server.js');
 interface JsonResponse {
   status: number;
   headers: IncomingHttpHeaders;
-  body: any;
+  body: unknown;
 }
 
 function getPort(server: Server): number {
@@ -106,12 +106,20 @@ describe('runner server routes', () => {
 
   it('GET / returns service metadata with docs link and hides debug routes by default', async () => {
     const res = await requestJson(server, '/');
+    const body = res.body as {
+      success: boolean;
+      data: {
+        service: string;
+        docs: string;
+        endpoints: Record<string, string | undefined>;
+      };
+    };
 
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.service).toBe('t3x-runner');
-    expect(res.body.data.docs).toBe('https://github.com/t3x-dev/t3x-core/tree/main/apps/runner/docs');
-    expect(res.body.data.endpoints.debug_n8n).toBeUndefined();
+    expect(body.success).toBe(true);
+    expect(body.data.service).toBe('t3x-runner');
+    expect(body.data.docs).toBe('https://github.com/t3x-dev/t3x-core/tree/main/apps/runner/docs');
+    expect(body.data.endpoints.debug_n8n).toBeUndefined();
   });
 
   it('GET /ready returns ready when engine health succeeds', async () => {
@@ -133,11 +141,15 @@ describe('runner server routes', () => {
     globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
 
     const res = await requestJson(server, '/ready');
+    const body = res.body as {
+      success: boolean;
+      error: { code: string; message: string };
+    };
 
     expect(res.status).toBe(503);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('NOT_READY');
-    expect(res.body.error.message).toContain('503');
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('NOT_READY');
+    expect(body.error.message).toContain('503');
   });
 
   it('GET /ready returns 503 when engine health is unreachable', async () => {
@@ -145,18 +157,23 @@ describe('runner server routes', () => {
     globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
 
     const res = await requestJson(server, '/ready');
+    const body = res.body as {
+      success: boolean;
+      error: { code: string; message: string };
+    };
 
     expect(res.status).toBe(503);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('NOT_READY');
-    expect(res.body.error.message).toContain('boom');
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('NOT_READY');
+    expect(body.error.message).toContain('boom');
   });
 
   it('GET /debug/n8n-check returns 404 when debug routes are disabled', async () => {
     const res = await requestJson(server, '/debug/n8n-check');
+    const body = res.body as { error: { code: string } };
 
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(body.error.code).toBe('NOT_FOUND');
   });
 
   it('GET / exposes debug route and returns NO_API_KEY when enabled on localhost', async () => {
@@ -165,11 +182,18 @@ describe('runner server routes', () => {
 
     const rootRes = await requestJson(server, '/');
     const res = await requestJson(server, '/debug/n8n-check');
+    const rootBody = rootRes.body as {
+      data: { endpoints: Record<string, string | undefined> };
+    };
+    const body = res.body as {
+      success: boolean;
+      error: { code: string };
+    };
 
-    expect(rootRes.body.data.endpoints.debug_n8n).toBe('GET /debug/n8n-check');
+    expect(rootBody.data.endpoints.debug_n8n).toBe('GET /debug/n8n-check');
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('NO_API_KEY');
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('NO_API_KEY');
   });
 
   it('GET /debug/n8n-check requires bearer auth when exposed off localhost', async () => {
@@ -179,9 +203,10 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/debug/n8n-check', {
       headers: { Host: 'runner.example.com' },
     });
+    const body = res.body as { error: { code: string } };
 
     expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('UNAUTHORIZED');
+    expect(body.error.code).toBe('UNAUTHORIZED');
   });
 
   it('GET /debug/n8n-check fails closed when exposed off localhost without a configured token', async () => {
@@ -191,8 +216,9 @@ describe('runner server routes', () => {
     const res = await requestJson(server, '/debug/n8n-check', {
       headers: { Host: 'runner.example.com' },
     });
+    const body = res.body as { error: { code: string } };
 
     expect(res.status).toBe(503);
-    expect(res.body.error.code).toBe('DEBUG_AUTH_NOT_CONFIGURED');
+    expect(body.error.code).toBe('DEBUG_AUTH_NOT_CONFIGURED');
   });
 });

@@ -168,16 +168,15 @@ const INCREMENTAL_DRAFT = JSON.stringify({
  */
 function createMockProvider(mode: 'full' | 'incremental' = 'full') {
   const structuredDraft =
-    mode === 'incremental'
-      ? JSON.parse(INCREMENTAL_DRAFT)
-      : JSON.parse(FIRST_EXTRACTION_DRAFT);
+    mode === 'incremental' ? JSON.parse(INCREMENTAL_DRAFT) : JSON.parse(FIRST_EXTRACTION_DRAFT);
   return {
     id: 'anthropic',
     generateStructured: vi.fn().mockImplementation(async () => ({
       data: structuredDraft,
-      usage: mode === 'incremental'
-        ? { inputTokens: 800, outputTokens: 300 }
-        : { inputTokens: 600, outputTokens: 400 },
+      usage:
+        mode === 'incremental'
+          ? { inputTokens: 800, outputTokens: 300 }
+          : { inputTokens: 600, outputTokens: 400 },
     })),
     generate: vi.fn().mockImplementation(async (prompt: string) => {
       const usage = { inputTokens: 100, outputTokens: 50 };

@@ -129,7 +129,8 @@ export default function LeafDetailPage() {
 
   const reflectedCount = Array.from(nodeCoverage.values()).filter((c) => c.reflected).length;
   const semanticPointItems = useMemo(
-    () => (leaf && semanticContent ? deriveLeafSemanticPointItems(semanticContent, leaf.config) : []),
+    () =>
+      leaf && semanticContent ? deriveLeafSemanticPointItems(semanticContent, leaf.config) : [],
     [leaf, semanticContent]
   );
   const semanticPointSummaryByNode = useMemo(
