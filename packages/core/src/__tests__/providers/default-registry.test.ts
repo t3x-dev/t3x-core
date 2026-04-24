@@ -5,21 +5,18 @@ describe('createDefaultProviderRegistry', () => {
   it('registers the built-in provider catalog', () => {
     const reg = createDefaultProviderRegistry({ autoConfigureFromEnv: false });
     const providers = reg.listProviders();
-    const ids = providers.map((provider) => provider.id);
+    const ids = providers.map((provider) => provider.id).sort();
 
-    expect(ids).toEqual(
-      expect.arrayContaining([
-        'anthropic',
-        'openai',
-        'deepseek',
-        'google-ai',
-        'ollama',
-        'anthropic-merge',
-        'google-ai-embedding',
-        'openai-embedding',
-        'ollama-embedding',
-      ])
-    );
+    // Exactly three LLM generation providers plus the embedding providers
+    // their keys already imply. No deepseek / ollama LLM, no merge role.
+    expect(ids).toEqual([
+      'anthropic',
+      'google-ai',
+      'google-ai-embedding',
+      'ollama-embedding',
+      'openai',
+      'openai-embedding',
+    ]);
   });
 
   it('supports overriding built-in default models', () => {
@@ -33,6 +30,5 @@ describe('createDefaultProviderRegistry', () => {
     });
 
     expect(reg.getEntry('anthropic')?.defaultModel).toBe('claude-sonnet-4-20250514');
-    expect(reg.getEntry('anthropic-merge')?.defaultModel).toBe('claude-sonnet-4-6');
   });
 });
