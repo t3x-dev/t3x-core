@@ -384,6 +384,8 @@ describe('Provider Routes', () => {
   });
 
   it('filters unsupported generation providers out of provider role reads', async () => {
+    // Legacy ids ('deepseek', 'ollama', 'anthropic-merge') may still appear in
+    // persisted config from older installations; the read path must drop them.
     mockRegistry.exportConfig.mockReturnValue({
       roles: [
         {
@@ -391,7 +393,6 @@ describe('Provider Routes', () => {
           providerIds: ['anthropic', 'deepseek', 'openai', 'ollama', 'google-ai'],
         },
         { role: 'embedding', providerIds: ['google-ai-embedding', 'openai-embedding'] },
-        { role: 'merge', providerIds: ['anthropic-merge'] },
       ],
     });
 
@@ -408,10 +409,6 @@ describe('Provider Routes', () => {
       {
         role: 'embedding',
         provider_ids: ['google-ai-embedding', 'openai-embedding'],
-      },
-      {
-        role: 'merge',
-        provider_ids: ['anthropic-merge'],
       },
     ]);
   });

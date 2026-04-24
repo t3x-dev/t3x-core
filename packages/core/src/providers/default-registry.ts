@@ -3,22 +3,13 @@ import {
   createOllamaEmbeddingProvider,
   createOpenAIEmbeddingProvider,
 } from './embedding';
-import {
-  createClaudeProvider,
-  createDeepSeekProvider,
-  createGeminiProvider,
-  createOllamaProvider,
-  createOpenAIProvider,
-} from './llm';
+import { createClaudeProvider, createGeminiProvider, createOpenAIProvider } from './llm';
 import { createProviderRegistry, type ProviderRegistry, type ResolvedConfig } from './registry';
 
 type ProviderId =
   | 'anthropic'
   | 'openai'
-  | 'deepseek'
   | 'google-ai'
-  | 'ollama'
-  | 'anthropic-merge'
   | 'google-ai-embedding'
   | 'openai-embedding'
   | 'ollama-embedding';
@@ -54,6 +45,12 @@ export function registerDefaultProviders(
   options: Pick<DefaultProviderRegistryOptions, 'providerOverrides'> = {}
 ): void {
   const { providerOverrides } = options;
+
+  // ── Generation providers: Anthropic, OpenAI, Google ──
+  //
+  // T3X ships with exactly three LLM generation providers. All model
+  // selection happens per-call (via the chat model selector); the
+  // registry owns only the API-key → provider wiring.
 
   {
     const config = applyOverride(
@@ -107,31 +104,6 @@ export function registerDefaultProviders(
 
   {
     const config = applyOverride(
-      'deepseek',
-      {
-        defaultModel: 'deepseek-chat',
-        availableModels: ['deepseek-chat', 'deepseek-reasoner'],
-      },
-      providerOverrides
-    );
-
-    reg.register({
-      id: 'deepseek',
-      name: 'DeepSeek',
-      role: 'generation',
-      requiredEnvKeys: ['DEEPSEEK_API_KEY'],
-      defaultModel: config.defaultModel,
-      availableModels: config.availableModels,
-      factory: (resolvedConfig) =>
-        createDeepSeekProvider({
-          apiKey: resolvedConfig.DEEPSEEK_API_KEY!,
-          baseUrl: process.env.DEEPSEEK_BASE_URL,
-        }),
-    });
-  }
-
-  {
-    const config = applyOverride(
       'google-ai',
       {
         defaultModel: 'gemini-2.5-pro',
@@ -158,52 +130,13 @@ export function registerDefaultProviders(
     });
   }
 
-  {
-    const config = applyOverride(
-      'ollama',
-      {
-        defaultModel: 'llama3.1',
-        availableModels: ['llama3.1', 'llama3.2', 'mistral', 'mixtral', 'qwen2.5', 'deepseek-r1'],
-      },
-      providerOverrides
-    );
-
-    reg.register({
-      id: 'ollama',
-      name: 'Ollama (Local)',
-      role: 'generation',
-      requiredEnvKeys: [],
-      defaultModel: config.defaultModel,
-      availableModels: config.availableModels,
-      factory: () =>
-        createOllamaProvider({
-          baseUrl: process.env.OLLAMA_BASE_URL,
-        }),
-    });
-  }
-
-  {
-    const config = applyOverride(
-      'anthropic-merge',
-      {
-        defaultModel: 'claude-sonnet-4-6',
-      },
-      providerOverrides
-    );
-
-    reg.register({
-      id: 'anthropic-merge',
-      name: 'Anthropic Claude (Merge)',
-      role: 'merge',
-      requiredEnvKeys: ['ANTHROPIC_API_KEY'],
-      defaultModel: config.defaultModel,
-      factory: (resolvedConfig) =>
-        createClaudeProvider({
-          apiKey: resolvedConfig.ANTHROPIC_API_KEY!,
-          baseUrl: process.env.ANTHROPIC_BASE_URL,
-        }),
-    });
-  }
+  // ── Embedding providers: internal ──
+  //
+  // Embedding is only used by leaf semantic-constraint validation and a
+  // few API helpers. The registrations stay so `getForRole('embedding')`
+  // resolves, but the settings UI surfaces these as an automatic
+  // consequence of the matching LLM key — the user never configures a
+  // separate embedding key.
 
   {
     const config = applyOverride(

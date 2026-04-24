@@ -89,7 +89,6 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash': { input: 0.1 / 1_000_000, output: 0.4 / 1_000_000 },
   'gemini-2.5-flash': { input: 0.15 / 1_000_000, output: 0.6 / 1_000_000 },
   'gemini-1.5-pro': { input: 1.25 / 1_000_000, output: 5 / 1_000_000 },
-  'deepseek-chat': { input: 0.27 / 1_000_000, output: 1.1 / 1_000_000 },
 };
 
 const FALLBACK_PRICING = { input: 3 / 1_000_000, output: 15 / 1_000_000 };

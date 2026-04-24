@@ -12,12 +12,12 @@ import type { EmbeddingProvider } from './embedding/base';
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type ProviderRole = 'generation' | 'embedding' | 'merge';
+export type ProviderRole = 'generation' | 'embedding';
 
 export type AnyProvider = LLMProvider | EmbeddingProvider;
 
 export interface ProviderEntry<T = AnyProvider> {
-  /** Unique provider ID, e.g., "anthropic", "openai", "ollama" */
+  /** Unique provider ID, e.g., "anthropic", "openai", "google-ai" */
   id: string;
   /** Display name */
   name: string;
