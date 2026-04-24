@@ -70,11 +70,13 @@ afterEach(() => {
 });
 
 describe('ChatSidebar', () => {
-  it('renders a dedicated settings link in the bottom section', () => {
+  it('delegates Settings entry to the UserMenu dropdown instead of a top-level link', () => {
     render(<ChatSidebar />);
 
-    const settingsLink = screen.getByRole('link', { name: /settings/i });
-    expect(settingsLink).toBeInTheDocument();
-    expect(settingsLink).toHaveAttribute('href', '/settings');
+    // Settings is reachable through the UserMenu dropdown (Profile / Settings /
+    // Sign Out) — see UserMenu.tsx. The sidebar should no longer render a
+    // standalone /settings link at the bottom.
+    expect(screen.queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('user-menu')).toBeInTheDocument();
   });
 });
