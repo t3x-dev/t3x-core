@@ -1,24 +1,23 @@
 'use client';
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { CheckCircle2, Circle, GripVertical, Loader2, RefreshCw, Zap } from 'lucide-react';
-import type { Dispatch, SetStateAction } from 'react';
+/**
+ * ProvidersSettingsPanel — 3 cards, one API key each.
+ *
+ * T3X ships three LLM generation providers: Anthropic, OpenAI, Google.
+ * Each card exposes a single API-key field (via `ProviderCredentialDialog`)
+ * and a connection-test button. Model selection happens per-call in
+ * the chat input, not here.
+ *
+ * Embedding and fallback-ordering used to live in this panel. They're
+ * intentionally gone:
+ *   - Embedding providers are auto-derived from the same API key
+ *     (OpenAI key → openai-embedding, Google key → google-ai-embedding,
+ *     Ollama is a local-only fallback that needs no key).
+ *   - Fallback ordering is a role-registry concern, not a per-user
+ *     concern; the backend resolves a single provider for each call.
+ */
+
+import { CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
@@ -28,93 +27,58 @@ import {
   type LocalProviderId,
   type LocalProviderStatus,
   type ProviderInfo,
-  type RoleAssignment,
   type TestConnectionResult,
   toLocalProviderId,
 } from '@/infrastructure';
 import { cn } from '@/utils/cn';
 
-type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';
+/** Only these three provider ids are shown in the settings UI. */
+const GENERATION_PROVIDER_ORDER: readonly string[] = ['anthropic', 'openai', 'google-ai'];
 
-const ROLE_LABELS: Record<RoleGroup, string> = {
-  generation: 'LLM Generation',
-  embedding: 'Embedding',
-  extraction: 'NLP Extraction',
-  merge: 'Merge Resolution',
-};
+function displayName(provider: ProviderInfo): string {
+  // Strip "AI (Gemini)" style suffixes when possible; Google reads cleaner in the UI.
+  const local = toLocalProviderId(provider.id);
+  if (local === 'google') return 'Google';
+  return provider.name;
+}
 
-const ROLE_DESCRIPTIONS: Record<RoleGroup, string> = {
-  generation: 'Generate leaf output and agent drafts',
-  embedding: 'Semantic similarity and validation',
-  extraction: 'Ring extraction and NLP analysis',
-  merge: 'LLM-assisted conflict resolution',
-};
-
-function SortableProviderCard({
+function ProviderCard({
   provider,
   testResult,
   onTest,
   onManageCredentials,
-  isDraggable,
 }: {
   provider: ProviderInfo;
   testResult: TestConnectionResult | 'loading' | undefined;
   onTest: (id: string) => void;
   onManageCredentials: (provider: ProviderInfo) => void;
-  isDraggable: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: provider.id,
-    disabled: !isDraggable,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
   const isTesting = testResult === 'loading';
   const result = testResult && testResult !== 'loading' ? testResult : null;
-  const localProviderId = getLocalGenerationProviderId(provider);
-  const displayName = getSettingsProviderName(provider);
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
       className={cn(
-        'flex items-center justify-between rounded-lg border px-4 py-3',
-        'border-[var(--stroke-divider)]',
+        'flex items-center justify-between rounded-lg border px-4 py-3 border-[var(--stroke-divider)]',
         provider.configured
           ? 'bg-[var(--surface-primary)]'
-          : 'bg-[var(--surface-secondary)] opacity-60',
-        isDragging && 'opacity-50 shadow-lg ring-2 ring-[var(--accent-blue)]'
+          : 'bg-[var(--surface-secondary)] opacity-70'
       )}
     >
       <div className="flex items-center gap-3">
-        {isDraggable ? (
-          <button
-            type="button"
-            className="cursor-grab touch-none text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        ) : (
-          <div className="w-4" />
-        )}
         {provider.configured ? (
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
         ) : (
           <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
         )}
         <div>
-          <div className="text-sm font-medium text-[var(--text-primary)]">{displayName}</div>
+          <div className="text-sm font-medium text-[var(--text-primary)]">
+            {displayName(provider)}
+          </div>
           <div className="text-xs text-[var(--text-tertiary)]">
             {provider.configured ? (
               <>
-                {provider.default_model && <span>Default: {provider.default_model}</span>}
+                <span>Key configured</span>
                 {result && (
                   <span className="ml-2">
                     {result.ok ? (
@@ -128,30 +92,23 @@ function SortableProviderCard({
                 )}
               </>
             ) : (
-              <span>Requires: {provider.required_env_keys.join(', ') || 'Local server'}</span>
+              <span>No API key set</span>
             )}
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        {provider.available_models && provider.available_models.length > 0 && (
-          <span className="hidden text-xs text-[var(--text-tertiary)] sm:inline">
-            {provider.available_models.length} models
-          </span>
-        )}
-        {localProviderId && (
-          <button
-            type="button"
-            onClick={() => onManageCredentials(provider)}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
-              'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-            )}
-          >
-            {provider.configured ? 'Manage' : 'Connect'}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => onManageCredentials(provider)}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md border border-[var(--stroke-divider)] px-2.5 py-1.5 text-xs font-medium',
+            'text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+          )}
+        >
+          {provider.configured ? 'Manage' : 'Connect'}
+        </button>
         {provider.configured && (
           <button
             type="button"
@@ -172,93 +129,9 @@ function SortableProviderCard({
   );
 }
 
-function SortableRoleGroup({
-  role,
-  providers,
-  testResults,
-  onTest,
-  onManageCredentials,
-  onReorder,
-}: {
-  role: RoleGroup;
-  providers: ProviderInfo[];
-  testResults: Record<string, TestConnectionResult | 'loading'>;
-  onTest: (id: string) => void;
-  onManageCredentials: (provider: ProviderInfo) => void;
-  onReorder: (role: RoleGroup, oldIndex: number, newIndex: number) => void;
-}) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const configured = providers.filter((p) => p.configured);
-  const unconfigured = providers.filter((p) => !p.configured);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = configured.findIndex((p) => p.id === active.id);
-    const newIndex = configured.findIndex((p) => p.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    onReorder(role, oldIndex, newIndex);
-  };
-
-  return (
-    <section>
-      <div className="mb-3">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{ROLE_LABELS[role]}</h2>
-        <p className="text-xs text-[var(--text-tertiary)]">{ROLE_DESCRIPTIONS[role]}</p>
-        {configured.length > 1 && (
-          <p className="mt-1 text-xs italic text-[var(--text-tertiary)]">
-            Fallback order: drag to reorder priority
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={configured.map((p) => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {configured.map((provider) => (
-              <SortableProviderCard
-                key={provider.id}
-                provider={provider}
-                testResult={testResults[provider.id]}
-                onTest={onTest}
-                onManageCredentials={onManageCredentials}
-                isDraggable={configured.length > 1}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-
-        {unconfigured.map((provider) => (
-          <SortableProviderCard
-            key={provider.id}
-            provider={provider}
-            testResult={testResults[provider.id]}
-            onTest={onTest}
-            onManageCredentials={onManageCredentials}
-            isDraggable={false}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export function ProvidersSettingsPanel() {
-  const {
-    removeLocalProviderCredential,
-    runProviderConnectionTest,
-    saveLocalProviderCredential,
-    saveProviderRoles,
-  } = useProviderCommands();
+  const { removeLocalProviderCredential, runProviderConnectionTest, saveLocalProviderCredential } =
+    useProviderCommands();
   const { fetchProviderStatus, fetchProvidersWithRoles } = useProvidersSettingsData();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [dialogProvider, setDialogProvider] = useState<{
@@ -274,19 +147,21 @@ export function ProvidersSettingsPanel() {
   const [testResults, setTestResults] = useState<Record<string, TestConnectionResult | 'loading'>>(
     {}
   );
-  const fetchProviders = useCallback(async (): Promise<ProviderInfo[]> => {
-    const [data, roles] = await fetchProvidersWithRoles();
-    return reorderByRoles(data, roles);
-  }, [fetchProvidersWithRoles]);
 
+  // We still fetch roles alongside providers because the backend contract is
+  // `[providers, roles]` — but we only consume the providers list here and
+  // keep only the three generation ids in canonical order.
   const loadProviders = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
       setTestResults({});
 
-      const reordered = await fetchProviders();
-      setProviders(reordered);
+      const [data] = await fetchProvidersWithRoles();
+      const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
+        data.find((p) => p.id === id && p.role === 'generation')
+      ).filter((p): p is ProviderInfo => p !== undefined);
+      setProviders(generationOnly);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load providers';
       setLoadError(message);
@@ -294,12 +169,15 @@ export function ProvidersSettingsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [fetchProviders]);
+  }, [fetchProvidersWithRoles]);
 
   const refreshProvidersSilently = useCallback(async () => {
-    const reordered = await fetchProviders();
-    setProviders(reordered);
-  }, [fetchProviders]);
+    const [data] = await fetchProvidersWithRoles();
+    const generationOnly = GENERATION_PROVIDER_ORDER.map((id) =>
+      data.find((p) => p.id === id && p.role === 'generation')
+    ).filter((p): p is ProviderInfo => p !== undefined);
+    setProviders(generationOnly);
+  }, [fetchProvidersWithRoles]);
 
   useEffect(() => {
     loadProviders();
@@ -351,14 +229,14 @@ export function ProvidersSettingsPanel() {
   };
 
   const handleManageCredentials = (provider: ProviderInfo) => {
-    const localProviderId = getLocalGenerationProviderId(provider);
+    const localProviderId = toLocalProviderId(provider.id);
     if (!localProviderId) return;
 
     setDialogStatus(null);
     setDialogError(null);
     setDialogProvider({
       id: localProviderId,
-      name: getSettingsProviderName(provider),
+      name: displayName(provider),
       availableModels: provider.available_models ?? [],
     });
   };
@@ -371,7 +249,13 @@ export function ProvidersSettingsPanel() {
     try {
       const status = await saveLocalProviderCredential(dialogProvider.id, input);
       setDialogStatus(status);
-      clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
+      setTestResults((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (toLocalProviderId(key) === dialogProvider.id) delete next[key];
+        }
+        return next;
+      });
       try {
         await refreshProvidersSilently();
       } catch (refreshError) {
@@ -392,7 +276,13 @@ export function ProvidersSettingsPanel() {
     try {
       const status = await removeLocalProviderCredential(dialogProvider.id);
       setDialogStatus(status);
-      clearTestResultsForLocalProvider(dialogProvider.id, setTestResults);
+      setTestResults((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (toLocalProviderId(key) === dialogProvider.id) delete next[key];
+        }
+        return next;
+      });
       try {
         await refreshProvidersSilently();
       } catch (refreshError) {
@@ -404,41 +294,6 @@ export function ProvidersSettingsPanel() {
       throw err;
     }
   };
-
-  const handleReorder = async (role: RoleGroup, oldIndex: number, newIndex: number) => {
-    const roleProviders = providers.filter((p) => p.role === role && p.configured);
-    const reordered = arrayMove(roleProviders, oldIndex, newIndex);
-
-    setProviders((prev) => {
-      const others = prev.filter((p) => p.role !== role || !p.configured);
-      const unconfigured = prev.filter((p) => p.role === role && !p.configured);
-      return [...others, ...reordered, ...unconfigured].sort((a, b) => {
-        const roleOrder = Object.keys(ROLE_LABELS);
-        const roleA = roleOrder.indexOf(a.role);
-        const roleB = roleOrder.indexOf(b.role);
-        if (roleA !== roleB) return roleA - roleB;
-        if (a.configured !== b.configured) return a.configured ? -1 : 1;
-        return 0;
-      });
-    });
-
-    try {
-      const grouped = groupByRole(providers);
-      grouped[role] = [...reordered, ...providers.filter((p) => p.role === role && !p.configured)];
-
-      const roles: RoleAssignment[] = Object.entries(grouped).map(([r, ps]) => ({
-        role: r,
-        provider_ids: ps.filter((p) => p.configured).map((p) => p.id),
-      }));
-
-      await saveProviderRoles(roles);
-    } catch (err) {
-      console.error('Failed to save provider order:', err);
-      await loadProviders();
-    }
-  };
-
-  const grouped = groupByRole(providers);
 
   if (loading) {
     return (
@@ -456,24 +311,26 @@ export function ProvidersSettingsPanel() {
         </div>
       )}
 
-      <div className="space-y-8">
-        {(Object.keys(ROLE_LABELS) as RoleGroup[]).map((role) => {
-          const roleProviders = grouped[role] ?? [];
-          if (roleProviders.length === 0) return null;
+      <section>
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Providers</h2>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            One API key per provider. Model selection happens in the chat.
+          </p>
+        </div>
 
-          return (
-            <SortableRoleGroup
-              key={role}
-              role={role}
-              providers={roleProviders}
-              testResults={testResults}
+        <div className="space-y-2">
+          {providers.map((provider) => (
+            <ProviderCard
+              key={provider.id}
+              provider={provider}
+              testResult={testResults[provider.id]}
               onTest={handleTest}
               onManageCredentials={handleManageCredentials}
-              onReorder={handleReorder}
             />
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      </section>
 
       <div className="mt-8 flex justify-end">
         <button
@@ -518,76 +375,4 @@ export function ProvidersSettingsPanel() {
       )}
     </>
   );
-}
-
-function groupByRole(providers: ProviderInfo[]): Record<RoleGroup, ProviderInfo[]> {
-  return providers.reduce(
-    (acc, p) => {
-      const role = p.role as RoleGroup;
-      if (!acc[role]) acc[role] = [];
-      acc[role].push(p);
-      return acc;
-    },
-    {} as Record<RoleGroup, ProviderInfo[]>
-  );
-}
-
-function reorderByRoles(providers: ProviderInfo[], roles: RoleAssignment[]): ProviderInfo[] {
-  const roleMap = new Map<string, string[]>();
-  for (const r of roles) {
-    roleMap.set(r.role, r.provider_ids);
-  }
-
-  const result: ProviderInfo[] = [];
-  const used = new Set<string>();
-
-  for (const role of Object.keys(ROLE_LABELS)) {
-    const order = roleMap.get(role) ?? [];
-    const roleProviders = providers.filter((p) => p.role === role);
-
-    for (const id of order) {
-      const provider = roleProviders.find((roleProvider) => roleProvider.id === id);
-      if (provider && !used.has(provider.id)) {
-        result.push(provider);
-        used.add(provider.id);
-      }
-    }
-
-    for (const provider of roleProviders) {
-      if (!used.has(provider.id)) {
-        result.push(provider);
-        used.add(provider.id);
-      }
-    }
-  }
-
-  return result;
-}
-
-function getLocalGenerationProviderId(provider: ProviderInfo): LocalProviderId | null {
-  if (provider.role !== 'generation') return null;
-  return toLocalProviderId(provider.id);
-}
-
-function getSettingsProviderName(provider: ProviderInfo): string {
-  const localProviderId = getLocalGenerationProviderId(provider);
-  if (localProviderId === 'google') return 'Google';
-  return provider.name;
-}
-
-function clearTestResultsForLocalProvider(
-  providerId: LocalProviderId,
-  setTestResults: Dispatch<SetStateAction<Record<string, TestConnectionResult | 'loading'>>>
-) {
-  setTestResults((prev) => {
-    const next = { ...prev };
-
-    for (const key of Object.keys(next)) {
-      if (toLocalProviderId(key) === providerId) {
-        delete next[key];
-      }
-    }
-
-    return next;
-  });
 }
