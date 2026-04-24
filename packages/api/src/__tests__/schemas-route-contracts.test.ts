@@ -124,6 +124,9 @@ describe('route contract schemas', () => {
         last_test_status: 'ok',
         last_tested_at: null,
         last_test_error: null,
+        api_key_source: 'file',
+        api_key_preview: '…JnYA',
+        env_overrides_stored: false,
       })
     ).toMatchObject({ provider: 'openai' });
 
