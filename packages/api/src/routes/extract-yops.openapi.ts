@@ -1,17 +1,20 @@
 /**
  * POST /v1/extract-yops
  *
- * New-architecture extraction endpoint. Takes turns + optional failing_ops
- * (for surgical retry), calls the LLM via provider registry, parses the
- * output as YOp[], returns { ops }.
+ * New-architecture extraction endpoint. Takes turns, calls the LLM via
+ * provider registry, parses the output as YOp[], returns { ops }.
  *
  * Does NOT persist to yops_log. Does NOT do drift detection. Those are
  * client concerns in the new architecture — this endpoint is a pure LLM
  * wrapper.
  *
- * The client-side retry loop (in extractionWorker.ts) drives all deterministic
- * source validation. If parsed ops lack `source`, the validator rejects them
- * and the worker calls this endpoint again with `failing_ops` populated.
+ * Retry policy: the v2 pipeline (`extractAndApply`) owns retry semantics
+ * server-side — if the model emits invalid structure or unverifiable
+ * quotes, the pipeline raises an `ExtractionFailure` and the client
+ * decides whether to call again with the same turns. There is no
+ * surgical-retry payload on this endpoint; an earlier `failing_ops`
+ * field was advertised in the schema but never wired to the handler,
+ * so it has been removed to keep the contract honest.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
@@ -38,17 +41,9 @@ const TurnInput = z.object({
   content: z.string(),
 });
 
-const FailingOpInput = z.object({
-  op: z.unknown(),
-  opIndex: z.number().int(),
-  reason: z.string(),
-  detail: z.string().optional(),
-});
-
 const ExtractYopsRequest = z.object({
   conversation_id: z.string().min(1),
   turns: z.array(TurnInput),
-  failing_ops: z.array(FailingOpInput).optional(),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
 });
@@ -101,7 +96,7 @@ const route = createRoute({
   tags: ['Extraction'],
   summary: 'Produce YOps from turns via LLM (client-driven retry loop)',
   description:
-    'Calls the LLM with the provided turns (and optional failing_ops for surgical retry) and returns parsed YOp[]. Does not persist to the yops_log — the caller is responsible for saving and validating.',
+    'Calls the LLM with the provided turns and returns parsed YOp[]. Does not persist to the yops_log — the caller is responsible for saving and validating. Retry semantics are owned by the v2 pipeline server-side; clients re-send the same turns to retry.',
   request: {
     body: {
       content: { 'application/json': { schema: ExtractYopsRequest } },

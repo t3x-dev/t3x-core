@@ -12,7 +12,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: validation route adapts permissive request payloads pending stricter tree DTOs */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { applyYOps } from '@t3x-dev/core';
+import { applyYOps, treesToYValue } from '@t3x-dev/core';
 import { zodErrorHook } from '../lib/errors';
 
 // ============================================================
@@ -171,15 +171,12 @@ yopsValidateRoutes.openapi(validateRoute, async (c) => {
   const { trees, relations, yops } = c.req.valid('json');
   const content = { trees: trees as any, relations: relations as any };
 
-  // Build the YValue document for pre-validation
-  // We reconstruct it manually to avoid importing treesToYValue (not in public API)
-  const doc: Record<string, unknown> = {};
-  for (const tree of trees) {
-    doc[tree.key] = { ...tree.slots };
-    for (const child of tree.children ?? []) {
-      (doc[tree.key] as Record<string, unknown>)[(child as any).key] = (child as any).slots ?? {};
-    }
-  }
+  // Build the YValue document for pre-validation using the engine's
+  // canonical recursive conversion. The previous inline reconstruction
+  // only walked root + one child level, so a set op targeting a path
+  // like `root/child/grandchild/slot` was reported PATH_NOT_FOUND even
+  // when the engine itself would have applied it cleanly.
+  const doc = treesToYValue(trees as any) as Record<string, unknown>;
 
   // Pre-validate set ops for parent path existence
   for (let i = 0; i < yops.length; i++) {

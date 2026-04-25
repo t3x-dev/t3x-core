@@ -8,6 +8,10 @@ export {
   parseYOpsYaml,
   type YOpCategory,
 } from '@t3x-dev/yops';
+// ── Tree ↔ YValue conversion ──
+// Public so route handlers (e.g. yops-validate) can reuse the engine's
+// canonical recursive form instead of reconstructing it inline.
+export { treesToYValue, yvalueToTrees } from './convert';
 export { applySourcedYOps, applyYOps } from './engine';
 // ── Helpers (public-facing only) ──
 export { findNode, getNodeKey, getParentPath } from './helpers';

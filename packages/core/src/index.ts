@@ -445,11 +445,13 @@ export {
   replayYOps,
   replayYOpsLog,
   SNAKE_CASE_KEY,
+  treesToYValue,
   validateSource,
   verifyReplay,
   YOPS_ERRORS,
   YOpSchema,
   YOpsDocumentSchema,
+  yvalueToTrees,
 } from './t3x-yops';
 export { getYOpsJsonSchema } from './t3x-yops/jsonSchema';
 // ═══════════════════════════════════════════════════════════════════════════

@@ -68,10 +68,15 @@ function buildRequestError(
 }
 
 export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<SourcedYOp[]> {
+  // `failingOps` is intentionally NOT forwarded to the server. The v2
+  // `extractAndApply` pipeline owns retry semantics internally and the
+  // server schema no longer accepts a surgical-retry payload. The
+  // worker still passes failingOps in for *client-side* logging /
+  // failure-classification (see extractionWorker.ts), but the wire
+  // payload is just turns + provider + model.
   const res = await postExtractYops({
     conversation_id: input.conversationId,
     turns: input.turns,
-    ...(input.failingOps ? { failing_ops: input.failingOps } : {}),
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
   });

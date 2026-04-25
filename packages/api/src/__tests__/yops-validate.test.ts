@@ -45,6 +45,50 @@ describe('POST /v1/yops/validate', () => {
     expect(body.data.error.op_index).toBe(0);
   });
 
+  it('accepts a set op targeting a grandchild path that the engine can apply', async () => {
+    // Regression: the previous inline doc reconstruction only walked
+    // root + one child level, so a `set` op on a grandchild path was
+    // reported PATH_NOT_FOUND even when the engine itself would have
+    // applied it. After switching to treesToYValue this should pass.
+    const res = await app.request(
+      new Request('http://localhost/v1/yops/validate', {
+        method: 'POST',
+        body: JSON.stringify({
+          trees: [
+            {
+              key: 'trip',
+              slots: {},
+              source: {},
+              children: [
+                {
+                  key: 'day_1',
+                  slots: {},
+                  source: {},
+                  children: [
+                    {
+                      key: 'morning',
+                      slots: { activity: 'breakfast' },
+                      children: [],
+                      source: {},
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          relations: [],
+          yops: [{ set: { path: 'trip/day_1/morning/activity', value: 'walk' } }],
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.ok).toBe(true);
+    expect(body.data.applied).toBe(1);
+  });
+
   it('returns 400 for empty yops array', async () => {
     const res = await app.request(
       new Request('http://localhost/v1/yops/validate', {
