@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 42;
+const SCHEMA_VERSION = 43;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -691,6 +691,54 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
         ALTER TABLE yops_log RENAME COLUMN delta TO yops;
         ALTER INDEX IF EXISTS idx_delta_log_conv RENAME TO idx_yops_log_conv;
         ALTER INDEX IF EXISTS idx_delta_log_project RENAME TO idx_yops_log_project;
+      END IF;
+    END $$;
+
+    -- Migration: per-op source provenance (was migrations/2026-04-12_yops-source-required.sql).
+    -- The engine + replay require every op to carry source.type ∈ {'llm','human'}.
+    -- Rows from before that contract was introduced are backfilled here from the
+    -- row-level source tag, then the CHECK constraint is installed. Idempotent.
+    DO $$ BEGIN
+      -- Backfill: add source to any op missing one. Map row-level source →
+      -- per-op source.type (pipeline → llm; everything else → human). The
+      -- LLM branch is best-effort: pre-contract rows have no per-op turn_ref,
+      -- so we treat them as human-authored history with author='legacy-backfill'.
+      UPDATE yops_log
+      SET yops = (
+        SELECT jsonb_agg(
+          CASE
+            WHEN op ? 'source' THEN op
+            ELSE op || jsonb_build_object(
+              'source', jsonb_build_object(
+                'type', 'human',
+                'author', 'legacy-backfill',
+                'at', to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+              )
+            )
+          END
+        )
+        FROM jsonb_array_elements(yops) op
+      )
+      WHERE jsonb_typeof(yops) = 'array'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_array_elements(yops) op
+          WHERE NOT (op ? 'source')
+        );
+
+      -- Constraint: enforce per-op source going forward. Skip if already present.
+      -- Postgres forbids subqueries in CHECK, so we use jsonb_path_exists to
+      -- scan for *any* op that is missing a valid source. The expression
+      -- returns TRUE when something is wrong; the CHECK requires the negation.
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'yops_log_source_required'
+      ) THEN
+        ALTER TABLE yops_log ADD CONSTRAINT yops_log_source_required CHECK (
+          jsonb_typeof(yops) = 'array'
+          AND NOT jsonb_path_exists(
+            yops,
+            '$[*] ? (!exists(@.source) || !(@.source.type == "llm" || @.source.type == "human"))'
+          )
+        );
       END IF;
     END $$;
 

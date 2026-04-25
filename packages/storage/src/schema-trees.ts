@@ -833,11 +833,14 @@ export type NotificationInsert = typeof notifications.$inferInsert;
  *
  * Every op in the `yops` JSONB array MUST have a `source` field with
  * type ∈ {'llm','human'} — enforced by DB check constraint
- * `yops_log_source_required` (see migrations/2026-04-12_yops-source-required.sql).
+ * `yops_log_source_required`, installed inline by `adapters/postgres.ts` so
+ * legacy rows are backfilled before the constraint is added.
  *
  * Row-level `source` text column (values: 'pipeline'|'manual'|'answer'|
- * 'collapse'|'compress') is kept for backward-compat queries but is no longer
- * authoritative — the truth is the per-op source field on each YOp.
+ * 'collapse'|'compress') is a separate, coarser provenance tag. Per-op
+ * `source.type` is the fine-grained truth, but the row-level column is still
+ * load-bearing for compression-v2 (which checks `source === 'manual'`) and
+ * the OpenAPI contract. Treat them as two distinct concepts, not duplicates.
  */
 export const yopsLog = pgTable(
   'yops_log',
@@ -890,14 +893,15 @@ export const yopsLog = pgTable(
   (table) => ({
     convIdx: index('idx_yops_log_conv').on(table.conversationId, table.createdAt),
     projectIdx: index('idx_yops_log_project').on(table.projectId),
-    // Source enforcement — mirrors migrations/2026-04-12_yops-source-required.sql
+    // Source enforcement — mirrors the inline auto-migrate in adapters/postgres.ts.
+    // Uses jsonb_path_exists because Postgres CHECK forbids subqueries.
     sourceRequired: check(
       'yops_log_source_required',
       sql`
         jsonb_typeof(${table.yops}) = 'array'
-        AND NOT EXISTS (
-          SELECT 1 FROM jsonb_array_elements(${table.yops}) op
-          WHERE NOT (op ? 'source' AND op->'source'->>'type' IN ('llm','human'))
+        AND NOT jsonb_path_exists(
+          ${table.yops},
+          '$[*] ? (!exists(@.source) || !(@.source.type == "llm" || @.source.type == "human"))'
         )
       `
     ),
