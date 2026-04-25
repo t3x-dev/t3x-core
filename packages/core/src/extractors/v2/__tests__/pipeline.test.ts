@@ -672,4 +672,66 @@ describe('extractors/v2 pipeline', () => {
     expect(secondPrompt).toContain('include either candidate.values_json as a JSON object string');
     expect(secondPrompt).toContain('airport_issue');
   });
+
+  it('reasks with child-key-specific guidance when candidate.children[].key is invalid', async () => {
+    // Pre-fix the targeted reask only knew how to talk about
+    // candidate.values_json / candidate.slot — a model emitting an invalid
+    // child key got the wrong instructions back. After the fix, the reask
+    // names the field, surfaces the rejected key, and gives examples.
+    let calls = 0;
+    let secondPrompt = '';
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        calls += 1;
+        if (calls === 2) {
+          secondPrompt = prompt.messages[prompt.messages.length - 1]?.content as string;
+        }
+        const childKey = calls === 1 ? 'Bad Key' : 'fixed_child';
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_1',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'parent',
+                  path_hint: 'parent',
+                  slot: null,
+                  value_json: null,
+                  values_json: null,
+                  children_json: `[{"key":"${childKey}","values":{"k":"v"}}]`,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'parent material', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'parent material' }],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      model: 'gpt-5.4-nano',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toBe(2);
+    expect(secondPrompt).toContain('candidate.children[].key');
+    expect(secondPrompt).toContain('Bad Key');
+    expect(secondPrompt).toContain('snake_case');
+    // The values_json branch must NOT fire for this failure shape; that
+    // was the old bug — wrong field-specific guidance.
+    expect(secondPrompt).not.toContain('include either candidate.values_json');
+  });
 });

@@ -14,8 +14,8 @@
           "path_hint": "airport_issue",
           "values": { "summary": "SEA had a cyberattack", "status": "stabilized" },
           "children": [
-            { "key": "Baggage Handling", "values": { "impact": "disrupted" } },
-            { "key": "Check-in", "values": { "impact": "disrupted" } }
+            { "key": "baggage_handling", "values": { "impact": "disrupted" } },
+            { "key": "check_in", "values": { "impact": "disrupted" } }
           ]
         },
         "evidence": [
@@ -33,12 +33,23 @@
       }
     ]
   },
-  "compiledOpKinds": ["define", "populate"],
+  "compiledOpKinds": ["define", "populate", "define", "populate", "define", "populate"],
   "snapshotTrees": [
     {
       "key": "airport_issue",
       "slots": { "status": "stabilized", "summary": "SEA had a cyberattack" },
-      "children": []
+      "children": [
+        {
+          "key": "baggage_handling",
+          "slots": { "impact": "disrupted" },
+          "children": []
+        },
+        {
+          "key": "check_in",
+          "slots": { "impact": "disrupted" },
+          "children": []
+        }
+      ]
     }
   ]
 }

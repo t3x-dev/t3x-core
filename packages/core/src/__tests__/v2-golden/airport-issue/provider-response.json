@@ -15,7 +15,7 @@
         "slot": null,
         "value_json": null,
         "values_json": "{\"summary\":\"SEA had a cyberattack\",\"status\":\"stabilized\"}",
-        "children_json": "[{\"key\":\"Baggage Handling\",\"values\":{\"impact\":\"disrupted\"}},{\"key\":\"Check-in\",\"values\":{\"impact\":\"disrupted\"}}]"
+        "children_json": "[{\"key\":\"baggage_handling\",\"values\":{\"impact\":\"disrupted\"}},{\"key\":\"check_in\",\"values\":{\"impact\":\"disrupted\"}}]"
       },
       "evidence": [
         {

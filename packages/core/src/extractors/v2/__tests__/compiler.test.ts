@@ -695,5 +695,120 @@ describe('extractors/v2 compiler', () => {
       expect('define' in result.ops[0]).toBe(true);
       expect('populate' in result.ops[1]).toBe(true);
     });
+
+    it('compiles children on update intent (no longer silently dropped outside add)', () => {
+      // Reviewer P2.3: pre-fix the children loop was inside the add branch
+      // only. An update or reinforce item with parent values + children
+      // would compile without error and silently lose the child subtree.
+      // Now the helper is shared across intents.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters' },
+              candidate: {
+                values: { count: 4 },
+                children: [{ key: 'rival', values: { name: 'Uryu' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'add rival', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const opShapes = result.ops.map((op) => {
+        if ('define' in op) return { kind: 'define', path: op.define.path };
+        if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+        return { kind: 'other' };
+      });
+      expect(opShapes).toEqual([
+        { kind: 'populate', path: 'characters' },
+        { kind: 'define', path: 'characters/rival' },
+        { kind: 'populate', path: 'characters/rival' },
+      ]);
+    });
+
+    it('compiles a reinforce intent that carries only children (no parent values)', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'reinforce',
+              confidence: 0.85,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters' },
+              candidate: {
+                children: [{ key: 'mentor', values: { name: 'Urahara' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'mentor figure', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      // Reinforce with only children should now compile (children are
+      // sufficient ops, no longer treated as "no values" failure).
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops.length).toBe(2);
+      expect((result.ops[0] as { define: { path: string } }).define.path).toBe('characters/mentor');
+      expect((result.ops[1] as { populate: { path: string } }).populate.path).toBe(
+        'characters/mentor'
+      );
+    });
+
+    it('returns reaskable failure on invalid child key under update intent', () => {
+      // Same validation contract as add: invalid child key on any intent
+      // is a typed compile failure with field-specific reask details.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              target_ref: { path: 'characters' },
+              candidate: {
+                values: { ok: 'value' },
+                children: [{ key: 'BadKey' }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'bad', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.code).toBe('compile');
+      expect(result.failure.details?.reaskable).toBe(true);
+      expect(result.failure.details?.field).toBe('candidate.children[].key');
+    });
   });
 });
