@@ -149,12 +149,17 @@ function buildTargetedReaskPrompt(
       lines.push(`- Invalid turn tag used: ${failure.details.turn_tag}`);
     }
   } else if (failure.code === 'compile' && failure.details?.reaskable === true) {
-    // Field-specific guidance. Earlier reask only covered the
-    // "missing values" branch; child-key validation in the compiler
-    // produces a different shape (`field: 'candidate.children[].key'`)
-    // that needs its own instructions, otherwise the model gets told
-    // to add `values_json` when the actual problem is the child key.
+    // Field-specific guidance. The compiler emits several different
+    // reaskable failure shapes; sending the wrong remediation tells
+    // the model to fix something unrelated to the actual problem.
     const field = typeof failure.details?.field === 'string' ? failure.details.field : null;
+
+    const PATH_FIELDS = new Set([
+      'target_ref.path',
+      'target_ref.node_key',
+      'candidate.path_hint',
+      'candidate.key',
+    ]);
 
     if (field === 'candidate.children[].key') {
       const invalidKey =
@@ -166,6 +171,22 @@ function buildTargetedReaskPrompt(
       );
       lines.push(
         '- Examples of valid child keys: "baggage_handling", "check_in", "soul_society/seireitei". Avoid spaces, capital letters, hyphens, and dots.'
+      );
+    } else if (field && PATH_FIELDS.has(field)) {
+      // P2 fail-fast: the path candidate at this field was present but
+      // malformed (e.g. CamelCase, dotted, contains spaces). The model
+      // needs to fix this specific field — not pad more fields, and
+      // not switch to a different intent.
+      const invalidPath =
+        typeof failure.details?.invalid_path === 'string'
+          ? failure.details.invalid_path
+          : '<unspecified>';
+      const reason = typeof failure.details?.reason === 'string' ? failure.details.reason : null;
+      lines.push(
+        `- ${field} "${invalidPath}" is not a valid YOps path${reason ? ` (${reason})` : ''}. Use snake_case segments separated by "/" — e.g. "trip/destination", "characters/main_protagonist". Avoid dots, spaces, capitals, and hyphens.`
+      );
+      lines.push(
+        '- Fix this exact field in the corrected draft. Do not move the value to a different field.'
       );
     } else {
       const intent =
