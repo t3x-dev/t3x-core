@@ -312,11 +312,20 @@ async function handleDriftChoice4(
       (RELATION_TYPES as readonly string[]).includes(driftContext.relation)
         ? driftContext.relation
         : 'follows';
+    // The relate op is a deterministic, server-side decision triggered by
+    // the user choosing keep_both_together — it is not produced by the LLM.
+    // The yops_log_source_required CHECK demands a per-op source, so attach
+    // a HumanSource that names the API path responsible for the choice.
     allYops.push({
       relate: {
         from: oldRootId,
         to: newRootId,
         type: relationType as RelationType,
+      },
+      source: {
+        type: 'human',
+        author: 'api:drift-keep-both-together',
+        at: new Date().toISOString(),
       },
     });
   }

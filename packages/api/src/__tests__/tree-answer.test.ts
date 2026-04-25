@@ -25,6 +25,16 @@ import { setupTestDB, testData } from './setup';
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
 
+/**
+ * Test helper — wraps a YOp with a HumanSource so the fixture row passes
+ * the yops_log_source_required CHECK that landed in #867. The source is
+ * deterministic; tests don't assert on it directly.
+ */
+const withSrc = (op: Record<string, unknown>, author = 'test') => ({
+  ...op,
+  source: { type: 'human' as const, author, at: '2026-04-25T00:00:00.000Z' },
+});
+
 let mockDB: AnyDB;
 
 vi.mock('../lib/db', () => ({
@@ -107,8 +117,8 @@ describe('Tree Answer Routes', () => {
         projectId,
         source: 'pipeline',
         yops: [
-          { define: { path: 'old_topic' } },
-          { populate: { path: 'old_topic', values: { marker: 'pre' } } },
+          withSrc({ define: { path: 'old_topic' } }),
+          withSrc({ populate: { path: 'old_topic', values: { marker: 'pre' } } }),
         ],
         pipelineState: 'completed',
       });
@@ -177,6 +187,14 @@ describe('Tree Answer Routes', () => {
       expect(typeof relateOp.relate.to).toBe('string');
       expect(relateOp.relate.from).not.toBe(relateOp.relate.to);
 
+      // Regression: the appended relate op MUST carry per-op source.
+      // yops_log_source_required would otherwise reject the row in
+      // production, even though the test's seed entries were sourced.
+      expect(relateOp.source).toBeDefined();
+      expect(relateOp.source.type).toBe('human');
+      expect(relateOp.source.author).toBe('api:drift-keep-both-together');
+      expect(typeof relateOp.source.at).toBe('string');
+
       // Materialised trees table is rebuilt in the same transaction as the
       // yops_log write — reads against `trees` should not lag the log.
       // Regression for the bug where tree-answer skipped syncYOpsToTrees:
@@ -199,7 +217,7 @@ describe('Tree Answer Routes', () => {
         conversationId: conv.conversationId,
         projectId,
         source: 'pipeline',
-        yops: [{ define: { path: 'seed_topic' } }],
+        yops: [withSrc({ define: { path: 'seed_topic' } })],
         pipelineState: 'completed',
       });
 
@@ -279,7 +297,7 @@ describe('Tree Answer Routes', () => {
         conversationId: conv.conversationId,
         projectId,
         source: 'pipeline',
-        yops: [{ define: { path: 'x' } }],
+        yops: [withSrc({ define: { path: 'x' } })],
         pipelineState: 'completed',
       });
 
@@ -315,7 +333,7 @@ describe('Tree Answer Routes', () => {
         conversationId: conv.conversationId,
         projectId,
         source: 'pipeline',
-        yops: [{ define: { path: 'old_topic' } }],
+        yops: [withSrc({ define: { path: 'old_topic' } })],
         pipelineState: 'completed',
       });
 
@@ -355,7 +373,7 @@ describe('Tree Answer Routes', () => {
         conversationId: conv.conversationId,
         projectId,
         source: 'pipeline',
-        yops: [{ define: { path: 'x' } }],
+        yops: [withSrc({ define: { path: 'x' } })],
         pipelineState: 'completed',
       });
 
