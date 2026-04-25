@@ -33,13 +33,29 @@ const PROVIDER_CAPABILITIES: Record<ProviderCapabilityId, ProviderCapabilities> 
 };
 
 /**
- * Map runtime provider ids (anthropic / openai / google-ai) to the
- * three-letter ids this table uses.
+ * Map any of the runtime provider id aliases to the canonical capability id.
+ *
+ * The chat surface ships at least three different ids per provider:
+ *   anthropic ← `anthropic` | `claude`
+ *   openai    ← `openai`    | `gpt`
+ *   google    ← `google`    | `google-ai` | `gemini`
+ *
+ * `/v1/chat/providers` emits `claude / openai / google`, the core registry
+ * uses `anthropic / openai / google-ai`, and the local settings UI uses
+ * `anthropic / openai / google`. All resolve to the same capability set.
  */
+const PROVIDER_ALIASES: Record<string, ProviderCapabilityId> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  openai: 'openai',
+  gpt: 'openai',
+  google: 'google',
+  'google-ai': 'google',
+  gemini: 'google',
+};
+
 export function toCapabilityId(providerId: string): ProviderCapabilityId | null {
-  if (providerId === 'google-ai' || providerId === 'google') return 'google';
-  if (providerId === 'anthropic' || providerId === 'openai') return providerId;
-  return null;
+  return PROVIDER_ALIASES[providerId.toLowerCase()] ?? null;
 }
 
 export function providerSupports(providerId: string, capability: ChatCapability): boolean {
