@@ -40,6 +40,8 @@
     "dev:api": "node tools/dev-source-runner.mjs api",
     "dev:api:persistent": "pnpm --filter t3x-api-server dev:persistent",
     "dev:agent": "turbo run dev --filter=agent-demo",
+    "e2e:api": "pnpm build && pnpm --filter t3x-api-server start",
+    "e2e:webui": "pnpm --filter t3x-webui build && pnpm --filter t3x-webui start",
     "stop:api": "lsof -ti:8000 | xargs kill -TERM 2>/dev/null || echo 'API not running'",
     "stop:webui": "lsof -ti:3000 | xargs kill -TERM 2>/dev/null || echo 'WebUI not running'",
     "docker:up": "docker compose up",
