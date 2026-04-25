@@ -129,16 +129,31 @@ describe('extractAndApply', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
+    // Compiler normalises dotted LLM paths to slashes, so `trip.duration_days`
+    // becomes a real nested `trip → duration_days` tree rather than a single
+    // root key whose name happens to contain dots.
     expect(result.snapshot.trees).toEqual([
       {
-        key: 'trip.duration_days',
-        slots: { value: 5 },
-        children: [],
-      },
-      {
-        key: 'trip.preferences.must_visit_pois',
-        slots: { value: ['West Lake', 'Lingyin Temple'] },
-        children: [],
+        key: 'trip',
+        slots: {},
+        children: [
+          {
+            key: 'duration_days',
+            slots: { value: 5 },
+            children: [],
+          },
+          {
+            key: 'preferences',
+            slots: {},
+            children: [
+              {
+                key: 'must_visit_pois',
+                slots: { value: ['West Lake', 'Lingyin Temple'] },
+                children: [],
+              },
+            ],
+          },
+        ],
       },
     ]);
   });

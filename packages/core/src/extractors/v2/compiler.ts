@@ -1,4 +1,4 @@
-import type { SourcedYOp, YValue } from '../../t3x-yops/types';
+import { SNAKE_CASE_KEY, type SourcedYOp, type YValue } from '../../t3x-yops/types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import type {
   CompiledMutationPlan,
@@ -8,6 +8,38 @@ import type {
 } from './types';
 
 const DEFAULT_VALUE_SLOT = 'value';
+
+/**
+ * Normalize an LLM-emitted path string to the YOps wire shape.
+ *
+ *   - Trim surrounding whitespace.
+ *   - `.` → `/`. Per `packages/yops/yops.yaml`, `/` is the path separator
+ *     and dots are not legal key characters. Small models (gpt-5.4-nano,
+ *     etc.) frequently emit dotted paths thinking they're nested; without
+ *     this rewrite the engine treats `story.overview.major_conflicts` as
+ *     a single root key with literal dots, which renders as a flat tree.
+ *   - Collapse runs of `/`, strip leading/trailing `/`.
+ *
+ * Returns `null` when the input is empty after trimming or any segment
+ * fails the SNAKE_CASE_KEY check (uppercase, leading digit, dashes, etc.).
+ * Callers MUST treat null as a hard compile failure rather than passing
+ * the original string through — that's the same pattern of silent
+ * pollution we fixed by adding this normalizer in the first place.
+ */
+export function normalizePath(raw: string | undefined | null): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+
+  const slashed = trimmed.replace(/\./g, '/');
+  const segments = slashed.split('/').filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+
+  for (const segment of segments) {
+    if (!SNAKE_CASE_KEY.test(segment)) return null;
+  }
+  return segments.join('/');
+}
 
 export type CompileResult =
   | { ok: true; ops: SourcedYOp[]; warnings: string[] }
@@ -68,13 +100,20 @@ function buildSource(
 }
 
 function resolveTargetPath(item: ExtractionDraftItem): string | null {
-  return (
-    item.target_ref?.path ??
-    item.target_ref?.node_key ??
-    item.candidate.path_hint ??
-    item.candidate.key ??
-    null
-  );
+  // Try each LLM-emitted source in priority order. The first one that
+  // normalises to a valid YOps path wins. Keeping the priority chain
+  // intact means a strict path_hint can outrank a malformed target_ref.
+  const candidates = [
+    item.target_ref?.path,
+    item.target_ref?.node_key,
+    item.candidate.path_hint,
+    item.candidate.key,
+  ];
+  for (const raw of candidates) {
+    const normalized = normalizePath(raw);
+    if (normalized) return normalized;
+  }
+  return null;
 }
 
 function synthesizeAddPath(item: ExtractionDraftItem): string {
@@ -140,9 +179,12 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
 
   if (effectiveIntent === 'add') {
     const warnings: string[] = [];
+    // Try the LLM-supplied path sources in order. Each goes through
+    // `normalizePath`, which rewrites dotted paths to slashed and
+    // rejects any segment that doesn't satisfy SNAKE_CASE_KEY.
     let path =
-      item.candidate.path_hint ??
-      item.candidate.key ??
+      normalizePath(item.candidate.path_hint) ??
+      normalizePath(item.candidate.key) ??
       (promotedFrom ? resolveTargetPath(item) : null);
 
     if (promotedFrom) {
@@ -151,8 +193,12 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
 
     if (!path) {
       // F8a: synthesize a deterministic path when the model omitted both key
-      // and path_hint instead of hard-failing compile.
-      path = synthesizeAddPath(item);
+      // and path_hint instead of hard-failing compile. The slug regex in
+      // `synthesizeAddPath` already produces SNAKE_CASE_KEY-safe output, so
+      // pass-through is fine; we still funnel it through `normalizePath`
+      // for symmetry / future-proofing.
+      const synthesized = synthesizeAddPath(item);
+      path = normalizePath(synthesized) ?? synthesized;
       warnings.push(
         `Synthesized path "${path}" for add intent (item ${item.id}) lacking candidate.key and path_hint`
       );

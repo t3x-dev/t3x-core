@@ -153,12 +153,15 @@ describe('extractors/v2 pipeline', () => {
     expect(result.compiled.ops).toHaveLength(4);
     expect(result.compiled.ops).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ define: { path: 'trip.duration_days' } }),
-        expect.objectContaining({ set: { path: 'trip.duration_days/value', value: 5 } }),
-        expect.objectContaining({ define: { path: 'trip.preferences.must_visit_pois' } }),
+        // Compiler normalises dotted LLM paths (`trip.duration_days`) to
+        // slashed YOps paths so the workspace renders the result as a
+        // proper nested tree, not a flat root with literal-dot keys.
+        expect.objectContaining({ define: { path: 'trip/duration_days' } }),
+        expect.objectContaining({ set: { path: 'trip/duration_days/value', value: 5 } }),
+        expect.objectContaining({ define: { path: 'trip/preferences/must_visit_pois' } }),
         expect.objectContaining({
           set: {
-            path: 'trip.preferences.must_visit_pois/value',
+            path: 'trip/preferences/must_visit_pois/value',
             value: ['West Lake', 'Lingyin Temple'],
           },
         }),
