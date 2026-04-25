@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileExtractionDraft } from '../compiler';
+import { compileExtractionDraft, normalizePath } from '../compiler';
 import { EXTRACTION_DRAFT_SCHEMA, type ExtractionDraft } from '../types';
 
 const bootstrapDraft: ExtractionDraft = {
@@ -412,5 +412,93 @@ describe('extractors/v2 compiler', () => {
     // Incremental update with no target_ref and no candidate values is genuinely
     // unresolvable — we cannot know which node to update.
     expect(result.failure.message).toContain('update');
+  });
+
+  describe('normalizePath', () => {
+    it('converts dotted LLM paths into slashed YOps paths', () => {
+      // Regression: small models (gpt-5.4-nano, etc.) emit dotted paths.
+      // Without normalization the engine treated `characters.main_protagonist`
+      // as a single root node whose entire key is the literal string with
+      // dots, producing a flat tree that didn't match the user's mental
+      // model. After this fix the paths are real nested paths.
+      expect(normalizePath('characters.main_protagonist')).toBe('characters/main_protagonist');
+      expect(normalizePath('story.overview.major_conflicts')).toBe(
+        'story/overview/major_conflicts'
+      );
+    });
+
+    it('handles mixed dot/slash separators consistently', () => {
+      expect(normalizePath('story.overview/value')).toBe('story/overview/value');
+      expect(normalizePath('story.overview.soul_reaper/value')).toBe(
+        'story/overview/soul_reaper/value'
+      );
+    });
+
+    it('passes through already-correct slashed paths', () => {
+      expect(normalizePath('mont_saint_michel/location/test1')).toBe(
+        'mont_saint_michel/location/test1'
+      );
+      expect(normalizePath('airport_issue')).toBe('airport_issue');
+    });
+
+    it('strips leading/trailing slashes and collapses runs', () => {
+      expect(normalizePath('/airport_issue/')).toBe('airport_issue');
+      expect(normalizePath('story//overview')).toBe('story/overview');
+    });
+
+    it('rejects segments that violate SNAKE_CASE_KEY', () => {
+      // Uppercase, leading digit, kebab-case all fail. The compiler treats
+      // null as a hard signal to fall back to the next path source or
+      // synthesise — never to ship the bad string forward.
+      expect(normalizePath('Camel.Case.Path')).toBeNull();
+      expect(normalizePath('1starts_with_digit')).toBeNull();
+      expect(normalizePath('kebab-case-key')).toBeNull();
+      expect(normalizePath('UPPER')).toBeNull();
+    });
+
+    it('returns null for empty / null / whitespace-only input', () => {
+      expect(normalizePath(null)).toBeNull();
+      expect(normalizePath(undefined)).toBeNull();
+      expect(normalizePath('')).toBeNull();
+      expect(normalizePath('   ')).toBeNull();
+      expect(normalizePath('//')).toBeNull();
+    });
+  });
+
+  it('compiles dotted candidate.path_hint into a nested YOps path', () => {
+    // End-to-end regression for the conv_c80bc8eb shape: the LLM emitted
+    // `path_hint: "characters.main_protagonist"` and we want the resulting
+    // op to use `characters/main_protagonist` so the workspace renders as
+    // a tree, not as a flat root with a literal-dot key.
+    const result = compileExtractionDraft({
+      draft: {
+        schema: EXTRACTION_DRAFT_SCHEMA,
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            candidate: {
+              path_hint: 'characters.main_protagonist',
+              values: { name: 'Ichigo Kurosaki' },
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'Ichigo Kurosaki', role: 'primary' }],
+          },
+        ],
+      },
+      sourceModel: 'gpt-5.4-nano',
+      extractedAt: '2026-04-25T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const definePath = (result.ops[0] as { define: { path: string } }).define.path;
+    expect(definePath).toBe('characters/main_protagonist');
+    const populatePath = (result.ops[1] as { populate: { path: string } }).populate.path;
+    expect(populatePath).toBe('characters/main_protagonist');
   });
 });
