@@ -150,6 +150,62 @@ function getTargetSlot(item: ExtractionDraftItem): string | null {
   return item.candidate.value !== undefined ? DEFAULT_VALUE_SLOT : null;
 }
 
+/**
+ * Compile `item.candidate.children` into nested define + populate ops
+ * under `parentPath`.
+ *
+ * The provider contract (DraftCandidateChildSchema) is one level deep:
+ * `{ key: string, values?: Record<string, unknown> }`. So this is a flat
+ * loop, not a tree walk — but each child key still goes through the same
+ * normaliser as the parent path (handles a model emitting `key: 'a.b'`
+ * by converting dots to slashes and segment-validating).
+ *
+ * Used by add / update / reinforce intents. Before this helper existed,
+ * children were compiled only inside the add branch; update + reinforce
+ * accepted children through the schema and silently dropped them on the
+ * floor — the same data-loss shape the review originally flagged as P1
+ * for the add path.
+ */
+function compileChildren(
+  item: ExtractionDraftItem,
+  parentPath: string,
+  source: SourcedYOp['source'],
+  warnings: string[]
+): { ok: true; ops: SourcedYOp[] } | { ok: false; failure: ExtractionFailure; warnings: string[] } {
+  const children = item.candidate.children ?? [];
+  const ops: SourcedYOp[] = [];
+  for (const child of children) {
+    const normalizedKey = normalizePath(child.key);
+    if (!normalizedKey) {
+      return {
+        ok: false,
+        failure: createExtractionFailure(
+          'compile',
+          `Child key "${child.key}" on item ${item.id} is not a valid YOps path segment`,
+          {
+            details: {
+              reaskable: true,
+              item_id: item.id,
+              field: 'candidate.children[].key',
+              invalid_key: child.key,
+            },
+          }
+        ),
+        warnings,
+      };
+    }
+    const childPath = `${parentPath}/${normalizedKey}`;
+    ops.push({ define: { path: childPath }, source });
+    if (child.values && Object.keys(child.values).length > 0) {
+      ops.push({
+        populate: { path: childPath, values: sortRecordValues(child.values) },
+        source,
+      });
+    }
+  }
+  return { ok: true, ops };
+}
+
 function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileResult {
   const primaryEvidence =
     item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
@@ -220,6 +276,10 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
+    const childrenResult = compileChildren(item, path, source, warnings);
+    if (!childrenResult.ok) return childrenResult;
+    ops.push(...childrenResult.ops);
+
     return { ok: true, ops, warnings };
   }
 
@@ -253,6 +313,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     }
 
     const ops: SourcedYOp[] = [];
+    const warnings: string[] = [];
     if (item.candidate.values && Object.keys(item.candidate.values).length > 0) {
       ops.push({
         populate: { path, values: sortRecordValues(item.candidate.values) },
@@ -268,12 +329,21 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
+    // Children also flow through update / reinforce. The provider schema
+    // accepts them on every intent, and a model that emits children on
+    // an update is saying "also add these subnodes under the resolved
+    // target path." Pre-fix the compiler ignored them silently; same P1
+    // shape as the add branch, just outside bootstrap-promotion.
+    const childrenResult = compileChildren(item, path, source, warnings);
+    if (!childrenResult.ok) return childrenResult;
+    ops.push(...childrenResult.ops);
+
     if (ops.length === 0) {
       return {
         ok: false,
         failure: createExtractionFailure(
           'compile',
-          `${item.intent} intent requires candidate.values or candidate.value`,
+          `${item.intent} intent requires candidate.values, candidate.value, or candidate.children`,
           {
             details: {
               reaskable: true,
@@ -286,7 +356,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       };
     }
 
-    return { ok: true, ops, warnings: [] };
+    return { ok: true, ops, warnings };
   }
 
   return {

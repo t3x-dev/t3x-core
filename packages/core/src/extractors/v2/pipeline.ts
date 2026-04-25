@@ -149,12 +149,33 @@ function buildTargetedReaskPrompt(
       lines.push(`- Invalid turn tag used: ${failure.details.turn_tag}`);
     }
   } else if (failure.code === 'compile' && failure.details?.reaskable === true) {
-    const intent = typeof failure.details?.intent === 'string' ? failure.details.intent : 'update';
-    const path = typeof failure.details?.path === 'string' ? failure.details.path : 'target path';
-    lines.push(
-      `- For ${intent} on ${path}, include either candidate.values_json as a JSON object string, or candidate.slot with candidate.value_json.`
-    );
-    lines.push('- Do not leave both candidate.values_json and candidate.slot/value_json empty.');
+    // Field-specific guidance. Earlier reask only covered the
+    // "missing values" branch; child-key validation in the compiler
+    // produces a different shape (`field: 'candidate.children[].key'`)
+    // that needs its own instructions, otherwise the model gets told
+    // to add `values_json` when the actual problem is the child key.
+    const field = typeof failure.details?.field === 'string' ? failure.details.field : null;
+
+    if (field === 'candidate.children[].key') {
+      const invalidKey =
+        typeof failure.details?.invalid_key === 'string'
+          ? failure.details.invalid_key
+          : '<unspecified>';
+      lines.push(
+        `- candidate.children[].key "${invalidKey}" is not a valid YOps key. Each child key must match snake_case (lowercase letters, digits, underscores) and use "/" as the path separator if it represents nesting.`
+      );
+      lines.push(
+        '- Examples of valid child keys: "baggage_handling", "check_in", "soul_society/seireitei". Avoid spaces, capital letters, hyphens, and dots.'
+      );
+    } else {
+      const intent =
+        typeof failure.details?.intent === 'string' ? failure.details.intent : 'update';
+      const path = typeof failure.details?.path === 'string' ? failure.details.path : 'target path';
+      lines.push(
+        `- For ${intent} on ${path}, include either candidate.values_json as a JSON object string, or candidate.slot with candidate.value_json.`
+      );
+      lines.push('- Do not leave both candidate.values_json and candidate.slot/value_json empty.');
+    }
   } else {
     lines.push(`- ${failure.message}`);
   }
