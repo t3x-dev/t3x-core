@@ -1,6 +1,6 @@
 import type { SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { YOpsReplayError } from '@/domain/replay';
+import { YOpsReplayError } from '@/commands/yops/errors';
 import * as loader from '@/infrastructure/conversationLoader';
 import { fetchConversationSnapshot, replayAppended } from '../loadConversation';
 
@@ -60,7 +60,11 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.opsLog).toEqual([]);
   });
 
-  it('throws replay error when persisted ops are structurally invalid', async () => {
+  it('returns partial snapshot when persisted ops are structurally invalid', async () => {
+    const goodOp: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'e', at: '2026-04-12T00:00:00Z' },
+    };
     const invalidOp: SourcedYOp = {
       populate: { path: 'trip/day_1', values: { budget: '10k' } },
       source: { type: 'human', author: 'e', at: '2026-04-12T00:00:00Z' },
@@ -70,15 +74,30 @@ describe('fetchConversationSnapshot', () => {
       turns: [],
       opsLog: [
         {
+          id: 'yl_good',
+          yops: [goodOp] as never,
+          source: 'manual',
+          created_at: '2026-04-12T00:00:00Z',
+        } as never,
+        {
           id: 'yl_bad',
           yops: [invalidOp] as never,
           source: 'manual',
-          created_at: '2026-04-12T00:00:00Z',
+          created_at: '2026-04-12T00:00:01Z',
         } as never,
       ],
     });
 
-    await expect(fetchConversationSnapshot('p1', 'c1')).rejects.toThrow(YOpsReplayError);
+    const snapshot = await fetchConversationSnapshot('p1', 'c1');
+
+    // First op applied, second blew up → partial snapshot with row mapping
+    expect(snapshot.tree.trees.length).toBeGreaterThan(0);
+    expect(snapshot.partial).toBeDefined();
+    expect(snapshot.partial?.opIndex).toBe(1);
+    expect(snapshot.partial?.appliedCount).toBe(1);
+    expect(snapshot.partial?.rowId).toBe('yl_bad');
+    expect(snapshot.partial?.opIndexInRow).toBe(0);
+    expect(snapshot.partial?.code).toBeDefined();
   });
 });
 

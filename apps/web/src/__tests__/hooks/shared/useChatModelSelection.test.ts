@@ -1,6 +1,35 @@
 // @vitest-environment jsdom
+//
+// Polyfill localStorage for Zustand `persist` middleware (see
+// settingsStore.test.ts for the rationale — Node 25 ships a broken stub).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  if (
+    typeof globalThis.localStorage !== 'object' ||
+    typeof globalThis.localStorage.setItem === 'function'
+  ) {
+    return;
+  }
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, String(value)),
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => store.clear(),
+      get length() {
+        return store.size;
+      },
+      key: (index: number) => [...store.keys()][index] ?? null,
+    },
+  });
+});
+
 import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
 
 vi.mock('@/hooks/shared/useAvailableModels', async () => {
@@ -33,6 +62,7 @@ function makeModel(id: string, label: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  globalThis.localStorage.clear();
   useChatModelPreferencesStore.setState({
     selectedProvider: null,
     selectedModel: null,
