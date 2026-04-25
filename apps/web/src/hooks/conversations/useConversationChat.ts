@@ -201,7 +201,13 @@ export function useConversationChat({
               stream.rafIdRef.current = null;
             }
             if (event.content) fullResponse = event.content;
-            if (!addedFinalMessage) {
+            // Skip the assistant append entirely when the upstream produced
+            // no visible tokens (provider blip, safety block, etc.). Adding
+            // an empty `{role: 'assistant', content: ''}` to the local
+            // history poisons every subsequent /chat/stream call — the
+            // server validator rejects empty content with "messages[N]:
+            // content must be non-empty" and chat stalls.
+            if (!addedFinalMessage && fullResponse.trim().length > 0) {
               history.setMessages((prev) => [
                 ...prev,
                 {
@@ -210,6 +216,11 @@ export function useConversationChat({
                   content: fullResponse,
                 },
               ]);
+              stream.setStreamingContent('');
+              addedFinalMessage = true;
+            } else if (!addedFinalMessage) {
+              // Failed quietly — surface a hint instead of poisoning history.
+              warnings.setError('Model returned no content. Try again or check the provider key.');
               stream.setStreamingContent('');
               addedFinalMessage = true;
             }
