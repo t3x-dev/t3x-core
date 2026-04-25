@@ -35,12 +35,17 @@ describe('Commit Operations E2E', () => {
   });
 
   it('full cycle: insert yops -> create commit -> query operations', async () => {
+    // yops_log_source_required CHECK demands a per-op source; legacy
+    // fixtures used inline `source: 'about 5000'` strings inside `set`
+    // (a different concept), which never satisfied the per-op contract.
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
+
     // 1. Insert two yops_log entries for a conversation
     const entry1 = await insertYOpsLogEntry(db, {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/budget', value: 5000, source: 'about 5000', from: 'T1' } }],
+      yops: [{ set: { path: 'trip/budget', value: 5000 }, source: src }],
     });
 
     await sleep(50);
@@ -49,7 +54,7 @@ describe('Commit Operations E2E', () => {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'manual',
-      yops: [{ set: { path: 'trip/style', value: 'casual', source: 'casual style', from: 'T2' } }],
+      yops: [{ set: { path: 'trip/style', value: 'casual' }, source: src }],
     });
 
     // 2. Create commit with yops_log_ids
@@ -79,9 +84,7 @@ describe('Commit Operations E2E', () => {
     expect(ops[1].source).toBe('manual');
 
     // 6. Verify operations contain the actual yops data
-    expect(ops[0].yops).toEqual([
-      { set: { path: 'trip/budget', value: 5000, source: 'about 5000', from: 'T1' } },
-    ]);
+    expect(ops[0].yops).toEqual([{ set: { path: 'trip/budget', value: 5000 }, source: src }]);
   });
 
   it('merge commit has empty yops_log_ids', async () => {

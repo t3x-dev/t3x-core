@@ -87,9 +87,13 @@ describe('event triggers', () => {
 
   it('INSERT on yops_log produces yops.applied event', async () => {
     const conv = await insertConversation(db, { projectId, title: 'YOps Conv' });
+    // yops_log_source_required CHECK demands a per-op source on every op,
+    // and that the array uses the canonical YOp discriminants (define / set
+    // / etc.), not legacy `{ op: '...' }` shapes.
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
     const yopsArray = [
-      { op: 'create_tree', key: 'root' },
-      { op: 'set_slot', key: 'root', slot: 'v', value: '1' },
+      { define: { path: 'root' }, source: src },
+      { set: { path: 'root/v', value: '1' }, source: src },
     ];
     const entry = await insertYOpsLogEntry(db, {
       conversationId: conv.conversationId,
