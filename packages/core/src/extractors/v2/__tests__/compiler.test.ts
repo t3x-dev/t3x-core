@@ -421,47 +421,207 @@ describe('extractors/v2 compiler', () => {
       // as a single root node whose entire key is the literal string with
       // dots, producing a flat tree that didn't match the user's mental
       // model. After this fix the paths are real nested paths.
-      expect(normalizePath('characters.main_protagonist')).toBe('characters/main_protagonist');
-      expect(normalizePath('story.overview.major_conflicts')).toBe(
-        'story/overview/major_conflicts'
-      );
+      expect(normalizePath('characters.main_protagonist')).toEqual({
+        kind: 'ok',
+        path: 'characters/main_protagonist',
+      });
+      expect(normalizePath('story.overview.major_conflicts')).toEqual({
+        kind: 'ok',
+        path: 'story/overview/major_conflicts',
+      });
     });
 
     it('handles mixed dot/slash separators consistently', () => {
-      expect(normalizePath('story.overview/value')).toBe('story/overview/value');
-      expect(normalizePath('story.overview.soul_reaper/value')).toBe(
-        'story/overview/soul_reaper/value'
-      );
+      expect(normalizePath('story.overview/value')).toEqual({
+        kind: 'ok',
+        path: 'story/overview/value',
+      });
+      expect(normalizePath('story.overview.soul_reaper/value')).toEqual({
+        kind: 'ok',
+        path: 'story/overview/soul_reaper/value',
+      });
     });
 
     it('passes through already-correct slashed paths', () => {
-      expect(normalizePath('mont_saint_michel/location/test1')).toBe(
-        'mont_saint_michel/location/test1'
-      );
-      expect(normalizePath('airport_issue')).toBe('airport_issue');
+      expect(normalizePath('mont_saint_michel/location/test1')).toEqual({
+        kind: 'ok',
+        path: 'mont_saint_michel/location/test1',
+      });
+      expect(normalizePath('airport_issue')).toEqual({ kind: 'ok', path: 'airport_issue' });
     });
 
     it('strips leading/trailing slashes and collapses runs', () => {
-      expect(normalizePath('/airport_issue/')).toBe('airport_issue');
-      expect(normalizePath('story//overview')).toBe('story/overview');
+      expect(normalizePath('/airport_issue/')).toEqual({ kind: 'ok', path: 'airport_issue' });
+      expect(normalizePath('story//overview')).toEqual({ kind: 'ok', path: 'story/overview' });
     });
 
-    it('rejects segments that violate SNAKE_CASE_KEY', () => {
-      // Uppercase, leading digit, kebab-case all fail. The compiler treats
-      // null as a hard signal to fall back to the next path source or
-      // synthesise — never to ship the bad string forward.
-      expect(normalizePath('Camel.Case.Path')).toBeNull();
-      expect(normalizePath('1starts_with_digit')).toBeNull();
-      expect(normalizePath('kebab-case-key')).toBeNull();
-      expect(normalizePath('UPPER')).toBeNull();
+    it('returns invalid (with reason) for segments that violate SNAKE_CASE_KEY', () => {
+      // Uppercase, leading digit, kebab-case, hyphen, etc. all fail. The
+      // discriminated result lets compiler callers tell present-but-bad
+      // apart from absent — invalid is a hard fail, absent falls through.
+      const camel = normalizePath('Camel.Case.Path');
+      expect(camel.kind).toBe('invalid');
+      if (camel.kind === 'invalid') {
+        expect(camel.reason).toMatch(/SNAKE_CASE_KEY/);
+        expect(camel.raw).toBe('Camel.Case.Path');
+      }
+
+      expect(normalizePath('1starts_with_digit').kind).toBe('invalid');
+      expect(normalizePath('kebab-case-key').kind).toBe('invalid');
+      expect(normalizePath('UPPER').kind).toBe('invalid');
     });
 
-    it('returns null for empty / null / whitespace-only input', () => {
-      expect(normalizePath(null)).toBeNull();
-      expect(normalizePath(undefined)).toBeNull();
-      expect(normalizePath('')).toBeNull();
-      expect(normalizePath('   ')).toBeNull();
-      expect(normalizePath('//')).toBeNull();
+    it('returns absent for null / undefined / empty / whitespace-only input', () => {
+      // These let the caller fall through to the next candidate in the
+      // priority chain without generating a compile failure.
+      expect(normalizePath(null)).toEqual({ kind: 'absent' });
+      expect(normalizePath(undefined)).toEqual({ kind: 'absent' });
+      expect(normalizePath('')).toEqual({ kind: 'absent' });
+      expect(normalizePath('   ')).toEqual({ kind: 'absent' });
+    });
+
+    it('returns invalid (not absent) for separator-only input like "//"', () => {
+      // `//` isn't really absent — the caller intended a path, it just
+      // collapsed to nothing. Treat as invalid so we don't silently
+      // fall through to the next candidate.
+      const result = normalizePath('//');
+      expect(result.kind).toBe('invalid');
+    });
+  });
+
+  describe('fail-fast on invalid path candidates (no silent fallback)', () => {
+    it('add: invalid candidate.path_hint fails compile and names the field, does not fall through to candidate.key', () => {
+      // Pre-fix, an invalid `path_hint` returned null and the compiler
+      // moved on to `candidate.key`. The model would never learn its
+      // path_hint was wrong, and the resulting tree would be nested
+      // under the wrong root. After this fix the compiler returns a
+      // typed reaskable failure naming `candidate.path_hint`.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'CamelCasePath', // invalid
+                key: 'fallback_key', // would have been used pre-fix
+                values: { foo: 'bar' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.code).toBe('compile');
+      expect(result.failure.details?.reaskable).toBe(true);
+      expect(result.failure.details?.field).toBe('candidate.path_hint');
+      expect(result.failure.details?.invalid_path).toBe('CamelCasePath');
+      expect(typeof result.failure.details?.reason).toBe('string');
+    });
+
+    it('add: absent candidate.path_hint falls through to candidate.key normally', () => {
+      // Absent (undefined) is not invalid — the compiler should walk past
+      // it and use the next candidate.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                key: 'fallback_key',
+                values: { foo: 'bar' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect((result.ops[0] as { define: { path: string } }).define.path).toBe('fallback_key');
+    });
+
+    it('update: invalid target_ref.path fails compile and names the field, does not fall through to path_hint', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              target_ref: { path: 'Capital.Path' }, // invalid
+              candidate: {
+                path_hint: 'fallback_path', // would have been used pre-fix
+                values: { foo: 'bar' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.details?.field).toBe('target_ref.path');
+      expect(result.failure.details?.invalid_path).toBe('Capital.Path');
+      expect(result.failure.details?.reaskable).toBe(true);
+    });
+
+    it('remove: invalid target_ref.path fails compile with field name', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'remove',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              target_ref: { path: 'Has Spaces' },
+              candidate: {},
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.details?.field).toBe('target_ref.path');
+      expect(result.failure.details?.invalid_path).toBe('Has Spaces');
     });
   });
 
