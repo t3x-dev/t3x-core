@@ -876,8 +876,11 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
 
           buffer += decoder.decode(value as Uint8Array, { stream: true });
 
-          // Parse SSE events separated by double newlines
-          const parts = buffer.split('\n\n');
+          // Parse SSE events separated by double newlines. Gemini emits
+          // CRLF (`\r\n\r\n`) per the SSE spec, while Anthropic / OpenAI
+          // emit LF-only (`\n\n`). Splitting on either keeps all three
+          // working without provider-specific branches.
+          const parts = buffer.split(/\r?\n\r?\n/);
           buffer = parts.pop() || '';
 
           for (const part of parts) {
