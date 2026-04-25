@@ -32,12 +32,14 @@ function wrapError(operation: PersistenceError['operation'], err: unknown): Pers
 }
 
 /**
- * Derive the legacy row-level source tag from per-op sources.
+ * Derive the row-level source tag from per-op sources.
  * - All LLM ops → 'pipeline'
  * - Any human ops (or mixed) → 'manual'
  *
- * Per-op source.type is the authoritative provenance; this tag exists for
- * legacy query filtering and is no longer part of the source contract.
+ * The row-level tag is a coarser, per-row classification, distinct from the
+ * fine-grained per-op `source.type`. Both are real and load-bearing:
+ * compression-v2 reads the row tag to flag manual edits, while the engine
+ * and replay use the per-op source for provenance and validation.
  */
 export function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
   if (ops.length === 0) return 'manual';
