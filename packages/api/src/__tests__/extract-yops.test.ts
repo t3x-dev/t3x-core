@@ -170,9 +170,12 @@ describe('POST /v1/extract-yops', () => {
     expect(body.data.ops).toEqual([]);
   });
 
-  it('accepts optional failing_ops field', async () => {
-    // The field is retained for transport compatibility even though v2 no longer
-    // uses the client-owned retry semantics.
+  it('ignores legacy failing_ops field without rejecting the request', async () => {
+    // The schema previously declared `failing_ops` for client-driven
+    // surgical retry, but the handler never read it — and v2's pipeline
+    // owns retry semantics internally. The field has been removed from
+    // the contract; zod tolerates the extra key (non-strict object), so
+    // older clients still mid-migration don't break.
     const res = await app.request('/v1/extract-yops', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -189,7 +192,6 @@ describe('POST /v1/extract-yops', () => {
         ],
       }),
     });
-    // We specifically want NOT INVALID_REQUEST — that would indicate request schema rejection.
     expect(res.status).not.toBe(400);
     const body = await res.json();
     if (!body.success) {
