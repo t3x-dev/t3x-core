@@ -225,6 +225,59 @@ describe('POST /v1/drafts/:id/apply-yops', () => {
     expect(json.error.code).toBe('INVALID_REQUEST');
   });
 
+  it('rejects relate ops with UNSUPPORTED_OP (drafts persist trees only)', async () => {
+    const initialNodes = [
+      { key: 'a', slots: {}, children: [] },
+      { key: 'b', slots: {}, children: [] },
+    ];
+    const { id, revision } = await createDraft({ nodes: initialNodes });
+
+    const res = await app.request(`/v1/drafts/${id}/apply-yops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        yops: [
+          {
+            relate: { from: 'a', to: 'b', type: 'causes' },
+          },
+        ],
+        if_revision: revision,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as ApiResponse;
+    expect(json.success).toBe(false);
+    expect(json.error.code).toBe('UNSUPPORTED_OP');
+    expect(json.error.message).toMatch(/relate\/unrelate/);
+  });
+
+  it('rejects unrelate ops with UNSUPPORTED_OP', async () => {
+    const initialNodes = [
+      { key: 'a', slots: {}, children: [] },
+      { key: 'b', slots: {}, children: [] },
+    ];
+    const { id, revision } = await createDraft({ nodes: initialNodes });
+
+    const res = await app.request(`/v1/drafts/${id}/apply-yops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        yops: [
+          {
+            unrelate: { from: 'a', to: 'b', type: 'causes' },
+          },
+        ],
+        if_revision: revision,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as ApiResponse;
+    expect(json.success).toBe(false);
+    expect(json.error.code).toBe('UNSUPPORTED_OP');
+  });
+
   it('returns 409 for already committed draft', async () => {
     const { id, revision } = await createDraft({
       nodes: [{ key: 'test', slots: { val: 1 }, children: [] }],

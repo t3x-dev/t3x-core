@@ -135,6 +135,9 @@ export const ErrorCodes = {
   // Source provenance errors
   MISSING_SOURCE: 'MISSING_SOURCE',
   MISSING_AUTHOR: 'MISSING_AUTHOR',
+
+  // YOps support
+  UNSUPPORTED_OP: 'UNSUPPORTED_OP',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -158,6 +161,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   // 400 Bad Request
   COMMIT_VERSION_UNSUPPORTED: 400,
   INVALID_REQUEST: 400,
+  UNSUPPORTED_OP: 400,
   VALIDATION_FAILED: 400,
   MISSING_PROJECT_FOR_ALIAS: 400,
   PARENT_NOT_FOUND: 400,
