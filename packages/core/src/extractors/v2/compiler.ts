@@ -10,6 +10,26 @@ import type {
 const DEFAULT_VALUE_SLOT = 'value';
 
 /**
+ * Result of normalizing an LLM-emitted path string.
+ *
+ *   - `ok`      — the input was present and produced a valid YOps path.
+ *   - `invalid` — the input was present but malformed (segment failed
+ *                 SNAKE_CASE_KEY, kebab/camel/space, etc.). Callers MUST
+ *                 surface this as a compile failure rather than fall
+ *                 through to the next candidate. Letting a bad
+ *                 `target_ref.path` silently become `candidate.key`
+ *                 changes the hierarchy without the model ever knowing
+ *                 it produced wrong data — exactly the pattern the
+ *                 review thread flagged as P2 silent fallback.
+ *   - `absent`  — the input wasn't provided. Caller falls through to
+ *                 the next candidate in the priority chain.
+ */
+export type NormalizePathResult =
+  | { kind: 'ok'; path: string }
+  | { kind: 'invalid'; reason: string; raw: string }
+  | { kind: 'absent' };
+
+/**
  * Normalize an LLM-emitted path string to the YOps wire shape.
  *
  *   - Trim surrounding whitespace.
@@ -19,26 +39,81 @@ const DEFAULT_VALUE_SLOT = 'value';
  *     this rewrite the engine treats `story.overview.major_conflicts` as
  *     a single root key with literal dots, which renders as a flat tree.
  *   - Collapse runs of `/`, strip leading/trailing `/`.
+ *   - Validate each segment against SNAKE_CASE_KEY.
  *
- * Returns `null` when the input is empty after trimming or any segment
- * fails the SNAKE_CASE_KEY check (uppercase, leading digit, dashes, etc.).
- * Callers MUST treat null as a hard compile failure rather than passing
- * the original string through — that's the same pattern of silent
- * pollution we fixed by adding this normalizer in the first place.
+ * Returns a discriminated `NormalizePathResult` so callers can tell
+ * "field absent (try next)" apart from "field present but malformed
+ * (fail compile, ask the model to fix this specific field)".
  */
-export function normalizePath(raw: string | undefined | null): string | null {
-  if (raw == null) return null;
+export function normalizePath(raw: string | undefined | null): NormalizePathResult {
+  if (raw == null) return { kind: 'absent' };
   const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
+  if (trimmed.length === 0) return { kind: 'absent' };
 
   const slashed = trimmed.replace(/\./g, '/');
   const segments = slashed.split('/').filter((s) => s.length > 0);
-  if (segments.length === 0) return null;
+  if (segments.length === 0) {
+    return { kind: 'invalid', reason: 'empty after collapsing separators', raw };
+  }
 
   for (const segment of segments) {
-    if (!SNAKE_CASE_KEY.test(segment)) return null;
+    if (!SNAKE_CASE_KEY.test(segment)) {
+      return {
+        kind: 'invalid',
+        reason: `segment "${segment}" must match SNAKE_CASE_KEY (lowercase, digits, underscores; cannot start with a digit)`,
+        raw,
+      };
+    }
   }
-  return segments.join('/');
+  return { kind: 'ok', path: segments.join('/') };
+}
+
+/**
+ * Walk a priority-ordered list of (field, raw) candidates and return:
+ *
+ *   - `{kind:'ok', path}`      when the first non-absent candidate is valid
+ *   - `{kind:'invalid',
+ *       failure}`              when the first non-absent candidate is
+ *                              malformed (returns a typed `compile` failure
+ *                              with `reaskable:true` and the offending
+ *                              field name baked into details).
+ *   - `{kind:'absent'}`        when every candidate is missing or empty.
+ *
+ * This is the fail-fast version of the old "loop, take first non-null"
+ * approach: a malformed `target_ref.path` no longer silently becomes
+ * `candidate.key`. The model gets told which specific field to fix.
+ */
+function resolvePathFromCandidates(
+  itemId: string,
+  candidates: Array<{ field: string; raw: string | undefined | null }>
+):
+  | { kind: 'ok'; path: string }
+  | { kind: 'invalid'; failure: ExtractionFailure }
+  | { kind: 'absent' } {
+  for (const { field, raw } of candidates) {
+    const r = normalizePath(raw);
+    if (r.kind === 'ok') return { kind: 'ok', path: r.path };
+    if (r.kind === 'invalid') {
+      return {
+        kind: 'invalid',
+        failure: createExtractionFailure(
+          'compile',
+          `Invalid ${field} on item ${itemId}: ${r.reason}`,
+          {
+            details: {
+              reaskable: true,
+              item_id: itemId,
+              field,
+              invalid_path: r.raw,
+              reason: r.reason,
+            },
+          }
+        ),
+      };
+    }
+    // absent — keep walking the chain
+  }
+  return { kind: 'absent' };
 }
 
 export type CompileResult =
@@ -99,21 +174,27 @@ function buildSource(
   };
 }
 
-function resolveTargetPath(item: ExtractionDraftItem): string | null {
-  // Try each LLM-emitted source in priority order. The first one that
-  // normalises to a valid YOps path wins. Keeping the priority chain
-  // intact means a strict path_hint can outrank a malformed target_ref.
-  const candidates = [
-    item.target_ref?.path,
-    item.target_ref?.node_key,
-    item.candidate.path_hint,
-    item.candidate.key,
-  ];
-  for (const raw of candidates) {
-    const normalized = normalizePath(raw);
-    if (normalized) return normalized;
-  }
-  return null;
+/**
+ * Resolve the target path for non-add intents (remove / update / reinforce).
+ *
+ * Priority order is unchanged: target_ref.path → target_ref.node_key →
+ * candidate.path_hint → candidate.key. The change is the *failure mode*:
+ * an invalid (malformed-but-present) candidate now stops the walk with a
+ * typed compile failure naming that field, rather than silently falling
+ * through to the next field. See `resolvePathFromCandidates` for details.
+ */
+function resolveTargetPath(
+  item: ExtractionDraftItem
+):
+  | { kind: 'ok'; path: string }
+  | { kind: 'invalid'; failure: ExtractionFailure }
+  | { kind: 'absent' } {
+  return resolvePathFromCandidates(item.id, [
+    { field: 'target_ref.path', raw: item.target_ref?.path },
+    { field: 'target_ref.node_key', raw: item.target_ref?.node_key },
+    { field: 'candidate.path_hint', raw: item.candidate.path_hint },
+    { field: 'candidate.key', raw: item.candidate.key },
+  ]);
 }
 
 function synthesizeAddPath(item: ExtractionDraftItem): string {
@@ -175,26 +256,43 @@ function compileChildren(
   const children = item.candidate.children ?? [];
   const ops: SourcedYOp[] = [];
   for (const child of children) {
-    const normalizedKey = normalizePath(child.key);
-    if (!normalizedKey) {
+    const result = normalizePath(child.key);
+    if (result.kind === 'absent') {
+      // Schema requires `key: z.string().min(1)`, so absent should not
+      // happen — but defend anyway. Treat as invalid.
+      return {
+        ok: false,
+        failure: createExtractionFailure('compile', `Child key on item ${item.id} is empty`, {
+          details: {
+            reaskable: true,
+            item_id: item.id,
+            field: 'candidate.children[].key',
+            invalid_key: child.key,
+          },
+        }),
+        warnings,
+      };
+    }
+    if (result.kind === 'invalid') {
       return {
         ok: false,
         failure: createExtractionFailure(
           'compile',
-          `Child key "${child.key}" on item ${item.id} is not a valid YOps path segment`,
+          `Child key "${child.key}" on item ${item.id}: ${result.reason}`,
           {
             details: {
               reaskable: true,
               item_id: item.id,
               field: 'candidate.children[].key',
               invalid_key: child.key,
+              reason: result.reason,
             },
           }
         ),
         warnings,
       };
     }
-    const childPath = `${parentPath}/${normalizedKey}`;
+    const childPath = `${parentPath}/${result.path}`;
     ops.push({ define: { path: childPath }, source });
     if (child.values && Object.keys(child.values).length > 0) {
       ops.push({
@@ -235,29 +333,59 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
 
   if (effectiveIntent === 'add') {
     const warnings: string[] = [];
-    // Try the LLM-supplied path sources in order. Each goes through
-    // `normalizePath`, which rewrites dotted paths to slashed and
-    // rejects any segment that doesn't satisfy SNAKE_CASE_KEY.
-    let path =
-      normalizePath(item.candidate.path_hint) ??
-      normalizePath(item.candidate.key) ??
-      (promotedFrom ? resolveTargetPath(item) : null);
 
+    // Resolve the add path through the discriminated chain so a malformed
+    // `candidate.path_hint` no longer silently falls through to
+    // `candidate.key` (or, when promoted, to `target_ref.*`). If any
+    // present-but-invalid candidate appears in the chain, return a
+    // typed compile failure naming that field.
+    const addCandidates: Array<{ field: string; raw: string | undefined | null }> = [
+      { field: 'candidate.path_hint', raw: item.candidate.path_hint },
+      { field: 'candidate.key', raw: item.candidate.key },
+    ];
     if (promotedFrom) {
-      warnings.push(`Promoted ${promotedFrom} to add in bootstrap mode for item ${item.id}`);
+      addCandidates.push(
+        { field: 'target_ref.path', raw: item.target_ref?.path },
+        { field: 'target_ref.node_key', raw: item.target_ref?.node_key }
+      );
     }
 
-    if (!path) {
-      // F8a: synthesize a deterministic path when the model omitted both key
-      // and path_hint instead of hard-failing compile. The slug regex in
-      // `synthesizeAddPath` already produces SNAKE_CASE_KEY-safe output, so
-      // pass-through is fine; we still funnel it through `normalizePath`
-      // for symmetry / future-proofing.
+    const resolved = resolvePathFromCandidates(item.id, addCandidates);
+    if (resolved.kind === 'invalid') {
+      return { ok: false, failure: resolved.failure, warnings };
+    }
+
+    let path: string;
+    if (resolved.kind === 'ok') {
+      path = resolved.path;
+    } else {
+      // F8a: synthesize a deterministic path when the model omitted every
+      // path source instead of hard-failing compile. The slug regex in
+      // `synthesizeAddPath` already produces SNAKE_CASE_KEY-safe output;
+      // we still funnel through `normalizePath` for symmetry. The
+      // synthesised slug should always be `ok`; if it weren't, we'd
+      // rather hard-fail than ship a bad path.
       const synthesized = synthesizeAddPath(item);
-      path = normalizePath(synthesized) ?? synthesized;
+      const synthResult = normalizePath(synthesized);
+      if (synthResult.kind !== 'ok') {
+        return {
+          ok: false,
+          failure: createExtractionFailure(
+            'compile',
+            `Could not derive a valid path for add item ${item.id} (synthesised "${synthesized}")`,
+            { details: { item_id: item.id, synthesized } }
+          ),
+          warnings,
+        };
+      }
+      path = synthResult.path;
       warnings.push(
         `Synthesized path "${path}" for add intent (item ${item.id}) lacking candidate.key and path_hint`
       );
+    }
+
+    if (promotedFrom) {
+      warnings.push(`Promoted ${promotedFrom} to add in bootstrap mode for item ${item.id}`);
     }
 
     const ops: SourcedYOp[] = [{ define: { path }, source }];
@@ -284,8 +412,11 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
   }
 
   if (item.intent === 'remove') {
-    const path = resolveTargetPath(item);
-    if (!path) {
+    const resolved = resolveTargetPath(item);
+    if (resolved.kind === 'invalid') {
+      return { ok: false, failure: resolved.failure, warnings: [] };
+    }
+    if (resolved.kind === 'absent') {
       return {
         ok: false,
         failure: createExtractionFailure(
@@ -296,12 +427,15 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       };
     }
 
-    return { ok: true, ops: [{ drop: { path }, source }], warnings: [] };
+    return { ok: true, ops: [{ drop: { path: resolved.path }, source }], warnings: [] };
   }
 
   if (item.intent === 'update' || item.intent === 'reinforce') {
-    const path = resolveTargetPath(item);
-    if (!path) {
+    const resolved = resolveTargetPath(item);
+    if (resolved.kind === 'invalid') {
+      return { ok: false, failure: resolved.failure, warnings: [] };
+    }
+    if (resolved.kind === 'absent') {
       return {
         ok: false,
         failure: createExtractionFailure(
@@ -311,6 +445,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
         warnings: [],
       };
     }
+    const path = resolved.path;
 
     const ops: SourcedYOp[] = [];
     const warnings: string[] = [];

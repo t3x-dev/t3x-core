@@ -734,4 +734,69 @@ describe('extractors/v2 pipeline', () => {
     // was the old bug — wrong field-specific guidance.
     expect(secondPrompt).not.toContain('include either candidate.values_json');
   });
+
+  it('reasks with path-field-specific guidance when candidate.path_hint is invalid', async () => {
+    // P2 fail-fast: the compiler now emits a reaskable failure naming
+    // the specific path field (target_ref.path / candidate.path_hint /
+    // etc.) instead of silently falling through to the next candidate.
+    // The reask should mention the field, surface the invalid value,
+    // and tell the model to fix THAT field — not switch to a different
+    // field or invent values_json.
+    let calls = 0;
+    let secondPrompt = '';
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        calls += 1;
+        if (calls === 2) {
+          secondPrompt = prompt.messages[prompt.messages.length - 1]?.content as string;
+        }
+        const pathHint = calls === 1 ? 'CamelCasePath' : 'snake_case_path';
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_1',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: null,
+                  path_hint: pathHint,
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"k":"v"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'q' }],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      model: 'gpt-5.4-nano',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toBe(2);
+    expect(secondPrompt).toContain('candidate.path_hint');
+    expect(secondPrompt).toContain('CamelCasePath');
+    // Tells the model to fix THIS field, not introduce values_json or
+    // switch to a different intent. The exact wording is the
+    // anti-fall-through guidance.
+    expect(secondPrompt).toContain('Fix this exact field');
+    expect(secondPrompt).not.toContain('include either candidate.values_json');
+  });
 });
