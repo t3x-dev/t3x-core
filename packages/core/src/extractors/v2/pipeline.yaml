@@ -1,13 +1,28 @@
 schema: t3x/extraction-pipeline-v2
 version: 1
 
-# Runtime source of truth for the V2 extraction pipeline.
-# Purpose: every failure mode, every stage contract, every provider quirk
-# lives here — so debugging, tests, and prompt tuning agree on one map.
+# ============================================================================
+# Architecture & debugging document for the V2 extraction pipeline.
+# ============================================================================
 #
-# Invariant: the codes in `failures[].code` MUST match
-# `EXTRACTION_FAILURE_CODES` in packages/core/src/extractors/v2/failures.ts.
-# A conformance test should assert this.
+# This file is NOT loaded at runtime. The runtime is the TypeScript code
+# under packages/core/src/extractors/v2/. In particular:
+#
+#   - The prompt the LLM actually sees is built by buildDraftPrompt
+#     in pipeline.ts (one provider-agnostic template, F9).
+#   - The retry policy is shouldTargetedReask + buildTargetedReaskPrompt
+#     in pipeline.ts.
+#   - The failure code enum is EXTRACTION_FAILURE_CODES in failures.ts.
+#
+# Use this YAML to ground discussions, debugging walkthroughs, and post-mortems.
+# When the runtime changes, this file should be updated with it. Sections that
+# describe per-provider prompt branches, embedded JSON examples, or specific
+# wording belong in code reviews of pipeline.ts — not here — because they will
+# drift the moment a deterministic fix lands.
+#
+# Loose alignment, not contract: the codes in `failures[].code` are intended
+# to match EXTRACTION_FAILURE_CODES, but there is no automated assertion. If
+# you change the enum, please update this file in the same PR.
 
 stages:
   - id: normalize
@@ -26,11 +41,12 @@ stages:
     output: LLMPrompt
     may_emit_failures: []
     notes:
-      - "F9 collapsed the prompt to one template for all providers."
-      - "Previously had per-provider branches (anthropic+openai vs. google)
-        and an embedded JSON example + rule list. Those rules are now enforced
-        deterministically by providerDraft.ts (shape normalizer / F6 loose
-        normalizer / F3 repairer) and compiler.ts (F2 dedupe / F8 tolerance)."
+      - "Single template for all providers. The `providerId` is part of
+        the input but is no longer branched on (F9). Drift previously
+        handled in the prompt is now handled deterministically — see
+        providerDraft.ts (shape normalizer, F6 loose normalizer, F3
+        repairer) and compiler.ts (F2 dedupe, F8 tolerance, child-key
+        validation, path normalisation)."
 
   - id: generate_draft
     role: Call LLM; produce ProviderExtractionDraft JSON
@@ -164,8 +180,11 @@ providers:
       generate: true
       generateFromPrompt: true
       generateStructured: true
-    prompt_quirks:
-      - "User message appends an extra line enforcing values_json/slot presence on update/reinforce."
+    # No prompt_quirks remain after F9 collapsed the per-provider branches.
+    # The previous "extra line enforcing values_json/slot presence on
+    # update/reinforce" guidance now lives in the targeted-reask prompt
+    # that fires only when the compiler emits a reaskable compile failure
+    # — see pipeline.ts::buildTargetedReaskPrompt.
     models:
       - id: gpt-5.4
       - id: gpt-5.4-mini
@@ -179,8 +198,11 @@ providers:
       generate: true
       generateFromPrompt: true
       generateStructured: true
-    prompt_quirks:
-      - "Gets its own prompt branch with an explicit JSON example block and stricter _json field rules."
+    # No prompt_quirks remain after F9. The "explicit JSON example block
+    # + stricter _json field rules" Google used to receive is gone; what
+    # the model emits is now coerced deterministically by providerDraft.ts
+    # (normalizeLooseProviderDraft, canonicalizeChildShape) and the F12
+    # JSON repair pipeline.
     models:
       - id: gemini-2.5-pro
         known_issues:
@@ -242,8 +264,9 @@ framework:
       - LLMProviderError.details carries rawText / jsonText / issues /
         priorDraftText
       - mapProviderErrorToExtractionFailure forwards those details
-      - this pipeline.yaml as runtime source-of-truth for stages /
-        failure codes / clusters / principles
+      - this pipeline.yaml as architecture / debugging document for stages /
+        failure codes / clusters / principles (NOT a runtime contract — see
+        the file header)
       - harness (--fixtures-dir, --runs=N, --slo-ms, --dump-dir) for
         empirical validation
 
@@ -267,14 +290,18 @@ principles:
 architecture_review:
   - id: per_provider_prompt_branch
     severity: principle_violation
+    status: resolved_by_F9
     site: packages/core/src/extractors/v2/pipeline.ts::buildDraftPrompt
     problem: >
-      One prompt for anthropic+openai, another for google; openai gets an extra
-      line about values_json/slot. With F2/F3 catching both issues deterministically,
-      the per-provider hints should be removable.
-    recommendation: >
-      Try removing the branches; run the stability harness. If 9/9 still passes,
-      delete the branches and keep one prompt.
+      One prompt for anthropic+openai, another for google; openai got an extra
+      line about values_json/slot. With F2/F3 catching both issues
+      deterministically, the per-provider hints became removable.
+    resolution: >
+      F9 collapsed buildDraftPrompt to a single provider-agnostic template.
+      The drift the prompt used to enforce now lives entirely in the
+      deterministic flow (providerDraft.ts normalizers, compiler.ts
+      validators, jsonRepair.ts). Stability harness verified 54/54 across
+      6 fixtures × 9 models post-F12.
 
   - id: transport_layer_duplication
     severity: high_debt
