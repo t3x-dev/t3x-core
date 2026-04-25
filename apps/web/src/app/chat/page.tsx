@@ -83,6 +83,7 @@ export default function ChatLandingPage() {
         <ChatInput
           onSend={handleSend}
           placeholder="Start a conversation..."
+          selectedProvider={selectedProvider ?? ''}
           selectedModel={selectedModel ?? ''}
           disabled={!hasConfiguredGenerationProvider || loading}
           onModelChange={handleModelChange}
