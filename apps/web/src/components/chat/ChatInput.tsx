@@ -4,6 +4,7 @@ import { Brain, Globe, Paperclip, Send, Square } from 'lucide-react';
 import NextImage from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { providerSupports } from '@/domain/providerCapabilities';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import type { AttachedImage } from '@/types/chat';
 import { cn } from '@/utils/cn';
@@ -73,6 +74,7 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   conversationId?: string | null;
+  selectedProvider?: string;
   selectedModel?: string;
   onModelChange?: (provider: string, model: string) => void;
 }
@@ -84,6 +86,7 @@ export function ChatInput({
   disabled = false,
   placeholder = 'Reply...',
   conversationId,
+  selectedProvider,
   selectedModel,
   onModelChange,
 }: ChatInputProps) {
@@ -97,6 +100,28 @@ export function ChatInput({
   const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
   const toggleWebSearch = useChatSessionStore((s) => s.toggleWebSearch);
   const toggleThinking = useChatSessionStore((s) => s.toggleThinking);
+  const setWebSearch = useChatSessionStore((s) => s.setWebSearch);
+  const setThinking = useChatSessionStore((s) => s.setThinking);
+
+  // Capability gating — every provider has a different surface for these
+  // features. The capability table in domain/providerCapabilities owns the
+  // truth; here we read it and (a) disable the button when unsupported,
+  // (b) auto-clear the toggle when the user switches to a provider that
+  // can't honour it. That stops the "click → 400 from server" loop.
+  const supportsWebSearch = providerSupports(selectedProvider ?? '', 'web_search');
+  const supportsThinking = providerSupports(selectedProvider ?? '', 'thinking');
+
+  useEffect(() => {
+    if (!supportsWebSearch && webSearchEnabled) setWebSearch(false);
+    if (!supportsThinking && thinkingEnabled) setThinking(false);
+  }, [
+    supportsWebSearch,
+    supportsThinking,
+    webSearchEnabled,
+    thinkingEnabled,
+    setWebSearch,
+    setThinking,
+  ]);
 
   // Auto-resize textarea as content grows
   const autoResize = useCallback(() => {
@@ -261,15 +286,22 @@ export function ChatInput({
             variant="ghost"
             size="icon"
             onClick={toggleWebSearch}
-            disabled={disabled}
+            disabled={disabled || !supportsWebSearch}
             className={cn(
               'h-8 w-8 rounded-lg transition-colors',
               webSearchEnabled
                 ? 'text-[var(--accent-commit)] bg-[var(--accent-commit)]/10 hover:bg-[var(--accent-commit)]/20'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
+              !supportsWebSearch && 'opacity-40'
             )}
             aria-label={webSearchEnabled ? 'Disable web search' : 'Enable web search'}
-            title={webSearchEnabled ? 'Web search on' : 'Web search'}
+            title={
+              !supportsWebSearch
+                ? 'Web search not available for this provider'
+                : webSearchEnabled
+                  ? 'Web search on'
+                  : 'Web search'
+            }
           >
             <Globe className="h-4 w-4" />
           </Button>
@@ -279,15 +311,22 @@ export function ChatInput({
             variant="ghost"
             size="icon"
             onClick={toggleThinking}
-            disabled={disabled}
+            disabled={disabled || !supportsThinking}
             className={cn(
               'h-8 w-8 rounded-lg transition-colors',
               thinkingEnabled
                 ? 'text-[var(--source)] bg-[var(--source)]/10 hover:bg-[var(--source)]/20'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
+              !supportsThinking && 'opacity-40'
             )}
             aria-label={thinkingEnabled ? 'Disable extended thinking' : 'Enable extended thinking'}
-            title={thinkingEnabled ? 'Extended thinking on' : 'Extended thinking'}
+            title={
+              !supportsThinking
+                ? 'Extended thinking not available for this provider'
+                : thinkingEnabled
+                  ? 'Extended thinking on'
+                  : 'Extended thinking'
+            }
           >
             <Brain className="h-4 w-4" />
           </Button>

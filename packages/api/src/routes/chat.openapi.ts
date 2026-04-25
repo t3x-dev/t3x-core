@@ -157,9 +157,23 @@ const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
 };
 
 const CHAT_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
-const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai'] as const;
+const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
 const DEFAULT_MAX_TOKENS = 4096;
 const MAX_CHAT_TOKENS = 16384;
+
+// Per-provider capability table — kept in sync with
+// apps/web/src/domain/providerCapabilities.ts. Single source of truth for
+// "can this provider honour this toggle?". Adding a new provider/capability:
+// flip the bit here AND in the web table, then wire the request body in
+// the appropriate branch below.
+const PROVIDER_CAPABILITY: Record<
+  ChatRuntimeProviderId,
+  { thinking: boolean; webSearch: boolean }
+> = {
+  anthropic: { thinking: true, webSearch: true },
+  openai: { thinking: true, webSearch: false },
+  'google-ai': { thinking: true, webSearch: true },
+};
 
 // ============================================================================
 // Helpers
@@ -169,9 +183,7 @@ function isSupportedChatProviderId(value: string): value is ChatRuntimeProviderI
   return (CHAT_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
 }
 
-function isSupportedStreamProviderId(
-  value: string
-): value is Extract<ChatRuntimeProviderId, 'anthropic' | 'openai'> {
+function isSupportedStreamProviderId(value: string): value is ChatRuntimeProviderId {
   return (STREAM_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
 }
 
@@ -194,15 +206,30 @@ function getUnsupportedChatFeatureError(options: {
   thinking?: boolean;
   webSearch?: boolean;
 }) {
-  if (options.thinking && options.providerId !== 'anthropic') {
-    return {
-      code: 'PROVIDER_ERROR',
-      message: `Provider ${options.providerId} does not support thinking`,
-    } as const;
+  const capabilities = PROVIDER_CAPABILITY[options.providerId];
+
+  if (options.thinking) {
+    if (!capabilities.thinking) {
+      return {
+        code: 'PROVIDER_ERROR',
+        message: `Provider ${options.providerId} does not support thinking`,
+      } as const;
+    }
+    // Non-streaming chat only routes thinking through Anthropic's
+    // dedicated handler. OpenAI / Google thinking is wired in the SSE
+    // streaming branch only — keep the non-stream surface restrictive
+    // so unsupported requests fail fast instead of silently dropping
+    // the toggle.
+    if (options.route !== 'stream' && options.providerId !== 'anthropic') {
+      return {
+        code: 'PROVIDER_ERROR',
+        message: `Provider ${options.providerId} thinking is only supported on the streaming chat route`,
+      } as const;
+    }
   }
 
   if (options.webSearch) {
-    if (options.providerId !== 'anthropic') {
+    if (!capabilities.webSearch) {
       return {
         code: 'PROVIDER_ERROR',
         message: `Provider ${options.providerId} does not support web_search`,
@@ -212,7 +239,7 @@ function getUnsupportedChatFeatureError(options: {
     if (options.route !== 'stream') {
       return {
         code: 'PROVIDER_ERROR',
-        message: 'web_search is only supported for Anthropic streaming chat',
+        message: 'web_search is only supported for streaming chat',
       } as const;
     }
   }
@@ -762,7 +789,14 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             },
             body: JSON.stringify({
               model,
-              temperature,
+              // GPT-5 / o-series support reasoning. Setting reasoning_effort
+              // surfaces extended thinking; ignored by older models that
+              // don't recognise it. medium is a balanced default — small
+              // enough to keep latency reasonable.
+              ...(body.thinking && { reasoning_effort: 'medium' }),
+              // Reasoning models (gpt-5/o-series) reject `temperature`. Skip
+              // it whenever thinking is on so the request validates.
+              ...(body.thinking ? {} : { temperature }),
               max_completion_tokens: maxTokens,
               stream: true,
               stream_options: { include_usage: true },
@@ -773,6 +807,47 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }),
             signal: AbortSignal.timeout(120000),
           })) as unknown as Response;
+        } else if (providerId === 'google-ai') {
+          // Gemini's streaming SSE endpoint: ?alt=sse on the streamGenerateContent path.
+          // Uses x-goog-api-key header instead of bearer auth.
+          const useThinkingGoogle = body.thinking;
+          upstreamResponse = (await proxyFetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+              },
+              body: JSON.stringify({
+                contents: messages
+                  .filter((m) => m.role !== 'system')
+                  .map((m) => ({
+                    role: m.role === 'assistant' ? 'model' : m.role,
+                    parts: [{ text: m.content }],
+                  })),
+                ...(systemMessage && {
+                  systemInstruction: { parts: [{ text: systemMessage.content }] },
+                }),
+                generationConfig: {
+                  temperature,
+                  maxOutputTokens: maxTokens,
+                  // When thinking is OFF, cap the implicit thinking budget
+                  // small so Pro models don't burn output tokens. When ON,
+                  // give it real headroom (-1 = let the model decide).
+                  ...(useThinkingGoogle
+                    ? { thinkingConfig: { thinkingBudget: -1, includeThoughts: true } }
+                    : { thinkingConfig: { thinkingBudget: 256 } }),
+                },
+                ...(body.web_search && {
+                  // Search Grounding tool — Gemini's web search equivalent.
+                  // Returns groundingMetadata with citations on each candidate.
+                  tools: [{ googleSearch: {} }],
+                }),
+              }),
+              signal: AbortSignal.timeout(120000),
+            }
+          )) as unknown as Response;
         } else {
           throw new Error(`Provider ${providerId} not implemented`);
         }
@@ -855,12 +930,74 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
                 : [];
               for (const choice of choices) {
                 const delta = choice.delta as Record<string, unknown> | undefined;
+                // GPT-5 / o-series surface reasoning summaries on a separate
+                // delta key; map them to thinking events so the UI shows them
+                // the same way as Anthropic's thinking blocks.
+                if (typeof delta?.reasoning_content === 'string') {
+                  controller.enqueue(
+                    encodeSseEvent(
+                      JSON.stringify({ type: 'thinking', content: delta.reasoning_content })
+                    )
+                  );
+                }
                 if (typeof delta?.content === 'string') {
                   controller.enqueue(
                     encodeSseEvent(JSON.stringify({ type: 'token', content: delta.content }))
                   );
                 }
                 if (typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0) {
+                  receivedMessageStop = true;
+                }
+              }
+              continue;
+            }
+
+            if (providerId === 'google-ai') {
+              if (typeof parsed.modelVersion === 'string') {
+                resolvedModel = parsed.modelVersion;
+              }
+              const usageChunk = parsed.usageMetadata as Record<string, number> | undefined;
+              if (usageChunk) {
+                usage.input_tokens = usageChunk.promptTokenCount ?? usage.input_tokens;
+                usage.output_tokens = usageChunk.candidatesTokenCount ?? usage.output_tokens;
+              }
+              const candidates = Array.isArray(parsed.candidates)
+                ? (parsed.candidates as Array<Record<string, unknown>>)
+                : [];
+              for (const candidate of candidates) {
+                const content = candidate.content as
+                  | { parts?: Array<{ text?: string; thought?: boolean }> }
+                  | undefined;
+                for (const part of content?.parts ?? []) {
+                  if (typeof part.text !== 'string' || part.text.length === 0) continue;
+                  // Gemini 2.5+ tags thought summaries with thought:true so
+                  // the visible-output and thinking streams map cleanly to
+                  // the same SSE event types we use for Anthropic / OpenAI.
+                  controller.enqueue(
+                    encodeSseEvent(
+                      JSON.stringify({
+                        type: part.thought === true ? 'thinking' : 'token',
+                        content: part.text,
+                      })
+                    )
+                  );
+                }
+                // Search Grounding citations land in groundingMetadata.
+                const grounding = candidate.groundingMetadata as
+                  | { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> }
+                  | undefined;
+                for (const chunk of grounding?.groundingChunks ?? []) {
+                  if (chunk.web?.uri) {
+                    citations.push({
+                      url: chunk.web.uri,
+                      title: chunk.web.title ?? chunk.web.uri,
+                    });
+                  }
+                }
+                if (
+                  typeof candidate.finishReason === 'string' &&
+                  candidate.finishReason.length > 0
+                ) {
                   receivedMessageStop = true;
                 }
               }
