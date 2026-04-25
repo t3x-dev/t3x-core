@@ -19,6 +19,6 @@ export {
   YOpsReplayError,
 } from './errors';
 export { runExtraction } from './extractionWorker';
-export { buildHumanSource, commitGoldEdit } from './goldEditBuilder';
+export { buildHumanSource, commitGoldEdit, sourceGoldEdit } from './goldEditBuilder';
 export { callExtractionLLM } from './llmAdapter';
 export { commitOps } from './yopsService';
