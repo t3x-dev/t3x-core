@@ -37,6 +37,7 @@ vi.mock('@/hooks/projects/useProjectCrud', () => ({
 
 import ProjectDetailPage from '@/app/project/[projectId]/page';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
 
 beforeEach(() => {
@@ -67,11 +68,19 @@ afterEach(() => {
 });
 
 describe('ProjectDetailPage — empty-project redirect', () => {
-  it('redirects to /chat when canvas finishes loading with zero nodes', async () => {
+  it('redirects to a project-aware chat URL and primes activeProjectId', async () => {
+    // Reset chat store to simulate a cold direct-load: no in-memory project.
+    useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+
     render(<ProjectDetailPage />);
 
     expect(screen.getByText(/Opening chat workspace/i)).toBeInTheDocument();
-    expect(replaceMock).toHaveBeenCalledWith('/chat');
+    // URL preserves project context so a refresh on the chat page still
+    // knows which project to write into.
+    expect(replaceMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
+    // Store is also primed synchronously so the next mount of ChatWorkspace
+    // reads the right project even if the URL handling is lazy.
+    expect(useChatStore.getState().activeProjectId).toBe('proj_test');
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
   });
 
