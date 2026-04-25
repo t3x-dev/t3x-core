@@ -9,6 +9,7 @@ import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useCanvasStore } from '@/store/canvasStore';
+import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
@@ -38,6 +39,7 @@ function ProjectDetailPageContent() {
   const canvasLoading = useCanvasStore((state) => state.loading);
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
+  const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
 
   // Parse initial viewport from URL params
   const initialViewport = useMemo(() => {
@@ -197,6 +199,26 @@ function ProjectDetailPageContent() {
     );
   }
 
+  // Empty-project redirect: chat is the producing layer. With no commits or
+  // leaves there is nothing for the canvas to visualise; surfacing an
+  // onboarding card here just duplicates the chat landing page. Hand the
+  // user back to chat so the working bench is the only entry point until
+  // they actually have committed meaning to view.
+  //
+  // Crucially we preserve the empty project as the *target* — both by
+  // priming `chatStore.activeProjectId` and by encoding it in the URL —
+  // so the user's first message in chat continues this project rather
+  // than spawning a new one. Direct loads of /project/[id] (no Zustand
+  // history) are exactly the case the URL param protects against.
+  const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
+  if (isEmptyAfterLoad) {
+    return (
+      <div className="flex h-full flex-col">
+        <RedirectToChat projectId={projectId} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <CanvasWorkspace
@@ -207,4 +229,27 @@ function ProjectDetailPageContent() {
       />
     </div>
   );
+}
+
+/**
+ * Imperatively replaces the route with /chat/new, preserving the project
+ * context two ways:
+ *
+ *   1. Primes `chatStore.activeProjectId` synchronously so the next mount
+ *      of ChatWorkspace already knows which project this is — covers the
+ *      same-tab navigation path.
+ *   2. Encodes `?projectId=…` in the URL so a direct load / refresh / share
+ *      of the chat page also picks the project up — covers the cold-start
+ *      case where Zustand has no history yet.
+ *
+ * `router.replace` (not push) so the browser back button doesn't bring the
+ * user back to the empty canvas they were just bounced out of.
+ */
+function RedirectToChat({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    useChatStore.getState().setActiveConversation(null, projectId);
+    router.replace(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
+  }, [router, projectId]);
+  return <LoadingSpinner message="Opening chat workspace…" />;
 }

@@ -14,7 +14,16 @@ export default function ConversationPage() {
   const firstMessage = searchParams.get('firstMessage');
   const initialProvider = searchParams.get('provider');
   const initialModel = searchParams.get('model');
+  // Project context comes from two sources:
+  //   - the in-memory chat store (filled by sidebar nav, post-extract, etc.)
+  //   - a `projectId` query param (set by the empty-project redirect from
+  //     /project/[id], or any other deep-link that wants to anchor the
+  //     conversation to a specific project on cold start).
+  // The query param wins so a direct load / refresh of the chat URL
+  // doesn't lose the project context the URL is explicitly carrying.
+  const projectIdParam = searchParams.get('projectId');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
+  const resolvedProjectId = projectIdParam ?? activeProjectId;
   const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
@@ -65,7 +74,7 @@ export default function ConversationPage() {
       <ChatWorkspace
         key={conversationId}
         conversationId={conversationId}
-        projectId={activeProjectId ?? undefined}
+        projectId={resolvedProjectId ?? undefined}
         firstMessage={firstMessage ?? undefined}
         initialProvider={initialProvider ?? undefined}
         initialModel={initialModel ?? undefined}
