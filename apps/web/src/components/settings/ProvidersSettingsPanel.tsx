@@ -28,7 +28,7 @@ import {
   type ProviderInfo,
   type TestConnectionResult,
   toLocalProviderId,
-} from '@/infrastructure';
+} from '@/types/providers';
 import { cn } from '@/utils/cn';
 
 /** Only these three provider ids are shown in the settings UI. */
