@@ -7,6 +7,7 @@ import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
+import { ReplayWarningBanner } from './ReplayWarningBanner';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 import { YOpsLogPanel } from './YOpsLogPanel';
@@ -134,9 +135,10 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     <div
       ref={containerRef}
       className="flex flex-col h-full bg-[var(--panel)] border-l border-[var(--stroke-default)]"
-      style={{ width, minWidth: 460, maxWidth: 1200 }}
+      style={{ width, minWidth: 400 }}
     >
       <WorkspaceTopbar />
+      <ReplayWarningBanner />
 
       <div
         style={{ height: `${splitRatio * 100}%` }}

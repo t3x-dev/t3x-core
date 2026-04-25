@@ -4,14 +4,19 @@
  * Per v2 §2.3, queries return data; they do not write to store.
  *
  * `fetchConversationSnapshot` loads a conversation's turns + yops log,
- * runs the deterministic replay, and returns the full derived snapshot.
- * `replayAppended` is a pure append-and-replay helper for optimistic-
- * update flows (used by useGoldEdit). Neither function touches any
- * Zustand store — callers (useChatInit, useGoldEdit) own the store writes.
+ * runs the deterministic replay, and returns the full derived snapshot —
+ * including a `partial` field when one of the persisted ops failed to
+ * replay. Callers (useChatInit) write the partial tree to the store and
+ * render a banner; they do *not* drop the rest of the conversation.
+ *
+ * `replayAppended` is the optimistic-update helper used by useGoldEdit.
+ * It keeps fail-fast semantics: a bad append throws YOpsReplayError so
+ * the caller can roll back before persisting.
  */
 
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { replay } from '@/domain/replay';
+import { YOpsReplayError } from '@/commands/yops/errors';
+import { type ReplayPartial, replay } from '@/domain/replay';
 import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
 
 export interface WorkspaceTurn {
@@ -19,11 +24,23 @@ export interface WorkspaceTurn {
   content: string;
 }
 
+export interface SnapshotPartial extends ReplayPartial {
+  /**
+   * yops_log row that contains the failing op. Populated for the initial
+   * snapshot path so the banner can offer a one-click "Delete this op"
+   * action that maps back to a real persisted row.
+   */
+  rowId: string;
+  /** Index of the failing op within its yops_log row's `yops` array. */
+  opIndexInRow: number;
+}
+
 export interface ConversationSnapshot {
   turns: WorkspaceTurn[];
   opsLog: SourcedYOp[];
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
+  partial?: SnapshotPartial;
 }
 
 export async function fetchConversationSnapshot(
@@ -36,12 +53,39 @@ export async function fetchConversationSnapshot(
     turn_hash: t.turn_hash,
     content: t.content,
   }));
-  const flatOps: SourcedYOp[] = opsLog.flatMap((e) => e.yops as SourcedYOp[]);
+
+  // Flatten row → ops while keeping a parallel index back to the source row,
+  // so the UI can map a failing flat-op-index to the yops_log row to delete.
+  const flatOps: SourcedYOp[] = [];
+  const flatToRow: Array<{ rowId: string; opIndexInRow: number }> = [];
+  for (const entry of opsLog) {
+    const ops = (entry.yops as SourcedYOp[] | undefined) ?? [];
+    for (let i = 0; i < ops.length; i++) {
+      flatOps.push(ops[i]);
+      flatToRow.push({ rowId: entry.id, opIndexInRow: i });
+    }
+  }
+
   const validationTurns: ValidationTurn[] = workspaceTurns;
+  const { tree, sourceIndex, partial } = replay(flatOps, validationTurns);
 
-  const { tree, sourceIndex } = replay(flatOps, validationTurns);
+  const snapshot: ConversationSnapshot = {
+    turns: workspaceTurns,
+    opsLog: flatOps,
+    tree,
+    sourceIndex,
+  };
 
-  return { turns: workspaceTurns, opsLog: flatOps, tree, sourceIndex };
+  if (partial) {
+    const origin = flatToRow[partial.opIndex];
+    snapshot.partial = {
+      ...partial,
+      rowId: origin?.rowId ?? '',
+      opIndexInRow: origin?.opIndexInRow ?? 0,
+    };
+  }
+
+  return snapshot;
 }
 
 export interface AppendedReplay {
@@ -54,6 +98,10 @@ export interface AppendedReplay {
  * Pure: merge `newOps` onto `prevOps`, replay against the current
  * turns, return the next derived slice. Returns `null` when `newOps`
  * is empty so callers can short-circuit writes.
+ *
+ * Throws `YOpsReplayError` when the appended ops produce a structurally
+ * invalid tree — callers (useGoldEdit) rely on this to roll back the
+ * optimistic update before persisting.
  */
 export function replayAppended(
   prevOps: SourcedYOp[],
@@ -63,6 +111,13 @@ export function replayAppended(
   if (newOps.length === 0) return null;
   const next = [...prevOps, ...newOps];
   const validationTurns: ValidationTurn[] = turns;
-  const { tree, sourceIndex } = replay(next, validationTurns);
+  const { tree, sourceIndex, partial } = replay(next, validationTurns);
+  if (partial) {
+    throw new YOpsReplayError(
+      partial.opIndex,
+      partial.code,
+      `replay failed at op ${partial.opIndex}: ${partial.message}`
+    );
+  }
   return { tree, sourceIndex, opsLog: next };
 }

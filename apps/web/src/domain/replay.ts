@@ -2,31 +2,35 @@
  * L3 — pure deterministic replay of a yops log.
  *
  * Input: sourced ops + turns (turns are context for future validation needs).
- * Output: { tree, sourceIndex }.
+ * Output: { tree, sourceIndex, partial? } — replay never throws on op-level
+ * errors. When the engine fails partway, we return whatever applied + a
+ * structured `partial` describing what blew up. Callers (initial load) can
+ * render the partial tree and surface a banner; callers that want
+ * fail-fast semantics (optimistic appends) can check `partial` and throw
+ * themselves (see queries/loadConversation.ts:replayAppended).
  *
  * sourceIndex maps each touched path to the Source that produced (or last
- * overwrote) that slot/node. Later ops supersede earlier ones at the same
- * path. If the engine fails partway through, only successfully-applied ops
- * appear in the sourceIndex.
+ * overwrote) that slot/node. Only successfully-applied ops appear here.
  */
 
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
 
+export interface ReplayPartial {
+  /** Index of the failing op in the flat ops array. */
+  opIndex: number;
+  /** How many ops applied successfully before the failure (== opIndex). */
+  appliedCount: number;
+  /** Engine error code, e.g. PATH_NOT_FOUND. */
+  code: string;
+  /** Human-readable engine message. */
+  message: string;
+}
+
 export interface ReplayResult {
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
-}
-
-export class YOpsReplayError extends Error {
-  constructor(
-    public opIndex: number,
-    public opError: string,
-    message?: string
-  ) {
-    super(message ?? `replay failed at op ${opIndex}: ${opError}`);
-    this.name = 'YOpsReplayError';
-  }
+  partial?: ReplayPartial;
 }
 
 const EMPTY: SemanticContent = { trees: [], relations: [] };
@@ -38,7 +42,6 @@ const EMPTY: SemanticContent = { trees: [], relations: [] };
  */
 function indexPathsFor(op: SourcedYOp): string[] {
   const o = op as Record<string, unknown>;
-  // Iterate candidate keys; each op has exactly one discriminant key besides `source`.
   for (const key of Object.keys(o)) {
     if (key === 'source') continue;
     const v = o[key] as { path?: string; to?: string; from?: string } | undefined;
@@ -62,18 +65,11 @@ export function replay(
   _turns: readonly ValidationTurn[]
 ): ReplayResult {
   const result = applySourcedYOps(EMPTY, ops as SourcedYOp[]);
-  if (!result.ok) {
-    throw new YOpsReplayError(
-      result.error?.op_index ?? result.applied,
-      result.error?.code ?? 'UNKNOWN',
-      result.error?.message
-        ? `replay failed at op ${result.error?.op_index ?? result.applied}: ${result.error.message}`
-        : undefined
-    );
-  }
-  const sourceIndex = new Map<string, Source>();
 
-  const appliedCount = ops.length;
+  const sourceIndex = new Map<string, Source>();
+  // Engine returns `applied` whether or not it succeeded. Index sources only
+  // for ops that actually landed in the tree.
+  const appliedCount = result.applied;
   for (let i = 0; i < appliedCount; i++) {
     const op = ops[i];
     const src = (op as unknown as { source: Source }).source;
@@ -82,8 +78,21 @@ export function replay(
     }
   }
 
-  return {
-    tree: { trees: result.trees, relations: result.relations },
-    sourceIndex,
-  };
+  const tree: SemanticContent = { trees: result.trees, relations: result.relations };
+
+  if (!result.ok) {
+    const opIndex = result.error?.op_index ?? appliedCount;
+    return {
+      tree,
+      sourceIndex,
+      partial: {
+        opIndex,
+        appliedCount,
+        code: result.error?.code ?? 'UNKNOWN',
+        message: result.error?.message ?? `replay failed at op ${opIndex}`,
+      },
+    };
+  }
+
+  return { tree, sourceIndex };
 }

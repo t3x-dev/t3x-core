@@ -19,8 +19,13 @@ export default function ConversationPage() {
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
 
-  // Resizable panel via drag handle
-  const [panelWidth, setPanelWidth] = useState(700);
+  // Resizable panel via drag handle. Default = 2/3 of viewport so the
+  // workspace dominates when first expanded; chat keeps the remaining 1/3.
+  // Lazy initial state so SSR (no `window`) falls back to a sane value.
+  const [panelWidth, setPanelWidth] = useState(() => {
+    if (typeof window === 'undefined') return 800;
+    return Math.round(window.innerWidth * (2 / 3));
+  });
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +37,10 @@ export default function ConversationPage() {
       if (!isDragging.current || !containerRef.current) return;
       const containerRect = containerRef.current.getBoundingClientRect();
       const newWidth = containerRect.right - ev.clientX;
-      setPanelWidth(Math.max(500, Math.min(1200, newWidth)));
+      // Reserve at least 360px for the chat column; otherwise let the panel
+      // grow to whatever the user drags to.
+      const max = Math.max(500, containerRect.width - 360);
+      setPanelWidth(Math.max(400, Math.min(max, newWidth)));
     };
 
     const handleMouseUp = () => {
