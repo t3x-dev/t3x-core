@@ -141,6 +141,12 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       ? await findUncommittedYOpsIds(db, conversationId, project_id)
       : [];
 
+    // Drafts intentionally persist trees only (no relations_json column on
+    // the drafts table; relate/unrelate ops are rejected by drafts-yops).
+    // Therefore the commit derived from a draft has no relations to carry
+    // forward — the empty array is correct here, not a placeholder. If
+    // draft-side relations land in a follow-up, replace this with the
+    // draft's persisted relations.
     const commit = await createCommit(db, {
       parents,
       author: { type: 'human' as const, name: 'api' },

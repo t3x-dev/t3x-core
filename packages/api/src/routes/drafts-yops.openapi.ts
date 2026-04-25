@@ -132,7 +132,28 @@ draftsYopsRoutes.openapi(applyYOpsRoute, async (c) => {
       );
     }
 
-    // 4. Apply YOps to draft's tree content
+    // 4. Apply YOps to draft's tree content.
+    //
+    // Drafts persist `nodes_json` only — there is no `relations_json`
+    // column on the drafts table. `relate` / `unrelate` ops would
+    // validate at the engine layer and then evaporate when we wrote
+    // back only `result.trees`. Reject them at the boundary so the
+    // failure is loud instead of silent. Adding draft-side relation
+    // persistence is the proper follow-up — see
+    // packages/storage/src/schema-trees.ts:627 (drafts table).
+    for (let i = 0; i < yops.length; i++) {
+      const op = yops[i] as Record<string, unknown>;
+      if ('relate' in op || 'unrelate' in op) {
+        return errorResponse(
+          c,
+          'UNSUPPORTED_OP',
+          'relate/unrelate ops are not supported on drafts — drafts persist trees only. ' +
+            'Apply these ops via the conversation yops_log or a commit instead.',
+          { op_index: i }
+        );
+      }
+    }
+
     const trees = (draft.nodes ?? []) as TreeNode[];
     const content = { trees, relations: [] };
     const result = applyYOps(content, yops);
