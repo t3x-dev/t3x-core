@@ -237,8 +237,13 @@ export class ProviderRegistry {
 
       // Test based on provider type
       if ('generate' in instance) {
-        // LLM provider — send a minimal prompt
-        await (instance as LLMProvider).generate('Say "ok"', { maxTokens: 5, temperature: 0 });
+        // LLM provider — send a minimal prompt. maxTokens is intentionally
+        // generous (1024) because Gemini 2.5 Pro counts the thinking budget
+        // toward maxOutputTokens as a single total cap (observed:
+        // finishReason=MAX_TOKENS even at 64 tokens with thinkingBudget=256).
+        // 1024 leaves plenty of headroom for thinking + a one-word "ok"
+        // reply on every supported model and stays trivially cheap.
+        await (instance as LLMProvider).generate('Say "ok"', { maxTokens: 1024, temperature: 0 });
       } else if ('encode' in instance) {
         // Embedding provider — encode a test string
         await (instance as EmbeddingProvider).encode(['test']);
