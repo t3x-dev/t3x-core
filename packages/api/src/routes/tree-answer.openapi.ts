@@ -32,6 +32,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { runApiExtractionV2 } from '../lib/extraction-v2';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { syncYOpsToTrees } from '../lib/tree-state-sync';
 import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
@@ -191,15 +192,22 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
       );
     }
 
-    // 4. Persist the yops
+    // 4. Persist the yops + rebuild materialised trees in one transaction so
+    //    reads against the trees / tree_relations tables don't lag the log.
+    //    Mirrors the canonical flow in ops/yops-apply.ts.
     let yopsLogId: string | undefined;
     if (result.yops && result.yops.length > 0) {
-      const record = await insertYOpsLogEntry(db, {
-        conversationId: conversation_id,
-        projectId: conversation.projectId,
-        source: answer.drift_choice ? 'collapse' : 'answer',
-        yops: result.yops,
-        pipelineState: 'completed',
+      // biome-ignore lint/suspicious/noExplicitAny: db.transaction typing varies by adapter
+      const record = await (db as any).transaction(async (tx: any) => {
+        const rec = await insertYOpsLogEntry(tx, {
+          conversationId: conversation_id,
+          projectId: conversation.projectId,
+          source: answer.drift_choice ? 'collapse' : 'answer',
+          yops: result.yops,
+          pipelineState: 'completed',
+        });
+        await syncYOpsToTrees(tx, conversation_id, conversation.projectId);
+        return rec;
       });
       yopsLogId = record.id;
     }
@@ -323,13 +331,19 @@ async function handleDriftChoice4(
     ? { trees: finalResult.trees, relations: finalResult.relations }
     : organizedSnapshot;
 
-  // 5. Persist the full op set (extraction + relation) as one pipeline entry.
-  const record = await insertYOpsLogEntry(db, {
-    conversationId: conversation.conversationId,
-    projectId: conversation.projectId,
-    source: 'pipeline',
-    yops: allYops,
-    pipelineState: 'completed',
+  // 5. Persist the full op set (extraction + relation) as one pipeline entry,
+  //    then rebuild materialised trees in the same transaction.
+  // biome-ignore lint/suspicious/noExplicitAny: db.transaction typing varies by adapter
+  const record = await (db as any).transaction(async (tx: any) => {
+    const rec = await insertYOpsLogEntry(tx, {
+      conversationId: conversation.conversationId,
+      projectId: conversation.projectId,
+      source: 'pipeline',
+      yops: allYops,
+      pipelineState: 'completed',
+    });
+    await syncYOpsToTrees(tx, conversation.conversationId, conversation.projectId);
+    return rec;
   });
 
   return c.json(
