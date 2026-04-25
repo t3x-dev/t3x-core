@@ -52,6 +52,59 @@ export interface GeminiProviderConfig {
   baseUrl?: string;
 }
 
+interface GeminiResponseShape {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    finishReason?: string;
+  }>;
+  promptFeedback?: { blockReason?: string };
+}
+
+/**
+ * Pull the visible text out of a Gemini response.
+ *
+ * Gemini 2.5+ responses can include "thought" parts (when thinking is enabled)
+ * AND visible-output parts in the same `parts` array. The `thought: true`
+ * flag distinguishes them. Older code grabbed `parts[0].text`, which silently
+ * picked up a thought summary (or nothing) on Pro models and produced a
+ * misleading "No content in response" error.
+ *
+ * Concatenate every non-thought part's `text` so we surface the actual model
+ * output regardless of where it lands in the array.
+ */
+function extractGeminiText(data: GeminiResponseShape): string | null {
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (!parts) return null;
+  const visible = parts
+    .filter((p) => p.thought !== true && typeof p.text === 'string' && p.text.length > 0)
+    .map((p) => p.text as string)
+    .join('');
+  return visible.length > 0 ? visible : null;
+}
+
+/**
+ * Build a diagnostic error message when Gemini returns 200 OK but no
+ * extractable text. Includes finishReason / safety block reason so the
+ * UI ("Test connection") can show *why* instead of just "No content".
+ */
+function formatGeminiNoContentError(data: GeminiResponseShape, rawResponse: string): string {
+  const finishReason = data.candidates?.[0]?.finishReason;
+  const blockReason = data.promptFeedback?.blockReason;
+  const partKinds = data.candidates?.[0]?.content?.parts?.map((p) =>
+    p.thought ? 'thought' : 'text'
+  );
+
+  const hints: string[] = [];
+  if (finishReason) hints.push(`finishReason=${finishReason}`);
+  if (blockReason) hints.push(`blockReason=${blockReason}`);
+  if (partKinds && partKinds.length > 0) hints.push(`parts=[${partKinds.join(',')}]`);
+  if (hints.length === 0) {
+    // Fall back to a short slice of the raw body so the user has *some* signal.
+    hints.push(`raw=${rawResponse.slice(0, 200)}`);
+  }
+  return `No content in response (${hints.join(' · ')})`;
+}
+
 export class GeminiProvider implements LLMProvider {
   readonly id = 'google-ai';
 
@@ -85,6 +138,7 @@ export class GeminiProvider implements LLMProvider {
     const temperature = options?.temperature ?? 0.3;
     const maxTokens = options?.maxTokens ?? 2048;
     const url = `${this.baseUrl}/models/${this.model}:generateContent`;
+    const thinkingConfig = this.buildThinkingConfig(this.model);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -101,6 +155,7 @@ export class GeminiProvider implements LLMProvider {
           generationConfig: {
             temperature,
             maxOutputTokens: maxTokens,
+            ...(thinkingConfig && { thinkingConfig }),
             ...(options?.stopSequences && { stopSequences: options.stopSequences }),
           },
         }),
@@ -120,14 +175,20 @@ export class GeminiProvider implements LLMProvider {
 
       const data = JSON.parse(responseText) as {
         candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> };
+          content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          finishReason?: string;
         }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        promptFeedback?: { blockReason?: string };
       };
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = extractGeminiText(data);
       if (!text) {
-        throw new LLMProviderError(this.id, undefined, 'No content in response');
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          formatGeminiNoContentError(data, responseText)
+        );
       }
 
       return {
@@ -156,6 +217,7 @@ export class GeminiProvider implements LLMProvider {
     const maxTokens = options.maxTokens ?? 2048;
     const model = options.model ?? this.model;
     const url = `${this.baseUrl}/models/${model}:generateContent`;
+    const thinkingConfig = this.buildThinkingConfig(model);
 
     const contents = prompt.messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : msg.role,
@@ -167,6 +229,7 @@ export class GeminiProvider implements LLMProvider {
       generationConfig: {
         temperature,
         maxOutputTokens: maxTokens,
+        ...(thinkingConfig && { thinkingConfig }),
         ...(options.stopSequences && { stopSequences: options.stopSequences }),
       },
     };
@@ -198,13 +261,21 @@ export class GeminiProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          finishReason?: string;
+        }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        promptFeedback?: { blockReason?: string };
       };
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = extractGeminiText(data);
       if (!text) {
-        throw new LLMProviderError(this.id, undefined, 'No content in response');
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          formatGeminiNoContentError(data, responseText)
+        );
       }
 
       return {
@@ -284,8 +355,12 @@ export class GeminiProvider implements LLMProvider {
       }
 
       const data = JSON.parse(responseText) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+          finishReason?: string;
+        }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        promptFeedback?: { blockReason?: string };
       };
 
       const usage = {
@@ -293,9 +368,13 @@ export class GeminiProvider implements LLMProvider {
         outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
       };
 
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const content = extractGeminiText(data);
       if (!content) {
-        throw new LLMProviderError(this.id, undefined, 'No content in response');
+        throw new LLMProviderError(
+          this.id,
+          undefined,
+          formatGeminiNoContentError(data, responseText)
+        );
       }
 
       let jsonData: unknown;
