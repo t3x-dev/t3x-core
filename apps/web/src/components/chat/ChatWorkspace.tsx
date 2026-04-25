@@ -436,6 +436,7 @@ export function ChatWorkspace({
               }
               placeholder="Reply..."
               conversationId={resolvedConversationId}
+              selectedProvider={selectedProvider ?? ''}
               selectedModel={selectedModel ?? ''}
               onModelChange={handleModelChange}
             />
