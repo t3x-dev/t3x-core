@@ -353,6 +353,8 @@ export type LocalProviderAlias = 'claude' | 'gemini' | 'google-ai' | 'gpt';
 export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
 export type LocalProviderTestStatus = 'ok' | 'error';
 
+export type LocalProviderKeySource = 'env' | 'file' | 'none';
+
 export interface LocalProviderStatus {
   provider: LocalProviderId;
   configured: boolean;
@@ -360,6 +362,12 @@ export interface LocalProviderStatus {
   last_test_status: LocalProviderTestStatus | null;
   last_tested_at: string | null;
   last_test_error: string | null;
+  /** Which layer produced the currently-active key: 'env' > 'file' > 'none'. */
+  api_key_source: LocalProviderKeySource;
+  /** Last-four tail of the active key, e.g. `…JnYA`; null when unconfigured. */
+  api_key_preview: string | null;
+  /** True when an env var is masking a stored file-based credential. */
+  env_overrides_stored: boolean;
 }
 
 export interface LocalProviderCredentialInput {
