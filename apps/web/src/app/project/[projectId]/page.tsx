@@ -38,6 +38,7 @@ function ProjectDetailPageContent() {
   const canvasLoading = useCanvasStore((state) => state.loading);
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
+  const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
 
   // Parse initial viewport from URL params
   const initialViewport = useMemo(() => {
@@ -197,6 +198,20 @@ function ProjectDetailPageContent() {
     );
   }
 
+  // Empty-project redirect: chat is the producing layer. With no commits or
+  // leaves there is nothing for the canvas to visualise; surfacing an
+  // onboarding card here just duplicates the chat landing page. Hand the
+  // user back to chat so the working bench is the only entry point until
+  // they actually have committed meaning to view.
+  const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
+  if (isEmptyAfterLoad) {
+    return (
+      <div className="flex h-full flex-col">
+        <RedirectToChat />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <CanvasWorkspace
@@ -207,4 +222,19 @@ function ProjectDetailPageContent() {
       />
     </div>
   );
+}
+
+/**
+ * Imperatively replaces the route with /chat. Mounted only when the project
+ * is empty after canvas load — see comment at the call site for rationale.
+ *
+ * `router.replace` (not push) so the browser back button doesn't bring the
+ * user back to the empty canvas they were just bounced out of.
+ */
+function RedirectToChat() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/chat');
+  }, [router]);
+  return <LoadingSpinner message="Opening chat workspace…" />;
 }
