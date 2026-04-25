@@ -2,13 +2,32 @@
  * Miscellaneous API: Share Links, Templates, Webhooks, Providers, Import, SSE Streaming
  */
 
+// Provider types live in `@/types/providers` so components can depend on
+// them without crossing the v2 components → infrastructure boundary. We
+// pull in the value (`toLocalProviderId`) plus the types we need in the
+// HTTP adapters below, and re-export the same surface so existing
+// `from '@/infrastructure'` consumers keep working.
+import {
+  type LocalProviderClientId,
+  type LocalProviderCredentialInput,
+  type LocalProviderId,
+  type LocalProviderStatus,
+  type ProviderInfo,
+  type RoleAssignment,
+  type TestConnectionResult,
+  toLocalProviderId,
+} from '@/types/providers';
 import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
-import type {
-  LocalProviderClientId,
+
+export type {
   LocalProviderCredentialInput,
   LocalProviderId,
   LocalProviderStatus,
-} from './types';
+  ProviderInfo,
+  RoleAssignment,
+  TestConnectionResult,
+};
+export { toLocalProviderId };
 
 // ============================================================================
 // Share Links
@@ -221,44 +240,9 @@ export async function testWebhook(id: string): Promise<{ status: number; ok: boo
 }
 
 // ============================================================================
-// Providers
+// Providers — types + `toLocalProviderId` live in `@/types/providers`.
+// Only the HTTP adapters remain here.
 // ============================================================================
-
-export interface ProviderInfo {
-  id: string;
-  name: string;
-  role: string;
-  configured: boolean;
-  roles: string[];
-  required_env_keys: string[];
-  default_model: string | null;
-  available_models: string[] | null;
-}
-
-export interface RoleAssignment {
-  role: string;
-  provider_ids: string[];
-}
-
-export interface TestConnectionResult {
-  ok: boolean;
-  error?: string;
-  latency_ms?: number;
-}
-
-const LOCAL_PROVIDER_ID_ALIASES: Record<LocalProviderClientId, LocalProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  gemini: 'google',
-  gpt: 'openai',
-  openai: 'openai',
-  google: 'google',
-  'google-ai': 'google',
-};
-
-export function toLocalProviderId(providerId: string): LocalProviderId | null {
-  return LOCAL_PROVIDER_ID_ALIASES[providerId as LocalProviderClientId] ?? null;
-}
 
 export async function listProviders(): Promise<ProviderInfo[]> {
   const res = await fetchWithTimeout(`${API_V1}/providers`);

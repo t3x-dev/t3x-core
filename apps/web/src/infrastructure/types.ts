@@ -323,54 +323,20 @@ export interface ApiResponse<T> {
 // ============================================================================
 // LLM types
 // ============================================================================
-
-export interface LLMModelInfo {
-  id: string;
-  label: string;
-  capabilities: string[];
-  max_output_tokens: number;
-}
-
-export interface LLMProviderInfo {
-  name: string;
-  label: string;
-  available: boolean;
-  models: LLMModelInfo[];
-}
-
-export interface LLMModelsResponse {
-  generation_provider_order: string[];
-  default_provider: string | null;
-  providers: LLMProviderInfo[];
-}
-
-// ============================================================================
-// Local provider settings types
+// Provider types — definitions live in `@/types/providers` so components
+// can depend on them without crossing the v2 components → infrastructure
+// boundary. Re-exported here so existing infrastructure callers don't change.
 // ============================================================================
 
-export type LocalProviderId = 'anthropic' | 'openai' | 'google';
-export type LocalProviderAlias = 'claude' | 'gemini' | 'google-ai' | 'gpt';
-export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
-export type LocalProviderTestStatus = 'ok' | 'error';
-
-export type LocalProviderKeySource = 'env' | 'file' | 'none';
-
-export interface LocalProviderStatus {
-  provider: LocalProviderId;
-  configured: boolean;
-  default_model: string | null;
-  last_test_status: LocalProviderTestStatus | null;
-  last_tested_at: string | null;
-  last_test_error: string | null;
-  /** Which layer produced the currently-active key: 'env' > 'file' > 'none'. */
-  api_key_source: LocalProviderKeySource;
-  /** Last-four tail of the active key, e.g. `…JnYA`; null when unconfigured. */
-  api_key_preview: string | null;
-  /** True when an env var is masking a stored file-based credential. */
-  env_overrides_stored: boolean;
-}
-
-export interface LocalProviderCredentialInput {
-  api_key: string;
-  default_model?: string | null;
-}
+export type {
+  LLMModelInfo,
+  LLMModelsResponse,
+  LLMProviderInfo,
+  LocalProviderAlias,
+  LocalProviderClientId,
+  LocalProviderCredentialInput,
+  LocalProviderId,
+  LocalProviderKeySource,
+  LocalProviderStatus,
+  LocalProviderTestStatus,
+} from '@/types/providers';
