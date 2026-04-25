@@ -415,7 +415,7 @@ describe('extractors/v2 pipeline', () => {
                   value_json: null,
                   values_json: '{"summary":"SEA had a cyberattack"}',
                   children_json:
-                    '[{"key":"Baggage Handling","values":{"description":"Automated baggage systems were disrupted"}}]',
+                    '[{"key":"baggage_handling","values":{"description":"Automated baggage systems were disrupted"}}]',
                 },
                 evidence: [
                   {

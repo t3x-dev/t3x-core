@@ -220,6 +220,50 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       });
     }
 
+    // Compile candidate.children into nested define + populate ops.
+    //
+    // The provider contract (DraftCandidateChildSchema) is one level deep:
+    // `{ key: string, values?: Record<string, unknown> }`. So this is a flat
+    // loop, not a tree walk — but each child key still goes through the same
+    // normaliser as the parent path (handles a model emitting `key: 'a.b'`
+    // by converting dots to slashes and segment-validating).
+    //
+    // Pre-fix, ProviderDraft normalised `children_json` → `candidate.children`
+    // and there were tests asserting the lift, but the compiler ignored the
+    // field entirely. Subtrees the model produced disappeared with no
+    // warning. This is the exact "silently dropped" failure mode the review
+    // flagged as P1 (data loss, not just rendering).
+    const children = item.candidate.children ?? [];
+    for (const child of children) {
+      const normalizedKey = normalizePath(child.key);
+      if (!normalizedKey) {
+        return {
+          ok: false,
+          failure: createExtractionFailure(
+            'compile',
+            `Child key "${child.key}" on item ${item.id} is not a valid YOps path segment`,
+            {
+              details: {
+                reaskable: true,
+                item_id: item.id,
+                field: 'candidate.children[].key',
+                invalid_key: child.key,
+              },
+            }
+          ),
+          warnings,
+        };
+      }
+      const childPath = `${path}/${normalizedKey}`;
+      ops.push({ define: { path: childPath }, source });
+      if (child.values && Object.keys(child.values).length > 0) {
+        ops.push({
+          populate: { path: childPath, values: sortRecordValues(child.values) },
+          source,
+        });
+      }
+    }
+
     return { ok: true, ops, warnings };
   }
 
