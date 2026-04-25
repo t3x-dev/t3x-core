@@ -15,6 +15,7 @@ import {
   insertProject,
   insertTurn,
   insertYOpsLogEntry,
+  listTreesByConversation,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -175,6 +176,15 @@ describe('Tree Answer Routes', () => {
       expect(typeof relateOp.relate.from).toBe('string');
       expect(typeof relateOp.relate.to).toBe('string');
       expect(relateOp.relate.from).not.toBe(relateOp.relate.to);
+
+      // Materialised trees table is rebuilt in the same transaction as the
+      // yops_log write — reads against `trees` should not lag the log.
+      // Regression for the bug where tree-answer skipped syncYOpsToTrees:
+      // the table was empty after a successful answer/collapse write because
+      // syncYOpsToTrees was never called.
+      const treeRows = await listTreesByConversation(mockDB, conv.conversationId);
+      expect(treeRows.length).toBeGreaterThan(0);
+      expect(treeRows.map((r) => r.type)).toContain('old_topic');
     });
 
     it('defaults the relation to "follows" when drift_context.relation is missing or invalid', async () => {
