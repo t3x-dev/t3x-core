@@ -59,7 +59,11 @@ describe('callExtractionLLM', () => {
     expect(body.model).toBe('gpt-4o-mini');
   });
 
-  it('sends failing_ops when retrying', async () => {
+  it('does not forward failingOps to the wire (server v2 owns retry)', async () => {
+    // Regression: PR #870 dropped `failing_ops` from the request schema
+    // because the v2 pipeline owns retry semantics server-side. The
+    // worker still uses `failingOps` internally for client-side
+    // classification, but the wire payload must not include the field.
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -75,7 +79,9 @@ describe('callExtractionLLM', () => {
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body as string);
-    expect(body.failing_ops).toHaveLength(1);
+    expect(body.failing_ops).toBeUndefined();
+    expect(body.conversation_id).toBe('c1');
+    expect(body.turns).toHaveLength(1);
   });
 
   it('throws on non-OK response', async () => {

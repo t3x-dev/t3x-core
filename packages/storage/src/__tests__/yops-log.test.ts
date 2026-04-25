@@ -10,6 +10,16 @@ import {
 } from '../queries/yops-log';
 import { createTestDB, sleep, testData } from './setup';
 
+/**
+ * Build a single sourced YOp suitable for `yops_log.yops` (which is an
+ * array of ops constrained by `yops_log_source_required`). Tests don't
+ * care about op semantics; they care about shape.
+ */
+const makeOp = (path: string) => ({
+  define: { path },
+  source: { type: 'human', author: 'test', at: '2026-04-25T00:00:00.000Z' },
+});
+
 describe('YOps Log Storage', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
@@ -40,7 +50,7 @@ describe('YOps Log Storage', () => {
   // =========================================================================
   describe('insertYOpsLogEntry', () => {
     it('inserts and retrieves a yops log entry', async () => {
-      const yops = { added_entities: [{ id: 'e1', label: 'TypeScript' }] };
+      const yops = [makeOp('TypeScript')];
       const entry = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
@@ -71,7 +81,7 @@ describe('YOps Log Storage', () => {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { removed_relations: [{ id: 'r1' }] },
+        yops: [makeOp('removed')],
       });
 
       expect(entry.turnHash).toBeNull();
@@ -83,13 +93,13 @@ describe('YOps Log Storage', () => {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { a: 1 },
+        yops: [makeOp('a')],
       });
       const entry2 = await insertYOpsLogEntry(db, {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { b: 2 },
+        yops: [makeOp('b')],
       });
 
       expect(entry1.id).toMatch(/^yl_/);
@@ -103,7 +113,7 @@ describe('YOps Log Storage', () => {
           conversationId: testConversationId,
           projectId: testProjectId,
           source,
-          yops: {},
+          yops: [makeOp(`src_${source}`)],
         });
         expect(entry.source).toBe(source);
       }
@@ -135,21 +145,21 @@ describe('YOps Log Storage', () => {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'pipeline',
-        yops: { order: 1 },
+        yops: [makeOp('order_1')],
       });
       await sleep(10);
       await insertYOpsLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { order: 2 },
+        yops: [makeOp('order_2')],
       });
       await sleep(10);
       await insertYOpsLogEntry(db, {
         conversationId: conv2.conversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { order: 3 },
+        yops: [makeOp('order_3')],
       });
 
       const list = await listYOpsLogByConversation(db, conv2.conversationId);
@@ -162,9 +172,11 @@ describe('YOps Log Storage', () => {
         );
       }
 
-      // Verify content order
-      expect((list[0].yops as { order: number }).order).toBe(1);
-      expect((list[2].yops as { order: number }).order).toBe(3);
+      // Verify content order — first op's path encodes the insertion order
+      const firstOp = (list[0].yops as Array<{ define: { path: string } }>)[0];
+      const lastOp = (list[2].yops as Array<{ define: { path: string } }>)[0];
+      expect(firstOp.define.path).toBe('order_1');
+      expect(lastOp.define.path).toBe('order_3');
     });
 
     it('returns empty array for conversation with no entries', async () => {
@@ -186,7 +198,7 @@ describe('YOps Log Storage', () => {
         conversationId: testConversationId,
         projectId: testProjectId,
         source: 'manual',
-        yops: { to_delete: true },
+        yops: [makeOp('to_delete')],
       });
 
       const deleted = await deleteYOpsLogEntry(db, entry.id);

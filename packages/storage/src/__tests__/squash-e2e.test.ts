@@ -41,26 +41,28 @@ describe('Squash E2E', () => {
 
   it('full squash cycle: 3 commits → 1', async () => {
     // 1. Create yops log entries (simulating extraction pipeline)
+    // yops_log_source_required CHECK demands a per-op source on every op.
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
     const yl1 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
       yops: [
-        { define: { path: 'trip' } },
-        { populate: { path: 'trip', values: { budget: 5000 } } },
+        { define: { path: 'trip' }, source: src },
+        { populate: { path: 'trip', values: { budget: 5000 } }, source: src },
       ],
     });
     const yl2 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/style', value: 'casual' } }],
+      yops: [{ set: { path: 'trip/style', value: 'casual' }, source: src }],
     });
     const yl3 = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
-      yops: [{ set: { path: 'trip/duration', value: 7 } }],
+      yops: [{ set: { path: 'trip/duration', value: 7 }, source: src }],
     });
 
     // 2. Build commits incrementally (each commit applies its yops to previous state)
@@ -178,13 +180,14 @@ describe('Squash E2E', () => {
 
   it('replay mismatch is detected when content diverges', async () => {
     // Create a yops entry
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
     const yl = await insertYOpsLogEntry(db, {
       conversationId,
       projectId,
       source: 'pipeline',
       yops: [
-        { define: { path: 'food' } },
-        { populate: { path: 'food', values: { type: 'pizza' } } },
+        { define: { path: 'food' }, source: src },
+        { populate: { path: 'food', values: { type: 'pizza' } }, source: src },
       ],
     });
 

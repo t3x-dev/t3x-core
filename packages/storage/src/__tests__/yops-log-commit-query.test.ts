@@ -34,15 +34,15 @@ describe('getYOpsForCommit', () => {
   });
 
   it('returns yops entries by IDs in order', async () => {
+    // yops_log_source_required CHECK demands an array of sourced ops; the
+    // legacy `{ changes: [...] }` shape was schema drift that the constraint
+    // now (correctly) rejects.
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
     const entry1 = await insertYOpsLogEntry(db, {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'pipeline',
-      yops: {
-        changes: [
-          { action: 'add', parent_path: '', node: { key: 'a', slots: { v: '1' }, children: [] } },
-        ],
-      },
+      yops: [{ define: { path: 'a' }, source: src }],
     });
 
     await sleep(50);
@@ -51,11 +51,7 @@ describe('getYOpsForCommit', () => {
       conversationId: testConversationId,
       projectId: testProjectId,
       source: 'manual',
-      yops: {
-        changes: [
-          { action: 'add', parent_path: '', node: { key: 'b', slots: { v: '2' }, children: [] } },
-        ],
-      },
+      yops: [{ define: { path: 'b' }, source: src }],
     });
 
     const results = await getYOpsForCommit(db, [entry1.id, entry2.id]);
