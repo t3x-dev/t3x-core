@@ -90,9 +90,6 @@ export function useChatInit({
           beforeCommitHash: data.lastCommitHash,
           confirmedNodeIds: data.confirmedNodeIds,
         });
-        if (!useWorkspaceStore.getState().panelExpanded) {
-          useWorkspaceStore.getState().setPanelExpanded(true);
-        }
       }
       if (data.fetched) {
         inheritedRef.current = true;
@@ -103,8 +100,6 @@ export function useChatInit({
     if (convId && convId !== 'new' && resolvedProjectId) {
       hydrateConversationToStore(resolvedProjectId, convId)
         .then(async () => {
-          const s = useWorkspaceStore.getState();
-          if (!s.panelExpanded) s.setPanelExpanded(true);
           // Topics are display-only until a workspaceStore slot exists.
           // TODO(topics-state): route through workspaceStore once the schema lands.
           await fetchConversationTopics(convId);
