@@ -1238,13 +1238,47 @@ describe('extractors/v2 pipeline', () => {
         },
       });
       const system = captured.system ?? '';
-      expect(system).toMatch(/Extraction mode: concise/i);
+      // With max_items omitted, this config doesn't exactly match
+      // PRESETS.concise (which now requires max_items: 6), so
+      // matchPreset → null and styleSummaryLine returns the
+      // 'custom — granularity=concise, ...' line. Either form
+      // counts as "concise direction was picked".
+      expect(system).toMatch(/granularity=concise|Extraction mode: concise/i);
       // No specific item count claimed.
       expect(system).not.toMatch(/at most ~\d+ items/i);
-      // But the qualitative direction stays — concise still means brief,
+      // The "hard limits" framing also drops — there's no cap to
+      // enforce, so claiming hard limits would be misleading.
+      expect(system).not.toMatch(/hard limits/i);
+      // Wording switches to qualitative-direction framing instead.
+      expect(system).toMatch(/qualitative guidance/i);
+      // The qualitative direction stays — concise still means brief,
       // single-tree, skip-secondary-specs.
       expect(system).toMatch(/Be brief|highest-signal facts/i);
       expect(system).toMatch(/path prefix/i);
+    });
+
+    it('concise style WITH max_items keeps the hard-limits header', async () => {
+      // Inverse pin for the conditional header — when a cap IS
+      // configured, the prompt must keep the "hard limits" framing
+      // so the model takes the number seriously.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 6,
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/hard limits/i);
+      expect(system).not.toMatch(/qualitative guidance/i);
     });
 
     it('detailed style asks for nuance under existing tree paths', async () => {
@@ -1282,6 +1316,11 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'balanced',
           tier3: 'extract',
+          max_items: 20, // matches PRESETS.balanced; without it
+          // matchPreset rightly reports 'custom' (drift coverage in
+          // extractionStyleConfig.test). Pass the full preset shape
+          // here so styleSummaryLine returns the friendly 'balanced'
+          // summary line.
         },
       });
       const system = captured.system ?? '';

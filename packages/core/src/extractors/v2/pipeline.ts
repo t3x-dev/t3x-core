@@ -147,22 +147,29 @@ function styleGuidanceBlock(style: ExtractionStyleConfig | undefined): string {
   const summary = styleSummaryLine(style);
   if (style.granularity === 'concise') {
     // Mirror the deterministic cap. If the caller supplied an explicit
-    // max_items, the prompt cites that exact number — otherwise prompt
-    // and selection would diverge:
+    // max_items, the prompt cites that exact number AND the header
+    // declares the budget a hard limit — otherwise prompt and
+    // selection would diverge:
     //   - { granularity: 'concise', max_items: 10 } previously said
     //     "~6" while selection kept 10
     //   - { granularity: 'concise' } (no cap) previously said "~6"
-    //     while selection applied no cap at all
-    // Now: prompt says exactly what selection enforces; without a
-    // cap we soften the wording so the model isn't told there's a
-    // hard limit there isn't.
-    const itemBudgetLine =
-      typeof style.max_items === 'number'
-        ? `- Emit at most ~${style.max_items} items total. Pick the highest-signal facts; drop the rest.\n`
-        : '- Be brief. Pick the highest-signal facts; skip the rest.\n';
+    //     under a "hard limits" header while selection applied no
+    //     cap at all
+    // Now: when max_items is defined, prompt + selection agree on
+    // the number AND the wording is honest about it being enforced;
+    // when undefined, both the number AND the "hard limits" framing
+    // are dropped — qualitative direction stays (brief, single-tree,
+    // skip-secondary-specs) since those still hold without a cap.
+    const hasCap = typeof style.max_items === 'number';
+    const header = hasCap
+      ? 'Concise budget — these are hard limits, not suggestions:\n'
+      : 'Concise direction — qualitative guidance:\n';
+    const itemBudgetLine = hasCap
+      ? `- Emit at most ~${style.max_items} items total. Pick the highest-signal facts; drop the rest.\n`
+      : '- Be brief. Pick the highest-signal facts; skip the rest.\n';
     return (
       `${summary}\n` +
-      'Concise budget — these are hard limits, not suggestions:\n' +
+      header +
       itemBudgetLine +
       '- Prefer one comparison tree (e.g. cameras/sony/{a7r_v, a7_v}/{slot}) over\n' +
       '  many parallel root nodes. Same-subject facts MUST share a path prefix; the\n' +
