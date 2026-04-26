@@ -19,6 +19,14 @@ describe('AfterPanel.shouldDisableCommit', () => {
     // the *pre-draft* tree while the staged YOps sit un-applied — the
     // user sees preview and ends up with a commit that doesn't match
     // anything on screen. The user must Apply (or Discard) first.
+    //
+    // The same helper gates BOTH the main Commit button AND the open
+    // commit dialog's Enter / confirm path — closing a follow-up bypass
+    // where the dialog was opened against a clean tree, then Extract
+    // staged a draft mid-typing. AfterPanel additionally auto-closes
+    // the dialog on the same hasDraft transition (cooperative defense),
+    // and handleCommit re-checks hasDraft directly off the store
+    // before commitTrees runs (in-flight keypress race).
     expect(shouldDisableCommit({ ...baseEnabled, hasDraft: true })).toBe(true);
   });
 

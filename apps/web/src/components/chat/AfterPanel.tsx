@@ -530,6 +530,19 @@ export function AfterPanel({
     commitInputRef.current?.select();
   }, [showCommitDialog]);
 
+  // Auto-close the commit dialog when a draft preview arrives. The dialog
+  // can already be open against the committed tree when Extract fires
+  // from elsewhere (chat header, hotkey, programmatic). Leaving it open
+  // would render a Commit dialog over a Draft-preview tree — confusing
+  // even with the confirm gated. Closing it sends the user back to the
+  // panel where the new "Draft preview" badge is visible and Apply /
+  // Discard are the only forward moves.
+  useEffect(() => {
+    if (hasDraft && showCommitDialog) {
+      setShowCommitDialog(false);
+    }
+  }, [hasDraft, showCommitDialog]);
+
   const rows = useMemo<RenderRow[]>(() => {
     const baseRoots = new Map(parentTrees.map((node) => [node.key, node]));
     const resultRoots = new Map(trees.map((node) => [node.key, node]));
@@ -584,6 +597,16 @@ export function AfterPanel({
 
   const handleCommit = useCallback(
     async (message: string) => {
+      // Defense in depth: the main Commit button and the dialog confirm
+      // both gate on shouldDisableCommit, but a keypress-in-flight can
+      // race a state update — handler reads stale React state and fires
+      // anyway. Re-check directly off the store so a draft that arrived
+      // mid-keystroke can't slip through and commit the pre-draft tree.
+      if (useWorkspaceStore.getState().hasDraft) {
+        toast.error('Apply or Discard the staged draft before committing.');
+        setShowCommitDialog(false);
+        return;
+      }
       try {
         useWorkspaceStore.getState().setMode('committing');
         await commitTrees(message || 'Knowledge Extract');
@@ -873,37 +896,58 @@ export function AfterPanel({
             >
               Name this commit
             </label>
-            <input
-              id="after-panel-commit-message"
-              ref={commitInputRef}
-              type="text"
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isCommitting) handleCommit(commitMessage);
-                if (e.key === 'Escape') setShowCommitDialog(false);
-              }}
-              className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
-              placeholder="e.g. Budget & Attractions"
-            />
-            <div className="flex justify-end gap-1.5 mt-3">
-              <button
-                type="button"
-                onClick={() => setShowCommitDialog(false)}
-                className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                data-testid="commit-dialog-confirm"
-                onClick={() => handleCommit(commitMessage)}
-                disabled={isCommitting}
-                className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                {isCommitting ? 'Committing...' : 'Commit'}
-              </button>
-            </div>
+            {/*
+              Dialog confirm gates on the same helper as the main button,
+              so a draft that arrives while the dialog is open disables
+              Enter + click here too (defense against the race the
+              auto-close effect also handles cooperatively).
+            */}
+            {(() => {
+              const dialogDisabled = shouldDisableCommit({
+                hasResult,
+                isCommitting,
+                isCommitted,
+                hasDraft,
+              });
+              return (
+                <>
+                  <input
+                    id="after-panel-commit-message"
+                    ref={commitInputRef}
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !dialogDisabled) handleCommit(commitMessage);
+                      if (e.key === 'Escape') setShowCommitDialog(false);
+                    }}
+                    className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
+                    placeholder="e.g. Budget & Attractions"
+                  />
+                  <div className="flex justify-end gap-1.5 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowCommitDialog(false)}
+                      className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="commit-dialog-confirm"
+                      onClick={() => handleCommit(commitMessage)}
+                      disabled={dialogDisabled}
+                      title={
+                        hasDraft ? 'Apply or Discard the staged draft before committing' : undefined
+                      }
+                      className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isCommitting ? 'Committing...' : 'Commit'}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
