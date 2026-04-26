@@ -11,8 +11,10 @@
  */
 
 import type { SourcedYOp, YOpsLogEntry } from '@t3x-dev/core';
-import { appendYOps } from '@/infrastructure/yopsLog';
+import { type AppendYOpsOptions, appendYOps } from '@/infrastructure/yopsLog';
 import { SourceValidationError } from './errors';
+
+export type CommitOpsOptions = AppendYOpsOptions;
 
 function assertSourcePresent(ops: readonly SourcedYOp[]): void {
   for (let i = 0; i < ops.length; i++) {
@@ -29,7 +31,11 @@ function assertSourcePresent(ops: readonly SourcedYOp[]): void {
   }
 }
 
-export async function commitOps(conversationId: string, ops: SourcedYOp[]): Promise<YOpsLogEntry> {
+export async function commitOps(
+  conversationId: string,
+  ops: SourcedYOp[],
+  options?: CommitOpsOptions
+): Promise<YOpsLogEntry> {
   assertSourcePresent(ops);
-  return appendYOps(conversationId, ops);
+  return appendYOps(conversationId, ops, options);
 }

@@ -106,18 +106,46 @@ export async function getSemanticDraft(
   return handleResponse<SemanticContent>(res);
 }
 
+export interface CreateYOpsEntryOptions {
+  /**
+   * Maps to the `replace_active_llm_draft` field on POST /yops. When true,
+   * the API marks every active-draft LLM-sourced entry for this
+   * conversation as `superseded_at = now()` inside the same transaction
+   * as the new entry's insert. Used by the WebUI Apply-from-staged-draft
+   * path so re-Extract → Apply replaces the prior LLM suggestion atomically
+   * instead of stacking it on top.
+   *
+   * Manual-edit (HumanSource) ops on prior entries are explicitly
+   * preserved by the API regardless of this flag — that's the v1 contract
+   * from the suggestion-vs-baseline RFC.
+   *
+   * Default omitted = API treats as `false`, preserving the legacy
+   * append-only behaviour for every existing caller (gold edits,
+   * compression, MCP, etc.).
+   */
+  replaceActiveLLMDraft?: boolean;
+}
+
 export async function createYOpsEntry(
   conversationId: string,
   yops: YOp[],
   source: YOpsSource,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  options?: CreateYOpsEntryOptions
 ): Promise<YOpsLogEntry> {
   const res = await fetchWithTimeout(
     `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, yops, ...(metadata && { metadata }) }),
+      body: JSON.stringify({
+        source,
+        yops,
+        ...(metadata && { metadata }),
+        ...(options?.replaceActiveLLMDraft !== undefined && {
+          replace_active_llm_draft: options.replaceActiveLLMDraft,
+        }),
+      }),
     }
   );
   return handleResponse<YOpsLogEntry>(res);

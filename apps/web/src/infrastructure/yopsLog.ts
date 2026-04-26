@@ -8,7 +8,14 @@
 
 import type { SourcedYOp, YOpsLogEntry, YOpsSource } from '@t3x-dev/core';
 import { ApiError } from '@/infrastructure/core';
-import { createYOpsEntry, deleteYOpsEntry, listYOpsLog } from '@/infrastructure/trees';
+import {
+  type CreateYOpsEntryOptions,
+  createYOpsEntry,
+  deleteYOpsEntry,
+  listYOpsLog,
+} from '@/infrastructure/trees';
+
+export type AppendYOpsOptions = CreateYOpsEntryOptions;
 
 export class PersistenceError extends Error {
   constructor(
@@ -47,13 +54,19 @@ export function deriveRowSource(ops: readonly SourcedYOp[]): YOpsSource {
   return allLLM ? 'pipeline' : 'manual';
 }
 
-export async function appendYOps(conversationId: string, ops: SourcedYOp[]): Promise<YOpsLogEntry> {
+export async function appendYOps(
+  conversationId: string,
+  ops: SourcedYOp[],
+  options?: AppendYOpsOptions
+): Promise<YOpsLogEntry> {
   try {
     const rowSource = deriveRowSource(ops);
     return await createYOpsEntry(
       conversationId,
       ops as unknown as Parameters<typeof createYOpsEntry>[1],
-      rowSource
+      rowSource,
+      undefined,
+      options
     );
   } catch (err) {
     throw wrapError('append', err);

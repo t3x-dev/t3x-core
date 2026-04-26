@@ -90,9 +90,24 @@ export function useScriptExecution() {
       };
     }) as SourcedYOp[];
 
+    // When Apply's source is a staged Extract draft (`hasDraft === true` at
+    // the moment of Apply), tell the API to mark prior active LLM drafts
+    // for this conversation as superseded inside the same transaction as
+    // the new entry's insert. Without this flag, re-Extract → Apply just
+    // appends a fresh entry on top of the prior LLM suggestion — the
+    // workspace then renders both, and the user sees what looks like
+    // duplicated ops. The API explicitly preserves manual-edit
+    // (HumanSource) ops on prior entries regardless of this flag, so
+    // human edits never get clobbered by an LLM Apply.
+    //
+    // Manual-only Apply (scriptDirty without hasDraft) leaves it false:
+    // a hand-written script edit shouldn't supersede a separate LLM
+    // suggestion the user might still want.
+    const replaceActiveLLMDraft = store.hasDraft;
+
     try {
       store.setMode('committing');
-      await commitOps(convId, sourced);
+      await commitOps(convId, sourced, { replaceActiveLLMDraft });
     } catch (err) {
       // Commit failed — yops_log was NOT written; the draft is still
       // applicable, leave it staged so the user can retry. This is the
