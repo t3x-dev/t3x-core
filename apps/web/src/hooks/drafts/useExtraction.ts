@@ -90,25 +90,42 @@ export function useExtraction({
         }
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
+
+        // The workspace already had committed ops before this extract
+        // attempt — a *new* attempt that fails should not blow away the
+        // workspace into an error banner. Demote to an info toast so the
+        // user keeps seeing their existing tree and can try again.
+        const hadExistingOps = useWorkspaceStore.getState().opsLog.length > 0;
+
         if (err instanceof ExtractionFailedError) {
-          const msg =
-            err.reason === 'unverifiable_quote'
-              ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
-              : err.reason === 'missing_source'
-                ? `Extraction returned ops without provenance. Please retry.`
-                : err.reason === 'invalid_structure'
-                  ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                  : err.reason === 'llm_error'
-                    ? err.failureCode
-                      ? `Extraction failed (${err.failureCode}): ${err.message}`
-                      : `LLM call failed: ${err.message}`
-                    : `Extraction failed after ${err.lastAttempt} attempts.`;
-          useWorkspaceStore.getState().setError(msg);
-          toast.error(msg);
+          const isUnverifiable = err.reason === 'unverifiable_quote';
+          const friendly = isUnverifiable
+            ? `No new facts could be tied back to the conversation this time. Try a more specific question, or add the slot manually.`
+            : err.reason === 'missing_source'
+              ? `Extraction returned ops without provenance. Please retry.`
+              : err.reason === 'invalid_structure'
+                ? `The model's proposal didn't form a valid tree update after retries. Please retry.`
+                : err.reason === 'llm_error'
+                  ? err.failureCode
+                    ? `Extraction failed (${err.failureCode}): ${err.message}`
+                    : `LLM call failed: ${err.message}`
+                  : `Extraction failed after ${err.lastAttempt} attempts.`;
+
+          if (hadExistingOps && isUnverifiable) {
+            // Soft surface: workspace stays usable, no red banner.
+            toast.message(friendly);
+          } else {
+            useWorkspaceStore.getState().setError(friendly);
+            toast.error(friendly);
+          }
         } else {
           const msg = formatWorkspaceError(err) || 'Extraction failed';
-          useWorkspaceStore.getState().setError(msg);
-          toast.error(msg);
+          if (hadExistingOps) {
+            toast.error(msg);
+          } else {
+            useWorkspaceStore.getState().setError(msg);
+            toast.error(msg);
+          }
         }
       }
     },

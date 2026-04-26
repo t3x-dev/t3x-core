@@ -19,7 +19,12 @@
  */
 
 import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { normalizeOpTurnHashes, repairOpQuotes, validateSource } from '@t3x-dev/core';
+import {
+  applySourcedYOps,
+  normalizeOpTurnHashes,
+  repairOpQuotes,
+  validateSource,
+} from '@t3x-dev/core';
 import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
@@ -74,20 +79,41 @@ function pickReason(failingOps: RetryFailingOp[]): ExtractionFailedError['reason
 }
 
 /**
- * Try to salvage a verified subset from a batch the model couldn't fully
- * verify after retry exhaustion. Returns the committable subset (passes
- * both source and structure checks) when it has at least one op, or
- * `null` when nothing can be salvaged.
+ * Try to salvage a committable subset from a batch the model couldn't fully
+ * verify after retry exhaustion.
+ *
+ * Strategy: greedy linear apply. Drop the source-failing ops first, then
+ * walk the remainder in order, applying each on top of the running tree.
+ * Keep the op when apply succeeds; skip when it fails (a SET whose parent
+ * DEFINE was in the failing subset, an UNSET on a missing path, etc.).
+ *
+ * `validateExecutableStructure` flags the *whole batch* as failing on a
+ * single bad op, which would over-prune; greedy apply gives us per-op
+ * granularity so the common "4 good + 3 bad quotes" case still commits
+ * the 4 even when one of the 3 bad ones happened to be a parent DEFINE.
+ *
+ * Returns `null` only when nothing committable remains.
  */
 function salvageVerifiedSubset(
   baseTree: SemanticContent,
   ops: readonly SourcedYOp[],
   failingOpIndices: Set<number>
 ): SourcedYOp[] | null {
-  const verified = ops.filter((_, idx) => !failingOpIndices.has(idx));
-  if (verified.length === 0) return null;
-  const structure = validateExecutableStructure(baseTree, verified);
-  return structure.ok ? verified : null;
+  const sourceVerified = ops.filter((_, idx) => !failingOpIndices.has(idx));
+  if (sourceVerified.length === 0) return null;
+
+  let runningTree: SemanticContent = baseTree;
+  const kept: SourcedYOp[] = [];
+  for (const op of sourceVerified) {
+    const result = applySourcedYOps(runningTree, [op]);
+    if (result.ok) {
+      kept.push(op);
+      runningTree = { trees: result.trees, relations: result.relations };
+    }
+    // else: drop this op, runningTree unchanged.
+  }
+
+  return kept.length > 0 ? kept : null;
 }
 
 export async function runExtraction({
