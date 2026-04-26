@@ -22,7 +22,11 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const [splitRatio, setSplitRatio] = useState(DEFAULT_SPLIT_RATIO);
   const [showBefore, setShowBefore] = useState(false);
-  const [topView, setTopView] = useState<TopView>('ops');
+  // Script is the canonical product in the propose/apply flow — what the
+  // user reviews, edits, and Applies. Ops view is the per-op audit
+  // surface (source provenance, turn refs, replay order). Script comes
+  // first as the default and visually leads in the tab order.
+  const [topView, setTopView] = useState<TopView>('script');
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const prevExpandedRef = useRef(panelExpanded);
@@ -110,8 +114,8 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         >
           {(
             [
-              { id: 'ops', label: 'Ops' },
               { id: 'script', label: 'Script' },
+              { id: 'ops', label: 'Ops' },
             ] as const
           ).map((tab) => (
             <button
