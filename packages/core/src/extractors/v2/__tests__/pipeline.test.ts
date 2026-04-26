@@ -308,6 +308,52 @@ describe('extractors/v2 pipeline', () => {
     });
   });
 
+  it('system prompt names provider schema fields (values_json, value_json, children_json)', () => {
+    // The provider schema's candidate fields are JSON-string-shaped:
+    // value_json, values_json, children_json. Earlier prompt drafts
+    // referenced canonical post-normalization names (candidate.values,
+    // candidate.value, candidate.children[].values), which are not
+    // accepted by ProviderCandidateSchema and would be silently dropped
+    // by coerceCandidate — turning real facts back into bare defines
+    // that the empty-define guard would then drop.
+    //
+    // Pin the provider field names + JSON-string shape so a future
+    // prompt edit can't drift back to the canonical names.
+    const captured: { system?: string } = {};
+    const capture: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        captured.system = prompt.system;
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    return runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'fact.' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider: capture,
+    }).then(() => {
+      const system = captured.system ?? '';
+      expect(system).toContain('values_json');
+      expect(system).toContain('value_json');
+      expect(system).toContain('children_json');
+      // The example values_json clearly shows it as a stringified object —
+      // a model copying the example will emit a JSON-string, not a raw
+      // object that the strict schema rejects.
+      expect(system).toMatch(/"values_json"\s*:\s*"\{/);
+    });
+  });
+
   it('returns a typed draft_parse failure when provider JSON string fields are invalid', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

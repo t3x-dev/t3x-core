@@ -535,14 +535,96 @@ function dedupeDefineOps(ops: SourcedYOp[]): { ops: SourcedYOp[]; warnings: stri
  * when the prompt fails to deter it.
  *
  * Items with at least one `populate` or `set` (whether from `candidate.values`,
- * `candidate.value`, or any populated child) pass through unchanged. Items
- * with no ops at all (e.g. `intent: noop`) also pass through — they're not
- * "empty defines", they're "no-op by design" and dropping them is the
- * caller's concern, not the guard's.
+ * `candidate.value`, or any populated child) pass through this check. The
+ * subsequent path-level pruner (`pruneUnreachableScaffold`) then trims any
+ * empty leaf defines that survived inside an otherwise-good item.
+ *
+ * Items with no ops at all (e.g. `intent: noop`) pass through — they're not
+ * "empty defines", they're "no-op by design".
  */
 function itemIsEmptyDefinesOnly(ops: readonly SourcedYOp[]): boolean {
   if (ops.length === 0) return false;
   return ops.every((op) => 'define' in op);
+}
+
+/**
+ * Returns true if `ancestor` equals `path` or is a strict ancestor of it
+ * (e.g. `cameras` is an ancestor of `cameras/a7r_v` but not of
+ * `cameras_other`). YOps paths use `/` as the segment separator and
+ * `compileItem` builds child paths via `${parentPath}/${childPath}`,
+ * so prefix-match-on-segment-boundary is sufficient.
+ */
+function isAncestorOrSelf(ancestor: string, path: string): boolean {
+  if (ancestor === path) return true;
+  return path.startsWith(`${ancestor}/`);
+}
+
+/**
+ * Path-level pruner: drops `define` ops whose path is neither equal to
+ * nor an ancestor of any `populate`/`set` path in the same op list.
+ *
+ * Closes the mixed-item gap that the per-item `itemIsEmptyDefinesOnly`
+ * filter doesn't catch: an item with one populated child and one bare
+ * child compiles to a populate plus *both* defines. The per-item filter
+ * keeps the item (one populate exists), but the bare child's define is
+ * still an empty bucket the workspace shouldn't render. This pruner
+ * removes those leaves while preserving the scaffold defines that are
+ * actually needed for the populated paths.
+ *
+ * Operates on the full ops list (post-dedupe) so a scaffold define
+ * emitted by one item that supports a populate from a different item
+ * is preserved — cross-item scaffolding is real and we mustn't break
+ * apply-time path validation.
+ *
+ * Returns the pruned ops plus warnings naming each dropped define path.
+ */
+function pruneUnreachableScaffold(ops: readonly SourcedYOp[]): {
+  ops: SourcedYOp[];
+  warnings: string[];
+} {
+  const populatedPaths: string[] = [];
+  for (const op of ops) {
+    if ('populate' in op) populatedPaths.push(op.populate.path);
+    else if ('set' in op) populatedPaths.push(op.set.path);
+  }
+
+  // No populate/set anywhere → all defines are unreachable. The per-item
+  // filter should have caught this already, but be defensive.
+  if (populatedPaths.length === 0) {
+    const dropped = ops
+      .filter((op): op is Extract<SourcedYOp, { define: { path: string } }> => 'define' in op)
+      .map((op) => op.define.path);
+    return {
+      ops: ops.filter((op) => !('define' in op)),
+      warnings: dropped.map(
+        (path) =>
+          `Pruned scaffold define "${path}": no populate or set ops in the batch reach this path.`
+      ),
+    };
+  }
+
+  const kept: SourcedYOp[] = [];
+  const dropped: string[] = [];
+  for (const op of ops) {
+    if (!('define' in op)) {
+      kept.push(op);
+      continue;
+    }
+    const path = op.define.path;
+    const reachable = populatedPaths.some((populated) => isAncestorOrSelf(path, populated));
+    if (reachable) {
+      kept.push(op);
+    } else {
+      dropped.push(path);
+    }
+  }
+  return {
+    ops: kept,
+    warnings: dropped.map(
+      (path) =>
+        `Pruned scaffold define "${path}": no populate or set descendant — likely an empty section-header node.`
+    ),
+  };
 }
 
 export function compileExtractionDraft(input: CompileInput): CompileResult {
@@ -585,7 +667,18 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   }
 
   const deduped = dedupeDefineOps(ops);
-  return { ok: true, ops: deduped.ops, warnings: [...warnings, ...deduped.warnings] };
+  // Path-level pruning runs after dedupe so it sees the full
+  // post-merge scaffold. A define from item A that supports a populate
+  // from item B is preserved; a leaf define with no populate descendant
+  // anywhere in the batch is dropped — closes the mixed-item gap where
+  // an item with one populated child and one bare child would otherwise
+  // leave the bare child's define as workspace pollution.
+  const pruned = pruneUnreachableScaffold(deduped.ops);
+  return {
+    ok: true,
+    ops: pruned.ops,
+    warnings: [...warnings, ...deduped.warnings, ...pruned.warnings],
+  };
 }
 
 export function toCompiledMutationPlan(

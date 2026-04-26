@@ -1282,10 +1282,15 @@ describe('extractors/v2 compiler', () => {
       expect(result.ops).toEqual([]);
     });
 
-    it('keeps items where at least one child carries values', () => {
-      // Parent is a bare define but one child has values — the item as
-      // a whole has data, so we keep all its ops (including the parent
-      // define, which the child needs as scaffolding).
+    it('keeps populated children + parent scaffold but DROPS empty sibling children', () => {
+      // P2 mixed-item regression: an item with one populated child and
+      // one bare child used to keep all three defines — parent + both
+      // children — because the per-item filter only checks "every op a
+      // bare define". The bare child's define still rendered as an
+      // empty bucket. The path-level pruner closes that gap: defines
+      // whose path is neither equal to nor an ancestor of any
+      // populate/set path get pruned, while scaffolding for the
+      // populated child is preserved.
       const result = compileExtractionDraft({
         draft: {
           schema: EXTRACTION_DRAFT_SCHEMA,
@@ -1301,7 +1306,7 @@ describe('extractors/v2 compiler', () => {
                 key: 'cameras',
                 children: [
                   { key: 'a7r_v', values: { resolution: '61 megapixels' } },
-                  { key: 'a7_v' }, // empty child, but parent's other child has data
+                  { key: 'a7_v' }, // empty sibling — must be pruned
                 ],
               },
               evidence: [{ turn_tag: 'T1', quote: '61 megapixels', role: 'primary' }],
@@ -1314,7 +1319,75 @@ describe('extractors/v2 compiler', () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.ops.some((op) => 'populate' in op)).toBe(true);
+
+      // Populate for the populated child survives.
+      expect(
+        result.ops.some((op) => 'populate' in op && op.populate.path === 'cameras/a7r_v')
+      ).toBe(true);
+      // Parent scaffold survives (it's an ancestor of the populated path).
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'cameras')).toBe(true);
+      // The populated child's own define survives (path equals populate path).
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'cameras/a7r_v')).toBe(
+        true
+      );
+      // The empty sibling's define is PRUNED — this is the gap fix.
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'cameras/a7_v')).toBe(
+        false
+      );
+      // And the prune is visible in warnings naming the dropped path.
+      expect(
+        result.warnings.some(
+          (w) => w.includes('cameras/a7_v') && /no populate or set descendant/i.test(w)
+        )
+      ).toBe(true);
+    });
+
+    it('preserves scaffold defines that support a populate emitted by a different item', () => {
+      // Cross-item scaffolding case: item A defines `cameras` (no
+      // populate of its own), item B populates `cameras/a7r_v`. The
+      // per-item filter would drop item A as empty-defines-only — but
+      // we run it FIRST, so item A is gone before path-pruning. Result:
+      // populate at `cameras/a7r_v` without parent scaffold = apply
+      // failure.
+      //
+      // The right shape from the model is: item B emits its own
+      // `cameras` define via compileChildren's parent path. To pin that
+      // contract, ensure the pruner doesn't strip parent scaffolds when
+      // they ARE produced by the populating item.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'with_populate',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                key: 'cameras',
+                children: [{ key: 'a7r_v', values: { resolution: '61 megapixels' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: '61 megapixels', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Both the parent scaffold and the populated child's own define
+      // survive — the populate isn't orphaned.
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'cameras')).toBe(true);
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'cameras/a7r_v')).toBe(
+        true
+      );
+      expect(
+        result.ops.some((op) => 'populate' in op && op.populate.path === 'cameras/a7r_v')
+      ).toBe(true);
     });
 
     it('drops junk items but keeps real ones in the same draft', () => {
