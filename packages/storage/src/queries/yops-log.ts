@@ -141,13 +141,51 @@ export async function listActiveYOpsLogByConversation(
 }
 
 /**
+ * Advisory-lock key namespace for the suggestion-vs-baseline serial
+ * section. Both `supersedeActiveLLMSuggestions` and `createCommit`
+ * acquire `pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, projectKey)`
+ * under their respective transactions. The namespace tag ensures the
+ * key space doesn't collide with any other advisory-lock user.
+ */
+const SUPERSEDE_LOCK_NAMESPACE = 0x7373_7362; // 'ssvb' (suggestion-vs-baseline)
+
+/**
+ * Acquire the per-project transaction-scoped advisory lock that
+ * serialises supersede + commit-with-yops-log-ids on the same
+ * project. Auto-released when the surrounding transaction ends.
+ *
+ * Used by `supersedeActiveLLMSuggestions` and `createCommit`. Must
+ * be called inside a transaction; outside a transaction the lock
+ * is a no-op (held only for the single statement) and the
+ * serialisation guarantee is lost.
+ *
+ * The reason this is the *correct* fix and not a row-level FOR SHARE:
+ * under PostgreSQL READ COMMITTED, a waiting UPDATE's WHERE
+ * predicate is re-evaluated only for the row being locked, not for
+ * subqueries over other tables (per PG docs: "an updating command
+ * ... does not see effects of those commands on other rows in the
+ * database"). So an UPDATE that hits a `FOR SHARE`-locked yops_log
+ * row would, after waking, fail to see the newly-inserted commits
+ * row in its `NOT EXISTS (... commits ...)` subquery and would still
+ * mark the row superseded. Advisory lock takes that ambiguity off
+ * the table by serialising the entire critical section.
+ */
+export async function acquireProjectSupersedeLock(db: AnyDB, projectId: string): Promise<void> {
+  // Hash the projectId to a stable int4 key; (namespace, key) gives
+  // us the bigint advisory-lock space pg_advisory_xact_lock expects.
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(${SUPERSEDE_LOCK_NAMESPACE}::int, hashtext(${projectId})::int)`
+  );
+}
+
+/**
  * Mark active-draft, **all-LLM** entries for the conversation as
  * superseded. Called atomically with the new extract entry's insert
  * so the workspace flips from "old suggestion + new suggestion" to
  * just "new suggestion" in a single transaction.
  *
- * Single-statement SQL UPDATE with three filters in the WHERE clause
- * — all evaluated atomically against the snapshot at UPDATE time:
+ * Acquires `acquireProjectSupersedeLock` first, then runs a single
+ * SQL UPDATE with three filters:
  *
  *   1. `conversation_id = $1` and `superseded_at IS NULL`
  *      — never touch other conversations; idempotent on already-
@@ -163,23 +201,36 @@ export async function listActiveYOpsLogByConversation(
  *      row qualifies only when no op has a non-LLM source.
  *
  *   3. The row is NOT referenced by any commit in the conversation's
- *      project at UPDATE time. Inline NOT EXISTS subquery against
- *      `commits.yops_log_ids` — committed entries are part of the
- *      immutable baseline and never get marked superseded.
- *
- * Concurrency: this query is internally atomic, but it does NOT
- * serialize against concurrent commit creation. A commit caller that
- * snapshotted the active-draft id set just before this UPDATE runs
- * may then write a now-superseded id into `commits.yops_log_ids`.
- * That residual race is closed at the commit boundary itself by
- * `createCommit`, which rejects superseded ids at insert time.
+ *      project. Inline NOT EXISTS subquery against
+ *      `commits.yops_log_ids`. Combined with the advisory lock above,
+ *      the subquery sees a stable view of `commits` for the duration
+ *      of the critical section.
  *
  * Returns the ids that were marked, for caller observability / audit.
+ *
+ * Caller contract: must run inside a transaction so the advisory
+ * lock is xact-scoped. `yopsApplyOp` already wraps the supersede +
+ * insert + tree sync in one tx.
  */
 export async function supersedeActiveLLMSuggestions(
   db: AnyDB,
   conversationId: string
 ): Promise<string[]> {
+  // Acquire the per-project advisory lock first. Looking up the
+  // project from the conversation is a cheap point-read; the lookup
+  // is fine outside the lock since the conversation→project mapping
+  // is immutable after creation.
+  const projectRow = await db.execute<{ project_id: string }>(
+    sql`SELECT project_id FROM conversations WHERE conversation_id = ${conversationId}`
+  );
+  const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
+    ? (projectRow as Array<{ project_id: string }>)
+    : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
+  const projectId = projectRows[0]?.project_id;
+  if (!projectId) return []; // conversation doesn't exist; nothing to supersede
+
+  await acquireProjectSupersedeLock(db, projectId);
+
   const result = await db.execute<{ id: string }>(sql`
     UPDATE ${yopsLog}
     SET superseded_at = NOW()
@@ -204,8 +255,6 @@ export async function supersedeActiveLLMSuggestions(
     RETURNING ${yopsLog.id}
   `);
 
-  // Drizzle returns either an array of rows or a `{ rows: [...] }` shape
-  // depending on adapter (postgres-js vs node-postgres). Normalize both.
   const rows: Array<{ id: string }> = Array.isArray(result)
     ? (result as Array<{ id: string }>)
     : ((result as { rows?: Array<{ id: string }> }).rows ?? []);

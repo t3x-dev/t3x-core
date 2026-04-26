@@ -28,6 +28,7 @@ import {
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { mapSupersededError } from '../lib/yops-commit-link';
 import { commitOp } from '../ops/commit';
 import { buildPipelineContext } from '../ops/context';
 import {
@@ -163,6 +164,11 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
 
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
+    // Suggestion-vs-baseline: surface concurrent-supersede races as
+    // 409 retryable conflict, not opaque 500. Same boundary as the
+    // draft / autopilot / drafts-workflow commit routes.
+    const conflict = mapSupersededError(c, err);
+    if (conflict) return conflict;
     const message = err instanceof Error ? err.message : 'Failed to create commit';
     return errorResponse(c, 'CREATE_FAILED', message);
   }

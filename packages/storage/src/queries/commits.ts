@@ -17,6 +17,7 @@ import type { AnyDB } from '../adapters';
 import { type CommitRecord, commits } from '../schema-commits';
 import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
+import { acquireProjectSupersedeLock } from './yops-log';
 
 /**
  * Thrown by `createCommit` when the caller passes one or more
@@ -115,42 +116,35 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
     return rowToCommit(row);
   }
 
-  // Race-closing path: lock the candidate yops_log rows for the
-  // duration of this commit so a concurrent
-  // `supersedeActiveLLMSuggestions` UPDATE blocks until our INSERT
-  // commits.
+  // Race-closing path: per-project advisory transaction lock shared
+  // with `supersedeActiveLLMSuggestions`. Acquired inside the
+  // transaction (so it auto-releases at COMMIT/ROLLBACK), it
+  // serialises the entire critical section between extract-side
+  // supersede and commit-side validation+insert.
+  //
+  // Why advisory (and not row-level FOR SHARE): under PG READ
+  // COMMITTED, a waiting UPDATE re-evaluates the WHERE predicate
+  // only against the locked row — its subqueries over OTHER tables
+  // (here, `commits`) keep using the original statement snapshot.
+  // So a `FOR SHARE` on yops_log rows would not have caused the
+  // supersede's `NOT EXISTS (... commits ...)` to see our newly-
+  // inserted commit row, and the row could be marked superseded
+  // even after we committed referencing it. Advisory lock takes that
+  // ambiguity off the table by serialising the two paths outright.
   //
   // Sequence inside the transaction:
-  //   1. SELECT id FROM yops_log WHERE id = ANY($ids) FOR SHARE
-  //      acquires shared row locks. UPDATEs (incl. supersede) on
-  //      these rows wait until this transaction ends. Other readers
-  //      (e.g. another commit attempt) can proceed.
-  //   2. SELECT for already-superseded rows. If any, throw —
-  //      caller raced before the lock was held.
+  //   1. pg_advisory_xact_lock(ssvb, hashtext(projectId)) —
+  //      blocks any concurrent supersede on this project.
+  //   2. SELECT for already-superseded ids. If any, throw —
+  //      caller raced *before* we acquired the lock; their snapshot
+  //      is stale, they should retry.
   //   3. INSERT commit. After this, the rows are referenced by
-  //      `commits.yops_log_ids`, so the next supersede UPDATE's
-  //      NOT EXISTS subquery against commits will exclude them
-  //      naturally.
-  //
-  // FOR SHARE (not FOR UPDATE) is the right grade: we don't mutate
-  // the yops_log rows, we only need to prevent concurrent UPDATEs.
+  //      `commits.yops_log_ids`. The next supersede (which has been
+  //      waiting on the advisory lock) wakes up, sees the new commits
+  //      row in its NOT EXISTS subquery, and excludes them.
   const result = await (db as unknown as TxRunner).transaction(async (tx) => {
-    // Acquire shared row locks on the candidate yops_log rows. A
-    // concurrent `supersedeActiveLLMSuggestions` UPDATE on any of
-    // these ids will block until this transaction ends. Other readers
-    // (and other unrelated commit attempts) are unaffected. Drizzle's
-    // `.for('share')` emits a standard `FOR SHARE` clause; the
-    // SELECT itself doesn't need to consume the rows — executing it
-    // is what acquires the locks.
-    await (tx as AnyDB)
-      .select({ id: yopsLog.id })
-      .from(yopsLog)
-      .where(inArray(yopsLog.id, yopsLogIds))
-      .for('share');
+    await acquireProjectSupersedeLock(tx as AnyDB, input.project_id);
 
-    // After lock acquisition, validate. A concurrent supersede UPDATE
-    // on these ids is now blocked until our transaction ends, so the
-    // outcome of this SELECT is stable for the rest of the tx.
     const superseded = await (tx as AnyDB)
       .select({ id: yopsLog.id })
       .from(yopsLog)

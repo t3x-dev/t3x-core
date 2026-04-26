@@ -450,6 +450,7 @@ export {
 } from './webhooks';
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
+  acquireProjectSupersedeLock,
   deleteYOpsLogEntry,
   getYOpsForCommit,
   getYOpsLogEntry,

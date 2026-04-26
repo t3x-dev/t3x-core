@@ -62,12 +62,22 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
 
     yield { type: 'step_start', step: 'persist' };
     const { record, supersededIds } = await (db as any).transaction(async (tx: any) => {
-      // Supersede + insert + tree sync all share one transaction. The
-      // supersede query's WHERE clause does the committed-id exclusion
-      // inline (NOT EXISTS subquery against commits.yops_log_ids), so
-      // a commit landing concurrently with this extract cannot end up
-      // marked superseded — there's no read-then-update window for the
-      // race to slip through.
+      // Supersede + insert + tree sync all share one transaction.
+      //
+      // Concurrency contract is two-sided:
+      //   - This UPDATE excludes commits visible at UPDATE time via
+      //     its NOT EXISTS subquery against commits.yops_log_ids.
+      //     Inside `supersedeActiveLLMSuggestions` we ALSO acquire the
+      //     per-project advisory transaction lock first.
+      //   - The other side — commit creation that references active
+      //     yops_log_ids — acquires the same advisory lock in
+      //     `createCommit` and re-validates `superseded_at IS NULL`
+      //     before insert, throwing `SupersededYOpsLogIdsError` on
+      //     conflict.
+      //
+      // Together those two paths serialise the critical section and
+      // make the "row both committed AND superseded" outcome
+      // unreachable. Neither path alone is sufficient.
       const ids = replaceActiveLLMDraft
         ? await supersedeActiveLLMSuggestions(tx, conversationId)
         : [];
