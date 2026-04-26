@@ -118,11 +118,8 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
 
       hydrateConversationToStore(projectId, conversationId)
         .then(() => {
-          // Expand panel
-          if (!useWorkspaceStore.getState().panelExpanded) {
-            useWorkspaceStore.getState().setPanelExpanded(true);
-          }
-          // Enter streaming mode — YOpsFeed will auto-transition to executed when done
+          // Enter streaming mode — YOpsFeed will auto-transition to executed when done.
+          // Don't auto-expand the panel: panel state is user-controlled (click to open).
           useWorkspaceStore.getState().setMode('streaming');
         })
         .catch(() => {

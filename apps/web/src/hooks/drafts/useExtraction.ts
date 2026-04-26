@@ -78,10 +78,18 @@ export function useExtraction({
       }
 
       const store = useWorkspaceStore.getState();
+      // Pre-sync the workspace's activeProjectId before flipping the panel.
+      // ConversationPage mirrors chatStore → workspaceStore via useEffect, so
+      // there's a window where chatStore.activeProjectId is ready (Extract is
+      // enabled) but workspaceStore.activeProjectId hasn't caught up yet —
+      // setPanelExpanded would no-op against the unsynced workspace state.
+      // Extract is an explicit user action, so we close the window inline.
+      if (store.activeProjectId !== projectId) store.setActiveProject(projectId);
       store.setMode('streaming');
       store.setError(null);
       store.setLastExtractionPinIds(sourcePinIds ?? []);
-      if (!store.panelExpanded) store.setPanelExpanded(true);
+      // Auto-expand on Extract — explicit user action, they want to see results.
+      store.setPanelExpanded(true);
 
       try {
         const turns = useWorkspaceStore.getState().turns;

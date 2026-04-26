@@ -54,7 +54,7 @@ vi.mock('@/store/chatStore', () => ({
 }));
 
 import { EXTRACTION_TOAST_ID, useExtraction } from '@/hooks/drafts/useExtraction';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('useExtraction', () => {
   beforeEach(() => {
@@ -64,6 +64,10 @@ describe('useExtraction', () => {
       activeConversationId: 'conv_123',
     };
     useWorkspaceStore.getState().reset();
+    // Wipe per-project preference + active project so every test starts from
+    // the same blank slate (otherwise persist would leak panelExpanded
+    // between cases).
+    useWorkspaceStore.setState({ panelExpandedByProject: {}, activeProjectId: null });
     useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
     runExtractionMock.mockImplementation(
       async ({ llm }: { llm: (input: unknown) => Promise<unknown> }) => {
@@ -175,5 +179,33 @@ describe('useExtraction', () => {
     const successOrder = toastSuccessMock.mock.invocationCallOrder[0];
     expect(hydrateOrder).toBeLessThan(successOrder);
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('expands the workspace even if workspaceStore.activeProjectId has not synced yet', async () => {
+    // Regression: ConversationPage mirrors chatStore.activeProjectId into
+    // workspaceStore via useEffect. There is a render where chatStore is
+    // ready (Extract is enabled) but workspaceStore.activeProjectId is
+    // still null — setPanelExpanded would no-op against the unsynced map
+    // and the user's explicit Extract click would silently leave the
+    // panel folded. handleExtract pre-syncs activeProjectId for this
+    // exact reason.
+    expect(useWorkspaceStore.getState().activeProjectId).toBeNull();
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const state = useWorkspaceStore.getState();
+    expect(state.activeProjectId).toBe('proj_123');
+    expect(selectPanelExpanded(state)).toBe(true);
+    expect(state.panelExpandedByProject.proj_123).toBe(true);
   });
 });

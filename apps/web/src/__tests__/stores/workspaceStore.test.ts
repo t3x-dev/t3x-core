@@ -1,10 +1,13 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
+    // Wipe both conversation state and the persisted per-project preference
+    // map so tests can't leak panelExpanded values into each other.
     useWorkspaceStore.getState().reset();
+    useWorkspaceStore.setState({ panelExpandedByProject: {}, activeProjectId: null });
   });
 
   it('starts in idle mode with empty derived state', () => {
@@ -68,8 +71,9 @@ describe('workspaceStore (state-only)', () => {
     useWorkspaceStore.getState().setMode('streaming');
     expect(useWorkspaceStore.getState().mode).toBe('streaming');
 
+    useWorkspaceStore.getState().setActiveProject('proj_x');
     useWorkspaceStore.getState().setPanelExpanded(true);
-    expect(useWorkspaceStore.getState().panelExpanded).toBe(true);
+    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(true);
 
     useWorkspaceStore.getState().setCommitted(true);
     expect(useWorkspaceStore.getState().isCommitted).toBe(true);
@@ -78,7 +82,9 @@ describe('workspaceStore (state-only)', () => {
     expect(useWorkspaceStore.getState().lastError).toBe('boom');
   });
 
-  it('reset restores initial state', () => {
+  it('reset clears conversation data but preserves UI prefs', () => {
+    useWorkspaceStore.getState().setActiveProject('proj_y');
+    useWorkspaceStore.getState().setPanelExpanded(true);
     useWorkspaceStore.getState().setConversation('conv_abc');
     useWorkspaceStore.getState().setMode('streaming');
     useWorkspaceStore.getState().setError('boom');
@@ -89,5 +95,32 @@ describe('workspaceStore (state-only)', () => {
     expect(s.conversationId).toBeNull();
     expect(s.mode).toBe('idle');
     expect(s.lastError).toBeNull();
+    // Per-project pref + active project survive a conversation reset so
+    // navigating between conversations of the same project doesn't slam the
+    // workspace shut.
+    expect(s.activeProjectId).toBe('proj_y');
+    expect(selectPanelExpanded(s)).toBe(true);
+  });
+
+  it('setPanelExpanded is per-project; switching projects defaults to folded', () => {
+    useWorkspaceStore.getState().setActiveProject('proj_a');
+    useWorkspaceStore.getState().setPanelExpanded(true);
+    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(true);
+
+    // Switching to a brand-new project starts folded — the pref is per-project,
+    // not global.
+    useWorkspaceStore.getState().setActiveProject('proj_b');
+    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
+
+    // Coming back to proj_a restores the previous expanded state.
+    useWorkspaceStore.getState().setActiveProject('proj_a');
+    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(true);
+  });
+
+  it('setPanelExpanded is a no-op without an active project', () => {
+    // No setActiveProject — nothing should be written to the persisted map.
+    useWorkspaceStore.getState().setPanelExpanded(true);
+    expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
+    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
   });
 });

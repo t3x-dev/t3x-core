@@ -1,12 +1,12 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useChatStore } from '@/store/chatStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -24,7 +24,15 @@ export default function ConversationPage() {
   const projectIdParam = searchParams.get('projectId');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
   const resolvedProjectId = projectIdParam ?? activeProjectId;
-  const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const panelExpanded = useWorkspaceStore(selectPanelExpanded);
+  const setActiveWorkspaceProject = useWorkspaceStore((s) => s.setActiveProject);
+
+  // Mirror the resolved project into the workspace store so the per-project
+  // expansion preference (`panelExpandedByProject[resolvedProjectId]`) keys
+  // off the right project for both reads and writes.
+  useEffect(() => {
+    setActiveWorkspaceProject(resolvedProjectId ?? null);
+  }, [resolvedProjectId, setActiveWorkspaceProject]);
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
 

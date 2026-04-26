@@ -1,5 +1,6 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export interface WorkspaceTurn {
   turn_hash: string;
@@ -42,7 +43,19 @@ interface WorkspaceState {
 
   // ── UI state ──
   mode: WorkspaceMode;
-  panelExpanded: boolean;
+  /**
+   * Per-project workspace expansion preference (persisted).
+   * Default for an unseen project is folded; flips to expanded once the user
+   * opens it for that project, and stays that way across refresh / nav until
+   * explicitly collapsed again.
+   */
+  panelExpandedByProject: Record<string, boolean>;
+  /**
+   * Project that the workspace is currently scoped to. Read by
+   * `selectPanelExpanded` / `setPanelExpanded` to look up the per-project
+   * preference. Null until a conversation has resolved its project_id.
+   */
+  activeProjectId: string | null;
   isCommitted: boolean;
   lastError: string | null;
   replayWarning: ReplayWarning | null;
@@ -64,6 +77,7 @@ interface WorkspaceState {
 
   // ── State setters (no business logic) ──
   setConversation: (id: string | null) => void;
+  setActiveProject: (projectId: string | null) => void;
   setTurns: (turns: WorkspaceTurn[]) => void;
   setDerived: (input: {
     tree: SemanticContent;
@@ -71,6 +85,11 @@ interface WorkspaceState {
     opsLog: SourcedYOp[];
   }) => void;
   setMode: (mode: WorkspaceMode) => void;
+  /**
+   * Sets expansion for the currently active project. No-op if no project is
+   * active yet (so a brand-new chat without a resolved project never writes
+   * a stray entry to the persisted map).
+   */
   setPanelExpanded: (expanded: boolean) => void;
   setCommitted: (committed: boolean) => void;
   setError: (err: string | null) => void;
@@ -93,81 +112,124 @@ interface WorkspaceState {
 
 const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
 
-function initialState(): Omit<
-  WorkspaceState,
-  | 'setConversation'
-  | 'setTurns'
-  | 'setDerived'
-  | 'setMode'
-  | 'setPanelExpanded'
-  | 'setCommitted'
-  | 'setError'
-  | 'setReplayWarning'
-  | 'select'
-  | 'clearSelection'
-  | 'setExtractionPreset'
-  | 'setLastExtractionPinIds'
-  | 'setScriptText'
-  | 'setScriptDirty'
-  | 'reset'
-> {
+/**
+ * Selector: derives the current workspace expansion flag from the active
+ * project. Components subscribe via `useWorkspaceStore(selectPanelExpanded)`.
+ */
+export const selectPanelExpanded = (state: WorkspaceState): boolean =>
+  state.activeProjectId ? Boolean(state.panelExpandedByProject[state.activeProjectId]) : false;
+
+/**
+ * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
+ * Note this object intentionally does NOT include `panelExpandedByProject` or
+ * `activeProjectId`: zustand's `set` is a partial update, so any field absent
+ * here is left untouched. That preserves the per-project expansion preference
+ * and the workspace's project scope across a conversation switch.
+ *
+ * Do not add UI prefs to this object — anything listed here gets reset on
+ * every `reset()` call.
+ */
+function conversationResetState() {
   return {
     conversationId: null,
     turns: [],
     opsLog: [],
     tree: EMPTY_TREE,
-    sourceIndex: new Map(),
-    mode: 'idle',
-    panelExpanded: false,
+    sourceIndex: new Map<string, Source>(),
+    mode: 'idle' as WorkspaceMode,
     isCommitted: false,
     lastError: null,
     replayWarning: null,
     selectedNodePath: null,
     selectedSlotKey: null,
     selectedTurnIndex: null,
-    selectedSource: null,
+    selectedSource: null as SelectionSource,
     scrollToCenter: false,
-    extractionPreset: 'balanced',
+    extractionPreset: 'balanced' as const,
     lastExtractionPinIds: [],
     scriptText: '',
     scriptDirty: false,
   };
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  ...initialState(),
+export const useWorkspaceStore = create<WorkspaceState>()(
+  persist(
+    (set, get) => ({
+      ...conversationResetState(),
+      panelExpandedByProject: {},
+      activeProjectId: null,
 
-  setConversation: (id) => set({ conversationId: id }),
-  setTurns: (turns) => set({ turns }),
-  setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
-  setMode: (mode) => set({ mode }),
-  setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
-  setCommitted: (isCommitted) => set({ isCommitted }),
-  setError: (lastError) => set({ lastError }),
-  setReplayWarning: (replayWarning) => set({ replayWarning }),
+      setConversation: (id) => set({ conversationId: id }),
+      setActiveProject: (activeProjectId) => set({ activeProjectId }),
+      setTurns: (turns) => set({ turns }),
+      setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
+      setMode: (mode) => set({ mode }),
+      setPanelExpanded: (expanded) => {
+        const projectId = get().activeProjectId;
+        if (!projectId) return;
+        set((s) => ({
+          panelExpandedByProject: {
+            ...s.panelExpandedByProject,
+            [projectId]: expanded,
+          },
+        }));
+      },
+      setCommitted: (isCommitted) => set({ isCommitted }),
+      setError: (lastError) => set({ lastError }),
+      setReplayWarning: (replayWarning) => set({ replayWarning }),
 
-  select: (source, { nodePath, slotKey, turnIndex }) =>
-    set({
-      selectedSource: source,
-      selectedNodePath: nodePath ?? null,
-      selectedSlotKey: slotKey ?? null,
-      selectedTurnIndex: turnIndex ?? null,
-      scrollToCenter: true,
+      select: (source, { nodePath, slotKey, turnIndex }) =>
+        set({
+          selectedSource: source,
+          selectedNodePath: nodePath ?? null,
+          selectedSlotKey: slotKey ?? null,
+          selectedTurnIndex: turnIndex ?? null,
+          scrollToCenter: true,
+        }),
+      clearSelection: () =>
+        set({
+          selectedSource: null,
+          selectedNodePath: null,
+          selectedSlotKey: null,
+          selectedTurnIndex: null,
+          scrollToCenter: false,
+        }),
+
+      setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
+      setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
+
+      setScriptText: (scriptText) => set({ scriptText }),
+      setScriptDirty: (scriptDirty) => set({ scriptDirty }),
+
+      // Clears conversation-scoped data; keeps UI prefs (per-project expansion
+      // map, active project) so navigation between conversations doesn't yank
+      // the workspace shut.
+      reset: () => set(conversationResetState()),
     }),
-  clearSelection: () =>
-    set({
-      selectedSource: null,
-      selectedNodePath: null,
-      selectedSlotKey: null,
-      selectedTurnIndex: null,
-      scrollToCenter: false,
-    }),
-
-  setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
-  setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
-
-  setScriptText: (scriptText) => set({ scriptText }),
-  setScriptDirty: (scriptDirty) => set({ scriptDirty }),
-
-  reset: () => set(initialState()),
-}));
+    {
+      name: 't3x-workspace-ui',
+      partialize: (state) => ({ panelExpandedByProject: state.panelExpandedByProject }),
+      // Falls back to in-memory storage on the server / in tests where
+      // localStorage is missing or its API surface isn't fully wired
+      // (e.g. some jsdom configurations). Persistence only matters in the
+      // browser; the fallback exists so the store is constructible everywhere.
+      storage: createJSONStorage(() => {
+        const ls =
+          typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
+        if (ls && typeof ls.setItem === 'function' && typeof ls.getItem === 'function') {
+          return ls;
+        }
+        const memory = new Map<string, string>();
+        return {
+          getItem: (key) => memory.get(key) ?? null,
+          setItem: (key, value) => {
+            memory.set(key, value);
+          },
+          removeItem: (key) => {
+            memory.delete(key);
+          },
+        };
+      }),
+    }
+  )
+);
