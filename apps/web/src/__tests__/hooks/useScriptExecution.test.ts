@@ -166,7 +166,11 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).not.toHaveBeenCalled();
   });
 
-  it('execute clears scriptDirty + draft state after a successful commit', async () => {
+  it('execute clears scriptDirty + draft state + persisted map after a successful commit', async () => {
+    // Setup: simulate the propose-only flow's pre-Apply state by
+    // staging a draft AND priming the persisted map (since setConversation
+    // was called in beforeEach with conv_xyz, the map will get an entry
+    // automatically).
     useWorkspaceStore.getState().setDraft({
       ops: [
         {
@@ -181,6 +185,7 @@ describe('useScriptExecution', () => {
       ] as never,
       tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
     });
+    expect(useWorkspaceStore.getState().draftsByConversation.conv_xyz).toBeDefined();
     useWorkspaceStore
       .getState()
       .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
@@ -192,12 +197,15 @@ describe('useScriptExecution', () => {
     });
 
     // After Apply + hydrate, the draft is now part of yops_log. scriptDirty
-    // resets to false (the script is once again a mirror), and the local
-    // draft state is cleared so a second click is a no-op.
+    // resets to false (the script is once again a mirror), the local
+    // draft state is cleared so a second click is a no-op, AND the
+    // persisted map entry is removed so an F5 right after Apply doesn't
+    // restore a draft that's already been applied.
     const after = useWorkspaceStore.getState();
     expect(after.scriptDirty).toBe(false);
     expect(after.hasDraft).toBe(false);
     expect(after.draftOps).toEqual([]);
     expect(after.draftTree).toBeNull();
+    expect(after.draftsByConversation.conv_xyz).toBeUndefined();
   });
 });

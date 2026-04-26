@@ -1,6 +1,10 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  DRAFT_PERSISTENCE_CAP,
+  selectPanelExpanded,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 
 describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
@@ -378,6 +382,197 @@ describe('workspaceStore (state-only)', () => {
       const result = useWorkspaceStore.getState().restoreDraftFor('conv_x');
       expect(result).toBe(false);
       expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+    });
+
+    it('isolates drafts between conversations (no cross-leak on restore)', () => {
+      // Stage two distinct drafts and verify each restore reads ONLY
+      // the matching id's snapshot. A bug here would show up as
+      // conv_a's draft appearing in conv_b after a switch+F5.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setScriptText('script for A');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+
+      const opsB = [
+        {
+          define: { path: 'other_root' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T01:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t2', quote: 'other_root' },
+          },
+        },
+      ];
+      useWorkspaceStore.getState().setConversation('conv_b');
+      useWorkspaceStore.getState().setScriptText('script for B');
+      useWorkspaceStore.getState().setDraft({
+        ops: opsB as never,
+        tree: { trees: [{ key: 'other_root', slots: {}, children: [] }], relations: [] },
+      });
+
+      // Wipe in-memory and re-hydrate as conv_a.
+      useWorkspaceStore.getState().reset();
+      useWorkspaceStore.getState().setConversation('conv_a');
+      const restoredA = useWorkspaceStore.getState().restoreDraftFor('conv_a');
+      expect(restoredA).toBe(true);
+      let s = useWorkspaceStore.getState();
+      expect(s.draftOps).toEqual(draftOps);
+      expect(s.scriptText).toBe('script for A');
+
+      // Now switch to conv_b. Reset wipes A's in-memory draft; restore
+      // for B brings B's draft back. A's persisted entry is left
+      // intact for the eventual return trip.
+      useWorkspaceStore.getState().reset();
+      useWorkspaceStore.getState().setConversation('conv_b');
+      const restoredB = useWorkspaceStore.getState().restoreDraftFor('conv_b');
+      expect(restoredB).toBe(true);
+      s = useWorkspaceStore.getState();
+      expect(s.draftOps).toEqual(opsB);
+      expect(s.scriptText).toBe('script for B');
+      // Sanity: both persisted entries still present.
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_b).toBeDefined();
+    });
+
+    it('fresh Extract on the same conversation overwrites the persisted entry', () => {
+      // Re-extract is the natural retry flow: previous LLM proposal is
+      // replaced by the new one. The persisted snapshot must follow —
+      // otherwise an F5 right after re-extract would restore the OLD
+      // proposal that the user explicitly threw away.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      const before = useWorkspaceStore.getState().draftsByConversation.conv_a;
+      expect(before.ops).toEqual(draftOps);
+
+      const newOps = [
+        {
+          set: { path: 'trip/budget', value: 'twenty thousand' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T02:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t3', quote: 'twenty thousand' },
+          },
+        },
+      ];
+      useWorkspaceStore.getState().setDraft({
+        ops: newOps as never,
+        tree: {
+          trees: [{ key: 'trip', slots: { budget: 'twenty thousand' }, children: [] }],
+          relations: [],
+        },
+      });
+
+      const after = useWorkspaceStore.getState().draftsByConversation.conv_a;
+      expect(after.ops).toEqual(newOps);
+      // Map should still have exactly one entry for this conversation.
+      expect(Object.keys(useWorkspaceStore.getState().draftsByConversation)).toEqual(['conv_a']);
+    });
+
+    it('discard sequence (clearDraft + clear scriptText/Dirty) removes persisted entry', () => {
+      // Mirrors AfterPanel.handleDiscard. After discard, the persisted
+      // map must not retain an applicable draft — otherwise an F5
+      // would restore something the user explicitly threw away.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setScriptText('user edits');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      useWorkspaceStore.getState().setScriptDirty(true);
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
+
+      // Discard sequence:
+      useWorkspaceStore.getState().clearDraft();
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.getState().setScriptDirty(false);
+
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeUndefined();
+    });
+
+    it(`evicts oldest entries when the map exceeds the LRU cap (${DRAFT_PERSISTENCE_CAP})`, () => {
+      // Stage drafts on cap+5 conversations. The map should size at
+      // exactly cap, with the oldest 5 (conv_0..conv_4) evicted.
+      const opsFor = (i: number) => [
+        {
+          set: { path: `root/${i}`, value: `v${i}` },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: `sha256:t${i}`, quote: `v${i}` },
+          },
+        },
+      ];
+      const total = DRAFT_PERSISTENCE_CAP + 5;
+      for (let i = 0; i < total; i++) {
+        useWorkspaceStore.getState().setConversation(`conv_${i}`);
+        useWorkspaceStore.getState().setDraft({
+          ops: opsFor(i) as never,
+          tree: { trees: [], relations: [] },
+        });
+      }
+
+      const map = useWorkspaceStore.getState().draftsByConversation;
+      expect(Object.keys(map)).toHaveLength(DRAFT_PERSISTENCE_CAP);
+      // The 5 oldest are gone.
+      for (let i = 0; i < 5; i++) {
+        expect(map[`conv_${i}`]).toBeUndefined();
+      }
+      // The newest cap entries are present.
+      for (let i = 5; i < total; i++) {
+        expect(map[`conv_${i}`]).toBeDefined();
+      }
+    });
+
+    it('touching an existing entry refreshes its LRU position (does not evict it)', () => {
+      // Fill the map to the cap with the conv_a entry oldest. Then
+      // touch conv_a (re-Extract / edit). One more new entry should
+      // evict the *next* oldest (conv_1), not conv_a — proving the
+      // re-insert behaviour of writeDraftSnapshot.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      for (let i = 1; i < DRAFT_PERSISTENCE_CAP; i++) {
+        useWorkspaceStore.getState().setConversation(`conv_${i}`);
+        useWorkspaceStore.getState().setDraft({
+          ops: [
+            {
+              set: { path: `root/${i}`, value: `v${i}` },
+              source: {
+                type: 'llm' as const,
+                model: 'gpt-4o-mini',
+                at: '2026-04-26T00:00:00Z',
+                turn_ref: { turn_hash: `sha256:t${i}`, quote: `v${i}` },
+              },
+            },
+          ] as never,
+          tree: { trees: [], relations: [] },
+        });
+      }
+      // Touch conv_a — moves it to most-recent.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({
+        ops: draftOps as never,
+        tree: previewTree,
+      });
+      // Add one more — should evict conv_1 (now oldest), not conv_a.
+      useWorkspaceStore.getState().setConversation('conv_new');
+      useWorkspaceStore.getState().setDraft({
+        ops: [
+          {
+            set: { path: 'fresh', value: 'val' },
+            source: {
+              type: 'llm' as const,
+              model: 'gpt-4o-mini',
+              at: '2026-04-26T03:00:00Z',
+              turn_ref: { turn_hash: 'sha256:tnew', quote: 'val' },
+            },
+          },
+        ] as never,
+        tree: { trees: [], relations: [] },
+      });
+
+      const map = useWorkspaceStore.getState().draftsByConversation;
+      expect(map.conv_a).toBeDefined();
+      expect(map.conv_1).toBeUndefined();
+      expect(map.conv_new).toBeDefined();
     });
   });
 });

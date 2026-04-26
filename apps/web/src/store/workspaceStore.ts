@@ -213,10 +213,29 @@ function conversationResetState() {
 }
 
 /**
+ * Soft cap on the number of persisted draft snapshots. The map is keyed by
+ * conversationId; without a cap, a power user who clicks Extract on hundreds
+ * of conversations and never explicitly Applies / Discards would accumulate
+ * unbounded localStorage. 50 is generous (dozens of in-flight reviews) but
+ * cheap to LRU-evict.
+ *
+ * Exported so the test pinning the cap can stay in lockstep with the value.
+ */
+export const DRAFT_PERSISTENCE_CAP = 50;
+
+/**
  * Helper for the per-conversation draft persistence layer. Returns the next
  * map after writing or removing the entry for `convId`. Centralised so the
  * setDraft / clearDraft / setScriptText / setScriptDirty mirrors all use
- * the same write path.
+ * the same write path — and so the LRU cap is enforced at exactly one
+ * place.
+ *
+ * LRU semantics: every write re-inserts the entry at the end of the
+ * iteration order, so the oldest (first) entry is always the
+ * least-recently-touched one. When the map exceeds DRAFT_PERSISTENCE_CAP
+ * we drop entries from the front until we're back under the cap. JS
+ * objects preserve insertion order for non-numeric keys, which is what
+ * this scheme depends on.
  */
 function writeDraftSnapshot(
   map: Record<string, PersistedDraft>,
@@ -230,7 +249,27 @@ function writeDraftSnapshot(
     delete next[convId];
     return next;
   }
-  return { ...map, [convId]: snapshot };
+
+  // Re-insert at the end so a touched entry becomes "most recent".
+  // Spread alone keeps an existing key in its original position, which
+  // would defeat the LRU.
+  const next: Record<string, PersistedDraft> = {};
+  for (const [key, value] of Object.entries(map)) {
+    if (key !== convId) next[key] = value;
+  }
+  next[convId] = snapshot;
+
+  // Evict the oldest entries when over the cap.
+  const keys = Object.keys(next);
+  if (keys.length > DRAFT_PERSISTENCE_CAP) {
+    const overflow = keys.length - DRAFT_PERSISTENCE_CAP;
+    const trimmed: Record<string, PersistedDraft> = {};
+    for (let i = overflow; i < keys.length; i++) {
+      trimmed[keys[i]] = next[keys[i]];
+    }
+    return trimmed;
+  }
+  return next;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
