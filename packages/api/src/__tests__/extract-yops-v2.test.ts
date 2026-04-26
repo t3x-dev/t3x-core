@@ -260,4 +260,118 @@ describe('POST /v1/extract-yops (v2)', () => {
       expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('committed_root');
     });
   });
+
+  describe('preset → ExtractionStyleConfig mapping', () => {
+    // The route is the contract boundary between the wire-level preset
+    // name (string) and the core pipeline's ExtractionStyleConfig
+    // (object). Web tests pin the wire field; core tests pin the
+    // prompt's behaviour given a style; this suite pins the mapping
+    // in between — without it, a typo in PRESETS[preset] or a rename
+    // of `style` on extractAndApply could silently drop the user's
+    // selection without any layer's tests catching it.
+
+    beforeEach(async () => {
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: {
+          schema: 't3x/extraction-draft',
+          version: 1,
+          mode: 'bootstrap',
+          items: [],
+        },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+    });
+
+    it('preset:"concise" lands on extractAndApply as the concise style config', async () => {
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: testConversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+          preset: 'concise',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      // Full ExtractionStyleConfig from PRESETS.concise — pin every
+      // field so a renamed property in the preset definition is loud.
+      expect(callArgs?.style).toEqual({
+        granularity: 'concise',
+        quote_length: 'representative',
+        update_stance: 'conservative',
+        tier3: 'extract',
+      });
+    });
+
+    it('preset:"detailed" lands on extractAndApply as the detailed style config', async () => {
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: testConversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+          preset: 'detailed',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.style).toEqual({
+        granularity: 'detailed',
+        quote_length: 'representative',
+        update_stance: 'aggressive',
+        tier3: 'extract',
+      });
+    });
+
+    it('omitted preset leaves style undefined (preserves historical no-style call)', async () => {
+      // Backward-compat: programmatic callers (MCP, scripts, anything
+      // pre-#901) don't send preset. The handler must pass `undefined`
+      // straight through, NOT default to PRESETS.balanced — that
+      // would silently change the prompt for every legacy caller.
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: testConversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.style).toBeUndefined();
+    });
+
+    it('rejects an invalid preset value with a 400, not a silent fallback', async () => {
+      // The schema is z.enum(['concise','balanced','detailed']) — a
+      // typo or a future preset name should fail validation, not
+      // silently fall through to undefined and run with no style.
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: testConversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+          preset: 'condensed', // not a valid preset
+        }),
+      });
+      expect(res.status).toBe(400);
+      expect(extractAndApply).not.toHaveBeenCalled();
+    });
+  });
 });

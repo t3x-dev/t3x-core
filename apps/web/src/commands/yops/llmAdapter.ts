@@ -22,6 +22,14 @@ export interface CallExtractionLLMInput {
   failingOps?: RetryFailingOp[];
   provider?: string;
   model?: string;
+  /**
+   * Extraction granularity preset. Forwarded to /v1/extract-yops as
+   * `preset`. The API maps it to `PRESETS[preset]` and passes the full
+   * ExtractionStyleConfig into the v2 pipeline, which prepends a
+   * granularity-aware budget block to the system prompt. Omitting
+   * `preset` reproduces the historical "no style guidance" call.
+   */
+  preset?: 'concise' | 'balanced' | 'detailed';
 }
 
 interface ExtractYopsErrorBody {
@@ -79,6 +87,7 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
     turns: input.turns,
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
+    ...(input.preset ? { preset: input.preset } : {}),
   });
 
   let parsedBody: unknown;

@@ -120,7 +120,50 @@ describe('useExtraction', () => {
       failingOps: undefined,
       provider: 'openai',
       model: 'gpt-4o-mini',
+      // Default workspace store preset is 'balanced'. The hook always
+      // forwards it now — pre-wiring, the field was missing entirely.
+      preset: 'balanced',
     });
+  });
+
+  it('forwards the workspace store extractionPreset (concise) to callExtractionLLM', async () => {
+    // The dropdown lives in ChatHeader and writes to
+    // workspaceStore.extractionPreset. Before this PR, the hook never
+    // read it — every Extract used the same prompt regardless of
+    // Concise/Balanced/Detailed. This test pins the wire-through.
+    useWorkspaceStore.getState().setExtractionPreset('concise');
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const callArgs = callExtractionLLMMock.mock.calls[0]?.[0] as { preset?: string } | undefined;
+    expect(callArgs?.preset).toBe('concise');
+  });
+
+  it('forwards extractionPreset=detailed when the user picks detailed', async () => {
+    useWorkspaceStore.getState().setExtractionPreset('detailed');
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const callArgs = callExtractionLLMMock.mock.calls[0]?.[0] as { preset?: string } | undefined;
+    expect(callArgs?.preset).toBe('detailed');
   });
 
   it('toasts and skips extraction when project context has not loaded yet', async () => {

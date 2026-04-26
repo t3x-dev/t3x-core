@@ -20,7 +20,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { extractAndApply } from '@t3x-dev/core';
+import { extractAndApply, PRESETS, type PresetName } from '@t3x-dev/core';
 import { findConversationById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
@@ -46,6 +46,17 @@ const ExtractYopsRequest = z.object({
   turns: z.array(TurnInput),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  /**
+   * Extraction style preset. Drives a granularity-aware system prompt
+   * (concise: hard 6-item budget + single-tree shape; detailed: capture
+   * nuance under existing paths). Omitted = no style guidance, which
+   * keeps the historical "balanced-ish, no budget" prompt.
+   *
+   * Only the preset names are accepted on the wire; custom configs go
+   * through `extractAndApply` directly. Mapping uses `PRESETS[name]`
+   * from `@t3x-dev/core`.
+   */
+  preset: z.enum(['concise', 'balanced', 'detailed']).optional(),
 });
 
 // Response schema — ops is opaque YOp[]; OpenAPI uses z.any() for the payload.
@@ -130,6 +141,7 @@ extractYopsRoutes.openapi(route, async (c) => {
     turns,
     provider: requestedProvider,
     model: requestedModel,
+    preset,
   } = c.req.valid('json');
 
   try {
@@ -172,6 +184,11 @@ extractYopsRoutes.openapi(route, async (c) => {
         return errorResponse(c, 'EXTRACTION_FAILED', resolution.message);
       }
 
+      // Map the wire-level preset name to the full ExtractionStyleConfig
+      // the core pipeline expects. Omitted preset → undefined → core
+      // emits the historical no-style prompt.
+      const style = preset ? PRESETS[preset as PresetName] : undefined;
+
       const pipelineResult = await extractAndApply({
         turns: turns.map((turn) => ({
           turn_hash: turn.turn_hash,
@@ -183,6 +200,7 @@ extractYopsRoutes.openapi(route, async (c) => {
         provider: resolution.provider,
         model: resolution.model,
         snapshot: baselineSnapshot.trees.length > 0 ? baselineSnapshot : undefined,
+        style,
       });
 
       if (!pipelineResult.ok) {
