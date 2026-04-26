@@ -32,14 +32,10 @@ export interface ExtractionInput {
    * validation pass — preserves today's "Extract auto-applies" behavior.
    *
    * When false, the worker returns the validated ops without writing to
-   * `yops_log`. Callers (e.g. the long-term Apply-as-explicit-step UX) own
-   * the persistence decision.
-   *
-   * The flag exists so the propose / apply split can be migrated in two
-   * PRs: PR A introduces the flag with default true (zero behavior
-   * change), PR B flips the call site default for the new UX.
-   *
-   * See: docs/2026-04-26-extract-propose-vs-apply-rfc.md
+   * `yops_log`. Callers own the persistence decision and would invoke
+   * `commitOps` themselves on an explicit apply step. Validation, retry,
+   * and last-resort repair all run regardless of this flag — only the
+   * final write is gated.
    */
   commit?: boolean;
 }
