@@ -101,26 +101,3 @@ export async function replayCommittedBaseline(
 
   return replayCoreYOpsLog(toYOpsLogEntries(committedEntries));
 }
-
-/**
- * Helper used by `supersedeActiveLLMSuggestions` callers: returns the
- * set of yops_log ids that are committed (referenced by some commit
- * in the project). The supersede query takes this set as `excludeIds`
- * to guarantee committed entries are never marked superseded.
- */
-export async function listCommittedYOpsLogIds(
-  db: AnyDB,
-  conversationId: string
-): Promise<string[]> {
-  const conv = await findConversationById(db, conversationId);
-  if (!conv) return [];
-  const projectCommits = await listCommits(db, {
-    projectId: conv.projectId,
-    limit: 10_000,
-  });
-  const ids = new Set<string>();
-  for (const commit of projectCommits) {
-    for (const id of commit.yops_log_ids ?? []) ids.add(id);
-  }
-  return [...ids];
-}

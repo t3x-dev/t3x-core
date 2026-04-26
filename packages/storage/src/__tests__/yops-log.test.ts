@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
 import {
@@ -265,7 +266,7 @@ describe('YOps Log Storage', () => {
         yops: [humanOp('bar')],
       });
 
-      const supersededIds = await supersedeActiveLLMSuggestions(db, convId, []);
+      const supersededIds = await supersedeActiveLLMSuggestions(db, convId);
 
       expect(supersededIds).toEqual([llmEntry.id]);
       const llm = await getYOpsLogEntry(db, llmEntry.id);
@@ -277,24 +278,77 @@ describe('YOps Log Storage', () => {
       expect(human?.supersededAt).toBeNull();
     });
 
-    it('excludeIds blocks supersede for committed entries (defense in depth)', async () => {
+    it('preserves mixed rows (any HumanSource op present → row stays active)', async () => {
+      // The drift `keep_both_together` handler in tree-answer.openapi.ts
+      // bundles LLM-extracted ops together with a deterministic
+      // server-side `relate` op carrying a HumanSource into the same
+      // yops_log row. An "any-LLM-op" supersede rule would silently
+      // discard the user's relation choice on the next re-extract —
+      // P2 from the review on this PR. The supersede must operate at
+      // row granularity: a row with at least one HumanSource op stays
+      // active in its entirety.
       const convId = await freshConv();
-      const llmEntry = await insertYOpsLogEntry(db, {
+      const mixedEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'collapse',
+        yops: [llmOp('extracted_root'), humanOp('relate_decision')],
+      });
+      const pureLlmEntry = await insertYOpsLogEntry(db, {
         conversationId: convId,
         projectId: testProjectId,
         source: 'pipeline',
-        yops: [llmOp('foo')],
+        yops: [llmOp('only_llm')],
       });
 
-      // Pretend this entry is referenced by a commit — caller passes its
-      // id in the excludeIds set. Even though source.type === 'llm', it
-      // must NOT be marked superseded; committed entries are immutable
-      // baseline.
-      const supersededIds = await supersedeActiveLLMSuggestions(db, convId, [llmEntry.id]);
+      const supersededIds = await supersedeActiveLLMSuggestions(db, convId);
 
-      expect(supersededIds).toEqual([]);
-      const fresh = await getYOpsLogEntry(db, llmEntry.id);
-      expect(fresh?.supersededAt).toBeNull();
+      // Only the all-LLM row is marked. The mixed row survives untouched.
+      expect(supersededIds).toEqual([pureLlmEntry.id]);
+      const mixed = await getYOpsLogEntry(db, mixedEntry.id);
+      const pure = await getYOpsLogEntry(db, pureLlmEntry.id);
+      expect(mixed?.supersededAt).toBeNull();
+      expect(pure?.supersededAt).toBeInstanceOf(Date);
+    });
+
+    it('atomically excludes committed entries via the SQL WHERE clause (no read-then-update race)', async () => {
+      // Replaces the prior `excludeIds` parameter test. Committed
+      // entries are excluded by the supersede query's own NOT EXISTS
+      // subquery against commits.yops_log_ids — there is no caller-
+      // facing parameter that a concurrent commit could miss.
+      const convId = await freshConv();
+      const committedEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('committed_root')],
+      });
+      const draftEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('draft_root')],
+      });
+      // Promote one entry to a real commit — this is the boundary the
+      // supersede query treats as immutable baseline.
+      await createCommit(db, {
+        author: { type: 'human', name: 'test' },
+        content: { trees: [], relations: [] },
+        project_id: testProjectId,
+        message: 'baseline',
+        yops_log_ids: [committedEntry.id],
+      });
+
+      const supersededIds = await supersedeActiveLLMSuggestions(db, convId);
+
+      expect(supersededIds).toEqual([draftEntry.id]);
+      const committed = await getYOpsLogEntry(db, committedEntry.id);
+      const draft = await getYOpsLogEntry(db, draftEntry.id);
+      // Committed entry is part of the immutable baseline. Even though
+      // its source.type === 'llm' and it would otherwise qualify, the
+      // query must never touch it.
+      expect(committed?.supersededAt).toBeNull();
+      expect(draft?.supersededAt).toBeInstanceOf(Date);
     });
 
     it('is idempotent: a second call after the first leaves already-superseded rows untouched', async () => {
@@ -306,10 +360,10 @@ describe('YOps Log Storage', () => {
         yops: [llmOp('foo')],
       });
 
-      const firstIds = await supersedeActiveLLMSuggestions(db, convId, []);
+      const firstIds = await supersedeActiveLLMSuggestions(db, convId);
       const firstStamp = (await getYOpsLogEntry(db, llmEntry.id))?.supersededAt;
       await sleep(10);
-      const secondIds = await supersedeActiveLLMSuggestions(db, convId, []);
+      const secondIds = await supersedeActiveLLMSuggestions(db, convId);
       const secondStamp = (await getYOpsLogEntry(db, llmEntry.id))?.supersededAt;
 
       expect(firstIds).toEqual([llmEntry.id]);
@@ -332,7 +386,7 @@ describe('YOps Log Storage', () => {
         yops: [humanOp('bar')],
       });
 
-      await supersedeActiveLLMSuggestions(db, convId, []);
+      await supersedeActiveLLMSuggestions(db, convId);
 
       const active = await listActiveYOpsLogByConversation(db, convId);
       const all = await listYOpsLogByConversation(db, convId);

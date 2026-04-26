@@ -27,12 +27,10 @@ vi.mock('@t3x-dev/storage', () => ({
   // RFC 2026-04-26: yopsApplyOp now also imports the supersede query so
   // it can flip prior LLM suggestions to superseded inside the same
   // transaction when `replaceActiveLLMDraft` is set. Default mock is a
-  // no-op returning [] so existing test cases stay unaffected.
+  // no-op returning [] so existing test cases stay unaffected. The
+  // committed-id exclusion now lives inside the SQL UPDATE itself
+  // (single atomic statement), so the op no longer pre-fetches anything.
   supersedeActiveLLMSuggestions: vi.fn(() => Promise.resolve([])),
-}));
-
-vi.mock('../../lib/yops-log-utils', () => ({
-  listCommittedYOpsLogIds: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../../lib/tree-state-sync', () => ({
@@ -184,12 +182,10 @@ describe('yopsApplyOp', () => {
   });
 
   describe('replaceActiveLLMDraft flag', () => {
-    it('does not call supersede or read committed ids when flag is off (or absent)', async () => {
+    it('does not call supersede when flag is off (or absent)', async () => {
       const ctx = buildMockContext();
       const { supersedeActiveLLMSuggestions } = await import('@t3x-dev/storage');
-      const { listCommittedYOpsLogIds } = await import('../../lib/yops-log-utils');
       (supersedeActiveLLMSuggestions as any).mockClear();
-      (listCommittedYOpsLogIds as any).mockClear();
 
       await collectResult(
         runOperation(
@@ -204,19 +200,13 @@ describe('yopsApplyOp', () => {
         )
       );
 
-      expect(listCommittedYOpsLogIds).not.toHaveBeenCalled();
       expect(supersedeActiveLLMSuggestions).not.toHaveBeenCalled();
     });
 
-    it('reads committed ids and passes them to supersede when flag is on', async () => {
+    it('calls supersede inside the same transaction when flag is on, surfacing the marked ids', async () => {
       const ctx = buildMockContext();
       const { supersedeActiveLLMSuggestions } = await import('@t3x-dev/storage');
-      const { listCommittedYOpsLogIds } = await import('../../lib/yops-log-utils');
       (supersedeActiveLLMSuggestions as any).mockClear();
-      (listCommittedYOpsLogIds as any).mockClear();
-      // Pretend two entries are already committed — they must be excluded
-      // from the supersede UPDATE so the immutable baseline isn't touched.
-      (listCommittedYOpsLogIds as any).mockResolvedValueOnce(['yl_committed_1', 'yl_committed_2']);
       (supersedeActiveLLMSuggestions as any).mockResolvedValueOnce(['yl_old_suggestion']);
 
       const output = await collectResult(
@@ -233,11 +223,13 @@ describe('yopsApplyOp', () => {
         )
       );
 
-      expect(listCommittedYOpsLogIds).toHaveBeenCalledWith(expect.anything(), 'conv_abc');
+      // Note: the new signature drops the excludeIds parameter — committed
+      // entries are excluded by the supersede query's own WHERE clause
+      // (NOT EXISTS subquery against commits.yops_log_ids), so a commit
+      // landing concurrently can't slip past the safety belt.
       expect(supersedeActiveLLMSuggestions).toHaveBeenCalledWith(
         expect.anything(), // tx
-        'conv_abc',
-        ['yl_committed_1', 'yl_committed_2']
+        'conv_abc'
       );
       // Output surfaces the IDs that were actually marked superseded so
       // observers (logs / tests / future UI affordance) can audit the

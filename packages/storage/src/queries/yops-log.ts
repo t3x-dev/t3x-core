@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
 
@@ -143,50 +143,70 @@ export async function listActiveYOpsLogByConversation(
 }
 
 /**
- * Mark every active-draft, LLM-sourced entry for the conversation as
+ * Mark active-draft, **all-LLM** entries for the conversation as
  * superseded. Called atomically with the new extract entry's insert
  * so the workspace flips from "old suggestion + new suggestion" to
  * just "new suggestion" in a single transaction.
  *
- * Filters at three layers:
+ * Single-statement SQL UPDATE with three filters in the WHERE clause
+ * — all evaluated atomically, no read-then-update race:
  *
- *   1. `conversation_id = $1` — never touch other conversations.
- *   2. `superseded_at IS NULL` — idempotent: a row already marked
- *      stays at its original timestamp.
- *   3. `excludeIds` — caller passes the set of `yops_log` ids that
- *      are referenced by any project commit. Committed entries are
- *      part of the immutable baseline and must never be marked
- *      superseded, even if their per-op source.type is 'llm'.
+ *   1. `conversation_id = $1` and `superseded_at IS NULL`
+ *      — never touch other conversations; idempotent on already-
+ *      superseded rows.
  *
- * Then in app code: filter by per-op `source.type === 'llm'`. Manual
- * edits (HumanSource ops) are explicitly preserved — that's the
- * v1 contract from the RFC.
+ *   2. **Every** op in the row has `source.type === 'llm'`. Mixed
+ *      rows (e.g. the drift `keep_both_together` handler that bundles
+ *      LLM-extracted ops with a deterministic HumanSource `relate` op
+ *      in the same yops_log row) are preserved unchanged. The RFC's
+ *      load-bearing rule — Extract has no authority to overwrite
+ *      HumanSource ops — applies at the row granularity. Implemented
+ *      via `NOT jsonb_path_exists(... @.source.type != "llm")`: the
+ *      row qualifies only when no op has a non-LLM source.
+ *
+ *   3. The row is NOT referenced by any commit in the conversation's
+ *      project. Done as an inline NOT EXISTS subquery so a commit
+ *      landing mid-transaction can't slip through the gap that an
+ *      external `excludeIds` parameter would leave. Committed entries
+ *      are part of the immutable baseline; this is the safety belt
+ *      that backs the invariant.
  *
  * Returns the ids that were marked, for caller observability / audit.
+ *
+ * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
  */
 export async function supersedeActiveLLMSuggestions(
   db: AnyDB,
-  conversationId: string,
-  excludeIds: readonly string[]
+  conversationId: string
 ): Promise<string[]> {
-  const active = await db
-    .select()
-    .from(yopsLog)
-    .where(and(eq(yopsLog.conversationId, conversationId), isNull(yopsLog.supersededAt)));
+  const result = await db.execute<{ id: string }>(sql`
+    UPDATE ${yopsLog}
+    SET superseded_at = NOW()
+    WHERE ${yopsLog.id} IN (
+      SELECT yl.id
+      FROM ${yopsLog} yl
+      WHERE yl.conversation_id = ${conversationId}
+        AND yl.superseded_at IS NULL
+        AND jsonb_typeof(yl.yops) = 'array'
+        AND NOT jsonb_path_exists(
+          yl.yops,
+          '$[*] ? (@.source.type != "llm")'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM commits c
+          INNER JOIN conversations conv ON conv.project_id = c.project_id
+          WHERE conv.conversation_id = ${conversationId}
+            AND c.yops_log_ids @> jsonb_build_array(yl.id)
+        )
+    )
+    RETURNING ${yopsLog.id}
+  `);
 
-  const exclude = new Set(excludeIds);
-  const targets: string[] = [];
-  for (const entry of active) {
-    if (exclude.has(entry.id)) continue;
-    const ops = (entry.yops as Array<{ source?: { type?: string } }> | null) ?? [];
-    if (ops.some((op) => op?.source?.type === 'llm')) {
-      targets.push(entry.id);
-    }
-  }
-
-  if (targets.length === 0) return [];
-
-  await db.update(yopsLog).set({ supersededAt: new Date() }).where(inArray(yopsLog.id, targets));
-
-  return targets;
+  // Drizzle returns either an array of rows or a `{ rows: [...] }` shape
+  // depending on adapter (postgres-js vs node-postgres). Normalize both.
+  const rows: Array<{ id: string }> = Array.isArray(result)
+    ? (result as Array<{ id: string }>)
+    : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
+  return rows.map((r) => r.id);
 }

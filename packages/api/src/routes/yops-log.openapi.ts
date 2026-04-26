@@ -103,6 +103,13 @@ const YOpsLogEntryResponse = z.object({
   turn_hash: z.string().nullable(),
   yops: z.any(),
   created_at: z.string(),
+  /**
+   * IDs of yops_log entries marked superseded by this request. Empty
+   * unless `replace_active_llm_draft: true` was passed AND there were
+   * active LLM-only entries to replace. Always present (`[]` default)
+   * so generated clients can rely on the field shape.
+   */
+  superseded_ids: z.array(z.string()).default([]),
 });
 
 const DraftResponse = z.object({

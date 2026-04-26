@@ -12,10 +12,10 @@
  *             + insertYOpsLogEntry + syncYOpsToTrees
  *
  * When `replaceActiveLLMDraft: true`, the supersede step runs *inside*
- * the same DB transaction as the insert + sync. That's the atomicity
- * guarantee from the suggestion-vs-baseline RFC: a re-extract either
- * fully replaces the visible LLM draft or is a no-op — no half-state
- * where the new entry exists but the old suggestions are still active.
+ * the same DB transaction as the insert + sync. The supersede query
+ * itself is a single SQL UPDATE whose WHERE clause atomically excludes
+ * any row referenced by a project commit, so a commit landing
+ * concurrently can't slip past the safety belt.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
@@ -23,7 +23,6 @@
 import type { Operation, PipelineEvent } from '@t3x-dev/core';
 import { insertYOpsLogEntry, supersedeActiveLLMSuggestions } from '@t3x-dev/storage';
 import { syncYOpsToTrees } from '../lib/tree-state-sync';
-import { listCommittedYOpsLogIds } from '../lib/yops-log-utils';
 import type { ApiPipelineContext } from './context';
 
 export interface YopsApplyInput {
@@ -57,20 +56,16 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
     const { conversationId, source, turnHash, yops, replaceActiveLLMDraft } = input;
     const { db, projectId } = ctx as ApiPipelineContext;
 
-    // Committed-id list is read OUTSIDE the transaction because it
-    // involves a join against the commits table — fine to be slightly
-    // stale (a brand-new commit landing during this exact window is
-    // implausible and the worst case is one extra entry surviving the
-    // supersede, which the next re-extract corrects). Inside the
-    // transaction we only do the targeted UPDATE + INSERT + sync.
-    const committedIds = replaceActiveLLMDraft
-      ? await listCommittedYOpsLogIds(db, conversationId)
-      : [];
-
     yield { type: 'step_start', step: 'persist' };
     const { record, supersededIds } = await (db as any).transaction(async (tx: any) => {
+      // Supersede + insert + tree sync all share one transaction. The
+      // supersede query's WHERE clause does the committed-id exclusion
+      // inline (NOT EXISTS subquery against commits.yops_log_ids), so
+      // a commit landing concurrently with this extract cannot end up
+      // marked superseded — there's no read-then-update window for the
+      // race to slip through.
       const ids = replaceActiveLLMDraft
-        ? await supersedeActiveLLMSuggestions(tx, conversationId, committedIds)
+        ? await supersedeActiveLLMSuggestions(tx, conversationId)
         : [];
       const rec = await insertYOpsLogEntry(tx, {
         conversationId,
