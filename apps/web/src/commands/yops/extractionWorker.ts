@@ -27,6 +27,27 @@ export interface ExtractionInput {
   conversationId: string;
   turns: ValidationTurn[];
   llm: LLMCall;
+  /**
+   * When true (default), the worker calls `commitOps` after a successful
+   * validation pass — preserves today's "Extract auto-applies" behavior.
+   *
+   * When false, the worker returns the validated ops without writing to
+   * `yops_log`. Callers own the persistence decision and would invoke
+   * `commitOps` themselves on an explicit apply step. Validation, retry,
+   * and last-resort repair all run regardless of this flag — only the
+   * final write is gated.
+   */
+  commit?: boolean;
+}
+
+export interface ExtractionResult {
+  /** The validated, possibly repaired ops the worker arrived at. */
+  ops: SourcedYOp[];
+  /**
+   * True when the worker called `commitOps` itself (i.e. `commit !== false`).
+   * Callers reading this can avoid double-applying.
+   */
+  committed: boolean;
 }
 
 function collectInsertedDefinePaths(
@@ -55,7 +76,8 @@ export async function runExtraction({
   conversationId,
   turns,
   llm,
-}: ExtractionInput): Promise<void> {
+  commit = true,
+}: ExtractionInput): Promise<ExtractionResult> {
   let attempt = 0;
   let prevFailing: RetryFailingOp[] | undefined;
 
@@ -102,8 +124,8 @@ export async function runExtraction({
 
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {
-      await commitOps(conversationId, ops);
-      return;
+      if (commit) await commitOps(conversationId, ops);
+      return { ops, committed: commit };
     }
 
     attempt++;
@@ -123,8 +145,8 @@ export async function runExtraction({
               insertedDefinePaths,
             }
           );
-          await commitOps(conversationId, repairedOps);
-          return;
+          if (commit) await commitOps(conversationId, repairedOps);
+          return { ops: repairedOps, committed: commit };
         }
 
         if (insertedDefinePaths.length > 0) {
