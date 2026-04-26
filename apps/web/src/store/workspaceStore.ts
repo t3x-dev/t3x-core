@@ -1,5 +1,6 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export interface WorkspaceTurn {
   turn_hash: string;
@@ -134,40 +135,67 @@ function initialState(): Omit<
   };
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  ...initialState(),
+export const useWorkspaceStore = create<WorkspaceState>()(
+  persist(
+    (set, get) => ({
+      ...initialState(),
 
-  setConversation: (id) => set({ conversationId: id }),
-  setTurns: (turns) => set({ turns }),
-  setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
-  setMode: (mode) => set({ mode }),
-  setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
-  setCommitted: (isCommitted) => set({ isCommitted }),
-  setError: (lastError) => set({ lastError }),
-  setReplayWarning: (replayWarning) => set({ replayWarning }),
+      setConversation: (id) => set({ conversationId: id }),
+      setTurns: (turns) => set({ turns }),
+      setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
+      setMode: (mode) => set({ mode }),
+      setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
+      setCommitted: (isCommitted) => set({ isCommitted }),
+      setError: (lastError) => set({ lastError }),
+      setReplayWarning: (replayWarning) => set({ replayWarning }),
 
-  select: (source, { nodePath, slotKey, turnIndex }) =>
-    set({
-      selectedSource: source,
-      selectedNodePath: nodePath ?? null,
-      selectedSlotKey: slotKey ?? null,
-      selectedTurnIndex: turnIndex ?? null,
-      scrollToCenter: true,
+      select: (source, { nodePath, slotKey, turnIndex }) =>
+        set({
+          selectedSource: source,
+          selectedNodePath: nodePath ?? null,
+          selectedSlotKey: slotKey ?? null,
+          selectedTurnIndex: turnIndex ?? null,
+          scrollToCenter: true,
+        }),
+      clearSelection: () =>
+        set({
+          selectedSource: null,
+          selectedNodePath: null,
+          selectedSlotKey: null,
+          selectedTurnIndex: null,
+          scrollToCenter: false,
+        }),
+
+      setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
+      setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
+
+      setScriptText: (scriptText) => set({ scriptText }),
+      setScriptDirty: (scriptDirty) => set({ scriptDirty }),
+
+      // Reset clears conversation-specific state but preserves user UI prefs
+      // (panelExpanded survives navigation + refresh).
+      reset: () => set({ ...initialState(), panelExpanded: get().panelExpanded }),
     }),
-  clearSelection: () =>
-    set({
-      selectedSource: null,
-      selectedNodePath: null,
-      selectedSlotKey: null,
-      selectedTurnIndex: null,
-      scrollToCenter: false,
-    }),
-
-  setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
-  setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
-
-  setScriptText: (scriptText) => set({ scriptText }),
-  setScriptDirty: (scriptDirty) => set({ scriptDirty }),
-
-  reset: () => set(initialState()),
-}));
+    {
+      name: 't3x-workspace-ui',
+      partialize: (state) => ({ panelExpanded: state.panelExpanded }),
+      // Falls back to in-memory storage on the server / in node tests where
+      // localStorage is unavailable. Persistence only matters in the browser.
+      storage: createJSONStorage(() => {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          return window.localStorage;
+        }
+        const memory = new Map<string, string>();
+        return {
+          getItem: (key) => memory.get(key) ?? null,
+          setItem: (key, value) => {
+            memory.set(key, value);
+          },
+          removeItem: (key) => {
+            memory.delete(key);
+          },
+        };
+      }),
+    }
+  )
+);
