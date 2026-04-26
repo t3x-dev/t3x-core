@@ -9,6 +9,8 @@ export interface ProjectFolderProps {
   project: Project;
   conversations: Conversation[];
   isExpanded: boolean;
+  /** Currently-selected project (highlight even when collapsed/no conv yet). */
+  isActive: boolean;
   activeConversationId: string | null;
   collapsed: boolean;
   onToggleExpand: () => void;
@@ -32,6 +34,7 @@ export function ProjectFolder({
   project,
   conversations,
   isExpanded,
+  isActive,
   activeConversationId,
   collapsed,
   onToggleExpand,
@@ -85,15 +88,22 @@ export function ProjectFolder({
         onToggleExpand();
       }}
       onContextMenu={onProjectContextMenu}
+      aria-current={isActive ? 'true' : undefined}
       className={cn(
         'flex items-center gap-2 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
         'hover:bg-[var(--hover-bg)]',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
         'active:scale-95 cursor-pointer w-full text-left',
         collapsed ? 'h-10 w-10 justify-center' : 'min-h-[44px] px-2 py-1.5',
-        isExpanded && !collapsed
-          ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
-          : 'text-[var(--text-secondary)]'
+        // Active wins over expanded: a project picked from "+ New Project"
+        // (or any nav that prims activeProjectId) gets a tinted bg + ring
+        // so the user immediately sees which project they're producing in,
+        // even before the folder is expanded or has any conversations yet.
+        isActive
+          ? 'bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30 text-[var(--text-primary)]'
+          : isExpanded && !collapsed
+            ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
+            : 'text-[var(--text-secondary)]'
       )}
     >
       {/* Project icon — emoji or first letter */}
