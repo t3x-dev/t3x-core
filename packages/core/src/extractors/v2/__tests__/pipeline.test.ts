@@ -1124,4 +1124,147 @@ describe('extractors/v2 pipeline', () => {
     if (result.ok) return;
     expect(result.failure.code).toBe('compile');
   });
+
+  describe('extraction style threading', () => {
+    // The Concise/Balanced/Detailed dropdown in the workspace was UI-only
+    // before this PR — the preset never reached the prompt. These tests
+    // pin the wire-through: a `style` input on the pipeline materially
+    // changes the system prompt, with concise carrying a hard budget.
+
+    function captureSystem() {
+      const captured: { system?: string } = {};
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured(prompt) {
+          captured.system = prompt.system;
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+      return { captured, provider };
+    }
+
+    it('omits style guidance when no style is supplied (preserves historical prompt)', async () => {
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+      });
+      const system = captured.system ?? '';
+      expect(system).not.toMatch(/Extraction mode:/i);
+      expect(system).not.toMatch(/Concise budget/i);
+    });
+
+    it('concise style adds a hard 6-item budget + single-tree shape rule', async () => {
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+        },
+      });
+      const system = captured.system ?? '';
+      // Style summary line is present.
+      expect(system).toMatch(/Extraction mode: concise/i);
+      // Hard 6-item ceiling — concise must not produce 60-op outputs.
+      expect(system).toMatch(/at most ~6 items/i);
+      // Single-tree shape rule — direct fix for the "17 parallel root
+      // nodes" failure mode in the Sony camera reproduction.
+      expect(system).toMatch(/path prefix/i);
+      expect(system).toMatch(/cameras\/sony/i);
+    });
+
+    it('detailed style asks for nuance under existing tree paths', async () => {
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'detailed',
+          quote_length: 'representative',
+          update_stance: 'aggressive',
+          tier3: 'extract',
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/Extraction mode: detailed/i);
+      expect(system).toMatch(/capture nuance/i);
+      // Still must not encourage flat root.
+      expect(system).toMatch(/not a flat root/i);
+    });
+
+    it('balanced style emits the summary but no extra budget rules', async () => {
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'balanced',
+          quote_length: 'representative',
+          update_stance: 'balanced',
+          tier3: 'extract',
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/Extraction mode: balanced/i);
+      expect(system).not.toMatch(/at most ~6 items/i);
+    });
+
+    it('concise prompt is materially different from balanced (sanity)', async () => {
+      const concise = captureSystem();
+      const balanced = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: concise.provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+        },
+      });
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: balanced.provider,
+        style: {
+          granularity: 'balanced',
+          quote_length: 'representative',
+          update_stance: 'balanced',
+          tier3: 'extract',
+        },
+      });
+      // The whole point of the dropdown is that prompts differ. If they're
+      // ever equal again, the preset is back to being dead UI.
+      expect(concise.captured.system).not.toEqual(balanced.captured.system);
+    });
+  });
 });

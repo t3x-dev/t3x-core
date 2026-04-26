@@ -2,6 +2,7 @@ import type { LLMPrompt, LLMProvider } from '../../llm/types';
 import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { serializeForPrompt } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
+import { type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
 import { compileExtractionDraft } from './compiler';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import { buildPromptTurnMap, normalizeExtractionText, type PromptTurnInput } from './normalization';
@@ -21,6 +22,16 @@ export interface ExtractionV2PipelineInput {
   model: string;
   snapshot?: SemanticContent;
   extractedAt?: string;
+  /**
+   * Optional extraction style. When supplied, drives a style summary line
+   * + granularity-specific budget rules in the system prompt. Omitted
+   * (or `undefined`) preserves the historical "no style guidance" prompt.
+   *
+   * The preset is read by `buildDraftPrompt` only — compile, normalisation,
+   * and persistence are unaffected. Callers that don't care about style
+   * (tests, MCP, programmatic invocations) can leave it out.
+   */
+  style?: ExtractionStyleConfig;
 }
 
 export type ExtractionV2PipelineResult =
@@ -43,11 +54,50 @@ function shouldTargetedReask(failure: ExtractionFailure): boolean {
   );
 }
 
+/**
+ * Granularity-specific guidance prepended to the system prompt's quality
+ * rules. Concise needs a hard ceiling and an explicit "skip secondary
+ * specs" hint, otherwise weak models like gpt-5.4-nano happily produce
+ * 60+ items even when told to be brief.
+ *
+ * Returned text is empty when no style is supplied — callers that want
+ * the historical prompt shape get exactly that.
+ */
+function styleGuidanceBlock(style: ExtractionStyleConfig | undefined): string {
+  if (!style) return '';
+  const summary = styleSummaryLine(style);
+  if (style.granularity === 'concise') {
+    return (
+      `${summary}\n` +
+      'Concise budget — these are hard limits, not suggestions:\n' +
+      '- Emit at most ~6 items total. Pick the highest-signal facts; drop the rest.\n' +
+      '- Prefer one comparison tree (e.g. cameras/sony/{a7r_v, a7_v}/{slot}) over\n' +
+      '  many parallel root nodes. Same-subject facts MUST share a path prefix; the\n' +
+      '  suffix is the slot, not the node name (write `cameras/sony/a7r_v` with slot\n' +
+      '  `sensor_resolution`, NOT a separate root `a7r_v_resolution`).\n' +
+      '- Skip secondary specs (storage size, file management, "not designed for X")\n' +
+      "  unless they are decisive for the user's actual question.\n" +
+      '- Keep evidence quotes representative (a sentence fragment), not full paragraphs.\n'
+    );
+  }
+  if (style.granularity === 'detailed') {
+    return (
+      `${summary}\n` +
+      'Detailed mode — capture nuance, secondary specs, and qualifying claims;\n' +
+      'keep hierarchy under existing tree paths, not a flat root.\n'
+    );
+  }
+  // balanced or unknown — emit the summary alone; the four core quality
+  // rules below carry most of the weight.
+  return `${summary}\n`;
+}
+
 function buildDraftPrompt(input: {
   mode: ExtractionMode;
   providerId: string;
   turns: Array<{ turn_tag: string; role: string; content: string }>;
   snapshot?: SemanticContent;
+  style?: ExtractionStyleConfig;
 }): LLMPrompt {
   // F9: one simple prompt for all providers. The shape drift we used to warn
   // the model about (schema prefix, version type, _json field types, singleton
@@ -63,11 +113,13 @@ function buildDraftPrompt(input: {
       ? `\nCurrent knowledge snapshot:\n${serializeForPrompt(input.snapshot)}\n`
       : '';
 
+  const styleBlock = styleGuidanceBlock(input.style);
   return {
     system:
       'You extract semantic knowledge from a conversation into a ProviderExtractionDraft JSON. ' +
       'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.\n' +
       '\n' +
+      (styleBlock ? `${styleBlock}\n` : '') +
       'Quality rules — these are not optional:\n' +
       '1. Every item MUST carry at least one concrete fact. The provider schema uses\n' +
       '   JSON-string fields on `candidate`:\n' +
@@ -403,6 +455,7 @@ export async function runExtractionV2Pipeline(
     providerId: input.providerId,
     turns: taggedTurns,
     snapshot: input.snapshot,
+    style: input.style,
   });
   let prompt = basePrompt;
   const maxAttempts = 2;

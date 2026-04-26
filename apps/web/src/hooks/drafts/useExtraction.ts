@@ -128,6 +128,14 @@ export function useExtraction({
       // Auto-expand on Extract — explicit user action, they want to see results.
       store.setPanelExpanded(true);
 
+      // Read the extraction preset at the moment of Extract — the
+      // dropdown in ChatHeader updates `workspaceStore.extractionPreset`
+      // and we forward it to the API so the LLM prompt actually varies
+      // by Concise / Balanced / Detailed. Before this wiring, the
+      // preset was UI-only: the dropdown changed the store but every
+      // extraction hit the same prompt.
+      const extractionPreset = useWorkspaceStore.getState().extractionPreset;
+
       try {
         const turns = useWorkspaceStore.getState().turns;
         const result = await runExtraction({
@@ -142,6 +150,7 @@ export function useExtraction({
               failingOps: input.failingOps,
               provider: selectedProvider ?? undefined,
               model: selectedModel ?? undefined,
+              preset: extractionPreset,
             }),
         });
 
