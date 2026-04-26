@@ -6,6 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const runExtractionMock = vi.fn();
 const callExtractionLLMMock = vi.fn();
 const hydrateConversationToStoreMock = vi.fn();
+const toastMessageMock = vi.fn();
+const toastErrorMock = vi.fn();
+
+// Mutable chat-store state so tests can simulate the "project not yet
+// loaded" race that motivated the readiness gate.
+let chatStoreState: { activeProjectId: string | null; activeConversationId: string | null } = {
+  activeProjectId: 'proj_123',
+  activeConversationId: 'conv_123',
+};
 
 vi.mock('@/commands/yops/extractionWorker', () => ({
   runExtraction: (...args: unknown[]) => runExtractionMock(...args),
@@ -19,6 +28,13 @@ vi.mock('@/hooks/conversations/hydrateConversationToStore', () => ({
   hydrateConversationToStore: (...args: unknown[]) => hydrateConversationToStoreMock(...args),
 }));
 
+vi.mock('sonner', () => ({
+  toast: {
+    message: (...args: unknown[]) => toastMessageMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+  },
+}));
+
 vi.mock('@/store/chatStore', () => ({
   useChatStore: Object.assign(
     (
@@ -26,16 +42,9 @@ vi.mock('@/store/chatStore', () => ({
         activeProjectId: string | null;
         activeConversationId: string | null;
       }) => unknown
-    ) =>
-      selector({
-        activeProjectId: 'proj_123',
-        activeConversationId: 'conv_123',
-      }),
+    ) => selector(chatStoreState),
     {
-      getState: () => ({
-        activeProjectId: 'proj_123',
-        activeConversationId: 'conv_123',
-      }),
+      getState: () => chatStoreState,
     }
   ),
 }));
@@ -46,6 +55,10 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 describe('useExtraction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    chatStoreState = {
+      activeProjectId: 'proj_123',
+      activeConversationId: 'conv_123',
+    };
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
     runExtractionMock.mockImplementation(
@@ -80,5 +93,32 @@ describe('useExtraction', () => {
       provider: 'openai',
       model: 'gpt-4o-mini',
     });
+  });
+
+  it('toasts and skips extraction when project context has not loaded yet', async () => {
+    // Simulates the race where /chat/[convId] renders before
+    // `useChatInit.fetchConversationMeta` backfills `activeProjectId`.
+    // ChatHeader gates the button on this state, but a programmatic
+    // event/hotkey could still fire — we want a visible failure mode,
+    // not a silent no-op the user has to click through twice.
+    chatStoreState = { activeProjectId: null, activeConversationId: 'conv_123' };
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(toastMessageMock).toHaveBeenCalledWith(
+      'Loading conversation context — try Extract again in a moment.'
+    );
+    expect(runExtractionMock).not.toHaveBeenCalled();
+    expect(callExtractionLLMMock).not.toHaveBeenCalled();
   });
 });

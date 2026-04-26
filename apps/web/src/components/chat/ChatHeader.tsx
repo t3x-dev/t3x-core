@@ -45,6 +45,16 @@ export function ChatHeader({
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
+  // Extract requires both an active project and a resolved conversation in
+  // the workspace store. On a direct load of /chat/[convId], `useChatInit`
+  // backfills `activeProjectId` from `fetchConversationMeta` asynchronously;
+  // the button can render visible before that fetch resolves. Without this
+  // gate the click handler in `useExtraction` silently early-returns
+  // (no toast, no API call) and the user has to click again after the
+  // fetch lands. Disable the button while the precondition isn't met so
+  // the failure mode is visible, not invisible.
+  const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
+  const isExtractReady = Boolean(activeProjectId && workspaceConversationId);
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -118,7 +128,8 @@ export function ChatHeader({
             type="button"
             data-testid="extract-button"
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
-            disabled={isExtracting}
+            disabled={isExtracting || !isExtractReady}
+            title={!isExtractReady ? 'Loading conversation context…' : undefined}
             className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isExtracting ? (
@@ -135,7 +146,7 @@ export function ChatHeader({
             ref={chevronRef}
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            disabled={isExtracting}
+            disabled={isExtracting || !isExtractReady}
             className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronDown className="h-2.5 w-2.5" />
