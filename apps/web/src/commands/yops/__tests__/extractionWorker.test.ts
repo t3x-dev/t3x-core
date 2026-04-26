@@ -278,6 +278,103 @@ describe('runExtraction', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  describe('commit flag', () => {
+    it('default-true keeps today behavior: returns ops + calls commitOps', async () => {
+      const llm = vi.fn().mockResolvedValueOnce(validOps);
+      const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
+
+      const result = await runExtraction({
+        baseTree: emptyTree,
+        conversationId: 'c1',
+        turns,
+        llm,
+      });
+
+      expect(commit).toHaveBeenCalledWith('c1', validOps);
+      expect(result).toEqual({ ops: validOps, committed: true });
+    });
+
+    it('commit:false returns ops without writing to yops_log', async () => {
+      // Propose-only path that the long-term Apply-as-explicit-step UX will
+      // call. The worker still validates + repairs, but persistence is the
+      // caller's decision. See docs/2026-04-26-extract-propose-vs-apply-rfc.md.
+      const llm = vi.fn().mockResolvedValueOnce(validOps);
+      const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
+
+      const result = await runExtraction({
+        baseTree: emptyTree,
+        conversationId: 'c1',
+        turns,
+        llm,
+        commit: false,
+      });
+
+      expect(commit).not.toHaveBeenCalled();
+      expect(result).toEqual({ ops: validOps, committed: false });
+    });
+
+    it('commit:false returns the repaired ops from the last-resort repair path', async () => {
+      // Even with commit disabled, a successful last-resort repair should
+      // surface the repaired ops (not the original LLM ops) so the caller
+      // can preview / apply the fix.
+      const autoRepairableOps: SourcedYOp[] = [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-17T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'budget is ten thousand dollars' },
+          },
+        },
+        {
+          populate: { path: 'trip/day_1', values: { budget: 'ten thousand dollars' } },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-17T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'ten thousand dollars' },
+          },
+        },
+      ];
+      const llm = vi.fn().mockResolvedValue(autoRepairableOps);
+      const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = await runExtraction({
+        baseTree: emptyTree,
+        conversationId: 'c1',
+        turns,
+        llm,
+        commit: false,
+      });
+
+      expect(commit).not.toHaveBeenCalled();
+      expect(result.committed).toBe(false);
+      expect(result.ops).toHaveLength(3);
+      // The injected define for `trip/day_1` is what makes the repair work;
+      // it must appear in the returned ops so the caller can apply the
+      // same sequence the auto-commit path would have.
+      expect(result.ops[1]).toMatchObject({ define: { path: 'trip/day_1' } });
+    });
+
+    it('commit:false still throws on validation failure (no silent swallow)', async () => {
+      const llm = vi.fn().mockResolvedValue(invalidOps);
+      const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
+
+      await expect(
+        runExtraction({
+          baseTree: emptyTree,
+          conversationId: 'c1',
+          turns,
+          llm,
+          commit: false,
+        })
+      ).rejects.toBeInstanceOf(ExtractionFailedError);
+      expect(commit).not.toHaveBeenCalled();
+    });
+  });
+
   it('logs failed last-resort repair attempts when inserts still do not validate', async () => {
     const partiallyRepairableButStillInvalidOps: SourcedYOp[] = [
       {
