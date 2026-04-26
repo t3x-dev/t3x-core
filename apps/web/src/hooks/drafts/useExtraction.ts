@@ -35,7 +35,19 @@ export function useExtraction({
       const extractConvId =
         resolvedConversationId ?? useChatStore.getState().activeConversationId ?? undefined;
       const projectId = useChatStore.getState().activeProjectId ?? undefined;
-      if (!extractConvId || !projectId || isExtracting) return;
+      // Already running — silent skip is correct, the user sees the
+      // "Extracting…" spinner.
+      if (isExtracting) return;
+      // Defense: ChatHeader gates the button on `isExtractReady` so this
+      // path shouldn't be reachable from the UI. If it somehow fires
+      // before the project context is loaded (race, programmatic event,
+      // direct hotkey), surface a toast rather than silently no-op so
+      // we don't repeat the "click twice" failure mode that motivated
+      // this guard.
+      if (!extractConvId || !projectId) {
+        toast.message('Loading conversation context — try Extract again in a moment.');
+        return;
+      }
 
       const store = useWorkspaceStore.getState();
       store.setMode('streaming');
