@@ -889,6 +889,89 @@ describe('extractors/v2 pipeline', () => {
     expect(warnings).toMatch(/item_bad_child/);
   });
 
+  it('does not partial-salvage non-reaskable compile failures on attempt 1 (no silent drop without reask)', async () => {
+    // Guards against the gate being too loose: a non-reaskable compile
+    // failure (e.g. unsupported draft intent) must NOT silently drop
+    // items and return siblings without any reask ever happening. The
+    // model never had a chance to self-correct, so the only honest
+    // outcome is the original failure.
+    let calls = 0;
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        calls += 1;
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_good',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'sony',
+                  path_hint: 'sony',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"availability":"unreleased"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'unreleased', role: 'primary' }],
+              },
+              {
+                id: 'item_remove_no_target',
+                // `remove intent requires target_ref or candidate path`
+                // (compiler.ts:422-427) emits a compile failure WITHOUT
+                // `reaskable: true`, so `shouldTargetedReask` returns
+                // false. Pre-fix, the partial branch fired on attempt 1
+                // and silently dropped this item; post-fix the gate
+                // requires `attempt >= maxAttempts && reaskable`, so
+                // the original failure surfaces and the model is never
+                // asked to fix something we have no targeted guidance
+                // for.
+                intent: 'remove',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: null,
+                  path_hint: null,
+                  slot: null,
+                  value_json: null,
+                  values_json: null,
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'spec', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'q' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider,
+    });
+
+    // No reask attempted (failure isn't reaskable), no salvage path
+    // taken, no silently dropped item — the original failure is what
+    // the caller sees.
+    expect(calls).toBe(1);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('compile');
+    expect(result.failure.message).toMatch(/remove intent requires target_ref/);
+  });
+
   it('does not partial-salvage when every item is malformed — surfaces the original compile failure', async () => {
     // Guard the floor: partial mode returns ok with empty ops in this
     // case, but the pipeline must still report failure so the client
