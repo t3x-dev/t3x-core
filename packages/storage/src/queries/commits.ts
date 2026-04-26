@@ -12,10 +12,33 @@ import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitRecord, commits } from '../schema-commits';
+import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
+import { acquireProjectSupersedeLock } from './yops-log';
+
+/**
+ * Thrown by `createCommit` when the caller passes one or more
+ * `yops_log_ids` whose `superseded_at IS NOT NULL` at insert time.
+ * Indicates a re-extract landed between the caller's
+ * `findUncommittedYOpsIds()` snapshot and the commit's insert,
+ * marking entries that the caller still believed were active. The
+ * caller should re-fetch the active draft id set and retry.
+ */
+export class SupersededYOpsLogIdsError extends Error {
+  constructor(public readonly supersededIds: string[]) {
+    super(
+      `Cannot commit superseded yops_log entries (re-extract landed during commit): ${supersededIds.join(', ')}`
+    );
+    this.name = 'SupersededYOpsLogIdsError';
+  }
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
+// vary by adapter; the runtime contract (transaction(fn)) is uniform.
+type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
 
 // ============================================================
 // Types
@@ -55,8 +78,9 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   const parents = input.parents ?? [];
   const now = new Date().toISOString();
   const branch = input.branch ?? 'main';
+  const yopsLogIds = input.yops_log_ids ?? [];
 
-  // Compute hash from first-class fields
+  // Compute hash up front (deterministic; no DB needed).
   const hash = computeCommitHash({
     schema: COMMIT_SCHEMA,
     parents,
@@ -65,25 +89,75 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
     content: input.content,
   });
 
-  const [row] = await db
-    .insert(commits)
-    .values({
-      hash,
-      schema: COMMIT_SCHEMA,
-      parents,
-      author: input.author,
-      committedAt: new Date(now),
-      content: input.content,
-      projectId: input.project_id,
-      message: input.message ?? null,
-      branch,
-      provenance: input.provenance ?? null,
-      yopsLogIds: input.yops_log_ids ?? [],
-      sources: input.sources ?? null,
-    })
-    .returning();
+  const insertCommit = async (txOrDb: AnyDB): Promise<CommitRecord> => {
+    const [row] = await txOrDb
+      .insert(commits)
+      .values({
+        hash,
+        schema: COMMIT_SCHEMA,
+        parents,
+        author: input.author,
+        committedAt: new Date(now),
+        content: input.content,
+        projectId: input.project_id,
+        message: input.message ?? null,
+        branch,
+        provenance: input.provenance ?? null,
+        yopsLogIds,
+        sources: input.sources ?? null,
+      })
+      .returning();
+    return row;
+  };
 
-  return rowToCommit(row);
+  // Fast path: nothing to lock. Skip the transaction entirely.
+  if (yopsLogIds.length === 0) {
+    const row = await insertCommit(db);
+    return rowToCommit(row);
+  }
+
+  // Race-closing path: per-project advisory transaction lock shared
+  // with `supersedeActiveLLMSuggestions`. Acquired inside the
+  // transaction (so it auto-releases at COMMIT/ROLLBACK), it
+  // serialises the entire critical section between extract-side
+  // supersede and commit-side validation+insert.
+  //
+  // Why advisory (and not row-level locking): under PG READ
+  // COMMITTED, a waiting UPDATE re-evaluates the WHERE predicate
+  // only against the locked row — its subqueries over OTHER tables
+  // (here, `commits`) keep using the original statement snapshot.
+  // So even a `FOR UPDATE` / `FOR SHARE` on yops_log rows would not
+  // have caused the supersede's `NOT EXISTS (... commits ...)` to
+  // see our newly-inserted commit row, and the row could be marked
+  // superseded after we committed referencing it. Advisory lock
+  // takes that ambiguity off the table by serialising the two paths
+  // outright.
+  //
+  // Sequence inside the transaction:
+  //   1. pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, hashtext(projectId)) —
+  //      blocks any concurrent supersede on this project.
+  //   2. SELECT for already-superseded ids. If any, throw —
+  //      caller raced *before* we acquired the lock; their snapshot
+  //      is stale, they should retry.
+  //   3. INSERT commit. After this, the rows are referenced by
+  //      `commits.yops_log_ids`. The next supersede (which has been
+  //      waiting on the advisory lock) wakes up, sees the new commits
+  //      row in its NOT EXISTS subquery, and excludes them.
+  const result = await (db as unknown as TxRunner).transaction(async (tx) => {
+    await acquireProjectSupersedeLock(tx as AnyDB, input.project_id);
+
+    const superseded = await (tx as AnyDB)
+      .select({ id: yopsLog.id })
+      .from(yopsLog)
+      .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
+    if (superseded.length > 0) {
+      throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
+    }
+
+    return insertCommit(tx as AnyDB);
+  });
+
+  return rowToCommit(result as CommitRecord);
 }
 
 /**

@@ -24,6 +24,13 @@ const mockRecord = {
 
 vi.mock('@t3x-dev/storage', () => ({
   insertYOpsLogEntry: vi.fn(() => Promise.resolve(mockRecord)),
+  // RFC 2026-04-26: yopsApplyOp now also imports the supersede query so
+  // it can flip prior LLM suggestions to superseded inside the same
+  // transaction when `replaceActiveLLMDraft` is set. Default mock is a
+  // no-op returning [] so existing test cases stay unaffected. The
+  // committed-id exclusion now lives inside the SQL UPDATE itself
+  // (single atomic statement), so the op no longer pre-fetches anything.
+  supersedeActiveLLMSuggestions: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../../lib/tree-state-sync', () => ({
@@ -103,6 +110,10 @@ describe('yopsApplyOp', () => {
       turn_hash: 'sha256:turn1',
       yops: mockRecord.yops,
       created_at: '2026-04-03T00:00:00.000Z',
+      // Default flag is off — no entries marked superseded, no flag in
+      // input. Caller still sees the field (always present) for
+      // observability; empty array means "no-op".
+      superseded_ids: [],
     });
   });
 
@@ -168,5 +179,62 @@ describe('yopsApplyOp', () => {
       'conv_abc',
       'proj_123'
     );
+  });
+
+  describe('replaceActiveLLMDraft flag', () => {
+    it('does not call supersede when flag is off (or absent)', async () => {
+      const ctx = buildMockContext();
+      const { supersedeActiveLLMSuggestions } = await import('@t3x-dev/storage');
+      (supersedeActiveLLMSuggestions as any).mockClear();
+
+      await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [{ op: 'test' }],
+            // flag intentionally absent
+          },
+          ctx
+        )
+      );
+
+      expect(supersedeActiveLLMSuggestions).not.toHaveBeenCalled();
+    });
+
+    it('calls supersede inside the same transaction when flag is on, surfacing the marked ids', async () => {
+      const ctx = buildMockContext();
+      const { supersedeActiveLLMSuggestions } = await import('@t3x-dev/storage');
+      (supersedeActiveLLMSuggestions as any).mockClear();
+      (supersedeActiveLLMSuggestions as any).mockResolvedValueOnce(['yl_old_suggestion']);
+
+      const output = await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'pipeline',
+            turnHash: 'sha256:turn1',
+            yops: [{ op: 'test' }],
+            replaceActiveLLMDraft: true,
+          },
+          ctx
+        )
+      );
+
+      // Note: the new signature drops the excludeIds parameter — committed
+      // entries are excluded by the supersede query's own WHERE clause
+      // (NOT EXISTS subquery against commits.yops_log_ids), so a commit
+      // landing concurrently can't slip past the safety belt.
+      expect(supersedeActiveLLMSuggestions).toHaveBeenCalledWith(
+        expect.anything(), // tx
+        'conv_abc'
+      );
+      // Output surfaces the IDs that were actually marked superseded so
+      // observers (logs / tests / future UI affordance) can audit the
+      // replacement.
+      expect(output.superseded_ids).toEqual(['yl_old_suggestion']);
+    });
   });
 });

@@ -77,6 +77,7 @@ export {
   getLatestCommit,
   type ListCommitsOptions,
   listCommits,
+  SupersededYOpsLogIdsError,
   updateCommitMessage,
   updateCommitPosition,
 } from './commits';
@@ -449,11 +450,14 @@ export {
 } from './webhooks';
 // YOps Log (Phase 2 — semantic yops tracking)
 export {
+  acquireProjectSupersedeLock,
   deleteYOpsLogEntry,
   getYOpsForCommit,
   getYOpsLogEntry,
   type InsertYOpsLogInput,
   insertYOpsLogEntry,
+  listActiveYOpsLogByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
+  supersedeActiveLLMSuggestions,
 } from './yops-log';

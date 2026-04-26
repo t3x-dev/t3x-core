@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
 
@@ -120,4 +120,154 @@ export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise
     .from(yopsLog)
     .where(inArray(yopsLog.id, yopsLogIds))
     .orderBy(asc(yopsLog.createdAt));
+}
+
+/**
+ * Active-draft slice: entries for the conversation whose `superseded_at`
+ * is NULL. The workspace's visible draft replays this list on top of
+ * the committed baseline (see `replayCommittedBaseline` in the api
+ * package). Distinct from `listYOpsLogByConversation`, which returns
+ * every entry (used by audit / GET /yops endpoints).
+ */
+export async function listActiveYOpsLogByConversation(
+  db: AnyDB,
+  conversationId: string
+): Promise<YOpsLogRecord[]> {
+  return db
+    .select()
+    .from(yopsLog)
+    .where(and(eq(yopsLog.conversationId, conversationId), isNull(yopsLog.supersededAt)))
+    .orderBy(asc(yopsLog.createdAt));
+}
+
+/**
+ * Advisory-lock key namespace for the suggestion-vs-baseline serial
+ * section. Both `supersedeActiveLLMSuggestions` and `createCommit`
+ * acquire `pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, projectKey)`
+ * under their respective transactions. The namespace tag ensures the
+ * key space doesn't collide with any other advisory-lock user.
+ */
+const SUPERSEDE_LOCK_NAMESPACE = 0x7373_7362; // 'ssvb' (suggestion-vs-baseline)
+
+/**
+ * Acquire the per-project transaction-scoped advisory lock that
+ * serialises supersede + commit-with-yops-log-ids on the same
+ * project. Auto-released when the surrounding transaction ends.
+ *
+ * Used by `supersedeActiveLLMSuggestions` and `createCommit`. Must
+ * be called inside a transaction; outside a transaction the lock
+ * is a no-op (held only for the single statement) and the
+ * serialisation guarantee is lost.
+ *
+ * The reason this is the *correct* fix and not a row-level FOR SHARE:
+ * under PostgreSQL READ COMMITTED, a waiting UPDATE's WHERE
+ * predicate is re-evaluated only for the row being locked, not for
+ * subqueries over other tables (per PG docs: "an updating command
+ * ... does not see effects of those commands on other rows in the
+ * database"). So an UPDATE that hits a `FOR SHARE`-locked yops_log
+ * row would, after waking, fail to see the newly-inserted commits
+ * row in its `NOT EXISTS (... commits ...)` subquery and would still
+ * mark the row superseded. Advisory lock takes that ambiguity off
+ * the table by serialising the entire critical section.
+ */
+export async function acquireProjectSupersedeLock(db: AnyDB, projectId: string): Promise<void> {
+  // Hash the projectId to a stable int4 key; (namespace, key) gives
+  // us the bigint advisory-lock space pg_advisory_xact_lock expects.
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(${SUPERSEDE_LOCK_NAMESPACE}::int, hashtext(${projectId})::int)`
+  );
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
+// vary by adapter; the runtime contract (transaction(fn)) is uniform.
+type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
+
+/**
+ * Mark active-draft, **all-LLM** entries for the conversation as
+ * superseded. Called atomically with the new extract entry's insert
+ * so the workspace flips from "old suggestion + new suggestion" to
+ * just "new suggestion" in a single transaction.
+ *
+ * The function **always wraps its work in a database transaction**
+ * (or, when the caller already passes a `tx`, opens a savepoint).
+ * The wrap is what makes `pg_advisory_xact_lock` meaningful:
+ * `_xact_` advisory locks live for the surrounding transaction, so
+ * if this ran outside a tx the lock would be released after the
+ * SELECT statement that acquired it and the subsequent UPDATE would
+ * race. Enforcing the wrap here makes the advisory-lock contract a
+ * property of the function, not a discipline the caller has to
+ * remember.
+ *
+ * When called from inside an existing transaction (the
+ * `yopsApplyOp` case: supersede + insert + tree sync share one tx),
+ * Drizzle creates a savepoint here. The advisory lock acquired
+ * during the savepoint is bound to the *enclosing* top-level tx
+ * per PostgreSQL semantics, so it stays held across the subsequent
+ * insert + tree sync — the atomicity guarantee the caller wants is
+ * preserved.
+ *
+ * Sequence inside the wrapping tx:
+ *
+ *   1. Look up project_id from conversations (immutable mapping).
+ *   2. `pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, hashtext(projectId))`
+ *      blocks any concurrent createCommit on the same project.
+ *   3. Single SQL UPDATE filters by:
+ *      - `conversation_id` and `superseded_at IS NULL` (idempotent)
+ *      - **Every** op has `source.type === 'llm'` (mixed rows with a
+ *        HumanSource op are preserved — Extract has no authority to
+ *        overwrite manual edits).
+ *      - Row is NOT referenced by any commit in the project (NOT
+ *        EXISTS against `commits.yops_log_ids`). Combined with the
+ *        advisory lock, the subquery sees a stable view of `commits`
+ *        for the duration of the critical section.
+ *
+ * Returns the ids that were marked.
+ */
+export async function supersedeActiveLLMSuggestions(
+  db: AnyDB,
+  conversationId: string
+): Promise<string[]> {
+  return (await (db as unknown as TxRunner).transaction(async (tx) => {
+    // Look up project_id (immutable mapping). Reading inside the tx
+    // (vs. before opening it) keeps the function self-contained.
+    const projectRow = await (tx as AnyDB).execute<{ project_id: string }>(
+      sql`SELECT project_id FROM conversations WHERE conversation_id = ${conversationId}`
+    );
+    const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
+      ? (projectRow as Array<{ project_id: string }>)
+      : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
+    const projectId = projectRows[0]?.project_id;
+    if (!projectId) return []; // conversation doesn't exist; nothing to supersede
+
+    await acquireProjectSupersedeLock(tx as AnyDB, projectId);
+
+    const result = await (tx as AnyDB).execute<{ id: string }>(sql`
+      UPDATE ${yopsLog}
+      SET superseded_at = NOW()
+      WHERE ${yopsLog.id} IN (
+        SELECT yl.id
+        FROM ${yopsLog} yl
+        WHERE yl.conversation_id = ${conversationId}
+          AND yl.superseded_at IS NULL
+          AND jsonb_typeof(yl.yops) = 'array'
+          AND NOT jsonb_path_exists(
+            yl.yops,
+            '$[*] ? (@.source.type != "llm")'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM commits c
+            INNER JOIN conversations conv ON conv.project_id = c.project_id
+            WHERE conv.conversation_id = ${conversationId}
+              AND c.yops_log_ids @> jsonb_build_array(yl.id)
+          )
+      )
+      RETURNING ${yopsLog.id}
+    `);
+
+    const rows: Array<{ id: string }> = Array.isArray(result)
+      ? (result as Array<{ id: string }>)
+      : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
+    return rows.map((r) => r.id);
+  })) as string[];
 }

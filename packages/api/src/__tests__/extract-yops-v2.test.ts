@@ -1,8 +1,10 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  createCommit,
   deleteProviderCredential,
   insertConversation,
   insertProject,
+  insertYOpsLogEntry,
   upsertProviderCredential,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -137,5 +139,125 @@ describe('POST /v1/extract-yops (v2)', () => {
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('EXTRACTION_FAILED');
     expect(body.error.details.failure_code).toBe('draft_schema');
+  });
+
+  describe('committed-baseline snapshot derivation', () => {
+    /**
+     * RFC 2026-04-26: the snapshot fed to extractAndApply is the
+     * **committed baseline** only — uncommitted yops_log entries (the
+     * active draft) deliberately never enter the LLM prompt. These
+     * tests assert the boundary at the route layer.
+     */
+    async function freshConv(): Promise<string> {
+      const conv = await insertConversation(
+        mockDB,
+        testData.conversation(testProjectId, { title: `Baseline ${Date.now()}` })
+      );
+      return conv.conversationId;
+    }
+
+    const llmOp = (path: string) => ({
+      define: { path },
+      source: {
+        type: 'llm' as const,
+        model: 'claude-sonnet-4-6',
+        at: '2026-04-26T00:00:00.000Z',
+        turn_ref: { turn_hash: 'sha256:aabbcc', quote: 'q' },
+      },
+    });
+
+    it("calls extractAndApply with mode='bootstrap' when only an uncommitted draft exists", async () => {
+      const convId = await freshConv();
+      // Plant an uncommitted LLM suggestion entry — this is the
+      // "active draft" that the route must NOT include in the snapshot.
+      await insertYOpsLogEntry(mockDB, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('foo')],
+      });
+
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: { schema: 't3x/extraction-draft', version: 1, mode: 'bootstrap', items: [] },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: convId,
+          turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      // Bootstrap, not incremental — the draft entry must not have
+      // promoted the conversation to incremental mode.
+      expect(callArgs?.mode).toBe('bootstrap');
+      expect(callArgs?.snapshot).toBeUndefined();
+    });
+
+    it("calls extractAndApply with mode='incremental' + committed snapshot when a commit references the entry", async () => {
+      const convId = await freshConv();
+      const committed = await insertYOpsLogEntry(mockDB, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('committed_root')],
+      });
+      // Promote the entry into a real commit — this is the boundary
+      // that flips it from "active draft" into "committed baseline".
+      await createCommit(mockDB, {
+        author: { type: 'human', name: 'test' },
+        content: {
+          trees: [{ key: 'committed_root', slots: {}, children: [] }],
+          relations: [],
+        },
+        project_id: testProjectId,
+        message: 'baseline commit',
+        yops_log_ids: [committed.id],
+      });
+
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: { schema: 't3x/extraction-draft', version: 1, mode: 'incremental', items: [] },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: convId,
+          turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot).toBeDefined();
+      // The committed root must be in the snapshot fed to the LLM.
+      expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('committed_root');
+    });
   });
 });

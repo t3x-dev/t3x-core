@@ -26,7 +26,7 @@ import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
+import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import {
   CommitDraftRequest,
@@ -571,6 +571,10 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (err) {
+    // Suggestion-vs-baseline: surface concurrent-supersede races as
+    // 409 retryable conflict, not opaque 500.
+    const conflict = mapSupersededError(c, err);
+    if (conflict) return conflict;
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'CREATE_FAILED', message);
   }

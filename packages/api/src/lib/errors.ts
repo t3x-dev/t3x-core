@@ -138,6 +138,12 @@ export const ErrorCodes = {
 
   // YOps support
   UNSUPPORTED_OP: 'UNSUPPORTED_OP',
+
+  // Suggestion-vs-baseline: a commit caller passed yops_log_ids that
+  // were superseded by a concurrent re-extract between the caller's
+  // snapshot and the commit insert. Retryable: re-fetch the active
+  // draft id set and try again.
+  YOPS_LOG_SUPERSEDED: 'YOPS_LOG_SUPERSEDED',
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;
@@ -185,6 +191,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   MAIN_ROOT_EXISTS: 409,
   MAIN_NOT_HEAD: 409,
   ALIAS_TAKEN: 409,
+  YOPS_LOG_SUPERSEDED: 409,
 
   // 500 Server Error
   CREATE_FAILED: 500,

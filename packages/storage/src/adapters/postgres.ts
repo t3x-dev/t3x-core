@@ -683,6 +683,14 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS pipeline_state TEXT;
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS gate_result_json JSONB;
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS metadata JSONB;
+    -- 2026-04-26: suggestion-vs-baseline.
+    -- Active draft entries with NULL stay visible; re-extract marks the
+    -- prior LLM suggestions as superseded so the workspace shows only
+    -- the latest attempt while preserving the audit trail. Committed
+    -- entries (referenced by any commits.yops_log_ids) must stay NULL.
+    ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
+    CREATE INDEX IF NOT EXISTS idx_yops_log_active
+      ON yops_log (conversation_id) WHERE superseded_at IS NULL;
 
     -- Migration: rename delta_log to yops_log if old table exists
     DO $$ BEGIN

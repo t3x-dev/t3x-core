@@ -21,12 +21,12 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { extractAndApply } from '@t3x-dev/core';
-import { findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
+import { findConversationById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayCommittedBaseline } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const extractYopsRoutes = new OpenAPIHono({
@@ -150,10 +150,13 @@ extractYopsRoutes.openapi(route, async (c) => {
       return c.json({ success: true as const, data: { ops: [] } }, 200);
     }
 
-    // Load existing yops log and replay to get the current snapshot.
-    const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
-    const replayedSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
-    const mode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
+    // Snapshot is the **committed baseline** only — the immutable
+    // semantic content this conversation has under any prior commit.
+    // Active draft entries (uncommitted yops_log rows) deliberately
+    // never enter the prompt: re-extract is a *full recompute* of the
+    // suggestion, not an "add more on top of the previous draft" step.
+    const baselineSnapshot = await replayCommittedBaseline(db, conversation_id);
+    const mode = baselineSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
     // Call the LLM via the unified provider/model selection chain.
     try {
@@ -179,7 +182,7 @@ extractYopsRoutes.openapi(route, async (c) => {
         providerId: resolution.providerId,
         provider: resolution.provider,
         model: resolution.model,
-        snapshot: replayedSnapshot.trees.length > 0 ? replayedSnapshot : undefined,
+        snapshot: baselineSnapshot.trees.length > 0 ? baselineSnapshot : undefined,
       });
 
       if (!pipelineResult.ok) {
