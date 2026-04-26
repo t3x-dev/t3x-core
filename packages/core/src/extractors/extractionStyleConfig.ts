@@ -11,6 +11,20 @@ export interface ExtractionStyleConfig {
   quote_length: QuoteLength;
   update_stance: UpdateStance;
   tier3: Tier3Behavior;
+  /**
+   * Deterministic ceiling on draft items — cap is applied at the
+   * canonical-draft layer (post-lift, pre-compile) by selecting the
+   * top-N items by confidence and dropping the rest with a warning.
+   *
+   * Operates on **items**, not compiled YOps. An item compiles into a
+   * group of dependent ops (define + populate + nested children); cap
+   * by item so each surviving item produces a complete, dependency-
+   * correct op group.
+   *
+   * `undefined` means no cap (Detailed). The prompt is the soft layer;
+   * this is the hard one.
+   */
+  max_items?: number;
 }
 
 export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
@@ -19,18 +33,21 @@ export const PRESETS: Record<PresetName, ExtractionStyleConfig> = {
     quote_length: 'representative',
     update_stance: 'conservative',
     tier3: 'extract',
+    max_items: 6,
   },
   balanced: {
     granularity: 'balanced',
     quote_length: 'representative',
     update_stance: 'balanced',
     tier3: 'extract',
+    max_items: 20,
   },
   detailed: {
     granularity: 'detailed',
     quote_length: 'representative',
     update_stance: 'aggressive',
     tier3: 'extract',
+    // No cap — capture nuance.
   },
 };
 
@@ -39,11 +56,17 @@ export const DEFAULT_STYLE: ExtractionStyleConfig = PRESETS.balanced;
 /** Returns the preset name if config matches a preset exactly, else null. */
 export function matchPreset(config: ExtractionStyleConfig): PresetName | null {
   for (const [name, preset] of Object.entries(PRESETS) as [PresetName, ExtractionStyleConfig][]) {
+    // max_items is part of the preset shape — a custom config that
+    // matches the four core fields but differs on the cap is NOT the
+    // built-in preset, since deterministic budget behaviour diverges.
+    // `undefined === undefined` is true, so detailed (no cap) still
+    // matches PRESETS.detailed correctly.
     if (
       config.granularity === preset.granularity &&
       config.quote_length === preset.quote_length &&
       config.update_stance === preset.update_stance &&
-      config.tier3 === preset.tier3
+      config.tier3 === preset.tier3 &&
+      config.max_items === preset.max_items
     ) {
       return name;
     }

@@ -37,6 +37,59 @@ describe('ExtractionStyleConfig', () => {
     };
     expect(matchPreset(custom)).toBeNull();
   });
+
+  it('matchPreset distinguishes a custom max_items from the built-in preset cap', () => {
+    // Regression: before max_items was added to the comparison, a
+    // custom config that differed ONLY by the cap was reported as
+    // the built-in preset. Deterministic budget behaviour diverges
+    // (e.g. concise + max_items=10 keeps 10 items vs the preset's
+    // 6), so the helper must not lie about the match.
+    const conciseWithCustomCap: ExtractionStyleConfig = {
+      granularity: 'concise',
+      quote_length: 'representative',
+      update_stance: 'conservative',
+      tier3: 'extract',
+      max_items: 10, // PRESETS.concise.max_items is 6
+    };
+    expect(matchPreset(conciseWithCustomCap)).toBeNull();
+
+    const balancedWithCustomCap: ExtractionStyleConfig = {
+      granularity: 'balanced',
+      quote_length: 'representative',
+      update_stance: 'balanced',
+      tier3: 'extract',
+      max_items: 50, // PRESETS.balanced.max_items is 20
+    };
+    expect(matchPreset(balancedWithCustomCap)).toBeNull();
+  });
+
+  it('matchPreset still matches detailed when max_items is undefined on both sides', () => {
+    // Defence: PRESETS.detailed has no max_items (capture nuance —
+    // no cap). A config matching the four core fields without a
+    // cap must still resolve to the 'detailed' preset name, not
+    // null, because `undefined === undefined` holds.
+    const detailedNoCap: ExtractionStyleConfig = {
+      granularity: 'detailed',
+      quote_length: 'representative',
+      update_stance: 'aggressive',
+      tier3: 'extract',
+    };
+    expect(matchPreset(detailedNoCap)).toBe('detailed');
+  });
+
+  it('matchPreset distinguishes detailed-with-cap from preset detailed (no cap)', () => {
+    // The inverse: detailed + an explicit cap is NOT the built-in
+    // detailed preset, since the deterministic selection step
+    // would now run.
+    const detailedWithCap: ExtractionStyleConfig = {
+      granularity: 'detailed',
+      quote_length: 'representative',
+      update_stance: 'aggressive',
+      tier3: 'extract',
+      max_items: 100,
+    };
+    expect(matchPreset(detailedWithCap)).toBeNull();
+  });
 });
 
 describe('styleSummaryLine', () => {

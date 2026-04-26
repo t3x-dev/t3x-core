@@ -305,15 +305,42 @@ describe('POST /v1/extract-yops (v2)', () => {
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
       // Full ExtractionStyleConfig from PRESETS.concise — pin every
       // field so a renamed property in the preset definition is loud.
+      // Includes max_items: 6 (added in the deterministic-cap PR);
+      // a future preset edit that drops or changes the cap value
+      // surfaces here, not in production.
       expect(callArgs?.style).toEqual({
         granularity: 'concise',
         quote_length: 'representative',
         update_stance: 'conservative',
         tier3: 'extract',
+        max_items: 6,
       });
     });
 
-    it('preset:"detailed" lands on extractAndApply as the detailed style config', async () => {
+    it('preset:"balanced" lands on extractAndApply as the balanced style config', async () => {
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: testConversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+          preset: 'balanced',
+        }),
+      });
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.style).toEqual({
+        granularity: 'balanced',
+        quote_length: 'representative',
+        update_stance: 'balanced',
+        tier3: 'extract',
+        max_items: 20,
+      });
+    });
+
+    it('preset:"detailed" lands on extractAndApply as the detailed style config (no cap)', async () => {
       const res = await app.request('/v1/extract-yops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -327,12 +354,15 @@ describe('POST /v1/extract-yops (v2)', () => {
       });
       expect(res.status).toBe(200);
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      // Detailed has NO max_items — capture nuance is the whole point.
+      // Pin both the field absence and the rest of the config.
       expect(callArgs?.style).toEqual({
         granularity: 'detailed',
         quote_length: 'representative',
         update_stance: 'aggressive',
         tier3: 'extract',
       });
+      expect(callArgs?.style).not.toHaveProperty('max_items');
     });
 
     it('omitted preset leaves style undefined (preserves historical no-style call)', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type LLMProvider, LLMProviderError } from '../../../llm/types';
+import { applyYOps } from '../../../t3x-yops/engine';
 import { runExtractionV2Pipeline } from '../pipeline';
 
 describe('extractors/v2 pipeline', () => {
@@ -1165,7 +1166,7 @@ describe('extractors/v2 pipeline', () => {
       expect(system).not.toMatch(/Concise budget/i);
     });
 
-    it('concise style adds a hard 6-item budget + single-tree shape rule', async () => {
+    it('concise style adds the configured item budget + single-tree shape rule', async () => {
       const { captured, provider } = captureSystem();
       await runExtractionV2Pipeline({
         turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
@@ -1178,17 +1179,106 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'conservative',
           tier3: 'extract',
+          max_items: 6,
         },
       });
       const system = captured.system ?? '';
       // Style summary line is present.
       expect(system).toMatch(/Extraction mode: concise/i);
-      // Hard 6-item ceiling — concise must not produce 60-op outputs.
+      // Item budget cites the configured max_items, not a hardcoded value.
       expect(system).toMatch(/at most ~6 items/i);
       // Single-tree shape rule — direct fix for the "17 parallel root
       // nodes" failure mode in the Sony camera reproduction.
       expect(system).toMatch(/path prefix/i);
       expect(system).toMatch(/cameras\/sony/i);
+    });
+
+    it('concise prompt reflects a custom max_items when caller overrides the preset', async () => {
+      // Direct/custom callers can pass max_items=10 with concise. Prompt
+      // and deterministic selection must agree on the number — otherwise
+      // the model is told 6 while selection keeps 10 (or vice versa).
+      // This was the original drift the reviewer flagged.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 10,
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/at most ~10 items/i);
+      expect(system).not.toMatch(/at most ~6 items/i);
+    });
+
+    it('concise style without max_items softens the wording (no false hard limit)', async () => {
+      // Custom config: granularity 'concise' but no cap. The selection
+      // step is a no-op, so the prompt must NOT claim a hard ceiling
+      // — that would mislead the model with a number we don't enforce.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          // max_items intentionally omitted
+        },
+      });
+      const system = captured.system ?? '';
+      // With max_items omitted, this config doesn't exactly match
+      // PRESETS.concise (which now requires max_items: 6), so
+      // matchPreset → null and styleSummaryLine returns the
+      // 'custom — granularity=concise, ...' line. Either form
+      // counts as "concise direction was picked".
+      expect(system).toMatch(/granularity=concise|Extraction mode: concise/i);
+      // No specific item count claimed.
+      expect(system).not.toMatch(/at most ~\d+ items/i);
+      // The "hard limits" framing also drops — there's no cap to
+      // enforce, so claiming hard limits would be misleading.
+      expect(system).not.toMatch(/hard limits/i);
+      // Wording switches to qualitative-direction framing instead.
+      expect(system).toMatch(/qualitative guidance/i);
+      // The qualitative direction stays — concise still means brief,
+      // single-tree, skip-secondary-specs.
+      expect(system).toMatch(/Be brief|highest-signal facts/i);
+      expect(system).toMatch(/path prefix/i);
+    });
+
+    it('concise style WITH max_items keeps the hard-limits header', async () => {
+      // Inverse pin for the conditional header — when a cap IS
+      // configured, the prompt must keep the "hard limits" framing
+      // so the model takes the number seriously.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 6,
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/hard limits/i);
+      expect(system).not.toMatch(/qualitative guidance/i);
     });
 
     it('detailed style asks for nuance under existing tree paths', async () => {
@@ -1226,6 +1316,11 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'balanced',
           tier3: 'extract',
+          max_items: 20, // matches PRESETS.balanced; without it
+          // matchPreset rightly reports 'custom' (drift coverage in
+          // extractionStyleConfig.test). Pass the full preset shape
+          // here so styleSummaryLine returns the friendly 'balanced'
+          // summary line.
         },
       });
       const system = captured.system ?? '';
@@ -1265,6 +1360,310 @@ describe('extractors/v2 pipeline', () => {
       // The whole point of the dropdown is that prompts differ. If they're
       // ever equal again, the preset is back to being dead UI.
       expect(concise.captured.system).not.toEqual(balanced.captured.system);
+    });
+  });
+
+  describe('deterministic item-level cap (style.max_items)', () => {
+    // Hard counterpart to the prompt budget. Selection runs at the
+    // canonical-draft layer (post-lift, pre-compile), so each surviving
+    // item produces a complete, dependency-correct op group. The
+    // applyYOps-on-empty-base assertion below is the contract anchor:
+    // if the selection accidentally splits a parent define from its
+    // populate, apply fails and the test goes red.
+    function buildItem(
+      id: string,
+      key: string,
+      confidence: number,
+      evidenceCount: number,
+      values: Record<string, string> = { fact: `value for ${id}` }
+    ) {
+      return {
+        id,
+        intent: 'add' as const,
+        confidence,
+        reasoning_type: 'direct' as const,
+        target_ref: { node_key: null, path: null, existing_node_id: null },
+        candidate: {
+          key,
+          path_hint: null,
+          slot: null,
+          value_json: null,
+          values_json: JSON.stringify(values),
+          children_json: null,
+        },
+        evidence: Array.from({ length: evidenceCount }, (_, i) => ({
+          turn_tag: 'T1',
+          quote: `quote ${id}-${i}`,
+          role: 'primary' as const,
+        })),
+      };
+    }
+
+    function providerWithItems(
+      items: ReturnType<typeof buildItem>[]
+    ): Pick<LLMProvider, 'generateStructured'> {
+      return {
+        async generateStructured() {
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items,
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+    }
+
+    it('concise (max_items=6) trims a 10-item draft to 6 by confidence', async () => {
+      // High-confidence first 6 + low-confidence last 4. After cap, the
+      // low-confidence items should be the ones dropped.
+      const items = [
+        buildItem('keep_a', 'a', 0.95, 1),
+        buildItem('keep_b', 'b', 0.94, 1),
+        buildItem('keep_c', 'c', 0.93, 1),
+        buildItem('keep_d', 'd', 0.92, 1),
+        buildItem('keep_e', 'e', 0.91, 1),
+        buildItem('keep_f', 'f', 0.9, 1),
+        buildItem('drop_g', 'g', 0.7, 1),
+        buildItem('drop_h', 'h', 0.6, 1),
+        buildItem('drop_i', 'i', 0.5, 1),
+        buildItem('drop_j', 'j', 0.4, 1),
+      ];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 6,
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // The compiled output reflects only the kept items. Each item
+      // compiles to define + populate (2 ops), so 6 items → 12 ops.
+      const definePaths = result.compiled.ops
+        .filter((op) => 'define' in op)
+        .map((op) => (op as { define: { path: string } }).define.path);
+      expect(definePaths).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd', 'e', 'f']));
+      expect(definePaths).not.toContain('g');
+      expect(definePaths).not.toContain('h');
+      expect(definePaths).not.toContain('i');
+      expect(definePaths).not.toContain('j');
+      // Warning names every dropped id, the cap, and the original count.
+      const capWarning = result.compiled.warnings.find((w) => w.includes('Extraction style cap'));
+      expect(capWarning).toBeDefined();
+      expect(capWarning).toContain('produced 10 items');
+      expect(capWarning).toContain('kept top 6');
+      expect(capWarning).toContain('drop_g');
+      expect(capWarning).toContain('drop_j');
+    });
+
+    it('compiled ops apply cleanly against an empty base (no broken dependencies)', async () => {
+      // Each item compiles into a define + populate group. Selection at
+      // item level guarantees that for every surviving item, both ops
+      // are present together — applyYOps must succeed against an empty
+      // base. If selection ever drops the wrong half of a group, this
+      // goes red.
+      const items = [
+        buildItem('a', 'root_a', 0.95, 2),
+        buildItem('b', 'root_b', 0.93, 1),
+        buildItem('c', 'root_c', 0.91, 1),
+        buildItem('d', 'root_d', 0.6, 1),
+        buildItem('e', 'root_e', 0.5, 1),
+        buildItem('f', 'root_f', 0.4, 1),
+        buildItem('g', 'root_g', 0.3, 1),
+        buildItem('h', 'root_h', 0.2, 1),
+      ];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 6,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const applied = applyYOps({ trees: [], relations: [] }, result.compiled.ops);
+      expect(applied.ok).toBe(true);
+      expect(applied.applied).toBe(result.compiled.ops.length);
+    });
+
+    it('balanced (max_items=20) is a no-op when draft has fewer items than the cap', async () => {
+      const items = [
+        buildItem('a', 'a', 0.9, 1),
+        buildItem('b', 'b', 0.9, 1),
+        buildItem('c', 'c', 0.9, 1),
+      ];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'balanced',
+          quote_length: 'representative',
+          update_stance: 'balanced',
+          tier3: 'extract',
+          max_items: 20,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // No cap warning when nothing was dropped.
+      expect(result.compiled.warnings.some((w) => w.includes('Extraction style cap'))).toBe(false);
+    });
+
+    it('detailed (no max_items) lets all items through with no cap warning', async () => {
+      // Detailed config has no max_items. A 30-item draft must compile
+      // entirely — capture nuance is the whole point of detailed.
+      const items = Array.from({ length: 30 }, (_, i) =>
+        buildItem(`item_${i}`, `root_${i}`, 0.9, 1)
+      );
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'detailed',
+          quote_length: 'representative',
+          update_stance: 'aggressive',
+          tier3: 'extract',
+          // max_items intentionally omitted (detailed = no cap)
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.compiled.ops.filter((op) => 'define' in op);
+      expect(definePaths.length).toBe(30);
+      expect(result.compiled.warnings.some((w) => w.includes('Extraction style cap'))).toBe(false);
+    });
+
+    it('omitted style → no cap, no warning (preserves historical behaviour)', async () => {
+      const items = Array.from({ length: 12 }, (_, i) =>
+        buildItem(`item_${i}`, `root_${i}`, 0.9, 1)
+      );
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // All 12 items survive — no style means no cap.
+      expect(result.compiled.ops.filter((op) => 'define' in op).length).toBe(12);
+      expect(result.compiled.warnings.some((w) => w.includes('Extraction style cap'))).toBe(false);
+    });
+
+    it('ties on confidence break by evidence count (more evidence wins)', async () => {
+      // Two items at confidence 0.9: one with 3 evidence rows, one with
+      // 1. The richer-evidence item must be kept; the leaner one dropped.
+      const items = [buildItem('keep_a', 'a', 0.9, 3), buildItem('drop_b', 'b', 0.9, 1)];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 1,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.compiled.ops
+        .filter((op) => 'define' in op)
+        .map((op) => (op as { define: { path: string } }).define.path);
+      expect(definePaths).toEqual(['a']);
+      const capWarning = result.compiled.warnings.find((w) => w.includes('Extraction style cap'));
+      expect(capWarning).toContain('drop_b');
+    });
+
+    it('ties on confidence + evidence break by original input order (stable)', async () => {
+      // Both items at confidence 0.9 with 1 evidence row. The first one
+      // wins; the second drops. Stable tie-break is essential for
+      // deterministic test output and reproducible user experience.
+      const items = [
+        buildItem('first', 'first_path', 0.9, 1),
+        buildItem('second', 'second_path', 0.9, 1),
+      ];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 1,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.compiled.ops
+        .filter((op) => 'define' in op)
+        .map((op) => (op as { define: { path: string } }).define.path);
+      expect(definePaths).toEqual(['first_path']);
+    });
+
+    it('warning names the dropped item ids so consumers can audit cuts', async () => {
+      const items = [
+        buildItem('keep_1', 'a', 0.95, 1),
+        buildItem('drop_x', 'b', 0.5, 1),
+        buildItem('drop_y', 'c', 0.4, 1),
+      ];
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider: providerWithItems(items),
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 1,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const capWarning = result.compiled.warnings.find((w) => w.includes('Extraction style cap'));
+      expect(capWarning).toBeDefined();
+      // Both dropped ids must appear so the user sees what was cut.
+      expect(capWarning).toContain('drop_x');
+      expect(capWarning).toContain('drop_y');
+      // The kept id should NOT appear in the dropped list.
+      expect(capWarning).not.toMatch(/Dropped:[^.]*keep_1/);
     });
   });
 });

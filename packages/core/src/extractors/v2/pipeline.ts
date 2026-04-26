@@ -55,6 +55,85 @@ function shouldTargetedReask(failure: ExtractionFailure): boolean {
 }
 
 /**
+ * Apply the style's `max_items` cap to a canonical extraction draft by
+ * selecting the top-N items and dropping the rest with a warning.
+ *
+ * Operates at the **item** level — not at the compiled-op level — because
+ * each item compiles into a group of dependent ops (parent define +
+ * populate + nested children). Truncating ops post-compile would risk
+ * leaving a `populate` whose parent `define` got dropped; selecting
+ * items pre-compile keeps each surviving item's op group intact.
+ *
+ * Item is the smallest sortable / discardable semantic unit, not an
+ * absolutely self-contained one — cross-item updates and same-path
+ * dedupe still happen downstream in the compiler. The applyYOps-on-
+ * empty-base test pins the dependency-correctness contract.
+ *
+ * Sort order (deterministic):
+ *   1. confidence desc
+ *   2. evidence count desc (more evidence = higher signal)
+ *   3. original index asc (stable tie-break)
+ *
+ * Returns the trimmed draft + a list of dropped item ids. Both are then
+ * surfaced through `compiled.warnings` so the caller sees what was cut
+ * without having to diff before/after manually.
+ *
+ * `max_items === undefined` (Detailed) → no cap, original draft + empty
+ * dropped list.
+ */
+function selectTopItemsByStyle(
+  draft: ExtractionDraft,
+  style: ExtractionStyleConfig | undefined
+): { draft: ExtractionDraft; droppedIds: string[] } {
+  const maxItems = style?.max_items;
+  if (maxItems === undefined || draft.items.length <= maxItems) {
+    return { draft, droppedIds: [] };
+  }
+
+  // Stable sort: track original index so equal-priority items keep
+  // their input order. Object.entries preserves insertion; .sort is
+  // not guaranteed stable on every engine, hence the explicit index.
+  const indexed = draft.items.map((item, index) => ({ item, index }));
+  indexed.sort((a, b) => {
+    if (a.item.confidence !== b.item.confidence) {
+      return b.item.confidence - a.item.confidence;
+    }
+    const aEv = a.item.evidence.length;
+    const bEv = b.item.evidence.length;
+    if (aEv !== bEv) {
+      return bEv - aEv;
+    }
+    return a.index - b.index;
+  });
+
+  const kept = indexed.slice(0, maxItems);
+  const dropped = indexed.slice(maxItems);
+  // Restore original input order among kept items so the compiler sees
+  // the same sequence the model emitted (relevant when items reference
+  // each other by adjacency or rely on define-before-populate ordering
+  // implicitly).
+  kept.sort((a, b) => a.index - b.index);
+
+  return {
+    draft: { ...draft, items: kept.map((entry) => entry.item) },
+    droppedIds: dropped.map((entry) => entry.item.id),
+  };
+}
+
+/**
+ * Build the warning message for an item-cap selection step. Centralised
+ * so the wording is consistent everywhere selection runs.
+ */
+function selectionWarningLine(droppedIds: string[], maxItems: number, totalItems: number): string {
+  return (
+    `${PRESET_PREFIX}produced ${totalItems} items; kept top ${maxItems} by confidence. ` +
+    `Dropped: ${droppedIds.join(', ')}.`
+  );
+}
+
+const PRESET_PREFIX = 'Extraction style cap: ';
+
+/**
  * Granularity-specific guidance prepended to the system prompt's quality
  * rules. Concise needs a hard ceiling and an explicit "skip secondary
  * specs" hint, otherwise weak models like gpt-5.4-nano happily produce
@@ -67,10 +146,31 @@ function styleGuidanceBlock(style: ExtractionStyleConfig | undefined): string {
   if (!style) return '';
   const summary = styleSummaryLine(style);
   if (style.granularity === 'concise') {
+    // Mirror the deterministic cap. If the caller supplied an explicit
+    // max_items, the prompt cites that exact number AND the header
+    // declares the budget a hard limit — otherwise prompt and
+    // selection would diverge:
+    //   - { granularity: 'concise', max_items: 10 } previously said
+    //     "~6" while selection kept 10
+    //   - { granularity: 'concise' } (no cap) previously said "~6"
+    //     under a "hard limits" header while selection applied no
+    //     cap at all
+    // Now: when max_items is defined, prompt + selection agree on
+    // the number AND the wording is honest about it being enforced;
+    // when undefined, both the number AND the "hard limits" framing
+    // are dropped — qualitative direction stays (brief, single-tree,
+    // skip-secondary-specs) since those still hold without a cap.
+    const hasCap = typeof style.max_items === 'number';
+    const header = hasCap
+      ? 'Concise budget — these are hard limits, not suggestions:\n'
+      : 'Concise direction — qualitative guidance:\n';
+    const itemBudgetLine = hasCap
+      ? `- Emit at most ~${style.max_items} items total. Pick the highest-signal facts; drop the rest.\n`
+      : '- Be brief. Pick the highest-signal facts; skip the rest.\n';
     return (
       `${summary}\n` +
-      'Concise budget — these are hard limits, not suggestions:\n' +
-      '- Emit at most ~6 items total. Pick the highest-signal facts; drop the rest.\n' +
+      header +
+      itemBudgetLine +
       '- Prefer one comparison tree (e.g. cameras/sony/{a7r_v, a7_v}/{slot}) over\n' +
       '  many parallel root nodes. Same-subject facts MUST share a path prefix; the\n' +
       '  suffix is the slot, not the node name (write `cameras/sony/a7r_v` with slot\n' +
@@ -474,8 +574,20 @@ export async function runExtractionV2Pipeline(
       };
     }
 
+    // Apply the style cap deterministically at the canonical-draft layer,
+    // before compile. This is the hard counterpart to the prompt budget:
+    // even if the model ignores "≤6 items" and emits 14, selection
+    // trims to the top 6 by confidence and surfaces what was dropped
+    // through compiled.warnings. See `selectTopItemsByStyle`.
+    const totalItemsFromModel = generated.draft.items.length;
+    const selection = selectTopItemsByStyle(generated.draft, input.style);
+    const selectionWarnings: string[] =
+      selection.droppedIds.length > 0 && input.style?.max_items !== undefined
+        ? [selectionWarningLine(selection.droppedIds, input.style.max_items, totalItemsFromModel)]
+        : [];
+
     const compiled = compileExtractionDraft({
-      draft: generated.draft,
+      draft: selection.draft,
       sourceModel: input.model,
       extractedAt: input.extractedAt ?? new Date().toISOString(),
       turnHashByTag,
@@ -503,8 +615,12 @@ export async function runExtractionV2Pipeline(
         compiled.failure.code === 'compile' &&
         shouldTargetedReask(compiled.failure);
       if (reaskExhausted) {
+        // Salvage compiles the SELECTED draft, not the original — the
+        // style cap still applies on the partial path so we don't
+        // accidentally widen output past the budget after a failed
+        // strict pass.
         const partial = compileExtractionDraft({
-          draft: generated.draft,
+          draft: selection.draft,
           sourceModel: input.model,
           extractedAt: input.extractedAt ?? new Date().toISOString(),
           turnHashByTag,
@@ -513,10 +629,11 @@ export async function runExtractionV2Pipeline(
         if (partial.ok && partial.ops.length > 0) {
           return {
             ok: true,
-            draft: generated.draft,
+            draft: selection.draft,
             compiled: {
               ops: partial.ops,
               warnings: [
+                ...selectionWarnings,
                 `Partial compile after reask exhaustion: ${compiled.failure.message}`,
                 ...partial.warnings,
               ],
@@ -536,10 +653,12 @@ export async function runExtractionV2Pipeline(
 
     return {
       ok: true,
-      draft: generated.draft,
+      draft: selection.draft,
       compiled: {
         ops: compiled.ops,
-        warnings: compiled.warnings,
+        // Selection warnings precede compile warnings so a reader
+        // sees the cap action before any downstream notes.
+        warnings: [...selectionWarnings, ...compiled.warnings],
       },
       turnHashByTag,
     };
