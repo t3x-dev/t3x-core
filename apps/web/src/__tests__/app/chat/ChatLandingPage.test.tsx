@@ -30,11 +30,13 @@ vi.hoisted(() => {
 });
 
 const push = vi.fn();
+let searchParamsValue: URLSearchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push,
   }),
+  useSearchParams: () => searchParamsValue,
 }));
 
 vi.mock('@/hooks/shared/useAvailableModels', async () => {
@@ -75,6 +77,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
 import ChatLandingPage from '@/app/chat/page';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import { useChatModelPreferencesStore } from '@/store/chatModelPreferencesStore';
+import { useChatStore } from '@/store/chatStore';
 
 beforeEach(() => {
   localStorage.removeItem('t3x-chat-model-preferences');
@@ -83,6 +86,8 @@ beforeEach(() => {
     selectedModel: null,
     hydrated: true,
   });
+  useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+  searchParamsValue = new URLSearchParams();
 });
 
 afterEach(() => {
@@ -93,6 +98,8 @@ afterEach(() => {
     selectedModel: null,
     hydrated: true,
   });
+  useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+  searchParamsValue = new URLSearchParams();
 });
 
 describe('ChatLandingPage', () => {
@@ -147,6 +154,55 @@ describe('ChatLandingPage', () => {
     expect(push).toHaveBeenCalledWith(
       '/chat/new?firstMessage=hello+world&provider=openai&model=gpt-4.1'
     );
+  });
+
+  it('primes activeProjectId and propagates ?projectId= into /chat/new', async () => {
+    // Mirrors the "+ New Project" sidebar action, which lands here with
+    // ?projectId=<id>. Without propagation, ChatWorkspace.useAutoProject
+    // would create a second project on first send.
+    searchParamsValue = new URLSearchParams({ projectId: 'proj_from_url' });
+
+    vi.mocked(useAvailableModels).mockReturnValue({
+      providers: [
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: true,
+          models: [
+            {
+              id: 'claude-sonnet-4-20250514',
+              label: 'Claude Sonnet 4',
+              capabilities: [],
+              max_output_tokens: 4096,
+            },
+          ],
+        },
+      ],
+      loading: false,
+      hasConfiguredGenerationProvider: true,
+      defaultProvider: 'anthropic',
+      defaultModel: 'claude-sonnet-4-20250514',
+      loadModels: vi.fn(),
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    await waitFor(() => {
+      expect(useChatStore.getState().activeProjectId).toBe('proj_from_url');
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const target = (push.mock.calls[0]?.[0] as string) ?? '';
+    expect(target.startsWith('/chat/new?')).toBe(true);
+    const params = new URLSearchParams(target.slice('/chat/new?'.length));
+    expect(params.get('firstMessage')).toBe('hello world');
+    expect(params.get('projectId')).toBe('proj_from_url');
   });
 
   it('disables the start path when no generation provider is usable', async () => {
