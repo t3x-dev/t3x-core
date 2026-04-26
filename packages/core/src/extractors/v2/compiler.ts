@@ -521,6 +521,30 @@ function dedupeDefineOps(ops: SourcedYOp[]): { ops: SourcedYOp[]; warnings: stri
   return { ops: kept, warnings };
 }
 
+/**
+ * Quality guard: returns true when every op a draft item produced is a bare
+ * `define` (no `populate`, no `set`). That shape is the small-model failure
+ * mode where the LLM transcribes an assistant response's section headers as
+ * an outline of empty nodes — `camera_comparison`, `decision_rule_*`, etc. —
+ * with no concrete facts attached. Applying it just pollutes the workspace
+ * with empty buckets the user has to clean up.
+ *
+ * We treat this as a deterministic pipeline filter, not a prompt issue: any
+ * model that emits an item without at least one `populate`/`set` is
+ * proposing structure for its own sake. The pipeline must catch this even
+ * when the prompt fails to deter it.
+ *
+ * Items with at least one `populate` or `set` (whether from `candidate.values`,
+ * `candidate.value`, or any populated child) pass through unchanged. Items
+ * with no ops at all (e.g. `intent: noop`) also pass through — they're not
+ * "empty defines", they're "no-op by design" and dropping them is the
+ * caller's concern, not the guard's.
+ */
+function itemIsEmptyDefinesOnly(ops: readonly SourcedYOp[]): boolean {
+  if (ops.length === 0) return false;
+  return ops.every((op) => 'define' in op);
+}
+
 export function compileExtractionDraft(input: CompileInput): CompileResult {
   const ops: SourcedYOp[] = [];
   const warnings: string[] = [];
@@ -541,6 +565,21 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
       );
       continue;
     }
+
+    // Deterministic empty-define guard. Runs in BOTH strict and partial
+    // modes: a junk item that creates an empty bucket isn't an
+    // "error" the LLM can be reasked to fix in a useful way (the
+    // model thought it was extracting structure), but it should never
+    // reach the workspace. Drop with a warning so callers can see
+    // what was filtered.
+    if (itemIsEmptyDefinesOnly(compiled.ops)) {
+      warnings.push(
+        `Dropped item "${item.id}": produced only empty define ops (no slots, values, or populated children). ` +
+          `LLM proposed structure without concrete facts; the pipeline filter rejected it.`
+      );
+      continue;
+    }
+
     ops.push(...compiled.ops);
     warnings.push(...compiled.warnings);
   }

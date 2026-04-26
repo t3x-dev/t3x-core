@@ -266,6 +266,48 @@ describe('extractors/v2 pipeline', () => {
     expect(prompt).not.toContain('schema, version, mode, items, warnings');
   });
 
+  it('system prompt instructs LLM not to emit empty structure (small-model failure mode)', () => {
+    // Quality rules in the system prompt are the second layer behind
+    // the deterministic empty-define guard in compileExtractionDraft.
+    // The guard is the safety net; the prompt is the first attempt to
+    // get good output. Pinning the key phrases here keeps the rules
+    // from being silently weakened in a future prompt edit.
+    const captured: { system?: string } = {};
+    const capture: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        captured.system = prompt.system;
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    return runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'assistant', content: 'fact.' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider: capture,
+    }).then(() => {
+      const system = captured.system ?? '';
+      // Concrete-fact requirement.
+      expect(system).toMatch(/concrete fact/i);
+      // No section-header / outline mode.
+      expect(system).toMatch(/section headers/i);
+      // Extend snapshot, don't duplicate categories.
+      expect(system).toMatch(/extend it|extend the snapshot|extend it\./i);
+      // Empty draft is correct, outline of empty buckets is not.
+      expect(system).toMatch(/empty buckets|items: \[\]/i);
+    });
+  });
+
   it('returns a typed draft_parse failure when provider JSON string fields are invalid', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

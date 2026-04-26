@@ -66,7 +66,22 @@ function buildDraftPrompt(input: {
   return {
     system:
       'You extract semantic knowledge from a conversation into a ProviderExtractionDraft JSON. ' +
-      'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.',
+      'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.\n' +
+      '\n' +
+      'Quality rules — these are not optional:\n' +
+      '1. Every item MUST carry at least one concrete fact. Populate `candidate.values` ' +
+      '(or `candidate.value` + `candidate.slot`, or `candidate.children[].values`) ' +
+      'with the real data from the conversation. Items that only declare a `key` with no ' +
+      'values, no children with values, and no slot/value are useless and will be dropped.\n' +
+      '2. Do NOT extract section headers, paragraph titles, or rhetorical structure as ' +
+      'empty nodes. "Key Differences", "The Verdict", "Choose X if:" are not facts; the ' +
+      'facts they introduce are. Skip the heading and capture the underlying claim with ' +
+      'concrete values.\n' +
+      '3. When a `Current knowledge snapshot` is provided, extend it. Add new facts ' +
+      'under existing paths, or add slots to existing nodes. Do NOT create parallel ' +
+      'top-level nodes that duplicate categories already present in the snapshot.\n' +
+      '4. If the conversation contains no new concrete facts to extract, return ' +
+      '`items: []`. An empty draft is correct; an outline of empty buckets is not.',
     messages: [
       {
         role: 'user',

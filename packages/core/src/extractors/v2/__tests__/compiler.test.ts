@@ -277,7 +277,18 @@ describe('extractors/v2 compiler', () => {
     ).toBe(true);
   });
 
-  it('synthesizes a path from item.id when add has no values and no key', () => {
+  it('synthesizes a path when add has no key but DOES carry values', () => {
+    // The path-synthesis fallback still runs when the model omits both
+    // `candidate.key` and `candidate.path_hint` but DOES attach concrete
+    // values — there's a real fact to extract, just no path-naming
+    // hint. `synthesizeAddPath` slugs the first short string value in
+    // `candidate.values` (falling back to `item.id` if none), and the
+    // populate hangs under that synthesised path.
+    //
+    // The completely bare case (no key, no values, no children) is now
+    // dropped by the empty-define quality guard — see the
+    // 'empty-define quality guard' describe block below for that
+    // contract.
     const draft: ExtractionDraft = {
       schema: EXTRACTION_DRAFT_SCHEMA,
       version: 1,
@@ -288,7 +299,10 @@ describe('extractors/v2 compiler', () => {
           intent: 'add',
           confidence: 0.5,
           reasoning_type: 'direct',
-          candidate: {},
+          // Numeric value, so synthesis can't pick a string slug from
+          // values and falls back to item.id — the historical contract
+          // this test was originally pinning.
+          candidate: { values: { count: 7 } },
           evidence: [{ turn_tag: 'T1', quote: 'bare', role: 'primary' }],
         },
       ],
@@ -305,6 +319,11 @@ describe('extractors/v2 compiler', () => {
     if (!result.ok) return;
     const defineOp = result.ops.find((op) => 'define' in op);
     expect((defineOp as { define: { path: string } }).define.path).toBe('item_bare_nano');
+    // Synthesised path was usable: populate landed under it.
+    const populateOp = result.ops.find((op) => 'populate' in op) as
+      | { populate: { path: string; values: Record<string, unknown> } }
+      | undefined;
+    expect(populateOp?.populate.path).toBe('item_bare_nano');
   });
 
   it('promotes update to add in bootstrap mode (path comes from target_ref)', () => {
@@ -717,7 +736,14 @@ describe('extractors/v2 compiler', () => {
       ]);
     });
 
-    it('emits only define when a child has no values', () => {
+    it('drops items where parent and every child are bare defines (empty-define guard)', () => {
+      // Previously this case "emitted only define ops" — parent + child
+      // both bare. That was exactly the small-model failure mode the
+      // empty-define quality guard now filters: structure with no
+      // concrete facts is workspace pollution, not extracted knowledge.
+      // The item is dropped with a warning; ops list comes back empty.
+      // See the dedicated 'empty-define quality guard' describe block
+      // for the full contract.
       const result = compileExtractionDraft({
         draft: {
           schema: EXTRACTION_DRAFT_SCHEMA,
@@ -744,11 +770,8 @@ describe('extractors/v2 compiler', () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.ops).toHaveLength(2);
-      expect((result.ops[0] as { define: { path: string } }).define.path).toBe('parent');
-      expect((result.ops[1] as { define: { path: string } }).define.path).toBe(
-        'parent/empty_child'
-      );
+      expect(result.ops).toEqual([]);
+      expect(result.warnings.some((w) => /empty define/i.test(w))).toBe(true);
     });
 
     it('normalises dotted child keys the same way as parent paths', () => {
@@ -1110,6 +1133,273 @@ describe('extractors/v2 compiler', () => {
       });
 
       expect(result.ok).toBe(false);
+    });
+  });
+
+  describe('empty-define quality guard', () => {
+    // Drops items that produce only bare `define` ops (no `populate`,
+    // no `set`, no populated children). The failure mode that motivated
+    // this guard: gpt-5.4-nano on a Sony camera comparison conversation
+    // emitted seven items each with just a `key` —
+    // `camera_comparison`, `a7r_v_philosophy_resolution`, etc. — and no
+    // values. The compiler dutifully turned each into a bare define,
+    // and the workspace got polluted with seven empty buckets that the
+    // user had to clean up by hand.
+    //
+    // Treating this as a deterministic filter (rather than a prompt
+    // issue) means small-model output can't bypass it.
+
+    const sectionHeaderJunkDraft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'junk_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: { key: 'camera_comparison' }, // no values, no children, no slot
+          evidence: [{ turn_tag: 'T1', quote: 'comparing the cameras', role: 'primary' }],
+        },
+      ],
+    };
+
+    it('drops an item whose only output is a bare define', () => {
+      const result = compileExtractionDraft({
+        draft: sectionHeaderJunkDraft,
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops).toEqual([]);
+      expect(result.warnings.some((w) => w.includes('junk_1') && /empty define/i.test(w))).toBe(
+        true
+      );
+    });
+
+    it('drops empty items in strict mode too (no allowPartial needed)', () => {
+      // The guard is a pipeline filter, not a per-item compile failure —
+      // an empty define isn't something the model can be reasked to
+      // "fix" usefully. So it must run regardless of allowPartial.
+      const result = compileExtractionDraft({
+        draft: sectionHeaderJunkDraft,
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        // allowPartial omitted = strict
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops).toEqual([]);
+    });
+
+    it('keeps items that carry at least one populate (values present)', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'good',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'a7r_v', values: { sensor_resolution: '61 megapixels' } },
+              evidence: [{ turn_tag: 'T1', quote: '61 megapixels', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops.some((op) => 'populate' in op)).toBe(true);
+    });
+
+    it('keeps items that set a slot (value + slot present)', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'slotted',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'a7r_v', slot: 'sensor_type', value: 'BSI CMOS' },
+              evidence: [{ turn_tag: 'T1', quote: 'BSI CMOS', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops.some((op) => 'set' in op)).toBe(true);
+    });
+
+    it('drops items where every child is also bare (parent + all-empty children)', () => {
+      // The deeper failure shape: parent has no values AND every child
+      // also has no values. The compiled ops are still all defines.
+      // Filter must catch this even with the children expansion in
+      // play.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'all_empty',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                key: 'comparison',
+                children: [{ key: 'a7r_v' }, { key: 'a7_v' }], // no values on either
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'comparison', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops).toEqual([]);
+    });
+
+    it('keeps items where at least one child carries values', () => {
+      // Parent is a bare define but one child has values — the item as
+      // a whole has data, so we keep all its ops (including the parent
+      // define, which the child needs as scaffolding).
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'mixed',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                key: 'cameras',
+                children: [
+                  { key: 'a7r_v', values: { resolution: '61 megapixels' } },
+                  { key: 'a7_v' }, // empty child, but parent's other child has data
+                ],
+              },
+              evidence: [{ turn_tag: 'T1', quote: '61 megapixels', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops.some((op) => 'populate' in op)).toBe(true);
+    });
+
+    it('drops junk items but keeps real ones in the same draft', () => {
+      // The exact pattern the user hit: one good item from the prior
+      // extraction (sony specs) coexists with a wave of section-header
+      // junk in a follow-up extraction. The guard must be per-item, not
+      // all-or-nothing.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'junk_a',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'camera_comparison' },
+              evidence: [{ turn_tag: 'T1', quote: 'comparison', role: 'primary' }],
+            },
+            {
+              id: 'real',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'a7r_v', values: { sensor_resolution: '61 megapixels' } },
+              evidence: [{ turn_tag: 'T1', quote: '61 megapixels', role: 'primary' }],
+            },
+            {
+              id: 'junk_b',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'decision_rule' },
+              evidence: [{ turn_tag: 'T1', quote: 'decision', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Only the real item's ops survive: define + populate for `a7r_v`.
+      expect(result.ops.some((op) => 'populate' in op && op.populate.path === 'a7r_v')).toBe(true);
+      expect(
+        result.ops.some((op) => 'define' in op && op.define.path === 'camera_comparison')
+      ).toBe(false);
+      expect(result.ops.some((op) => 'define' in op && op.define.path === 'decision_rule')).toBe(
+        false
+      );
+      expect(result.warnings.filter((w) => /empty define/i.test(w))).toHaveLength(2);
+    });
+
+    it('does not flag noop items (intent: noop emits zero ops by design)', () => {
+      // `intent: noop` returns ops=[] from compileItem on purpose.
+      // The guard ignores empty op lists (length===0) so noop items
+      // pass through without a misleading "dropped: empty define"
+      // warning.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'noop',
+              intent: 'noop',
+              confidence: 0.5,
+              reasoning_type: 'implicit',
+              candidate: {},
+              evidence: [{ turn_tag: 'T1', quote: 'no signal', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-nano',
+        extractedAt: '2026-04-26T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops).toEqual([]);
+      expect(result.warnings.some((w) => /empty define/i.test(w))).toBe(false);
     });
   });
 });
