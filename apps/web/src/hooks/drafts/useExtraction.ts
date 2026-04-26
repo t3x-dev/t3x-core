@@ -4,6 +4,19 @@
  * Wraps the extraction worker + LLM adapter (commands/yops/*) and re-hydrates
  * the conversation after a successful run. Components consume this hook
  * instead of reaching into @/commands directly.
+ *
+ * Toast lifecycle: every Extract attempt owns a single sonner slot
+ * (`EXTRACTION_TOAST_ID`). The slot is dismissed at the start of every
+ * attempt and rewritten by the success / error path, so a stale red
+ * toast from a previous attempt cannot survive past the next one — the
+ * earlier "extraction succeeded but the old red toast is still on screen
+ * so it looks like it failed" failure mode.
+ *
+ * Refresh boundary: after the worker returns, `hydrateConversationToStore`
+ * is the single source of truth for the post-extraction workspace state
+ * (turns + opsLog + tree + sourceIndex + replay warnings). The success
+ * toast fires only after hydrate resolves, so the user sees the new tree
+ * and the confirmation in the same render.
  */
 
 import { useCallback } from 'react';
@@ -15,6 +28,14 @@ import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+
+/**
+ * Stable sonner id for every toast emitted from `handleExtract`. Using a
+ * single id means success / error / info calls overwrite the same slot
+ * instead of stacking, and a leading `toast.dismiss(EXTRACTION_TOAST_ID)`
+ * clears any prior slot before a new attempt starts.
+ */
+export const EXTRACTION_TOAST_ID = 't3x-extraction';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;
@@ -38,6 +59,11 @@ export function useExtraction({
       // Already running — silent skip is correct, the user sees the
       // "Extracting…" spinner.
       if (isExtracting) return;
+      // Clear any toast left over from a previous Extract attempt before
+      // doing anything else: the not-ready early return, the success
+      // path, and the error path all reuse the same slot, so dismissing
+      // first guarantees the next emit is what the user sees.
+      toast.dismiss(EXTRACTION_TOAST_ID);
       // Defense: ChatHeader gates the button on `isExtractReady` so this
       // path shouldn't be reachable from the UI. If it somehow fires
       // before the project context is loaded (race, programmatic event,
@@ -45,7 +71,9 @@ export function useExtraction({
       // we don't repeat the "click twice" failure mode that motivated
       // this guard.
       if (!extractConvId || !projectId) {
-        toast.message('Loading conversation context — try Extract again in a moment.');
+        toast.message('Loading conversation context — try Extract again in a moment.', {
+          id: EXTRACTION_TOAST_ID,
+        });
         return;
       }
 
@@ -71,9 +99,14 @@ export function useExtraction({
             }),
         });
 
-        // Re-hydrate the conversation to pull newly-committed ops into the store.
+        // hydrate is the single refresh boundary on the success path:
+        // turns + opsLog + tree + sourceIndex + replay warnings all come
+        // from server replay. The success toast fires only after this
+        // resolves so the user sees the new tree and the confirmation
+        // in the same paint.
         await hydrateConversationToStore(projectId, extractConvId);
         useWorkspaceStore.getState().setMode('idle');
+        toast.success('Extraction complete', { id: EXTRACTION_TOAST_ID });
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
         if (err instanceof ExtractionFailedError) {
@@ -90,11 +123,11 @@ export function useExtraction({
                       : `LLM call failed: ${err.message}`
                     : `Extraction failed after ${err.lastAttempt} attempts.`;
           useWorkspaceStore.getState().setError(msg);
-          toast.error(msg);
+          toast.error(msg, { id: EXTRACTION_TOAST_ID });
         } else {
           const msg = formatWorkspaceError(err) || 'Extraction failed';
           useWorkspaceStore.getState().setError(msg);
-          toast.error(msg);
+          toast.error(msg, { id: EXTRACTION_TOAST_ID });
         }
       }
     },
