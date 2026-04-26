@@ -121,8 +121,13 @@ export const selectPanelExpanded = (state: WorkspaceState): boolean =>
 
 /**
  * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
- * UI prefs (`panelExpandedByProject`, `activeProjectId`) are preserved so a
- * conversation switch within the same project keeps the user's view choice.
+ * Note this object intentionally does NOT include `panelExpandedByProject` or
+ * `activeProjectId`: zustand's `set` is a partial update, so any field absent
+ * here is left untouched. That preserves the per-project expansion preference
+ * and the workspace's project scope across a conversation switch.
+ *
+ * Do not add UI prefs to this object — anything listed here gets reset on
+ * every `reset()` call.
  */
 function conversationResetState() {
   return {
@@ -204,11 +209,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     {
       name: 't3x-workspace-ui',
       partialize: (state) => ({ panelExpandedByProject: state.panelExpandedByProject }),
-      // Falls back to in-memory storage on the server / in node tests where
-      // localStorage is unavailable. Persistence only matters in the browser.
+      // Falls back to in-memory storage on the server / in tests where
+      // localStorage is missing or its API surface isn't fully wired
+      // (e.g. some jsdom configurations). Persistence only matters in the
+      // browser; the fallback exists so the store is constructible everywhere.
       storage: createJSONStorage(() => {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          return window.localStorage;
+        const ls =
+          typeof window !== 'undefined' && window.localStorage ? window.localStorage : null;
+        if (ls && typeof ls.setItem === 'function' && typeof ls.getItem === 'function') {
+          return ls;
         }
         const memory = new Map<string, string>();
         return {
