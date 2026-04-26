@@ -166,6 +166,109 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).not.toHaveBeenCalled();
   });
 
+  it('clears the draft + persisted map even when hydrate fails after a successful commit', async () => {
+    // P2 split-failure regression: commitOps writes to yops_log, then
+    // hydrate refreshes server state. With persistence, if commit
+    // succeeds but hydrate fails, the OLD code left the draft staged
+    // (hasDraft=true, persisted entry intact) — an F5 then restored an
+    // already-applied draft and Apply would duplicate the same ops.
+    //
+    // The fix clears local + persisted draft state immediately after
+    // commitOps resolves, BEFORE hydrate is awaited. This test pins
+    // that boundary.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
+    useWorkspaceStore.getState().setScriptDirty(false);
+    expect(useWorkspaceStore.getState().draftsByConversation.conv_xyz).toBeDefined();
+
+    // Commit succeeds, hydrate explodes.
+    commitOpsMock.mockResolvedValueOnce({ id: 'yl_2' });
+    hydrateMock.mockRejectedValueOnce(new Error('replay timeout'));
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    expect(hydrateMock).toHaveBeenCalledTimes(1);
+
+    const after = useWorkspaceStore.getState();
+    // Draft state cleared even though hydrate failed — the ops are
+    // already in yops_log, so leaving them staged would let an F5
+    // duplicate-apply.
+    expect(after.hasDraft).toBe(false);
+    expect(after.draftOps).toEqual([]);
+    expect(after.draftTree).toBeNull();
+    expect(after.scriptDirty).toBe(false);
+    expect(after.draftsByConversation.conv_xyz).toBeUndefined();
+    // Hydrate failure surfaces as a distinct error, NOT a commit-failure
+    // error. Mode lands at idle (not 'executed') so the UI knows the
+    // workspace is stale.
+    expect(after.mode).toBe('idle');
+    expect(after.lastError).toMatch(/refresh failed/i);
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/refresh failed/i));
+  });
+
+  it('preserves the draft when commitOps itself fails (retry path)', async () => {
+    // Inverse of the split-failure case: when commitOps rejects,
+    // nothing landed in yops_log. The draft must stay staged so the
+    // user can retry — clearing it would silently lose the LLM
+    // proposal they were about to apply.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
+    useWorkspaceStore.getState().setScriptDirty(false);
+
+    commitOpsMock.mockRejectedValueOnce(new Error('persist conflict'));
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    // Hydrate must NOT be called when commit fails — there's nothing
+    // new on the server to refresh.
+    expect(hydrateMock).not.toHaveBeenCalled();
+
+    const after = useWorkspaceStore.getState();
+    expect(after.hasDraft).toBe(true);
+    expect(after.draftOps).toHaveLength(1);
+    expect(after.draftsByConversation.conv_xyz).toBeDefined();
+    expect(after.mode).toBe('idle');
+    expect(after.lastError).toBe('persist conflict');
+  });
+
   it('execute clears scriptDirty + draft state + persisted map after a successful commit', async () => {
     // Setup: simulate the propose-only flow's pre-Apply state by
     // staging a draft AND priming the persisted map (since setConversation
