@@ -410,6 +410,37 @@ export async function runExtractionV2Pipeline(
         prompt = buildTargetedReaskPrompt(basePrompt, compiled.failure, turnHashByTag);
         continue;
       }
+      // Reask exhausted. Before failing the entire response, try a
+      // partial compile of the same draft: per-item drop will skip the
+      // malformed candidates (e.g. a child key like "61 megapixels" that
+      // doesn't pass SNAKE_CASE_KEY) and keep every well-formed sibling.
+      // Only used for compile failures — transport / draft_parse / etc.
+      // are not item-level and have nothing to salvage.
+      if (compiled.failure.code === 'compile') {
+        const partial = compileExtractionDraft({
+          draft: generated.draft,
+          sourceModel: input.model,
+          extractedAt: input.extractedAt ?? new Date().toISOString(),
+          turnHashByTag,
+          allowPartial: true,
+        });
+        if (partial.ok && partial.ops.length > 0) {
+          return {
+            ok: true,
+            draft: generated.draft,
+            compiled: {
+              ops: partial.ops,
+              warnings: [
+                `Partial compile after reask exhaustion: ${compiled.failure.message}`,
+                ...partial.warnings,
+              ],
+            },
+            turnHashByTag,
+          };
+        }
+        // Partial yielded zero ops — every item was malformed, so the
+        // failure is the only honest signal.
+      }
       return {
         ok: false,
         failure: compiled.failure,

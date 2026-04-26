@@ -799,4 +799,158 @@ describe('extractors/v2 pipeline', () => {
     expect(secondPrompt).toContain('Fix this exact field');
     expect(secondPrompt).not.toContain('include either candidate.values_json');
   });
+
+  it('after reask exhaustion on a reaskable compile failure, salvages well-formed siblings via partial compile', async () => {
+    // Repro of the conv_bedc22e9 failure shape on the Claude path: the
+    // model keeps emitting the same bad child key across all reask
+    // attempts. Pre-fix the whole batch was thrown away with a 400.
+    // Post-fix: after reask attempts exhaust, the pipeline runs one
+    // more compile in `allowPartial` mode and returns the siblings that
+    // *did* compile, with a warning naming the dropped item.
+    let calls = 0;
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        calls += 1;
+        // Every attempt emits the same shape: one good item, one item
+        // with a bad child key. The model never fixes it.
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_good',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'sony',
+                  path_hint: 'sony',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"availability":"unreleased"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'unreleased', role: 'primary' }],
+              },
+              {
+                id: 'item_bad_child',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'specs',
+                  path_hint: 'specs',
+                  slot: null,
+                  value_json: null,
+                  values_json: null,
+                  children_json: '[{"key":"61 megapixels","values":{"v":"x"}}]',
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'spec', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [
+        {
+          turn_hash: 'sha256:1',
+          role: 'user',
+          content: 'sony availability unreleased; spec is 61 megapixels',
+        },
+      ],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Both reask attempts ran (the model never fixed the child key),
+    // then partial compile salvaged the well-formed sibling.
+    expect(calls).toBe(2);
+    const definePaths = result.compiled.ops
+      .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+      .map((op) => op.define.path);
+    expect(definePaths).toContain('sony');
+    expect(definePaths).not.toContain('specs');
+    // Warnings name both the partial-compile boundary and the dropped item.
+    const warnings = result.compiled.warnings.join('\n');
+    expect(warnings).toMatch(/Partial compile after reask exhaustion/);
+    expect(warnings).toMatch(/item_bad_child/);
+  });
+
+  it('does not partial-salvage when every item is malformed — surfaces the original compile failure', async () => {
+    // Guard the floor: partial mode returns ok with empty ops in this
+    // case, but the pipeline must still report failure so the client
+    // sees a real diagnostic instead of "0 ops with no error".
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_a',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'parent_a',
+                  path_hint: 'parent_a',
+                  slot: null,
+                  value_json: null,
+                  values_json: null,
+                  children_json: '[{"key":"Bad A","values":{"v":"x"}}]',
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'a', role: 'primary' }],
+              },
+              {
+                id: 'item_b',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: { node_key: null, path: null, existing_node_id: null },
+                candidate: {
+                  key: 'parent_b',
+                  path_hint: 'parent_b',
+                  slot: null,
+                  value_json: null,
+                  values_json: null,
+                  children_json: '[{"key":"Bad B","values":{"v":"y"}}]',
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'b', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a and b' }],
+      mode: 'bootstrap',
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('compile');
+  });
 });

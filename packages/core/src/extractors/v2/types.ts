@@ -89,6 +89,19 @@ export interface CompileInput {
   sourceModel: string;
   extractedAt: string;
   turnHashByTag: Record<string, string>;
+  /**
+   * Resilience escape hatch. When `true`, `compileExtractionDraft` does not
+   * fail-fast on the first malformed item: it drops that item, appends a
+   * warning naming the dropped item id + the underlying failure message,
+   * and keeps compiling the rest. Returns `{ ok: true, ops, warnings }`
+   * with whatever survived (empty `ops` is allowed; the caller decides
+   * whether an empty partial is acceptable).
+   *
+   * Default `false` preserves the strict per-item contract every existing
+   * caller (golden tests, the strict pipeline path) relies on. Only the
+   * pipeline's post-reask salvage path opts in.
+   */
+  allowPartial?: boolean;
 }
 
 export interface CompiledMutationPlan {

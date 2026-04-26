@@ -528,7 +528,18 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   for (const item of input.draft.items) {
     const compiled = compileItem(item, input);
     if (!compiled.ok) {
-      return compiled;
+      // Strict path (default): one bad item kills the whole batch — every
+      // existing caller relies on this contract.
+      if (!input.allowPartial) {
+        return compiled;
+      }
+      // Partial path: keep going. Name the dropped item so the caller
+      // can surface what was lost without the user having to diff
+      // before/after trees by hand.
+      warnings.push(
+        `Dropped item "${item.id}" during partial compile: ${compiled.failure.message}`
+      );
+      continue;
     }
     ops.push(...compiled.ops);
     warnings.push(...compiled.warnings);

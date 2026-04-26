@@ -971,4 +971,145 @@ describe('extractors/v2 compiler', () => {
       expect(result.failure.details?.field).toBe('candidate.children[].key');
     });
   });
+
+  describe('allowPartial: per-item resilience', () => {
+    it('keeps every well-formed item and drops the malformed one with a named warning', () => {
+      // Repro of the conv_bedc22e9 shape: three add candidates, the
+      // middle one carries a child key that fails SNAKE_CASE_KEY (the
+      // same shape that produces "invalid candidate.children[].key =
+      // '61 megapixels'" in the wild). Strict compile would throw the
+      // entire batch; allowPartial keeps items 1 and 3.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'item_good_1',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'sony', values: { availability: 'unreleased' } },
+              evidence: [{ turn_tag: 'T1', quote: 'unreleased', role: 'primary' }],
+            },
+            {
+              id: 'item_bad_child_key',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                key: 'specs',
+                children: [{ key: '61 megapixels', values: { v: 'x' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'spec', role: 'primary' }],
+            },
+            {
+              id: 'item_good_2',
+              intent: 'add',
+              confidence: 0.8,
+              reasoning_type: 'direct',
+              candidate: { key: 'canon', values: { model: 'r5' } },
+              evidence: [{ turn_tag: 'T1', quote: 'r5', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        allowPartial: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // Two surviving items each emit a define + their value sets.
+      const defines = result.ops.filter((op) => 'define' in op);
+      expect(defines.map((op) => ('define' in op ? op.define.path : ''))).toEqual([
+        'sony',
+        'canon',
+      ]);
+      const droppedWarning = result.warnings.find((w) => w.includes('item_bad_child_key'));
+      expect(droppedWarning).toBeDefined();
+      expect(droppedWarning).toMatch(/61 megapixels/);
+    });
+
+    it('returns ok with empty ops + warnings when every item is malformed', () => {
+      // The pipeline distinguishes "partial yielded zero ops" from
+      // "partial yielded some" — when every item fails, allowPartial is
+      // still ok:true, but the caller (pipeline) checks ops.length and
+      // falls back to surfacing the original failure. Lock the contract.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'bad_a',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'parent', children: [{ key: 'BadKey' }] },
+              evidence: [{ turn_tag: 'T1', quote: 'x', role: 'primary' }],
+            },
+            {
+              id: 'bad_b',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'parent2', children: [{ key: 'AlsoBad' }] },
+              evidence: [{ turn_tag: 'T1', quote: 'y', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        allowPartial: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops).toEqual([]);
+      expect(result.warnings).toHaveLength(2);
+      expect(result.warnings[0]).toMatch(/bad_a/);
+      expect(result.warnings[1]).toMatch(/bad_b/);
+    });
+
+    it('default (allowPartial omitted) preserves strict fail-fast — backward compat guard', () => {
+      // Existing callers (golden tests, the strict pipeline path) rely
+      // on one bad item killing the whole batch. Don't quietly demote
+      // them to partial mode by accident.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'good',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'good_node', values: { v: 'ok' } },
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+            {
+              id: 'bad',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: { key: 'parent', children: [{ key: 'NotSnake' }] },
+              evidence: [{ turn_tag: 'T1', quote: 'q', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(false);
+    });
+  });
 });
