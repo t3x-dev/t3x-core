@@ -2,7 +2,7 @@
 
 import { ClipboardList, Lightbulb, Target } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect } from 'react';
+import { Suspense, useCallback, useEffect } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -30,6 +30,17 @@ const STARTER_CARDS = [
 ] as const;
 
 export default function ChatLandingPage() {
+  // useSearchParams forces a CSR bailout in Next 16 — wrap in Suspense so
+  // the surrounding shell can still prerender. Fallback is `null` because
+  // the page is essentially a blank composer until hydration anyway.
+  return (
+    <Suspense fallback={null}>
+      <ChatLanding />
+    </Suspense>
+  );
+}
+
+function ChatLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Anchor this landing to a specific project when one was passed in the
