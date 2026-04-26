@@ -86,9 +86,12 @@ describe('runExtraction', () => {
   });
 
   describe('commit flag', () => {
-    // Shared fixtures for the commit-flag suite. We need real
-    // (non-mocked) structure validation so the propose-only path can
-    // exercise the same branches as the auto-commit path.
+    // Shared fixtures for the commit-flag suite. Structure validation is
+    // mocked at the module level (see top of file); each case drives it
+    // with mockReturnValue/mockReturnValueOnce to steer the worker through
+    // the success / retry / repair branches. The fixtures here are real
+    // op shapes only because the worker still touches their `source` field
+    // for normalization and source validation, which are not mocked.
     const realTurns: ValidationTurn[] = [
       { turn_hash: 'sha256:t1', content: 'The budget is ten thousand dollars.' },
     ];
