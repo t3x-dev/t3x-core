@@ -58,5 +58,11 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
       appliedCount: snapshot.partial.appliedCount,
     });
   }
+  // Layer any persisted draft for this conversation on top of the
+  // freshly-hydrated server state. This is the F5 protection: if the
+  // user staged an Extract proposal and reloaded, the draft + script +
+  // dry-run preview come back so they can keep reviewing instead of
+  // losing the LLM round-trip. No-op if there's nothing persisted.
+  post.restoreDraftFor(convId);
   post.setMode('idle');
 }

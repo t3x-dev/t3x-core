@@ -93,17 +93,48 @@ export function useScriptExecution() {
     try {
       store.setMode('committing');
       await commitOps(convId, sourced);
-      await hydrateConversationToStore(projectId, convId);
-      const after = useWorkspaceStore.getState();
-      after.setScriptDirty(false);
-      // Apply succeeded — the draft is now in yops_log; clear local state.
-      after.clearDraft();
-      after.setMode('executed');
     } catch (err) {
+      // Commit failed — yops_log was NOT written; the draft is still
+      // applicable, leave it staged so the user can retry. This is the
+      // only path that preserves the draft.
       const msg = err instanceof Error ? err.message : 'Execution failed';
       useWorkspaceStore.getState().setMode('idle');
       useWorkspaceStore.getState().setError(msg);
       toast.error(msg);
+      return;
+    }
+
+    // Commit succeeded — the draft is now in yops_log. Clear local
+    // draft state IMMEDIATELY (before hydrate) so a hydrate failure
+    // or a page refresh can't restore an already-applied draft and
+    // let the user duplicate-apply against the server. This is the
+    // split-failure case persistence opened up: previously the draft
+    // was only cleared after hydrate resolved, so a hydrate error left
+    // the persisted entry intact and an F5 would re-stage applied ops.
+    {
+      const post = useWorkspaceStore.getState();
+      post.setScriptDirty(false);
+      post.clearDraft();
+    }
+
+    try {
+      await hydrateConversationToStore(projectId, convId);
+      useWorkspaceStore.getState().setMode('executed');
+    } catch (hydrateErr) {
+      // Commit landed in yops_log but the post-commit refresh failed
+      // (network blip, replay error, etc.). The draft is correctly
+      // cleared above; the only remaining problem is that the UI's
+      // tree / opsLog are stale. Surface a distinct error so the user
+      // knows the apply succeeded and a manual reload is the fix —
+      // don't put it on the same toast as commit failure.
+      const msg = hydrateErr instanceof Error ? hydrateErr.message : 'Refresh failed';
+      useWorkspaceStore.getState().setMode('idle');
+      useWorkspaceStore
+        .getState()
+        .setError(
+          `Applied — but workspace refresh failed: ${msg}. Reload the page to see the result.`
+        );
+      toast.error('Applied — but workspace refresh failed. Reload to see the result.');
     }
   }, []);
 
