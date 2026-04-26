@@ -32,13 +32,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # pnpm must be installed before setup-node so the latter can pick
+      # up `cache: 'pnpm'` and resolve the pnpm store path.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          # Caches the pnpm store between runs. First run still cold;
+          # subsequent runs that share the same pnpm-lock.yaml hit the
+          # cache and reduce `pnpm install` from ~60-90s to ~5-10s.
+          cache: 'pnpm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      # Caches Turborepo's local task outputs (`.turbo/`). Packages
+      # whose inputs haven't changed since the last run hit the cache
+      # and skip the actual build (`>>> FULL TURBO` in the log).
+      # `restore-keys` lets a PR fall back to the latest main cache
+      # when the PR-specific cache doesn't exist yet.
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.ref_name }}-
+            turbo-${{ runner.os }}-main-
+            turbo-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
