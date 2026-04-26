@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
@@ -245,9 +246,36 @@ export function useConversationChat({
         if (projectId && currentConversationId) {
           const saveTurns = async (retriesLeft: number): Promise<void> => {
             try {
-              await api.createTurn(projectId, currentConversationId, 'user', userMessage);
+              const userTurn = await api.createTurn(
+                projectId,
+                currentConversationId,
+                'user',
+                userMessage
+              );
+              // Mirror persisted turns into workspaceStore.turns so an
+              // immediately-following Extract sends real input instead
+              // of the stale snapshot loaded at conv mount (otherwise
+              // /v1/extract-yops short-circuits on an empty turns array
+              // and silently returns 0 ops).
+              if (userTurn?.turn_hash) {
+                syncSavedTurnIntoWorkspace(currentConversationId, {
+                  turn_hash: userTurn.turn_hash,
+                  content: userMessage,
+                });
+              }
               if (fullResponse) {
-                await api.createTurn(projectId, currentConversationId, 'assistant', fullResponse);
+                const assistantTurn = await api.createTurn(
+                  projectId,
+                  currentConversationId,
+                  'assistant',
+                  fullResponse
+                );
+                if (assistantTurn?.turn_hash) {
+                  syncSavedTurnIntoWorkspace(currentConversationId, {
+                    turn_hash: assistantTurn.turn_hash,
+                    content: fullResponse,
+                  });
+                }
               }
               setTurnsSavedCounter((c) => c + 1);
               onTurnsSaved?.();
