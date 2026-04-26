@@ -35,6 +35,10 @@ export class SupersededYOpsLogIdsError extends Error {
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
+// vary by adapter; the runtime contract (transaction(fn)) is uniform.
+type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
+
 // ============================================================
 // Types
 // ============================================================
@@ -73,28 +77,9 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   const parents = input.parents ?? [];
   const now = new Date().toISOString();
   const branch = input.branch ?? 'main';
-
-  // Defense in depth against the suggestion-vs-baseline contamination
-  // race: callers find candidate yops_log ids via a point-in-time read
-  // (e.g. `findUncommittedYOpsIds`), then later call here to write the
-  // commit. A re-extract running between those two steps can supersede
-  // ids the caller still thought were active. Without this check those
-  // ids would land in `commits.yops_log_ids` and become permanent
-  // baseline; the next replay would resurrect facts the user already
-  // replaced. Reject loudly so the caller can re-fetch the active set
-  // and retry.
   const yopsLogIds = input.yops_log_ids ?? [];
-  if (yopsLogIds.length > 0) {
-    const superseded = await db
-      .select({ id: yopsLog.id })
-      .from(yopsLog)
-      .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
-    if (superseded.length > 0) {
-      throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
-    }
-  }
 
-  // Compute hash from first-class fields
+  // Compute hash up front (deterministic; no DB needed).
   const hash = computeCommitHash({
     schema: COMMIT_SCHEMA,
     parents,
@@ -103,25 +88,81 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
     content: input.content,
   });
 
-  const [row] = await db
-    .insert(commits)
-    .values({
-      hash,
-      schema: COMMIT_SCHEMA,
-      parents,
-      author: input.author,
-      committedAt: new Date(now),
-      content: input.content,
-      projectId: input.project_id,
-      message: input.message ?? null,
-      branch,
-      provenance: input.provenance ?? null,
-      yopsLogIds,
-      sources: input.sources ?? null,
-    })
-    .returning();
+  const insertCommit = async (txOrDb: AnyDB): Promise<CommitRecord> => {
+    const [row] = await txOrDb
+      .insert(commits)
+      .values({
+        hash,
+        schema: COMMIT_SCHEMA,
+        parents,
+        author: input.author,
+        committedAt: new Date(now),
+        content: input.content,
+        projectId: input.project_id,
+        message: input.message ?? null,
+        branch,
+        provenance: input.provenance ?? null,
+        yopsLogIds,
+        sources: input.sources ?? null,
+      })
+      .returning();
+    return row;
+  };
 
-  return rowToCommit(row);
+  // Fast path: nothing to lock. Skip the transaction entirely.
+  if (yopsLogIds.length === 0) {
+    const row = await insertCommit(db);
+    return rowToCommit(row);
+  }
+
+  // Race-closing path: lock the candidate yops_log rows for the
+  // duration of this commit so a concurrent
+  // `supersedeActiveLLMSuggestions` UPDATE blocks until our INSERT
+  // commits.
+  //
+  // Sequence inside the transaction:
+  //   1. SELECT id FROM yops_log WHERE id = ANY($ids) FOR SHARE
+  //      acquires shared row locks. UPDATEs (incl. supersede) on
+  //      these rows wait until this transaction ends. Other readers
+  //      (e.g. another commit attempt) can proceed.
+  //   2. SELECT for already-superseded rows. If any, throw —
+  //      caller raced before the lock was held.
+  //   3. INSERT commit. After this, the rows are referenced by
+  //      `commits.yops_log_ids`, so the next supersede UPDATE's
+  //      NOT EXISTS subquery against commits will exclude them
+  //      naturally.
+  //
+  // FOR SHARE (not FOR UPDATE) is the right grade: we don't mutate
+  // the yops_log rows, we only need to prevent concurrent UPDATEs.
+  const result = await (db as unknown as TxRunner).transaction(async (tx) => {
+    // Acquire shared row locks on the candidate yops_log rows. A
+    // concurrent `supersedeActiveLLMSuggestions` UPDATE on any of
+    // these ids will block until this transaction ends. Other readers
+    // (and other unrelated commit attempts) are unaffected. Drizzle's
+    // `.for('share')` emits a standard `FOR SHARE` clause; the
+    // SELECT itself doesn't need to consume the rows — executing it
+    // is what acquires the locks.
+    await (tx as AnyDB)
+      .select({ id: yopsLog.id })
+      .from(yopsLog)
+      .where(inArray(yopsLog.id, yopsLogIds))
+      .for('share');
+
+    // After lock acquisition, validate. A concurrent supersede UPDATE
+    // on these ids is now blocked until our transaction ends, so the
+    // outcome of this SELECT is stable for the rest of the tx.
+    const superseded = await (tx as AnyDB)
+      .select({ id: yopsLog.id })
+      .from(yopsLog)
+      .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
+    if (superseded.length > 0) {
+      throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
+    }
+
+    return insertCommit(tx as AnyDB);
+  });
+
+  return rowToCommit(result as CommitRecord);
 }
 
 /**

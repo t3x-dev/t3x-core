@@ -6,7 +6,13 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { listActiveYOpsLogByConversation, listCommits } from '@t3x-dev/storage';
+import {
+  listActiveYOpsLogByConversation,
+  listCommits,
+  SupersededYOpsLogIdsError,
+} from '@t3x-dev/storage';
+import type { Context } from 'hono';
+import { errorJson } from './errors';
 
 /**
  * Find yops_log entry IDs that should land in the next commit:
@@ -36,4 +42,26 @@ export async function findUncommittedYOpsIds(
   const allCommits = await listCommits(db, { projectId });
   const usedIds = new Set(allCommits.flatMap((c) => c.yops_log_ids));
   return activeYops.filter((y) => !usedIds.has(y.id)).map((y) => y.id);
+}
+
+/**
+ * Map `SupersededYOpsLogIdsError` (thrown by `createCommit` when a
+ * concurrent re-extract superseded one of the input ids) to a 409
+ * `YOPS_LOG_SUPERSEDED` response with the offending ids in `details`.
+ * Returns `null` for any other error so the caller can keep its
+ * existing fallback (typically `COMMIT_FAILED` → 500).
+ *
+ * Surfaced as a typed retryable conflict — clients that hit this
+ * should re-fetch the active draft id set (e.g. via
+ * `findUncommittedYOpsIds`) and retry the commit.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: Hono's typed-response
+// helpers are intentionally permissive at the boundary.
+export function mapSupersededError(c: Context, err: unknown): any | null {
+  if (err instanceof SupersededYOpsLogIdsError) {
+    return errorJson(c, 'YOPS_LOG_SUPERSEDED', err.message, 409, {
+      superseded_ids: err.supersededIds,
+    });
+  }
+  return null;
 }

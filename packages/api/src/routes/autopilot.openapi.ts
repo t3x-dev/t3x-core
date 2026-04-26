@@ -29,7 +29,7 @@ import { eq } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
-import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
+import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema } from '../schemas/common';
 import { pushNotification } from './notifications.openapi';
 
@@ -460,6 +460,10 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       200
     );
   } catch (err) {
+    // Suggestion-vs-baseline: surface concurrent-supersede races as
+    // 409 retryable conflict, not opaque 500.
+    const conflict = mapSupersededError(c, err);
+    if (conflict) return conflict;
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'INTERNAL_ERROR', message);
   }

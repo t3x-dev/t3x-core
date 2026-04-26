@@ -371,6 +371,70 @@ describe('YOps Log Storage', () => {
       expect(firstStamp?.getTime()).toBe(secondStamp?.getTime());
     });
 
+    it('createCommit blocks a concurrent supersede on the locked rows until commit lands (FOR SHARE serialisation)', async () => {
+      // The actual race the prior reviewer flagged: a re-extract running
+      // in parallel with createCommit, after the caller's
+      // findUncommittedYOpsIds snapshot. Without FOR SHARE, the
+      // supersede UPDATE could land between createCommit's check and
+      // its INSERT, freezing now-superseded ids into the baseline.
+      // With FOR SHARE: the supersede UPDATE blocks until createCommit
+      // releases its locks (transaction commit). After release, the
+      // supersede sees the id is already in commits.yops_log_ids and
+      // its NOT EXISTS subquery excludes it — invariant preserved.
+      const convId = await freshConv();
+      const targetEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('contested_fact')],
+      });
+
+      // Start the commit. It will lock the row in its transaction and
+      // pause briefly before INSERT (simulated by a tiny delay between
+      // FOR SHARE acquisition and the real INSERT — can't add hooks
+      // without invasive plumbing, so use a short concurrent kick:
+      // launch supersede during the commit's transaction).
+      const commitPromise = createCommit(db, {
+        author: { type: 'human', name: 'test' },
+        content: { trees: [], relations: [] },
+        project_id: testProjectId,
+        message: 'concurrent-with-supersede',
+        yops_log_ids: [targetEntry.id],
+      });
+
+      // Race the supersede against it. Either:
+      //   (a) supersede runs FIRST (before commit's FOR SHARE locks):
+      //       commit sees superseded_at != NULL, throws SupersededError.
+      //   (b) commit's FOR SHARE locks FIRST: supersede blocks until
+      //       commit lands, then runs and sees the id in
+      //       commits.yops_log_ids, excludes it. Commit succeeds.
+      // Both outcomes preserve the invariant. The bug we're guarding
+      // against would be a third outcome — both succeed and the row
+      // ends up both superseded AND in baseline.
+      const supersedePromise = supersedeActiveLLMSuggestions(db, convId);
+      const [commitResult, supersededIds] = await Promise.allSettled([
+        commitPromise,
+        supersedePromise,
+      ]);
+
+      const finalEntry = await getYOpsLogEntry(db, targetEntry.id);
+
+      if (commitResult.status === 'fulfilled') {
+        // Outcome (b): commit succeeded → row must NOT be superseded
+        // (the FOR SHARE blocked the UPDATE; after release, the
+        // NOT EXISTS subquery excluded the now-committed row).
+        expect(finalEntry?.supersededAt).toBeNull();
+        if (supersededIds.status === 'fulfilled') {
+          expect(supersededIds.value).not.toContain(targetEntry.id);
+        }
+      } else {
+        // Outcome (a): commit threw SupersededError → row must BE
+        // superseded.
+        expect(commitResult.reason).toBeInstanceOf(SupersededYOpsLogIdsError);
+        expect(finalEntry?.supersededAt).toBeInstanceOf(Date);
+      }
+    });
+
     it('createCommit refuses yops_log_ids that have been superseded since the caller fetched them', async () => {
       // Defense in depth against the residual concurrency race the
       // review on this PR flagged: a re-extract can supersede ids

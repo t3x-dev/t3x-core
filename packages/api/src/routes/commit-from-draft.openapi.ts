@@ -16,7 +16,7 @@ import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
-import { findUncommittedYOpsIds } from '../lib/yops-commit-link';
+import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 import { CommitFromDraftRequest, CommitFromDraftResponse } from '../schemas/integration-contracts';
 
@@ -187,6 +187,12 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       201
     );
   } catch (err) {
+    // Suggestion-vs-baseline: if a concurrent re-extract superseded
+    // any of the candidate yops_log_ids between findUncommittedYOpsIds
+    // and createCommit, surface as 409 retryable conflict instead of
+    // an opaque 500. Client should re-fetch the active draft and retry.
+    const conflict = mapSupersededError(c, err);
+    if (conflict) return conflict;
     const message_ = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'COMMIT_FAILED', message_);
   }

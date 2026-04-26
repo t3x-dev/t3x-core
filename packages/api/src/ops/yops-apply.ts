@@ -13,9 +13,13 @@
  *
  * When `replaceActiveLLMDraft: true`, the supersede step runs *inside*
  * the same DB transaction as the insert + sync. The supersede query
- * itself is a single SQL UPDATE whose WHERE clause atomically excludes
- * any row referenced by a project commit, so a commit landing
- * concurrently can't slip past the safety belt.
+ * is a single SQL UPDATE whose WHERE clause excludes any row that is
+ * already referenced by a project commit *at UPDATE time*. It does
+ * NOT serialise against new commit creation — that boundary is held
+ * separately by `createCommit`, which acquires a FOR SHARE row lock
+ * on the input yops_log_ids and re-validates `superseded_at IS NULL`
+ * before insert. The two paths combined keep committed entries
+ * immutable in baseline; this op alone is not sufficient.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
