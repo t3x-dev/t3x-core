@@ -410,6 +410,47 @@ export async function runExtractionV2Pipeline(
         prompt = buildTargetedReaskPrompt(basePrompt, compiled.failure, turnHashByTag);
         continue;
       }
+      // Partial-compile salvage runs ONLY when:
+      //   1. the failure is `compile` (the only item-level code),
+      //   2. it was reaskable (`shouldTargetedReask` true) — i.e. the
+      //      kind of error the model has targeted guidance for, and
+      //   3. we actually ran out of reask budget (`attempt >= maxAttempts`).
+      //
+      // Without (2) + (3), a non-reaskable compile failure on attempt 1
+      // (e.g. an unsupported draft intent) would silently drop items
+      // and return siblings without the model ever having a chance to
+      // self-correct. Silent drop is exactly the data-loss class the
+      // review on the prior PR flagged: salvage is a last resort, not
+      // a first-attempt branch.
+      const reaskExhausted =
+        attempt >= maxAttempts &&
+        compiled.failure.code === 'compile' &&
+        shouldTargetedReask(compiled.failure);
+      if (reaskExhausted) {
+        const partial = compileExtractionDraft({
+          draft: generated.draft,
+          sourceModel: input.model,
+          extractedAt: input.extractedAt ?? new Date().toISOString(),
+          turnHashByTag,
+          allowPartial: true,
+        });
+        if (partial.ok && partial.ops.length > 0) {
+          return {
+            ok: true,
+            draft: generated.draft,
+            compiled: {
+              ops: partial.ops,
+              warnings: [
+                `Partial compile after reask exhaustion: ${compiled.failure.message}`,
+                ...partial.warnings,
+              ],
+            },
+            turnHashByTag,
+          };
+        }
+        // Partial yielded zero ops — every item was malformed, so the
+        // original failure is the only honest signal.
+      }
       return {
         ok: false,
         failure: compiled.failure,
