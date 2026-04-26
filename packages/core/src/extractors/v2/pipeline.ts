@@ -66,7 +66,30 @@ function buildDraftPrompt(input: {
   return {
     system:
       'You extract semantic knowledge from a conversation into a ProviderExtractionDraft JSON. ' +
-      'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.',
+      'Use T-tags (T1, T2, …) in evidence.turn_tag and quote the source verbatim. Return JSON only.\n' +
+      '\n' +
+      'Quality rules — these are not optional:\n' +
+      '1. Every item MUST carry at least one concrete fact. The provider schema uses\n' +
+      '   JSON-string fields on `candidate`:\n' +
+      '   - `values_json`: stringified object of slot → value, e.g.\n' +
+      '       "values_json": "{\\"sensor_resolution\\": \\"61 megapixels\\", \\"burst_speed\\": \\"10 fps\\"}"\n' +
+      '   - `value_json` + `slot`: stringified scalar for a single slot, e.g.\n' +
+      '       "slot": "sensor_type", "value_json": "\\"BSI CMOS\\""\n' +
+      '   - `children_json`: stringified array of `{key, values}` entries\n' +
+      '       (note: child `values` here is a RAW object inside the JSON-string,\n' +
+      '       NOT a nested values_json string), e.g.\n' +
+      '       "children_json": "[{\\"key\\": \\"a7r_v\\", \\"values\\": {\\"resolution\\": \\"61 MP\\"}}]"\n' +
+      '   Items that only declare a `key` with no values_json, no value_json, and no\n' +
+      '   children_json carrying values are useless and will be dropped.\n' +
+      '2. Do NOT extract section headers, paragraph titles, or rhetorical structure as\n' +
+      '   empty nodes. "Key Differences", "The Verdict", "Choose X if:" are not facts;\n' +
+      '   the facts they introduce are. Skip the heading and capture the underlying\n' +
+      '   claim with concrete values.\n' +
+      '3. When a `Current knowledge snapshot` is provided, extend it. Add new facts\n' +
+      '   under existing paths, or add slots to existing nodes. Do NOT create parallel\n' +
+      '   top-level nodes that duplicate categories already present in the snapshot.\n' +
+      '4. If the conversation contains no new concrete facts to extract, return\n' +
+      '   `items: []`. An empty draft is correct; an outline of empty buckets is not.',
     messages: [
       {
         role: 'user',

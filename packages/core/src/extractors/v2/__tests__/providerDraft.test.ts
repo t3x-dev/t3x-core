@@ -818,4 +818,96 @@ describe('F12 inner _json repair', () => {
       role: 'warrior',
     });
   });
+
+  it('lifts the prompt example children_json shape into populated child values', () => {
+    // Pin the prompt example shape end-to-end. The system prompt shows
+    // children_json as a stringified array of {key, values} entries —
+    // child `values` is a RAW object inside the JSON-string, NOT a
+    // nested values_json string. canonicalizeChildShape only recognises
+    // the {key, values} shape; if a future prompt edit drifts back to
+    // {key, values_json: "..."}, the loop in canonicalizeChildShape
+    // would fold values_json into a literal slot named "values_json"
+    // (with the JSON-string as its value), and the compiler would then
+    // populate that nonsense slot instead of the intended `resolution`.
+    //
+    // This regression locks the prompt example to a shape the
+    // normalizer actually understands.
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_cameras',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'cameras',
+            path_hint: null,
+            slot: null,
+            value_json: null,
+            values_json: null,
+            // Verbatim copy of the prompt example shape.
+            children_json: '[{"key":"a7r_v","values":{"resolution":"61 MP"}}]',
+          },
+          evidence: [{ turn_tag: 'T1', quote: '61 MP', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    const candidate = lifted.draft.items[0]?.candidate;
+    expect(candidate?.children).toEqual([{ key: 'a7r_v', values: { resolution: '61 MP' } }]);
+    // Defense: the intended slot is `resolution`, NOT a literal
+    // `values_json`. If this ever flips, the prompt example has
+    // drifted away from the canonicalizeChildShape contract.
+    expect(candidate?.children?.[0]?.values).not.toHaveProperty('values_json');
+  });
+
+  it('rejects child {key, values_json: "..."} shape — folds into a literal slot, exposing prompt drift', () => {
+    // Inverse of the regression above: confirm that the rejected shape
+    // genuinely produces wrong output. If a future change makes
+    // canonicalizeChildShape also accept nested values_json, this test
+    // will need updating — but it shouldn't pass silently.
+    const lifted = liftProviderDraftToExtractionDraft({
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_cameras',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { node_key: null, path: null, existing_node_id: null },
+          candidate: {
+            key: 'cameras',
+            path_hint: null,
+            slot: null,
+            value_json: null,
+            values_json: null,
+            // The rejected shape — what the OLD prompt example would
+            // have produced.
+            children_json: '[{"key":"a7r_v","values_json":"{\\"resolution\\":\\"61 MP\\"}"}]',
+          },
+          evidence: [{ turn_tag: 'T1', quote: '61 MP', role: 'primary' }],
+        },
+      ],
+      warnings: [],
+    });
+
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    const child = lifted.draft.items[0]?.candidate.children?.[0];
+    // Wrong output — values_json got folded into a literal slot. This
+    // is exactly the failure mode the prompt example was leading the
+    // model into. The test exists so a regression in either direction
+    // (prompt drift OR normalizer change) is loud.
+    expect(child?.values).toHaveProperty('values_json');
+    expect(child?.values).not.toHaveProperty('resolution');
+  });
 });
