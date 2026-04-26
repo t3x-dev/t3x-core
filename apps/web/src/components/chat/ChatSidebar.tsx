@@ -25,6 +25,7 @@ export function ChatSidebar() {
   const {
     sidebarCollapsed: collapsed,
     activeConversationId,
+    activeProjectId,
     expandedProjectIds,
     toggleProjectExpanded,
     setActiveConversation,
@@ -89,7 +90,14 @@ export function ChatSidebar() {
       // param is the source of truth on refresh (store state is in-memory),
       // and matches the existing empty-project redirect contract.
       setActiveConversation(null, project.project_id);
-      useChatStore.getState().refreshSidebar();
+      // Expand the new folder so the user sees the empty state
+      // ("No conversations") under the highlighted project, reinforcing
+      // that this is where their next chat will land.
+      const store = useChatStore.getState();
+      if (!store.expandedProjectIds.has(project.project_id)) {
+        store.toggleProjectExpanded(project.project_id);
+      }
+      store.refreshSidebar();
       router.push(`/chat?projectId=${encodeURIComponent(project.project_id)}`);
     } catch {
       // Fallback: land on blank chat so users can still type a first message
@@ -242,6 +250,7 @@ export function ChatSidebar() {
                 project={project}
                 conversations={projectConversations[project.project_id] ?? []}
                 isExpanded={expandedProjectIds.has(project.project_id)}
+                isActive={activeProjectId === project.project_id}
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
                 onToggleExpand={() => {
