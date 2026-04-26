@@ -37,14 +37,18 @@ function parseScript(yamlStr: string): ReturnType<typeof parseYOpsYaml> {
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const scriptDirty = useWorkspaceStore((s) => s.scriptDirty);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const mode = useWorkspaceStore((s) => s.mode);
 
-  // Sync opsLog → scriptText when extraction produces new ops (not during manual edit)
+  // Sync committed opsLog → scriptText only when there's no draft and no
+  // manual edit. Once Extract stages a draft, `useExtraction` owns the
+  // script content; once the user starts editing, `scriptDirty` owns it.
   useEffect(() => {
-    if (!scriptDirty && opsLog.length > 0) {
+    if (scriptDirty || hasDraft) return;
+    if (opsLog.length > 0) {
       useWorkspaceStore.getState().setScriptText(serializeOpsToYaml(opsLog));
     }
-  }, [opsLog, scriptDirty]);
+  }, [opsLog, scriptDirty, hasDraft]);
 
   const execute = useCallback(async () => {
     const store = useWorkspaceStore.getState();
@@ -52,13 +56,14 @@ export function useScriptExecution() {
     const projectId = useChatStore.getState().activeProjectId;
     if (!convId || !projectId) return;
 
-    // Defense in depth: the WorkspaceTopbar Run button gates on `canRun`, but
-    // execute() may be invoked from tests, hotkeys, or future callers that
-    // bypass the button. Re-check the same guards here so a direct call can
-    // never duplicate-apply the post-extract mirror or race a streaming /
-    // committing run.
+    // Defense in depth: the WorkspaceTopbar Apply button gates on `canRun`,
+    // but execute() may be invoked from tests, hotkeys, or future callers
+    // that bypass the button. Re-check the same guards here.
     if (store.mode === 'streaming' || store.mode === 'committing') return;
-    if (!store.scriptDirty) return;
+    // Apply only fires when there's something un-applied: either a fresh
+    // draft from Extract, or a manual edit. A clean script that mirrors
+    // committed state is a no-op.
+    if (!store.scriptDirty && !store.hasDraft) return;
 
     const parseResult = parseScript(store.scriptText);
     if (!parseResult.ok) {
@@ -73,7 +78,9 @@ export function useScriptExecution() {
       return;
     }
 
-    // Add HumanSource to ops that lack source metadata (manual edits in script)
+    // Add HumanSource to ops that lack source metadata (manual edits in
+    // script). Draft ops from Extract already carry an `llm` source, so
+    // they pass through unchanged.
     const now = new Date().toISOString();
     const sourced = ops.map((op) => {
       if ((op as Record<string, unknown>).source) return op;
@@ -87,8 +94,11 @@ export function useScriptExecution() {
       store.setMode('committing');
       await commitOps(convId, sourced);
       await hydrateConversationToStore(projectId, convId);
-      useWorkspaceStore.getState().setScriptDirty(false);
-      useWorkspaceStore.getState().setMode('executed');
+      const after = useWorkspaceStore.getState();
+      after.setScriptDirty(false);
+      // Apply succeeded — the draft is now in yops_log; clear local state.
+      after.clearDraft();
+      after.setMode('executed');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Execution failed';
       useWorkspaceStore.getState().setMode('idle');
@@ -97,21 +107,19 @@ export function useScriptExecution() {
     }
   }, []);
 
-  // Run is gated on `scriptDirty` to prevent the duplicate-apply footgun:
-  // `runExtraction` already calls `commitOps`, so the post-extract script is
-  // a *mirror* of what's already in `yops_log`. Re-running it would append
-  // the same ops a second time. Run becomes meaningful only after a manual
-  // edit in the script editor — that's when scriptDirty flips true.
-  // (Long-term: extraction should produce a draft script that Run commits;
-  // tracked separately. This gate is the correct guardrail until then.)
-  const canRun = mode !== 'streaming' && mode !== 'committing' && scriptDirty;
-  const disabledReason = !scriptDirty
-    ? ('No script edits to run' as const)
-    : mode === 'streaming'
+  // Apply is enabled when there's something un-applied to apply: a fresh
+  // draft from Extract (`hasDraft`) or a manual edit (`scriptDirty`). A
+  // clean script that mirrors committed state is a no-op and keeps the
+  // button disabled.
+  const canRun = mode !== 'streaming' && mode !== 'committing' && (scriptDirty || hasDraft);
+  const disabledReason =
+    mode === 'streaming'
       ? ('Extraction running' as const)
       : mode === 'committing'
         ? ('Commit in progress' as const)
-        : null;
+        : !scriptDirty && !hasDraft
+          ? ('No script edits to apply' as const)
+          : null;
 
   return { execute, canRun, disabledReason };
 }

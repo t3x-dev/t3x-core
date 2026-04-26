@@ -48,6 +48,28 @@ function formatSlotValue(val: unknown): string {
   return String(val);
 }
 
+/**
+ * Whether the panel's Commit button should be disabled.
+ *
+ * Commit reads `workspaceStore.tree` (the committed/applied state), but the
+ * panel renders `draftTree` whenever `hasDraft` is true. Letting the button
+ * fire in that window would freeze the *pre-draft* tree under the user's
+ * eyes while the staged YOps still sit un-applied — what the user sees
+ * (preview) and what gets committed (committed tree) diverge. Forcing
+ * Apply / Discard first keeps those in sync.
+ *
+ * Exported so the regression test can pin the contract without mounting
+ * the full AfterPanel.
+ */
+export function shouldDisableCommit(input: {
+  hasResult: boolean;
+  isCommitting: boolean;
+  isCommitted: boolean;
+  hasDraft: boolean;
+}): boolean {
+  return !input.hasResult || input.isCommitting || input.isCommitted || input.hasDraft;
+}
+
 function summarizeVisibleDiff(diff: TreeDiffResult | null): {
   addedRows: number;
   modifiedRows: number;
@@ -462,7 +484,14 @@ export function AfterPanel({
   onToggleBefore?: () => void;
   beforeVisible?: boolean;
 }) {
-  const tree = useWorkspaceStore((s) => s.tree);
+  const committedTree = useWorkspaceStore((s) => s.tree);
+  const draftTree = useWorkspaceStore((s) => s.draftTree);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  // Render the dry-run preview tree when an Extract has staged a draft;
+  // otherwise show the committed tree as before. The preview is computed
+  // by `useExtraction` (`applySourcedYOps(currentTree, draftOps)`) and
+  // cleared on Apply or Discard.
+  const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
@@ -500,6 +529,19 @@ export function AfterPanel({
     commitInputRef.current?.focus();
     commitInputRef.current?.select();
   }, [showCommitDialog]);
+
+  // Auto-close the commit dialog when a draft preview arrives. The dialog
+  // can already be open against the committed tree when Extract fires
+  // from elsewhere (chat header, hotkey, programmatic). Leaving it open
+  // would render a Commit dialog over a Draft-preview tree — confusing
+  // even with the confirm gated. Closing it sends the user back to the
+  // panel where the new "Draft preview" badge is visible and Apply /
+  // Discard are the only forward moves.
+  useEffect(() => {
+    if (hasDraft && showCommitDialog) {
+      setShowCommitDialog(false);
+    }
+  }, [hasDraft, showCommitDialog]);
 
   const rows = useMemo<RenderRow[]>(() => {
     const baseRoots = new Map(parentTrees.map((node) => [node.key, node]));
@@ -555,6 +597,16 @@ export function AfterPanel({
 
   const handleCommit = useCallback(
     async (message: string) => {
+      // Defense in depth: the main Commit button and the dialog confirm
+      // both gate on shouldDisableCommit, but a keypress-in-flight can
+      // race a state update — handler reads stale React state and fires
+      // anyway. Re-check directly off the store so a draft that arrived
+      // mid-keystroke can't slip through and commit the pre-draft tree.
+      if (useWorkspaceStore.getState().hasDraft) {
+        toast.error('Apply or Discard the staged draft before committing.');
+        setShowCommitDialog(false);
+        return;
+      }
       try {
         useWorkspaceStore.getState().setMode('committing');
         await commitTrees(message || 'Knowledge Extract');
@@ -578,6 +630,15 @@ export function AfterPanel({
   const handleDiscard = useCallback(async () => {
     const convId = useWorkspaceStore.getState().conversationId;
     if (!projectId || !convId || isCommitting) return;
+    // Discard means "throw away anything un-applied". hydrate alone only
+    // refreshes server state — the local draft (preview tree, draftOps,
+    // hasDraft, scriptText, scriptDirty) would survive and stay
+    // applicable, letting the user Apply a draft they thought was gone.
+    // Clear all of that here before re-hydrating.
+    const store = useWorkspaceStore.getState();
+    store.clearDraft();
+    store.setScriptText('');
+    store.setScriptDirty(false);
     await hydrateConversationToStore(projectId, convId);
     useWorkspaceStore.getState().clearSelection();
     useWorkspaceStore.getState().setMode('idle');
@@ -604,8 +665,16 @@ export function AfterPanel({
           </div>
         )}
         <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Result
+            {hasDraft && (
+              <span
+                title="Dry-run preview of the staged Extract — click Apply to commit."
+                className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
+              >
+                Draft preview
+              </span>
+            )}
           </span>
           {showBeforeToggle && onToggleBefore && hasParent && (
             <button
@@ -669,6 +738,14 @@ export function AfterPanel({
                   />
                 );
 
+              // While a draft is staged, this view is a *preview* of the
+              // un-applied script — not the live committed tree. Inline
+              // gold-edit handlers (`useGoldEdit.applyEdit`) write
+              // straight to yops_log against the committed workspace,
+              // bypassing the script/Apply flow and leaving the staged
+              // script stale relative to what just changed. Disable them
+              // here; the user should edit the YAML or click Apply first.
+              const allowInlineEdit = !hasDraft;
               const afterCell =
                 row.kind === 'node' ? (
                   <NodeCell
@@ -678,9 +755,13 @@ export function AfterPanel({
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path })}
                     onClear={clearSelection}
-                    onAddChild={row.afterNode ? () => handleAddChild(row.path) : undefined}
+                    onAddChild={
+                      allowInlineEdit && row.afterNode ? () => handleAddChild(row.path) : undefined
+                    }
                     onDeleteNode={
-                      row.afterNode ? () => handleDeleteNode(row.path, row.nodeKey) : undefined
+                      allowInlineEdit && row.afterNode
+                        ? () => handleDeleteNode(row.path, row.nodeKey)
+                        : undefined
                     }
                   />
                 ) : (
@@ -693,12 +774,12 @@ export function AfterPanel({
                     onSelect={() => select('after', { nodePath: row.path, slotKey: row.slotKey })}
                     onClear={clearSelection}
                     onDelete={
-                      row.afterValue !== null
+                      allowInlineEdit && row.afterValue !== null
                         ? () => handleDeleteSlot(row.path, row.slotKey)
                         : undefined
                     }
                     onEdit={
-                      row.afterValue !== null
+                      allowInlineEdit && row.afterValue !== null
                         ? (newValue) => handleEditSlot(row.path, row.slotKey, newValue)
                         : undefined
                     }
@@ -780,7 +861,22 @@ export function AfterPanel({
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);
             }}
-            disabled={!hasResult || isCommitting || isCommitted}
+            // Commit reads workspaceStore.tree (committed state), but the
+            // panel renders draftTree when hasDraft. Allowing Commit in
+            // that window would freeze the *pre-draft* tree under the
+            // user's eyes while the staged YOps still sit un-applied \u2014
+            // they'd see preview, click Commit, and end up with a
+            // commit that doesn't match anything on screen.
+            // The user must Apply (or Discard) the draft first; this
+            // button reactivates once hasDraft flips back to false.
+            disabled={shouldDisableCommit({ hasResult, isCommitting, isCommitted, hasDraft })}
+            title={
+              hasDraft
+                ? 'Apply or Discard the staged draft before committing'
+                : isCommitted
+                  ? 'Already committed'
+                  : undefined
+            }
             className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--commit)] px-3 py-2 text-[11px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             {isCommitting ? 'Committing...' : '\u2192 Commit'}
@@ -800,37 +896,58 @@ export function AfterPanel({
             >
               Name this commit
             </label>
-            <input
-              id="after-panel-commit-message"
-              ref={commitInputRef}
-              type="text"
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isCommitting) handleCommit(commitMessage);
-                if (e.key === 'Escape') setShowCommitDialog(false);
-              }}
-              className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
-              placeholder="e.g. Budget & Attractions"
-            />
-            <div className="flex justify-end gap-1.5 mt-3">
-              <button
-                type="button"
-                onClick={() => setShowCommitDialog(false)}
-                className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                data-testid="commit-dialog-confirm"
-                onClick={() => handleCommit(commitMessage)}
-                disabled={isCommitting}
-                className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                {isCommitting ? 'Committing...' : 'Commit'}
-              </button>
-            </div>
+            {/*
+              Dialog confirm gates on the same helper as the main button,
+              so a draft that arrives while the dialog is open disables
+              Enter + click here too (defense against the race the
+              auto-close effect also handles cooperatively).
+            */}
+            {(() => {
+              const dialogDisabled = shouldDisableCommit({
+                hasResult,
+                isCommitting,
+                isCommitted,
+                hasDraft,
+              });
+              return (
+                <>
+                  <input
+                    id="after-panel-commit-message"
+                    ref={commitInputRef}
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !dialogDisabled) handleCommit(commitMessage);
+                      if (e.key === 'Escape') setShowCommitDialog(false);
+                    }}
+                    className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
+                    placeholder="e.g. Budget & Attractions"
+                  />
+                  <div className="flex justify-end gap-1.5 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowCommitDialog(false)}
+                      className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="commit-dialog-confirm"
+                      onClick={() => handleCommit(commitMessage)}
+                      disabled={dialogDisabled}
+                      title={
+                        hasDraft ? 'Apply or Discard the staged draft before committing' : undefined
+                      }
+                      className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isCommitting ? 'Committing...' : 'Commit'}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

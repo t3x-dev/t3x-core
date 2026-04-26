@@ -117,6 +117,106 @@ describe('workspaceStore (state-only)', () => {
     expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(true);
   });
 
+  it('setDraft populates ops/tree and flips hasDraft; clearDraft resets all three', () => {
+    const previewTree: SemanticContent = {
+      trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }],
+      relations: [],
+    };
+    const draftOps = [
+      {
+        set: { path: 'trip/dest', value: 'HZ' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+        },
+      },
+    ];
+
+    useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+    let s = useWorkspaceStore.getState();
+    expect(s.draftOps).toEqual(draftOps);
+    expect(s.draftTree).toEqual(previewTree);
+    expect(s.hasDraft).toBe(true);
+
+    useWorkspaceStore.getState().clearDraft();
+    s = useWorkspaceStore.getState();
+    expect(s.draftOps).toEqual([]);
+    expect(s.draftTree).toBeNull();
+    expect(s.hasDraft).toBe(false);
+  });
+
+  it('setDraft with empty ops leaves hasDraft false (avoids stale-draft button state)', () => {
+    // An extraction that returned zero ops is not a draft worth applying;
+    // hasDraft must stay false so Apply remains disabled.
+    useWorkspaceStore.getState().setDraft({ ops: [], tree: { trees: [], relations: [] } });
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+  });
+
+  it('discard sequence (clearDraft + setScriptText empty + setScriptDirty false) fully releases Apply', () => {
+    // P2 regression: AfterPanel's Discard previously only called
+    // hydrateConversationToStore — that left draftOps / hasDraft /
+    // scriptText / scriptDirty intact, so the user could click Apply on
+    // a draft they thought was discarded. The fix is to call all three
+    // primitives in sequence; this test verifies that the resulting
+    // state actually disables Apply (canRun gates on
+    // scriptDirty || hasDraft).
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    useWorkspaceStore.getState().setScriptText('yops:\n  - set: ...');
+    useWorkspaceStore.getState().setScriptDirty(true);
+
+    // Discard sequence (must mirror AfterPanel.handleDiscard):
+    useWorkspaceStore.getState().clearDraft();
+    useWorkspaceStore.getState().setScriptText('');
+    useWorkspaceStore.getState().setScriptDirty(false);
+
+    const s = useWorkspaceStore.getState();
+    expect(s.hasDraft).toBe(false);
+    expect(s.draftOps).toEqual([]);
+    expect(s.draftTree).toBeNull();
+    expect(s.scriptText).toBe('');
+    expect(s.scriptDirty).toBe(false);
+  });
+
+  it('reset clears the draft along with other conversation-scoped state', () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    expect(useWorkspaceStore.getState().hasDraft).toBe(true);
+
+    useWorkspaceStore.getState().reset();
+
+    const s = useWorkspaceStore.getState();
+    expect(s.hasDraft).toBe(false);
+    expect(s.draftOps).toEqual([]);
+    expect(s.draftTree).toBeNull();
+  });
+
   it('setPanelExpanded is a no-op without an active project', () => {
     // No setActiveProject — nothing should be written to the persisted map.
     useWorkspaceStore.getState().setPanelExpanded(true);

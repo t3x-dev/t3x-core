@@ -107,6 +107,30 @@ interface WorkspaceState {
   setScriptText: (text: string) => void;
   setScriptDirty: (dirty: boolean) => void;
 
+  // ── Draft (uncommitted extraction proposal) ──
+  /**
+   * The ops the LLM proposed in the most recent Extract that have NOT been
+   * applied to `yops_log` yet. Lives entirely in client state — set by
+   * `useExtraction` when calling `runExtraction({ commit: false })`,
+   * consumed by `useScriptExecution` to gate Apply, and cleared by
+   * `clearDraft()` on successful Apply or fresh hydration.
+   */
+  draftOps: SourcedYOp[];
+  /**
+   * Cheap dry-run preview: `applySourcedYOps(currentTree, draftOps)`. Lets
+   * AfterPanel render what the result tree would look like *if* the user
+   * clicked Apply, without persisting anything. Recomputed only on Extract;
+   * a live preview that follows manual script edits is a follow-up.
+   */
+  draftTree: SemanticContent | null;
+  /**
+   * True iff there's an uncommitted draft to apply. Read by
+   * `useScriptExecution.canRun` and AfterPanel's "Draft" badge.
+   */
+  hasDraft: boolean;
+  setDraft: (input: { ops: SourcedYOp[]; tree: SemanticContent }) => void;
+  clearDraft: () => void;
+
   reset: () => void;
 }
 
@@ -149,6 +173,9 @@ function conversationResetState() {
     lastExtractionPinIds: [],
     scriptText: '',
     scriptDirty: false,
+    draftOps: [] as SourcedYOp[],
+    draftTree: null as SemanticContent | null,
+    hasDraft: false,
   };
 }
 
@@ -200,6 +227,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       setScriptText: (scriptText) => set({ scriptText }),
       setScriptDirty: (scriptDirty) => set({ scriptDirty }),
+
+      setDraft: ({ ops, tree }) =>
+        set({ draftOps: ops, draftTree: tree, hasDraft: ops.length > 0 }),
+      clearDraft: () => set({ draftOps: [], draftTree: null, hasDraft: false }),
 
       // Clears conversation-scoped data; keeps UI prefs (per-project expansion
       // map, active project) so navigation between conversations doesn't yank
