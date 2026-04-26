@@ -1,11 +1,12 @@
 'use client';
 
 import { ClipboardList, Lightbulb, Target } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
+import { useChatStore } from '@/store/chatStore';
 
 const STARTER_CARDS = [
   {
@@ -30,6 +31,21 @@ const STARTER_CARDS = [
 
 export default function ChatLandingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Anchor this landing to a specific project when one was passed in the
+  // URL (e.g. the "+ New Project" sidebar action lands here so the user can
+  // type their first message). Priming the store keeps activeProjectId in
+  // sync for the sidebar; propagating the param to /chat/new survives
+  // refresh and avoids relying solely on in-memory state.
+  const projectIdParam = searchParams.get('projectId');
+  useEffect(() => {
+    if (!projectIdParam) return;
+    const store = useChatStore.getState();
+    if (store.activeProjectId !== projectIdParam) {
+      store.setActiveConversation(null, projectIdParam);
+    }
+  }, [projectIdParam]);
+
   const {
     loading,
     hasConfiguredGenerationProvider,
@@ -45,9 +61,10 @@ export default function ChatLandingPage() {
       const params = new URLSearchParams({ firstMessage: message });
       if (selectedProvider) params.set('provider', selectedProvider);
       if (selectedModel) params.set('model', selectedModel);
+      if (projectIdParam) params.set('projectId', projectIdParam);
       router.push(`/chat/new?${params.toString()}`);
     },
-    [router, hasConfiguredGenerationProvider, selectedModel, selectedProvider]
+    [router, hasConfiguredGenerationProvider, selectedModel, selectedProvider, projectIdParam]
   );
 
   return (

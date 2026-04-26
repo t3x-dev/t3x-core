@@ -84,9 +84,13 @@ export function ChatSidebar() {
   async function handleNewProject() {
     try {
       const project = await createProject('Untitled Project');
+      // Prime the store so ChatWorkspace.useAutoProject reuses this project
+      // for the first message instead of creating another one. The query
+      // param is the source of truth on refresh (store state is in-memory),
+      // and matches the existing empty-project redirect contract.
       setActiveConversation(null, project.project_id);
       useChatStore.getState().refreshSidebar();
-      router.push(`/project/${project.project_id}`);
+      router.push(`/chat?projectId=${encodeURIComponent(project.project_id)}`);
     } catch {
       // Fallback: land on blank chat so users can still type a first message
       // (which will auto-create a project via useAutoProject).
