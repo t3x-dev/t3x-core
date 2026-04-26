@@ -31,10 +31,23 @@ vi.mock('@/store/chatStore', () => ({
     selector({ activeProjectId: storeProjectId }),
 }));
 
-vi.mock('@/store/workspaceStore', () => ({
-  useWorkspaceStore: (selector: (state: { panelExpanded: boolean }) => unknown) =>
-    selector({ panelExpanded: false }),
-}));
+vi.mock('@/store/workspaceStore', () => {
+  type WorkspaceMockState = {
+    panelExpandedByProject: Record<string, boolean>;
+    activeProjectId: string | null;
+    setActiveProject: (id: string | null) => void;
+  };
+  const state: WorkspaceMockState = {
+    panelExpandedByProject: {},
+    activeProjectId: null,
+    setActiveProject: vi.fn(),
+  };
+  return {
+    selectPanelExpanded: (s: WorkspaceMockState) =>
+      s.activeProjectId ? Boolean(s.panelExpandedByProject[s.activeProjectId]) : false,
+    useWorkspaceStore: (selector: (s: WorkspaceMockState) => unknown) => selector(state),
+  };
+});
 
 import ConversationPage from '@/app/chat/[conversationId]/page';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';

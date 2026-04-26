@@ -3,7 +3,7 @@
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ReplayWarningBanner } from './ReplayWarningBanner';
@@ -18,7 +18,7 @@ const COLLAPSED_WIDTH = 48;
 const DEFAULT_SPLIT_RATIO = 0.5;
 
 export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
-  const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const [splitRatio, setSplitRatio] = useState(DEFAULT_SPLIT_RATIO);
   const [showBefore, setShowBefore] = useState(false);

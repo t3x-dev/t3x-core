@@ -43,7 +43,19 @@ interface WorkspaceState {
 
   // ── UI state ──
   mode: WorkspaceMode;
-  panelExpanded: boolean;
+  /**
+   * Per-project workspace expansion preference (persisted).
+   * Default for an unseen project is folded; flips to expanded once the user
+   * opens it for that project, and stays that way across refresh / nav until
+   * explicitly collapsed again.
+   */
+  panelExpandedByProject: Record<string, boolean>;
+  /**
+   * Project that the workspace is currently scoped to. Read by
+   * `selectPanelExpanded` / `setPanelExpanded` to look up the per-project
+   * preference. Null until a conversation has resolved its project_id.
+   */
+  activeProjectId: string | null;
   isCommitted: boolean;
   lastError: string | null;
   replayWarning: ReplayWarning | null;
@@ -65,6 +77,7 @@ interface WorkspaceState {
 
   // ── State setters (no business logic) ──
   setConversation: (id: string | null) => void;
+  setActiveProject: (projectId: string | null) => void;
   setTurns: (turns: WorkspaceTurn[]) => void;
   setDerived: (input: {
     tree: SemanticContent;
@@ -72,6 +85,11 @@ interface WorkspaceState {
     opsLog: SourcedYOp[];
   }) => void;
   setMode: (mode: WorkspaceMode) => void;
+  /**
+   * Sets expansion for the currently active project. No-op if no project is
+   * active yet (so a brand-new chat without a resolved project never writes
+   * a stray entry to the persisted map).
+   */
   setPanelExpanded: (expanded: boolean) => void;
   setCommitted: (committed: boolean) => void;
   setError: (err: string | null) => void;
@@ -94,41 +112,35 @@ interface WorkspaceState {
 
 const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
 
-function initialState(): Omit<
-  WorkspaceState,
-  | 'setConversation'
-  | 'setTurns'
-  | 'setDerived'
-  | 'setMode'
-  | 'setPanelExpanded'
-  | 'setCommitted'
-  | 'setError'
-  | 'setReplayWarning'
-  | 'select'
-  | 'clearSelection'
-  | 'setExtractionPreset'
-  | 'setLastExtractionPinIds'
-  | 'setScriptText'
-  | 'setScriptDirty'
-  | 'reset'
-> {
+/**
+ * Selector: derives the current workspace expansion flag from the active
+ * project. Components subscribe via `useWorkspaceStore(selectPanelExpanded)`.
+ */
+export const selectPanelExpanded = (state: WorkspaceState): boolean =>
+  state.activeProjectId ? Boolean(state.panelExpandedByProject[state.activeProjectId]) : false;
+
+/**
+ * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
+ * UI prefs (`panelExpandedByProject`, `activeProjectId`) are preserved so a
+ * conversation switch within the same project keeps the user's view choice.
+ */
+function conversationResetState() {
   return {
     conversationId: null,
     turns: [],
     opsLog: [],
     tree: EMPTY_TREE,
-    sourceIndex: new Map(),
-    mode: 'idle',
-    panelExpanded: false,
+    sourceIndex: new Map<string, Source>(),
+    mode: 'idle' as WorkspaceMode,
     isCommitted: false,
     lastError: null,
     replayWarning: null,
     selectedNodePath: null,
     selectedSlotKey: null,
     selectedTurnIndex: null,
-    selectedSource: null,
+    selectedSource: null as SelectionSource,
     scrollToCenter: false,
-    extractionPreset: 'balanced',
+    extractionPreset: 'balanced' as const,
     lastExtractionPinIds: [],
     scriptText: '',
     scriptDirty: false,
@@ -138,13 +150,25 @@ function initialState(): Omit<
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
-      ...initialState(),
+      ...conversationResetState(),
+      panelExpandedByProject: {},
+      activeProjectId: null,
 
       setConversation: (id) => set({ conversationId: id }),
+      setActiveProject: (activeProjectId) => set({ activeProjectId }),
       setTurns: (turns) => set({ turns }),
       setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
       setMode: (mode) => set({ mode }),
-      setPanelExpanded: (panelExpanded) => set({ panelExpanded }),
+      setPanelExpanded: (expanded) => {
+        const projectId = get().activeProjectId;
+        if (!projectId) return;
+        set((s) => ({
+          panelExpandedByProject: {
+            ...s.panelExpandedByProject,
+            [projectId]: expanded,
+          },
+        }));
+      },
       setCommitted: (isCommitted) => set({ isCommitted }),
       setError: (lastError) => set({ lastError }),
       setReplayWarning: (replayWarning) => set({ replayWarning }),
@@ -172,13 +196,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setScriptText: (scriptText) => set({ scriptText }),
       setScriptDirty: (scriptDirty) => set({ scriptDirty }),
 
-      // Reset clears conversation-specific state but preserves user UI prefs
-      // (panelExpanded survives navigation + refresh).
-      reset: () => set({ ...initialState(), panelExpanded: get().panelExpanded }),
+      // Clears conversation-scoped data; keeps UI prefs (per-project expansion
+      // map, active project) so navigation between conversations doesn't yank
+      // the workspace shut.
+      reset: () => set(conversationResetState()),
     }),
     {
       name: 't3x-workspace-ui',
-      partialize: (state) => ({ panelExpanded: state.panelExpanded }),
+      partialize: (state) => ({ panelExpandedByProject: state.panelExpandedByProject }),
       // Falls back to in-memory storage on the server / in node tests where
       // localStorage is unavailable. Persistence only matters in the browser.
       storage: createJSONStorage(() => {

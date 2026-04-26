@@ -81,7 +81,10 @@ export function useExtraction({
       store.setMode('streaming');
       store.setError(null);
       store.setLastExtractionPinIds(sourcePinIds ?? []);
-      if (!store.panelExpanded) store.setPanelExpanded(true);
+      // Auto-expand on Extract — explicit user action, they want to see results.
+      // setPanelExpanded is a no-op when no project is active, so this can't
+      // accidentally pollute the per-project map.
+      store.setPanelExpanded(true);
 
       try {
         const turns = useWorkspaceStore.getState().turns;

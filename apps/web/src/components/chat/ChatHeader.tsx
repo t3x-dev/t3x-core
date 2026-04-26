@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { BranchSwitcher } from './BranchSwitcher';
@@ -40,7 +40,7 @@ export function ChatHeader({
   } = useChatStore();
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
   const { init: initCommitState } = useCommitActions();
-  const panelExpanded = useWorkspaceStore((s) => s.panelExpanded);
+  const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
