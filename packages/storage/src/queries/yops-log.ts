@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type YOpsLogInsert, type YOpsLogRecord, yopsLog } from '../schema-trees';
 
@@ -120,4 +120,73 @@ export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise
     .from(yopsLog)
     .where(inArray(yopsLog.id, yopsLogIds))
     .orderBy(asc(yopsLog.createdAt));
+}
+
+/**
+ * Active-draft slice: entries for the conversation whose `superseded_at`
+ * is NULL. The workspace's visible draft replays this list on top of
+ * the committed baseline (see `replayCommittedBaseline` in the api
+ * package). Distinct from `listYOpsLogByConversation`, which returns
+ * every entry (used by audit / GET /yops endpoints).
+ *
+ * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
+ */
+export async function listActiveYOpsLogByConversation(
+  db: AnyDB,
+  conversationId: string
+): Promise<YOpsLogRecord[]> {
+  return db
+    .select()
+    .from(yopsLog)
+    .where(and(eq(yopsLog.conversationId, conversationId), isNull(yopsLog.supersededAt)))
+    .orderBy(asc(yopsLog.createdAt));
+}
+
+/**
+ * Mark every active-draft, LLM-sourced entry for the conversation as
+ * superseded. Called atomically with the new extract entry's insert
+ * so the workspace flips from "old suggestion + new suggestion" to
+ * just "new suggestion" in a single transaction.
+ *
+ * Filters at three layers:
+ *
+ *   1. `conversation_id = $1` — never touch other conversations.
+ *   2. `superseded_at IS NULL` — idempotent: a row already marked
+ *      stays at its original timestamp.
+ *   3. `excludeIds` — caller passes the set of `yops_log` ids that
+ *      are referenced by any project commit. Committed entries are
+ *      part of the immutable baseline and must never be marked
+ *      superseded, even if their per-op source.type is 'llm'.
+ *
+ * Then in app code: filter by per-op `source.type === 'llm'`. Manual
+ * edits (HumanSource ops) are explicitly preserved — that's the
+ * v1 contract from the RFC.
+ *
+ * Returns the ids that were marked, for caller observability / audit.
+ */
+export async function supersedeActiveLLMSuggestions(
+  db: AnyDB,
+  conversationId: string,
+  excludeIds: readonly string[]
+): Promise<string[]> {
+  const active = await db
+    .select()
+    .from(yopsLog)
+    .where(and(eq(yopsLog.conversationId, conversationId), isNull(yopsLog.supersededAt)));
+
+  const exclude = new Set(excludeIds);
+  const targets: string[] = [];
+  for (const entry of active) {
+    if (exclude.has(entry.id)) continue;
+    const ops = (entry.yops as Array<{ source?: { type?: string } }> | null) ?? [];
+    if (ops.some((op) => op?.source?.type === 'llm')) {
+      targets.push(entry.id);
+    }
+  }
+
+  if (targets.length === 0) return [];
+
+  await db.update(yopsLog).set({ supersededAt: new Date() }).where(inArray(yopsLog.id, targets));
+
+  return targets;
 }

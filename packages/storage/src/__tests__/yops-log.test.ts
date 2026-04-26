@@ -6,7 +6,9 @@ import {
   deleteYOpsLogEntry,
   getYOpsLogEntry,
   insertYOpsLogEntry,
+  listActiveYOpsLogByConversation,
   listYOpsLogByConversation,
+  supersedeActiveLLMSuggestions,
 } from '../queries/yops-log';
 import { createTestDB, sleep, testData } from './setup';
 
@@ -213,6 +215,132 @@ describe('YOps Log Storage', () => {
     it('returns undefined for non-existent ID', async () => {
       const result = await deleteYOpsLogEntry(db, 'yl_nonexistent');
       expect(result).toBeUndefined();
+    });
+  });
+
+  // =========================================================================
+  // Suggestion-vs-baseline (RFC 2026-04-26): superseded_at column behavior
+  // =========================================================================
+  describe('supersedeActiveLLMSuggestions + listActiveYOpsLogByConversation', () => {
+    /**
+     * Each test creates its own conversation so timestamps and IDs don't
+     * bleed across cases. Using the suite-level conversation would mix
+     * entries from earlier tests into the supersede candidate set.
+     */
+    async function freshConv(): Promise<string> {
+      const conv = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: `Supersede ${Date.now()}` })
+      );
+      return conv.conversationId;
+    }
+
+    const llmOp = (path: string) => ({
+      define: { path },
+      source: {
+        type: 'llm' as const,
+        model: 'claude-sonnet-4-6',
+        at: '2026-04-26T00:00:00.000Z',
+        turn_ref: { turn_hash: 'sha256:t1', quote: 'q' },
+      },
+    });
+
+    const humanOp = (path: string) => ({
+      define: { path },
+      source: { type: 'human' as const, author: 'test', at: '2026-04-26T00:00:00.000Z' },
+    });
+
+    it('marks LLM-sourced active entries superseded; preserves HumanSource entries', async () => {
+      const convId = await freshConv();
+      const llmEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('foo')],
+      });
+      const humanEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('bar')],
+      });
+
+      const supersededIds = await supersedeActiveLLMSuggestions(db, convId, []);
+
+      expect(supersededIds).toEqual([llmEntry.id]);
+      const llm = await getYOpsLogEntry(db, llmEntry.id);
+      const human = await getYOpsLogEntry(db, humanEntry.id);
+      expect(llm?.supersededAt).toBeInstanceOf(Date);
+      // Manual edits are explicitly preserved by the v1 contract — the
+      // RFC's load-bearing rule is that Extract has no authority to
+      // overwrite HumanSource ops.
+      expect(human?.supersededAt).toBeNull();
+    });
+
+    it('excludeIds blocks supersede for committed entries (defense in depth)', async () => {
+      const convId = await freshConv();
+      const llmEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('foo')],
+      });
+
+      // Pretend this entry is referenced by a commit — caller passes its
+      // id in the excludeIds set. Even though source.type === 'llm', it
+      // must NOT be marked superseded; committed entries are immutable
+      // baseline.
+      const supersededIds = await supersedeActiveLLMSuggestions(db, convId, [llmEntry.id]);
+
+      expect(supersededIds).toEqual([]);
+      const fresh = await getYOpsLogEntry(db, llmEntry.id);
+      expect(fresh?.supersededAt).toBeNull();
+    });
+
+    it('is idempotent: a second call after the first leaves already-superseded rows untouched', async () => {
+      const convId = await freshConv();
+      const llmEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('foo')],
+      });
+
+      const firstIds = await supersedeActiveLLMSuggestions(db, convId, []);
+      const firstStamp = (await getYOpsLogEntry(db, llmEntry.id))?.supersededAt;
+      await sleep(10);
+      const secondIds = await supersedeActiveLLMSuggestions(db, convId, []);
+      const secondStamp = (await getYOpsLogEntry(db, llmEntry.id))?.supersededAt;
+
+      expect(firstIds).toEqual([llmEntry.id]);
+      expect(secondIds).toEqual([]);
+      expect(firstStamp?.getTime()).toBe(secondStamp?.getTime());
+    });
+
+    it('listActiveYOpsLogByConversation excludes superseded rows; full-list query still returns them', async () => {
+      const convId = await freshConv();
+      const llmEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('foo')],
+      });
+      const humanEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('bar')],
+      });
+
+      await supersedeActiveLLMSuggestions(db, convId, []);
+
+      const active = await listActiveYOpsLogByConversation(db, convId);
+      const all = await listYOpsLogByConversation(db, convId);
+
+      expect(active.map((e) => e.id)).toEqual([humanEntry.id]);
+      // The audit / GET-all path still surfaces the superseded entry —
+      // history must remain readable.
+      expect(all.map((e) => e.id).sort()).toEqual([llmEntry.id, humanEntry.id].sort());
     });
   });
 });

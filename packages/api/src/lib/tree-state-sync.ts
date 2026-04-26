@@ -28,17 +28,26 @@ import type { AnyDB } from '@t3x-dev/storage';
 import {
   deleteTreeRelationsByConversation,
   deleteTreesByConversation,
+  listActiveYOpsLogByConversation,
   listTreeRelationsByConversation,
   listTreesByConversation,
-  listYOpsLogByConversation,
   upsertTree,
   upsertTreeRelation,
 } from '@t3x-dev/storage';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
 
 /**
- * Replay the full yops log for a conversation and rebuild the trees table.
- * The `db` parameter should be a transaction handle (tx) from the caller.
+ * Replay the **active** yops log slice (committed entries + non-superseded
+ * draft entries) for a conversation and rebuild the trees table. The
+ * `db` parameter should be a transaction handle (tx) from the caller.
+ *
+ * Superseded entries are intentionally excluded — the materialized
+ * trees table is the workspace's "current state" view, and a
+ * superseded prior LLM suggestion is by definition no longer current.
+ * The full audit history still lives in `yops_log` for the GET /yops
+ * endpoint and replay diagnostics.
+ *
+ * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
  */
 export async function syncYOpsToTrees(
   db: AnyDB,
@@ -46,7 +55,7 @@ export async function syncYOpsToTrees(
   projectId: string,
   opts?: { topicId?: string }
 ): Promise<void> {
-  const records = await listYOpsLogByConversation(db, conversationId);
+  const records = await listActiveYOpsLogByConversation(db, conversationId);
   const snapshot = replayYOpsLog(toYOpsLogEntries(records));
   await rebuildTreesFromSnapshot(db, conversationId, projectId, snapshot, opts?.topicId);
 }

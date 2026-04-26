@@ -889,10 +889,30 @@ export const yopsLog = pgTable(
 
     /** Topic ID for multi-topic conversations */
     topicId: text('topic_id'),
+
+    /**
+     * Marks an entry obsolete within the active draft (uncommitted)
+     * window. NULL = active. Set by `supersedeActiveLLMSuggestions`
+     * when a re-extract replaces the prior LLM suggestion. Never set
+     * on committed entries — once an id appears in some commit's
+     * `yops_log_ids` it is part of the immutable baseline and stays
+     * `superseded_at = NULL` forever.
+     *
+     * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md
+     */
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },
   (table) => ({
     convIdx: index('idx_yops_log_conv').on(table.conversationId, table.createdAt),
     projectIdx: index('idx_yops_log_project').on(table.projectId),
+    /**
+     * Partial index for the hot path: replay the active draft, which
+     * filters by conversation + WHERE superseded_at IS NULL. Skipped
+     * for the audit / GET-all path which doesn't filter on supersede.
+     */
+    activeConvIdx: index('idx_yops_log_active')
+      .on(table.conversationId)
+      .where(sql`${table.supersededAt} IS NULL`),
     // Source enforcement — mirrors the inline auto-migrate in adapters/postgres.ts.
     // Uses jsonb_path_exists because Postgres CHECK forbids subqueries.
     sourceRequired: check(

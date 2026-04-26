@@ -454,6 +454,8 @@ export {
   getYOpsLogEntry,
   type InsertYOpsLogInput,
   insertYOpsLogEntry,
+  listActiveYOpsLogByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
+  supersedeActiveLLMSuggestions,
 } from './yops-log';
