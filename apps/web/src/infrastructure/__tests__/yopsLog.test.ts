@@ -41,19 +41,41 @@ describe('appendYOps', () => {
       created_at: '2026-04-12T00:00:00Z',
     } as never);
     await appendYOps('c1', [humanOp]);
-    expect(spy).toHaveBeenCalledWith('c1', [humanOp], 'manual');
+    expect(spy).toHaveBeenCalledWith('c1', [humanOp], 'manual', undefined, undefined);
   });
 
   it('uses row source "pipeline" when all ops are llm', async () => {
     const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
     await appendYOps('c1', [llmOp]);
-    expect(spy).toHaveBeenCalledWith('c1', [llmOp], 'pipeline');
+    expect(spy).toHaveBeenCalledWith('c1', [llmOp], 'pipeline', undefined, undefined);
   });
 
   it('uses row source "manual" for mixed batch', async () => {
     const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
     await appendYOps('c1', [llmOp, humanOp]);
-    expect(spy).toHaveBeenCalledWith('c1', [llmOp, humanOp], 'manual');
+    expect(spy).toHaveBeenCalledWith('c1', [llmOp, humanOp], 'manual', undefined, undefined);
+  });
+
+  it('forwards replaceActiveLLMDraft option to createYOpsEntry', async () => {
+    // Apply-from-staged-Extract-draft path: web's hook reads
+    // hasDraft and passes { replaceActiveLLMDraft: true } so the API
+    // marks prior active LLM drafts as superseded inside the same
+    // transaction. Without this, re-Extract → Apply just appends and
+    // the workspace stacks duplicate suggestions.
+    const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
+    await appendYOps('c1', [llmOp], { replaceActiveLLMDraft: true });
+    expect(spy).toHaveBeenCalledWith('c1', [llmOp], 'pipeline', undefined, {
+      replaceActiveLLMDraft: true,
+    });
+  });
+
+  it('omits replaceActiveLLMDraft when not provided (preserves legacy callers)', async () => {
+    // Gold edits, compression, and any caller that doesn't pass options
+    // must keep their existing append-only semantics — dropping the
+    // option means the API uses its default (false).
+    const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
+    await appendYOps('c1', [humanOp]);
+    expect(spy).toHaveBeenCalledWith('c1', [humanOp], 'manual', undefined, undefined);
   });
 
   it('wraps ApiError into PersistenceError', async () => {

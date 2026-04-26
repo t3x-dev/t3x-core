@@ -27,7 +27,17 @@ describe('commitOps', () => {
   it('calls infrastructure.appendYOps with ops when all are valid', async () => {
     const spy = vi.spyOn(yopsLogInfra, 'appendYOps').mockResolvedValue({} as never);
     await commitOps('c1', [humanOp, llmOp]);
-    expect(spy).toHaveBeenCalledWith('c1', [humanOp, llmOp]);
+    expect(spy).toHaveBeenCalledWith('c1', [humanOp, llmOp], undefined);
+  });
+
+  it('forwards options.replaceActiveLLMDraft to infrastructure.appendYOps', async () => {
+    // Apply-from-staged-Extract-draft path: caller passes the flag so
+    // the API marks prior active LLM drafts as superseded inside the
+    // same transaction as the new entry's insert. commitOps must
+    // pass it through unchanged.
+    const spy = vi.spyOn(yopsLogInfra, 'appendYOps').mockResolvedValue({} as never);
+    await commitOps('c1', [llmOp], { replaceActiveLLMDraft: true });
+    expect(spy).toHaveBeenCalledWith('c1', [llmOp], { replaceActiveLLMDraft: true });
   });
 
   it('returns the entry from appendYOps', async () => {
@@ -90,6 +100,6 @@ describe('commitOps', () => {
     // Design choice: we still call appendYOps (may be a no-op server-side)
     // OR we skip. Assert whichever your implementation chose — see impl notes.
     // For this test, let's require that the service passes through (simpler).
-    expect(spy).toHaveBeenCalledWith('c1', []);
+    expect(spy).toHaveBeenCalledWith('c1', [], undefined);
   });
 });

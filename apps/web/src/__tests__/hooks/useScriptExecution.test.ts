@@ -128,6 +128,61 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
   });
 
+  it('passes replaceActiveLLMDraft: true to commitOps when applying a staged Extract draft', async () => {
+    // Root-cause fix for the "re-extract piles up duplicate suggestions"
+    // symptom: backend already supports replace_active_llm_draft to
+    // supersede prior active LLM drafts atomically, but web's commitOps
+    // call chain was dropping the flag. Apply on a staged draft must
+    // tell the API to replace the prior LLM suggestion.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    // scriptDirty stays false — the script is the canonical proposal,
+    // not a user edit. hasDraft alone enables Apply.
+    useWorkspaceStore.getState().setScriptDirty(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({ replaceActiveLLMDraft: true });
+  });
+
+  it('passes replaceActiveLLMDraft: false on a manual-edit Apply (no staged draft)', async () => {
+    // Hand-written script edits shouldn't supersede a separate LLM
+    // suggestion the user might still want — manual edits append, LLM
+    // re-extract replaces. The flag is exclusively driven by hasDraft.
+    useWorkspaceStore.getState().setScriptText(`- set:\n    path: trip/dest\n    value: HZ\n`);
+    useWorkspaceStore.getState().setScriptDirty(true);
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({ replaceActiveLLMDraft: false });
+  });
+
   it('execute() refuses to commit when there is no draft and no manual edit', async () => {
     // Defense in depth: the Apply button is disabled in this state, but
     // execute() may be reached via hotkeys, tests, or programmatic calls.
