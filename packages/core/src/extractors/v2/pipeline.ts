@@ -75,8 +75,10 @@ function buildDraftPrompt(input: {
       '       "values_json": "{\\"sensor_resolution\\": \\"61 megapixels\\", \\"burst_speed\\": \\"10 fps\\"}"\n' +
       '   - `value_json` + `slot`: stringified scalar for a single slot, e.g.\n' +
       '       "slot": "sensor_type", "value_json": "\\"BSI CMOS\\""\n' +
-      '   - `children_json`: stringified array of `{key, values_json}` entries, e.g.\n' +
-      '       "children_json": "[{\\"key\\": \\"a7r_v\\", \\"values_json\\": \\"{\\\\\\"resolution\\\\\\": \\\\\\"61 MP\\\\\\"}\\"}]"\n' +
+      '   - `children_json`: stringified array of `{key, values}` entries\n' +
+      '       (note: child `values` here is a RAW object inside the JSON-string,\n' +
+      '       NOT a nested values_json string), e.g.\n' +
+      '       "children_json": "[{\\"key\\": \\"a7r_v\\", \\"values\\": {\\"resolution\\": \\"61 MP\\"}}]"\n' +
       '   Items that only declare a `key` with no values_json, no value_json, and no\n' +
       '   children_json carrying values are useless and will be dropped.\n' +
       '2. Do NOT extract section headers, paragraph titles, or rhetorical structure as\n' +
