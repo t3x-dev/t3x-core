@@ -110,13 +110,18 @@ export function useExtraction({
       }
 
       const store = useWorkspaceStore.getState();
-      // Pre-sync the workspace's activeProjectId before flipping the panel.
-      // ConversationPage mirrors chatStore → workspaceStore via useEffect, so
-      // there's a window where chatStore.activeProjectId is ready (Extract is
-      // enabled) but workspaceStore.activeProjectId hasn't caught up yet —
-      // setPanelExpanded would no-op against the unsynced workspace state.
-      // Extract is an explicit user action, so we close the window inline.
+      // Pre-sync the workspace's activeProjectId + conversationId before
+      // doing anything that depends on them. ConversationPage mirrors
+      // chatStore → workspaceStore via useEffect, and hydrate eventually
+      // calls setConversation, but there's a window where chatStore is
+      // ready (Extract is enabled) and workspaceStore hasn't caught up.
+      // Two consequences if we don't pre-sync:
+      //   (a) setPanelExpanded would no-op against the unsynced map;
+      //   (b) setDraft would write to draftsByConversation under a
+      //       null/stale conversationId, breaking F5 protection.
+      // Extract is an explicit user action — close both windows inline.
       if (store.activeProjectId !== projectId) store.setActiveProject(projectId);
+      if (store.conversationId !== extractConvId) store.setConversation(extractConvId);
       store.setMode('streaming');
       store.setError(null);
       store.setLastExtractionPinIds(sourcePinIds ?? []);

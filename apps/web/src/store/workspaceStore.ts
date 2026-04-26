@@ -1,4 +1,5 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
+import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -131,7 +132,39 @@ interface WorkspaceState {
   setDraft: (input: { ops: SourcedYOp[]; tree: SemanticContent }) => void;
   clearDraft: () => void;
 
+  // ── Draft persistence (per-conversation) ──
+  /**
+   * Persisted draft snapshots keyed by `conversationId`. Lets a refresh
+   * (or accidental F5) preserve an in-flight Extract proposal — losing
+   * 30s of LLM work to a stray reload was the data-loss case the
+   * propose/apply flow's two-step model still left exposed.
+   *
+   * Shape note: we persist `ops` + `scriptText` + `scriptDirty` but NOT
+   * `draftTree`. The preview tree is derived (`applySourcedYOps(currentTree, ops)`)
+   * and the underlying `currentTree` may have moved on (a commit landed
+   * in another tab) since the snapshot was written. Re-derive on
+   * rehydration against the freshly hydrated tree so the preview can't
+   * lie.
+   */
+  draftsByConversation: Record<string, PersistedDraft>;
+  /**
+   * Look up a persisted draft for `conversationId` and, if found, layer
+   * it on top of the just-hydrated workspace state (sets draftOps,
+   * derives draftTree against current tree, sets scriptText/scriptDirty,
+   * flips hasDraft). Idempotent — a second call with the same id is
+   * a no-op once the in-memory state already matches.
+   *
+   * Returns true iff a snapshot was applied.
+   */
+  restoreDraftFor: (conversationId: string) => boolean;
+
   reset: () => void;
+}
+
+export interface PersistedDraft {
+  ops: SourcedYOp[];
+  scriptText: string;
+  scriptDirty: boolean;
 }
 
 const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
@@ -179,12 +212,34 @@ function conversationResetState() {
   };
 }
 
+/**
+ * Helper for the per-conversation draft persistence layer. Returns the next
+ * map after writing or removing the entry for `convId`. Centralised so the
+ * setDraft / clearDraft / setScriptText / setScriptDirty mirrors all use
+ * the same write path.
+ */
+function writeDraftSnapshot(
+  map: Record<string, PersistedDraft>,
+  convId: string | null,
+  snapshot: PersistedDraft | null
+): Record<string, PersistedDraft> {
+  if (!convId) return map;
+  if (snapshot === null) {
+    if (!(convId in map)) return map;
+    const next = { ...map };
+    delete next[convId];
+    return next;
+  }
+  return { ...map, [convId]: snapshot };
+}
+
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
       ...conversationResetState(),
       panelExpandedByProject: {},
       activeProjectId: null,
+      draftsByConversation: {},
 
       setConversation: (id) => set({ conversationId: id }),
       setActiveProject: (activeProjectId) => set({ activeProjectId }),
@@ -225,21 +280,107 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
       setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
 
-      setScriptText: (scriptText) => set({ scriptText }),
-      setScriptDirty: (scriptDirty) => set({ scriptDirty }),
+      setScriptText: (scriptText) => {
+        const s = get();
+        // Mirror to the persisted map only while a draft is staged. A
+        // committed-mirror script (hasDraft=false) doesn't need
+        // persistence — opsLog is the source of truth and re-syncs
+        // from server on hydrate.
+        if (s.hasDraft && s.conversationId) {
+          set({
+            scriptText,
+            draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
+              ops: s.draftOps,
+              scriptText,
+              scriptDirty: s.scriptDirty,
+            }),
+          });
+        } else {
+          set({ scriptText });
+        }
+      },
+      setScriptDirty: (scriptDirty) => {
+        const s = get();
+        if (s.hasDraft && s.conversationId) {
+          set({
+            scriptDirty,
+            draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
+              ops: s.draftOps,
+              scriptText: s.scriptText,
+              scriptDirty,
+            }),
+          });
+        } else {
+          set({ scriptDirty });
+        }
+      },
 
-      setDraft: ({ ops, tree }) =>
-        set({ draftOps: ops, draftTree: tree, hasDraft: ops.length > 0 }),
-      clearDraft: () => set({ draftOps: [], draftTree: null, hasDraft: false }),
+      setDraft: ({ ops, tree }) => {
+        const s = get();
+        const hasDraft = ops.length > 0;
+        const baseUpdate = { draftOps: ops, draftTree: tree, hasDraft };
+        if (!s.conversationId) {
+          set(baseUpdate);
+          return;
+        }
+        const snapshot: PersistedDraft | null = hasDraft
+          ? { ops, scriptText: s.scriptText, scriptDirty: s.scriptDirty }
+          : null;
+        set({
+          ...baseUpdate,
+          draftsByConversation: writeDraftSnapshot(
+            s.draftsByConversation,
+            s.conversationId,
+            snapshot
+          ),
+        });
+      },
+      clearDraft: () => {
+        const s = get();
+        set({
+          draftOps: [],
+          draftTree: null,
+          hasDraft: false,
+          draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, null),
+        });
+      },
+
+      restoreDraftFor: (conversationId) => {
+        const s = get();
+        const snapshot = s.draftsByConversation[conversationId];
+        if (!snapshot || snapshot.ops.length === 0) return false;
+
+        // Re-derive the preview tree against the current (possibly
+        // freshly-hydrated) committed tree. A stale persisted preview
+        // tree could lie if a commit landed elsewhere since the
+        // snapshot was written.
+        const previewResult = applySourcedYOps(s.tree, snapshot.ops);
+        const previewTree: SemanticContent = previewResult.ok
+          ? { trees: previewResult.trees, relations: previewResult.relations }
+          : s.tree;
+
+        set({
+          draftOps: snapshot.ops,
+          draftTree: previewTree,
+          hasDraft: true,
+          scriptText: snapshot.scriptText,
+          scriptDirty: snapshot.scriptDirty,
+        });
+        return true;
+      },
 
       // Clears conversation-scoped data; keeps UI prefs (per-project expansion
-      // map, active project) so navigation between conversations doesn't yank
-      // the workspace shut.
+      // map, active project, persisted draft snapshots) so navigation between
+      // conversations doesn't yank the workspace shut and doesn't lose
+      // pending drafts on other conversations.
       reset: () => set(conversationResetState()),
     }),
     {
       name: 't3x-workspace-ui',
-      partialize: (state) => ({ panelExpandedByProject: state.panelExpandedByProject }),
+      partialize: (state) => ({
+        panelExpandedByProject: state.panelExpandedByProject,
+        draftsByConversation: state.draftsByConversation,
+      }),
       // Falls back to in-memory storage on the server / in tests where
       // localStorage is missing or its API surface isn't fully wired
       // (e.g. some jsdom configurations). Persistence only matters in the

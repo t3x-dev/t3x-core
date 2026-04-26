@@ -35,7 +35,11 @@ describe('useScriptExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
-    useWorkspaceStore.setState({ panelExpandedByProject: {}, activeProjectId: null });
+    useWorkspaceStore.setState({
+      panelExpandedByProject: {},
+      activeProjectId: null,
+      draftsByConversation: {},
+    });
     useWorkspaceStore.getState().setConversation('conv_xyz');
     chatStoreState.activeProjectId = 'proj_abc';
     commitOpsMock.mockResolvedValue({ id: 'yl_1' });

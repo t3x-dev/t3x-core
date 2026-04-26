@@ -67,7 +67,11 @@ describe('useExtraction', () => {
     // Wipe per-project preference + active project so every test starts from
     // the same blank slate (otherwise persist would leak panelExpanded
     // between cases).
-    useWorkspaceStore.setState({ panelExpandedByProject: {}, activeProjectId: null });
+    useWorkspaceStore.setState({
+      panelExpandedByProject: {},
+      activeProjectId: null,
+      draftsByConversation: {},
+    });
     useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
     runExtractionMock.mockImplementation(
       async ({ llm }: { llm: (input: unknown) => Promise<unknown> }) => {
@@ -313,6 +317,50 @@ describe('useExtraction', () => {
     // the user's edit.
     expect(state.scriptDirty).toBe(false);
     expect(state.hasDraft).toBe(true);
+  });
+
+  it('staged draft survives a reset + hydrate cycle (F5 protection)', async () => {
+    // End-to-end of the per-conversation persistence layer:
+    //   1. Extract → setDraft writes to draftsByConversation[conv_123].
+    //   2. reset() simulates the in-memory wipe a refresh causes (the
+    //      persisted map survives via zustand persist).
+    //   3. hydrateConversationToStore-equivalent rewrites tree +
+    //      conversationId, then restoreDraftFor(conv_123) reapplies
+    //      the staged draft on top.
+    // We exercise the store-level contract here; the actual
+    // hydrateConversationToStore call site has its own coverage.
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    // Snapshot the persisted draft, then nuke in-memory state to mimic
+    // the page reload.
+    const persistedBefore = useWorkspaceStore.getState().draftsByConversation.conv_123;
+    expect(persistedBefore).toBeDefined();
+    expect(persistedBefore.ops.length).toBeGreaterThan(0);
+
+    useWorkspaceStore.getState().reset();
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+    expect(useWorkspaceStore.getState().draftsByConversation.conv_123).toBeDefined();
+
+    // Mimic hydrate: set conversation + tree, then restoreDraftFor.
+    useWorkspaceStore.getState().setConversation('conv_123');
+    const restored = useWorkspaceStore.getState().restoreDraftFor('conv_123');
+    expect(restored).toBe(true);
+
+    const after = useWorkspaceStore.getState();
+    expect(after.hasDraft).toBe(true);
+    expect(after.draftOps).toEqual(persistedBefore.ops);
+    expect(after.scriptText).toBe(persistedBefore.scriptText);
+    expect(after.draftTree).not.toBeNull();
   });
 
   it('does not prompt when scriptDirty is false (replacing a previous draft is fine)', async () => {

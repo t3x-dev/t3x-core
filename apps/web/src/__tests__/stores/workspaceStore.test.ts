@@ -4,10 +4,14 @@ import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
-    // Wipe both conversation state and the persisted per-project preference
-    // map so tests can't leak panelExpanded values into each other.
+    // Wipe both conversation state and ALL persisted maps so tests can't
+    // leak panelExpanded / draftsByConversation entries into each other.
     useWorkspaceStore.getState().reset();
-    useWorkspaceStore.setState({ panelExpandedByProject: {}, activeProjectId: null });
+    useWorkspaceStore.setState({
+      panelExpandedByProject: {},
+      activeProjectId: null,
+      draftsByConversation: {},
+    });
   });
 
   it('starts in idle mode with empty derived state', () => {
@@ -222,5 +226,158 @@ describe('workspaceStore (state-only)', () => {
     useWorkspaceStore.getState().setPanelExpanded(true);
     expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
     expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
+  });
+
+  describe('per-conversation draft persistence', () => {
+    const draftOps = [
+      {
+        set: { path: 'trip/dest', value: 'HZ' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+        },
+      },
+    ];
+    const previewTree: SemanticContent = {
+      trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }],
+      relations: [],
+    };
+
+    it('setDraft writes to draftsByConversation when a conversation is active', () => {
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setScriptText('yops:\n  - set: ...');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+
+      const map = useWorkspaceStore.getState().draftsByConversation;
+      expect(map.conv_a).toBeDefined();
+      expect(map.conv_a.ops).toEqual(draftOps);
+      expect(map.conv_a.scriptText).toBe('yops:\n  - set: ...');
+      expect(map.conv_a.scriptDirty).toBe(false);
+    });
+
+    it('setDraft does not write to the map without a conversationId (no key to use)', () => {
+      // conversationId is null at this point — beforeEach wipes everything.
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      expect(useWorkspaceStore.getState().draftsByConversation).toEqual({});
+    });
+
+    it('setScriptText / setScriptDirty mirror to the map only while a draft is staged', () => {
+      useWorkspaceStore.getState().setConversation('conv_a');
+      // No draft yet → setScriptText writes only the in-memory field.
+      useWorkspaceStore.getState().setScriptText('orphan edit');
+      expect(useWorkspaceStore.getState().draftsByConversation).toEqual({});
+
+      // Stage a draft, then edit the script. Both writes should be
+      // captured in the persisted snapshot so an F5 restores the latest
+      // edited form, not the original LLM proposal.
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      useWorkspaceStore.getState().setScriptText('user edited the proposal');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_a;
+      expect(snapshot.scriptText).toBe('user edited the proposal');
+      expect(snapshot.scriptDirty).toBe(true);
+    });
+
+    it('clearDraft removes the entry for the current conversation', () => {
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
+
+      useWorkspaceStore.getState().clearDraft();
+      expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeUndefined();
+    });
+
+    it('reset() preserves the persisted map (per-conversation drafts survive nav)', () => {
+      // Stage drafts on two conversations, then reset. The conversation
+      // we just navigated AWAY from must keep its persisted draft so
+      // navigating back restores it.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      useWorkspaceStore.getState().setConversation('conv_b');
+      useWorkspaceStore.getState().setDraft({
+        ops: [
+          {
+            set: { path: 'other', value: 'val' },
+            source: {
+              type: 'llm' as const,
+              model: 'gpt-4o-mini',
+              at: '2026-04-26T00:00:00Z',
+              turn_ref: { turn_hash: 'sha256:t2', quote: 'val' },
+            },
+          },
+        ] as never,
+        tree: { trees: [], relations: [] },
+      });
+
+      useWorkspaceStore.getState().reset();
+
+      // Conversation-scoped state cleared, but the persisted map survives.
+      expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+      expect(useWorkspaceStore.getState().draftOps).toEqual([]);
+      expect(Object.keys(useWorkspaceStore.getState().draftsByConversation)).toEqual(
+        expect.arrayContaining(['conv_a', 'conv_b'])
+      );
+    });
+
+    it('restoreDraftFor returns false and is a no-op when no snapshot exists', () => {
+      const before = useWorkspaceStore.getState();
+      const result = useWorkspaceStore.getState().restoreDraftFor('conv_unknown');
+      expect(result).toBe(false);
+      const after = useWorkspaceStore.getState();
+      expect(after.hasDraft).toBe(before.hasDraft);
+      expect(after.draftOps).toBe(before.draftOps);
+      expect(after.scriptText).toBe(before.scriptText);
+    });
+
+    it('restoreDraftFor restores ops + script + dirty + re-derives draftTree against current tree', () => {
+      // Pretend a previous session staged a draft on conv_a, then the
+      // page reloaded. Hydrate sets the committed tree first (so the
+      // re-derived preview is grounded in current server state), then
+      // restoreDraftFor layers the draft on top.
+      useWorkspaceStore.getState().setConversation('conv_a');
+      useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+      useWorkspaceStore.getState().setScriptText('user edit before reload');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      // Simulate the F5: in-memory state wiped, persisted map intact.
+      useWorkspaceStore.getState().reset();
+      // Hydrate writes the committed tree first (would normally be a
+      // server snapshot; here we set it directly).
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [],
+      });
+      useWorkspaceStore.getState().setConversation('conv_a');
+
+      const restored = useWorkspaceStore.getState().restoreDraftFor('conv_a');
+
+      expect(restored).toBe(true);
+      const s = useWorkspaceStore.getState();
+      expect(s.hasDraft).toBe(true);
+      expect(s.draftOps).toEqual(draftOps);
+      expect(s.scriptText).toBe('user edit before reload');
+      expect(s.scriptDirty).toBe(true);
+      // Preview tree is re-derived from `tree` (committed) + draftOps —
+      // not the stale persisted preview from before the reload. The
+      // committed tree didn't have `dest` but the draft adds it.
+      expect(s.draftTree).not.toBeNull();
+      expect(s.draftTree?.trees[0]?.slots.dest).toBe('HZ');
+    });
+
+    it('restoreDraftFor with empty ops snapshot is a no-op (avoids stale-draft state)', () => {
+      // Defensive: a corrupted snapshot with empty ops shouldn't flip
+      // hasDraft true or change anything. setDraft also rejects empty
+      // ops at write time, but restore must mirror that contract.
+      useWorkspaceStore.setState({
+        draftsByConversation: { conv_x: { ops: [], scriptText: 'oops', scriptDirty: false } },
+      });
+      const result = useWorkspaceStore.getState().restoreDraftFor('conv_x');
+      expect(result).toBe(false);
+      expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+    });
   });
 });
