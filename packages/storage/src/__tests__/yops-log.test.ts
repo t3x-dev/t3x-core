@@ -425,9 +425,11 @@ describe('YOps Log Storage', () => {
       const finalEntry = await getYOpsLogEntry(db, targetEntry.id);
 
       if (commitResult.status === 'fulfilled') {
-        // Outcome (b): commit succeeded → row must NOT be superseded
-        // (the FOR SHARE blocked the UPDATE; after release, the
-        // NOT EXISTS subquery excluded the now-committed row).
+        // Outcome (b): commit succeeded → row must NOT be superseded.
+        // Commit acquired the per-project advisory lock first; supersede
+        // waited on the lock, then ran its UPDATE against the now-
+        // current commits table. The NOT EXISTS subquery saw our newly
+        // inserted commits row and excluded the id from the UPDATE.
         expect(finalEntry?.supersededAt).toBeNull();
         if (supersededIds.status === 'fulfilled') {
           expect(supersededIds.value).not.toContain(targetEntry.id);
