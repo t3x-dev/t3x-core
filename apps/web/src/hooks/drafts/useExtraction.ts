@@ -57,7 +57,7 @@ export function useExtraction({
 
       try {
         const turns = useWorkspaceStore.getState().turns;
-        await runExtraction({
+        const outcome = await runExtraction({
           baseTree: tree,
           conversationId: extractConvId,
           turns,
@@ -74,6 +74,20 @@ export function useExtraction({
         // Re-hydrate the conversation to pull newly-committed ops into the store.
         await hydrateConversationToStore(projectId, extractConvId);
         useWorkspaceStore.getState().setMode('idle');
+
+        // Resilience surface: the worker returned `partial` because some
+        // ops couldn't be verified after retries, but the verified subset
+        // was committed. Surface as an info-level toast — the workspace
+        // is intentionally NOT put into an error state since the user
+        // does have new ops to inspect.
+        if (outcome.partial) {
+          const failed = outcome.partial.failingOps.length;
+          const committed = outcome.committed;
+          const noun = failed === 1 ? 'item' : 'items';
+          toast.message(
+            `Extracted ${committed} op${committed === 1 ? '' : 's'}. Skipped ${failed} ${noun} the model couldn't tie back to the conversation — you can refine the prompt or add them manually.`
+          );
+        }
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
         if (err instanceof ExtractionFailedError) {

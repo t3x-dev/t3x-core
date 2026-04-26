@@ -2,11 +2,20 @@
  * L2 — LLM extraction with deterministic retry loop.
  *
  * Policy (locked): surgical retry payload (only failing ops go back to LLM),
- * budget 2 retries (3 LLM calls max), hard fail on exhaustion.
+ * budget 2 retries (3 LLM calls max), then degrade.
  *
- * The only exception is a last-resort deterministic repair for the narrow
- * "populate missing define" pattern. It is intentionally delayed until retry
- * exhaustion so LLM self-repair remains the primary path.
+ * Degradation contract (resilience): on retry exhaustion the worker no
+ * longer throws away every op the model produced. It partitions the last
+ * batch into a verified subset (passes both source provenance and
+ * executable-structure checks against the base tree) and a failing
+ * subset, commits the verified subset, and returns
+ * `{ committed, partial }` instead of throwing. The caller (useExtraction)
+ * surfaces the failing ops as a soft warning. Only when nothing can be
+ * salvaged does the worker throw — so the user never loses a fully-good
+ * batch because of a single unverifiable quote.
+ *
+ * The legacy last-resort deterministic repair for the narrow
+ * "populate missing define" pattern is still attempted before degradation.
  */
 
 import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
@@ -27,6 +36,20 @@ export interface ExtractionInput {
   conversationId: string;
   turns: ValidationTurn[];
   llm: LLMCall;
+}
+
+export interface ExtractionOutcome {
+  /** Number of ops committed to the conversation's yops_log. */
+  committed: number;
+  /**
+   * Present when the LLM produced a mix of verified + failing ops and the
+   * worker degraded to committing only the verified subset. Callers should
+   * surface `failingOps` as a soft warning (not an error) and re-hydrate.
+   */
+  partial?: {
+    failingOps: RetryFailingOp[];
+    reason: ExtractionFailedError['reason'];
+  };
 }
 
 function collectInsertedDefinePaths(
@@ -50,12 +73,29 @@ function pickReason(failingOps: RetryFailingOp[]): ExtractionFailedError['reason
   return 'exhausted_retries';
 }
 
+/**
+ * Try to salvage a verified subset from a batch the model couldn't fully
+ * verify after retry exhaustion. Returns the committable subset (passes
+ * both source and structure checks) when it has at least one op, or
+ * `null` when nothing can be salvaged.
+ */
+function salvageVerifiedSubset(
+  baseTree: SemanticContent,
+  ops: readonly SourcedYOp[],
+  failingOpIndices: Set<number>
+): SourcedYOp[] | null {
+  const verified = ops.filter((_, idx) => !failingOpIndices.has(idx));
+  if (verified.length === 0) return null;
+  const structure = validateExecutableStructure(baseTree, verified);
+  return structure.ok ? verified : null;
+}
+
 export async function runExtraction({
   baseTree,
   conversationId,
   turns,
   llm,
-}: ExtractionInput): Promise<void> {
+}: ExtractionInput): Promise<ExtractionOutcome> {
   let attempt = 0;
   let prevFailing: RetryFailingOp[] | undefined;
 
@@ -91,6 +131,23 @@ export async function runExtraction({
       prevFailing = sourceResult.failingOps;
 
       if (attempt > MAX_RETRIES) {
+        // Resilience: instead of throwing the whole batch away, try to
+        // commit the verified subset and surface the failing slots as a
+        // soft warning. Only throw when nothing is salvageable so the
+        // pipeline never silently produces zero ops while the user has
+        // valid data sitting in the same response.
+        const failingIndices = new Set(sourceResult.failingOps.map((f) => f.opIndex));
+        const verified = salvageVerifiedSubset(baseTree, ops, failingIndices);
+        if (verified) {
+          await commitOps(conversationId, verified);
+          return {
+            committed: verified.length,
+            partial: {
+              failingOps: sourceResult.failingOps,
+              reason: pickReason(sourceResult.failingOps),
+            },
+          };
+        }
         throw new ExtractionFailedError(
           sourceResult.failingOps,
           attempt,
@@ -103,7 +160,7 @@ export async function runExtraction({
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {
       await commitOps(conversationId, ops);
-      return;
+      return { committed: ops.length };
     }
 
     attempt++;
@@ -124,7 +181,7 @@ export async function runExtraction({
             }
           );
           await commitOps(conversationId, repairedOps);
-          return;
+          return { committed: repairedOps.length };
         }
 
         if (insertedDefinePaths.length > 0) {
@@ -138,6 +195,21 @@ export async function runExtraction({
         }
       }
 
+      // Same degradation as the source path: filter the structurally
+      // failing ops and try to commit the rest. If nothing salvageable,
+      // throw.
+      const failingIndices = new Set(structureResult.failingOps.map((f) => f.opIndex));
+      const verified = salvageVerifiedSubset(baseTree, ops, failingIndices);
+      if (verified) {
+        await commitOps(conversationId, verified);
+        return {
+          committed: verified.length,
+          partial: {
+            failingOps: structureResult.failingOps,
+            reason: pickReason(structureResult.failingOps),
+          },
+        };
+      }
       throw new ExtractionFailedError(
         structureResult.failingOps,
         attempt,
