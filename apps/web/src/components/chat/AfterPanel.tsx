@@ -462,7 +462,14 @@ export function AfterPanel({
   onToggleBefore?: () => void;
   beforeVisible?: boolean;
 }) {
-  const tree = useWorkspaceStore((s) => s.tree);
+  const committedTree = useWorkspaceStore((s) => s.tree);
+  const draftTree = useWorkspaceStore((s) => s.draftTree);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  // Render the dry-run preview tree when an Extract has staged a draft;
+  // otherwise show the committed tree as before. The preview is computed
+  // by `useExtraction` (`applySourcedYOps(currentTree, draftOps)`) and
+  // cleared on Apply or Discard.
+  const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
@@ -604,8 +611,16 @@ export function AfterPanel({
           </div>
         )}
         <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Result
+            {hasDraft && (
+              <span
+                title="Dry-run preview of the staged Extract — click Apply to commit."
+                className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
+              >
+                Draft preview
+              </span>
+            )}
           </span>
           {showBeforeToggle && onToggleBefore && hasParent && (
             <button

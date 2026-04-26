@@ -30,11 +30,11 @@ export function WorkspaceTopbar() {
           type="button"
           onClick={execute}
           disabled={!canRun}
-          title={disabledReason ?? 'Apply edited script'}
+          title={disabledReason ?? 'Apply the script to the tree (commits a new yops_log entry)'}
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <Play className="h-2.5 w-2.5" />
-          Run
+          Apply
         </button>
 
         <button

@@ -75,6 +75,22 @@ describe('useExtraction', () => {
           turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
           failingOps: undefined,
         });
+        // Propose-only model: worker returns validated ops; hook writes them
+        // into the workspace as a draft and waits for user Apply.
+        return {
+          ops: [
+            {
+              set: { path: 'trip/budget', value: 'ten thousand dollars' },
+              source: {
+                type: 'llm',
+                model: 'gpt-4o-mini',
+                at: '2026-04-26T00:00:00Z',
+                turn_ref: { turn_hash: 'sha256:t1', quote: 'ten thousand dollars' },
+              },
+            },
+          ],
+          committed: false,
+        };
       }
     );
     callExtractionLLMMock.mockResolvedValue([]);
@@ -157,7 +173,11 @@ describe('useExtraction', () => {
     expect(dismissCallOrder).toBeLessThan(successCallOrder);
   });
 
-  it('emits a single success toast on the stable slot after hydrate resolves', async () => {
+  it('stages a draft locally without hydrating or committing on success', async () => {
+    // Propose-only model: a successful Extract writes a draft to the
+    // workspace store (ops + scriptText + dry-run preview tree) but does
+    // NOT hit the server's hydrate path because nothing has been
+    // committed yet. The user reviews and clicks Apply to persist.
     const { result } = renderHook(() =>
       useExtraction({
         resolvedConversationId: 'conv_123',
@@ -170,15 +190,41 @@ describe('useExtraction', () => {
       await result.current.handleExtract();
     });
 
-    expect(hydrateConversationToStoreMock).toHaveBeenCalledWith('proj_123', 'conv_123');
-    expect(toastSuccessMock).toHaveBeenCalledWith('Extraction complete', {
-      id: EXTRACTION_TOAST_ID,
-    });
-    // hydrate is the refresh boundary: success toast must follow it.
-    const hydrateOrder = hydrateConversationToStoreMock.mock.invocationCallOrder[0];
-    const successOrder = toastSuccessMock.mock.invocationCallOrder[0];
-    expect(hydrateOrder).toBeLessThan(successOrder);
+    // No hydrate — server state is unchanged on the propose-only path.
+    expect(hydrateConversationToStoreMock).not.toHaveBeenCalled();
+
+    const state = useWorkspaceStore.getState();
+    expect(state.hasDraft).toBe(true);
+    expect(state.draftOps).toHaveLength(1);
+    expect(state.draftTree).not.toBeNull();
+    // Script editor is populated with the proposal so the user can edit
+    // before Apply.
+    expect(state.scriptText.length).toBeGreaterThan(0);
+    // The script is the canonical proposal, not a user edit — Apply gates
+    // on `scriptDirty || hasDraft`, so we keep dirty=false here.
+    expect(state.scriptDirty).toBe(false);
+
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      expect.stringContaining('Extracted 1 op'),
+      expect.objectContaining({ id: EXTRACTION_TOAST_ID })
+    );
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('passes commit:false to runExtraction so the worker never writes yops_log', async () => {
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(runExtractionMock).toHaveBeenCalledWith(expect.objectContaining({ commit: false }));
   });
 
   it('expands the workspace even if workspaceStore.activeProjectId has not synced yet', async () => {

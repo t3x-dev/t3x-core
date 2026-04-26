@@ -42,18 +42,47 @@ describe('useScriptExecution', () => {
     hydrateMock.mockResolvedValue(undefined);
   });
 
-  it('disables Run when scriptDirty is false (post-extract mirror)', () => {
-    // Post-extract state: opsLog populated, script mirrors it, but the
-    // user has not edited. Re-running would duplicate-apply.
+  it('disables Apply when there is no draft and no manual edit', () => {
+    // Idle state: nothing un-applied, script mirrors committed yops_log.
     useWorkspaceStore.getState().setScriptDirty(false);
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(false);
-    expect(result.current.disabledReason).toBe('No script edits to run');
+    expect(result.current.disabledReason).toBe('No script edits to apply');
   });
 
-  it('enables Run after a manual edit flips scriptDirty', () => {
+  it('enables Apply after a manual edit flips scriptDirty', () => {
     useWorkspaceStore.getState().setScriptText('yops:\n  - {set: {path: foo, value: bar}}');
     useWorkspaceStore.getState().setScriptDirty(true);
+    const { result } = renderHook(() => useScriptExecution());
+    expect(result.current.canRun).toBe(true);
+    expect(result.current.disabledReason).toBeNull();
+  });
+
+  it('enables Apply when Extract has staged a draft (scriptDirty stays false)', () => {
+    // Propose-only Extract: useExtraction calls setDraft({ ops, tree })
+    // and leaves scriptDirty=false because the script is the canonical
+    // proposal, not a user edit. Apply must still be enabled — that's the
+    // whole point of the two-step flow.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().setScriptDirty(false);
+
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(true);
     expect(result.current.disabledReason).toBeNull();
@@ -95,15 +124,16 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('execute() itself refuses to commit when scriptDirty is false', async () => {
-    // Defense in depth: the Run button is disabled when scriptDirty=false,
-    // but the duplicate-apply footgun is severe enough that execute() must
-    // also short-circuit — a hotkey, test, or programmatic call shouldn't
-    // be able to bypass the UI gate and re-append the post-extract mirror.
+  it('execute() refuses to commit when there is no draft and no manual edit', async () => {
+    // Defense in depth: the Apply button is disabled in this state, but
+    // execute() may be reached via hotkeys, tests, or programmatic calls.
+    // Without `hasDraft || scriptDirty`, the script is just a mirror of
+    // committed state — re-applying would duplicate the ops in yops_log.
     useWorkspaceStore
       .getState()
       .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
     useWorkspaceStore.getState().setScriptDirty(false);
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -132,20 +162,38 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).not.toHaveBeenCalled();
   });
 
-  it('execute clears scriptDirty after a successful commit', async () => {
+  it('execute clears scriptDirty + draft state after a successful commit', async () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+    });
     useWorkspaceStore
       .getState()
       .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setScriptDirty(false);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
       await result.current.execute();
     });
 
-    // After commit + hydrate, the script is once again a mirror of yops_log.
-    // scriptDirty must reset so Run goes back to disabled — otherwise the
-    // next click would duplicate-apply.
-    expect(useWorkspaceStore.getState().scriptDirty).toBe(false);
+    // After Apply + hydrate, the draft is now part of yops_log. scriptDirty
+    // resets to false (the script is once again a mirror), and the local
+    // draft state is cleared so a second click is a no-op.
+    const after = useWorkspaceStore.getState();
+    expect(after.scriptDirty).toBe(false);
+    expect(after.hasDraft).toBe(false);
+    expect(after.draftOps).toEqual([]);
+    expect(after.draftTree).toBeNull();
   });
 });

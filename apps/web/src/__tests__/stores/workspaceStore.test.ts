@@ -117,6 +117,68 @@ describe('workspaceStore (state-only)', () => {
     expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(true);
   });
 
+  it('setDraft populates ops/tree and flips hasDraft; clearDraft resets all three', () => {
+    const previewTree: SemanticContent = {
+      trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }],
+      relations: [],
+    };
+    const draftOps = [
+      {
+        set: { path: 'trip/dest', value: 'HZ' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+        },
+      },
+    ];
+
+    useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
+    let s = useWorkspaceStore.getState();
+    expect(s.draftOps).toEqual(draftOps);
+    expect(s.draftTree).toEqual(previewTree);
+    expect(s.hasDraft).toBe(true);
+
+    useWorkspaceStore.getState().clearDraft();
+    s = useWorkspaceStore.getState();
+    expect(s.draftOps).toEqual([]);
+    expect(s.draftTree).toBeNull();
+    expect(s.hasDraft).toBe(false);
+  });
+
+  it('setDraft with empty ops leaves hasDraft false (avoids stale-draft button state)', () => {
+    // An extraction that returned zero ops is not a draft worth applying;
+    // hasDraft must stay false so Apply remains disabled.
+    useWorkspaceStore.getState().setDraft({ ops: [], tree: { trees: [], relations: [] } });
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+  });
+
+  it('reset clears the draft along with other conversation-scoped state', () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    expect(useWorkspaceStore.getState().hasDraft).toBe(true);
+
+    useWorkspaceStore.getState().reset();
+
+    const s = useWorkspaceStore.getState();
+    expect(s.hasDraft).toBe(false);
+    expect(s.draftOps).toEqual([]);
+    expect(s.draftTree).toBeNull();
+  });
+
   it('setPanelExpanded is a no-op without an active project', () => {
     // No setActiveProject — nothing should be written to the persisted map.
     useWorkspaceStore.getState().setPanelExpanded(true);

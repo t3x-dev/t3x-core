@@ -1,9 +1,13 @@
 /**
- * useExtraction — adapter hook for LLM extraction.
+ * useExtraction — adapter hook for LLM extraction (propose-only model).
  *
- * Wraps the extraction worker + LLM adapter (commands/yops/*) and re-hydrates
- * the conversation after a successful run. Components consume this hook
- * instead of reaching into @/commands directly.
+ * Wraps the extraction worker + LLM adapter (commands/yops/*). Calls
+ * `runExtraction({ commit: false })` so the worker validates + repairs the
+ * proposal but does NOT write to `yops_log`. The proposal lands in
+ * `workspaceStore.draftOps` + `draftTree` + `scriptText`; the user reviews
+ * (and optionally edits) in the script editor and clicks Apply to commit
+ * via `useScriptExecution`. This is the long-term "Extract = propose,
+ * Apply = persist" model from the workspace UX RFC.
  *
  * Toast lifecycle: every Extract attempt owns a single sonner slot
  * (`EXTRACTION_TOAST_ID`). The slot is dismissed at the start of every
@@ -12,20 +16,21 @@
  * earlier "extraction succeeded but the old red toast is still on screen
  * so it looks like it failed" failure mode.
  *
- * Refresh boundary: after the worker returns, `hydrateConversationToStore`
- * is the single source of truth for the post-extraction workspace state
- * (turns + opsLog + tree + sourceIndex + replay warnings). The success
- * toast fires only after hydrate resolves, so the user sees the new tree
- * and the confirmation in the same render.
+ * No hydration on the success path: nothing has been committed yet, so
+ * server state is unchanged. The success toast fires after the local
+ * draft is in place so the user sees the proposal and the confirmation
+ * in the same render.
  */
 
+import type { SemanticContent } from '@t3x-dev/core';
+import { applySourcedYOps } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
+import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
-import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -93,10 +98,11 @@ export function useExtraction({
 
       try {
         const turns = useWorkspaceStore.getState().turns;
-        await runExtraction({
+        const result = await runExtraction({
           baseTree: tree,
           conversationId: extractConvId,
           turns,
+          commit: false,
           llm: (input) =>
             callExtractionLLM({
               conversationId: extractConvId,
@@ -107,14 +113,38 @@ export function useExtraction({
             }),
         });
 
-        // hydrate is the single refresh boundary on the success path:
-        // turns + opsLog + tree + sourceIndex + replay warnings all come
-        // from server replay. The success toast fires only after this
-        // resolves so the user sees the new tree and the confirmation
-        // in the same paint.
-        await hydrateConversationToStore(projectId, extractConvId);
-        useWorkspaceStore.getState().setMode('idle');
-        toast.success('Extraction complete', { id: EXTRACTION_TOAST_ID });
+        // Propose-only success path: the worker returned validated/repaired
+        // ops without committing. Stage them as a draft for the user to
+        // review and Apply.
+        //
+        // Dry-run preview: apply the ops to a snapshot of the current tree
+        // so AfterPanel can render what the result would look like. This
+        // is in-memory only; nothing is persisted until Apply.
+        // applySourcedYOps is pure — we just discard the failure case
+        // (the worker already validated; if it somehow fails here it's a
+        // post-validation bug worth surfacing through the existing error
+        // path instead of crashing extraction).
+        const previewResult = applySourcedYOps(tree, result.ops);
+        // YOpsResult exposes trees + relations directly. On failure, fall
+        // back to the current tree — the worker already validated, so any
+        // failure here is a post-validation surprise; the script editor
+        // still surfaces the proposal and the user can choose to Apply
+        // (which will hit the same engine and report the real error).
+        const previewTree: SemanticContent = previewResult.ok
+          ? { trees: previewResult.trees, relations: previewResult.relations }
+          : tree;
+        const store = useWorkspaceStore.getState();
+        store.setDraft({ ops: result.ops, tree: previewTree });
+        store.setScriptText(serializeOpsToYaml(result.ops));
+        // The script is the canonical proposal — not "dirty" in the
+        // user-edited sense. Apply is gated on `scriptDirty || hasDraft`
+        // (see useScriptExecution), so this still enables the button.
+        store.setScriptDirty(false);
+        store.setMode('idle');
+        toast.success(
+          `Extracted ${result.ops.length} op${result.ops.length === 1 ? '' : 's'} — review and click Apply`,
+          { id: EXTRACTION_TOAST_ID }
+        );
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
         if (err instanceof ExtractionFailedError) {
