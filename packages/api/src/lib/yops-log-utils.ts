@@ -65,8 +65,6 @@ const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
  * Returns an empty `{ trees: [], relations: [] }` when:
  *   - the conversation doesn't exist,
  *   - the conversation has no committed entries yet (a fresh project).
- *
- * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §4, §6.2
  */
 export async function replayCommittedBaseline(
   db: AnyDB,

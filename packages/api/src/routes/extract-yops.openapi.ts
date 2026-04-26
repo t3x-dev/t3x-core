@@ -155,7 +155,6 @@ extractYopsRoutes.openapi(route, async (c) => {
     // Active draft entries (uncommitted yops_log rows) deliberately
     // never enter the prompt: re-extract is a *full recompute* of the
     // suggestion, not an "add more on top of the previous draft" step.
-    // See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §4.
     const baselineSnapshot = await replayCommittedBaseline(db, conversation_id);
     const mode = baselineSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 

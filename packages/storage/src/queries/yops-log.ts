@@ -128,8 +128,6 @@ export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise
  * the committed baseline (see `replayCommittedBaseline` in the api
  * package). Distinct from `listYOpsLogByConversation`, which returns
  * every entry (used by audit / GET /yops endpoints).
- *
- * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
  */
 export async function listActiveYOpsLogByConversation(
   db: AnyDB,
@@ -149,7 +147,7 @@ export async function listActiveYOpsLogByConversation(
  * just "new suggestion" in a single transaction.
  *
  * Single-statement SQL UPDATE with three filters in the WHERE clause
- * — all evaluated atomically, no read-then-update race:
+ * — all evaluated atomically against the snapshot at UPDATE time:
  *
  *   1. `conversation_id = $1` and `superseded_at IS NULL`
  *      — never touch other conversations; idempotent on already-
@@ -158,22 +156,25 @@ export async function listActiveYOpsLogByConversation(
  *   2. **Every** op in the row has `source.type === 'llm'`. Mixed
  *      rows (e.g. the drift `keep_both_together` handler that bundles
  *      LLM-extracted ops with a deterministic HumanSource `relate` op
- *      in the same yops_log row) are preserved unchanged. The RFC's
+ *      in the same yops_log row) are preserved unchanged. The
  *      load-bearing rule — Extract has no authority to overwrite
  *      HumanSource ops — applies at the row granularity. Implemented
  *      via `NOT jsonb_path_exists(... @.source.type != "llm")`: the
  *      row qualifies only when no op has a non-LLM source.
  *
  *   3. The row is NOT referenced by any commit in the conversation's
- *      project. Done as an inline NOT EXISTS subquery so a commit
- *      landing mid-transaction can't slip through the gap that an
- *      external `excludeIds` parameter would leave. Committed entries
- *      are part of the immutable baseline; this is the safety belt
- *      that backs the invariant.
+ *      project at UPDATE time. Inline NOT EXISTS subquery against
+ *      `commits.yops_log_ids` — committed entries are part of the
+ *      immutable baseline and never get marked superseded.
+ *
+ * Concurrency: this query is internally atomic, but it does NOT
+ * serialize against concurrent commit creation. A commit caller that
+ * snapshotted the active-draft id set just before this UPDATE runs
+ * may then write a now-superseded id into `commits.yops_log_ids`.
+ * That residual race is closed at the commit boundary itself by
+ * `createCommit`, which rejects superseded ids at insert time.
  *
  * Returns the ids that were marked, for caller observability / audit.
- *
- * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
  */
 export async function supersedeActiveLLMSuggestions(
   db: AnyDB,

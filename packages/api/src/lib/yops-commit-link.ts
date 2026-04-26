@@ -19,10 +19,13 @@ import { listActiveYOpsLogByConversation, listCommits } from '@t3x-dev/storage';
  * as a commit candidate. The commit would freeze those replaced
  * entries into `commits.yops_log_ids`, and on the next extract
  * `replayCommittedBaseline` would resurrect the replaced facts as
- * permanent baseline — exactly the contamination class the
- * suggestion-vs-baseline RFC was meant to eliminate.
+ * permanent baseline.
  *
- * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §4
+ * Concurrency note: this read is point-in-time. A re-extract landing
+ * between this call and the eventual `createCommit` could supersede
+ * an id we returned. `createCommit` defends against this directly by
+ * rejecting any `yops_log_ids` whose `superseded_at IS NOT NULL`
+ * at insert time.
  */
 export async function findUncommittedYOpsIds(
   db: AnyDB,

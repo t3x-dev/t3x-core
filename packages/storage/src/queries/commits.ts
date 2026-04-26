@@ -12,10 +12,28 @@ import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitRecord, commits } from '../schema-commits';
+import { yopsLog } from '../schema-trees';
 import { getSupersededHashes } from './commit-rewrites';
+
+/**
+ * Thrown by `createCommit` when the caller passes one or more
+ * `yops_log_ids` whose `superseded_at IS NOT NULL` at insert time.
+ * Indicates a re-extract landed between the caller's
+ * `findUncommittedYOpsIds()` snapshot and the commit's insert,
+ * marking entries that the caller still believed were active. The
+ * caller should re-fetch the active draft id set and retry.
+ */
+export class SupersededYOpsLogIdsError extends Error {
+  constructor(public readonly supersededIds: string[]) {
+    super(
+      `Cannot commit superseded yops_log entries (re-extract landed during commit): ${supersededIds.join(', ')}`
+    );
+    this.name = 'SupersededYOpsLogIdsError';
+  }
+}
 
 // ============================================================
 // Types
@@ -56,6 +74,26 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   const now = new Date().toISOString();
   const branch = input.branch ?? 'main';
 
+  // Defense in depth against the suggestion-vs-baseline contamination
+  // race: callers find candidate yops_log ids via a point-in-time read
+  // (e.g. `findUncommittedYOpsIds`), then later call here to write the
+  // commit. A re-extract running between those two steps can supersede
+  // ids the caller still thought were active. Without this check those
+  // ids would land in `commits.yops_log_ids` and become permanent
+  // baseline; the next replay would resurrect facts the user already
+  // replaced. Reject loudly so the caller can re-fetch the active set
+  // and retry.
+  const yopsLogIds = input.yops_log_ids ?? [];
+  if (yopsLogIds.length > 0) {
+    const superseded = await db
+      .select({ id: yopsLog.id })
+      .from(yopsLog)
+      .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
+    if (superseded.length > 0) {
+      throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
+    }
+  }
+
   // Compute hash from first-class fields
   const hash = computeCommitHash({
     schema: COMMIT_SCHEMA,
@@ -78,7 +116,7 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       message: input.message ?? null,
       branch,
       provenance: input.provenance ?? null,
-      yopsLogIds: input.yops_log_ids ?? [],
+      yopsLogIds,
       sources: input.sources ?? null,
     })
     .returning();

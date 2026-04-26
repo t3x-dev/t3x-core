@@ -895,10 +895,10 @@ export const yopsLog = pgTable(
      * window. NULL = active. Set by `supersedeActiveLLMSuggestions`
      * when a re-extract replaces the prior LLM suggestion. Never set
      * on committed entries — once an id appears in some commit's
-     * `yops_log_ids` it is part of the immutable baseline and stays
-     * `superseded_at = NULL` forever.
-     *
-     * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md
+     * `yops_log_ids` it is part of the immutable baseline and must
+     * stay `superseded_at = NULL` forever. `createCommit` defends
+     * this by rejecting any `yops_log_ids` whose `superseded_at IS
+     * NOT NULL` at insert time.
      */
     supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },

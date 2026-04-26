@@ -46,8 +46,6 @@ import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
  * superseded prior LLM suggestion is by definition no longer current.
  * The full audit history still lives in `yops_log` for the GET /yops
  * endpoint and replay diagnostics.
- *
- * See: docs/2026-04-26-extract-suggestion-vs-baseline-rfc.md §6.1
  */
 export async function syncYOpsToTrees(
   db: AnyDB,

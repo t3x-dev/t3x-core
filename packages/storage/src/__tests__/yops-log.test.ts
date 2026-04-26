@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommit } from '../queries/commits';
+import { createCommit, SupersededYOpsLogIdsError } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
 import {
@@ -369,6 +369,35 @@ describe('YOps Log Storage', () => {
       expect(firstIds).toEqual([llmEntry.id]);
       expect(secondIds).toEqual([]);
       expect(firstStamp?.getTime()).toBe(secondStamp?.getTime());
+    });
+
+    it('createCommit refuses yops_log_ids that have been superseded since the caller fetched them', async () => {
+      // Defense in depth against the residual concurrency race the
+      // review on this PR flagged: a re-extract can supersede ids
+      // between a commit caller's `findUncommittedYOpsIds` snapshot
+      // and the actual commit insert. Without this guard those ids
+      // would land in `commits.yops_log_ids` and `replayCommittedBaseline`
+      // would resurrect the replaced facts forever.
+      const convId = await freshConv();
+      const llmEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('replaced_fact')],
+      });
+      // Simulate the re-extract supersede landing between
+      // findUncommittedYOpsIds and createCommit.
+      await supersedeActiveLLMSuggestions(db, convId);
+
+      await expect(
+        createCommit(db, {
+          author: { type: 'human', name: 'test' },
+          content: { trees: [], relations: [] },
+          project_id: testProjectId,
+          message: 'race condition',
+          yops_log_ids: [llmEntry.id],
+        })
+      ).rejects.toBeInstanceOf(SupersededYOpsLogIdsError);
     });
 
     it('listActiveYOpsLogByConversation excludes superseded rows; full-list query still returns them', async () => {

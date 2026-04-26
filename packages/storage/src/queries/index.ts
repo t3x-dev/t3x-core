@@ -77,6 +77,7 @@ export {
   getLatestCommit,
   type ListCommitsOptions,
   listCommits,
+  SupersededYOpsLogIdsError,
   updateCommitMessage,
   updateCommitPosition,
 } from './commits';
