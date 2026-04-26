@@ -95,6 +95,43 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
   });
 
+  it('execute() itself refuses to commit when scriptDirty is false', async () => {
+    // Defense in depth: the Run button is disabled when scriptDirty=false,
+    // but the duplicate-apply footgun is severe enough that execute() must
+    // also short-circuit — a hotkey, test, or programmatic call shouldn't
+    // be able to bypass the UI gate and re-append the post-extract mirror.
+    useWorkspaceStore
+      .getState()
+      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().setScriptDirty(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('execute() refuses to commit while extraction is streaming', async () => {
+    // Same defense for the in-flight states. canRun gates the button on
+    // `mode !== streaming && mode !== committing`; mirror it inside
+    // execute() so a fast double-trigger can't slip through.
+    useWorkspaceStore
+      .getState()
+      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setMode('streaming');
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).not.toHaveBeenCalled();
+  });
+
   it('execute clears scriptDirty after a successful commit', async () => {
     useWorkspaceStore
       .getState()

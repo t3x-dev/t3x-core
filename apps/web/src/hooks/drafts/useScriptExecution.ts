@@ -52,6 +52,14 @@ export function useScriptExecution() {
     const projectId = useChatStore.getState().activeProjectId;
     if (!convId || !projectId) return;
 
+    // Defense in depth: the WorkspaceTopbar Run button gates on `canRun`, but
+    // execute() may be invoked from tests, hotkeys, or future callers that
+    // bypass the button. Re-check the same guards here so a direct call can
+    // never duplicate-apply the post-extract mirror or race a streaming /
+    // committing run.
+    if (store.mode === 'streaming' || store.mode === 'committing') return;
+    if (!store.scriptDirty) return;
+
     const parseResult = parseScript(store.scriptText);
     if (!parseResult.ok) {
       store.setError(`YAML parse error: ${parseResult.error}`);
