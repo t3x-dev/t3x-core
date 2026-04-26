@@ -48,6 +48,28 @@ function formatSlotValue(val: unknown): string {
   return String(val);
 }
 
+/**
+ * Whether the panel's Commit button should be disabled.
+ *
+ * Commit reads `workspaceStore.tree` (the committed/applied state), but the
+ * panel renders `draftTree` whenever `hasDraft` is true. Letting the button
+ * fire in that window would freeze the *pre-draft* tree under the user's
+ * eyes while the staged YOps still sit un-applied — what the user sees
+ * (preview) and what gets committed (committed tree) diverge. Forcing
+ * Apply / Discard first keeps those in sync.
+ *
+ * Exported so the regression test can pin the contract without mounting
+ * the full AfterPanel.
+ */
+export function shouldDisableCommit(input: {
+  hasResult: boolean;
+  isCommitting: boolean;
+  isCommitted: boolean;
+  hasDraft: boolean;
+}): boolean {
+  return !input.hasResult || input.isCommitting || input.isCommitted || input.hasDraft;
+}
+
 function summarizeVisibleDiff(diff: TreeDiffResult | null): {
   addedRows: number;
   modifiedRows: number;
@@ -816,7 +838,22 @@ export function AfterPanel({
               setCommitMessage(getDefaultCommitName());
               setShowCommitDialog(true);
             }}
-            disabled={!hasResult || isCommitting || isCommitted}
+            // Commit reads workspaceStore.tree (committed state), but the
+            // panel renders draftTree when hasDraft. Allowing Commit in
+            // that window would freeze the *pre-draft* tree under the
+            // user's eyes while the staged YOps still sit un-applied \u2014
+            // they'd see preview, click Commit, and end up with a
+            // commit that doesn't match anything on screen.
+            // The user must Apply (or Discard) the draft first; this
+            // button reactivates once hasDraft flips back to false.
+            disabled={shouldDisableCommit({ hasResult, isCommitting, isCommitted, hasDraft })}
+            title={
+              hasDraft
+                ? 'Apply or Discard the staged draft before committing'
+                : isCommitted
+                  ? 'Already committed'
+                  : undefined
+            }
             className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--commit)] px-3 py-2 text-[11px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             {isCommitting ? 'Committing...' : '\u2192 Commit'}
