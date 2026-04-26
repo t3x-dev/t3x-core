@@ -1166,7 +1166,7 @@ describe('extractors/v2 pipeline', () => {
       expect(system).not.toMatch(/Concise budget/i);
     });
 
-    it('concise style adds a hard 6-item budget + single-tree shape rule', async () => {
+    it('concise style adds the configured item budget + single-tree shape rule', async () => {
       const { captured, provider } = captureSystem();
       await runExtractionV2Pipeline({
         turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
@@ -1179,17 +1179,72 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'conservative',
           tier3: 'extract',
+          max_items: 6,
         },
       });
       const system = captured.system ?? '';
       // Style summary line is present.
       expect(system).toMatch(/Extraction mode: concise/i);
-      // Hard 6-item ceiling — concise must not produce 60-op outputs.
+      // Item budget cites the configured max_items, not a hardcoded value.
       expect(system).toMatch(/at most ~6 items/i);
       // Single-tree shape rule — direct fix for the "17 parallel root
       // nodes" failure mode in the Sony camera reproduction.
       expect(system).toMatch(/path prefix/i);
       expect(system).toMatch(/cameras\/sony/i);
+    });
+
+    it('concise prompt reflects a custom max_items when caller overrides the preset', async () => {
+      // Direct/custom callers can pass max_items=10 with concise. Prompt
+      // and deterministic selection must agree on the number — otherwise
+      // the model is told 6 while selection keeps 10 (or vice versa).
+      // This was the original drift the reviewer flagged.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          max_items: 10,
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/at most ~10 items/i);
+      expect(system).not.toMatch(/at most ~6 items/i);
+    });
+
+    it('concise style without max_items softens the wording (no false hard limit)', async () => {
+      // Custom config: granularity 'concise' but no cap. The selection
+      // step is a no-op, so the prompt must NOT claim a hard ceiling
+      // — that would mislead the model with a number we don't enforce.
+      const { captured, provider } = captureSystem();
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: {
+          granularity: 'concise',
+          quote_length: 'representative',
+          update_stance: 'conservative',
+          tier3: 'extract',
+          // max_items intentionally omitted
+        },
+      });
+      const system = captured.system ?? '';
+      expect(system).toMatch(/Extraction mode: concise/i);
+      // No specific item count claimed.
+      expect(system).not.toMatch(/at most ~\d+ items/i);
+      // But the qualitative direction stays — concise still means brief,
+      // single-tree, skip-secondary-specs.
+      expect(system).toMatch(/Be brief|highest-signal facts/i);
+      expect(system).toMatch(/path prefix/i);
     });
 
     it('detailed style asks for nuance under existing tree paths', async () => {
