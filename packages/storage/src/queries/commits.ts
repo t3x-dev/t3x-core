@@ -122,18 +122,19 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   // serialises the entire critical section between extract-side
   // supersede and commit-side validation+insert.
   //
-  // Why advisory (and not row-level FOR SHARE): under PG READ
+  // Why advisory (and not row-level locking): under PG READ
   // COMMITTED, a waiting UPDATE re-evaluates the WHERE predicate
   // only against the locked row — its subqueries over OTHER tables
   // (here, `commits`) keep using the original statement snapshot.
-  // So a `FOR SHARE` on yops_log rows would not have caused the
-  // supersede's `NOT EXISTS (... commits ...)` to see our newly-
-  // inserted commit row, and the row could be marked superseded
-  // even after we committed referencing it. Advisory lock takes that
-  // ambiguity off the table by serialising the two paths outright.
+  // So even a `FOR UPDATE` / `FOR SHARE` on yops_log rows would not
+  // have caused the supersede's `NOT EXISTS (... commits ...)` to
+  // see our newly-inserted commit row, and the row could be marked
+  // superseded after we committed referencing it. Advisory lock
+  // takes that ambiguity off the table by serialising the two paths
+  // outright.
   //
   // Sequence inside the transaction:
-  //   1. pg_advisory_xact_lock(ssvb, hashtext(projectId)) —
+  //   1. pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, hashtext(projectId)) —
   //      blocks any concurrent supersede on this project.
   //   2. SELECT for already-superseded ids. If any, throw —
   //      caller raced *before* we acquired the lock; their snapshot

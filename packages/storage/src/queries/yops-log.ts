@@ -178,85 +178,96 @@ export async function acquireProjectSupersedeLock(db: AnyDB, projectId: string):
   );
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
+// vary by adapter; the runtime contract (transaction(fn)) is uniform.
+type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
+
 /**
  * Mark active-draft, **all-LLM** entries for the conversation as
  * superseded. Called atomically with the new extract entry's insert
  * so the workspace flips from "old suggestion + new suggestion" to
  * just "new suggestion" in a single transaction.
  *
- * Acquires `acquireProjectSupersedeLock` first, then runs a single
- * SQL UPDATE with three filters:
+ * The function **always wraps its work in a database transaction**
+ * (or, when the caller already passes a `tx`, opens a savepoint).
+ * The wrap is what makes `pg_advisory_xact_lock` meaningful:
+ * `_xact_` advisory locks live for the surrounding transaction, so
+ * if this ran outside a tx the lock would be released after the
+ * SELECT statement that acquired it and the subsequent UPDATE would
+ * race. Enforcing the wrap here makes the advisory-lock contract a
+ * property of the function, not a discipline the caller has to
+ * remember.
  *
- *   1. `conversation_id = $1` and `superseded_at IS NULL`
- *      — never touch other conversations; idempotent on already-
- *      superseded rows.
+ * When called from inside an existing transaction (the
+ * `yopsApplyOp` case: supersede + insert + tree sync share one tx),
+ * Drizzle creates a savepoint here. The advisory lock acquired
+ * during the savepoint is bound to the *enclosing* top-level tx
+ * per PostgreSQL semantics, so it stays held across the subsequent
+ * insert + tree sync — the atomicity guarantee the caller wants is
+ * preserved.
  *
- *   2. **Every** op in the row has `source.type === 'llm'`. Mixed
- *      rows (e.g. the drift `keep_both_together` handler that bundles
- *      LLM-extracted ops with a deterministic HumanSource `relate` op
- *      in the same yops_log row) are preserved unchanged. The
- *      load-bearing rule — Extract has no authority to overwrite
- *      HumanSource ops — applies at the row granularity. Implemented
- *      via `NOT jsonb_path_exists(... @.source.type != "llm")`: the
- *      row qualifies only when no op has a non-LLM source.
+ * Sequence inside the wrapping tx:
  *
- *   3. The row is NOT referenced by any commit in the conversation's
- *      project. Inline NOT EXISTS subquery against
- *      `commits.yops_log_ids`. Combined with the advisory lock above,
- *      the subquery sees a stable view of `commits` for the duration
- *      of the critical section.
+ *   1. Look up project_id from conversations (immutable mapping).
+ *   2. `pg_advisory_xact_lock(SUPERSEDE_LOCK_NAMESPACE, hashtext(projectId))`
+ *      blocks any concurrent createCommit on the same project.
+ *   3. Single SQL UPDATE filters by:
+ *      - `conversation_id` and `superseded_at IS NULL` (idempotent)
+ *      - **Every** op has `source.type === 'llm'` (mixed rows with a
+ *        HumanSource op are preserved — Extract has no authority to
+ *        overwrite manual edits).
+ *      - Row is NOT referenced by any commit in the project (NOT
+ *        EXISTS against `commits.yops_log_ids`). Combined with the
+ *        advisory lock, the subquery sees a stable view of `commits`
+ *        for the duration of the critical section.
  *
- * Returns the ids that were marked, for caller observability / audit.
- *
- * Caller contract: must run inside a transaction so the advisory
- * lock is xact-scoped. `yopsApplyOp` already wraps the supersede +
- * insert + tree sync in one tx.
+ * Returns the ids that were marked.
  */
 export async function supersedeActiveLLMSuggestions(
   db: AnyDB,
   conversationId: string
 ): Promise<string[]> {
-  // Acquire the per-project advisory lock first. Looking up the
-  // project from the conversation is a cheap point-read; the lookup
-  // is fine outside the lock since the conversation→project mapping
-  // is immutable after creation.
-  const projectRow = await db.execute<{ project_id: string }>(
-    sql`SELECT project_id FROM conversations WHERE conversation_id = ${conversationId}`
-  );
-  const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
-    ? (projectRow as Array<{ project_id: string }>)
-    : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
-  const projectId = projectRows[0]?.project_id;
-  if (!projectId) return []; // conversation doesn't exist; nothing to supersede
+  return (await (db as unknown as TxRunner).transaction(async (tx) => {
+    // Look up project_id (immutable mapping). Reading inside the tx
+    // (vs. before opening it) keeps the function self-contained.
+    const projectRow = await (tx as AnyDB).execute<{ project_id: string }>(
+      sql`SELECT project_id FROM conversations WHERE conversation_id = ${conversationId}`
+    );
+    const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
+      ? (projectRow as Array<{ project_id: string }>)
+      : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
+    const projectId = projectRows[0]?.project_id;
+    if (!projectId) return []; // conversation doesn't exist; nothing to supersede
 
-  await acquireProjectSupersedeLock(db, projectId);
+    await acquireProjectSupersedeLock(tx as AnyDB, projectId);
 
-  const result = await db.execute<{ id: string }>(sql`
-    UPDATE ${yopsLog}
-    SET superseded_at = NOW()
-    WHERE ${yopsLog.id} IN (
-      SELECT yl.id
-      FROM ${yopsLog} yl
-      WHERE yl.conversation_id = ${conversationId}
-        AND yl.superseded_at IS NULL
-        AND jsonb_typeof(yl.yops) = 'array'
-        AND NOT jsonb_path_exists(
-          yl.yops,
-          '$[*] ? (@.source.type != "llm")'
-        )
-        AND NOT EXISTS (
-          SELECT 1
-          FROM commits c
-          INNER JOIN conversations conv ON conv.project_id = c.project_id
-          WHERE conv.conversation_id = ${conversationId}
-            AND c.yops_log_ids @> jsonb_build_array(yl.id)
-        )
-    )
-    RETURNING ${yopsLog.id}
-  `);
+    const result = await (tx as AnyDB).execute<{ id: string }>(sql`
+      UPDATE ${yopsLog}
+      SET superseded_at = NOW()
+      WHERE ${yopsLog.id} IN (
+        SELECT yl.id
+        FROM ${yopsLog} yl
+        WHERE yl.conversation_id = ${conversationId}
+          AND yl.superseded_at IS NULL
+          AND jsonb_typeof(yl.yops) = 'array'
+          AND NOT jsonb_path_exists(
+            yl.yops,
+            '$[*] ? (@.source.type != "llm")'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM commits c
+            INNER JOIN conversations conv ON conv.project_id = c.project_id
+            WHERE conv.conversation_id = ${conversationId}
+              AND c.yops_log_ids @> jsonb_build_array(yl.id)
+          )
+      )
+      RETURNING ${yopsLog.id}
+    `);
 
-  const rows: Array<{ id: string }> = Array.isArray(result)
-    ? (result as Array<{ id: string }>)
-    : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
-  return rows.map((r) => r.id);
+    const rows: Array<{ id: string }> = Array.isArray(result)
+      ? (result as Array<{ id: string }>)
+      : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
+    return rows.map((r) => r.id);
+  })) as string[];
 }

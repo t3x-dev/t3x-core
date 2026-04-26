@@ -13,13 +13,14 @@
  *
  * When `replaceActiveLLMDraft: true`, the supersede step runs *inside*
  * the same DB transaction as the insert + sync. The supersede query
- * is a single SQL UPDATE whose WHERE clause excludes any row that is
- * already referenced by a project commit *at UPDATE time*. It does
- * NOT serialise against new commit creation — that boundary is held
- * separately by `createCommit`, which acquires a FOR SHARE row lock
- * on the input yops_log_ids and re-validates `superseded_at IS NULL`
- * before insert. The two paths combined keep committed entries
- * immutable in baseline; this op alone is not sufficient.
+ * also acquires a per-project advisory transaction lock
+ * (`pg_advisory_xact_lock`) on the way in, which is shared with
+ * `createCommit`'s race-closing branch. The two paths serialise on
+ * that lock for the duration of their respective transactions, so a
+ * commit creation that references active yops_log_ids cannot
+ * interleave with the supersede in a way that leaves a row both
+ * committed AND marked superseded. Neither side alone is sufficient
+ * — the contract lives in the pair.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
