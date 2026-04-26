@@ -254,4 +254,102 @@ describe('useExtraction', () => {
     expect(selectPanelExpanded(state)).toBe(true);
     expect(state.panelExpandedByProject.proj_123).toBe(true);
   });
+
+  it('blocks Extract when scriptDirty is true and the user declines the overwrite confirm', async () => {
+    // P2 regression: in the propose-only model the script editor is the
+    // review surface, so re-extracting on top of dirty manual edits would
+    // silently destroy the user's YAML. handleExtract must surface a
+    // confirm and bail when the user declines.
+    const dirtyEdit = `yops:\n  - set:\n      path: trip/budget\n      value: ten thousand dollars  # my edit\n`;
+    useWorkspaceStore.getState().setScriptText(dirtyEdit);
+    useWorkspaceStore.getState().setScriptDirty(true);
+    const confirmOverwrite = vi.fn().mockReturnValue(false);
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+        confirmOverwrite,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(confirmOverwrite).toHaveBeenCalled();
+    // Worker not invoked, dirty edit preserved verbatim.
+    expect(runExtractionMock).not.toHaveBeenCalled();
+    const state = useWorkspaceStore.getState();
+    expect(state.scriptText).toBe(dirtyEdit);
+    expect(state.scriptDirty).toBe(true);
+    expect(state.hasDraft).toBe(false);
+  });
+
+  it('proceeds (and overwrites) when the user accepts the overwrite confirm', async () => {
+    useWorkspaceStore.getState().setScriptText('user dirty edit');
+    useWorkspaceStore.getState().setScriptDirty(true);
+    const confirmOverwrite = vi.fn().mockReturnValue(true);
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+        confirmOverwrite,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(confirmOverwrite).toHaveBeenCalled();
+    expect(runExtractionMock).toHaveBeenCalled();
+    const state = useWorkspaceStore.getState();
+    expect(state.scriptText).not.toBe('user dirty edit');
+    // Re-extract clears scriptDirty since the canonical proposal replaces
+    // the user's edit.
+    expect(state.scriptDirty).toBe(false);
+    expect(state.hasDraft).toBe(true);
+  });
+
+  it('does not prompt when scriptDirty is false (replacing a previous draft is fine)', async () => {
+    // Replacing a previous LLM proposal with a fresh one is the natural
+    // retry flow — no confirm needed. Only dirty manual edits trigger
+    // the prompt.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'old', value: 'proposal' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'old' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    useWorkspaceStore.getState().setScriptDirty(false);
+    const confirmOverwrite = vi.fn().mockReturnValue(false);
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+        confirmOverwrite,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(confirmOverwrite).not.toHaveBeenCalled();
+    expect(runExtractionMock).toHaveBeenCalled();
+  });
 });

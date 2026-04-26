@@ -585,6 +585,15 @@ export function AfterPanel({
   const handleDiscard = useCallback(async () => {
     const convId = useWorkspaceStore.getState().conversationId;
     if (!projectId || !convId || isCommitting) return;
+    // Discard means "throw away anything un-applied". hydrate alone only
+    // refreshes server state — the local draft (preview tree, draftOps,
+    // hasDraft, scriptText, scriptDirty) would survive and stay
+    // applicable, letting the user Apply a draft they thought was gone.
+    // Clear all of that here before re-hydrating.
+    const store = useWorkspaceStore.getState();
+    store.clearDraft();
+    store.setScriptText('');
+    store.setScriptDirty(false);
     await hydrateConversationToStore(projectId, convId);
     useWorkspaceStore.getState().clearSelection();
     useWorkspaceStore.getState().setMode('idle');
@@ -684,6 +693,14 @@ export function AfterPanel({
                   />
                 );
 
+              // While a draft is staged, this view is a *preview* of the
+              // un-applied script — not the live committed tree. Inline
+              // gold-edit handlers (`useGoldEdit.applyEdit`) write
+              // straight to yops_log against the committed workspace,
+              // bypassing the script/Apply flow and leaving the staged
+              // script stale relative to what just changed. Disable them
+              // here; the user should edit the YAML or click Apply first.
+              const allowInlineEdit = !hasDraft;
               const afterCell =
                 row.kind === 'node' ? (
                   <NodeCell
@@ -693,9 +710,13 @@ export function AfterPanel({
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path })}
                     onClear={clearSelection}
-                    onAddChild={row.afterNode ? () => handleAddChild(row.path) : undefined}
+                    onAddChild={
+                      allowInlineEdit && row.afterNode ? () => handleAddChild(row.path) : undefined
+                    }
                     onDeleteNode={
-                      row.afterNode ? () => handleDeleteNode(row.path, row.nodeKey) : undefined
+                      allowInlineEdit && row.afterNode
+                        ? () => handleDeleteNode(row.path, row.nodeKey)
+                        : undefined
                     }
                   />
                 ) : (
@@ -708,12 +729,12 @@ export function AfterPanel({
                     onSelect={() => select('after', { nodePath: row.path, slotKey: row.slotKey })}
                     onClear={clearSelection}
                     onDelete={
-                      row.afterValue !== null
+                      allowInlineEdit && row.afterValue !== null
                         ? () => handleDeleteSlot(row.path, row.slotKey)
                         : undefined
                     }
                     onEdit={
-                      row.afterValue !== null
+                      allowInlineEdit && row.afterValue !== null
                         ? (newValue) => handleEditSlot(row.path, row.slotKey, newValue)
                         : undefined
                     }

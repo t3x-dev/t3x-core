@@ -46,12 +46,28 @@ interface UseExtractionParams {
   resolvedConversationId: string | undefined;
   selectedProvider?: string | null;
   selectedModel?: string | null;
+  /**
+   * Confirm callback invoked before Extract overwrites a dirty manual edit
+   * in the script editor (`scriptDirty === true`). Returning `false`
+   * cancels the extraction. Default: `window.confirm` with a fixed prompt.
+   * Tests inject their own to avoid a blocking dialog.
+   */
+  confirmOverwrite?: () => boolean;
+}
+
+const DEFAULT_OVERWRITE_PROMPT =
+  'You have unsaved edits in the script editor. Re-running Extract will overwrite them. Continue?';
+
+function defaultConfirmOverwrite(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.confirm(DEFAULT_OVERWRITE_PROMPT);
 }
 
 export function useExtraction({
   resolvedConversationId,
   selectedProvider,
   selectedModel,
+  confirmOverwrite = defaultConfirmOverwrite,
 }: UseExtractionParams) {
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const tree = useWorkspaceStore((s) => s.tree);
@@ -79,6 +95,17 @@ export function useExtraction({
         toast.message('Loading conversation context — try Extract again in a moment.', {
           id: EXTRACTION_TOAST_ID,
         });
+        return;
+      }
+
+      // Don't silently nuke a dirty manual edit in the script editor.
+      // Re-extracting with `scriptDirty=true` would overwrite the user's
+      // YAML with the new LLM proposal — direct data loss in the
+      // visible refactor path. A fresh draft (hasDraft=true, scriptDirty
+      // false) is a different case: that's the previous proposal, replacing
+      // it with a new one is the natural retry flow and doesn't need a
+      // confirm. So we only gate on scriptDirty.
+      if (useWorkspaceStore.getState().scriptDirty && !confirmOverwrite()) {
         return;
       }
 
@@ -169,7 +196,7 @@ export function useExtraction({
         }
       }
     },
-    [resolvedConversationId, isExtracting, selectedProvider, selectedModel]
+    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite]
   );
 
   // Back-compat return shape for existing callers:
