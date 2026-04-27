@@ -493,7 +493,13 @@ export function AfterPanel({
   // cleared on Apply or Discard.
   const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
+  // (un-applied LLM proposal). The footer next to Discard / Commit
+  // was the leftover ambiguous count after PR #904 covered the
+  // header — kept reading 'N ops' regardless of whether what's
+  // visible is committed history or a staged preview.
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
+  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
@@ -837,8 +843,15 @@ export function AfterPanel({
         className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3"
         style={{ height: TREE_FOOTER_HEIGHT }}
       >
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)] truncate">
-          {opsCount} ops
+        <span
+          className="text-[9px] font-mono text-[var(--text-tertiary)] truncate"
+          title={
+            hasDraft
+              ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+              : `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log`
+          }
+        >
+          {opsCount} committed{hasDraft ? ` · ${draftCount} draft` : ''}
           {diff && (
             <>
               {' · '}
