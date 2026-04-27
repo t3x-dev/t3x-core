@@ -630,6 +630,50 @@ describe('workspaceStore (state-only)', () => {
       // scriptText is derived from ops, not the empty persisted value.
       expect(s.scriptText).toContain('trip/dest');
       expect(s.scriptText).toContain('HZ');
+      // Derived script + scriptDirty=false from snapshot stays false.
+      // The next test covers the case where the snapshot itself was
+      // doubly inconsistent (scriptDirty=true alongside empty
+      // scriptText) and the dirty flag must NOT be restored.
+      expect(s.scriptDirty).toBe(false);
+    });
+
+    it('restoreDraftFor clears stale scriptDirty when scriptText is derived from ops', () => {
+      // P3 from the #918 review: a persisted snapshot can be doubly
+      // inconsistent — `{ ops: non-empty, scriptText: '', scriptDirty:
+      // true }`. The empty scriptText is already treated as a missing
+      // mirror (derived from ops); the dirty flag is correspondingly
+      // stale, since there's no actual user edit to mark. Restoring
+      // `scriptDirty: true` against a derived script would surface an
+      // overwrite-confirm prompt on the next re-extract for content
+      // the user never typed.
+      //
+      // Contract: derive both scriptText AND scriptDirty when the
+      // persisted scriptText is empty. Preserve snapshot.scriptDirty
+      // verbatim ONLY on the preserve-real-edit branch.
+      useWorkspaceStore.setState({
+        draftsByConversation: {
+          conv_doubly_inconsistent: {
+            ops: draftOps,
+            scriptText: '',
+            scriptDirty: true,
+          },
+        },
+      });
+      useWorkspaceStore.getState().setConversation('conv_doubly_inconsistent');
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [],
+      });
+
+      useWorkspaceStore.getState().restoreDraftFor('conv_doubly_inconsistent');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toContain('trip/dest');
+      // The load-bearing assertion: dirty flag was NOT restored from
+      // the persisted snapshot. The derived script is canonical, not
+      // a manual edit.
+      expect(s.scriptDirty).toBe(false);
     });
 
     it('restoreDraftFor preserves a non-empty persisted scriptText (real edit not overwritten)', () => {

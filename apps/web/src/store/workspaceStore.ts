@@ -589,17 +589,26 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         // preview, and the committed-mirror gate in useScriptExecution
         // would not fire because hasDraft is true. Treat empty
         // scriptText as a missing mirror and reconstruct it from ops.
-        const restoredScriptText =
-          snapshot.scriptText.trim() === ''
-            ? serializeOpsToYaml(snapshot.ops)
-            : snapshot.scriptText;
+        //
+        // When we derive scriptText, the persisted scriptDirty flag is
+        // stale too: there is no actual user edit to mark, the
+        // canonical YAML mirror is what's now in the editor. Restoring
+        // `scriptDirty: true` against a derived script would surface
+        // an overwrite-confirm prompt on the next re-extract for
+        // content the user never typed. The dirty flag is preserved
+        // verbatim ONLY on the preserve-real-edit branch.
+        const persistedScriptIsEmpty = snapshot.scriptText.trim() === '';
+        const restoredScriptText = persistedScriptIsEmpty
+          ? serializeOpsToYaml(snapshot.ops)
+          : snapshot.scriptText;
+        const restoredScriptDirty = persistedScriptIsEmpty ? false : snapshot.scriptDirty;
 
         set({
           draftOps: snapshot.ops,
           draftTree: previewTree,
           hasDraft: true,
           scriptText: restoredScriptText,
-          scriptDirty: snapshot.scriptDirty,
+          scriptDirty: restoredScriptDirty,
         });
         return true;
       },
