@@ -9,8 +9,8 @@ import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
 import * as api from '@/infrastructure';
 import type { Citation } from '@/infrastructure/chat';
-import { useChatStore } from '@/store/chatStore';
 import { useChatSessionStore } from '@/store/chatSessionStore';
+import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import type { AttachedImage } from '@/types/chat';
 
