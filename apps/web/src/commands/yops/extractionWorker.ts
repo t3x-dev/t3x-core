@@ -9,7 +9,13 @@
  * exhaustion so LLM self-repair remains the primary path.
  */
 
-import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
+import type {
+  ExtractionFailure,
+  ExtractionFailureCode,
+  SemanticContent,
+  SourcedYOp,
+  ValidationTurn,
+} from '@t3x-dev/core';
 // normalize/repair/validate moved to server-side core pipeline
 // (runExtractionV2Pipeline handles source provenance after compile).
 // Web no longer re-runs them — the API contract already guarantees
@@ -74,6 +80,52 @@ function pickReason(failingOps: RetryFailingOp[]): ExtractionFailedError['reason
   return 'exhausted_retries';
 }
 
+/**
+ * Map a typed server-side ExtractionFailure code onto the web's
+ * ExtractionFailedError reason. The reason drives the dedicated UI
+ * message branch in useExtraction (e.g. "could not verify N slot(s)").
+ *
+ * Codes without a dedicated UI string fall through to 'llm_error',
+ * which produces "Extraction failed (<code>): <message>" — generic but
+ * still includes the typed code for diagnostics.
+ */
+function mapApiFailureToReason(code: ExtractionFailureCode): ExtractionFailedError['reason'] {
+  if (code === 'unverifiable_quote') return 'unverifiable_quote';
+  if (code === 'provenance') return 'missing_source';
+  if (code === 'compile' || code === 'executable_structure') return 'invalid_structure';
+  return 'llm_error';
+}
+
+/**
+ * Build a synthetic RetryFailingOp[] from a server failure's structured
+ * details so the web's ExtractionFailedError carries the same per-op
+ * count the API saw. Currently only `unverifiable_quote` ships with
+ * structured details; other codes return an empty array, which still
+ * gives the UI a stable shape to read.
+ *
+ * The synthetic ops have minimal valid shape — `op` is a stub since we
+ * don't ship the full op back over the wire. UI message paths only read
+ * `failingOps.length`; future deeper UX (per-op highlight) can switch
+ * to reading the typed `details.failingOps` directly.
+ */
+function synthesiseFailingOpsFromApi(failure: ExtractionFailure): RetryFailingOp[] {
+  if (failure.code !== 'unverifiable_quote') return [];
+  const detail = failure.details?.failingOps;
+  if (!Array.isArray(detail)) return [];
+  return detail.map((entry) => {
+    const e = entry as { opIndex?: number; path?: string; turnTag?: string; badQuote?: string };
+    return {
+      // Stub op — the worker doesn't have the original SourcedYOp here.
+      // UI doesn't dereference this for unverifiable_quote, but the
+      // shape needs to be present so future readers don't NPE.
+      op: {} as SourcedYOp,
+      opIndex: typeof e.opIndex === 'number' ? e.opIndex : 0,
+      reason: 'unverifiable_quote' as const,
+      detail: e.path && e.turnTag ? `path "${e.path}" (turn ${e.turnTag})` : undefined,
+    };
+  });
+}
+
 export async function runExtraction({
   baseTree,
   conversationId,
@@ -114,7 +166,21 @@ export async function runExtraction({
           attempt >= retryDecision.maxAttempts ||
           attempt > MAX_RETRIES;
         if (exhausted) {
-          throw new ExtractionFailedError([], attempt, 'llm_error', e.message, e.failure.code);
+          // Map typed server failure codes onto the web ExtractionFailedError
+          // `reason` so useExtraction can render the dedicated UI string
+          // (e.g. "could not verify N slot(s)") instead of the generic
+          // "Extraction failed (unverifiable_quote): ...". Codes without a
+          // dedicated branch fall through to 'llm_error'.
+          //
+          // For unverifiable_quote we also surface a synthetic failingOps
+          // array carrying just the count + per-op identifiers from the
+          // API failure's `details.failingOps`. The UI only reads
+          // `failingOps.length`, but keeping the shape stable means future
+          // UI features (per-op highlight, "show me which quote was bad")
+          // can read the structured data without another wire round-trip.
+          const reason = mapApiFailureToReason(e.failure.code);
+          const failingOps = synthesiseFailingOpsFromApi(e.failure);
+          throw new ExtractionFailedError(failingOps, attempt, reason, e.message, e.failure.code);
         }
         continue;
       }
