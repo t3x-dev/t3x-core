@@ -597,6 +597,69 @@ describe('workspaceStore (state-only)', () => {
       expect(s.draftTree?.trees[0]?.slots.dest).toBe('HZ');
     });
 
+    it('restoreDraftFor derives scriptText from ops when persisted snapshot has empty scriptText (PR-D hardening)', () => {
+      // A persisted snapshot with non-empty ops but `scriptText: ''` is
+      // structurally inconsistent — restoring it as-is would produce
+      // `hasDraft=true` with an empty editor while AfterPanel renders
+      // the draft preview tree, AND the committed-mirror gate in
+      // useScriptExecution would skip (because hasDraft is true). The
+      // restore path defends against this by deriving scriptText from
+      // serializeOpsToYaml(ops) whenever the persisted scriptText is
+      // empty/whitespace.
+      useWorkspaceStore.setState({
+        draftsByConversation: {
+          conv_inconsistent: {
+            ops: draftOps,
+            scriptText: '',
+            scriptDirty: false,
+          },
+        },
+      });
+      useWorkspaceStore.getState().setConversation('conv_inconsistent');
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [],
+      });
+
+      const restored = useWorkspaceStore.getState().restoreDraftFor('conv_inconsistent');
+
+      expect(restored).toBe(true);
+      const s = useWorkspaceStore.getState();
+      expect(s.hasDraft).toBe(true);
+      // scriptText is derived from ops, not the empty persisted value.
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptText).toContain('HZ');
+    });
+
+    it('restoreDraftFor preserves a non-empty persisted scriptText (real edit not overwritten)', () => {
+      // Inverse of the PR-D hardening: when the persisted scriptText
+      // has actual content, restore it verbatim — that may be a manual
+      // edit the user wants back, distinct from what
+      // serializeOpsToYaml(ops) would produce.
+      useWorkspaceStore.setState({
+        draftsByConversation: {
+          conv_real_edit: {
+            ops: draftOps,
+            scriptText: 'yops:\n  - {set: {path: hand/typed, value: x}}\n',
+            scriptDirty: true,
+          },
+        },
+      });
+      useWorkspaceStore.getState().setConversation('conv_real_edit');
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [],
+      });
+
+      useWorkspaceStore.getState().restoreDraftFor('conv_real_edit');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toBe('yops:\n  - {set: {path: hand/typed, value: x}}\n');
+      expect(s.scriptDirty).toBe(true);
+    });
+
     it('restoreDraftFor with empty ops snapshot is a no-op (avoids stale-draft state)', () => {
       // Defensive: a corrupted snapshot with empty ops shouldn't flip
       // hasDraft true or change anything. setDraft also rejects empty

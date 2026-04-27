@@ -63,6 +63,141 @@ describe('useScriptExecution', () => {
     expect(result.current.disabledReason).toBeNull();
   });
 
+  describe('committed-mirror gate (PR-D: blank-dirty-script coherence)', () => {
+    // The mirror effect writes `serializeOpsToYaml(opsLog) → scriptText`
+    // when no draft is staged. The pre-PR-D gate skipped any time
+    // `scriptDirty` was true, even when the dirty content was empty.
+    // That allowed an in-session state where:
+    //   hasDraft=false, opsLog.length>0, scriptDirty=true, scriptText=''
+    // left the editor blank while AfterPanel rendered the committed
+    // result — a UI coherence violation, fixable without compromising
+    // protection of real manual edits.
+    const sampleOps = [
+      {
+        set: { path: 'trip/dest', value: 'HZ' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+        },
+      },
+    ];
+
+    function seedCommitted(ops: typeof sampleOps): void {
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: ops as never,
+      });
+    }
+
+    it('repopulates Script from committed ops when scriptDirty is set but scriptText is blank', () => {
+      // The exact incoherent state the PR is targeting. Mirror should
+      // run, write the YAML, AND clear the stale scriptDirty flag (an
+      // empty dirty marker isn't meaningful manual content to preserve).
+      seedCommitted(sampleOps);
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptText).toContain('HZ');
+      expect(s.scriptDirty).toBe(false);
+    });
+
+    it('repopulates Script when scriptDirty is set with whitespace-only text', () => {
+      // `trim() === ''` matches whitespace too — a stray newline or
+      // space character isn't a meaningful edit either.
+      seedCommitted(sampleOps);
+      useWorkspaceStore.getState().setScriptText('   \n\n  ');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptDirty).toBe(false);
+    });
+
+    it('does NOT overwrite a non-empty dirty script (real manual edit protected)', () => {
+      // The load-bearing inverse: if the user has actually typed
+      // something, the mirror MUST stay out of the way. This is what
+      // the original gate was protecting and is not changing.
+      seedCommitted(sampleOps);
+      useWorkspaceStore
+        .getState()
+        .setScriptText('yops:\n  - set:\n      path: user/edit\n      value: keep\n');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toContain('user/edit');
+      expect(s.scriptText).not.toContain('trip/dest');
+      expect(s.scriptDirty).toBe(true);
+    });
+
+    it('mirrors when scriptDirty is false and scriptText is empty (existing path)', () => {
+      // Preserves the steady-state mirror: clean script, committed ops
+      // present → write the YAML.
+      seedCommitted(sampleOps);
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.getState().setScriptDirty(false);
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptDirty).toBe(false);
+    });
+
+    it('skips when hasDraft is true regardless of dirty/empty state', () => {
+      // Draft owns the script via useExtraction's setDraft path; the
+      // mirror must never step on it. Even if the script is somehow
+      // empty (a bug elsewhere), we don't reach in here — the failure
+      // surfaces through the dedicated retained-draft / Apply path
+      // instead.
+      useWorkspaceStore.getState().setDraft({
+        ops: sampleOps as never,
+        tree: { trees: [], relations: [] },
+      });
+      // setDraft populates the per-conversation snapshot, but does NOT
+      // write scriptText — useExtraction does that on success. Force
+      // the empty-script state directly.
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.getState().setScriptDirty(true);
+      // Seed committed ops in addition to the draft to make the test
+      // distinguish from "no committed history" cases.
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: sampleOps as never,
+      });
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toBe('');
+      expect(s.scriptDirty).toBe(true);
+    });
+
+    it('is a no-op when committed opsLog is empty (nothing to mirror)', () => {
+      // No committed history to mirror means there's no canonical
+      // YAML to write — leave whatever state the editor is in alone.
+      useWorkspaceStore.getState().setScriptText('');
+      useWorkspaceStore.getState().setScriptDirty(true);
+
+      renderHook(() => useScriptExecution());
+
+      const s = useWorkspaceStore.getState();
+      expect(s.scriptText).toBe('');
+      expect(s.scriptDirty).toBe(true);
+    });
+  });
+
   it('enables Apply when Extract has staged a draft (scriptDirty stays false)', () => {
     // Propose-only Extract: useExtraction calls setDraft({ ops, tree })
     // and leaves scriptDirty=false because the script is the canonical

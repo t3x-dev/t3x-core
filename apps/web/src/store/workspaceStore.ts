@@ -2,6 +2,7 @@ import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from 
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 
 export interface WorkspaceTurn {
   turn_hash: string;
@@ -581,11 +582,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ? { trees: previewResult.trees, relations: previewResult.relations }
           : s.tree;
 
+        // Defensive scriptText derivation: a persisted snapshot with
+        // ops but an empty scriptText is structurally inconsistent —
+        // restoring `scriptText: ''` against `hasDraft: true` would
+        // leave the editor blank while AfterPanel renders the draft
+        // preview, and the committed-mirror gate in useScriptExecution
+        // would not fire because hasDraft is true. Treat empty
+        // scriptText as a missing mirror and reconstruct it from ops.
+        const restoredScriptText =
+          snapshot.scriptText.trim() === ''
+            ? serializeOpsToYaml(snapshot.ops)
+            : snapshot.scriptText;
+
         set({
           draftOps: snapshot.ops,
           draftTree: previewTree,
           hasDraft: true,
-          scriptText: snapshot.scriptText,
+          scriptText: restoredScriptText,
           scriptDirty: snapshot.scriptDirty,
         });
         return true;
