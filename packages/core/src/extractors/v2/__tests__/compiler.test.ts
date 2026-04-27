@@ -981,6 +981,51 @@ describe('extractors/v2 compiler', () => {
       ]);
     });
 
+    it('normalises dotted target_ref.path before seeding the existing-path set', () => {
+      // Reviewer follow-up on PR #926: target_ref.path accepts dotted
+      // input the same way candidate.path_hint does (the LLM wire format
+      // doesn't distinguish `.` from `/`). Pre-fix the seed used the raw
+      // string, so a dotted nested target like `characters.main_protagonist`
+      // seeded `characters.main_protagonist` (literal-dot key) while the
+      // op stream used the normalised `characters/main_protagonist` —
+      // and a child define under `characters/main_protagonist/goal`
+      // would inject `define characters` and
+      // `define characters/main_protagonist`, both ALREADY_EXISTS at
+      // apply time.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters.main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // Only the brand-new `goal` leaf is defined. Neither `characters`
+      // nor `characters/main_protagonist` is recreated.
+      expect(definePaths).toEqual(['characters/main_protagonist/goal']);
+    });
+
     it('does not inject ancestor defines for nested non-define primary paths', () => {
       // Same logical case, but the "this exists" signal comes from a
       // populate op rather than target_ref. A populate at

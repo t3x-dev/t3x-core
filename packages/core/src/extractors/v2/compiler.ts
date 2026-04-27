@@ -761,11 +761,22 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   // that already exists in the snapshot the compile is being applied to.
   // Seed the dedupe pass with these so ancestor-define injection doesn't
   // try to recreate them and trip ALREADY_EXISTS at apply time.
+  //
+  // `target_ref.path` is allowed to arrive in dotted form (the same
+  // shape `candidate.path_hint` accepts, since the LLM's wire format
+  // doesn't distinguish path separators). Normalise it through the
+  // same pipeline the op-emitting branches use, so the seed lines up
+  // with the normalised paths that end up in the ops list. If
+  // normalisation fails (malformed segment, etc.) we drop the seed —
+  // `resolveTargetPath` will surface the same failure as a typed
+  // compile error in the relevant intent branch.
   const preExisting: string[] = [];
   for (const item of input.draft.items) {
-    const targetPath = item.target_ref?.path;
-    if (typeof targetPath === 'string' && targetPath.length > 0) {
-      preExisting.push(targetPath);
+    const raw = item.target_ref?.path;
+    if (typeof raw !== 'string' || raw.length === 0) continue;
+    const normalised = normalizePath(raw);
+    if (normalised.kind === 'ok') {
+      preExisting.push(normalised.path);
     }
   }
 
