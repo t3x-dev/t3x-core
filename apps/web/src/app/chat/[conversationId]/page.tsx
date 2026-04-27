@@ -7,6 +7,11 @@ import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  WORKSPACE_PANEL_FALLBACK_WIDTH,
+  clampWorkspacePanelWidth,
+  getPreferredWorkspacePanelWidth,
+} from '@/utils/chatWorkspaceLayout';
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -36,15 +41,34 @@ export default function ConversationPage() {
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
 
-  // Resizable panel via drag handle. Default = 2/3 of viewport so the
-  // workspace dominates when first expanded; chat keeps the remaining 1/3.
-  // Lazy initial state so SSR (no `window`) falls back to a sane value.
-  const [panelWidth, setPanelWidth] = useState(() => {
-    if (typeof window === 'undefined') return 800;
-    return Math.round(window.innerWidth * (2 / 3));
-  });
+  const [panelWidth, setPanelWidth] = useState(WORKSPACE_PANEL_FALLBACK_WIDTH);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hasMeasuredPanelWidth = useRef(false);
+  const isExpanded = panelExpanded;
+
+  useEffect(() => {
+    if (!isExpanded || !containerRef.current) return;
+
+    const syncPanelWidth = () => {
+      if (!containerRef.current) return;
+      const containerWidth = containerRef.current.getBoundingClientRect().width;
+      const firstMeasurement = !hasMeasuredPanelWidth.current;
+      const preferredWidth = getPreferredWorkspacePanelWidth(containerWidth);
+      hasMeasuredPanelWidth.current = true;
+      setPanelWidth((current) => {
+        const requested = firstMeasurement ? preferredWidth : current;
+        return clampWorkspacePanelWidth(requested, containerWidth);
+      });
+    };
+
+    syncPanelWidth();
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const resizeObserver = new ResizeObserver(syncPanelWidth);
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [isExpanded]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -54,10 +78,7 @@ export default function ConversationPage() {
       if (!isDragging.current || !containerRef.current) return;
       const containerRect = containerRef.current.getBoundingClientRect();
       const newWidth = containerRect.right - ev.clientX;
-      // Reserve at least 360px for the chat column; otherwise let the panel
-      // grow to whatever the user drags to.
-      const max = Math.max(500, containerRect.width - 360);
-      setPanelWidth(Math.max(400, Math.min(max, newWidth)));
+      setPanelWidth(clampWorkspacePanelWidth(newWidth, containerRect.width));
     };
 
     const handleMouseUp = () => {
@@ -73,8 +94,6 @@ export default function ConversationPage() {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
-
-  const isExpanded = panelExpanded;
 
   return (
     <div ref={containerRef} className="flex h-full overflow-hidden">

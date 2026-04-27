@@ -8,8 +8,12 @@ import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
+import { getFixedPopoverStyle } from '@/utils/popoverPosition';
 import { glass } from '@/utils/theme';
 import { BranchSwitcher } from './BranchSwitcher';
+
+const EXTRACT_MENU_WIDTH = 224;
+const EXTRACT_MENU_ESTIMATED_HEIGHT = 260;
 
 const PRESET_LABELS: Record<string, { label: string; desc: string }> = {
   concise: { label: 'Concise', desc: 'Key points (~30%)' },
@@ -85,6 +89,24 @@ export function ChatHeader({
   }, [dropdownOpen]);
 
   const displayTitle = storeTitle || conversationTitle || 'New Chat';
+  const getExtractMenuStyle = (): React.CSSProperties => {
+    if (!chevronRef.current) {
+      return { position: 'fixed', top: 0, left: 8, zIndex: 9999, width: EXTRACT_MENU_WIDTH };
+    }
+
+    return {
+      ...getFixedPopoverStyle(chevronRef.current.getBoundingClientRect(), {
+        width: EXTRACT_MENU_WIDTH,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        estimatedHeight: EXTRACT_MENU_ESTIMATED_HEIGHT,
+        align: 'end',
+      }),
+      width: EXTRACT_MENU_WIDTH,
+      maxHeight: 'min(320px, calc(100vh - 16px))',
+      overflowY: 'auto',
+    };
+  };
 
   return (
     <header
@@ -156,17 +178,8 @@ export function ChatHeader({
             createPortal(
               <div
                 ref={dropdownMenuRef}
-                className="w-56 rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
-                style={{
-                  position: 'fixed',
-                  top: chevronRef.current
-                    ? chevronRef.current.getBoundingClientRect().bottom + 4
-                    : 0,
-                  left: chevronRef.current
-                    ? chevronRef.current.getBoundingClientRect().right - 224
-                    : 0,
-                  zIndex: 9999,
-                }}
+                className="rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
+                style={getExtractMenuStyle()}
               >
                 {(['concise', 'balanced', 'detailed'] as const).map((preset) => (
                   <button
