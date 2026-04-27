@@ -177,4 +177,195 @@ describe('repairOpQuotes', () => {
     if (src?.type !== 'llm') throw new Error('expected llm source');
     expect(validateSource(ops, turns).ok).toBe(true);
   });
+
+  // ── Markdown source-span repair ──────────────────────────────────────
+  // Counterpart to the existing quote-side `**marker** → bare` strategy.
+  // Some LLMs emit quotes against the *rendered* text they perceive
+  // (no `**`, `*`, `\``) while validation runs against raw turn content
+  // that still carries the markers. We project the raw content into a
+  // stripped form, search the bad quote there, and map a contiguous
+  // hit back to a contiguous *raw* span. Repair must be deterministic
+  // (no fuzzy matching) and post-condition is rigid: the repaired
+  // quote MUST be a verbatim substring of raw content.
+  describe('markdown source-span repair', () => {
+    function quoteOfFirst(ops: SourcedYOp[]): string {
+      const src = ops[0].source;
+      if (src?.type !== 'llm') throw new Error('expected llm source');
+      return src.turn_ref.quote;
+    }
+
+    it('repairs a quote that drops bold markers from the source turn', () => {
+      // Original failing case: assistant turn renders bold inline;
+      // small LLM extractor quotes the rendered (stripped) text;
+      // raw turn carries `**...**`. Without this repair the quote is
+      // not a substring of raw and validation hard-fails.
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: "Don't mind **bigger file sizes** and more post-processing",
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'tradeoffs/storage' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: 'bigger file sizes and more post-processing',
+            },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+
+      // Repair brings the markers back into the quote so it's a real
+      // substring of raw turn content. We do NOT assert the exact
+      // repaired text — only the load-bearing invariant.
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      expect(validateSource(ops, turns).ok).toBe(true);
+    });
+
+    it('handles multiple bold spans in the same sentence', () => {
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: 'Pick **A7R5** if you want detail; pick **A7M5** if you want battery life.',
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'pick/criteria' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: 'A7R5 if you want detail; pick A7M5 if you want battery life.',
+            },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      expect(validateSource(ops, turns).ok).toBe(true);
+    });
+
+    it('picks the first occurrence deterministically when stripped match repeats', () => {
+      // Stripped form contains the same span twice; raw bolds both
+      // sides differently. Repair must always lock onto the first
+      // stripped hit so the same input produces the same repair across
+      // runs (no lastIndexOf, no scoring).
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: '**foo** bar; **foo** bar',
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'tip/foo' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            // Bare 'foo bar' is NOT a substring of raw — forces the
+            // markdown projection path, not the cheap as-is check.
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'foo bar' },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      // First stripped hit at index 0 maps back to raw[2..10] = "foo** bar".
+      // The second hit (raw[15..23]) would also satisfy the substring
+      // invariant — asserting the first one specifically locks the
+      // determinism contract.
+      expect(quoteOfFirst(ops)).toBe('foo** bar');
+    });
+
+    it('does not stitch fragments across a span the model omitted', () => {
+      // Stripped is `A and B and C`. Quote `A C` does not appear
+      // contiguously in stripped — `indexOf` returns -1 — so repair
+      // must abstain rather than hallucinate a span that joins two
+      // separate substrings. The op stays failing for the LLM to fix.
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: '**A** and **B** and **C**',
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'noncontig' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            // Two non-adjacent fragments joined by the model.
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'A C' },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      // Quote untouched (still 'A C') and validation still fails.
+      expect(quoteOfFirst(ops)).toBe('A C');
+      expect(validateSource(ops, turns).ok).toBe(false);
+    });
+
+    it('repairs across italic and inline-code markers, not only bold', () => {
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: 'Use *care* with the `fetch` API for *streaming* responses.',
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'api/usage' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: 'care with the fetch API for streaming responses.',
+            },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      expect(validateSource(ops, turns).ok).toBe(true);
+    });
+
+    it('is a no-op when content has no markdown and the quote already matches', () => {
+      const turns: ValidationTurn[] = [
+        { turn_hash: 'sha256:t1', content: 'Plain text with no markdown markers.' },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'plain' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'Plain text with no markdown markers.' },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(quoteOfFirst(ops)).toBe('Plain text with no markdown markers.');
+      expect(validateSource(ops, turns).ok).toBe(true);
+    });
+  });
 });
