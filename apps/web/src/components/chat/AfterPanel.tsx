@@ -493,7 +493,13 @@ export function AfterPanel({
   // cleared on Apply or Discard.
   const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
+  // (un-applied LLM proposal). The footer next to Discard / Commit
+  // was the leftover ambiguous count after PR #904 covered the
+  // header — kept reading 'N ops' regardless of whether what's
+  // visible is committed history or a staged preview.
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
+  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
@@ -665,14 +671,23 @@ export function AfterPanel({
           </div>
         )}
         <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+          {/*
+            The header now states whether the rendered tree is the
+            committed result (the live yops_log replay) or a dry-run
+            preview of a staged draft. Without this distinction, a
+            conversation with prior committed history shows the full
+            old tree even right after a fresh Extract, and users read
+            it as "Concise produced this" — which it didn't, because
+            Concise can't shrink committed history.
+          */}
           <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-            Result
+            {hasDraft ? 'Draft preview' : 'Committed result'}
             {hasDraft && (
               <span
                 title="Dry-run preview of the staged Extract — click Apply to commit."
                 className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
               >
-                Draft preview
+                Unapplied
               </span>
             )}
           </span>
@@ -828,8 +843,15 @@ export function AfterPanel({
         className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--stroke-default)] bg-[var(--panel-alt)] px-3"
         style={{ height: TREE_FOOTER_HEIGHT }}
       >
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)] truncate">
-          {opsCount} ops
+        <span
+          className="text-[9px] font-mono text-[var(--text-tertiary)] truncate"
+          title={
+            hasDraft
+              ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+              : `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log`
+          }
+        >
+          {opsCount} committed{hasDraft ? ` · ${draftCount} draft` : ''}
           {diff && (
             <>
               {' · '}
