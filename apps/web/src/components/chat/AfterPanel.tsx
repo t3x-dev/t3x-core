@@ -628,6 +628,7 @@ export function AfterPanel({
         await commitTrees(message || 'Knowledge Extract');
         useWorkspaceStore.getState().setMode('idle');
         useWorkspaceStore.getState().setCommitted(true);
+        useWorkspaceStore.getState().clearDraft();
         setShowCommitDialog(false);
         toast.success('Committed successfully');
         try {

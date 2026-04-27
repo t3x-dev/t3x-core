@@ -40,6 +40,8 @@ export interface ConversationSnapshot {
   opsLog: SourcedYOp[];
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
+  committedAs: string | null;
+  committedAt: string | null;
   partial?: SnapshotPartial;
 }
 
@@ -47,7 +49,7 @@ export async function fetchConversationSnapshot(
   projectId: string,
   convId: string
 ): Promise<ConversationSnapshot> {
-  const { turns, opsLog } = await loadL1(projectId, convId);
+  const { turns, opsLog, committedAs, committedAt } = await loadL1(projectId, convId);
 
   const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     turn_hash: t.turn_hash,
@@ -74,6 +76,8 @@ export async function fetchConversationSnapshot(
     opsLog: flatOps,
     tree,
     sourceIndex,
+    committedAs,
+    committedAt,
   };
 
   if (partial) {

@@ -50,6 +50,8 @@ export interface Conversation {
   project_id: string;
   title?: string;
   parent_commit_hash?: string;
+  committed_as?: string | null;
+  committed_at?: string | null;
   position_x?: number;
   position_y?: number;
   created_at: string;

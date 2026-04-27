@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   title TEXT,
   alias TEXT CONSTRAINT conversations_alias_format CHECK (alias IS NULL OR alias ~ '^[a-z][a-z0-9_]{0,63}$'),
   parent_commit_hash TEXT,
+  committed_as TEXT,
+  committed_at TIMESTAMPTZ,
   position_x REAL,
   position_y REAL,
   metadata_json TEXT,

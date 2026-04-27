@@ -102,6 +102,8 @@ export const conversations = pgTable(
     title: text('title'),
     alias: text('alias'),
     parentCommitHash: text('parent_commit_hash'),
+    committedAs: text('committed_as'),
+    committedAt: timestamp('committed_at', { withTimezone: true }),
     positionX: real('position_x'),
     positionY: real('position_y'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),

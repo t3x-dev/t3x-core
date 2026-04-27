@@ -22,6 +22,7 @@
  */
 
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
+import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatWorkspaceError } from './formatWorkspaceError';
 
@@ -58,12 +59,19 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
       appliedCount: snapshot.partial.appliedCount,
     });
   }
-  // Layer any persisted draft for this conversation on top of the
-  // freshly-hydrated server state. This is the F5 protection: if the
-  // user staged an Extract proposal and reloaded, the draft + script +
-  // dry-run preview come back so they can keep reviewing instead of
-  // losing the LLM round-trip. No-op if there's nothing persisted.
-  post.restoreDraftFor(convId);
+  if (snapshot.committedAs) {
+    post.setCommitted(true);
+    post.clearDraft();
+    useCommitStore.getState().setInitialCommit(snapshot.committedAs, {}, {});
+  } else {
+    post.setCommitted(false);
+    // Layer any persisted draft for this conversation on top of the
+    // freshly-hydrated server state. This is the F5 protection: if the
+    // user staged an Extract proposal and reloaded, the draft + script +
+    // dry-run preview come back so they can keep reviewing instead of
+    // losing the LLM round-trip. No-op if there's nothing persisted.
+    post.restoreDraftFor(convId);
+  }
 
   // Discoverability: a content-bearing conversation should not require
   // a click to reveal. Auto-expand on first view if the project has no

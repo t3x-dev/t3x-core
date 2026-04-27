@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 44;
+const SCHEMA_VERSION = 45;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -120,6 +120,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
       title TEXT,
       parent_commit_hash TEXT,
+      committed_as TEXT,
+      committed_at TIMESTAMPTZ,
       position_x REAL,
       position_y REAL,
       created_at TIMESTAMPTZ NOT NULL,
@@ -1230,6 +1232,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE TRIGGER trg_events_notify
       AFTER INSERT ON events
       FOR EACH ROW EXECUTE FUNCTION t3x_trg_events_notify();
+  `);
+
+  // ── Schema v45: committed conversation lock ──
+  await sql.unsafe(`
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_as TEXT;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;
   `);
 
   // Record schema version so subsequent startups skip the init SQL.

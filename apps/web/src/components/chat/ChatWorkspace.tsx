@@ -138,12 +138,16 @@ export function ChatWorkspace({
 
   // Flush pending message once projectId is resolved and sendMessage is recreated
   useEffect(() => {
+    if (isCommitted) {
+      pendingMessageRef.current = null;
+      return;
+    }
     if (resolvedProjectId && pendingMessageRef.current && isSelectionReady) {
       const msg = pendingMessageRef.current;
       pendingMessageRef.current = null;
       sendMessage(msg);
     }
-  }, [resolvedProjectId, sendMessage, isSelectionReady]);
+  }, [resolvedProjectId, sendMessage, isSelectionReady, isCommitted]);
 
   // Store initialization, draft loading, inheritance hydration, topic loading
   const { parentConversationId } = useChatInit({
@@ -237,6 +241,10 @@ export function ChatWorkspace({
 
   const handleSend = useCallback(
     async (message: string, images?: AttachedImage[]) => {
+      if (isCommitted) {
+        pendingMessageRef.current = null;
+        return;
+      }
       if (!isSelectionReady) {
         pendingMessageRef.current = message;
         return;
@@ -250,7 +258,7 @@ export function ChatWorkspace({
         sendMessage(message, images ? { images } : undefined);
       }
     },
-    [resolvedProjectId, ensureProject, sendMessage, isSelectionReady]
+    [resolvedProjectId, ensureProject, sendMessage, isSelectionReady, isCommitted]
   );
 
   return (

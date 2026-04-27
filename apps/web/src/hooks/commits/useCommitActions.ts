@@ -109,6 +109,7 @@ export function useCommitActions() {
           branch: commitBranch,
           message: message || undefined,
           sources: sources.length > 0 ? sources : undefined,
+          source_conversation_id: conversationId ?? undefined,
           provenance: { method: 'llm_extraction' },
         }
       );

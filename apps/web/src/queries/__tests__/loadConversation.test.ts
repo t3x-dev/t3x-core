@@ -25,6 +25,8 @@ describe('fetchConversationSnapshot', () => {
           created_at: '2026-04-12T00:00:00Z',
         } as never,
       ],
+      committedAs: 'sha256:commit',
+      committedAt: '2026-04-12T00:00:01Z',
       opsLog: [
         {
           id: 'yl_1',
@@ -42,6 +44,8 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.opsLog).toHaveLength(1);
     expect(snapshot.tree.trees.length).toBeGreaterThan(0);
     expect(snapshot.sourceIndex).toBeInstanceOf(Map);
+    expect(snapshot.committedAs).toBe('sha256:commit');
+    expect(snapshot.committedAt).toBe('2026-04-12T00:00:01Z');
   });
 
   it('propagates loader errors', async () => {
@@ -54,6 +58,8 @@ describe('fetchConversationSnapshot', () => {
       convId: 'c1',
       turns: [],
       opsLog: [],
+      committedAs: null,
+      committedAt: null,
     });
     const snapshot = await fetchConversationSnapshot('p1', 'c1');
     expect(snapshot.turns).toEqual([]);
@@ -72,6 +78,8 @@ describe('fetchConversationSnapshot', () => {
     vi.spyOn(loader, 'loadConversation').mockResolvedValue({
       convId: 'c1',
       turns: [],
+      committedAs: null,
+      committedAt: null,
       opsLog: [
         {
           id: 'yl_good',
