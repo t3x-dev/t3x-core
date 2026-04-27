@@ -665,14 +665,23 @@ export function AfterPanel({
           </div>
         )}
         <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+          {/*
+            The header now states whether the rendered tree is the
+            committed result (the live yops_log replay) or a dry-run
+            preview of a staged draft. Without this distinction, a
+            conversation with prior committed history shows the full
+            old tree even right after a fresh Extract, and users read
+            it as "Concise produced this" — which it didn't, because
+            Concise can't shrink committed history.
+          */}
           <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-            Result
+            {hasDraft ? 'Draft preview' : 'Committed result'}
             {hasDraft && (
               <span
                 title="Dry-run preview of the staged Extract — click Apply to commit."
                 className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
               >
-                Draft preview
+                Unapplied
               </span>
             )}
           </span>

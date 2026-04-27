@@ -7,7 +7,16 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const mode = useWorkspaceStore((s) => s.mode);
-  const opsCount = useWorkspaceStore((s) => s.opsLog.length);
+  // Split the count into committed vs draft so the topbar can't be
+  // misread as "Concise produced 60 ops". The committed count is
+  // opsLog.length (history persisted to yops_log); the draft count is
+  // draftOps.length (un-applied LLM proposal staged via setDraft).
+  // Without this split, an old conversation with prior committed
+  // history shows "60 ops" regardless of what the current Extract
+  // produced — which is exactly what confused us during E2E review.
+  const committedCount = useWorkspaceStore((s) => s.opsLog.length);
+  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const { execute, canRun, disabledReason } = useScriptExecution();
 
   return (
@@ -22,8 +31,16 @@ export function WorkspaceTopbar() {
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-[10px] font-mono text-[var(--text-tertiary)]">
-          {opsCount} op{opsCount === 1 ? '' : 's'}
+        <span
+          className="text-[10px] font-mono text-[var(--text-tertiary)]"
+          title={
+            hasDraft
+              ? `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+              : `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log`
+          }
+        >
+          {committedCount} committed
+          {hasDraft ? ` · ${draftCount} draft` : ''}
         </span>
 
         <button
