@@ -259,6 +259,57 @@ describe('POST /v1/extract-yops (v2)', () => {
       // The committed root must be in the snapshot fed to the LLM.
       expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('committed_root');
     });
+
+    it('uses parent commit content as the incremental baseline for child conversations', async () => {
+      const parentCommit = await createCommit(mockDB, {
+        author: { type: 'human', name: 'test' },
+        content: {
+          trees: [
+            {
+              key: 'parent_trip',
+              slots: { destination: 'Dali' },
+              children: [],
+            },
+          ],
+          relations: [],
+        },
+        project_id: testProjectId,
+        message: 'parent commit',
+      });
+      const child = await insertConversation(mockDB, {
+        projectId: testProjectId,
+        title: `Child ${Date.now()}`,
+        parentCommitHash: parentCommit.hash,
+      });
+
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: { schema: 't3x/extraction-draft', version: 1, mode: 'incremental', items: [] },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: child.conversationId,
+          turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'add day 4' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot).toEqual(parentCommit.content);
+    });
   });
 
   describe('preset → ExtractionStyleConfig mapping', () => {

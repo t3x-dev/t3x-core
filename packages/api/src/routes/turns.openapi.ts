@@ -404,6 +404,13 @@ turnRoutes.openapi(createTurnRoute, async (c) => {
         'conversation does not belong to the specified project'
       );
     }
+    if (conversation.committedAs) {
+      return errorResponse(
+        c,
+        'ALREADY_COMMITTED',
+        `Conversation ${body.conversation_id} has already been committed`
+      );
+    }
 
     // Ring extraction has been retired — pass through any rings provided by the client
     const rings = body.rings as Record<string, unknown> | undefined;

@@ -4,6 +4,7 @@
  */
 
 import type { YOpsLogEntry } from '@t3x-dev/core';
+import { getConversation } from '@/infrastructure/conversations';
 import { listTurns } from '@/infrastructure/turns';
 import type { Turn } from '@/infrastructure/types';
 import { loadYOpsLog } from './yopsLog';
@@ -12,17 +13,30 @@ export type { Turn as LoadedTurn };
 
 export interface LoadedConversation {
   convId: string;
+  title: string | null;
   turns: Turn[];
   opsLog: YOpsLogEntry[];
+  committedAs: string | null;
+  committedAt: string | null;
+  parentCommitHash: string | null;
 }
 
 export async function loadConversation(
   projectId: string,
   convId: string
 ): Promise<LoadedConversation> {
-  const [turnsData, opsLog] = await Promise.all([
+  const [conversation, turnsData, opsLog] = await Promise.all([
+    getConversation(convId),
     listTurns(projectId, convId),
     loadYOpsLog(convId),
   ]);
-  return { convId, turns: turnsData.turns, opsLog };
+  return {
+    convId,
+    title: conversation.title ?? null,
+    turns: turnsData.turns,
+    opsLog,
+    committedAs: conversation.committed_as ?? null,
+    committedAt: conversation.committed_at ?? null,
+    parentCommitHash: conversation.parent_commit_hash ?? null,
+  };
 }

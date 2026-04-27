@@ -195,6 +195,27 @@ export async function renameConversation(
 }
 
 /**
+ * Mark a conversation as committed exactly once.
+ *
+ * Returns the updated conversation when this call wins the guard, or null
+ * when the conversation is missing or was already committed by another writer.
+ */
+export async function markConversationCommitted(
+  db: AnyDB,
+  conversationId: string,
+  commitHash: string,
+  committedAt = new Date()
+): Promise<Conversation | null> {
+  const [updated] = await db
+    .update(conversations)
+    .set({ committedAs: commitHash, committedAt })
+    .where(and(eq(conversations.conversationId, conversationId), isNull(conversations.committedAs)))
+    .returning();
+
+  return updated ?? null;
+}
+
+/**
  * Find conversations by project
  *
  * Supports two pagination modes:

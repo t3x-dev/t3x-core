@@ -135,6 +135,10 @@ export const CreateCommitRequest = z
       .describe('Parent commit hashes (empty for root commit)'),
     message: z.string().max(2000).optional().describe('Human-readable commit message'),
     branch: z.string().optional().describe('Branch name (defaults to main)'),
+    source_conversation_id: z
+      .string()
+      .optional()
+      .describe('Primary conversation to lock as committed after this commit succeeds'),
 
     // Optional self-identifier; if present it must match COMMIT_SCHEMA.
     schema: z.string().optional().describe(`If provided, must equal '${COMMIT_SCHEMA}'`),

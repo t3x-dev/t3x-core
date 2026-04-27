@@ -13,6 +13,14 @@ describe('AfterPanel.shouldDisableCommit', () => {
     expect(shouldDisableCommit(baseEnabled)).toBe(false);
   });
 
+  it('disables Commit when the visible tree is only an inherited parent baseline', () => {
+    // A child conversation can inherit a parent commit as its baseline
+    // before it has any applied YOps of its own. That tree is visible,
+    // but it is not a new result the child conversation should be able
+    // to commit unchanged.
+    expect(shouldDisableCommit({ ...baseEnabled, isInheritedBaselineOnly: true })).toBe(true);
+  });
+
   it('disables Commit while a draft preview is staged (P2 regression)', () => {
     // Commit reads workspaceStore.tree (committed state), but the panel
     // renders draftTree when hasDraft. Allowing Commit here would freeze

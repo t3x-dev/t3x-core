@@ -129,6 +129,7 @@ export interface CreateCommitInput {
   branch?: string;
   parents?: string[];
   message?: string;
+  source_conversation_id?: string;
   author?: {
     type: 'human' | 'agent' | 'system';
     id?: string;

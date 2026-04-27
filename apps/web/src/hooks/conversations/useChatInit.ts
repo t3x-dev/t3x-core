@@ -51,7 +51,10 @@ export function useChatInit({
     const convId = resolvedConversationId ?? conversationId;
 
     // ── 1. Sync store state for the current conversation ──
-    useChatStore.getState().setActiveConversation(convId, resolvedProjectId || null);
+    const chatStore = useChatStore.getState();
+    chatStore.setActiveConversation(convId, resolvedProjectId || null);
+    chatStore.setConversationTitle(null);
+    useCommitStore.getState().setConversationTitle(null);
     if (!inheritedRef.current) {
       useWorkspaceStore.getState().reset();
     }
@@ -90,6 +93,10 @@ export function useChatInit({
           beforeCommitHash: data.lastCommitHash,
           confirmedNodeIds: data.confirmedNodeIds,
         });
+      }
+      if (data.branch) {
+        useCommitStore.getState().setCommitBranch(data.branch);
+        useChatStore.getState().setActiveBranch(data.branch);
       }
       if (data.fetched) {
         inheritedRef.current = true;

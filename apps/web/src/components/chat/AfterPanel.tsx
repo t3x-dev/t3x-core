@@ -22,7 +22,7 @@ import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useCommitStore } from '@/store/commitStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
@@ -70,8 +70,15 @@ export function shouldDisableCommit(input: {
   isCommitting: boolean;
   isCommitted: boolean;
   hasDraft: boolean;
+  isInheritedBaselineOnly?: boolean;
 }): boolean {
-  return !input.hasResult || input.isCommitting || input.isCommitted || input.hasDraft;
+  return (
+    !input.hasResult ||
+    input.isCommitting ||
+    input.isCommitted ||
+    input.hasDraft ||
+    Boolean(input.isInheritedBaselineOnly)
+  );
 }
 
 function summarizeVisibleDiff(diff: TreeDiffResult | null): {
@@ -497,6 +504,7 @@ export function AfterPanel({
   // cleared on Apply or Discard.
   const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
   // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
   // (un-applied LLM proposal). The footer next to Discard / Commit
   // was the leftover ambiguous count after PR #904 covered the
@@ -531,6 +539,8 @@ export function AfterPanel({
   const hasResult = trees.length > 0;
   const hasParent = !!parent;
   const showBefore = !!beforeVisible && hasParent;
+  const showBeforeControl =
+    !!showBeforeToggle && !!onToggleBefore && hasParent && !isInheritedBaselineOnly;
 
   const diff = useMemo<TreeDiffResult | null>(() => {
     if (!parent) return null;
@@ -618,16 +628,23 @@ export function AfterPanel({
       // race a state update — handler reads stale React state and fires
       // anyway. Re-check directly off the store so a draft that arrived
       // mid-keystroke can't slip through and commit the pre-draft tree.
-      if (useWorkspaceStore.getState().hasDraft) {
+      const workspaceState = useWorkspaceStore.getState();
+      if (workspaceState.hasDraft) {
         toast.error('Apply or Discard the staged draft before committing.');
         setShowCommitDialog(false);
         return;
       }
+      if (selectIsInheritedBaselineOnly(workspaceState)) {
+        toast.error('Extract, edit, or Apply new YOps before committing this conversation.');
+        setShowCommitDialog(false);
+        return;
+      }
       try {
-        useWorkspaceStore.getState().setMode('committing');
+        workspaceState.setMode('committing');
         await commitTrees(message || 'Knowledge Extract');
         useWorkspaceStore.getState().setMode('idle');
         useWorkspaceStore.getState().setCommitted(true);
+        useWorkspaceStore.getState().clearDraft();
         setShowCommitDialog(false);
         toast.success('Committed successfully');
         try {
@@ -683,24 +700,28 @@ export function AfterPanel({
         <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
           {/*
             The header now states whether the rendered tree is the
-            committed result (the live yops_log replay) or a dry-run
-            preview of a staged draft. Without this distinction, a
-            conversation with prior committed history shows the full
-            old tree even right after a fresh Extract, and users read
-            it as "Concise produced this" — which it didn't, because
-            Concise can't shrink committed history.
+            applied result (the live yops_log replay), an inherited
+            baseline from the parent commit, or a dry-run preview of a
+            staged draft. Without this distinction, a child conversation
+            with no YOps of its own can look like it already committed
+            the parent's tree.
           */}
           {/*
             Header label table (post-PR-B):
               hasDraft && retainedDraftFailure → "Previous draft" + Retained badge
               hasDraft                         → "Draft preview"  + Unapplied badge
-              otherwise                        → "Committed result"
+              inherited baseline only          → "Inherited baseline"
+              otherwise                        → "Applied result"
             The retained-draft variant signals that the rendered tree is
             the prior successful proposal, NOT the new (failed) attempt
             the user just clicked Extract on.
           */}
           <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-            {getResultPanelHeaderLabel({ hasDraft, hasRetainedFailure })}
+            {getResultPanelHeaderLabel({
+              hasDraft,
+              hasRetainedFailure,
+              isInheritedBaselineOnly,
+            })}
             {hasRetainedFailure ? (
               <span
                 title="Last extract failed; this is the previous staged draft. Click Apply to commit it, or Discard to drop it."
@@ -715,12 +736,19 @@ export function AfterPanel({
               >
                 Unapplied
               </span>
+            ) : isInheritedBaselineOnly ? (
+              <span
+                title="This tree is inherited from the parent commit. Extract, edit, or Apply new YOps before committing this conversation."
+                className="rounded bg-[var(--accent-commit)]/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent-commit)]"
+              >
+                Parent
+              </span>
             ) : null}
           </span>
-          {showBeforeToggle && onToggleBefore && hasParent && (
+          {showBeforeControl && (
             <button
               type="button"
-              onClick={onToggleBefore}
+              onClick={() => onToggleBefore?.()}
               className={`text-[9px] font-medium px-1.5 py-0.5 rounded transition-colors ${
                 showBefore
                   ? 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
@@ -886,12 +914,20 @@ export function AfterPanel({
         <span
           className="text-[9px] font-mono text-[var(--text-tertiary)] truncate"
           title={
-            hasDraft
-              ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
-              : `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log`
+            isInheritedBaselineOnly
+              ? 'Inherited from parent commit; no current conversation YOps applied'
+              : hasDraft
+                ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+                : `${opsCount} applied op${opsCount === 1 ? '' : 's'} in yops_log`
           }
         >
-          {opsCount} committed{hasDraft ? ` · ${draftCount} draft` : ''}
+          {isInheritedBaselineOnly ? (
+            'Inherited baseline'
+          ) : (
+            <>
+              {opsCount} applied{hasDraft ? ` · ${draftCount} draft` : ''}
+            </>
+          )}
           {diff && (
             <>
               {' · '}
@@ -911,7 +947,9 @@ export function AfterPanel({
           <button
             type="button"
             onClick={() => void handleDiscard()}
-            disabled={!projectId || !hasResult || isCommitting || isCommitted}
+            disabled={
+              !projectId || !hasResult || isCommitting || isCommitted || isInheritedBaselineOnly
+            }
             className="flex min-w-[88px] items-center justify-center rounded border border-[var(--stroke-default)] bg-transparent px-3 py-2 text-[11px] font-semibold text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Discard
@@ -931,13 +969,21 @@ export function AfterPanel({
             // commit that doesn't match anything on screen.
             // The user must Apply (or Discard) the draft first; this
             // button reactivates once hasDraft flips back to false.
-            disabled={shouldDisableCommit({ hasResult, isCommitting, isCommitted, hasDraft })}
+            disabled={shouldDisableCommit({
+              hasResult,
+              isCommitting,
+              isCommitted,
+              hasDraft,
+              isInheritedBaselineOnly,
+            })}
             title={
-              hasDraft
-                ? 'Apply or Discard the staged draft before committing'
-                : isCommitted
-                  ? 'Already committed'
-                  : undefined
+              isInheritedBaselineOnly
+                ? 'Extract, edit, or Apply new YOps before committing this conversation'
+                : hasDraft
+                  ? 'Apply or Discard the staged draft before committing'
+                  : isCommitted
+                    ? 'Already committed'
+                    : undefined
             }
             className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--commit)] px-3 py-2 text-[11px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -970,6 +1016,7 @@ export function AfterPanel({
                 isCommitting,
                 isCommitted,
                 hasDraft,
+                isInheritedBaselineOnly,
               });
               return (
                 <>
@@ -1000,7 +1047,11 @@ export function AfterPanel({
                       onClick={() => handleCommit(commitMessage)}
                       disabled={dialogDisabled}
                       title={
-                        hasDraft ? 'Apply or Discard the staged draft before committing' : undefined
+                        isInheritedBaselineOnly
+                          ? 'Extract, edit, or Apply new YOps before committing this conversation'
+                          : hasDraft
+                            ? 'Apply or Discard the staged draft before committing'
+                            : undefined
                       }
                       className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     >

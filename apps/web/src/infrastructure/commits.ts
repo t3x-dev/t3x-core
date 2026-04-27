@@ -116,6 +116,7 @@ export async function createCommit(
     parents?: string[];
     author?: { type: string; id?: string; name?: string };
     sources?: Array<{ type: string; id: string; title?: string }>;
+    source_conversation_id?: string;
     provenance?: { method: string; model?: string };
   }
 ): Promise<{ commit: { hash: string } }> {
@@ -130,6 +131,7 @@ export async function createCommit(
       parents: options?.parents ?? [],
       author: options?.author ?? { type: 'human', name: 'User' },
       sources: options?.sources,
+      source_conversation_id: options?.source_conversation_id,
       provenance: options?.provenance,
     }),
   });

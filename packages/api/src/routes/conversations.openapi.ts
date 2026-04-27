@@ -118,6 +118,8 @@ const ConversationSchema = z.object({
   title: z.string().nullable(),
   alias: z.string().nullable(),
   parent_commit_hash: z.string().nullable(),
+  committed_as: z.string().nullable(),
+  committed_at: z.string().nullable(),
   position_x: z.number().nullable(),
   position_y: z.number().nullable(),
   created_at: z.string(),
@@ -170,6 +172,8 @@ const toApiConversation = (conv: {
   title: string | null;
   alias: string | null;
   parentCommitHash: string | null;
+  committedAs: string | null;
+  committedAt: Date | null;
   positionX: number | null;
   positionY: number | null;
   createdAt: Date;
@@ -180,6 +184,8 @@ const toApiConversation = (conv: {
   title: conv.title,
   alias: conv.alias,
   parent_commit_hash: conv.parentCommitHash,
+  committed_as: conv.committedAs,
+  committed_at: conv.committedAt?.toISOString() ?? null,
   position_x: conv.positionX,
   position_y: conv.positionY,
   created_at: conv.createdAt.toISOString(),
@@ -342,6 +348,8 @@ conversationRoutes.openapi(createConversationRoute, async (c) => {
       title: conversation.title,
       alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
+      committed_as: conversation.committedAs,
+      committed_at: conversation.committedAt?.toISOString() ?? null,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),
@@ -405,6 +413,8 @@ conversationRoutes.openapi(getConversationRoute, async (c) => {
       title: conversation.title,
       alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
+      committed_as: conversation.committedAs,
+      committed_at: conversation.committedAt?.toISOString() ?? null,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),
@@ -495,6 +505,8 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
       title: conversation.title,
       alias: conversation.alias,
       parent_commit_hash: conversation.parentCommitHash,
+      committed_as: conversation.committedAs,
+      committed_at: conversation.committedAt?.toISOString() ?? null,
       position_x: conversation.positionX,
       position_y: conversation.positionY,
       created_at: conversation.createdAt.toISOString(),

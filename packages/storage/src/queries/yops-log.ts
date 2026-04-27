@@ -178,9 +178,9 @@ export async function acquireProjectSupersedeLock(db: AnyDB, projectId: string):
   );
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
-// vary by adapter; the runtime contract (transaction(fn)) is uniform.
-type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
+// Drizzle's tx vs db types vary by adapter; the runtime contract
+// (transaction(fn)) is uniform and callers narrow tx to AnyDB.
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
 /**
  * Mark active-draft, **all-LLM** entries for the conversation as

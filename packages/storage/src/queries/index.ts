@@ -108,6 +108,7 @@ export {
   getConversationTurnCount,
   insertConversation,
   type ListConversationsOptions,
+  markConversationCommitted,
   renameConversation,
   setAliasIfNull,
   type UpdateConversationInput,

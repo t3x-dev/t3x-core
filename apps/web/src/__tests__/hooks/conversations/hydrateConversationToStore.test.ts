@@ -9,6 +9,8 @@ vi.mock('@/queries/loadConversation', () => ({
 }));
 
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
+import { useChatStore } from '@/store/chatStore';
+import { useCommitStore } from '@/store/commitStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 
 const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
@@ -28,17 +30,32 @@ const SAMPLE_OPS: SourcedYOp[] = [
   },
 ];
 
-function snapshot(opts: { ops?: SourcedYOp[]; tree?: SemanticContent }): {
+function snapshot(opts: {
+  ops?: SourcedYOp[];
+  tree?: SemanticContent;
+  committedAs?: string | null;
+  committedAt?: string | null;
+  parentCommitHash?: string | null;
+  parentCommitBranch?: string | null;
+}): {
   turns: Array<{ turn_hash: string; content: string }>;
   opsLog: SourcedYOp[];
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
+  committedAs?: string | null;
+  committedAt?: string | null;
+  parentCommitHash?: string | null;
+  parentCommitBranch?: string | null;
 } {
   return {
     turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
     opsLog: opts.ops ?? [],
     tree: opts.tree ?? EMPTY_TREE,
     sourceIndex: new Map<string, Source>(),
+    committedAs: opts.committedAs,
+    committedAt: opts.committedAt,
+    parentCommitHash: opts.parentCommitHash,
+    parentCommitBranch: opts.parentCommitBranch,
   };
 }
 
@@ -46,6 +63,20 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
+    useCommitStore.setState({
+      confirmedNodeIds: {},
+      confirmedSlotKeys: {},
+      manualEditedNodeIds: new Set(),
+      lastCommitHash: null,
+      committedNodeIds: {},
+      committedNodeSnapshot: {},
+      commitBranch: 'main',
+      projectId: null,
+      conversationTitle: null,
+      isCommitting: false,
+      commitError: null,
+    });
+    useChatStore.setState({ activeBranch: 'main' });
     useWorkspaceStore.setState({
       panelExpandedByProject: {},
       activeProjectId: null,
@@ -119,5 +150,71 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
     expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({
       proj_Rel: true,
     });
+  });
+
+  it('locks committed snapshots and clears stale local draft cache', async () => {
+    useWorkspaceStore.setState({
+      conversationId: 'conv_Committed',
+      draftsByConversation: {
+        conv_Committed: {
+          ops: SAMPLE_OPS,
+          scriptText: 'yops:\n- stale: true',
+          tree: SAMPLE_TREE,
+          dirty: true,
+          baseOpsCount: 0,
+          baseTurnCount: 1,
+        },
+      },
+    });
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({
+        ops: SAMPLE_OPS,
+        tree: SAMPLE_TREE,
+        committedAs: 'sha256:committed',
+        committedAt: '2026-04-27T00:00:00.000Z',
+      })
+    );
+
+    await hydrateConversationToStore('proj_Committed', 'conv_Committed');
+
+    const workspace = useWorkspaceStore.getState();
+    expect(workspace.isCommitted).toBe(true);
+    expect(workspace.hasDraft).toBe(false);
+    expect(workspace.draftsByConversation.conv_Committed).toBeUndefined();
+    expect(useCommitStore.getState().lastCommitHash).toBe('sha256:committed');
+  });
+
+  it('keeps inherited child conversations unlocked and seeds the parent commit hash', async () => {
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({
+        tree: SAMPLE_TREE,
+        parentCommitHash: 'sha256:parent_commit',
+        parentCommitBranch: '5',
+      })
+    );
+
+    await hydrateConversationToStore('proj_Child', 'conv_Child');
+
+    expect(useWorkspaceStore.getState().isCommitted).toBe(false);
+    expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
+    expect(useWorkspaceStore.getState().hasConversationChanges).toBe(false);
+    expect(useCommitStore.getState().lastCommitHash).toBe('sha256:parent_commit');
+    expect(useCommitStore.getState().commitBranch).toBe('5');
+    expect(useChatStore.getState().activeBranch).toBe('5');
+  });
+
+  it('marks inherited children with applied YOps as having conversation changes', async () => {
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({
+        ops: SAMPLE_OPS,
+        tree: SAMPLE_TREE,
+        parentCommitHash: 'sha256:parent_commit',
+      })
+    );
+
+    await hydrateConversationToStore('proj_Child', 'conv_Child');
+
+    expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
+    expect(useWorkspaceStore.getState().hasConversationChanges).toBe(true);
   });
 });

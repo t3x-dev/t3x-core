@@ -13,22 +13,24 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { SemanticContent, YOp } from '@t3x-dev/core';
+import type { Commit, SemanticContent, YOp } from '@t3x-dev/core';
 import { collectResult, extractOpsFromEntries, runOperation, verifyReplay } from '@t3x-dev/core';
 import {
   collectYOpsForCommitRange,
   createCommit,
+  findConversationById,
   getCommit,
   getYOpsForCommit,
   insertRewrite,
   isCommitSuperseded,
   listCommits,
+  markConversationCommitted,
   updateCommitMessage,
   updateCommitPosition,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { mapSupersededError } from '../lib/yops-commit-link';
+import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { commitOp } from '../ops/commit';
 import { buildPipelineContext } from '../ops/context';
 import {
@@ -66,6 +68,7 @@ const ProvenanceSchema = z.object({
 
 const CreateCommitRequestSchema = z.object({
   project_id: z.string().min(1),
+  source_conversation_id: z.string().optional(),
   content: z.object({
     trees: z.any(),
     relations: z.any().optional(),
@@ -86,6 +89,15 @@ const CreateCommitRequestSchema = z.object({
     )
     .optional(),
 });
+
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
+
+class SourceConversationAlreadyCommittedError extends Error {
+  constructor(readonly conversationId: string) {
+    super(`Conversation ${conversationId} has already been committed`);
+    this.name = 'SourceConversationAlreadyCommittedError';
+  }
+}
 
 const CommitResponseSchema = z.object({
   hash: z.string(),
@@ -143,27 +155,78 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
 
   try {
     const ctx = await buildPipelineContext(c, body.project_id);
-    const commit = await collectResult(
-      runOperation(
-        commitOp,
-        {
-          project_id: body.project_id,
-          // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
-          content: body.content as any,
-          branch: body.branch,
-          parents: body.parents,
-          message: body.message,
-          author: body.author,
-          provenance: body.provenance,
-          yops_log_ids: body.yops_log_ids,
-          sources: body.sources,
-        },
-        ctx
-      )
-    );
+    const sourceConversationId = body.source_conversation_id;
+
+    let yopsLogIds = body.yops_log_ids;
+    let inheritedParentHash: string | undefined;
+    if (sourceConversationId) {
+      const sourceConversation = await findConversationById(ctx.db, sourceConversationId);
+      if (!sourceConversation) {
+        return errorResponse(c, 'NOT_FOUND', `Conversation ${sourceConversationId} not found`);
+      }
+      if (sourceConversation.projectId !== body.project_id) {
+        return errorResponse(
+          c,
+          'INVALID_REQUEST',
+          'source_conversation_id does not belong to the specified project'
+        );
+      }
+      if (sourceConversation.committedAs) {
+        return errorResponse(
+          c,
+          'ALREADY_COMMITTED',
+          `Conversation ${sourceConversationId} has already been committed`
+        );
+      }
+      inheritedParentHash = sourceConversation.parentCommitHash ?? undefined;
+      yopsLogIds ??= await findUncommittedYOpsIds(ctx.db, sourceConversationId, body.project_id);
+    }
+    const parents =
+      body.parents && body.parents.length > 0
+        ? body.parents
+        : inheritedParentHash
+          ? [inheritedParentHash]
+          : body.parents;
+
+    const commitInput = {
+      project_id: body.project_id,
+      // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
+      content: body.content as any,
+      branch: body.branch,
+      parents,
+      message: body.message,
+      author: body.author,
+      provenance: body.provenance,
+      yops_log_ids: yopsLogIds,
+      sources: body.sources,
+    };
+
+    if (sourceConversationId) {
+      let commit: Commit | undefined;
+      await (ctx.db as unknown as TxRunner).transaction(async (tx) => {
+        const txCtx = { ...ctx, db: tx as typeof ctx.db };
+        commit = await collectResult(runOperation(commitOp, commitInput, txCtx));
+        const marked = await markConversationCommitted(
+          tx as typeof ctx.db,
+          sourceConversationId,
+          commit.hash
+        );
+        if (!marked) {
+          throw new SourceConversationAlreadyCommittedError(sourceConversationId);
+        }
+      });
+      if (!commit) throw new Error('Commit transaction did not return a commit');
+
+      return c.json({ success: true as const, data: { commit } }, 200);
+    }
+
+    const commit = await collectResult(runOperation(commitOp, commitInput, ctx));
 
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
+    if (err instanceof SourceConversationAlreadyCommittedError) {
+      return errorResponse(c, 'ALREADY_COMMITTED', err.message);
+    }
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500. Same boundary as the
     // draft / autopilot / drafts-workflow commit routes.

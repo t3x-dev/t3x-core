@@ -5,6 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { cn } from '@/utils/cn';
+import { getFixedPopoverStyle } from '@/utils/popoverPosition';
+
+const BRANCH_MENU_WIDTH = 260;
+const BRANCH_MENU_MAX_HEIGHT = 320;
 
 interface BranchSwitcherProps {
   projectId: string;
@@ -16,6 +20,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,18 +32,30 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    setDropdownPos({
+      ...getFixedPopoverStyle(rect, {
+        width: BRANCH_MENU_WIDTH,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        estimatedHeight: BRANCH_MENU_MAX_HEIGHT,
+      }),
+      width: BRANCH_MENU_WIDTH,
+      maxHeight: 'min(320px, calc(100vh - 16px))',
+      overflowY: 'auto',
+    });
   }, [open]);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setCreating(false);
-        setNewName('');
+      const target = e.target as Node;
+      if (wrapperRef.current?.contains(target) || dropdownRef.current?.contains(target)) {
+        return;
       }
+      setOpen(false);
+      setCreating(false);
+      setNewName('');
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -69,7 +86,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
   }, [newName, projectId, activeBranch, handleSelect, create]);
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={wrapperRef}>
       {/* Trigger button */}
       <button
         ref={triggerRef}
@@ -92,7 +109,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
           <div
             ref={dropdownRef}
             className={cn(
-              'fixed z-[9999] min-w-[180px]',
+              'fixed z-[9999] max-w-[calc(100vw-16px)]',
               'rounded-lg border border-[var(--stroke-divider)]',
               'bg-[var(--surface-panel)] shadow-lg',
               'py-1 text-xs'
@@ -109,7 +126,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
                     type="button"
                     onClick={() => handleSelect(branch)}
                     className={cn(
-                      'w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer',
+                      'w-full min-w-0 flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer',
                       'hover:bg-[var(--hover-bg)] transition-colors',
                       branch === activeBranch
                         ? 'text-[var(--accent-commit)] font-medium'
@@ -117,7 +134,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
                     )}
                   >
                     <GitBranch className="h-3 w-3 shrink-0 opacity-50" />
-                    <span className="truncate flex-1">{branch}</span>
+                    <span className="min-w-0 truncate flex-1">{branch}</span>
                     {branch === activeBranch && <Check className="h-3 w-3 shrink-0" />}
                   </button>
                 ))}

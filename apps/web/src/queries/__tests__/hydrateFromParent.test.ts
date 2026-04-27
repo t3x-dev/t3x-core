@@ -16,6 +16,7 @@ const treesWithOneNode: TreeNode[] = [
 function mockCommit(overrides: {
   trees?: TreeNode[];
   sources?: Array<{ type: string; id?: string }>;
+  branch?: string;
 }): void {
   vi.spyOn(fetchers, 'fetchCommitForInheritance').mockResolvedValue({
     hash: HASH,
@@ -23,7 +24,7 @@ function mockCommit(overrides: {
     committed_at: '2026-04-12T00:00:00Z',
     author: { type: 'human', id: 'u1', name: 'e' },
     project_id: 'proj_1',
-    branch: 'main',
+    branch: overrides.branch ?? 'main',
     message: '',
     content: { trees: overrides.trees ?? [], relations: [] },
     sources: overrides.sources,
@@ -44,12 +45,13 @@ describe('fetchParentCommitData', () => {
   });
 
   it('surfaces lastCommitHash + confirmedNodeIds when trees exist', async () => {
-    mockCommit({ trees: treesWithOneNode });
+    mockCommit({ trees: treesWithOneNode, branch: '5' });
 
     const data = await fetchParentCommitData(HASH);
 
     expect(data.hasTrees).toBe(true);
     expect(data.lastCommitHash).toBe(HASH);
+    expect(data.branch).toBe('5');
     expect(data.confirmedNodeIds).toMatchObject({ trip: true });
   });
 
@@ -70,6 +72,7 @@ describe('fetchParentCommitData', () => {
     expect(data).toEqual({
       parentConversationId: null,
       lastCommitHash: null,
+      branch: null,
       confirmedNodeIds: {},
       hasTrees: false,
       fetched: false,

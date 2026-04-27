@@ -22,6 +22,8 @@
  */
 
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
+import { useChatStore } from '@/store/chatStore';
+import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatWorkspaceError } from './formatWorkspaceError';
 
@@ -42,11 +44,15 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
   }
 
   const post = useWorkspaceStore.getState();
+  useChatStore.getState().setConversationTitle(snapshot.title);
+  useCommitStore.getState().setConversationTitle(snapshot.title);
   post.setTurns(snapshot.turns);
   post.setDerived({
     tree: snapshot.tree,
     sourceIndex: snapshot.sourceIndex,
     opsLog: snapshot.opsLog,
+    baselineCommitHash: snapshot.parentCommitHash,
+    hasConversationChanges: snapshot.opsLog.length > 0 || Boolean(snapshot.committedAs),
   });
   if (snapshot.partial) {
     post.setReplayWarning({
@@ -58,12 +64,28 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
       appliedCount: snapshot.partial.appliedCount,
     });
   }
-  // Layer any persisted draft for this conversation on top of the
-  // freshly-hydrated server state. This is the F5 protection: if the
-  // user staged an Extract proposal and reloaded, the draft + script +
-  // dry-run preview come back so they can keep reviewing instead of
-  // losing the LLM round-trip. No-op if there's nothing persisted.
-  post.restoreDraftFor(convId);
+  if (snapshot.committedAs) {
+    post.setCommitted(true);
+    post.clearDraft();
+    useCommitStore.getState().setInitialCommit(snapshot.committedAs, {}, {});
+  } else {
+    post.setCommitted(false);
+    if (snapshot.parentCommitHash) {
+      const commitStore = useCommitStore.getState();
+      commitStore.setInitialCommit(snapshot.parentCommitHash, {}, {});
+      commitStore.setBeforeCommitHash(snapshot.parentCommitHash);
+      if (snapshot.parentCommitBranch) {
+        commitStore.setCommitBranch(snapshot.parentCommitBranch);
+        useChatStore.getState().setActiveBranch(snapshot.parentCommitBranch);
+      }
+    }
+    // Layer any persisted draft for this conversation on top of the
+    // freshly-hydrated server state. This is the F5 protection: if the
+    // user staged an Extract proposal and reloaded, the draft + script +
+    // dry-run preview come back so they can keep reviewing instead of
+    // losing the LLM round-trip. No-op if there's nothing persisted.
+    post.restoreDraftFor(convId);
+  }
 
   // Discoverability: a content-bearing conversation should not require
   // a click to reveal. Auto-expand on first view if the project has no

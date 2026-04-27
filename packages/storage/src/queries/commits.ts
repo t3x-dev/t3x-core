@@ -36,9 +36,9 @@ export class SupersededYOpsLogIdsError extends Error {
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Drizzle's tx vs db types
-// vary by adapter; the runtime contract (transaction(fn)) is uniform.
-type TxRunner = { transaction: (fn: (tx: any) => Promise<unknown>) => Promise<unknown> };
+// Drizzle's tx vs db types vary by adapter; the runtime contract
+// (transaction(fn)) is uniform and callers narrow tx to AnyDB.
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
 // ============================================================
 // Types
@@ -143,10 +143,10 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
   //      `commits.yops_log_ids`. The next supersede (which has been
   //      waiting on the advisory lock) wakes up, sees the new commits
   //      row in its NOT EXISTS subquery, and excludes them.
-  const result = await (db as unknown as TxRunner).transaction(async (tx) => {
-    await acquireProjectSupersedeLock(tx as AnyDB, input.project_id);
+  const insertWithSupersedeGuard = async (txOrDb: AnyDB): Promise<CommitRecord> => {
+    await acquireProjectSupersedeLock(txOrDb, input.project_id);
 
-    const superseded = await (tx as AnyDB)
+    const superseded = await txOrDb
       .select({ id: yopsLog.id })
       .from(yopsLog)
       .where(and(inArray(yopsLog.id, yopsLogIds), isNotNull(yopsLog.supersededAt)));
@@ -154,8 +154,14 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
     }
 
-    return insertCommit(tx as AnyDB);
-  });
+    return insertCommit(txOrDb);
+  };
+
+  const runner = db as unknown as Partial<TxRunner>;
+  const result =
+    typeof runner.transaction === 'function'
+      ? await runner.transaction(async (tx) => insertWithSupersedeGuard(tx as AnyDB))
+      : await insertWithSupersedeGuard(db);
 
   return rowToCommit(result as CommitRecord);
 }

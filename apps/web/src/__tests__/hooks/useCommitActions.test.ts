@@ -91,6 +91,7 @@ describe('useCommitActions.commit', () => {
         sources: expect.arrayContaining([
           expect.objectContaining({ type: 'conversation', id: 'conv_1' }),
         ]),
+        source_conversation_id: 'conv_1',
         provenance: { method: 'llm_extraction' },
       })
     );

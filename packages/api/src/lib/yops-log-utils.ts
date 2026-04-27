@@ -6,13 +6,16 @@
  */
 
 import {
+  extractOpsFromEntries,
   replayYOpsLog as replayCoreYOpsLog,
+  replayYOps,
   type SemanticContent,
   type YOpsLogEntry,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
   findConversationById,
+  getCommit,
   listCommits,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
@@ -54,6 +57,38 @@ export const replayYOpsLog = (entries: YOpsLogEntry[]): SemanticContent =>
 
 const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
 
+async function getParentCommitContent(
+  db: AnyDB,
+  parentCommitHash: string | null,
+  projectId: string
+): Promise<SemanticContent> {
+  if (!parentCommitHash) return EMPTY_CONTENT;
+
+  const commit = await getCommit(db, parentCommitHash);
+  if (!commit || commit.project_id !== projectId) return EMPTY_CONTENT;
+
+  return commit.content;
+}
+
+function replayEntriesOnBaseline(
+  baseline: SemanticContent,
+  entries: YOpsLogRecord[]
+): SemanticContent {
+  if (entries.length === 0) return baseline;
+
+  return entries.reduce((snapshot, entry) => {
+    try {
+      const replay = replayYOps({
+        baseContent: snapshot,
+        ops: extractOpsFromEntries([toYOpsLogEntry(entry)]),
+      });
+      return replay.ok ? replay.content : snapshot;
+    } catch {
+      return snapshot;
+    }
+  }, baseline);
+}
+
 /**
  * Replay only the *committed* yops_log entries for a conversation —
  * i.e. those whose ids appear in some `commits.yops_log_ids` for the
@@ -62,9 +97,11 @@ const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
  * (uncommitted, regardless of `superseded_at`) are intentionally
  * excluded — see `replayActiveDraftOnBaseline` if you need both.
  *
- * Returns an empty `{ trees: [], relations: [] }` when:
+ * Uses `conversation.parent_commit_hash` as the inherited base when present,
+ * then layers this conversation's committed entries on top. Returns an empty
+ * `{ trees: [], relations: [] }` when:
  *   - the conversation doesn't exist,
- *   - the conversation has no committed entries yet (a fresh project).
+ *   - the conversation has no parent commit and no committed entries yet.
  */
 export async function replayCommittedBaseline(
   db: AnyDB,
@@ -73,8 +110,13 @@ export async function replayCommittedBaseline(
   const conv = await findConversationById(db, conversationId);
   if (!conv) return EMPTY_CONTENT;
 
+  const inheritedBaseline = await getParentCommitContent(
+    db,
+    conv.parentCommitHash ?? null,
+    conv.projectId
+  );
   const allEntries = await listYOpsLogByConversation(db, conversationId);
-  if (allEntries.length === 0) return EMPTY_CONTENT;
+  if (allEntries.length === 0) return inheritedBaseline;
 
   // The committed-id set is per-project, not per-conversation: a commit
   // never holds yops from another project, but it may hold yops from
@@ -95,7 +137,11 @@ export async function replayCommittedBaseline(
   }
 
   const committedEntries = allEntries.filter((entry) => committedIds.has(entry.id));
-  if (committedEntries.length === 0) return EMPTY_CONTENT;
+  if (committedEntries.length === 0) return inheritedBaseline;
+
+  if (inheritedBaseline.trees.length > 0 || inheritedBaseline.relations.length > 0) {
+    return replayEntriesOnBaseline(inheritedBaseline, committedEntries);
+  }
 
   return replayCoreYOpsLog(toYOpsLogEntries(committedEntries));
 }
