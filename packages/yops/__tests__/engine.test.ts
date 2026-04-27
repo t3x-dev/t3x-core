@@ -50,6 +50,28 @@ describe('applyYOps — engine behavior', () => {
     expect(result.doc).toEqual({ a: 1 });
   });
 
+  it('resolves the op key when source appears first (alphabetical YAML emit)', () => {
+    const doc: YValue = {};
+    // Object.keys order matches insertion: source first, then set.
+    const ops = [
+      {
+        source: { type: 'human', author: 'tester' },
+        set: { path: 'a', value: 1 },
+      },
+    ] as unknown as YOp[];
+    const result = applyYOps(doc, ops);
+    expect(result.ok).toBe(true);
+    expect(result.doc).toEqual({ a: 1 });
+  });
+
+  it('returns INVALID_OP when only metadata keys are present', () => {
+    const doc: YValue = {};
+    const ops = [{ source: { type: 'human', author: 'tester' } }] as unknown as YOp[];
+    const result = applyYOps(doc, ops);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
+
   it('unknown op returns UNKNOWN_OP error', () => {
     const doc: YValue = {};
     const ops = [{ bogus: { path: 'x' } }] as unknown as YOp[];

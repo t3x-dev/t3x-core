@@ -675,10 +675,17 @@ describe('extractors/v2 compiler', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const definePath = (result.ops[0] as { define: { path: string } }).define.path;
-    expect(definePath).toBe('characters/main_protagonist');
-    const populatePath = (result.ops[1] as { populate: { path: string } }).populate.path;
-    expect(populatePath).toBe('characters/main_protagonist');
+    // Strict define: every parent must be defined before its child, so the
+    // compiler now emits the `characters` parent define ahead of the
+    // `characters/main_protagonist` define — no more mkdir-p in the engine.
+    const definePaths = result.ops
+      .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+      .map((op) => op.define.path);
+    expect(definePaths).toEqual(['characters', 'characters/main_protagonist']);
+    const populatePath = result.ops
+      .filter((op): op is Extract<typeof op, { populate: unknown }> => 'populate' in op)
+      .map((op) => op.populate.path);
+    expect(populatePath).toEqual(['characters/main_protagonist']);
   });
 
   describe('candidate.children compilation', () => {
@@ -804,13 +811,19 @@ describe('extractors/v2 compiler', () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // Parent define + child define + child populate, child path is nested.
-      expect((result.ops[1] as { define: { path: string } }).define.path).toBe(
-        'story/overview/summary'
-      );
-      expect((result.ops[2] as { populate: { path: string } }).populate.path).toBe(
-        'story/overview/summary'
-      );
+      // Strict define inserts the missing intermediate `story/overview`
+      // ancestor before `story/overview/summary`, then populates the leaf.
+      const opShapes = result.ops.map((op) => {
+        if ('define' in op) return { kind: 'define', path: op.define.path };
+        if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+        return { kind: 'other' };
+      });
+      expect(opShapes).toEqual([
+        { kind: 'define', path: 'story' },
+        { kind: 'define', path: 'story/overview' },
+        { kind: 'define', path: 'story/overview/summary' },
+        { kind: 'populate', path: 'story/overview/summary' },
+      ]);
     });
 
     it('returns a reaskable compile failure when a child key fails SNAKE_CASE_KEY', () => {

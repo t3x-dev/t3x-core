@@ -14,6 +14,18 @@ import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
 import type { YOp, YOpsResult, YValue } from './types';
 
+// Keys that may appear alongside the op key on the outer object. The op
+// name is the first key not in this set, so YAML emitters that sort keys
+// alphabetically can't accidentally elect `source` as the operation.
+const OP_METADATA_KEYS = new Set(['source']);
+
+function resolveOpName(op: Record<string, unknown>): string | null {
+  for (const key of Object.keys(op)) {
+    if (!OP_METADATA_KEYS.has(key)) return key;
+  }
+  return null;
+}
+
 // ── Field Validation ──
 
 function validateFields(
@@ -60,9 +72,17 @@ export function createEngine(registry: OpRegistry) {
     let current = deepClone(doc);
 
     for (let i = 0; i < ops.length; i++) {
-      const op = ops[i];
-      const opName = Object.keys(op)[0];
-      const fields = (op as Record<string, unknown>)[opName] as Record<string, unknown>;
+      const op = ops[i] as Record<string, unknown>;
+      const opName = resolveOpName(op);
+      if (opName === null) {
+        return {
+          ok: false,
+          doc: current,
+          applied: i,
+          error: yopsError(YOPS_ERRORS.INVALID_OP, `Op at index ${i} has no operation key`, i),
+        };
+      }
+      const fields = op[opName] as Record<string, unknown>;
 
       // 1. Registry lookup
       const handler = registry.getHandler(opName);

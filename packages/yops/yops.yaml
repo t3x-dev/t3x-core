@@ -84,14 +84,26 @@ operations:
       - define:
           path: config/database
     tests:
-      - name: creates empty mapping at path
+      - name: creates empty mapping at root
         input: {}
+        ops: [{ define: { path: config } }]
+        output: { config: {} }
+      - name: creates nested mapping when parent exists
+        input: { config: {} }
         ops: [{ define: { path: config/database } }]
         output: { config: { database: {} } }
       - name: errors if path already exists
         input: { config: { database: {} } }
         ops: [{ define: { path: config/database } }]
         error: ALREADY_EXISTS
+      - name: errors if parent does not exist
+        input: {}
+        ops: [{ define: { path: config/database } }]
+        error: PATH_NOT_FOUND
+      - name: errors if parent is not a mapping
+        input: { config: 'scalar' }
+        ops: [{ define: { path: config/database } }]
+        error: NOT_A_MAPPING
 
   drop:
     category: ddl
@@ -525,6 +537,12 @@ operations:
     rules:
       - target must exist and be a sequence
       - if 'by' is provided, items must be mappings with that key
+      - >
+        comparison is deterministic and language-portable: type rank
+        null < boolean < number < string < array < mapping; within a type,
+        strings compare by Unicode codepoint (no locale collation), numbers
+        by numeric value, arrays/mappings by their canonical encoding
+        (mapping keys lexicographically sorted before comparison).
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
@@ -539,6 +557,12 @@ operations:
         input: { items: [cherry, apple, banana] }
         ops: [{ sort: { path: items } }]
         output: { items: [apple, banana, cherry] }
+      - name: sorts by Unicode codepoint, not locale
+        # 'B' (U+0042) < 'a' (U+0061) in codepoint order, but locale order
+        # often interleaves them. Result must be codepoint-ordered.
+        input: { items: ['a', 'B', 'c'] }
+        ops: [{ sort: { path: items } }]
+        output: { items: ['B', 'a', 'c'] }
       - name: errors when sort by sees non-mapping item
         input: { users: [{ name: alice }, bob] }
         ops: [{ sort: { path: users, by: name } }]
@@ -566,6 +590,10 @@ operations:
       - target must exist and be a sequence
       - if 'by' is provided, items must be mappings with that key
       - keeps first occurrence, removes subsequent duplicates
+      - >
+        equality is by canonical encoding: scalars by value; arrays element-wise;
+        mappings with keys sorted lexicographically before comparison. This
+        is language-portable and independent of YAML key insertion order.
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
@@ -578,6 +606,12 @@ operations:
         input: { tags: [a, b, a, c, b] }
         ops: [{ unique: { path: tags } }]
         output: { tags: [a, b, c] }
+      - name: deduplicates mappings irrespective of key order
+        # The two mappings are equal under canonical encoding even though
+        # their keys are written in different orders.
+        input: { items: [{ a: 1, b: 2 }, { b: 2, a: 1 }] }
+        ops: [{ unique: { path: items } }]
+        output: { items: [{ a: 1, b: 2 }] }
       - name: errors when unique by sees non-mapping item
         input: { users: [{ name: alice }, bob] }
         ops: [{ unique: { path: users, by: name } }]

@@ -501,20 +501,93 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
   };
 }
 
-function dedupeDefineOps(ops: SourcedYOp[]): { ops: SourcedYOp[]; warnings: string[] } {
+/**
+ * Returns the primary target path of an op, or null if the op shape doesn't
+ * have one. Used by `dedupeDefineOps` to track which paths a batch implies
+ * already exist at apply time (any non-define op that targets a path
+ * effectively asserts the path already exists in the document, since
+ * `populate` / `set` / `assert` / `unset` / etc. all require resolution).
+ */
+function primaryPathOf(op: SourcedYOp): string | null {
+  if ('define' in op) return op.define.path;
+  if ('populate' in op) return op.populate.path;
+  if ('set' in op) return op.set.path;
+  if ('append' in op) return op.append.path;
+  if ('unset' in op) return op.unset.path;
+  if ('drop' in op) return op.drop.path;
+  if ('assert' in op) return op.assert.path;
+  if ('rename' in op) return op.rename.path;
+  if ('fold' in op) return op.fold.path;
+  if ('sort' in op) return op.sort.path;
+  if ('unique' in op) return op.unique.path;
+  if ('pick' in op) return op.pick.path;
+  if ('omit' in op) return op.omit.path;
+  if ('nest' in op) return op.nest.path;
+  if ('split' in op) return op.split.path;
+  if ('merge' in op) return op.merge.path;
+  if ('move' in op) return op.move.from;
+  if ('clone' in op) return op.clone.from;
+  return null;
+}
+
+/**
+ * Normalize the define ops in a compiled batch:
+ *
+ *   1. Insert ancestor defines so every multi-segment `define` path is
+ *      preceded by defines for each parent that the batch hasn't already
+ *      brought into scope. The YOps `define` op is strict ("parent must
+ *      exist and be a mapping") — there is no mkdir-p — so a bootstrap
+ *      add at `trip/duration_days` compiles to `define trip` followed by
+ *      `define trip/duration_days`. Auto-emitted parents inherit the
+ *      triggering op's `source`.
+ *
+ *      A non-define op (populate / set / etc.) earlier in the batch is
+ *      taken as evidence that its target path already exists at apply
+ *      time. So an `update` item that emits `populate characters` and
+ *      then `define characters/rival` does NOT receive an injected
+ *      `define characters` — that would fail with ALREADY_EXISTS.
+ *
+ *   2. Drop redundant `define` ops at paths already defined earlier in
+ *      the batch. Inferred parent defines are silent; explicit duplicates
+ *      from the LLM still produce a warning so callers can see the model
+ *      proposed the same path twice.
+ */
+function dedupeDefineOps(
+  ops: SourcedYOp[],
+  preExistingPaths: Iterable<string> = []
+): { ops: SourcedYOp[]; warnings: string[] } {
+  const knownExisting = new Set<string>(preExistingPaths);
   const defined = new Set<string>();
   const kept: SourcedYOp[] = [];
   const warnings: string[] = [];
 
   for (const op of ops) {
-    if ('define' in op) {
-      const path = op.define.path;
-      if (defined.has(path)) {
-        warnings.push(`Dropped duplicate define op for path "${path}"`);
-        continue;
-      }
-      defined.add(path);
+    if (!('define' in op)) {
+      const path = primaryPathOf(op);
+      if (path !== null) knownExisting.add(path);
+      kept.push(op);
+      continue;
     }
+
+    const path = op.define.path;
+    const segments = path.split('/').filter((s) => s.length > 0);
+
+    let prefix = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      prefix = prefix === '' ? segments[i] : `${prefix}/${segments[i]}`;
+      if (!knownExisting.has(prefix) && !defined.has(prefix)) {
+        kept.push({ define: { path: prefix }, source: op.source } as SourcedYOp);
+        defined.add(prefix);
+        knownExisting.add(prefix);
+      }
+    }
+
+    if (defined.has(path)) {
+      warnings.push(`Dropped duplicate define op for path "${path}"`);
+      continue;
+    }
+    defined.add(path);
+    knownExisting.add(path);
     kept.push(op);
   }
 
@@ -666,7 +739,19 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     warnings.push(...compiled.warnings);
   }
 
-  const deduped = dedupeDefineOps(ops);
+  // `target_ref.path` on update / reinforce / remove items names a path
+  // that already exists in the snapshot the compile is being applied to.
+  // Seed the dedupe pass with these so ancestor-define injection doesn't
+  // try to recreate them and trip ALREADY_EXISTS at apply time.
+  const preExisting: string[] = [];
+  for (const item of input.draft.items) {
+    const targetPath = item.target_ref?.path;
+    if (typeof targetPath === 'string' && targetPath.length > 0) {
+      preExisting.push(targetPath);
+    }
+  }
+
+  const deduped = dedupeDefineOps(ops, preExisting);
   // Path-level pruning runs after dedupe so it sees the full
   // post-merge scaffold. A define from item A that supports a populate
   // from item B is preserved; a leaf define with no populate descendant

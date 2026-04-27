@@ -16,9 +16,21 @@ import type { YValue } from '../src/types';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('define — edge cases', () => {
-  // 1. Deep nesting creates all intermediates
-  it('creates a/b/c/d/e (5 levels deep)', () => {
+  // 1. Deep nesting requires every parent to be defined first (no mkdir-p)
+  it('errors at the first missing parent in a 5-level path', () => {
     const r = applyYOps({}, [{ define: { path: 'a/b/c/d/e' } }]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('PATH_NOT_FOUND');
+  });
+
+  it('builds a/b/c/d/e (5 levels deep) by defining each parent', () => {
+    const r = applyYOps({}, [
+      { define: { path: 'a' } },
+      { define: { path: 'a/b' } },
+      { define: { path: 'a/b/c' } },
+      { define: { path: 'a/b/c/d' } },
+      { define: { path: 'a/b/c/d/e' } },
+    ]);
     expect(r.ok).toBe(true);
     expect((r.doc as any).a.b.c.d.e).toEqual({});
   });
@@ -83,11 +95,11 @@ describe('define — edge cases', () => {
     expect(r.error?.code).toBe('ALREADY_EXISTS');
   });
 
-  // 10. Define with intermediate that's scalar blocks
-  it('creates intermediate even when parent path does not exist yet', () => {
+  // 10. define is strict: missing parent is PATH_NOT_FOUND
+  it('errors when intermediate parent does not exist (no mkdir-p)', () => {
     const r = applyYOps({}, [{ define: { path: 'a/b' } }]);
-    expect(r.ok).toBe(true);
-    expect((r.doc as any).a.b).toEqual({});
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('PATH_NOT_FOUND');
   });
 
   // 11. Immutability: original doc not modified
@@ -144,12 +156,17 @@ describe('define — edge cases', () => {
     expect((r.doc as any)['my key']).toEqual({});
   });
 
-  // 18. Define child when parent is scalar — should create intermediate
-  it('overwrites null intermediate to create nested mapping', () => {
-    // define creates intermediates, so if parent doesn't exist it creates it
-    const r = applyYOps({}, [{ define: { path: 'a/b/c' } }]);
-    expect(r.ok).toBe(true);
-    expect((r.doc as any).a.b.c).toEqual({});
+  // 18. Define refuses to replace a non-mapping intermediate
+  it('errors when intermediate is null (NOT_A_MAPPING)', () => {
+    const r = applyYOps({ a: null }, [{ define: { path: 'a/b' } }]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('NOT_A_MAPPING');
+  });
+
+  it('errors when intermediate is a sequence (NOT_A_MAPPING)', () => {
+    const r = applyYOps({ a: [1, 2] }, [{ define: { path: 'a/b' } }]);
+    expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('NOT_A_MAPPING');
   });
 
   // 19. Boolean value at path blocks define
