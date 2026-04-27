@@ -8,9 +8,9 @@ import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
-  WORKSPACE_PANEL_FALLBACK_WIDTH,
   clampWorkspacePanelWidth,
   getPreferredWorkspacePanelWidth,
+  WORKSPACE_PANEL_FALLBACK_WIDTH,
 } from '@/utils/chatWorkspaceLayout';
 
 export default function ConversationPage() {

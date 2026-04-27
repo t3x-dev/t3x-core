@@ -55,9 +55,7 @@ export async function findUncommittedYOpsIds(
  * should re-fetch the active draft id set (e.g. via
  * `findUncommittedYOpsIds`) and retry the commit.
  */
-// biome-ignore lint/suspicious/noExplicitAny: Hono's typed-response
-// helpers are intentionally permissive at the boundary.
-export function mapSupersededError(c: Context, err: unknown): any | null {
+export function mapSupersededError(c: Context, err: unknown): ReturnType<typeof errorJson> | null {
   if (err instanceof SupersededYOpsLogIdsError) {
     return errorJson(c, 'YOPS_LOG_SUPERSEDED', err.message, 409, {
       superseded_ids: err.supersededIds,
