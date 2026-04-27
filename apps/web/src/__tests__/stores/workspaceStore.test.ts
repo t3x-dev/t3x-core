@@ -232,6 +232,87 @@ describe('workspaceStore (state-only)', () => {
     expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
   });
 
+  describe('retainedDraftFailure (PR-B preserve-draft-on-failure)', () => {
+    // The structured marker that survives a failed re-extract on top of a
+    // previously-staged draft. Set by useExtraction's catch block; cleared
+    // by the next successful extract / Discard / successful Apply / reset.
+    // See `RetainedDraftFailure` in workspaceStore.ts.
+    const failure = {
+      message: 'Extraction could not verify 1 slot(s) against the conversation.',
+      at: '2026-04-27T00:00:00Z',
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      preset: 'concise' as const,
+    };
+
+    it('starts null and survives setError so the two surfaces stay independent', () => {
+      // Two distinct error fields drive two distinct UI surfaces. Setting
+      // one must not silently clobber the other — useExtraction picks the
+      // right field based on whether a draft was staged at attempt start.
+      expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
+      useWorkspaceStore.getState().setError('separate channel');
+      expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
+    });
+
+    it('a successful new draft clears any retained failure marker', () => {
+      // Real flow: Extract A succeeds → user has draft → Extract B fails
+      // (sets retainedDraftFailure) → Extract C succeeds. After C, the
+      // panel must flip back to "Draft preview" — retainedDraftFailure
+      // describes a stale event by then.
+      useWorkspaceStore.getState().setRetainedDraftFailure(failure);
+      expect(useWorkspaceStore.getState().retainedDraftFailure).not.toBeNull();
+
+      useWorkspaceStore.getState().setDraft({
+        ops: [
+          {
+            set: { path: 'trip/dest', value: 'HZ' },
+            source: {
+              type: 'llm' as const,
+              model: 'gpt-4o-mini',
+              at: '2026-04-26T00:00:00Z',
+              turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+            },
+          },
+        ] as never,
+        tree: { trees: [], relations: [] },
+      });
+      expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
+    });
+
+    it('clearDraft (Discard / successful Apply) also clears the failure marker', () => {
+      // Discard explicitly drops the proposal — the marker referred to
+      // that draft, so it must clear too. Same path is used after a
+      // successful Apply (useScriptExecution.execute). Without this the
+      // panel would keep showing "Last extract failed... Previous draft
+      // retained." after the user has already disposed of the draft.
+      useWorkspaceStore.getState().setDraft({
+        ops: [
+          {
+            set: { path: 'trip/dest', value: 'HZ' },
+            source: {
+              type: 'llm' as const,
+              model: 'gpt-4o-mini',
+              at: '2026-04-26T00:00:00Z',
+              turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+            },
+          },
+        ] as never,
+        tree: { trees: [], relations: [] },
+      });
+      useWorkspaceStore.getState().setRetainedDraftFailure(failure);
+      expect(useWorkspaceStore.getState().retainedDraftFailure).not.toBeNull();
+
+      useWorkspaceStore.getState().clearDraft();
+      expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
+    });
+
+    it('reset() clears the marker as part of conversation-scoped wipe', () => {
+      useWorkspaceStore.getState().setRetainedDraftFailure(failure);
+      useWorkspaceStore.getState().reset();
+      expect(useWorkspaceStore.getState().retainedDraftFailure).toBeNull();
+    });
+  });
+
   describe('per-conversation draft persistence', () => {
     const draftOps = [
       {

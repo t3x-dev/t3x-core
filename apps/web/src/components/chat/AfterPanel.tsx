@@ -13,6 +13,10 @@ import {
 } from '@/components/chat/treeRowMetrics';
 import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
+import {
+  formatRetainedFailureRow,
+  getResultPanelHeaderLabel,
+} from '@/domain/draft/retainedFailureLabel';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
@@ -501,6 +505,12 @@ export function AfterPanel({
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
+  // When a re-Extract failed but the previous draft is still applicable,
+  // the panel renders the retained draft tree + a persistent error row +
+  // a "Previous draft" header label. Set by useExtraction's catch block;
+  // cleared on successful extract / Discard / successful Apply.
+  const retainedDraftFailure = useWorkspaceStore((s) => s.retainedDraftFailure);
+  const hasRetainedFailure = hasDraft && retainedDraftFailure !== null;
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
   const selectedSlotKey = useWorkspaceStore((s) => s.selectedSlotKey);
   const select = useWorkspaceStore((s) => s.select);
@@ -680,16 +690,32 @@ export function AfterPanel({
             it as "Concise produced this" — which it didn't, because
             Concise can't shrink committed history.
           */}
+          {/*
+            Header label table (post-PR-B):
+              hasDraft && retainedDraftFailure → "Previous draft" + Retained badge
+              hasDraft                         → "Draft preview"  + Unapplied badge
+              otherwise                        → "Committed result"
+            The retained-draft variant signals that the rendered tree is
+            the prior successful proposal, NOT the new (failed) attempt
+            the user just clicked Extract on.
+          */}
           <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-            {hasDraft ? 'Draft preview' : 'Committed result'}
-            {hasDraft && (
+            {getResultPanelHeaderLabel({ hasDraft, hasRetainedFailure })}
+            {hasRetainedFailure ? (
+              <span
+                title="Last extract failed; this is the previous staged draft. Click Apply to commit it, or Discard to drop it."
+                className="rounded bg-[var(--status-warning)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--status-warning)]"
+              >
+                Retained
+              </span>
+            ) : hasDraft ? (
               <span
                 title="Dry-run preview of the staged Extract — click Apply to commit."
                 className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
               >
                 Unapplied
               </span>
-            )}
+            ) : null}
           </span>
           {showBeforeToggle && onToggleBefore && hasParent && (
             <button
@@ -706,6 +732,20 @@ export function AfterPanel({
           )}
         </div>
       </div>
+
+      {hasRetainedFailure && retainedDraftFailure && (
+        <output
+          data-testid="after-panel-retained-failure"
+          className="block shrink-0 border-b border-[var(--status-warning)]/30 bg-[var(--status-warning)]/[0.06] px-3 py-1.5"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-warning)] opacity-80" />
+            <span className="text-[10px] leading-4 text-[var(--status-warning)]">
+              {formatRetainedFailureRow(retainedDraftFailure)}
+            </span>
+          </div>
+        </output>
+      )}
 
       <div className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
         {rows.length === 0 && lastError ? (

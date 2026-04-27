@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2, PanelRightClose, Play } from 'lucide-react';
+import { formatApplyTooltipForRetainedFailure } from '@/domain/draft/retainedFailureLabel';
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -17,6 +18,11 @@ export function WorkspaceTopbar() {
   const committedCount = useWorkspaceStore((s) => s.opsLog.length);
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  // Drives the Apply button tooltip wording. When a re-extract failed
+  // on top of a previously-staged draft, Apply still works — but it
+  // applies the PREVIOUS draft, not the latest (failed) attempt. The
+  // generic "Apply the script to the tree" tooltip would mislead.
+  const retainedDraftFailure = useWorkspaceStore((s) => s.retainedDraftFailure);
   const { execute, canRun, disabledReason } = useScriptExecution();
 
   return (
@@ -47,7 +53,12 @@ export function WorkspaceTopbar() {
           type="button"
           onClick={execute}
           disabled={!canRun}
-          title={disabledReason ?? 'Apply the script to the tree (commits a new yops_log entry)'}
+          title={
+            disabledReason ??
+            (retainedDraftFailure
+              ? formatApplyTooltipForRetainedFailure(retainedDraftFailure)
+              : 'Apply the script to the tree (commits a new yops_log entry)')
+          }
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <Play className="h-2.5 w-2.5" />
