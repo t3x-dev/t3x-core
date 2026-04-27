@@ -58,9 +58,63 @@ function generateQuoteCandidates(quote: string): string[] {
     push(current.replace(/'/g, '’'));
     push(current.replace(/"/g, '“'));
     push(current.replace(/"/g, '”'));
+    // Trim trailing terminal punctuation that small models often add
+    // ("A7R5." → "A7R5"), and surrounding brackets/quotes that get
+    // glued onto a fragment.
+    push(current.replace(/[.,;:!?)\]\s]+$/, ''));
+    push(current.replace(/^[(\[\s]+/, ''));
   }
 
   return [...candidates];
+}
+
+/**
+ * Case-insensitive + whitespace-collapsed search for `needle` in
+ * `haystack`. Returns the original-cased substring of `haystack` that
+ * matched, so the repaired quote stays a verbatim substring of the
+ * turn content (the audit-trail invariant `validateSource` relies on).
+ *
+ * Why both at once: small models routinely emit quotes that differ in
+ * casing AND whitespace simultaneously (e.g. lowercased + single-spaced
+ * vs the prompt's mixed-case + multi-line content). Two separate
+ * passes would miss the combined case.
+ *
+ * Returns null if no match — caller falls back to the next repair
+ * strategy or hard-fails validation.
+ */
+function findCaseInsensitiveCollapsedMatch(haystack: string, needle: string): string | null {
+  const trimmedNeedle = needle.trim();
+  if (!trimmedNeedle) return null;
+
+  // Build a normalized form of haystack with a position map back to
+  // the original. Each normalized character knows its original index.
+  const positions: number[] = [];
+  let normalizedHaystack = '';
+  let prevWasSpace = false;
+  for (let i = 0; i < haystack.length; i++) {
+    const char = haystack[i];
+    if (/\s/.test(char)) {
+      if (prevWasSpace) continue;
+      normalizedHaystack += ' ';
+      positions.push(i);
+      prevWasSpace = true;
+    } else {
+      normalizedHaystack += char.toLowerCase();
+      positions.push(i);
+      prevWasSpace = false;
+    }
+  }
+
+  const normalizedNeedle = trimmedNeedle.toLowerCase().replace(/\s+/g, ' ');
+  const matchStart = normalizedHaystack.indexOf(normalizedNeedle);
+  if (matchStart === -1) return null;
+
+  // Map back: the matched range in the normalized haystack corresponds
+  // to original indices `positions[matchStart]` through
+  // `positions[matchStart + normalizedNeedle.length - 1]` inclusive.
+  const originalStart = positions[matchStart];
+  const originalEnd = positions[matchStart + normalizedNeedle.length - 1];
+  return haystack.slice(originalStart, originalEnd + 1);
 }
 
 /**
@@ -125,6 +179,27 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
         const repaired = tryExactQuote(content, candidate);
         if (repaired) {
           src.turn_ref.quote = repaired;
+          break;
+        }
+      }
+      if (src.turn_ref.quote && content.includes(src.turn_ref.quote)) {
+        continue;
+      }
+    }
+
+    // Strategy 1b: case-insensitive + whitespace-collapsed match. Small
+    // models (gpt-5.4-nano, gemini-3.1-flash-lite) consistently emit
+    // quotes that differ from the source by casing, whitespace runs,
+    // or both simultaneously — so this strategy folds those two
+    // dimensions together in one pass. The repaired quote is the
+    // ORIGINAL-cased substring from the content, so the audit-trail
+    // invariant ("quote is a verbatim substring of content") still
+    // holds — we just recover the right slice.
+    if (quote) {
+      for (const candidate of generateQuoteCandidates(quote)) {
+        const recovered = findCaseInsensitiveCollapsedMatch(content, candidate);
+        if (recovered) {
+          src.turn_ref.quote = recovered;
           break;
         }
       }
