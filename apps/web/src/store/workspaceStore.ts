@@ -1,4 +1,4 @@
-import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
+import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -52,11 +52,41 @@ export interface ReplayWarning {
  * `reset()`, and the start of any new Extract attempt. NOT cleared by
  * an Apply failure — the previous draft is still applicable.
  */
+/**
+ * Web-side failure-reason taxonomy for `ExtractionFailedError`. Mirrors
+ * the union declared in `@/commands/yops/errors.ts`; redeclared here so
+ * the store doesn't take a structural dependency on the command-layer
+ * error class. Keep in sync with that file.
+ */
+export type ExtractionFailureReason =
+  | 'missing_source'
+  | 'unverifiable_quote'
+  | 'invalid_structure'
+  | 'exhausted_retries'
+  | 'llm_error';
+
 export interface RetainedDraftFailure {
   /** User-facing failure message — same string we'd put on a toast. */
   message: string;
   /** ISO-8601 timestamp the failure was recorded; useful for "stale" badges. */
   at: string;
+  /**
+   * Web-side reason category from `ExtractionFailedError.reason`. Lets a
+   * future affordance branch on the *kind* of failure (e.g. "click to
+   * see the failing slot" only for `unverifiable_quote`) without
+   * regex-parsing `message`. Undefined when the failure didn't come
+   * from `ExtractionFailedError` (transport / unexpected throw).
+   */
+  reason?: ExtractionFailureReason;
+  /**
+   * Wire-level failure code from `ExtractionFailureCode` (e.g.
+   * `unverifiable_quote`, `compile`, `draft_parse`, `transport`).
+   * Independent from `reason`: `reason` is a small UI-facing taxonomy,
+   * `failureCode` is the typed wire code we forwarded from the API.
+   * Carrying both keeps server-side diagnostic info available without
+   * recomputing on the client.
+   */
+  failureCode?: ExtractionFailureCode;
   /**
    * Provider id at the time of the failed attempt. Optional because
    * provider resolution is async and the catch block may run before a

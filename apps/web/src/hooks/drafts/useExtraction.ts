@@ -143,10 +143,26 @@ export function useExtraction({
       //   - on failure: if true, set retainedDraftFailure and PRESERVE
       //                 the existing draft instead of dropping it.
       const hadDraftAtStart = store.hasDraft;
-      // Manual dirty edits are already protected by the scriptDirty
-      // confirm above; the other clearDraft / setScriptText calls are
-      // deferred to the success branch so a failed retry doesn't
-      // destroy a still-applicable previous draft.
+      const draftOpsAtStart = store.draftOps;
+
+      // Honour the dirty-edit overwrite confirm BEFORE the LLM call.
+      // The user explicitly accepted "throw away my edits" via the
+      // confirm at the top of this handler — leaving scriptText with
+      // the old dirty content while flipping scriptDirty=false would
+      // produce an incoherent half-clear (Apply gated on
+      // `scriptDirty || hasDraft` ignores the visible text; if a
+      // prior draft is retained, Apply parses scriptText that no
+      // longer matches the panel's "Previous draft" rendering).
+      //
+      // Replace scriptText with the canonical mirror of whatever the
+      // panel will keep showing through both branches: prior draft
+      // YAML if a draft is staged, empty otherwise. The success branch
+      // overwrites with the new proposal's serialization; the failure
+      // branch leaves this canonical mirror in place. Either way,
+      // `scriptText` always agrees with what AfterPanel renders.
+      if (store.scriptDirty) {
+        store.setScriptText(hadDraftAtStart ? serializeOpsToYaml(draftOpsAtStart) : '');
+      }
       store.setScriptDirty(false);
 
       // Read the extraction preset at the moment of Extract — the
@@ -215,20 +231,20 @@ export function useExtraction({
         );
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
-        const msg =
-          err instanceof ExtractionFailedError
-            ? err.reason === 'unverifiable_quote'
-              ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
-              : err.reason === 'missing_source'
-                ? `Extraction returned ops without provenance. Please retry.`
-                : err.reason === 'invalid_structure'
-                  ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                  : err.reason === 'llm_error'
-                    ? err.failureCode
-                      ? `Extraction failed (${err.failureCode}): ${err.message}`
-                      : `LLM call failed: ${err.message}`
-                    : `Extraction failed after ${err.lastAttempt} attempts.`
-            : formatWorkspaceError(err) || 'Extraction failed';
+        const isExtractionFailed = err instanceof ExtractionFailedError;
+        const msg = isExtractionFailed
+          ? err.reason === 'unverifiable_quote'
+            ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
+            : err.reason === 'missing_source'
+              ? `Extraction returned ops without provenance. Please retry.`
+              : err.reason === 'invalid_structure'
+                ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
+                : err.reason === 'llm_error'
+                  ? err.failureCode
+                    ? `Extraction failed (${err.failureCode}): ${err.message}`
+                    : `LLM call failed: ${err.message}`
+                  : `Extraction failed after ${err.lastAttempt} attempts.`
+          : formatWorkspaceError(err) || 'Extraction failed';
 
         // Two failure shapes, mutually exclusive:
         //
@@ -242,6 +258,11 @@ export function useExtraction({
         //    to show". Setting both would render the same string in
         //    two places.
         //
+        //    Forward typed diagnostic fields (`reason`, `failureCode`)
+        //    from `ExtractionFailedError` so future surfaces (per-op
+        //    highlight, "see what failed" UX, telemetry) can branch on
+        //    the kind of failure without regex-parsing `message`.
+        //
         // 2. Failure with NO draft (today's behaviour preserved). Use
         //    `lastError`; the panel shows the centered empty-state and
         //    the ScriptEditor banner shows the same message.
@@ -249,6 +270,8 @@ export function useExtraction({
           useWorkspaceStore.getState().setRetainedDraftFailure({
             message: msg,
             at: new Date().toISOString(),
+            reason: isExtractionFailed ? err.reason : undefined,
+            failureCode: isExtractionFailed ? err.failureCode : undefined,
             provider: selectedProvider ?? undefined,
             model: selectedModel ?? undefined,
             preset: useWorkspaceStore.getState().extractionPreset,
