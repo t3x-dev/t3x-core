@@ -328,6 +328,52 @@ describe('repairOpQuotes', () => {
       expect(quoteOfFirst(ops)).toBe('Choose **A7R5 (A7R V)** if you want **maximum detail**');
     });
 
+    it('repairs combined failure: quote misplaces markers AND content has narrower markers', () => {
+      // Real GPT-5.4-mini repro from conv_51205437 (post-#906 + boundary
+      // fix): model emitted the bad quote
+      //   "Don't mind **bigger file sizes and more post-processing**"
+      // — wrapping the WHOLE phrase in `**...**` — while raw content has
+      // a narrower bolded span:
+      //   "Don't mind **bigger file sizes** and more post-processing"
+      //
+      // Neither strategy alone catches this:
+      //   * Direct candidate match fails: stripping `**` from the quote
+      //     gives `Don't mind bigger file sizes and more post-processing`,
+      //     which is NOT a substring of raw (raw still has `**bigger
+      //     file sizes**` in the middle).
+      //   * Projection with the original quote fails: the stripped
+      //     projection of raw has no `**`, so `indexOf` of a `**`-laden
+      //     quote returns -1.
+      //
+      // Combined repair: feed each normalized candidate through the
+      // projection. The stripped candidate matches the stripped raw,
+      // and balanced-boundary mapping reconstructs the full raw span.
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: "Don't mind **bigger file sizes** and more post-processing",
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'tradeoffs/storage' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: "Don't mind **bigger file sizes and more post-processing**",
+            },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      expect(validateSource(ops, turns).ok).toBe(true);
+    });
+
     it('does not orphan a marker when the match sits strictly inside a span', () => {
       // Match start IS the first content char of `**hello world**`
       // (a candidate for opening expansion), but the match end is

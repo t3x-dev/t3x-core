@@ -282,32 +282,49 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
     const quote = src.turn_ref.quote;
     if (quote && content.includes(quote)) continue;
 
-    // Strategy 1: deterministic quote normalization (markdown + punctuation variants)
+    // Strategies 1 + 2: deterministic repair across normalized quote
+    // candidates and the markdown-stripped projection of raw content.
+    //
+    //   Strategy 1 — cheap: try each generated quote candidate verbatim
+    //   against raw. Handles "model added or misplaced markers in the
+    //   quote against plain content".
+    //
+    //   Strategy 2 — projection: if no candidate matches raw directly,
+    //   retry every candidate against the markdown-stripped projection
+    //   of raw and map any hit back to a balanced raw span (boundary
+    //   expansion preserves marker pairs). This is the inverse of
+    //   Strategy 1: it handles quotes against markdown-bearing content.
+    //
+    // The two strategies are deliberately combined into one pass over
+    // the SAME candidate set. A common failure shape we observed in
+    // production has the model BOTH misplacing markers in the quote
+    // (e.g. wrapping the whole phrase in `**...**`) AND quoting against
+    // raw content that itself carries narrower markers. Running
+    // projection only over the original (un-normalized) quote misses
+    // that case — the stripped raw projection does not contain `**`,
+    // so `indexOf` fails. Running projection over each normalized
+    // candidate as well repairs it.
     if (quote) {
-      for (const candidate of generateQuoteCandidates(quote)) {
-        const repaired = tryExactQuote(content, candidate);
-        if (repaired) {
-          src.turn_ref.quote = repaired;
+      const candidates = generateQuoteCandidates(quote);
+      let repaired: string | null = null;
+      for (const candidate of candidates) {
+        const direct = tryExactQuote(content, candidate);
+        if (direct) {
+          repaired = direct;
           break;
         }
       }
-      if (src.turn_ref.quote && content.includes(src.turn_ref.quote)) {
-        continue;
+      if (repaired === null) {
+        for (const candidate of candidates) {
+          const projected = repairFromMarkdownProjection(content, candidate);
+          if (projected) {
+            repaired = projected;
+            break;
+          }
+        }
       }
-    }
-
-    // Strategy 2: markdown source-span projection (content side).
-    // Inverse of Strategy 1's quote-side stripping: when raw turn
-    // content carries `**...**` / `*...*` / `` `...` `` markers but the
-    // model quoted the rendered text, the bare quote isn't a substring
-    // of raw. Project raw to stripped, locate the quote with first-
-    // occurrence indexOf, then map back to the contiguous raw span
-    // (which embeds whatever markers fell inside the matched stretch).
-    // The substring-of-raw invariant is preserved by the index map.
-    if (quote) {
-      const projected = repairFromMarkdownProjection(content, quote);
-      if (projected) {
-        src.turn_ref.quote = projected;
+      if (repaired !== null) {
+        src.turn_ref.quote = repaired;
         continue;
       }
     }
