@@ -2,9 +2,13 @@
 
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
+import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   assertRuntimeLayout,
   ensureDir,
@@ -36,6 +40,11 @@ const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
   '@t3x-dev/storage',
 ];
 const GITHUB_TOKEN_ENV_NAMES = ['T3X_LOCAL_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
+const DOWNLOAD_MAX_ATTEMPTS = parsePositiveInt(process.env.T3X_LOCAL_DOWNLOAD_ATTEMPTS, 3);
+const DOWNLOAD_RETRY_DELAY_MS = parsePositiveInt(
+  process.env.T3X_LOCAL_DOWNLOAD_RETRY_DELAY_MS,
+  3000
+);
 
 if (process.env.T3X_LOCAL_SKIP_DOWNLOAD === '1' || process.env.T3X_LOCAL_SKIP_DOWNLOAD === 'true') {
   console.log(
@@ -132,20 +141,58 @@ async function downloadArtifact(source, destinationPath) {
   }
 
   if (source.startsWith('http://') || source.startsWith('https://')) {
-    const response = await fetchRuntimeArtifact(source);
-
-    if (!response.ok) {
-      throw new Error(
-        `[t3x-local:postinstall] Failed to download runtime: HTTP ${response.status}${getDownloadHint(source)}`
-      );
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    await fs.writeFile(destinationPath, new Uint8Array(arrayBuffer));
+    await downloadHttpArtifact(source, destinationPath);
     return;
   }
 
   await fs.copyFile(source, destinationPath);
+}
+
+async function downloadHttpArtifact(source, destinationPath) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await fs.rm(destinationPath, { force: true });
+
+      const response = await fetchRuntimeArtifact(source);
+      if (!response.ok) {
+        throw buildHttpDownloadError(source, response.status);
+      }
+
+      await writeResponseBody(response, destinationPath);
+      return;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === DOWNLOAD_MAX_ATTEMPTS || !isRetryableDownloadError(error)) {
+        throw error;
+      }
+
+      console.log(
+        `[t3x-local:postinstall] Runtime download failed (${getErrorSummary(error)}). Retrying ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`
+      );
+      await sleep(DOWNLOAD_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+async function writeResponseBody(response, destinationPath) {
+  if (!response.body) {
+    throw new Error('[t3x-local:postinstall] Runtime download response did not contain a body');
+  }
+
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(destinationPath));
+}
+
+function buildHttpDownloadError(source, status) {
+  const error = new Error(
+    `[t3x-local:postinstall] Failed to download runtime: HTTP ${status}${getDownloadHint(source)}`
+  );
+  error.httpStatus = status;
+  return error;
 }
 
 async function fetchRuntimeArtifact(source) {
@@ -285,6 +332,35 @@ function parseGitHubReleaseDownloadUrl(source) {
 
 function isAuthRetryStatus(status) {
   return status === 403 || status === 404;
+}
+
+function isRetryableDownloadError(error) {
+  if (isRetryableHttpStatus(error?.httpStatus)) {
+    return true;
+  }
+
+  const code = error?.code ?? error?.cause?.code;
+  return (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
+    code === 'EPIPE' ||
+    code === 'UND_ERR_BODY_TIMEOUT' ||
+    code === 'UND_ERR_SOCKET' ||
+    error instanceof TypeError
+  );
+}
+
+function isRetryableHttpStatus(status) {
+  return status === 408 || status === 429 || (status >= 500 && status <= 599);
+}
+
+function getErrorSummary(error) {
+  return error?.cause?.code ?? error?.code ?? error?.message ?? String(error);
+}
+
+function parsePositiveInt(value, fallbackValue) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackValue;
 }
 
 async function verifyArchiveSha(archivePath, expectedSha) {
