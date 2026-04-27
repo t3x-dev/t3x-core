@@ -127,6 +127,14 @@ export function useExtraction({
       store.setLastExtractionPinIds(sourcePinIds ?? []);
       // Auto-expand on Extract — explicit user action, they want to see results.
       store.setPanelExpanded(true);
+      // A new Extract attempt supersedes the previous un-applied proposal.
+      // If this attempt fails verification, leaving the old draft/script
+      // staged makes Apply point at stale YAML while the error describes
+      // the new run. Manual dirty edits are already protected by the
+      // confirm above, so it is safe to clear once the attempt really starts.
+      store.setScriptDirty(false);
+      store.clearDraft();
+      store.setScriptText('');
 
       // Read the extraction preset at the moment of Extract — the
       // dropdown in ChatHeader updates `workspaceStore.extractionPreset`
