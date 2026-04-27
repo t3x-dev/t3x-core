@@ -1,5 +1,12 @@
 # @t3x-dev/runner
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/core@0.1.3
+
 ## 0.0.6
 
 ### Patch Changes
