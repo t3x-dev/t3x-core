@@ -2,6 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ExtractionFailedError } from '@/commands/yops/errors';
 
 const runExtractionMock = vi.fn();
 const callExtractionLLMMock = vi.fn();
@@ -442,5 +443,66 @@ describe('useExtraction', () => {
 
     expect(confirmOverwrite).not.toHaveBeenCalled();
     expect(runExtractionMock).toHaveBeenCalled();
+  });
+
+  it('clears a stale staged draft when re-extract fails verification', async () => {
+    // Repro: user stages an extraction draft, switches Concise/Balanced/
+    // Detailed, and clicks Extract again. If the new run fails verification,
+    // the old draft must not remain applyable — otherwise the UI shows an
+    // error for the new run while Script/Apply still point at stale YAML.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'old/proposal', value: 'stale' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'stale' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText('yops:\n  - set:\n      path: old/proposal\n      value: stale\n');
+    useWorkspaceStore.getState().setScriptDirty(false);
+
+    runExtractionMock.mockRejectedValueOnce(
+      new ExtractionFailedError(
+        [
+          {
+            opIndex: 0,
+            reason: 'quote_not_found',
+            turnHash: 'sha256:t1',
+            quote: 'not in conversation',
+          },
+        ],
+        2,
+        'unverifiable_quote'
+      )
+    );
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const state = useWorkspaceStore.getState();
+    expect(state.lastError).toContain('Extraction could not verify 1 slot');
+    expect(state.hasDraft).toBe(false);
+    expect(state.draftOps).toEqual([]);
+    expect(state.draftTree).toBeNull();
+    expect(state.scriptText).toBe('');
+    expect(state.scriptDirty).toBe(false);
+    expect(state.draftsByConversation.conv_123).toBeUndefined();
   });
 });
