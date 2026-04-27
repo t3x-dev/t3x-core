@@ -3,7 +3,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertProject } from '@t3x-dev/storage';
+import { createCommit, insertConversation, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -113,5 +113,28 @@ describe('Commit source conversation lock', () => {
     expect(turn.status).toBe(409);
     const turnBody: ApiResponse = await turn.json();
     expect(turnBody.error.code).toBe('ALREADY_COMMITTED');
+  });
+
+  it('uses source conversation parent_commit_hash as the default commit parent', async () => {
+    const parentCommit = await createCommit(mockDB, {
+      project_id: projectId,
+      author: { type: 'human', name: 'test' },
+      message: 'Parent commit',
+      content: {
+        trees: [{ key: 'baseline', slots: {}, children: [] }],
+        relations: [],
+      },
+    });
+    const child = await insertConversation(mockDB, {
+      projectId,
+      title: 'Child chat',
+      parentCommitHash: parentCommit.hash,
+    });
+
+    const res = await postCommit(child.conversationId);
+    const body: ApiResponse = await res.json();
+
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    expect(body.data.commit.parents).toEqual([parentCommit.hash]);
   });
 });

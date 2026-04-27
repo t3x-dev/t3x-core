@@ -22,6 +22,7 @@
  */
 
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
+import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatWorkspaceError } from './formatWorkspaceError';
@@ -65,6 +66,15 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
     useCommitStore.getState().setInitialCommit(snapshot.committedAs, {}, {});
   } else {
     post.setCommitted(false);
+    if (snapshot.parentCommitHash) {
+      const commitStore = useCommitStore.getState();
+      commitStore.setInitialCommit(snapshot.parentCommitHash, {}, {});
+      commitStore.setBeforeCommitHash(snapshot.parentCommitHash);
+      if (snapshot.parentCommitBranch) {
+        commitStore.setCommitBranch(snapshot.parentCommitBranch);
+        useChatStore.getState().setActiveBranch(snapshot.parentCommitBranch);
+      }
+    }
     // Layer any persisted draft for this conversation on top of the
     // freshly-hydrated server state. This is the F5 protection: if the
     // user staged an Extract proposal and reloaded, the draft + script +

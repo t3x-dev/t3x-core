@@ -19,6 +19,7 @@ export default function ConversationPage() {
   const firstMessage = searchParams.get('firstMessage');
   const initialProvider = searchParams.get('provider');
   const initialModel = searchParams.get('model');
+  const inheritFromParam = searchParams.get('inheritFrom');
   // Project context comes from two sources:
   //   - the in-memory chat store (filled by sidebar nav, post-extract, etc.)
   //   - a `projectId` query param (set by the empty-project redirect from
@@ -40,6 +41,7 @@ export default function ConversationPage() {
   }, [resolvedProjectId, setActiveWorkspaceProject]);
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
+  const resolvedInheritFromCommitHash = inheritFromParam ?? inheritFromCommitHash;
 
   const [panelWidth, setPanelWidth] = useState(WORKSPACE_PANEL_FALLBACK_WIDTH);
   const isDragging = useRef(false);
@@ -106,7 +108,7 @@ export default function ConversationPage() {
         initialProvider={initialProvider ?? undefined}
         initialModel={initialModel ?? undefined}
         className="flex-1 min-w-0"
-        inheritFromCommitHash={inheritFromCommitHash}
+        inheritFromCommitHash={resolvedInheritFromCommitHash ?? undefined}
         onInheritComplete={clearInherit}
       />
 

@@ -62,9 +62,10 @@ function indexPathsFor(op: SourcedYOp): string[] {
 
 export function replay(
   ops: readonly SourcedYOp[],
-  _turns: readonly ValidationTurn[]
+  _turns: readonly ValidationTurn[],
+  baseContent: SemanticContent = EMPTY
 ): ReplayResult {
-  const result = applySourcedYOps(EMPTY, ops as SourcedYOp[]);
+  const result = applySourcedYOps(baseContent, ops as SourcedYOp[]);
 
   const sourceIndex = new Map<string, Source>();
   // Engine returns `applied` whether or not it succeeded. Index sources only

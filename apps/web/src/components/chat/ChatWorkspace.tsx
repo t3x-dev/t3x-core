@@ -113,6 +113,7 @@ export function ChatWorkspace({
     conversationId: resolvedConversationId,
     provider: selectedProvider ?? undefined,
     model: selectedModel ?? undefined,
+    parentCommitHash: inheritFromCommitHash,
     onConversationCreated: useCallback(
       (newConvId: string) => {
         setResolvedConversationId(newConvId);

@@ -91,6 +91,10 @@ export function useChatInit({
           confirmedNodeIds: data.confirmedNodeIds,
         });
       }
+      if (data.branch) {
+        useCommitStore.getState().setCommitBranch(data.branch);
+        useChatStore.getState().setActiveBranch(data.branch);
+      }
       if (data.fetched) {
         inheritedRef.current = true;
         onInheritComplete?.();

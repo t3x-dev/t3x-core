@@ -97,6 +97,18 @@ describe('ConversationPage', () => {
     expect(props.projectId).toBe('proj_url');
   });
 
+  it('passes the inheritFrom query param into ChatWorkspace', () => {
+    searchParamsValue = new URLSearchParams({
+      projectId: 'proj_url',
+      inheritFrom: 'sha256:parent_commit',
+    });
+
+    render(<ConversationPage />);
+
+    const props = vi.mocked(ChatWorkspace).mock.calls[0][0];
+    expect(props.inheritFromCommitHash).toBe('sha256:parent_commit');
+  });
+
   it('falls back to the chat store activeProjectId when no query param is present', () => {
     searchParamsValue = new URLSearchParams();
     storeProjectId = 'proj_store';

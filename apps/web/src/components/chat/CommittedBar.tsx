@@ -44,8 +44,11 @@ export function CommittedBar({ projectId }: CommittedBarProps) {
             <button
               type="button"
               onClick={() => {
-                const params = lastCommitHash ? `?inheritFrom=${lastCommitHash}` : '';
-                router.push(`/chat/new${params}`);
+                const params = new URLSearchParams();
+                if (lastCommitHash) params.set('inheritFrom', lastCommitHash);
+                if (projectId) params.set('projectId', projectId);
+                const query = params.toString();
+                router.push(query ? `/chat/new?${query}` : '/chat/new');
               }}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--stroke-default)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
             >

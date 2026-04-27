@@ -158,6 +158,7 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
     const sourceConversationId = body.source_conversation_id;
 
     let yopsLogIds = body.yops_log_ids;
+    let inheritedParentHash: string | undefined;
     if (sourceConversationId) {
       const sourceConversation = await findConversationById(ctx.db, sourceConversationId);
       if (!sourceConversation) {
@@ -177,15 +178,22 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
           `Conversation ${sourceConversationId} has already been committed`
         );
       }
+      inheritedParentHash = sourceConversation.parentCommitHash ?? undefined;
       yopsLogIds ??= await findUncommittedYOpsIds(ctx.db, sourceConversationId, body.project_id);
     }
+    const parents =
+      body.parents && body.parents.length > 0
+        ? body.parents
+        : inheritedParentHash
+          ? [inheritedParentHash]
+          : body.parents;
 
     const commitInput = {
       project_id: body.project_id,
       // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
       content: body.content as any,
       branch: body.branch,
-      parents: body.parents,
+      parents,
       message: body.message,
       author: body.author,
       provenance: body.provenance,

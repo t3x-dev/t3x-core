@@ -20,6 +20,8 @@ export interface ParentCommitData {
    * when the fetch failed.
    */
   lastCommitHash: string | null;
+  /** Commit branch for the inherited parent; used as the default child commit branch. */
+  branch: string | null;
   /** Map of node-id -> true for every tree node on the parent commit. */
   confirmedNodeIds: Record<string, boolean>;
   /** True iff the parent commit had non-empty trees. */
@@ -41,6 +43,7 @@ export async function fetchParentCommitData(hash: string): Promise<ParentCommitD
       return {
         parentConversationId,
         lastCommitHash: null,
+        branch: parentCommit.branch ?? null,
         confirmedNodeIds: {},
         hasTrees: false,
         fetched: true,
@@ -55,6 +58,7 @@ export async function fetchParentCommitData(hash: string): Promise<ParentCommitD
     return {
       parentConversationId,
       lastCommitHash: hash,
+      branch: parentCommit.branch ?? null,
       confirmedNodeIds: confirmed,
       hasTrees: true,
       fetched: true,
@@ -63,6 +67,7 @@ export async function fetchParentCommitData(hash: string): Promise<ParentCommitD
     return {
       parentConversationId: null,
       lastCommitHash: null,
+      branch: null,
       confirmedNodeIds: {},
       hasTrees: false,
       fetched: false,

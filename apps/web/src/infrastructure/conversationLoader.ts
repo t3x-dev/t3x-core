@@ -17,6 +17,7 @@ export interface LoadedConversation {
   opsLog: YOpsLogEntry[];
   committedAs: string | null;
   committedAt: string | null;
+  parentCommitHash: string | null;
 }
 
 export async function loadConversation(
@@ -34,5 +35,6 @@ export async function loadConversation(
     opsLog,
     committedAs: conversation.committed_as ?? null,
     committedAt: conversation.committed_at ?? null,
+    parentCommitHash: conversation.parent_commit_hash ?? null,
   };
 }

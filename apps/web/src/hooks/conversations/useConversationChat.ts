@@ -22,6 +22,7 @@ export interface UseConversationChatOptions {
   title?: string;
   provider?: string;
   model?: string;
+  parentCommitHash?: string;
   onConversationCreated?: (conversationId: string) => void;
   onTurnsSaved?: () => void;
 }
@@ -65,6 +66,7 @@ export function useConversationChat({
   title,
   provider,
   model,
+  parentCommitHash,
   onConversationCreated,
   onTurnsSaved,
 }: UseConversationChatOptions): UseConversationChatReturn {
@@ -139,7 +141,11 @@ export function useConversationChat({
       try {
         let convId = conversationIdRef.current;
         if (!convId && projectId) {
-          const newConv = await api.createConversation(projectId, title || 'Untitled Conversation');
+          const newConv = await api.createConversation(
+            projectId,
+            title || 'Untitled Conversation',
+            parentCommitHash
+          );
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
           onConversationCreated?.(convId);
@@ -323,6 +329,7 @@ export function useConversationChat({
       title,
       provider,
       model,
+      parentCommitHash,
       onConversationCreated,
       onTurnsSaved,
       webSearchEnabled,

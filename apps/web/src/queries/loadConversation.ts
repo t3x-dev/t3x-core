@@ -18,6 +18,7 @@ import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-d
 import { YOpsReplayError } from '@/commands/yops/errors';
 import { type ReplayPartial, replay } from '@/domain/replay';
 import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
+import { fetchCommitForInheritance } from './chatInitFetch';
 
 export interface WorkspaceTurn {
   turn_hash: string;
@@ -42,14 +43,31 @@ export interface ConversationSnapshot {
   sourceIndex: Map<string, Source>;
   committedAs: string | null;
   committedAt: string | null;
+  parentCommitHash: string | null;
+  parentCommitBranch: string | null;
   partial?: SnapshotPartial;
+}
+
+async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
+  content: SemanticContent;
+  branch: string | null;
+}> {
+  if (!parentCommitHash) return { content: { trees: [], relations: [] }, branch: null };
+  const parentCommit = await fetchCommitForInheritance(parentCommitHash);
+  return {
+    content: parentCommit.content ?? { trees: [], relations: [] },
+    branch: parentCommit.branch ?? null,
+  };
 }
 
 export async function fetchConversationSnapshot(
   projectId: string,
   convId: string
 ): Promise<ConversationSnapshot> {
-  const { turns, opsLog, committedAs, committedAt } = await loadL1(projectId, convId);
+  const { turns, opsLog, committedAs, committedAt, parentCommitHash } = await loadL1(
+    projectId,
+    convId
+  );
 
   const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     turn_hash: t.turn_hash,
@@ -69,7 +87,9 @@ export async function fetchConversationSnapshot(
   }
 
   const validationTurns: ValidationTurn[] = workspaceTurns;
-  const { tree, sourceIndex, partial } = replay(flatOps, validationTurns);
+  const parentCommitInfo = await loadParentCommitInfo(parentCommitHash);
+  const parentBaseline = parentCommitInfo.content;
+  const { tree, sourceIndex, partial } = replay(flatOps, validationTurns, parentBaseline);
 
   const snapshot: ConversationSnapshot = {
     turns: workspaceTurns,
@@ -78,6 +98,8 @@ export async function fetchConversationSnapshot(
     sourceIndex,
     committedAs,
     committedAt,
+    parentCommitHash,
+    parentCommitBranch: parentCommitInfo.branch,
   };
 
   if (partial) {
