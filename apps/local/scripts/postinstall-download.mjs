@@ -35,6 +35,7 @@ const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
   '@t3x-dev/mcp',
   '@t3x-dev/storage',
 ];
+const GITHUB_TOKEN_ENV_NAMES = ['T3X_LOCAL_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
 
 if (process.env.T3X_LOCAL_SKIP_DOWNLOAD === '1' || process.env.T3X_LOCAL_SKIP_DOWNLOAD === 'true') {
   console.log(
@@ -131,11 +132,11 @@ async function downloadArtifact(source, destinationPath) {
   }
 
   if (source.startsWith('http://') || source.startsWith('https://')) {
-    const response = await fetch(source);
+    const response = await fetchRuntimeArtifact(source);
 
     if (!response.ok) {
       throw new Error(
-        `[t3x-local:postinstall] Failed to download runtime: HTTP ${response.status}`
+        `[t3x-local:postinstall] Failed to download runtime: HTTP ${response.status}${getDownloadHint(source)}`
       );
     }
 
@@ -145,6 +146,145 @@ async function downloadArtifact(source, destinationPath) {
   }
 
   await fs.copyFile(source, destinationPath);
+}
+
+async function fetchRuntimeArtifact(source) {
+  const response = await fetch(source, { headers: getDownloadHeaders(source) });
+  const token = getGitHubToken();
+
+  if (
+    response.ok ||
+    !token ||
+    !isGitHubReleaseDownloadUrl(source) ||
+    !isAuthRetryStatus(response.status)
+  ) {
+    return response;
+  }
+
+  const apiResponse = await fetchGitHubReleaseAsset(source, token);
+  return apiResponse ?? response;
+}
+
+function getDownloadHeaders(source) {
+  if (!isGitHubUrl(source)) {
+    return undefined;
+  }
+
+  const token = getGitHubToken();
+  if (!token) {
+    return undefined;
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+    'User-Agent': '@t3x-dev/local postinstall',
+  };
+}
+
+function getDownloadHint(source) {
+  if (!isGitHubUrl(source) || getGitHubToken()) {
+    return '';
+  }
+
+  return `; set ${GITHUB_TOKEN_ENV_NAMES[0]}, GH_TOKEN, or GITHUB_TOKEN if the runtime release is private`;
+}
+
+function getGitHubToken() {
+  for (const envName of GITHUB_TOKEN_ENV_NAMES) {
+    const token = process.env[envName]?.trim();
+    if (token) {
+      return token;
+    }
+  }
+
+  return null;
+}
+
+async function fetchGitHubReleaseAsset(source, token) {
+  const releaseAsset = parseGitHubReleaseDownloadUrl(source);
+  if (!releaseAsset) {
+    return null;
+  }
+
+  const releaseUrl = `https://api.github.com/repos/${releaseAsset.owner}/${releaseAsset.repo}/releases/tags/${releaseAsset.tag}`;
+  const releaseResponse = await fetch(releaseUrl, {
+    headers: getGitHubApiHeaders(token),
+  });
+
+  if (!releaseResponse.ok) {
+    return releaseResponse;
+  }
+
+  const release = await releaseResponse.json();
+  const asset = release.assets?.find((candidate) => candidate.name === releaseAsset.assetName);
+
+  if (!asset?.url) {
+    return new Response(null, {
+      status: 404,
+      statusText: `Release asset ${releaseAsset.assetName} not found`,
+    });
+  }
+
+  return fetch(asset.url, {
+    headers: {
+      ...getGitHubApiHeaders(token),
+      Accept: 'application/octet-stream',
+    },
+  });
+}
+
+function getGitHubApiHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': '@t3x-dev/local postinstall',
+  };
+}
+
+function isGitHubUrl(source) {
+  try {
+    const { hostname } = new URL(source);
+    return hostname === 'github.com' || hostname === 'api.github.com';
+  } catch {
+    return false;
+  }
+}
+
+function isGitHubReleaseDownloadUrl(source) {
+  return parseGitHubReleaseDownloadUrl(source) !== null;
+}
+
+function parseGitHubReleaseDownloadUrl(source) {
+  try {
+    const url = new URL(source);
+    if (url.hostname !== 'github.com') {
+      return null;
+    }
+
+    const [, owner, repo, releases, download, tag, ...assetParts] = url.pathname.split('/');
+    if (!owner || !repo || releases !== 'releases' || download !== 'download' || !tag) {
+      return null;
+    }
+
+    const assetName = assetParts.join('/');
+    if (!assetName) {
+      return null;
+    }
+
+    return {
+      owner: encodeURIComponent(owner),
+      repo: encodeURIComponent(repo),
+      tag: encodeURIComponent(decodeURIComponent(tag)),
+      assetName: decodeURIComponent(assetName),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isAuthRetryStatus(status) {
+  return status === 403 || status === 404;
 }
 
 async function verifyArchiveSha(archivePath, expectedSha) {
