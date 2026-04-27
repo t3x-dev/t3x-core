@@ -372,6 +372,12 @@ describe('repairOpQuotes', () => {
       repairOpQuotes(ops, turns);
       expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
       expect(validateSource(ops, turns).ok).toBe(true);
+      // Lock the exact balanced output — without this, a regression
+      // that produced a legal-but-hard-to-read raw substring (e.g. one
+      // with an orphan marker still inside the span) would slip past
+      // the substring + validation assertions while shipping malformed
+      // evidence to the YOps panel.
+      expect(quoteOfFirst(ops)).toBe("Don't mind **bigger file sizes** and more post-processing");
     });
 
     it('does not orphan a marker when the match sits strictly inside a span', () => {
