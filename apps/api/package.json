@@ -1,6 +1,6 @@
 {
   "name": "t3x-api-server",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
