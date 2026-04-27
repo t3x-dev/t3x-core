@@ -1,4 +1,4 @@
-import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
+import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -32,6 +32,73 @@ export interface ReplayWarning {
   appliedCount: number;
 }
 
+/**
+ * Captured when an Extract attempt fails AND a usable draft was already
+ * staged before the attempt. Distinct from `lastError`:
+ *   - `lastError` describes the most recent error and is cleared by the
+ *     next extract attempt OR by Discard. It drives the centered
+ *     empty-state and the ScriptEditor banner — surfaces that only make
+ *     sense when there's no rendered draft tree.
+ *   - `retainedDraftFailure` describes "the new attempt failed but your
+ *     previous draft is still applicable". It rides alongside
+ *     `hasDraft = true` so AfterPanel can label the rendered tree as a
+ *     retained previous draft and surface the failure as a persistent
+ *     header row, and so the Apply button tooltip can read
+ *     "Apply previous draft" instead of pretending the latest attempt
+ *     succeeded.
+ *
+ * Cleared by: a successful Extract (overwrites the draft), Discard,
+ * a successful Apply (the draft has been committed), conversation
+ * `reset()`, and the start of any new Extract attempt. NOT cleared by
+ * an Apply failure — the previous draft is still applicable.
+ */
+/**
+ * Web-side failure-reason taxonomy for `ExtractionFailedError`. Mirrors
+ * the union declared in `@/commands/yops/errors.ts`; redeclared here so
+ * the store doesn't take a structural dependency on the command-layer
+ * error class. Keep in sync with that file.
+ */
+export type ExtractionFailureReason =
+  | 'missing_source'
+  | 'unverifiable_quote'
+  | 'invalid_structure'
+  | 'exhausted_retries'
+  | 'llm_error';
+
+export interface RetainedDraftFailure {
+  /** User-facing failure message — same string we'd put on a toast. */
+  message: string;
+  /** ISO-8601 timestamp the failure was recorded; useful for "stale" badges. */
+  at: string;
+  /**
+   * Web-side reason category from `ExtractionFailedError.reason`. Lets a
+   * future affordance branch on the *kind* of failure (e.g. "click to
+   * see the failing slot" only for `unverifiable_quote`) without
+   * regex-parsing `message`. Undefined when the failure didn't come
+   * from `ExtractionFailedError` (transport / unexpected throw).
+   */
+  reason?: ExtractionFailureReason;
+  /**
+   * Wire-level failure code from `ExtractionFailureCode` (e.g.
+   * `unverifiable_quote`, `compile`, `draft_parse`, `transport`).
+   * Independent from `reason`: `reason` is a small UI-facing taxonomy,
+   * `failureCode` is the typed wire code we forwarded from the API.
+   * Carrying both keeps server-side diagnostic info available without
+   * recomputing on the client.
+   */
+  failureCode?: ExtractionFailureCode;
+  /**
+   * Provider id at the time of the failed attempt. Optional because
+   * provider resolution is async and the catch block may run before a
+   * resolved provider/model is known.
+   */
+  provider?: string;
+  /** Model id at the time of the failed attempt. */
+  model?: string;
+  /** Extraction preset used for the failed attempt. */
+  preset?: 'concise' | 'balanced' | 'detailed';
+}
+
 interface WorkspaceState {
   // ── Conversation state ──
   conversationId: string | null;
@@ -59,6 +126,13 @@ interface WorkspaceState {
   activeProjectId: string | null;
   isCommitted: boolean;
   lastError: string | null;
+  /**
+   * Set when an Extract attempt fails on top of an already-staged draft;
+   * see `RetainedDraftFailure`. Used by AfterPanel + WorkspaceTopbar
+   * to disambiguate "Apply applies the new attempt" from "Apply applies
+   * the previous draft because the new attempt failed".
+   */
+  retainedDraftFailure: RetainedDraftFailure | null;
   replayWarning: ReplayWarning | null;
 
   // ── Selection (ephemeral, cleared on refresh) ──
@@ -94,6 +168,15 @@ interface WorkspaceState {
   setPanelExpanded: (expanded: boolean) => void;
   setCommitted: (committed: boolean) => void;
   setError: (err: string | null) => void;
+  /**
+   * Set/clear the retained-draft failure marker. Pass `null` to clear.
+   * Distinct from `setError` because the two surfaces are intentionally
+   * non-overlapping: when a new Extract attempt fails on top of an
+   * existing draft, we set `retainedDraftFailure` (not `lastError`)
+   * so AfterPanel shows the rich "Previous draft retained — last
+   * extract failed" treatment instead of the empty-state error.
+   */
+  setRetainedDraftFailure: (failure: RetainedDraftFailure | null) => void;
   setReplayWarning: (warning: ReplayWarning | null) => void;
 
   select: (
@@ -196,6 +279,7 @@ function conversationResetState() {
     mode: 'idle' as WorkspaceMode,
     isCommitted: false,
     lastError: null,
+    retainedDraftFailure: null as RetainedDraftFailure | null,
     replayWarning: null,
     selectedNodePath: null,
     selectedSlotKey: null,
@@ -297,6 +381,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
       setCommitted: (isCommitted) => set({ isCommitted }),
       setError: (lastError) => set({ lastError }),
+      setRetainedDraftFailure: (retainedDraftFailure) => set({ retainedDraftFailure }),
       setReplayWarning: (replayWarning) => set({ replayWarning }),
 
       select: (source, { nodePath, slotKey, turnIndex }) =>
@@ -357,7 +442,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setDraft: ({ ops, tree }) => {
         const s = get();
         const hasDraft = ops.length > 0;
-        const baseUpdate = { draftOps: ops, draftTree: tree, hasDraft };
+        // A successful new draft always retires any retained-failure
+        // marker — the staged tree IS the new attempt, so the AfterPanel
+        // header should flip back to "Draft preview" and the Apply
+        // tooltip should stop saying "previous draft".
+        const baseUpdate = {
+          draftOps: ops,
+          draftTree: tree,
+          hasDraft,
+          retainedDraftFailure: null as RetainedDraftFailure | null,
+        };
         if (!s.conversationId) {
           set(baseUpdate);
           return;
@@ -376,10 +470,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
       clearDraft: () => {
         const s = get();
+        // Discard, successful Apply, and any other "throw away the
+        // proposal" path call clearDraft. Either branch invalidates a
+        // retained-failure marker: if we had one, it referred to the
+        // draft that's now gone.
         set({
           draftOps: [],
           draftTree: null,
           hasDraft: false,
+          retainedDraftFailure: null,
           draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, null),
         });
       },
