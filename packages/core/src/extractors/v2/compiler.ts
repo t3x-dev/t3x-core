@@ -552,11 +552,29 @@ function primaryPathOf(op: SourcedYOp): string | null {
  *      from the LLM still produce a warning so callers can see the model
  *      proposed the same path twice.
  */
+/**
+ * Add `path` and every ancestor segment to `set`. A path that exists at
+ * apply time implies all of its ancestors also exist; tracking only the
+ * leaf would leave a deeper sibling-of-ancestor define injecting a
+ * recreation op against a live node (ALREADY_EXISTS at apply time).
+ */
+function seedPathAndAncestors(set: Set<string>, path: string): void {
+  const segments = path.split('/').filter((s) => s.length > 0);
+  let prefix = '';
+  for (const segment of segments) {
+    prefix = prefix === '' ? segment : `${prefix}/${segment}`;
+    set.add(prefix);
+  }
+}
+
 function dedupeDefineOps(
   ops: SourcedYOp[],
   preExistingPaths: Iterable<string> = []
 ): { ops: SourcedYOp[]; warnings: string[] } {
-  const knownExisting = new Set<string>(preExistingPaths);
+  const knownExisting = new Set<string>();
+  for (const path of preExistingPaths) {
+    seedPathAndAncestors(knownExisting, path);
+  }
   const defined = new Set<string>();
   const kept: SourcedYOp[] = [];
   const warnings: string[] = [];
@@ -564,7 +582,7 @@ function dedupeDefineOps(
   for (const op of ops) {
     if (!('define' in op)) {
       const path = primaryPathOf(op);
-      if (path !== null) knownExisting.add(path);
+      if (path !== null) seedPathAndAncestors(knownExisting, path);
       kept.push(op);
       continue;
     }

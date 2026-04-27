@@ -936,6 +936,99 @@ describe('extractors/v2 compiler', () => {
       ]);
     });
 
+    it('does not inject ancestor defines for nested target_ref.path', () => {
+      // Regression for PR #926 review: a `target_ref.path` of
+      // `characters/main_protagonist` implies BOTH `characters` and
+      // `characters/main_protagonist` exist at apply time. A child
+      // define under that target — say `characters/main_protagonist/goal`
+      // — must not auto-emit `define characters` or
+      // `define characters/main_protagonist`, both of which would fail
+      // ALREADY_EXISTS against the live snapshot.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters/main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const opShapes = result.ops.map((op) => {
+        if ('define' in op) return { kind: 'define', path: op.define.path };
+        if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+        return { kind: 'other' };
+      });
+      expect(opShapes).toEqual([
+        { kind: 'define', path: 'characters/main_protagonist/goal' },
+        { kind: 'populate', path: 'characters/main_protagonist/goal' },
+      ]);
+    });
+
+    it('does not inject ancestor defines for nested non-define primary paths', () => {
+      // Same logical case, but the "this exists" signal comes from a
+      // populate op rather than target_ref. A populate at
+      // `trip/preferences` implies `trip` exists; a sibling-of-trip
+      // define under `trip/itinerary` must not inject `define trip`.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              target_ref: { path: 'trip/preferences' },
+              candidate: { values: { climate: 'temperate' } },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate climate', role: 'primary' }],
+            },
+            {
+              id: 'item_2',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'trip.itinerary',
+                values: { day_one: 'arrive' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate climate', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // No `define trip` — `trip` is implied by the prior populate at
+      // `trip/preferences`. Only the brand-new `trip/itinerary` is defined.
+      expect(definePaths).toEqual(['trip/itinerary']);
+    });
+
     it('compiles a reinforce intent that carries only children (no parent values)', () => {
       const result = compileExtractionDraft({
         draft: {

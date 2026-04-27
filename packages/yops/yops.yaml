@@ -540,9 +540,12 @@ operations:
       - >
         comparison is deterministic and language-portable: type rank
         null < boolean < number < string < array < mapping; within a type,
-        strings compare by Unicode codepoint (no locale collation), numbers
-        by numeric value, arrays/mappings by their canonical encoding
-        (mapping keys lexicographically sorted before comparison).
+        strings compare by Unicode codepoint (NOT UTF-16 code unit, NOT
+        locale collation — implementations must iterate codepoints, not
+        UTF-16 chars, otherwise non-BMP characters sort differently from
+        the spec), numbers by numeric value, arrays/mappings by their
+        canonical encoding (mapping keys sorted by Unicode codepoint
+        before comparison).
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
@@ -592,8 +595,9 @@ operations:
       - keeps first occurrence, removes subsequent duplicates
       - >
         equality is by canonical encoding: scalars by value; arrays element-wise;
-        mappings with keys sorted lexicographically before comparison. This
-        is language-portable and independent of YAML key insertion order.
+        mappings with keys sorted by Unicode codepoint (NOT UTF-16 code
+        unit) before comparison. This is language-portable and independent
+        of YAML key insertion order or runtime string representation.
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
