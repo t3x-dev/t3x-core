@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/mcp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "T3X MCP Server — semantic version control tools for AI agents",
   "license": "Apache-2.0",
   "repository": {

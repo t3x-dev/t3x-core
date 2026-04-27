@@ -1,5 +1,17 @@
 # @t3x-dev/local
 
+## 0.1.4
+
+### Patch Changes
+
+- [#917](https://github.com/t3x-dev/t3x-core/pull/917) [`ef88721`](https://github.com/t3x-dev/t3x-core/commit/ef887213b21a517f6b4e534be6552f587d0b8b97) Thanks [@lqw905](https://github.com/lqw905)! - Republish local runtime artifacts with a fresh manifest.
+
+- Updated dependencies []:
+  - @t3x-dev/cli@0.1.4
+  - @t3x-dev/api@0.1.4
+  - @t3x-dev/storage@0.1.4
+  - @t3x-dev/mcp@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes

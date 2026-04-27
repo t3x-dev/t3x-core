@@ -126,16 +126,16 @@ importers:
         specifier: ^1.15.2
         version: 1.19.11(hono@4.12.9)
       '@t3x-dev/api':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:../../packages/api
       '@t3x-dev/cli':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:../cli
       '@t3x-dev/mcp':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:../mcp
       '@t3x-dev/storage':
-        specifier: workspace:0.1.3
+        specifier: workspace:0.1.4
         version: link:../../packages/storage
       commander:
         specifier: ^13.1.0
