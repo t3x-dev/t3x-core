@@ -85,6 +85,75 @@ describe('runExtraction', () => {
     expect(commitOpsMock).not.toHaveBeenCalled();
   });
 
+  it('does NOT retry on unverifiable_quote — server already exhausted internal reasks', async () => {
+    // Review P2: callExtractionLLM no longer forwards failingOps
+    // because the API now owns targeted reask. So when the API
+    // returns a typed unverifiable_quote failure, its internal
+    // budget is already spent. The web worker MUST NOT call
+    // /extract-yops again with the same inputs — that's wasted
+    // model spend for a guaranteed-identical failure.
+    //
+    // RetryStrategy for unverifiable_quote is { retryable: true,
+    // maxAttempts: 2 } from the core taxonomy (it IS retryable
+    // server-side), but on the wire it must be treated as terminal.
+    const llm = vi
+      .fn()
+      .mockRejectedValue(
+        new ExtractionRequestError(
+          createExtractionFailure('unverifiable_quote', '2 quotes did not verify'),
+          400,
+          'EXTRACTION_FAILED'
+        )
+      );
+
+    await expect(
+      runExtraction({
+        baseTree: { trees: [], relations: [] },
+        conversationId: 'conv_123',
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+        llm,
+      })
+    ).rejects.toMatchObject<Partial<ExtractionFailedError>>({
+      failureCode: 'unverifiable_quote',
+    });
+
+    // Exactly one call. No retry, no doubled latency, no doubled
+    // model spend.
+    expect(llm).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries transport failures (genuinely client-retryable)', async () => {
+    // Defensive inverse: the only retry path that survives the
+    // 'server owns targeted reask' contract is genuine network /
+    // rate-limit transport. Make sure that path still works after
+    // the gate change — otherwise we'd kill all client retries by
+    // accident.
+    const llm = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ExtractionRequestError(
+          createExtractionFailure('transport', 'Rate limited'),
+          429,
+          'RATE_LIMITED'
+        )
+      )
+      .mockResolvedValueOnce([]);
+
+    validateExecutableStructureMock.mockReturnValue({ ok: true });
+    commitOpsMock.mockResolvedValue(undefined);
+
+    await runExtraction({
+      baseTree: { trees: [], relations: [] },
+      conversationId: 'conv_123',
+      turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+      llm,
+    });
+
+    // First call rate-limited, second succeeded — retry path kept
+    // for transport.
+    expect(llm).toHaveBeenCalledTimes(2);
+  });
+
   describe('commit flag', () => {
     // Shared fixtures for the commit-flag suite. Structure validation is
     // mocked at the module level (see top of file); each case drives it

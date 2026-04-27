@@ -305,6 +305,16 @@ function safeStringify(value: unknown): string | undefined {
 }
 
 /**
+ * Project a pipeline input's turns down to the validator's shape.
+ * `PromptTurnInput` carries `role` for prompt assembly; `ValidationTurn`
+ * doesn't care about role, just `turn_hash` + `content`. Centralised so
+ * both the strict and salvage paths see the exact same turn map.
+ */
+function validationTurnsFor(turns: readonly PromptTurnInput[]): ValidationTurn[] {
+  return turns.map((t) => ({ turn_hash: t.turn_hash, content: t.content }));
+}
+
+/**
  * Build a structured ExtractionFailure for source-quote validation
  * failures. The prompt builder reads the typed `failingOps` list out of
  * `details` to render one bullet per failing op (op index, path, turn
@@ -724,6 +734,24 @@ export async function runExtractionV2Pipeline(
           allowPartial: true,
         });
         if (partial.ok && partial.ops.length > 0) {
+          // Salvage output must clear the same source-quote contract
+          // the strict path enforces — otherwise a draft with one
+          // reaskable compile error plus one structurally valid item
+          // carrying a fabricated quote could return API 200 with
+          // unverifiable quotes the caller now trusts. Salvage gets
+          // its own validation pass; reask budget is already spent,
+          // so failure here is terminal (no further retries).
+          const partialOps = partial.ops as SourcedYOp[];
+          normalizeOpTurnHashes(partialOps, validationTurnsFor(input.turns));
+          repairOpQuotes(partialOps, validationTurnsFor(input.turns));
+          const partialSourceCheck = validateSource(partialOps, validationTurnsFor(input.turns));
+          if (!partialSourceCheck.ok) {
+            return {
+              ok: false,
+              failure: buildUnverifiableQuoteFailure(partialSourceCheck.failingOps, turnHashByTag),
+              turnHashByTag,
+            };
+          }
           return {
             ok: true,
             draft: selection.draft,
@@ -757,17 +785,15 @@ export async function runExtractionV2Pipeline(
     // Source provenance is a core invariant; enforcing it here means
     // the API only returns 200 when quotes verify, and reask happens
     // in the same loop as compile/draft retries.
-    const validationTurns: ValidationTurn[] = input.turns.map((t) => ({
-      turn_hash: t.turn_hash,
-      content: t.content,
-    }));
-    // Mutate ops in place: hash-prefix expansion + deterministic quote
+    //
+    // Mutates ops in place: hash-prefix expansion + deterministic quote
     // repair (markdown / smart-quote / punct / case+whitespace variants).
     // Quotes that can't be repaired stay untouched and fail validation.
     const opsForValidation = compiled.ops as SourcedYOp[];
-    normalizeOpTurnHashes(opsForValidation, validationTurns);
-    repairOpQuotes(opsForValidation, validationTurns);
-    const sourceCheck = validateSource(opsForValidation, validationTurns);
+    const strictValidationTurns = validationTurnsFor(input.turns);
+    normalizeOpTurnHashes(opsForValidation, strictValidationTurns);
+    repairOpQuotes(opsForValidation, strictValidationTurns);
+    const sourceCheck = validateSource(opsForValidation, strictValidationTurns);
 
     if (!sourceCheck.ok) {
       // Same retry shape as compile/provenance failures: budget aware,

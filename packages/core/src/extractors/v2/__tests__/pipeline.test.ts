@@ -1859,5 +1859,88 @@ describe('extractors/v2 pipeline', () => {
       expect(reask).toMatch(/path "topic_root"/);
       expect(reask).toMatch(/"fabricated quote 1"/);
     });
+
+    it('partial-compile salvage path also enforces source validation (no bypass)', async () => {
+      // Review P1: the strict success path runs validateSource, but
+      // the allowPartial salvage branch was returning ok:true with
+      // partial.ops without going through the same gate. A draft with
+      // one reaskable compile error plus one structurally valid item
+      // carrying a fabricated quote could return API 200 with an
+      // unverifiable quote the caller then trusts.
+      //
+      // Repro: provider always returns one item with an invalid path
+      // (forces reaskable compile failure → reask exhaustion → salvage)
+      // alongside an item with a fabricated quote that compiles fine.
+      // After the fix, salvage routes through validateSource and the
+      // unverifiable quote turns this into a typed failure instead of
+      // a silent 200.
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured() {
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [
+                {
+                  // Item 1: structurally invalid path → reaskable compile
+                  // failure that, after exhaustion, gets dropped by
+                  // allowPartial.
+                  id: 'item_bad_path',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'BadCamelCaseKey', // SNAKE_CASE_KEY violation → compile fail
+                    path_hint: null,
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"k":"v"}',
+                    children_json: null,
+                  },
+                  evidence: [{ turn_tag: 'T1', quote: 'real content', role: 'primary' }],
+                },
+                {
+                  // Item 2: compiles fine, but quote is fabricated.
+                  // Pre-fix this would survive salvage and ride out as
+                  // 200 with a bogus quote. Post-fix the salvage
+                  // validation gate catches it.
+                  id: 'item_bad_quote',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'good_path',
+                    path_hint: null,
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"k":"v"}',
+                    children_json: null,
+                  },
+                  evidence: [{ turn_tag: 'T1', quote: 'totally not in the turn', role: 'primary' }],
+                },
+              ],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'real content' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+      });
+      // Without the fix: result.ok would be true and result.compiled.ops
+      // would contain the bad-quote item. With the fix: salvage's
+      // validation gate fires.
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.code).toBe('unverifiable_quote');
+    });
   });
 });

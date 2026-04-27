@@ -92,9 +92,27 @@ export async function runExtraction({
       attempt++;
 
       if (e instanceof ExtractionRequestError) {
+        // The new server-side contract: API now owns targeted reask
+        // for draft/compile/source failures. By the time it returns
+        // an ExtractionRequestError to the wire, its internal reask
+        // budget is already spent — calling /extract-yops again with
+        // the same turns/provider/model/preset would burn another
+        // round of LLM calls for the same predictable failure.
+        //
+        // Web only retries `transport` failures (network blips,
+        // rate-limit, transient provider errors) where another HTTP
+        // attempt has a real chance of succeeding without the model
+        // doing anything different. Everything else — draft_parse,
+        // draft_schema, provenance, compile, executable_structure,
+        // domain_schema, unverifiable_quote — is the server's
+        // verdict and treated as terminal here.
+        const isTransport = e.failure.code === 'transport';
         const retryDecision = e.failure.retry;
         const exhausted =
-          !retryDecision.retryable || attempt >= retryDecision.maxAttempts || attempt > MAX_RETRIES;
+          !isTransport ||
+          !retryDecision.retryable ||
+          attempt >= retryDecision.maxAttempts ||
+          attempt > MAX_RETRIES;
         if (exhausted) {
           throw new ExtractionFailedError([], attempt, 'llm_error', e.message, e.failure.code);
         }
