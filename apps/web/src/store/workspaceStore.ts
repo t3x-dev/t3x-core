@@ -395,23 +395,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setConversation: (id) => {
         const prev = get().conversationId;
         // Cross-conversation guard: a pending expand intent captured
-        // for one conversation must not bleed into another. If the
-        // user clicks Workspace on conv_A (no project yet), then
-        // navigates to conv_B before the meta backfill resolves, the
-        // pending boolean would otherwise apply to conv_B's project.
+        // for one conversation must not bleed into another. The guard
+        // fires when `prev` is a real conversation and `id` differs
+        // from it (including transitions to null — leaving conv_A IS
+        // a binding event, the user has moved on, and a click captured
+        // for conv_A's project shouldn't leak through /chat/new onto
+        // whichever project the next chat resolves to).
         //
-        // The guard fires ONLY when both prev and id are non-null and
-        // differ. That preserves the click in two cases that would
-        // otherwise look like "different":
-        //   1. First setConversation after page mount (null → conv_A).
-        //      The collapsed Workspace strip can mount before
-        //      useChatInit's effect lands the conversation id, so a
-        //      click captured during that window must survive the
-        //      first setConversation.
-        //   2. setConversation(null) — e.g. navigation to /chat/new —
-        //      does not yet bind to a different conversation, so the
-        //      intent stays alive until a real id replaces null.
-        if (prev !== null && id !== null && prev !== id && get().pendingPanelExpanded !== null) {
+        // Two transitions deliberately preserve pending:
+        //   1. null → conv_A: the collapsed Workspace strip can mount
+        //      before useChatInit's effect lands the conversation id,
+        //      so a click captured during that window must survive
+        //      the first non-null setConversation.
+        //   2. conv_A → conv_A (same id): chatInit re-fires its effect
+        //      when resolvedProjectId changes and re-invokes
+        //      setConversation with the same id; that's not a real
+        //      cross-conversation move.
+        if (prev !== null && id !== prev && get().pendingPanelExpanded !== null) {
           set({ conversationId: id, pendingPanelExpanded: null });
           return;
         }

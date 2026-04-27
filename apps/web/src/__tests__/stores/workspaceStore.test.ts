@@ -300,15 +300,26 @@ describe('workspaceStore (state-only)', () => {
       expect(useWorkspaceStore.getState().pendingPanelExpanded).toBeNull();
     });
 
-    it('setConversation back to null (e.g. nav to /chat/new) preserves pending', () => {
-      // setConversation(null) does not bind the click to a different
-      // conversation yet — the next non-null setConversation does. So
-      // pending must survive the intermediate null. The cross-conv
-      // guard fires only when BOTH prev and id are non-null.
+    it('setConversation back to null (e.g. nav to /chat/new) clears pending', () => {
+      // Leaving a real conversation IS the binding event. If the user
+      // clicked Workspace on conv_A, then navigates to /chat/new before
+      // conv_A's project resolves, the click was for conv_A's project
+      // and is now stale. Without this clear, the next chat would pick
+      // up the pending intent and apply it to whatever project that
+      // /chat/new resolves to — a real leakage path through an
+      // intermediate null. The guard fires whenever `prev` is non-null
+      // and `id` differs (including null).
       useWorkspaceStore.getState().setConversation('conv_A');
       useWorkspaceStore.getState().setPanelExpanded(true);
-      useWorkspaceStore.getState().setConversation(null);
       expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+
+      useWorkspaceStore.getState().setConversation(null);
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBeNull();
+
+      // Subsequent setActiveProject for whatever project the new chat
+      // resolves to must NOT find a stale pending to apply.
+      useWorkspaceStore.getState().setActiveProject('proj_new');
+      expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
     });
 
     it('same-conv re-set of conversationId does NOT clear pending (chatInit re-fire)', () => {
