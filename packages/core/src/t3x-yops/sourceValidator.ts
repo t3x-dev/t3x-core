@@ -82,6 +82,26 @@ interface MarkdownProjection {
    * match in `stripped` always maps to a contiguous span in raw.
    */
   rawIndexAt: number[];
+  /**
+   * For each stripped position, the id of the paired-marker span the
+   * character belongs to (`-1` for plain text outside any span). Used
+   * to detect whether a match crosses a span boundary, which is what
+   * makes balanced marker expansion safe.
+   */
+  spanIdAt: number[];
+  /**
+   * If `stripped[i]` is the first content character of a paired span,
+   * `openMarkerAt[i]` is the raw index of that span's opening marker
+   * (so a slice starting there includes the marker). `-1` otherwise.
+   */
+  openMarkerAt: number[];
+  /**
+   * If `stripped[i]` is the last content character of a paired span,
+   * `closeMarkerEndAt[i]` is the raw index immediately after that
+   * span's closing marker (so a slice ending there includes the
+   * marker). `-1` otherwise.
+   */
+  closeMarkerEndAt: number[];
 }
 
 /**
@@ -91,12 +111,8 @@ interface MarkdownProjection {
  * literal characters — we only strip a marker when its closing
  * counterpart exists later in the string.
  *
- * The returned `rawIndexAt` lets a substring hit in `stripped` be
- * mapped back to a contiguous raw span: for a stripped match at
- * `[start, end)`, the raw span is `raw.slice(rawIndexAt[start],
- * rawIndexAt[end - 1] + 1)`. That raw span will contain any markers
- * that fell *between* the matched characters, but it is guaranteed to
- * be a verbatim substring of the input.
+ * Returns the projection plus enough metadata to map a stripped match
+ * back to a *balanced* raw span (see `repairFromMarkdownProjection`).
  *
  * Determinism: single left-to-right scan, no regex backtracking, no
  * scoring. The same input always yields the same projection.
@@ -104,7 +120,11 @@ interface MarkdownProjection {
 function projectMarkdownToRaw(raw: string): MarkdownProjection {
   const strippedParts: string[] = [];
   const rawIndexAt: number[] = [];
+  const spanIdAt: number[] = [];
+  const openMarkerAt: number[] = [];
+  const closeMarkerEndAt: number[] = [];
   let i = 0;
+  let nextSpanId = 0;
   while (i < raw.length) {
     let matchedMarker: string | null = null;
     for (const marker of PROJECTION_MARKERS) {
@@ -115,11 +135,19 @@ function projectMarkdownToRaw(raw: string): MarkdownProjection {
         // literal so we don't lose those characters from the projection).
         if (closeIdx > i + marker.length) {
           matchedMarker = marker;
+          const spanId = nextSpanId++;
+          const openMarkerStart = i;
+          const closeMarkerEnd = closeIdx + marker.length;
           for (let k = i + marker.length; k < closeIdx; k++) {
+            const isFirstContent = k === i + marker.length;
+            const isLastContent = k === closeIdx - 1;
             strippedParts.push(raw[k]);
             rawIndexAt.push(k);
+            spanIdAt.push(spanId);
+            openMarkerAt.push(isFirstContent ? openMarkerStart : -1);
+            closeMarkerEndAt.push(isLastContent ? closeMarkerEnd : -1);
           }
-          i = closeIdx + marker.length;
+          i = closeMarkerEnd;
           break;
         }
       }
@@ -127,18 +155,37 @@ function projectMarkdownToRaw(raw: string): MarkdownProjection {
     if (matchedMarker === null) {
       strippedParts.push(raw[i]);
       rawIndexAt.push(i);
+      spanIdAt.push(-1);
+      openMarkerAt.push(-1);
+      closeMarkerEndAt.push(-1);
       i += 1;
     }
   }
-  return { stripped: strippedParts.join(''), rawIndexAt };
+  return {
+    stripped: strippedParts.join(''),
+    rawIndexAt,
+    spanIdAt,
+    openMarkerAt,
+    closeMarkerEndAt,
+  };
 }
 
 /**
  * If `quote` is not a substring of `rawContent` but appears verbatim
  * in the markdown-stripped projection of the content, return the
  * corresponding contiguous raw span (which IS a substring of raw).
- * Otherwise return null. Caller must guard with the
- * `rawContent.includes(repaired)` invariant.
+ * Otherwise return null.
+ *
+ * Boundary balance: when the match starts at the first content char of
+ * a paired marker span AND extends past that span (so the closing
+ * marker would already be inside the slice), the opening marker is
+ * pulled in too — without this, repaired quotes look like
+ * `foo** bar` / `A7R5 (A7R V)** if you want **maximum detail`: valid
+ * raw substrings, but visibly malformed evidence in the YOps UI.
+ * Symmetric on the trailing edge. Matches strictly inside a single
+ * span (e.g. quoting `hello` from `**hello world**`) get NO expansion,
+ * because adding only the opening or only the closing marker would
+ * just orphan it the other way.
  *
  * Single match, first-occurrence (`indexOf`). No fuzzy scoring, no
  * fragment stitching — non-contiguous joins simply don't appear in
@@ -146,12 +193,28 @@ function projectMarkdownToRaw(raw: string): MarkdownProjection {
  */
 function repairFromMarkdownProjection(rawContent: string, quote: string): string | null {
   if (!quote || rawContent.includes(quote)) return null;
-  const { stripped, rawIndexAt } = projectMarkdownToRaw(rawContent);
+  const projection = projectMarkdownToRaw(rawContent);
+  const { stripped, rawIndexAt, spanIdAt, openMarkerAt, closeMarkerEndAt } = projection;
   if (stripped.length === 0) return null;
   const hit = stripped.indexOf(quote);
   if (hit < 0) return null;
-  const rawStart = rawIndexAt[hit];
-  const rawEnd = rawIndexAt[hit + quote.length - 1] + 1;
+  const end = hit + quote.length - 1;
+
+  let rawStart = rawIndexAt[hit];
+  let rawEnd = rawIndexAt[end] + 1;
+
+  // Crossing-boundary expansion: only when the match start/end sit on
+  // the first/last content char of a span AND the opposite end of the
+  // match is *outside* that span. The span-id check is what keeps
+  // matches strictly inside a span (`hello` ⊂ `**hello world**`) from
+  // becoming unbalanced `**hello`.
+  if (openMarkerAt[hit] >= 0 && spanIdAt[end] !== spanIdAt[hit]) {
+    rawStart = openMarkerAt[hit];
+  }
+  if (closeMarkerEndAt[end] >= 0 && spanIdAt[hit] !== spanIdAt[end]) {
+    rawEnd = closeMarkerEndAt[end];
+  }
+
   const repaired = rawContent.slice(rawStart, rawEnd);
   // Defensive — the index map should guarantee this, but a regression
   // here would silently re-introduce unverifiable quotes. Cheaper to

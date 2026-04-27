@@ -283,11 +283,78 @@ describe('repairOpQuotes', () => {
 
       repairOpQuotes(ops, turns);
       expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
-      // First stripped hit at index 0 maps back to raw[2..10] = "foo** bar".
-      // The second hit (raw[15..23]) would also satisfy the substring
-      // invariant — asserting the first one specifically locks the
-      // determinism contract.
-      expect(quoteOfFirst(ops)).toBe('foo** bar');
+      // Match starts at the first content char of the first `**foo**`
+      // span and extends past its closing marker into the plain ` bar`
+      // tail. Boundary expansion pulls the opening `**` into the slice
+      // so the repaired quote is balanced — `**foo** bar`, not the raw
+      // `foo** bar` substring (which would be visibly malformed in the
+      // YOps panel even though it satisfies `rawContent.includes`).
+      // The first/second-match contract is locked by anchoring on the
+      // FIRST stripped hit (raw[0..11]), not the second (raw[13..24]).
+      expect(quoteOfFirst(ops)).toBe('**foo** bar');
+    });
+
+    it('balances markers when the match crosses two paired spans', () => {
+      // Reproduces the GPT-5.4-mini regression seen post-#906: without
+      // boundary expansion the API returned quotes like
+      //   "A7R5 (A7R V)** if you want **maximum detail"
+      // — opening `**` of the first span dropped, closing `**` of the
+      // second span dropped, but the middle markers preserved. Valid as
+      // a raw substring, but malformed evidence visible in the panel.
+      const turns: ValidationTurn[] = [
+        {
+          turn_hash: 'sha256:t1',
+          content: 'Choose **A7R5 (A7R V)** if you want **maximum detail**...',
+        },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'pick/criteria' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: 'Choose A7R5 (A7R V) if you want maximum detail',
+            },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      // Both `**` pairs are balanced in the repaired quote.
+      expect(quoteOfFirst(ops)).toBe('Choose **A7R5 (A7R V)** if you want **maximum detail**');
+    });
+
+    it('does not orphan a marker when the match sits strictly inside a span', () => {
+      // Match start IS the first content char of `**hello world**`
+      // (a candidate for opening expansion), but the match end is
+      // also inside the same span. Expanding only the opening would
+      // produce `**hello` — unbalanced. Boundary expansion is gated on
+      // crossing the span, so this case must leave the slice alone.
+      // The bare `hello` is still a verbatim raw substring (it appears
+      // inside the bolded span), so validation succeeds.
+      const turns: ValidationTurn[] = [
+        { turn_hash: 'sha256:t1', content: 'Say **hello world** loudly.' },
+      ];
+      const ops: SourcedYOp[] = [
+        {
+          define: { path: 'greet' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-04-27T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'hello' },
+          },
+        },
+      ];
+
+      repairOpQuotes(ops, turns);
+      expect(turns[0].content.includes(quoteOfFirst(ops))).toBe(true);
+      // No expansion — `**hello` would be invalid.
+      expect(quoteOfFirst(ops)).toBe('hello');
     });
 
     it('does not stitch fragments across a span the model omitted', () => {
