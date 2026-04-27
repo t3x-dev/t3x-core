@@ -6,6 +6,12 @@ export const EXTRACTION_FAILURE_CODES = [
   'compile',
   'executable_structure',
   'domain_schema',
+  // Source-quote validation failure: the LLM emitted evidence quotes
+  // that are not exact substrings of the provided turn content (after
+  // deterministic repair: smart-quote variants, markdown strip,
+  // case-insensitive whitespace-collapsed match). Reaskable with
+  // targeted feedback naming the failing item ids and turn tags.
+  'unverifiable_quote',
 ] as const;
 
 export type ExtractionFailureCode = (typeof EXTRACTION_FAILURE_CODES)[number];
@@ -39,6 +45,7 @@ const RETRY_STRATEGIES: Record<ExtractionFailureCode, RetryDecision> = {
   compile: { retryable: false, strategy: 'none', maxAttempts: 0 },
   executable_structure: { retryable: false, strategy: 'none', maxAttempts: 0 },
   domain_schema: { retryable: false, strategy: 'none', maxAttempts: 0 },
+  unverifiable_quote: { retryable: true, strategy: 'targeted_reask', maxAttempts: 2 },
 };
 
 export function getRetryStrategy(code: ExtractionFailureCode): RetryDecision {

@@ -50,53 +50,6 @@ describe('runExtraction', () => {
     expect(commit).toHaveBeenCalledWith('c1', validOps);
   });
 
-  it('retries once with failingOps and succeeds on attempt 2', async () => {
-    const llm = vi.fn().mockResolvedValueOnce(invalidOps).mockResolvedValueOnce(validOps);
-    vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
-
-    await runExtraction({ baseTree: emptyTree, conversationId: 'c1', turns, llm });
-
-    expect(llm).toHaveBeenCalledTimes(2);
-    expect(llm).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        turns,
-        failingOps: expect.any(Array),
-      })
-    );
-  });
-
-  it('retries twice and succeeds on attempt 3', async () => {
-    const llm = vi
-      .fn()
-      .mockResolvedValueOnce(invalidOps)
-      .mockResolvedValueOnce(invalidOps)
-      .mockResolvedValueOnce(validOps);
-    vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
-
-    await runExtraction({ baseTree: emptyTree, conversationId: 'c1', turns, llm });
-
-    expect(llm).toHaveBeenCalledTimes(3);
-  });
-
-  it('hard-fails after 2 retries (3 total calls) with ExtractionFailedError', async () => {
-    const llm = vi.fn().mockResolvedValue(invalidOps);
-    const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
-
-    let thrown: unknown;
-    try {
-      await runExtraction({ baseTree: emptyTree, conversationId: 'c1', turns, llm });
-    } catch (e) {
-      thrown = e;
-    }
-
-    expect(thrown).toBeInstanceOf(ExtractionFailedError);
-    expect((thrown as ExtractionFailedError).failingOps).toHaveLength(1);
-    expect((thrown as ExtractionFailedError).reason).toBe('unverifiable_quote');
-    expect(llm).toHaveBeenCalledTimes(3);
-    expect(commit).not.toHaveBeenCalled();
-  });
-
   it('retries llm errors and then throws ExtractionFailedError with reason=llm_error', async () => {
     const llm = vi.fn().mockRejectedValue(new Error('network down'));
 
@@ -113,28 +66,25 @@ describe('runExtraction', () => {
     expect(llm).toHaveBeenCalledTimes(3);
   });
 
-  it('does not call commitOps when validation fails before commit', async () => {
-    const llm = vi.fn().mockResolvedValue(invalidOps);
+  it('does not re-validate source quotes on the web side (server owns that contract)', async () => {
+    // Architecture move (post-#N+1): runExtractionV2Pipeline runs
+    // normalize/repair/validateSource server-side after compile and
+    // returns a typed 'unverifiable_quote' failure when quotes don't
+    // verify. The web worker no longer re-runs validateSource — what
+    // the LLM callback returns is committed as-is.
+    //
+    // This test feeds the worker ops with a quote that's NOT a
+    // substring of the turn content. The pre-architecture worker
+    // would have rejected and retried via validateSource. Now: the
+    // worker trusts the contract, calls commitOps, and returns.
+    const llm = vi.fn().mockResolvedValueOnce(invalidOps);
     const commit = vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
-
-    try {
-      await runExtraction({ baseTree: emptyTree, conversationId: 'c1', turns, llm });
-    } catch {
-      /* expected */
-    }
-
-    expect(commit).not.toHaveBeenCalled();
-  });
-
-  it('passes failing_ops verbatim on retry for surgical repair', async () => {
-    const llm = vi.fn().mockResolvedValueOnce(invalidOps).mockResolvedValueOnce(validOps);
-    vi.spyOn(yopsService, 'commitOps').mockResolvedValue({} as never);
 
     await runExtraction({ baseTree: emptyTree, conversationId: 'c1', turns, llm });
 
-    const secondCall = llm.mock.calls[1][0];
-    expect(secondCall.failingOps).toBeDefined();
-    expect(secondCall.failingOps[0].reason).toBe('unverifiable_quote');
+    // No retry on the web side; commit happened on first response.
+    expect(llm).toHaveBeenCalledTimes(1);
+    expect(commit).toHaveBeenCalledTimes(1);
   });
 
   it('retries when ops have valid source but invalid structure', async () => {
