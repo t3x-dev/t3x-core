@@ -64,5 +64,24 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
   // dry-run preview come back so they can keep reviewing instead of
   // losing the LLM round-trip. No-op if there's nothing persisted.
   post.restoreDraftFor(convId);
+
+  // Discoverability: a content-bearing conversation should not require
+  // a click to reveal. Auto-expand on first view if the project has no
+  // explicit preference yet AND the snapshot carries something worth
+  // showing. The check uses `projectId in panelExpandedByProject` so an
+  // explicit user-folded preference (`false`) is preserved — only the
+  // truly-missing case gets the auto-expand. Re-firing this on every
+  // hydrate of the same project is safe: once the key exists, the
+  // condition flips and the call is skipped.
+  const hydrated = useWorkspaceStore.getState();
+  const hasContent =
+    snapshot.opsLog.length > 0 ||
+    snapshot.tree.trees.length > 0 ||
+    snapshot.tree.relations.length > 0 ||
+    hydrated.hasDraft;
+  if (hasContent && !(projectId in hydrated.panelExpandedByProject)) {
+    hydrated.setProjectPanelExpansion(projectId, true);
+  }
+
   post.setMode('idle');
 }

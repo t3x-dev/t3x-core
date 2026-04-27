@@ -225,11 +225,109 @@ describe('workspaceStore (state-only)', () => {
     expect(s.draftTree).toBeNull();
   });
 
-  it('setPanelExpanded is a no-op without an active project', () => {
-    // No setActiveProject — nothing should be written to the persisted map.
-    useWorkspaceStore.getState().setPanelExpanded(true);
-    expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
-    expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
+  describe('setPanelExpanded — pending intent for cold-load races (PR-C P1)', () => {
+    // The previous behaviour silently early-returned when no project was
+    // active, dropping clicks issued during the brief window between
+    // /chat/:id mount and the async meta backfill that resolves
+    // project_id. Now the intent is captured in `pendingPanelExpanded`
+    // (ephemeral, not persisted) and promoted by the next
+    // `setActiveProject(projectId)` call.
+
+    it('captures the click as a pending intent when activeProjectId is null', () => {
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      const s = useWorkspaceStore.getState();
+      // Persisted map must stay clean — we don't write to a "default"
+      // key (would pollute and leak across projects).
+      expect(s.panelExpandedByProject).toEqual({});
+      // Selector still reads false until a project is known.
+      expect(selectPanelExpanded(s)).toBe(false);
+      // But the intent is held for the project that will resolve next.
+      expect(s.pendingPanelExpanded).toBe(true);
+    });
+
+    it('promotes the pending intent on the next setActiveProject', () => {
+      // Real-world flow: user clicks Workspace → useChatInit's async
+      // fetchConversationMeta completes → page useEffect calls
+      // setActiveProject(projectId) → panel expands.
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      useWorkspaceStore.getState().setActiveProject('proj_late');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.activeProjectId).toBe('proj_late');
+      expect(s.panelExpandedByProject).toEqual({ proj_late: true });
+      expect(s.pendingPanelExpanded).toBeNull();
+      expect(selectPanelExpanded(s)).toBe(true);
+    });
+
+    it('cross-conversation guard: setConversation to a different convId clears pending', () => {
+      // User clicks Workspace on conv_A (no project yet), then navigates
+      // to conv_B before conv_A's project resolves. The pending intent
+      // must NOT leak onto conv_B's project — that would expand a panel
+      // for a conversation the user never clicked Workspace on.
+      useWorkspaceStore.getState().setConversation('conv_A');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+
+      useWorkspaceStore.getState().setConversation('conv_B');
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBeNull();
+
+      // setActiveProject after switch must NOT find a pending to apply.
+      useWorkspaceStore.getState().setActiveProject('proj_B');
+      expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
+    });
+
+    it('same-conv re-set of conversationId does NOT clear pending (chatInit re-fire)', () => {
+      // useChatInit re-runs its effect when `resolvedProjectId`
+      // changes; that path calls `setConversation(convId)` with the
+      // same id. Clearing pending there would lose the click that was
+      // captured between mount and project backfill — the very click
+      // we're trying to apply.
+      useWorkspaceStore.getState().setConversation('conv_A');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      useWorkspaceStore.getState().setConversation('conv_A');
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+    });
+
+    it('writes directly to the persisted map when a project is already active', () => {
+      // Steady-state: Workspace tab clicked after the project has
+      // resolved. The pending field never enters the picture.
+      useWorkspaceStore.getState().setActiveProject('proj_X');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+
+      const s = useWorkspaceStore.getState();
+      expect(s.panelExpandedByProject).toEqual({ proj_X: true });
+      expect(s.pendingPanelExpanded).toBeNull();
+    });
+  });
+
+  describe('setProjectPanelExpansion — direct writer for hydrate-time auto-expand (PR-C P2)', () => {
+    // Used by hydrateConversationToStore so the auto-expand decision
+    // can target a known projectId without depending on whether
+    // setActiveProject has run yet. Tests that drive this directly
+    // also use it to seed an explicit "false" preference.
+
+    it('writes to the per-project map without consulting activeProjectId', () => {
+      // No setActiveProject — direct writer must work regardless.
+      useWorkspaceStore.getState().setProjectPanelExpansion('proj_direct', true);
+      expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({
+        proj_direct: true,
+      });
+    });
+
+    it('preserves an explicit false preference: hydrate-time auto-expand must NOT override it', () => {
+      // Critical for the discoverability rule. If the user has folded
+      // the panel for `proj_X` once, every subsequent conversation in
+      // that project (no matter how content-rich) must respect that
+      // choice. The hydrate path checks `(projectId in panelExpandedByProject)`
+      // — explicit false is "in", auto-expand is skipped.
+      useWorkspaceStore.getState().setProjectPanelExpansion('proj_X', false);
+      const s = useWorkspaceStore.getState();
+      expect('proj_X' in s.panelExpandedByProject).toBe(true);
+      // Selector reads the explicit false — not the absence of a
+      // preference. This is the load-bearing distinction.
+      useWorkspaceStore.getState().setActiveProject('proj_X');
+      expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
+    });
   });
 
   describe('retainedDraftFailure (PR-B preserve-draft-on-failure)', () => {

@@ -124,6 +124,24 @@ interface WorkspaceState {
    * preference. Null until a conversation has resolved its project_id.
    */
   activeProjectId: string | null;
+  /**
+   * Ephemeral expand-intent captured BEFORE `activeProjectId` resolves.
+   * On a direct `/chat/:conversationId` load the project id is fetched
+   * asynchronously from the conversation meta, so a click on the
+   * collapsed Workspace strip in that window used to be silently
+   * dropped (`setPanelExpanded` early-returned). Now the intent is
+   * stored here; `setActiveProject` promotes it onto
+   * `panelExpandedByProject[projectId]` once a project becomes
+   * available, and clears it.
+   *
+   * NOT persisted (deliberately omitted from `partialize`) — re-running
+   * the same async race after a refresh shouldn't re-fire a stale
+   * click. NOT cleared by `reset()` either: the chatInit effect
+   * re-fires when `resolvedProjectId` changes and re-invokes `reset`,
+   * and clearing pending there would lose the click that triggered
+   * the very expansion we're trying to apply.
+   */
+  pendingPanelExpanded: boolean | null;
   isCommitted: boolean;
   lastError: string | null;
   /**
@@ -161,11 +179,20 @@ interface WorkspaceState {
   }) => void;
   setMode: (mode: WorkspaceMode) => void;
   /**
-   * Sets expansion for the currently active project. No-op if no project is
-   * active yet (so a brand-new chat without a resolved project never writes
-   * a stray entry to the persisted map).
+   * User-intent expansion setter. When a project is active, writes
+   * directly to `panelExpandedByProject[activeProjectId]`. When no
+   * project is resolved yet (cold-load race), captures the intent in
+   * `pendingPanelExpanded` so it can be promoted by the next
+   * `setActiveProject` call. Either way the click is no longer lost.
    */
   setPanelExpanded: (expanded: boolean) => void;
+  /**
+   * Direct writer used by hydrate-time auto-expand and by tests that
+   * want to seed the map without going through the user-intent path.
+   * Bypasses the active-project lookup so callers can target a
+   * specific project explicitly.
+   */
+  setProjectPanelExpansion: (projectId: string, expanded: boolean) => void;
   setCommitted: (committed: boolean) => void;
   setError: (err: string | null) => void;
   /**
@@ -362,16 +389,62 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       ...conversationResetState(),
       panelExpandedByProject: {},
       activeProjectId: null,
+      pendingPanelExpanded: null,
       draftsByConversation: {},
 
-      setConversation: (id) => set({ conversationId: id }),
-      setActiveProject: (activeProjectId) => set({ activeProjectId }),
+      setConversation: (id) => {
+        const prev = get().conversationId;
+        // Cross-conversation guard: a pending expand intent captured
+        // for one conversation must not bleed into another. If the
+        // user clicks Workspace on conv_A (no project yet), then
+        // navigates to conv_B before the meta backfill resolves, the
+        // pending boolean would otherwise apply to conv_B's project.
+        // Clearing on conv-switch is the smallest safe gate.
+        if (prev !== id && get().pendingPanelExpanded !== null) {
+          set({ conversationId: id, pendingPanelExpanded: null });
+          return;
+        }
+        set({ conversationId: id });
+      },
+      setActiveProject: (activeProjectId) => {
+        const pending = get().pendingPanelExpanded;
+        if (activeProjectId && pending !== null) {
+          // Promote the captured intent: write to the per-project map
+          // and clear pending in the same set so a subsequent re-render
+          // can't observe a half-applied state.
+          set((s) => ({
+            activeProjectId,
+            panelExpandedByProject: {
+              ...s.panelExpandedByProject,
+              [activeProjectId]: pending,
+            },
+            pendingPanelExpanded: null,
+          }));
+          return;
+        }
+        set({ activeProjectId });
+      },
       setTurns: (turns) => set({ turns }),
       setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
       setMode: (mode) => set({ mode }),
       setPanelExpanded: (expanded) => {
         const projectId = get().activeProjectId;
-        if (!projectId) return;
+        if (!projectId) {
+          // No project yet — capture as pending. setActiveProject will
+          // promote it once a project resolves. This used to silently
+          // early-return, dropping the click on cold-loaded chat URLs
+          // where the project id backfills async from conversation meta.
+          set({ pendingPanelExpanded: expanded });
+          return;
+        }
+        set((s) => ({
+          panelExpandedByProject: {
+            ...s.panelExpandedByProject,
+            [projectId]: expanded,
+          },
+        }));
+      },
+      setProjectPanelExpansion: (projectId, expanded) => {
         set((s) => ({
           panelExpandedByProject: {
             ...s.panelExpandedByProject,
