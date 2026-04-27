@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  deriveConversationTitleFromMessage,
+  isPlaceholderConversationTitle,
+} from '@/domain/conversationTitle';
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
 import { useChatWarnings } from '@/hooks/conversations/useChatWarnings';
 import * as api from '@/infrastructure';
 import type { Citation } from '@/infrastructure/chat';
+import { useChatStore } from '@/store/chatStore';
 import { useChatSessionStore } from '@/store/chatSessionStore';
+import { useCommitStore } from '@/store/commitStore';
 import type { AttachedImage } from '@/types/chat';
 
 export type { ChatMessage } from '@/hooks/conversations/useChatHistory';
@@ -49,6 +55,13 @@ export interface UseConversationChatReturn {
   citations: Citation[];
   thinkingContent: string;
   isThinking: boolean;
+}
+
+function syncConversationTitle(title: string) {
+  const chatStore = useChatStore.getState();
+  chatStore.setConversationTitle(title);
+  chatStore.refreshSidebar();
+  useCommitStore.getState().setConversationTitle(title);
 }
 
 /**
@@ -127,6 +140,10 @@ export function useConversationChat({
             role: msg.role as 'user' | 'assistant',
             content: msg.content,
           }));
+      const messageTitle = deriveConversationTitleFromMessage(userMessage);
+      const currentTitle = title ?? useChatStore.getState().conversationTitle;
+      const shouldRenamePlaceholder =
+        previousMessages.length === 0 && isPlaceholderConversationTitle(currentTitle);
 
       const newUserMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -141,13 +158,11 @@ export function useConversationChat({
       try {
         let convId = conversationIdRef.current;
         if (!convId && projectId) {
-          const newConv = await api.createConversation(
-            projectId,
-            title || 'Untitled Conversation',
-            parentCommitHash
-          );
+          const newTitle = title?.trim() ? title : messageTitle;
+          const newConv = await api.createConversation(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
+          syncConversationTitle(newConv.title || newTitle);
           onConversationCreated?.(convId);
         }
 
@@ -268,6 +283,16 @@ export function useConversationChat({
                   turn_hash: userTurn.turn_hash,
                   content: userMessage,
                 });
+              }
+              if (shouldRenamePlaceholder) {
+                try {
+                  const updated = await api.updateConversation(currentConversationId, {
+                    title: messageTitle,
+                  });
+                  syncConversationTitle(updated.title || messageTitle);
+                } catch {
+                  // Title refresh is cosmetic; keep the saved chat turn.
+                }
               }
               if (fullResponse) {
                 const assistantTurn = await api.createTurn(

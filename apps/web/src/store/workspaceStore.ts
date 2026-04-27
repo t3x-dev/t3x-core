@@ -108,6 +108,17 @@ interface WorkspaceState {
   // ── Derived state (populated by queries/replay) ──
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
+  /**
+   * Parent commit used as the replay baseline for this conversation.
+   * Null means this conversation starts from an empty baseline.
+   */
+  baselineCommitHash: string | null;
+  /**
+   * True when this conversation has applied semantic changes of its own
+   * (persisted yops_log rows or an already-created commit). False with a
+   * parent baseline means the visible tree is inherited, not new work.
+   */
+  hasConversationChanges: boolean;
 
   // ── UI state ──
   mode: WorkspaceMode;
@@ -176,6 +187,8 @@ interface WorkspaceState {
     tree: SemanticContent;
     sourceIndex: Map<string, Source>;
     opsLog: SourcedYOp[];
+    baselineCommitHash?: string | null;
+    hasConversationChanges?: boolean;
   }) => void;
   setMode: (mode: WorkspaceMode) => void;
   /**
@@ -286,6 +299,15 @@ const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
 export const selectPanelExpanded = (state: WorkspaceState): boolean =>
   state.activeProjectId ? Boolean(state.panelExpandedByProject[state.activeProjectId]) : false;
 
+export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
+  Boolean(
+    state.baselineCommitHash &&
+      !state.isCommitted &&
+      !state.hasConversationChanges &&
+      !state.hasDraft &&
+      (state.tree.trees.length > 0 || state.tree.relations.length > 0)
+  );
+
 /**
  * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
  * Note this object intentionally does NOT include `panelExpandedByProject` or
@@ -303,6 +325,8 @@ function conversationResetState() {
     opsLog: [],
     tree: EMPTY_TREE,
     sourceIndex: new Map<string, Source>(),
+    baselineCommitHash: null,
+    hasConversationChanges: false,
     mode: 'idle' as WorkspaceMode,
     isCommitted: false,
     lastError: null,
@@ -436,7 +460,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ activeProjectId });
       },
       setTurns: (turns) => set({ turns }),
-      setDerived: ({ tree, sourceIndex, opsLog }) => set({ tree, sourceIndex, opsLog }),
+      setDerived: ({ tree, sourceIndex, opsLog, baselineCommitHash, hasConversationChanges }) =>
+        set((s) => ({
+          tree,
+          sourceIndex,
+          opsLog,
+          baselineCommitHash:
+            baselineCommitHash === undefined ? s.baselineCommitHash : baselineCommitHash,
+          hasConversationChanges: hasConversationChanges ?? opsLog.length > 0,
+        })),
       setMode: (mode) => set({ mode }),
       setPanelExpanded: (expanded) => {
         const projectId = get().activeProjectId;

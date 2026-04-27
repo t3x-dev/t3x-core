@@ -37,6 +37,7 @@ export interface SnapshotPartial extends ReplayPartial {
 }
 
 export interface ConversationSnapshot {
+  title: string | null;
   turns: WorkspaceTurn[];
   opsLog: SourcedYOp[];
   tree: SemanticContent;
@@ -64,7 +65,7 @@ export async function fetchConversationSnapshot(
   projectId: string,
   convId: string
 ): Promise<ConversationSnapshot> {
-  const { turns, opsLog, committedAs, committedAt, parentCommitHash } = await loadL1(
+  const { title, turns, opsLog, committedAs, committedAt, parentCommitHash } = await loadL1(
     projectId,
     convId
   );
@@ -92,6 +93,7 @@ export async function fetchConversationSnapshot(
   const { tree, sourceIndex, partial } = replay(flatOps, validationTurns, parentBaseline);
 
   const snapshot: ConversationSnapshot = {
+    title,
     turns: workspaceTurns,
     opsLog: flatOps,
     tree,

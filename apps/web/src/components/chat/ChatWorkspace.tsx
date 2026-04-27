@@ -14,6 +14,7 @@ import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
 import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
+import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
@@ -60,6 +61,7 @@ export function ChatWorkspace({
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
+  const conversationTitle = useChatStore((s) => s.conversationTitle);
   const { fetch: fetchPins } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
@@ -111,6 +113,7 @@ export function ChatWorkspace({
   } = useConversationChat({
     projectId: resolvedProjectId,
     conversationId: resolvedConversationId,
+    title: conversationTitle ?? undefined,
     provider: selectedProvider ?? undefined,
     model: selectedModel ?? undefined,
     parentCommitHash: inheritFromCommitHash,

@@ -86,13 +86,24 @@ describe('formatApplyTooltipForRetainedFailure', () => {
 });
 
 describe('getResultPanelHeaderLabel', () => {
-  // Three-state label (Committed result / Draft preview / Previous draft)
+  // Four-state label (Applied result / Inherited baseline / Draft preview / Previous draft)
   // factored out of AfterPanel JSX so the precedence — retained-failure
-  // wins over draft, draft wins over committed — is locked in one place.
-  it('returns "Committed result" in the steady state with no draft staged', () => {
+  // wins over draft, draft wins over inherited baseline, inherited
+  // baseline wins over applied — is locked in one place.
+  it('returns "Applied result" in the steady state with no draft staged', () => {
     expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: false })).toBe(
-      'Committed result'
+      'Applied result'
     );
+  });
+
+  it('returns "Inherited baseline" when only a parent commit baseline is visible', () => {
+    expect(
+      getResultPanelHeaderLabel({
+        hasDraft: false,
+        hasRetainedFailure: false,
+        isInheritedBaselineOnly: true,
+      })
+    ).toBe('Inherited baseline');
   });
 
   it('returns "Draft preview" when a draft is staged from a successful extract', () => {
@@ -118,7 +129,7 @@ describe('getResultPanelHeaderLabel', () => {
     // produces that combination, fall back to the steady-state label
     // rather than rendering "Previous draft" against a committed tree.
     expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe(
-      'Committed result'
+      'Applied result'
     );
   });
 });

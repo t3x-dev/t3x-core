@@ -3,7 +3,7 @@
 import { Loader2, PanelRightClose, Play } from 'lucide-react';
 import { formatApplyTooltipForRetainedFailure } from '@/domain/draft/retainedFailureLabel';
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
 
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
@@ -18,6 +18,7 @@ export function WorkspaceTopbar() {
   const committedCount = useWorkspaceStore((s) => s.opsLog.length);
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
   // Drives the Apply button tooltip wording. When a re-extract failed
   // on top of a previously-staged draft, Apply still works — but it
   // applies the PREVIOUS draft, not the latest (failed) attempt. The
@@ -40,13 +41,20 @@ export function WorkspaceTopbar() {
         <span
           className="text-[10px] font-mono text-[var(--text-tertiary)]"
           title={
-            hasDraft
-              ? `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
-              : `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log`
+            isInheritedBaselineOnly
+              ? 'Inherited from parent commit; no current conversation YOps applied'
+              : hasDraft
+                ? `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+                : `${committedCount} applied op${committedCount === 1 ? '' : 's'} in yops_log`
           }
         >
-          {committedCount} committed
-          {hasDraft ? ` · ${draftCount} draft` : ''}
+          {isInheritedBaselineOnly ? (
+            'Inherited baseline'
+          ) : (
+            <>
+              {committedCount} applied{hasDraft ? ` · ${draftCount} draft` : ''}
+            </>
+          )}
         </span>
 
         <button

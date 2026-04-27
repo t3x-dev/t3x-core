@@ -13,6 +13,7 @@ export type { Turn as LoadedTurn };
 
 export interface LoadedConversation {
   convId: string;
+  title: string | null;
   turns: Turn[];
   opsLog: YOpsLogEntry[];
   committedAs: string | null;
@@ -31,6 +32,7 @@ export async function loadConversation(
   ]);
   return {
     convId,
+    title: conversation.title ?? null,
     turns: turnsData.turns,
     opsLog,
     committedAs: conversation.committed_as ?? null,

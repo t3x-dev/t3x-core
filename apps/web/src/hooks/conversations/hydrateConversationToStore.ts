@@ -44,11 +44,15 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
   }
 
   const post = useWorkspaceStore.getState();
+  useChatStore.getState().setConversationTitle(snapshot.title);
+  useCommitStore.getState().setConversationTitle(snapshot.title);
   post.setTurns(snapshot.turns);
   post.setDerived({
     tree: snapshot.tree,
     sourceIndex: snapshot.sourceIndex,
     opsLog: snapshot.opsLog,
+    baselineCommitHash: snapshot.parentCommitHash,
+    hasConversationChanges: snapshot.opsLog.length > 0 || Boolean(snapshot.committedAs),
   });
   if (snapshot.partial) {
     post.setReplayWarning({

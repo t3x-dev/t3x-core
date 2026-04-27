@@ -7,6 +7,7 @@ const createConversationMock = vi.fn();
 const getConversationMemoryMock = vi.fn();
 const chatStreamMock = vi.fn();
 const createTurnMock = vi.fn();
+const updateConversationMock = vi.fn();
 const setInputMock = vi.fn();
 const setMessagesMock = vi.fn();
 
@@ -70,6 +71,7 @@ vi.mock('@/infrastructure', () => ({
   getConversationMemory: (...args: unknown[]) => getConversationMemoryMock(...args),
   chatStream: (...args: unknown[]) => chatStreamMock(...args),
   createTurn: (...args: unknown[]) => createTurnMock(...args),
+  updateConversation: (...args: unknown[]) => updateConversationMock(...args),
 }));
 
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
@@ -85,6 +87,10 @@ describe('useConversationChat', () => {
     getConversationMemoryMock.mockResolvedValue({ text: '' });
     chatStreamMock.mockReturnValue(emptyChatStream());
     createTurnMock.mockResolvedValue({ turn_hash: 'sha256:turn' });
+    updateConversationMock.mockResolvedValue({
+      conversation_id: 'conv_existing',
+      title: 'I want to eat chestnuts.',
+    });
   });
 
   it('creates new child conversations with the inherited parent commit hash', async () => {
@@ -108,5 +114,65 @@ describe('useConversationChat', () => {
         'sha256:parent_commit'
       );
     });
+  });
+
+  it('derives new conversation titles from the first user message when no title is supplied', async () => {
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: undefined,
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(createConversationMock).toHaveBeenCalledWith(
+        'proj_1',
+        'I want to eat chestnuts.',
+        undefined
+      );
+    });
+  });
+
+  it('renames placeholder conversations after the first saved user turn', async () => {
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'New Chat',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(updateConversationMock).toHaveBeenCalledWith('conv_existing', {
+        title: 'I want to eat chestnuts.',
+      });
+    });
+  });
+
+  it('does not rename conversations with custom titles', async () => {
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(createTurnMock).toHaveBeenCalled();
+    });
+    expect(updateConversationMock).not.toHaveBeenCalled();
   });
 });

@@ -196,8 +196,25 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
     await hydrateConversationToStore('proj_Child', 'conv_Child');
 
     expect(useWorkspaceStore.getState().isCommitted).toBe(false);
+    expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
+    expect(useWorkspaceStore.getState().hasConversationChanges).toBe(false);
     expect(useCommitStore.getState().lastCommitHash).toBe('sha256:parent_commit');
     expect(useCommitStore.getState().commitBranch).toBe('5');
     expect(useChatStore.getState().activeBranch).toBe('5');
+  });
+
+  it('marks inherited children with applied YOps as having conversation changes', async () => {
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({
+        ops: SAMPLE_OPS,
+        tree: SAMPLE_TREE,
+        parentCommitHash: 'sha256:parent_commit',
+      })
+    );
+
+    await hydrateConversationToStore('proj_Child', 'conv_Child');
+
+    expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
+    expect(useWorkspaceStore.getState().hasConversationChanges).toBe(true);
   });
 });
