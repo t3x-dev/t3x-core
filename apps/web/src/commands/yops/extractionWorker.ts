@@ -10,7 +10,10 @@
  */
 
 import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { normalizeOpTurnHashes, repairOpQuotes, validateSource } from '@t3x-dev/core';
+// normalize/repair/validate moved to server-side core pipeline
+// (runExtractionV2Pipeline handles source provenance after compile).
+// Web no longer re-runs them — the API contract already guarantees
+// verified quotes when it returns 200.
 import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
@@ -105,22 +108,19 @@ export async function runExtraction({
       continue;
     }
 
-    normalizeOpTurnHashes(ops, turns);
-    repairOpQuotes(ops, turns);
-    const sourceResult = validateSource(ops, turns);
-    if (!sourceResult.ok) {
-      attempt++;
-      prevFailing = sourceResult.failingOps;
-
-      if (attempt > MAX_RETRIES) {
-        throw new ExtractionFailedError(
-          sourceResult.failingOps,
-          attempt,
-          pickReason(sourceResult.failingOps)
-        );
-      }
-      continue;
-    }
+    // Source-quote validation now lives server-side inside
+    // runExtractionV2Pipeline (post-#N+1 architecture move). The API
+    // returns 200 only when every op's turn_ref.quote is verified
+    // against turn content; an unverifiable quote surfaces as a typed
+    // 'unverifiable_quote' ExtractionFailure (mapped to 400). Web
+    // therefore trusts the contract and skips the redundant
+    // normalize/repair/validate triple — those would be no-ops on a
+    // server-validated batch and the extra retry loop here used to
+    // double-spend the LLM budget without ever forwarding failingOps
+    // through the wire.
+    //
+    // `prevFailing` is no longer mutated by this branch; it stays in
+    // scope only for the structure-validation retry path below.
 
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {

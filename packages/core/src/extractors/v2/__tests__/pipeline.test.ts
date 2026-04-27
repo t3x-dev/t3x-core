@@ -140,7 +140,18 @@ describe('extractors/v2 pipeline', () => {
     };
 
     const result = await runExtractionV2Pipeline({
-      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: '5 days in Hangzhou.' }],
+      // Turn content carries every quote the provider response references —
+      // server-side validateSource runs after compile and rejects ops whose
+      // turn_ref.quote is not an exact substring. Earlier this fixture had
+      // a 5-word turn that didn't contain "West Lake and Lingyin Temple"
+      // and got away with it only because validation lived on the web side.
+      turns: [
+        {
+          turn_hash: 'sha256:turn-1',
+          role: 'user',
+          content: '5 days in Hangzhou. West Lake and Lingyin Temple are highlights.',
+        },
+      ],
       mode: 'bootstrap',
       providerId: 'openai',
       model: 'gpt-5.4',
@@ -1391,9 +1402,17 @@ describe('extractors/v2 pipeline', () => {
           values_json: JSON.stringify(values),
           children_json: null,
         },
-        evidence: Array.from({ length: evidenceCount }, (_, i) => ({
+        // Use a single-char quote that's guaranteed to be a substring
+        // of the test turn content (which is 'a' in every cap test).
+        // The cap suite is testing item selection logic, not source
+        // validation — quote content is incidental, but it must still
+        // pass validateSource since #N+1 enforces that contract
+        // server-side. Multiple evidence rows reuse the same quote;
+        // the validator is content-of-quote agnostic, only verbatim-
+        // substring matters.
+        evidence: Array.from({ length: evidenceCount }, () => ({
           turn_tag: 'T1',
-          quote: `quote ${id}-${i}`,
+          quote: 'a',
           role: 'primary' as const,
         })),
       };
@@ -1664,6 +1683,181 @@ describe('extractors/v2 pipeline', () => {
       expect(capWarning).toContain('drop_y');
       // The kept id should NOT appear in the dropped list.
       expect(capWarning).not.toMatch(/Dropped:[^.]*keep_1/);
+    });
+  });
+
+  describe('server-side source quote validation', () => {
+    // The architecture move: source provenance is a core invariant,
+    // enforced inside runExtractionV2Pipeline AFTER compileExtractionDraft.
+    // Web no longer re-validates; if the model emits unverifiable
+    // quotes, the pipeline reasks (with targeted feedback naming the
+    // failing items) and ultimately fails with a typed
+    // 'unverifiable_quote' code that the API surfaces back to clients.
+
+    it("succeeds when every item's quote is an exact substring of its turn", async () => {
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured() {
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [
+                {
+                  id: 'item_1',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'topic',
+                    path_hint: null,
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"summary":"hello world"}',
+                    children_json: null,
+                  },
+                  evidence: [{ turn_tag: 'T1', quote: 'hello world', role: 'primary' }],
+                },
+              ],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello world from earlier' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+      });
+      expect(result.ok).toBe(true);
+    });
+
+    it("returns 'unverifiable_quote' failure after retries when the model can't recover", async () => {
+      // Provider always returns the same un-substring quote — repair
+      // can't recover, reask doesn't help (mock provider isn't
+      // adaptive), so the pipeline exhausts its budget and surfaces
+      // a typed unverifiable_quote failure instead of returning ops
+      // that would fail validation downstream.
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured() {
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [
+                {
+                  id: 'bad_quote_item',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'topic',
+                    path_hint: null,
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"summary":"value"}',
+                    children_json: null,
+                  },
+                  evidence: [
+                    { turn_tag: 'T1', quote: 'completely fabricated phrase', role: 'primary' },
+                  ],
+                },
+              ],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'unrelated content' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.code).toBe('unverifiable_quote');
+      // Structured details carry the failing op back to clients so the
+      // API → web error path can display per-op information instead of
+      // just an opaque count.
+      const failingOps = (result.failure.details?.failingOps as Array<unknown>) ?? [];
+      expect(failingOps.length).toBeGreaterThan(0);
+    });
+
+    it('targeted-reask prompt names failing items + turn tags + bad quotes', async () => {
+      // Verify the prompt builder renders the user-locked v1 wording:
+      // 'exact substring' (not 'byte-for-byte'), drop-item escape
+      // hatch, and per-item identifiers (op index, path, turn tag,
+      // bad quote in JSON). Capture the second call's prompt.
+      const captured: string[] = [];
+      let callIndex = 0;
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured(prompt) {
+          captured.push((prompt.messages.at(-1)?.content as string) ?? '');
+          callIndex += 1;
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items: [
+                {
+                  id: 'item_99',
+                  intent: 'add',
+                  confidence: 0.9,
+                  reasoning_type: 'direct',
+                  target_ref: { node_key: null, path: null, existing_node_id: null },
+                  candidate: {
+                    key: 'topic_root',
+                    path_hint: null,
+                    slot: null,
+                    value_json: null,
+                    values_json: '{"k":"v"}',
+                    children_json: null,
+                  },
+                  evidence: [
+                    {
+                      turn_tag: 'T1',
+                      quote: 'fabricated quote ' + callIndex,
+                      role: 'primary',
+                    },
+                  ],
+                },
+              ],
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+
+      await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'real content here' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+      });
+      // Second call must include the unverifiable_quote reask body.
+      expect(captured.length).toBeGreaterThan(1);
+      const reask = captured[1];
+      // v1 prompt invariants (per review):
+      expect(reask).toMatch(/exact substring/i);
+      expect(reask).not.toMatch(/byte-for-byte/i);
+      expect(reask).toMatch(/drop that item/i);
+      expect(reask).toMatch(/Failing items:/);
+      expect(reask).toMatch(/turn T1/);
+      // Failing op identifier surfaces as path + bad quote (JSON-quoted).
+      expect(reask).toMatch(/path "topic_root"/);
+      expect(reask).toMatch(/"fabricated quote 1"/);
     });
   });
 });

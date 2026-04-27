@@ -2,6 +2,14 @@ import type { LLMPrompt, LLMProvider } from '../../llm/types';
 import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { serializeForPrompt } from '../../semantic/serialize';
 import type { SemanticContent } from '../../semantic/types';
+import {
+  type FailingOp,
+  normalizeOpTurnHashes,
+  repairOpQuotes,
+  type ValidationTurn,
+  validateSource,
+} from '../../t3x-yops/sourceValidator';
+import type { SourcedYOp } from '../../t3x-yops/types';
 import { type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
 import { compileExtractionDraft } from './compiler';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
@@ -296,6 +304,52 @@ function safeStringify(value: unknown): string | undefined {
   }
 }
 
+/**
+ * Build a structured ExtractionFailure for source-quote validation
+ * failures. The prompt builder reads the typed `failingOps` list out of
+ * `details` to render one bullet per failing op (op index, path, turn
+ * tag, the bad quote). Keeping the data structured (not pre-rendered)
+ * means the prompt and any future telemetry / UI can format independently.
+ */
+function buildUnverifiableQuoteFailure(
+  failingOps: readonly FailingOp[],
+  turnHashByTag: Record<string, string>
+): ExtractionFailure {
+  const tagByHash = new Map(Object.entries(turnHashByTag).map(([tag, hash]) => [hash, tag]));
+  const detailedFailingOps = failingOps
+    .filter((f) => f.reason === 'unverifiable_quote')
+    .map((f) => {
+      const op = f.op as Record<string, unknown>;
+      const src = op.source as { turn_ref?: { turn_hash?: string; quote?: string } } | undefined;
+      const turnHash = src?.turn_ref?.turn_hash ?? '';
+      const turnTag = tagByHash.get(turnHash) ?? '<unknown>';
+      // Pick a meaningful path identifier from the op shape. Each YOp
+      // has exactly one of define/set/populate/etc. carrying a path.
+      const path =
+        (op.define as { path?: string } | undefined)?.path ??
+        (op.set as { path?: string } | undefined)?.path ??
+        (op.populate as { path?: string } | undefined)?.path ??
+        (op.unset as { path?: string } | undefined)?.path ??
+        (op.drop as { path?: string } | undefined)?.path ??
+        '<unknown>';
+      return {
+        opIndex: f.opIndex,
+        turnTag,
+        path,
+        badQuote: src?.turn_ref?.quote ?? '',
+      };
+    });
+
+  const summary =
+    detailedFailingOps.length === 1
+      ? '1 evidence quote is not an exact substring of its source turn'
+      : `${detailedFailingOps.length} evidence quotes are not exact substrings of their source turns`;
+
+  return createExtractionFailure('unverifiable_quote', summary, {
+    details: { failingOps: detailedFailingOps },
+  });
+}
+
 function buildTargetedReaskPrompt(
   prompt: LLMPrompt,
   failure: ExtractionFailure,
@@ -323,6 +377,49 @@ function buildTargetedReaskPrompt(
     if (typeof failure.details?.turn_tag === 'string') {
       lines.push(`- Invalid turn tag used: ${failure.details.turn_tag}`);
     }
+  } else if (failure.code === 'unverifiable_quote') {
+    // Per the v1 prompt design (review-locked): plain language about
+    // exact substrings (no "byte-for-byte" — JS substring isn't byte-
+    // level), no inferred "likely cause" hints (those mislead small
+    // models), drop-item escape hatch retained, no worked example.
+    lines.length = 0;
+    lines.push(
+      'Your previous ProviderExtractionDraft used evidence quotes that are not exact substrings of the source turns.'
+    );
+    lines.push('');
+    lines.push('For each failing item:');
+    lines.push('1. Use only the named [T<n>] turn.');
+    lines.push('2. Replace evidence.quote with one exact substring copied from that turn.');
+    lines.push(
+      '3. The quote must preserve casing, whitespace, and punctuation exactly as it appears in the source turn.'
+    );
+    lines.push('4. If no exact supporting substring exists, drop that item.');
+    lines.push('');
+    lines.push(
+      'Do not paraphrase, combine separate fragments, invent punctuation, or use rendered/markdown-stripped text.'
+    );
+
+    const failingOps = Array.isArray(failure.details?.failingOps)
+      ? (failure.details.failingOps as Array<{
+          opIndex: number;
+          turnTag: string;
+          path: string;
+          badQuote: string;
+        }>)
+      : [];
+    if (failingOps.length > 0) {
+      lines.push('');
+      lines.push('Failing items:');
+      for (const f of failingOps) {
+        lines.push(
+          `- op #${f.opIndex} (path "${f.path}", turn ${f.turnTag}), invalid quote: ${JSON.stringify(f.badQuote)}`
+        );
+      }
+    }
+    lines.push('');
+    lines.push(
+      'Return a full corrected ProviderExtractionDraft. Do not add new items; only fix or drop the listed items.'
+    );
   } else if (failure.code === 'compile' && failure.details?.reaskable === true) {
     // Field-specific guidance. The compiler emits several different
     // reaskable failure shapes; sending the wrong remediation tells
@@ -647,6 +744,44 @@ export async function runExtractionV2Pipeline(
       return {
         ok: false,
         failure: compiled.failure,
+        turnHashByTag,
+      };
+    }
+
+    // ── Source quote validation (server-side contract enforcement) ──
+    // Compile succeeded structurally; now check that every op's
+    // source.turn_ref.quote is a verbatim substring of the named turn's
+    // content. This used to live on the web side, after the API had
+    // already returned 200 — which made retries non-targeted (the
+    // failing-ops feedback never reached the LLM through the wire).
+    // Source provenance is a core invariant; enforcing it here means
+    // the API only returns 200 when quotes verify, and reask happens
+    // in the same loop as compile/draft retries.
+    const validationTurns: ValidationTurn[] = input.turns.map((t) => ({
+      turn_hash: t.turn_hash,
+      content: t.content,
+    }));
+    // Mutate ops in place: hash-prefix expansion + deterministic quote
+    // repair (markdown / smart-quote / punct / case+whitespace variants).
+    // Quotes that can't be repaired stay untouched and fail validation.
+    const opsForValidation = compiled.ops as SourcedYOp[];
+    normalizeOpTurnHashes(opsForValidation, validationTurns);
+    repairOpQuotes(opsForValidation, validationTurns);
+    const sourceCheck = validateSource(opsForValidation, validationTurns);
+
+    if (!sourceCheck.ok) {
+      // Same retry shape as compile/provenance failures: budget aware,
+      // targeted reask carrying the failing ops back to the model so
+      // it can fix the specific quotes (rather than re-rolling the
+      // whole extraction blindly).
+      const sourceFailure = buildUnverifiableQuoteFailure(sourceCheck.failingOps, turnHashByTag);
+      if (attempt < maxAttempts) {
+        prompt = buildTargetedReaskPrompt(basePrompt, sourceFailure, turnHashByTag);
+        continue;
+      }
+      return {
+        ok: false,
+        failure: sourceFailure,
         turnHashByTag,
       };
     }
