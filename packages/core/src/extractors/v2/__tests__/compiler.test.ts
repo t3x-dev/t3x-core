@@ -1290,6 +1290,69 @@ describe('extractors/v2 compiler', () => {
       expect(result.warnings[1]).toMatch(/bad_b/);
     });
 
+    it('dropped item with malformed target_ref.path does not seed knownExisting from node_key', () => {
+      // Reviewer P2 follow-up on PR #926. `resolveTargetPath` is
+      // fail-fast: a present-but-malformed `target_ref.path` returns
+      // `invalid` and the item gets dropped (here, in allowPartial
+      // mode). The pre-existing-path seed must mirror the same
+      // fail-fast semantics — otherwise the dropped item still
+      // contributes its `node_key` to the seed and ancestor-define
+      // injection for surviving items gets suppressed.
+      //
+      // Concrete reproducer: a dropped update with malformed
+      // `target_ref.path: 'BAD KEY'` (fails SNAKE_CASE_KEY) but a
+      // benign-looking `target_ref.node_key: 'trip/preferences'`. A
+      // surviving add at `trip/itinerary` must still receive its
+      // `define trip` ancestor.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_dropped',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'BAD KEY', node_key: 'trip/preferences' },
+              candidate: { values: { climate: 'temperate' } },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate', role: 'primary' }],
+            },
+            {
+              id: 'item_surviving',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'trip.itinerary',
+                values: { day_one: 'arrive' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'arrive', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        allowPartial: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const droppedWarning = result.warnings.find((w) => w.includes('item_dropped'));
+      expect(droppedWarning).toBeDefined();
+
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // The surviving add must still receive its full ancestor chain.
+      // If the dropped item's node_key had bled into knownExisting,
+      // `define trip` would be missing and the apply would fail
+      // PATH_NOT_FOUND on `define trip/itinerary`.
+      expect(definePaths).toEqual(['trip', 'trip/itinerary']);
+    });
+
     it('default (allowPartial omitted) preserves strict fail-fast — backward compat guard', () => {
       // Existing callers (golden tests, the strict pipeline path) rely
       // on one bad item killing the whole batch. Don't quietly demote

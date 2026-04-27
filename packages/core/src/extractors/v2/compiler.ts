@@ -210,12 +210,18 @@ function resolveTargetPath(
  * so an `update` whose only addressing is `target_ref.node_key` doesn't
  * trip ALREADY_EXISTS by recreating its own ancestors.
  *
- * Field priority matches `resolveTargetPath`: `target_ref.path` first,
- * then `target_ref.node_key`. We don't fall through to `candidate.*`
- * here — those are *new* path candidates for `add` intents, not
- * pre-existing references. Malformed inputs are silently dropped:
- * `resolveTargetPath` will surface them as typed compile failures in
- * the relevant intent branch where reask details belong.
+ * Mirrors `resolveTargetPath` in two ways:
+ *   - Same field priority: `target_ref.path` first, then `target_ref.node_key`.
+ *     `candidate.*` is intentionally NOT included — those name *new* paths
+ *     for `add` intents, not pre-existing references; seeding from them
+ *     would block legitimate ancestor-define injection.
+ *   - Same fail-fast semantics: a higher-priority field that is present
+ *     but malformed stops the walk and returns `null`. Falling through
+ *     to `node_key` on a malformed `path` would let an item that
+ *     `resolveTargetPath` rejects (and which `compileExtractionDraft`
+ *     drops in `allowPartial` mode) still seed `knownExisting`,
+ *     suppressing ancestor defines that surviving items legitimately
+ *     need.
  */
 function preExistingTargetPath(item: ExtractionDraftItem): string | null {
   const fields: Array<string | undefined | null> = [
@@ -223,9 +229,10 @@ function preExistingTargetPath(item: ExtractionDraftItem): string | null {
     item.target_ref?.node_key,
   ];
   for (const raw of fields) {
-    if (typeof raw !== 'string' || raw.length === 0) continue;
     const result = normalizePath(raw);
     if (result.kind === 'ok') return result.path;
+    if (result.kind === 'invalid') return null;
+    // 'absent' → continue to the next priority candidate.
   }
   return null;
 }
