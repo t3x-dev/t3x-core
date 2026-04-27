@@ -197,6 +197,39 @@ function resolveTargetPath(
   ]);
 }
 
+/**
+ * Return the normalised path of a node the item declares already exists in
+ * the snapshot the compile will be applied to, or `null` if the item names
+ * none.
+ *
+ * `target_ref` is the model's "this node exists" channel. Both `path` and
+ * `node_key` resolve through `normalizePath` into the same op-shape that
+ * `resolveTargetPath` emits — meaning either field, when set, names a
+ * pre-existing node in the live snapshot. The dedupe pass uses this to
+ * skip ancestor-define injection for that node and every prefix of it,
+ * so an `update` whose only addressing is `target_ref.node_key` doesn't
+ * trip ALREADY_EXISTS by recreating its own ancestors.
+ *
+ * Field priority matches `resolveTargetPath`: `target_ref.path` first,
+ * then `target_ref.node_key`. We don't fall through to `candidate.*`
+ * here — those are *new* path candidates for `add` intents, not
+ * pre-existing references. Malformed inputs are silently dropped:
+ * `resolveTargetPath` will surface them as typed compile failures in
+ * the relevant intent branch where reask details belong.
+ */
+function preExistingTargetPath(item: ExtractionDraftItem): string | null {
+  const fields: Array<string | undefined | null> = [
+    item.target_ref?.path,
+    item.target_ref?.node_key,
+  ];
+  for (const raw of fields) {
+    if (typeof raw !== 'string' || raw.length === 0) continue;
+    const result = normalizePath(raw);
+    if (result.kind === 'ok') return result.path;
+  }
+  return null;
+}
+
 function synthesizeAddPath(item: ExtractionDraftItem): string {
   // F8a: small models (nano) occasionally emit `add` items with neither key
   // nor path_hint. Synthesize a deterministic, slug-safe path from the first
@@ -757,27 +790,10 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     warnings.push(...compiled.warnings);
   }
 
-  // `target_ref.path` on update / reinforce / remove items names a path
-  // that already exists in the snapshot the compile is being applied to.
-  // Seed the dedupe pass with these so ancestor-define injection doesn't
-  // try to recreate them and trip ALREADY_EXISTS at apply time.
-  //
-  // `target_ref.path` is allowed to arrive in dotted form (the same
-  // shape `candidate.path_hint` accepts, since the LLM's wire format
-  // doesn't distinguish path separators). Normalise it through the
-  // same pipeline the op-emitting branches use, so the seed lines up
-  // with the normalised paths that end up in the ops list. If
-  // normalisation fails (malformed segment, etc.) we drop the seed —
-  // `resolveTargetPath` will surface the same failure as a typed
-  // compile error in the relevant intent branch.
   const preExisting: string[] = [];
   for (const item of input.draft.items) {
-    const raw = item.target_ref?.path;
-    if (typeof raw !== 'string' || raw.length === 0) continue;
-    const normalised = normalizePath(raw);
-    if (normalised.kind === 'ok') {
-      preExisting.push(normalised.path);
-    }
+    const seeded = preExistingTargetPath(item);
+    if (seeded !== null) preExisting.push(seeded);
   }
 
   const deduped = dedupeDefineOps(ops, preExisting);

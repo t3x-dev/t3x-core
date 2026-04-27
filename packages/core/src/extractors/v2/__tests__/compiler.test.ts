@@ -1026,6 +1026,46 @@ describe('extractors/v2 compiler', () => {
       expect(definePaths).toEqual(['characters/main_protagonist/goal']);
     });
 
+    it('seeds the pre-existing set from target_ref.node_key when target_ref.path is absent', () => {
+      // Reviewer follow-up on PR #926: `resolveTargetPath` falls through
+      // from `target_ref.path` to `target_ref.node_key` when the former
+      // is null, and uses whichever it finds to derive the emitted op
+      // path. The seed has to honour the same priority — otherwise an
+      // update with only `node_key` set lets the dedupe pass inject
+      // ancestor defines for `characters` and `characters/main_protagonist`,
+      // both of which exist at apply time.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: null, node_key: 'characters/main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      expect(definePaths).toEqual(['characters/main_protagonist/goal']);
+    });
+
     it('does not inject ancestor defines for nested non-define primary paths', () => {
       // Same logical case, but the "this exists" signal comes from a
       // populate op rather than target_ref. A populate at
