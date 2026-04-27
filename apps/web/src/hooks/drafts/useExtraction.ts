@@ -124,17 +124,46 @@ export function useExtraction({
       if (store.conversationId !== extractConvId) store.setConversation(extractConvId);
       store.setMode('streaming');
       store.setError(null);
+      // Clear any prior retained-failure marker too — the new attempt is
+      // about to either succeed (overwriting the draft via setDraft, which
+      // also clears this) or fail (the catch block below will write a
+      // fresh marker if hasDraft was true at the start). Carrying a
+      // stale marker through the in-flight window would let the panel
+      // read "Last extract failed (gpt-5.4-mini / concise) ..." while
+      // the topbar says "Extracting...".
+      store.setRetainedDraftFailure(null);
       store.setLastExtractionPinIds(sourcePinIds ?? []);
       // Auto-expand on Extract — explicit user action, they want to see results.
       store.setPanelExpanded(true);
-      // A new Extract attempt supersedes the previous un-applied proposal.
-      // If this attempt fails verification, leaving the old draft/script
-      // staged makes Apply point at stale YAML while the error describes
-      // the new run. Manual dirty edits are already protected by the
-      // confirm above, so it is safe to clear once the attempt really starts.
+      // Snapshot whether a usable draft was already staged at the moment
+      // this attempt started. Read here (not in the catch block) so a
+      // late state mutation can't change the answer between the LLM
+      // call and the failure handler. Drives both branches:
+      //   - on success: setDraft replaces it (and clears the failure marker)
+      //   - on failure: if true, set retainedDraftFailure and PRESERVE
+      //                 the existing draft instead of dropping it.
+      const hadDraftAtStart = store.hasDraft;
+      const draftOpsAtStart = store.draftOps;
+
+      // Honour the dirty-edit overwrite confirm BEFORE the LLM call.
+      // The user explicitly accepted "throw away my edits" via the
+      // confirm at the top of this handler — leaving scriptText with
+      // the old dirty content while flipping scriptDirty=false would
+      // produce an incoherent half-clear (Apply gated on
+      // `scriptDirty || hasDraft` ignores the visible text; if a
+      // prior draft is retained, Apply parses scriptText that no
+      // longer matches the panel's "Previous draft" rendering).
+      //
+      // Replace scriptText with the canonical mirror of whatever the
+      // panel will keep showing through both branches: prior draft
+      // YAML if a draft is staged, empty otherwise. The success branch
+      // overwrites with the new proposal's serialization; the failure
+      // branch leaves this canonical mirror in place. Either way,
+      // `scriptText` always agrees with what AfterPanel renders.
+      if (store.scriptDirty) {
+        store.setScriptText(hadDraftAtStart ? serializeOpsToYaml(draftOpsAtStart) : '');
+      }
       store.setScriptDirty(false);
-      store.clearDraft();
-      store.setScriptText('');
 
       // Read the extraction preset at the moment of Extract — the
       // dropdown in ChatHeader updates `workspaceStore.extractionPreset`
@@ -183,6 +212,12 @@ export function useExtraction({
           ? { trees: previewResult.trees, relations: previewResult.relations }
           : tree;
         const store = useWorkspaceStore.getState();
+        // setDraft writes the new draft AND clears any retainedDraftFailure
+        // marker — see workspaceStore. clearDraft is no longer called
+        // pre-flight, so reaching here is the FIRST point at which the
+        // previous draft (if any) is replaced. A failed attempt above
+        // would have skipped this branch entirely and the previous
+        // draft survives untouched.
         store.setDraft({ ops: result.ops, tree: previewTree });
         store.setScriptText(serializeOpsToYaml(result.ops));
         // The script is the canonical proposal — not "dirty" in the
@@ -196,26 +231,55 @@ export function useExtraction({
         );
       } catch (err) {
         useWorkspaceStore.getState().setMode('idle');
-        if (err instanceof ExtractionFailedError) {
-          const msg =
-            err.reason === 'unverifiable_quote'
-              ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
-              : err.reason === 'missing_source'
-                ? `Extraction returned ops without provenance. Please retry.`
-                : err.reason === 'invalid_structure'
-                  ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                  : err.reason === 'llm_error'
-                    ? err.failureCode
-                      ? `Extraction failed (${err.failureCode}): ${err.message}`
-                      : `LLM call failed: ${err.message}`
-                    : `Extraction failed after ${err.lastAttempt} attempts.`;
-          useWorkspaceStore.getState().setError(msg);
-          toast.error(msg, { id: EXTRACTION_TOAST_ID });
+        const isExtractionFailed = err instanceof ExtractionFailedError;
+        const msg = isExtractionFailed
+          ? err.reason === 'unverifiable_quote'
+            ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
+            : err.reason === 'missing_source'
+              ? `Extraction returned ops without provenance. Please retry.`
+              : err.reason === 'invalid_structure'
+                ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
+                : err.reason === 'llm_error'
+                  ? err.failureCode
+                    ? `Extraction failed (${err.failureCode}): ${err.message}`
+                    : `LLM call failed: ${err.message}`
+                  : `Extraction failed after ${err.lastAttempt} attempts.`
+          : formatWorkspaceError(err) || 'Extraction failed';
+
+        // Two failure shapes, mutually exclusive:
+        //
+        // 1. Failure WITH a usable draft staged at attempt start. The
+        //    previous draft is still applicable (it was validated when
+        //    it was staged), so we PRESERVE it and write a structured
+        //    `retainedDraftFailure` marker the panel uses to switch to
+        //    "Previous draft retained" labelling. Crucially we do NOT
+        //    write `lastError` here: that field drives the empty-state
+        //    error and ScriptEditor banner — both meant for "no draft
+        //    to show". Setting both would render the same string in
+        //    two places.
+        //
+        //    Forward typed diagnostic fields (`reason`, `failureCode`)
+        //    from `ExtractionFailedError` so future surfaces (per-op
+        //    highlight, "see what failed" UX, telemetry) can branch on
+        //    the kind of failure without regex-parsing `message`.
+        //
+        // 2. Failure with NO draft (today's behaviour preserved). Use
+        //    `lastError`; the panel shows the centered empty-state and
+        //    the ScriptEditor banner shows the same message.
+        if (hadDraftAtStart) {
+          useWorkspaceStore.getState().setRetainedDraftFailure({
+            message: msg,
+            at: new Date().toISOString(),
+            reason: isExtractionFailed ? err.reason : undefined,
+            failureCode: isExtractionFailed ? err.failureCode : undefined,
+            provider: selectedProvider ?? undefined,
+            model: selectedModel ?? undefined,
+            preset: useWorkspaceStore.getState().extractionPreset,
+          });
         } else {
-          const msg = formatWorkspaceError(err) || 'Extraction failed';
           useWorkspaceStore.getState().setError(msg);
-          toast.error(msg, { id: EXTRACTION_TOAST_ID });
         }
+        toast.error(msg, { id: EXTRACTION_TOAST_ID });
       }
     },
     [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite]

@@ -119,7 +119,17 @@ describe('extractAndApply', () => {
     };
 
     const result = await extractAndApply({
-      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: '5 days in Hangzhou trip' }],
+      // Server-side validateSource (added with the architecture move)
+      // requires every evidence quote to be an exact substring of its
+      // turn. Both quotes the provider response cites must literally
+      // appear in this content.
+      turns: [
+        {
+          turn_hash: 'sha256:turn-1',
+          role: 'user',
+          content: '5 days in Hangzhou trip — West Lake and Lingyin Temple',
+        },
+      ],
       mode: 'bootstrap',
       providerId: 'openai',
       provider,
@@ -208,7 +218,14 @@ describe('extractAndApply', () => {
     };
 
     const result = await extractAndApply({
-      turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'HotS is a MOBA' }],
+      // Both item quotes must be exact substrings post-#N+1.
+      turns: [
+        {
+          turn_hash: 'sha256:turn-1',
+          role: 'user',
+          content: 'Heroes of the Storm — HotS is a MOBA',
+        },
+      ],
       mode: 'bootstrap',
       providerId: 'anthropic',
       provider,

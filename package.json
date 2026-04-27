@@ -55,7 +55,7 @@
     "changeset": "changeset",
     "verify:versions": "node tools/verify-versions.mjs",
     "verify:versions:no-manifest": "node tools/verify-versions.mjs --no-manifest",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && pnpm install --lockfile-only",
     "publish-packages": "pnpm verify:versions && pnpm build && node tools/publish-package-tarballs.mjs",
     "publish-runtime-release": "node tools/publish-runtime-release.mjs",
     "publish-release": "pnpm publish-runtime-release && pnpm publish-packages",

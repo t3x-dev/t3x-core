@@ -11,6 +11,7 @@ describe('extractors/v2 failures', () => {
       'compile',
       'executable_structure',
       'domain_schema',
+      'unverifiable_quote',
     ]);
   });
 
@@ -19,6 +20,7 @@ describe('extractors/v2 failures', () => {
     expect(isRetryableFailure('draft_parse')).toBe(true);
     expect(isRetryableFailure('compile')).toBe(false);
     expect(isRetryableFailure('domain_schema')).toBe(false);
+    expect(isRetryableFailure('unverifiable_quote')).toBe(true);
   });
 
   it('returns a deterministic retry strategy per failure code', () => {

@@ -1,20 +1,30 @@
 /**
  * POST /v1/extract-yops
  *
- * New-architecture extraction endpoint. Takes turns, calls the LLM via
- * provider registry, parses the output as YOp[], returns { ops }.
+ * Server-validated extraction endpoint. Takes turns, calls the LLM via
+ * the provider registry, runs the v2 pipeline (parse → schema validate
+ * → compile → source-quote validate), and returns { ops }.
  *
- * Does NOT persist to yops_log. Does NOT do drift detection. Those are
- * client concerns in the new architecture — this endpoint is a pure LLM
- * wrapper.
+ * Does NOT persist to yops_log. Does NOT do drift detection.
  *
- * Retry policy: the v2 pipeline (`extractAndApply`) owns retry semantics
- * server-side — if the model emits invalid structure or unverifiable
- * quotes, the pipeline raises an `ExtractionFailure` and the client
- * decides whether to call again with the same turns. There is no
- * surgical-retry payload on this endpoint; an earlier `failing_ops`
- * field was advertised in the schema but never wired to the handler,
- * so it has been removed to keep the contract honest.
+ * Validation + retry policy (post-server-side-validation move):
+ *   - The pipeline owns ALL retry budget. Draft schema, provenance,
+ *     compile, AND source-quote validation each get their own targeted
+ *     reask attempts inside `runExtractionV2Pipeline` before the route
+ *     ever returns.
+ *   - A 200 response means every op carries a verbatim-substring quote
+ *     from the named turn. Clients trust this contract and do not
+ *     re-validate.
+ *   - A non-2xx response with code `EXTRACTION_FAILED` carries a
+ *     typed `failure_code` (`unverifiable_quote`, `compile`, etc.) so
+ *     clients can render the right UI without re-deriving cause from
+ *     the message text.
+ *   - Clients should NOT retry non-`transport` failures: by the time
+ *     they're returned, the server has already exhausted its internal
+ *     reask budget. Retrying with the same turns/provider/model/preset
+ *     just doubles model spend for the same predictable failure.
+ *     Transport-class failures (rate-limit, network, provider 5xx)
+ *     remain client-retryable.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
@@ -105,9 +115,9 @@ const route = createRoute({
   method: 'post',
   path: '/v1/extract-yops',
   tags: ['Extraction'],
-  summary: 'Produce YOps from turns via LLM (client-driven retry loop)',
+  summary: 'Produce server-validated YOps from turns via LLM',
   description:
-    'Calls the LLM with the provided turns and returns parsed YOp[]. Does not persist to the yops_log — the caller is responsible for saving and validating. Retry semantics are owned by the v2 pipeline server-side; clients re-send the same turns to retry.',
+    'Runs the v2 extraction pipeline end-to-end (LLM call → schema validate → compile → source-quote validate). A 200 response guarantees every op carries a verbatim-substring quote from the named turn; the pipeline owns all reask budget for draft, compile, and source failures. Does not persist to yops_log — that is a separate Apply step. Clients SHOULD NOT retry non-transport `EXTRACTION_FAILED` responses; the server has already exhausted internal reasks before returning.',
   request: {
     body: {
       content: { 'application/json': { schema: ExtractYopsRequest } },

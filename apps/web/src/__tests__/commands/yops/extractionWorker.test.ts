@@ -57,6 +57,10 @@ describe('runExtraction', () => {
   });
 
   it('fails fast on non-retryable request failures', async () => {
+    // Compile failures from the API map to web reason 'invalid_structure'
+    // (not generic 'llm_error') so useExtraction renders the dedicated
+    // 'do not form a valid tree update' message. failureCode still
+    // carries the typed wire code for diagnostics.
     const llm = vi
       .fn()
       .mockRejectedValueOnce(
@@ -75,7 +79,7 @@ describe('runExtraction', () => {
         llm,
       })
     ).rejects.toMatchObject<Partial<ExtractionFailedError>>({
-      reason: 'llm_error',
+      reason: 'invalid_structure',
       lastAttempt: 1,
       failureCode: 'compile',
       message: 'Compiler rejected the draft',
@@ -83,6 +87,91 @@ describe('runExtraction', () => {
 
     expect(llm).toHaveBeenCalledTimes(1);
     expect(commitOpsMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT retry on unverifiable_quote — server already exhausted internal reasks', async () => {
+    // Review P2: callExtractionLLM no longer forwards failingOps
+    // because the API now owns targeted reask. So when the API
+    // returns a typed unverifiable_quote failure, its internal
+    // budget is already spent. The web worker MUST NOT call
+    // /extract-yops again with the same inputs — that's wasted
+    // model spend for a guaranteed-identical failure.
+    //
+    // RetryStrategy for unverifiable_quote is { retryable: true,
+    // maxAttempts: 2 } from the core taxonomy (it IS retryable
+    // server-side), but on the wire it must be treated as terminal.
+    const llm = vi.fn().mockRejectedValue(
+      new ExtractionRequestError(
+        createExtractionFailure('unverifiable_quote', '2 quotes did not verify', {
+          details: {
+            failingOps: [
+              { opIndex: 1, path: 'a', turnTag: 'T1', badQuote: 'fake1' },
+              { opIndex: 2, path: 'b', turnTag: 'T1', badQuote: 'fake2' },
+            ],
+          },
+        }),
+        400,
+        'EXTRACTION_FAILED'
+      )
+    );
+
+    let thrown: ExtractionFailedError | undefined;
+    try {
+      await runExtraction({
+        baseTree: { trees: [], relations: [] },
+        conversationId: 'conv_123',
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+        llm,
+      });
+    } catch (e) {
+      thrown = e as ExtractionFailedError;
+    }
+
+    // Exactly one call. No retry, no doubled latency, no doubled
+    // model spend.
+    expect(llm).toHaveBeenCalledTimes(1);
+    // Reason is the typed 'unverifiable_quote' (not generic 'llm_error')
+    // so useExtraction renders the dedicated 'could not verify N slot(s)'
+    // UI message instead of the fallback 'Extraction failed
+    // (unverifiable_quote): ...'.
+    expect(thrown?.reason).toBe('unverifiable_quote');
+    expect(thrown?.failureCode).toBe('unverifiable_quote');
+    // failingOps length matches the API-side count, so the UI message's
+    // "N slot(s)" reflects what the server actually saw.
+    expect(thrown?.failingOps).toHaveLength(2);
+    expect(thrown?.failingOps?.[0]?.reason).toBe('unverifiable_quote');
+  });
+
+  it('still retries transport failures (genuinely client-retryable)', async () => {
+    // Defensive inverse: the only retry path that survives the
+    // 'server owns targeted reask' contract is genuine network /
+    // rate-limit transport. Make sure that path still works after
+    // the gate change — otherwise we'd kill all client retries by
+    // accident.
+    const llm = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ExtractionRequestError(
+          createExtractionFailure('transport', 'Rate limited'),
+          429,
+          'RATE_LIMITED'
+        )
+      )
+      .mockResolvedValueOnce([]);
+
+    validateExecutableStructureMock.mockReturnValue({ ok: true });
+    commitOpsMock.mockResolvedValue(undefined);
+
+    await runExtraction({
+      baseTree: { trees: [], relations: [] },
+      conversationId: 'conv_123',
+      turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+      llm,
+    });
+
+    // First call rate-limited, second succeeded — retry path kept
+    // for transport.
+    expect(llm).toHaveBeenCalledTimes(2);
   });
 
   describe('commit flag', () => {

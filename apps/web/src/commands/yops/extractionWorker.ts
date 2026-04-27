@@ -9,8 +9,17 @@
  * exhaustion so LLM self-repair remains the primary path.
  */
 
-import type { SemanticContent, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
-import { normalizeOpTurnHashes, repairOpQuotes, validateSource } from '@t3x-dev/core';
+import type {
+  ExtractionFailure,
+  ExtractionFailureCode,
+  SemanticContent,
+  SourcedYOp,
+  ValidationTurn,
+} from '@t3x-dev/core';
+// normalize/repair/validate moved to server-side core pipeline
+// (runExtractionV2Pipeline handles source provenance after compile).
+// Web no longer re-runs them — the API contract already guarantees
+// verified quotes when it returns 200.
 import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
@@ -71,6 +80,52 @@ function pickReason(failingOps: RetryFailingOp[]): ExtractionFailedError['reason
   return 'exhausted_retries';
 }
 
+/**
+ * Map a typed server-side ExtractionFailure code onto the web's
+ * ExtractionFailedError reason. The reason drives the dedicated UI
+ * message branch in useExtraction (e.g. "could not verify N slot(s)").
+ *
+ * Codes without a dedicated UI string fall through to 'llm_error',
+ * which produces "Extraction failed (<code>): <message>" — generic but
+ * still includes the typed code for diagnostics.
+ */
+function mapApiFailureToReason(code: ExtractionFailureCode): ExtractionFailedError['reason'] {
+  if (code === 'unverifiable_quote') return 'unverifiable_quote';
+  if (code === 'provenance') return 'missing_source';
+  if (code === 'compile' || code === 'executable_structure') return 'invalid_structure';
+  return 'llm_error';
+}
+
+/**
+ * Build a synthetic RetryFailingOp[] from a server failure's structured
+ * details so the web's ExtractionFailedError carries the same per-op
+ * count the API saw. Currently only `unverifiable_quote` ships with
+ * structured details; other codes return an empty array, which still
+ * gives the UI a stable shape to read.
+ *
+ * The synthetic ops have minimal valid shape — `op` is a stub since we
+ * don't ship the full op back over the wire. UI message paths only read
+ * `failingOps.length`; future deeper UX (per-op highlight) can switch
+ * to reading the typed `details.failingOps` directly.
+ */
+function synthesiseFailingOpsFromApi(failure: ExtractionFailure): RetryFailingOp[] {
+  if (failure.code !== 'unverifiable_quote') return [];
+  const detail = failure.details?.failingOps;
+  if (!Array.isArray(detail)) return [];
+  return detail.map((entry) => {
+    const e = entry as { opIndex?: number; path?: string; turnTag?: string; badQuote?: string };
+    return {
+      // Stub op — the worker doesn't have the original SourcedYOp here.
+      // UI doesn't dereference this for unverifiable_quote, but the
+      // shape needs to be present so future readers don't NPE.
+      op: {} as SourcedYOp,
+      opIndex: typeof e.opIndex === 'number' ? e.opIndex : 0,
+      reason: 'unverifiable_quote' as const,
+      detail: e.path && e.turnTag ? `path "${e.path}" (turn ${e.turnTag})` : undefined,
+    };
+  });
+}
+
 export async function runExtraction({
   baseTree,
   conversationId,
@@ -89,11 +144,43 @@ export async function runExtraction({
       attempt++;
 
       if (e instanceof ExtractionRequestError) {
+        // The new server-side contract: API now owns targeted reask
+        // for draft/compile/source failures. By the time it returns
+        // an ExtractionRequestError to the wire, its internal reask
+        // budget is already spent — calling /extract-yops again with
+        // the same turns/provider/model/preset would burn another
+        // round of LLM calls for the same predictable failure.
+        //
+        // Web only retries `transport` failures (network blips,
+        // rate-limit, transient provider errors) where another HTTP
+        // attempt has a real chance of succeeding without the model
+        // doing anything different. Everything else — draft_parse,
+        // draft_schema, provenance, compile, executable_structure,
+        // domain_schema, unverifiable_quote — is the server's
+        // verdict and treated as terminal here.
+        const isTransport = e.failure.code === 'transport';
         const retryDecision = e.failure.retry;
         const exhausted =
-          !retryDecision.retryable || attempt >= retryDecision.maxAttempts || attempt > MAX_RETRIES;
+          !isTransport ||
+          !retryDecision.retryable ||
+          attempt >= retryDecision.maxAttempts ||
+          attempt > MAX_RETRIES;
         if (exhausted) {
-          throw new ExtractionFailedError([], attempt, 'llm_error', e.message, e.failure.code);
+          // Map typed server failure codes onto the web ExtractionFailedError
+          // `reason` so useExtraction can render the dedicated UI string
+          // (e.g. "could not verify N slot(s)") instead of the generic
+          // "Extraction failed (unverifiable_quote): ...". Codes without a
+          // dedicated branch fall through to 'llm_error'.
+          //
+          // For unverifiable_quote we also surface a synthetic failingOps
+          // array carrying just the count + per-op identifiers from the
+          // API failure's `details.failingOps`. The UI only reads
+          // `failingOps.length`, but keeping the shape stable means future
+          // UI features (per-op highlight, "show me which quote was bad")
+          // can read the structured data without another wire round-trip.
+          const reason = mapApiFailureToReason(e.failure.code);
+          const failingOps = synthesiseFailingOpsFromApi(e.failure);
+          throw new ExtractionFailedError(failingOps, attempt, reason, e.message, e.failure.code);
         }
         continue;
       }
@@ -105,22 +192,19 @@ export async function runExtraction({
       continue;
     }
 
-    normalizeOpTurnHashes(ops, turns);
-    repairOpQuotes(ops, turns);
-    const sourceResult = validateSource(ops, turns);
-    if (!sourceResult.ok) {
-      attempt++;
-      prevFailing = sourceResult.failingOps;
-
-      if (attempt > MAX_RETRIES) {
-        throw new ExtractionFailedError(
-          sourceResult.failingOps,
-          attempt,
-          pickReason(sourceResult.failingOps)
-        );
-      }
-      continue;
-    }
+    // Source-quote validation now lives server-side inside
+    // runExtractionV2Pipeline (post-#N+1 architecture move). The API
+    // returns 200 only when every op's turn_ref.quote is verified
+    // against turn content; an unverifiable quote surfaces as a typed
+    // 'unverifiable_quote' ExtractionFailure (mapped to 400). Web
+    // therefore trusts the contract and skips the redundant
+    // normalize/repair/validate triple — those would be no-ops on a
+    // server-validated batch and the extra retry loop here used to
+    // double-spend the LLM budget without ever forwarding failingOps
+    // through the wire.
+    //
+    // `prevFailing` is no longer mutated by this branch; it stays in
+    // scope only for the structure-validation retry path below.
 
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {

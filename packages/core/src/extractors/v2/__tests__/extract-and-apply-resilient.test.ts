@@ -113,7 +113,10 @@ describe('extractAndApplyResilient (F10)', () => {
                   values_json: null,
                   children_json: null,
                 },
-                evidence: [{ turn_tag: 'T1', quote: 'remove that', role: 'primary' }],
+                // Quote must be an exact substring of the turn content
+                // ('remove missing_node') — server-side validateSource
+                // rejects ops with non-verbatim quotes.
+                evidence: [{ turn_tag: 'T1', quote: 'missing_node', role: 'primary' }],
               },
             ],
             warnings: [],

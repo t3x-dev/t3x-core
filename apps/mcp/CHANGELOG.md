@@ -1,5 +1,12 @@
 # @t3x-dev/mcp
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/mcp-lib@0.1.3
+
 ## 0.1.2
 
 ### Patch Changes

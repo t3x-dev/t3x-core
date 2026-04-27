@@ -445,29 +445,38 @@ describe('useExtraction', () => {
     expect(runExtractionMock).toHaveBeenCalled();
   });
 
-  it('clears a stale staged draft when re-extract fails verification', async () => {
-    // Repro: user stages an extraction draft, switches Concise/Balanced/
-    // Detailed, and clicks Extract again. If the new run fails verification,
-    // the old draft must not remain applyable — otherwise the UI shows an
-    // error for the new run while Script/Apply still point at stale YAML.
-    useWorkspaceStore.getState().setDraft({
-      ops: [
-        {
-          set: { path: 'old/proposal', value: 'stale' },
-          source: {
-            type: 'llm' as const,
-            model: 'gpt-4o-mini',
-            at: '2026-04-26T00:00:00Z',
-            turn_ref: { turn_hash: 'sha256:t1', quote: 'stale' },
-          },
+  it('preserves the prior draft and writes retainedDraftFailure when re-extract fails', async () => {
+    // PR-B contract (supersedes the PR #903 "clear stale draft" test):
+    //   The original behaviour pre-emptively cleared the staged draft
+    //   before the LLM call so a stale draft could never sit under a
+    //   fresh error. After #906 turned server failures into hard
+    //   terminal results, that pre-emptive clear meant every failed
+    //   re-extract silently destroyed the user's previous successful
+    //   proposal — concrete data loss in the visible refactor path
+    //   (real conv_51205437: Google succeeds → switch to GPT mini /
+    //   Concise → unverifiable_quote → previous Google draft gone).
+    //
+    //   PR-B inverts the policy: the previous draft survives, and a
+    //   structured `retainedDraftFailure` marker drives AfterPanel's
+    //   "Previous draft retained" header + persistent error row so the
+    //   Apply button is unambiguous.
+    const stagedOps = [
+      {
+        set: { path: 'old/proposal', value: 'stale' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'stale' },
         },
-      ] as never,
-      tree: { trees: [], relations: [] },
-    });
-    useWorkspaceStore
-      .getState()
-      .setScriptText('yops:\n  - set:\n      path: old/proposal\n      value: stale\n');
+      },
+    ];
+    const stagedScript = 'yops:\n  - set:\n      path: old/proposal\n      value: stale\n';
+    const stagedTree = { trees: [], relations: [] };
+    useWorkspaceStore.getState().setDraft({ ops: stagedOps as never, tree: stagedTree });
+    useWorkspaceStore.getState().setScriptText(stagedScript);
     useWorkspaceStore.getState().setScriptDirty(false);
+    useWorkspaceStore.getState().setExtractionPreset('concise');
 
     runExtractionMock.mockRejectedValueOnce(
       new ExtractionFailedError(
@@ -488,7 +497,7 @@ describe('useExtraction', () => {
       useExtraction({
         resolvedConversationId: 'conv_123',
         selectedProvider: 'openai',
-        selectedModel: 'gpt-4o-mini',
+        selectedModel: 'gpt-5.4-mini',
       })
     );
 
@@ -497,12 +506,191 @@ describe('useExtraction', () => {
     });
 
     const state = useWorkspaceStore.getState();
-    expect(state.lastError).toContain('Extraction could not verify 1 slot');
+    // Draft survives — same ops, same preview tree, same script.
+    expect(state.hasDraft).toBe(true);
+    expect(state.draftOps).toEqual(stagedOps);
+    expect(state.scriptText).toBe(stagedScript);
+    expect(state.draftsByConversation.conv_123).toBeDefined();
+
+    // The two error channels are intentionally non-overlapping. Setting
+    // both would render the same string in two surfaces.
+    expect(state.lastError).toBeNull();
+    expect(state.retainedDraftFailure).not.toBeNull();
+    expect(state.retainedDraftFailure?.message).toContain('Extraction could not verify 1 slot');
+    // Provider / model / preset captured at attempt time so the panel
+    // header can read "Last extract failed (openai · gpt-5.4-mini ·
+    // Concise)" instead of an opaque "extraction failed".
+    expect(state.retainedDraftFailure?.provider).toBe('openai');
+    expect(state.retainedDraftFailure?.model).toBe('gpt-5.4-mini');
+    expect(state.retainedDraftFailure?.preset).toBe('concise');
+    expect(typeof state.retainedDraftFailure?.at).toBe('string');
+  });
+
+  it('falls back to lastError (no retainedDraftFailure) when there is no prior draft', async () => {
+    // Inverse case: a first-ever Extract that fails has no draft to
+    // retain, so the historic surfaces (centered empty-state error,
+    // ScriptEditor banner) still apply. This test exists to make sure
+    // PR-B doesn't accidentally suppress those by routing every
+    // failure through retainedDraftFailure.
+    runExtractionMock.mockRejectedValueOnce(
+      new ExtractionFailedError([], 1, 'llm_error', 'LLM call failed')
+    );
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.4-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const state = useWorkspaceStore.getState();
     expect(state.hasDraft).toBe(false);
-    expect(state.draftOps).toEqual([]);
-    expect(state.draftTree).toBeNull();
+    expect(state.lastError).toContain('LLM call failed');
+    expect(state.retainedDraftFailure).toBeNull();
+  });
+
+  it('forwards typed reason + failureCode into retainedDraftFailure', async () => {
+    // P2 from the #915 review: the structured diagnostic fields on
+    // ExtractionFailedError must reach retainedDraftFailure so future
+    // UI / telemetry can branch on the *kind* of failure without
+    // regex-parsing the rendered message.
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'old', value: 'proposal' },
+          source: {
+            type: 'llm' as const,
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'old' },
+          },
+        },
+      ] as never,
+      tree: { trees: [], relations: [] },
+    });
+
+    runExtractionMock.mockRejectedValueOnce(
+      new ExtractionFailedError([], 2, 'unverifiable_quote', 'msg', 'unverifiable_quote')
+    );
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.4-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const failure = useWorkspaceStore.getState().retainedDraftFailure;
+    expect(failure?.reason).toBe('unverifiable_quote');
+    expect(failure?.failureCode).toBe('unverifiable_quote');
+  });
+
+  it('a confirm-accepted dirty edit does not survive an extraction failure with a retained draft', async () => {
+    // P1 from the #915 review: pre-flight `setScriptDirty(false)` used
+    // to run while `scriptText` still held the user's dirty YAML.
+    // Confirm-accepted + Extract-failure left the editor showing OLD
+    // user text with `scriptDirty=false`, so:
+    //   - Apply (gated on scriptDirty || hasDraft) ignored the visible
+    //     edits even though they were on screen, and
+    //   - if a prior draft was retained, Apply parsed user YAML that
+    //     no longer matched the panel's "Previous draft" rendering.
+    //
+    // Fix: when the user accepts the overwrite, the editor is reset
+    // pre-flight to the canonical mirror of whatever the panel will
+    // continue to show — prior draft YAML if a draft is staged. The
+    // success branch then overwrites with the new proposal; the
+    // failure branch leaves the canonical mirror in place. Either way
+    // scriptText agrees with what AfterPanel renders.
+    const stagedOps = [
+      {
+        define: { path: 'tradeoffs/storage' },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: 'storage' },
+        },
+      },
+    ];
+    useWorkspaceStore
+      .getState()
+      .setDraft({ ops: stagedOps as never, tree: { trees: [], relations: [] } });
+    useWorkspaceStore.getState().setScriptText('user-edited dirty YAML');
+    useWorkspaceStore.getState().setScriptDirty(true);
+
+    runExtractionMock.mockRejectedValueOnce(
+      new ExtractionFailedError([], 2, 'llm_error', 'transient error')
+    );
+
+    const confirmOverwrite = vi.fn().mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.4-mini',
+        confirmOverwrite,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const state = useWorkspaceStore.getState();
+    // Confirm was honoured: the dirty user text is gone and the flag
+    // is clean. No half-cleared "text still here, dirty falsely false".
+    expect(state.scriptText).not.toBe('user-edited dirty YAML');
+    expect(state.scriptDirty).toBe(false);
+    // The retained-draft path stays coherent: the editor mirrors the
+    // prior draft serialization, which is exactly what the panel's
+    // "Previous draft" rendering shows. Apply parses this — same
+    // semantics as the panel.
+    expect(state.scriptText).toContain('tradeoffs/storage');
+    expect(state.hasDraft).toBe(true);
+    expect(state.retainedDraftFailure).not.toBeNull();
+  });
+
+  it('a confirm-accepted dirty edit clears the editor when no prior draft is staged', async () => {
+    // Companion to the previous case: same consent, no prior draft.
+    // The editor must reset to empty (not stay on the dirty text)
+    // and scriptDirty must be false. With no draft to apply and
+    // scriptText empty, Apply stays disabled — coherent failure.
+    useWorkspaceStore.getState().setScriptText('user-edited dirty YAML');
+    useWorkspaceStore.getState().setScriptDirty(true);
+
+    runExtractionMock.mockRejectedValueOnce(new ExtractionFailedError([], 1, 'llm_error', 'fail'));
+
+    const confirmOverwrite = vi.fn().mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.4-mini',
+        confirmOverwrite,
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const state = useWorkspaceStore.getState();
     expect(state.scriptText).toBe('');
     expect(state.scriptDirty).toBe(false);
-    expect(state.draftsByConversation.conv_123).toBeUndefined();
+    expect(state.hasDraft).toBe(false);
+    // No prior draft → falls through to the lastError channel, not
+    // retainedDraftFailure.
+    expect(state.lastError).toContain('fail');
+    expect(state.retainedDraftFailure).toBeNull();
   });
 });

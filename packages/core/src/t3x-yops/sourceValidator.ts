@@ -64,6 +64,165 @@ function generateQuoteCandidates(quote: string): string[] {
 }
 
 /**
+ * Inline markdown markers we know how to project away from raw turn
+ * content. Order matters: longer markers first so `**` is matched
+ * before the single-`*` italic rule. Block-level constructs (headings,
+ * lists, links) are intentionally out of scope — those would change
+ * structure, not just span boundaries, and projecting them invites
+ * fuzzy matching.
+ */
+const PROJECTION_MARKERS = ['**', '*', '`'] as const;
+
+interface MarkdownProjection {
+  /** Raw content with paired inline markers removed. */
+  stripped: string;
+  /**
+   * Per-character map: `rawIndexAt[i]` is the raw-content index that
+   * produced `stripped[i]`. Monotonically increasing, so a contiguous
+   * match in `stripped` always maps to a contiguous span in raw.
+   */
+  rawIndexAt: number[];
+  /**
+   * For each stripped position, the id of the paired-marker span the
+   * character belongs to (`-1` for plain text outside any span). Used
+   * to detect whether a match crosses a span boundary, which is what
+   * makes balanced marker expansion safe.
+   */
+  spanIdAt: number[];
+  /**
+   * If `stripped[i]` is the first content character of a paired span,
+   * `openMarkerAt[i]` is the raw index of that span's opening marker
+   * (so a slice starting there includes the marker). `-1` otherwise.
+   */
+  openMarkerAt: number[];
+  /**
+   * If `stripped[i]` is the last content character of a paired span,
+   * `closeMarkerEndAt[i]` is the raw index immediately after that
+   * span's closing marker (so a slice ending there includes the
+   * marker). `-1` otherwise.
+   */
+  closeMarkerEndAt: number[];
+}
+
+/**
+ * Project raw turn content into a stripped form by removing the inner
+ * characters of paired inline markdown markers (`**bold**`, `*italic*`,
+ * `` `code` ``). Unpaired markers are left in place and treated as
+ * literal characters — we only strip a marker when its closing
+ * counterpart exists later in the string.
+ *
+ * Returns the projection plus enough metadata to map a stripped match
+ * back to a *balanced* raw span (see `repairFromMarkdownProjection`).
+ *
+ * Determinism: single left-to-right scan, no regex backtracking, no
+ * scoring. The same input always yields the same projection.
+ */
+function projectMarkdownToRaw(raw: string): MarkdownProjection {
+  const strippedParts: string[] = [];
+  const rawIndexAt: number[] = [];
+  const spanIdAt: number[] = [];
+  const openMarkerAt: number[] = [];
+  const closeMarkerEndAt: number[] = [];
+  let i = 0;
+  let nextSpanId = 0;
+  while (i < raw.length) {
+    let matchedMarker: string | null = null;
+    for (const marker of PROJECTION_MARKERS) {
+      if (raw.startsWith(marker, i)) {
+        const closeIdx = raw.indexOf(marker, i + marker.length);
+        // Require a non-empty inner span. `closeIdx === i + marker.length`
+        // means an empty pair like `**` or `` `` `` — ignore (treat as
+        // literal so we don't lose those characters from the projection).
+        if (closeIdx > i + marker.length) {
+          matchedMarker = marker;
+          const spanId = nextSpanId++;
+          const openMarkerStart = i;
+          const closeMarkerEnd = closeIdx + marker.length;
+          for (let k = i + marker.length; k < closeIdx; k++) {
+            const isFirstContent = k === i + marker.length;
+            const isLastContent = k === closeIdx - 1;
+            strippedParts.push(raw[k]);
+            rawIndexAt.push(k);
+            spanIdAt.push(spanId);
+            openMarkerAt.push(isFirstContent ? openMarkerStart : -1);
+            closeMarkerEndAt.push(isLastContent ? closeMarkerEnd : -1);
+          }
+          i = closeMarkerEnd;
+          break;
+        }
+      }
+    }
+    if (matchedMarker === null) {
+      strippedParts.push(raw[i]);
+      rawIndexAt.push(i);
+      spanIdAt.push(-1);
+      openMarkerAt.push(-1);
+      closeMarkerEndAt.push(-1);
+      i += 1;
+    }
+  }
+  return {
+    stripped: strippedParts.join(''),
+    rawIndexAt,
+    spanIdAt,
+    openMarkerAt,
+    closeMarkerEndAt,
+  };
+}
+
+/**
+ * If `quote` is not a substring of `rawContent` but appears verbatim
+ * in the markdown-stripped projection of the content, return the
+ * corresponding contiguous raw span (which IS a substring of raw).
+ * Otherwise return null.
+ *
+ * Boundary balance: when the match starts at the first content char of
+ * a paired marker span AND extends past that span (so the closing
+ * marker would already be inside the slice), the opening marker is
+ * pulled in too — without this, repaired quotes look like
+ * `foo** bar` / `A7R5 (A7R V)** if you want **maximum detail`: valid
+ * raw substrings, but visibly malformed evidence in the YOps UI.
+ * Symmetric on the trailing edge. Matches strictly inside a single
+ * span (e.g. quoting `hello` from `**hello world**`) get NO expansion,
+ * because adding only the opening or only the closing marker would
+ * just orphan it the other way.
+ *
+ * Single match, first-occurrence (`indexOf`). No fuzzy scoring, no
+ * fragment stitching — non-contiguous joins simply don't appear in
+ * the projection and `indexOf` returns -1.
+ */
+function repairFromMarkdownProjection(rawContent: string, quote: string): string | null {
+  if (!quote || rawContent.includes(quote)) return null;
+  const projection = projectMarkdownToRaw(rawContent);
+  const { stripped, rawIndexAt, spanIdAt, openMarkerAt, closeMarkerEndAt } = projection;
+  if (stripped.length === 0) return null;
+  const hit = stripped.indexOf(quote);
+  if (hit < 0) return null;
+  const end = hit + quote.length - 1;
+
+  let rawStart = rawIndexAt[hit];
+  let rawEnd = rawIndexAt[end] + 1;
+
+  // Crossing-boundary expansion: only when the match start/end sit on
+  // the first/last content char of a span AND the opposite end of the
+  // match is *outside* that span. The span-id check is what keeps
+  // matches strictly inside a span (`hello` ⊂ `**hello world**`) from
+  // becoming unbalanced `**hello`.
+  if (openMarkerAt[hit] >= 0 && spanIdAt[end] !== spanIdAt[hit]) {
+    rawStart = openMarkerAt[hit];
+  }
+  if (closeMarkerEndAt[end] >= 0 && spanIdAt[hit] !== spanIdAt[end]) {
+    rawEnd = closeMarkerEndAt[end];
+  }
+
+  const repaired = rawContent.slice(rawStart, rawEnd);
+  // Defensive — the index map should guarantee this, but a regression
+  // here would silently re-introduce unverifiable quotes. Cheaper to
+  // re-check than to debug later.
+  return rawContent.includes(repaired) ? repaired : null;
+}
+
+/**
  * Returns the raw source object if it exists and is an object — without
  * filtering by type. Type discrimination happens in validateSource so that
  * unrecognized types hit `invalid_source_type` rather than `missing_source`.
@@ -101,8 +260,12 @@ export function normalizeOpTurnHashes(ops: SourcedYOp[], turns: readonly Validat
  * the turn content (extra whitespace, markdown artifacts, slight rewording).
  * This function attempts deterministic repair:
  *  1. Try the quote as-is (already valid → skip)
- *  2. Strip markdown bold/italic markers and retry
- *  3. Fall back to the op's slot value if it appears verbatim in the turn
+ *  2. Strip markdown markers from the QUOTE and retry against raw content
+ *     (handles the case where the model emitted `**foo**` against plain content)
+ *  3. Strip markdown markers from the CONTENT and retry the quote against the
+ *     stripped projection, then map a hit back to a raw span (handles the
+ *     inverse: model quoted rendered text against raw content with markers)
+ *  4. Fall back to the op's slot value if it appears verbatim in the turn
  *
  * Mutates ops in place. Quotes that can't be repaired are left untouched
  * so they fail validation normally.
@@ -119,21 +282,54 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
     const quote = src.turn_ref.quote;
     if (quote && content.includes(quote)) continue;
 
-    // Strategy 1: deterministic quote normalization (markdown + punctuation variants)
+    // Strategies 1 + 2: deterministic repair across normalized quote
+    // candidates and the markdown-stripped projection of raw content.
+    //
+    //   Strategy 1 — cheap: try each generated quote candidate verbatim
+    //   against raw. Handles "model added or misplaced markers in the
+    //   quote against plain content".
+    //
+    //   Strategy 2 — projection: if no candidate matches raw directly,
+    //   retry every candidate against the markdown-stripped projection
+    //   of raw and map any hit back to a balanced raw span (boundary
+    //   expansion preserves marker pairs). This is the inverse of
+    //   Strategy 1: it handles quotes against markdown-bearing content.
+    //
+    // The two strategies are deliberately combined into one pass over
+    // the SAME candidate set. A common failure shape we observed in
+    // production has the model BOTH misplacing markers in the quote
+    // (e.g. wrapping the whole phrase in `**...**`) AND quoting against
+    // raw content that itself carries narrower markers. Running
+    // projection only over the original (un-normalized) quote misses
+    // that case — the stripped raw projection does not contain `**`,
+    // so `indexOf` fails. Running projection over each normalized
+    // candidate as well repairs it.
     if (quote) {
-      for (const candidate of generateQuoteCandidates(quote)) {
-        const repaired = tryExactQuote(content, candidate);
-        if (repaired) {
-          src.turn_ref.quote = repaired;
+      const candidates = generateQuoteCandidates(quote);
+      let repaired: string | null = null;
+      for (const candidate of candidates) {
+        const direct = tryExactQuote(content, candidate);
+        if (direct) {
+          repaired = direct;
           break;
         }
       }
-      if (src.turn_ref.quote && content.includes(src.turn_ref.quote)) {
+      if (repaired === null) {
+        for (const candidate of candidates) {
+          const projected = repairFromMarkdownProjection(content, candidate);
+          if (projected) {
+            repaired = projected;
+            break;
+          }
+        }
+      }
+      if (repaired !== null) {
+        src.turn_ref.quote = repaired;
         continue;
       }
     }
 
-    // Strategy 2: use the op's scalar slot value as quote
+    // Strategy 3: use the op's scalar slot value as quote
     const opObj = op as Record<string, unknown>;
     const setVal = (opObj.set as { value?: string })?.value;
     if (typeof setVal === 'string' && setVal.length >= 4 && content.includes(setVal)) {
@@ -141,7 +337,7 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
       continue;
     }
 
-    // Strategy 3: use the first scalar value from populate.values when available
+    // Strategy 4: use the first scalar value from populate.values when available
     const populateValues = (opObj.populate as { values?: Record<string, unknown> })?.values;
     if (populateValues && typeof populateValues === 'object') {
       const scalarCandidate = Object.values(populateValues).find(
@@ -161,7 +357,7 @@ export function repairOpQuotes(ops: SourcedYOp[], turns: readonly ValidationTurn
       }
     }
 
-    // Strategy 4: for define ops, use the path's last segment as a keyword search
+    // Strategy 5: for define ops, use the path's last segment as a keyword search
     const definePath = (opObj.define as { path?: string })?.path;
     if (definePath && !quote) {
       const keyword = definePath.split('/').pop()?.replace(/_/g, ' ');
