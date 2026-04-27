@@ -37,18 +37,40 @@ function parseScript(yamlStr: string): ReturnType<typeof parseYOpsYaml> {
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const scriptDirty = useWorkspaceStore((s) => s.scriptDirty);
+  const scriptText = useWorkspaceStore((s) => s.scriptText);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const mode = useWorkspaceStore((s) => s.mode);
 
-  // Sync committed opsLog → scriptText only when there's no draft and no
-  // manual edit. Once Extract stages a draft, `useExtraction` owns the
-  // script content; once the user starts editing, `scriptDirty` owns it.
+  // Sync committed opsLog → scriptText so the editor reflects what
+  // AfterPanel renders when no draft is staged. Once Extract stages a
+  // draft, `useExtraction` owns the script content (via setDraft +
+  // setScriptText). Once the user starts editing, `scriptDirty` owns it
+  // — but only if the dirty content is actually meaningful.
+  //
+  // The gate intentionally distinguishes "real manual edit" from "empty
+  // dirty marker". A non-empty dirty script is protected from being
+  // overwritten by a fresh hydrate of committed ops; an empty dirty
+  // marker (`scriptText.trim() === ''`) is treated as no meaningful
+  // content and the mirror runs anyway, clearing the stale dirty flag.
+  // Without this carve-out, an in-session state where `scriptDirty=true`
+  // but `scriptText=''` (e.g. a transient code path that flipped the
+  // flag without actually writing edits) leaves the editor blank even
+  // though `opsLog.length > 0` and the AfterPanel header reads
+  // "Committed result" — a UI coherence violation.
   useEffect(() => {
-    if (scriptDirty || hasDraft) return;
-    if (opsLog.length > 0) {
-      useWorkspaceStore.getState().setScriptText(serializeOpsToYaml(opsLog));
-    }
-  }, [opsLog, scriptDirty, hasDraft]);
+    if (hasDraft) return;
+    if (opsLog.length === 0) return;
+    if (scriptDirty && scriptText.trim() !== '') return;
+    const yaml = serializeOpsToYaml(opsLog);
+    // Idempotent guard: if the editor already shows the canonical
+    // mirror, don't write again. This avoids spurious setScriptText
+    // calls that would re-trigger the effect's deps and loop, and
+    // keeps `scriptDirty` quiet when nothing actually changed.
+    if (yaml === scriptText && !scriptDirty) return;
+    const store = useWorkspaceStore.getState();
+    store.setScriptText(yaml);
+    if (scriptDirty) store.setScriptDirty(false);
+  }, [opsLog, scriptDirty, hasDraft, scriptText]);
 
   const execute = useCallback(async () => {
     const store = useWorkspaceStore.getState();
