@@ -399,8 +399,19 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         // user clicks Workspace on conv_A (no project yet), then
         // navigates to conv_B before the meta backfill resolves, the
         // pending boolean would otherwise apply to conv_B's project.
-        // Clearing on conv-switch is the smallest safe gate.
-        if (prev !== id && get().pendingPanelExpanded !== null) {
+        //
+        // The guard fires ONLY when both prev and id are non-null and
+        // differ. That preserves the click in two cases that would
+        // otherwise look like "different":
+        //   1. First setConversation after page mount (null → conv_A).
+        //      The collapsed Workspace strip can mount before
+        //      useChatInit's effect lands the conversation id, so a
+        //      click captured during that window must survive the
+        //      first setConversation.
+        //   2. setConversation(null) — e.g. navigation to /chat/new —
+        //      does not yet bind to a different conversation, so the
+        //      intent stays alive until a real id replaces null.
+        if (prev !== null && id !== null && prev !== id && get().pendingPanelExpanded !== null) {
           set({ conversationId: id, pendingPanelExpanded: null });
           return;
         }

@@ -276,6 +276,41 @@ describe('workspaceStore (state-only)', () => {
       expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({});
     });
 
+    it('first setConversation (null → conv_A) preserves pending captured before the id lands', () => {
+      // Same race as the reset re-fire case but at an even earlier
+      // point: the collapsed Workspace strip can mount before
+      // useChatInit's effect runs `setConversation(convId)`, so a click
+      // captured during that window starts with `conversationId = null`
+      // in the store. Without this guarded transition, the very first
+      // setConversation would treat null → 'conv_A' as "different
+      // conversation" and clear the pending click — defeating the
+      // whole pending-intent fix.
+      expect(useWorkspaceStore.getState().conversationId).toBeNull();
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+
+      useWorkspaceStore.getState().setConversation('conv_A');
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+
+      // setActiveProject finishes the promotion as expected.
+      useWorkspaceStore.getState().setActiveProject('proj_A');
+      expect(useWorkspaceStore.getState().panelExpandedByProject).toEqual({
+        proj_A: true,
+      });
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBeNull();
+    });
+
+    it('setConversation back to null (e.g. nav to /chat/new) preserves pending', () => {
+      // setConversation(null) does not bind the click to a different
+      // conversation yet — the next non-null setConversation does. So
+      // pending must survive the intermediate null. The cross-conv
+      // guard fires only when BOTH prev and id are non-null.
+      useWorkspaceStore.getState().setConversation('conv_A');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      useWorkspaceStore.getState().setConversation(null);
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+    });
+
     it('same-conv re-set of conversationId does NOT clear pending (chatInit re-fire)', () => {
       // useChatInit re-runs its effect when `resolvedProjectId`
       // changes; that path calls `setConversation(convId)` with the
