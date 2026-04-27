@@ -1,5 +1,17 @@
 # @t3x-dev/local
 
+## 0.1.5
+
+### Patch Changes
+
+- [#920](https://github.com/t3x-dev/t3x-core/pull/920) [`765bc0f`](https://github.com/t3x-dev/t3x-core/commit/765bc0f6c18fff64b2dac0daf0614065c96ff428) Thanks [@lqw905](https://github.com/lqw905)! - Retry local runtime downloads and stream archives to disk during postinstall.
+
+- Updated dependencies []:
+  - @t3x-dev/storage@0.1.5
+  - @t3x-dev/api@0.1.5
+  - @t3x-dev/cli@0.1.5
+  - @t3x-dev/mcp@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes
