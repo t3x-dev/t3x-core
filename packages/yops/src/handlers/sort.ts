@@ -1,3 +1,4 @@
+import { compareYValues } from '../canonical';
 import { YOPS_ERRORS, yopsError } from '../errors';
 import { deepClone, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
@@ -70,15 +71,7 @@ export const sortHandler: OpHandler = (doc, fields, index) => {
       bVal = b;
     }
 
-    let cmp: number;
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      cmp = aVal.localeCompare(bVal);
-    } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-      cmp = aVal - bVal;
-    } else {
-      cmp = String(aVal).localeCompare(String(bVal));
-    }
-
+    const cmp = compareYValues(aVal, bVal);
     return order === 'desc' ? -cmp : cmp;
   });
 

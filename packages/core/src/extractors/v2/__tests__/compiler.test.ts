@@ -675,10 +675,17 @@ describe('extractors/v2 compiler', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const definePath = (result.ops[0] as { define: { path: string } }).define.path;
-    expect(definePath).toBe('characters/main_protagonist');
-    const populatePath = (result.ops[1] as { populate: { path: string } }).populate.path;
-    expect(populatePath).toBe('characters/main_protagonist');
+    // Strict define: every parent must be defined before its child, so the
+    // compiler now emits the `characters` parent define ahead of the
+    // `characters/main_protagonist` define — no more mkdir-p in the engine.
+    const definePaths = result.ops
+      .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+      .map((op) => op.define.path);
+    expect(definePaths).toEqual(['characters', 'characters/main_protagonist']);
+    const populatePath = result.ops
+      .filter((op): op is Extract<typeof op, { populate: unknown }> => 'populate' in op)
+      .map((op) => op.populate.path);
+    expect(populatePath).toEqual(['characters/main_protagonist']);
   });
 
   describe('candidate.children compilation', () => {
@@ -804,13 +811,19 @@ describe('extractors/v2 compiler', () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // Parent define + child define + child populate, child path is nested.
-      expect((result.ops[1] as { define: { path: string } }).define.path).toBe(
-        'story/overview/summary'
-      );
-      expect((result.ops[2] as { populate: { path: string } }).populate.path).toBe(
-        'story/overview/summary'
-      );
+      // Strict define inserts the missing intermediate `story/overview`
+      // ancestor before `story/overview/summary`, then populates the leaf.
+      const opShapes = result.ops.map((op) => {
+        if ('define' in op) return { kind: 'define', path: op.define.path };
+        if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+        return { kind: 'other' };
+      });
+      expect(opShapes).toEqual([
+        { kind: 'define', path: 'story' },
+        { kind: 'define', path: 'story/overview' },
+        { kind: 'define', path: 'story/overview/summary' },
+        { kind: 'populate', path: 'story/overview/summary' },
+      ]);
     });
 
     it('returns a reaskable compile failure when a child key fails SNAKE_CASE_KEY', () => {
@@ -921,6 +934,184 @@ describe('extractors/v2 compiler', () => {
         { kind: 'define', path: 'characters/rival' },
         { kind: 'populate', path: 'characters/rival' },
       ]);
+    });
+
+    it('does not inject ancestor defines for nested target_ref.path', () => {
+      // Regression for PR #926 review: a `target_ref.path` of
+      // `characters/main_protagonist` implies BOTH `characters` and
+      // `characters/main_protagonist` exist at apply time. A child
+      // define under that target — say `characters/main_protagonist/goal`
+      // — must not auto-emit `define characters` or
+      // `define characters/main_protagonist`, both of which would fail
+      // ALREADY_EXISTS against the live snapshot.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters/main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const opShapes = result.ops.map((op) => {
+        if ('define' in op) return { kind: 'define', path: op.define.path };
+        if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+        return { kind: 'other' };
+      });
+      expect(opShapes).toEqual([
+        { kind: 'define', path: 'characters/main_protagonist/goal' },
+        { kind: 'populate', path: 'characters/main_protagonist/goal' },
+      ]);
+    });
+
+    it('normalises dotted target_ref.path before seeding the existing-path set', () => {
+      // Reviewer follow-up on PR #926: target_ref.path accepts dotted
+      // input the same way candidate.path_hint does (the LLM wire format
+      // doesn't distinguish `.` from `/`). Pre-fix the seed used the raw
+      // string, so a dotted nested target like `characters.main_protagonist`
+      // seeded `characters.main_protagonist` (literal-dot key) while the
+      // op stream used the normalised `characters/main_protagonist` —
+      // and a child define under `characters/main_protagonist/goal`
+      // would inject `define characters` and
+      // `define characters/main_protagonist`, both ALREADY_EXISTS at
+      // apply time.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters.main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // Only the brand-new `goal` leaf is defined. Neither `characters`
+      // nor `characters/main_protagonist` is recreated.
+      expect(definePaths).toEqual(['characters/main_protagonist/goal']);
+    });
+
+    it('seeds the pre-existing set from target_ref.node_key when target_ref.path is absent', () => {
+      // Reviewer follow-up on PR #926: `resolveTargetPath` falls through
+      // from `target_ref.path` to `target_ref.node_key` when the former
+      // is null, and uses whichever it finds to derive the emitted op
+      // path. The seed has to honour the same priority — otherwise an
+      // update with only `node_key` set lets the dedupe pass inject
+      // ancestor defines for `characters` and `characters/main_protagonist`,
+      // both of which exist at apply time.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: null, node_key: 'characters/main_protagonist' },
+              candidate: {
+                children: [{ key: 'goal', values: { value: 'become a soul reaper' } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'become a soul reaper', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      expect(definePaths).toEqual(['characters/main_protagonist/goal']);
+    });
+
+    it('does not inject ancestor defines for nested non-define primary paths', () => {
+      // Same logical case, but the "this exists" signal comes from a
+      // populate op rather than target_ref. A populate at
+      // `trip/preferences` implies `trip` exists; a sibling-of-trip
+      // define under `trip/itinerary` must not inject `define trip`.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              target_ref: { path: 'trip/preferences' },
+              candidate: { values: { climate: 'temperate' } },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate climate', role: 'primary' }],
+            },
+            {
+              id: 'item_2',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'trip.itinerary',
+                values: { day_one: 'arrive' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate climate', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // No `define trip` — `trip` is implied by the prior populate at
+      // `trip/preferences`. Only the brand-new `trip/itinerary` is defined.
+      expect(definePaths).toEqual(['trip/itinerary']);
     });
 
     it('compiles a reinforce intent that carries only children (no parent values)', () => {
@@ -1097,6 +1288,69 @@ describe('extractors/v2 compiler', () => {
       expect(result.warnings).toHaveLength(2);
       expect(result.warnings[0]).toMatch(/bad_a/);
       expect(result.warnings[1]).toMatch(/bad_b/);
+    });
+
+    it('dropped item with malformed target_ref.path does not seed knownExisting from node_key', () => {
+      // Reviewer P2 follow-up on PR #926. `resolveTargetPath` is
+      // fail-fast: a present-but-malformed `target_ref.path` returns
+      // `invalid` and the item gets dropped (here, in allowPartial
+      // mode). The pre-existing-path seed must mirror the same
+      // fail-fast semantics — otherwise the dropped item still
+      // contributes its `node_key` to the seed and ancestor-define
+      // injection for surviving items gets suppressed.
+      //
+      // Concrete reproducer: a dropped update with malformed
+      // `target_ref.path: 'BAD KEY'` (fails SNAKE_CASE_KEY) but a
+      // benign-looking `target_ref.node_key: 'trip/preferences'`. A
+      // surviving add at `trip/itinerary` must still receive its
+      // `define trip` ancestor.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_dropped',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'BAD KEY', node_key: 'trip/preferences' },
+              candidate: { values: { climate: 'temperate' } },
+              evidence: [{ turn_tag: 'T1', quote: 'temperate', role: 'primary' }],
+            },
+            {
+              id: 'item_surviving',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'trip.itinerary',
+                values: { day_one: 'arrive' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'arrive', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        allowPartial: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const droppedWarning = result.warnings.find((w) => w.includes('item_dropped'));
+      expect(droppedWarning).toBeDefined();
+
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // The surviving add must still receive its full ancestor chain.
+      // If the dropped item's node_key had bled into knownExisting,
+      // `define trip` would be missing and the apply would fail
+      // PATH_NOT_FOUND on `define trip/itinerary`.
+      expect(definePaths).toEqual(['trip', 'trip/itinerary']);
     });
 
     it('default (allowPartial omitted) preserves strict fail-fast — backward compat guard', () => {

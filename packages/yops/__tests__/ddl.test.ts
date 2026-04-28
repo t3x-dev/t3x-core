@@ -21,11 +21,27 @@ describe('define', () => {
     expect((doc as any).database).toBeUndefined();
   });
 
-  it('creates nested intermediate mappings', () => {
-    const doc: YValue = {};
+  it('creates nested mapping when parent exists', () => {
+    const doc: YValue = { a: { b: {} } };
     const result = applyYOps(doc, [{ define: { path: 'a/b/c' } }]);
     expect(result.ok).toBe(true);
     expect((result.doc as any).a.b.c).toEqual({});
+  });
+
+  it('errors if parent does not exist (no mkdir-p)', () => {
+    const doc: YValue = {};
+    const result = applyYOps(doc, [{ define: { path: 'a/b/c' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('PATH_NOT_FOUND');
+  });
+
+  it('errors if parent is not a mapping', () => {
+    const doc: YValue = { a: 'scalar' };
+    const result = applyYOps(doc, [{ define: { path: 'a/b' } }]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('NOT_A_MAPPING');
+    // Original parent must not be replaced
+    expect((doc as any).a).toBe('scalar');
   });
 
   it('errors if path already exists', () => {

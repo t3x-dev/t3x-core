@@ -140,7 +140,7 @@ describe('nest', () => {
       },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('PATH_NOT_FOUND');
+    expect(result.error?.code).toBe('NOT_SIBLINGS');
     expect(result.error?.op_index).toBe(0);
   });
 
@@ -152,7 +152,7 @@ describe('nest', () => {
       },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('NOT_A_MAPPING');
+    expect(result.error?.code).toBe('PATH_NOT_FOUND');
   });
 });
 
@@ -271,7 +271,7 @@ describe('fold', () => {
     const doc: YValue = {};
     const result = applyYOps(doc, [{ fold: { path: 'missing' } }]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('NOT_FOLDABLE');
+    expect(result.error?.code).toBe('PATH_NOT_FOUND');
   });
 });
 
@@ -339,7 +339,7 @@ describe('merge', () => {
       },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('PATH_NOT_FOUND');
+    expect(result.error?.code).toBe('NOT_SIBLINGS');
     expect(result.error?.op_index).toBe(0);
   });
 });
@@ -547,7 +547,7 @@ describe('pick', () => {
     const doc: YValue = {};
     const result = applyYOps(doc, [{ pick: { path: 'missing', keys: ['a'] } }]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('NOT_A_MAPPING');
+    expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
   });
 });
@@ -592,7 +592,7 @@ describe('omit', () => {
     const doc: YValue = {};
     const result = applyYOps(doc, [{ omit: { path: 'missing', keys: ['a'] } }]);
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('NOT_A_MAPPING');
+    expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(0);
   });
 });
