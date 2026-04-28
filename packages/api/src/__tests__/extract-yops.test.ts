@@ -67,7 +67,7 @@ const extractionDraft = {
         path_hint: 'trip',
         slot: null,
         value_json: null,
-        values_json: null,
+        values_json: '{"destination":"Tokyo"}',
         children_json: null,
       },
       evidence: [
@@ -246,6 +246,13 @@ describe('POST /v1/extract-yops', () => {
     expect(body.data.ops).toEqual([
       {
         define: { path: 'trip' },
+        source: expect.objectContaining({
+          type: 'llm',
+          model: 'gpt-5.4-mini',
+        }),
+      },
+      {
+        populate: { path: 'trip', values: { destination: 'Tokyo' } },
         source: expect.objectContaining({
           type: 'llm',
           model: 'gpt-5.4-mini',
