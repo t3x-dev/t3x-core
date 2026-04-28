@@ -55,6 +55,35 @@ path:
       example: users/[name=alice]/role
 
 # ----------------------------------------------------------------------------
+# Existence and type preconditions — how strict is each op?
+# ----------------------------------------------------------------------------
+#
+# YOps doesn't have one global "strictness" rule. Each op declares its own
+# preconditions in its `rules:` and `errors:` blocks. Three high-level
+# patterns recur — read this before scanning the catalog so the asymmetry
+# below doesn't surprise re-implementers:
+#
+#   - `define` is strict creation of one mapping key. The parent path must
+#     already exist as a mapping; the final key must be absent. There is
+#     no mkdir-p, and a non-mapping intermediate is never silently
+#     replaced. Multi-segment paths require defining each ancestor first.
+#
+#   - `set` creates missing mapping ancestors along the path on its way
+#     to the target ("lazy create"), but refuses to traverse through a
+#     scalar/null intermediate — that returns INVALID_PATH. So `set`
+#     is forgiving of *missing* parents, strict about *typed* ones.
+#
+#   - All other ops state their own existence/type preconditions in their
+#     `rules:` / `errors:` blocks. `populate` requires the target to
+#     exist and be a mapping; `append` requires it to exist and be a
+#     sequence; `nest`/`merge` require sibling keys to exist; etc.
+#     None of them auto-create anything — `set` is the only mkdir-p op.
+#
+# Cross-language implementations must preserve this asymmetry: a Python
+# or Rust engine that "helpfully" mkdir-p's `define`, or refuses to
+# auto-create for `set`, breaks behavioural conformance.
+
+# ----------------------------------------------------------------------------
 # Operations — 18 atomic YAML operations in 4 categories
 # ----------------------------------------------------------------------------
 operations:
