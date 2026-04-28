@@ -84,6 +84,25 @@ path:
 # auto-create for `set`, breaks behavioural conformance.
 
 # ----------------------------------------------------------------------------
+# path_fields — which fields on each op carry a path?
+# ----------------------------------------------------------------------------
+#
+# Every op declares a `path_fields:` block naming the field(s) that carry
+# YOps paths. Three roles:
+#
+#   - primary       — the single path the op operates on (most ops).
+#   - source        — for two-path ops (`move`, `clone`): where data is
+#                     read from. The source path must exist at apply time.
+#   - destination   — for two-path ops: where data is written. The
+#                     destination must NOT exist at apply time.
+#
+# Tools that walk an op list to reason about which paths exist (e.g. the
+# extractor compiler's ancestor-define injector) read this metadata
+# instead of pattern-matching every op shape. A 19th op added later only
+# needs to declare its `path_fields` for the existing tooling to handle
+# it correctly.
+
+# ----------------------------------------------------------------------------
 # Operations — 18 atomic YAML operations in 4 categories
 # ----------------------------------------------------------------------------
 operations:
@@ -94,6 +113,8 @@ operations:
 
   define:
     category: ddl
+    path_fields:
+      primary: path
     description: Create an empty mapping at a path
     fields:
       path:
@@ -141,6 +162,8 @@ operations:
 
   drop:
     category: ddl
+    path_fields:
+      primary: path
     description: Remove a key and its entire subtree from a mapping
     fields:
       path:
@@ -167,6 +190,8 @@ operations:
 
   rename:
     category: ddl
+    path_fields:
+      primary: path
     description: Change a key name without moving its value
     fields:
       path:
@@ -213,6 +238,8 @@ operations:
 
   set:
     category: dml
+    path_fields:
+      primary: path
     description: Set a value at a path, creating intermediate mappings as needed
     fields:
       path:
@@ -248,6 +275,8 @@ operations:
 
   unset:
     category: dml
+    path_fields:
+      primary: path
     description: Remove a key from a mapping
     fields:
       path:
@@ -281,6 +310,8 @@ operations:
 
   populate:
     category: dml
+    path_fields:
+      primary: path
     description: Set multiple keys on a mapping at once
     fields:
       path:
@@ -325,6 +356,8 @@ operations:
 
   append:
     category: dml
+    path_fields:
+      primary: path
     description: Add a value to the end of a sequence
     fields:
       path:
@@ -364,6 +397,9 @@ operations:
 
   move:
     category: dtl
+    path_fields:
+      source: from
+      destination: to
     description: Relocate a subtree from one path to another
     fields:
       from:
@@ -407,6 +443,9 @@ operations:
 
   clone:
     category: dtl
+    path_fields:
+      source: from
+      destination: to
     description: Deep copy a subtree to a new path
     fields:
       from:
@@ -444,6 +483,8 @@ operations:
 
   nest:
     category: dtl
+    path_fields:
+      primary: path
     description: Group sibling keys under a new parent mapping
     fields:
       path:
@@ -497,6 +538,8 @@ operations:
 
   split:
     category: dtl
+    path_fields:
+      primary: path
     description: Distribute a mapping's keys into new child mappings
     fields:
       path:
@@ -547,6 +590,8 @@ operations:
 
   fold:
     category: dtl
+    path_fields:
+      primary: path
     description: >
       Collapse a single-child mapping by promoting its only child.
       The wrapper key is removed and the child takes its place.
@@ -581,6 +626,8 @@ operations:
 
   merge:
     category: dtl
+    path_fields:
+      primary: path
     description: Combine sibling keys into one mapping
     fields:
       path:
@@ -629,6 +676,8 @@ operations:
 
   sort:
     category: dtl
+    path_fields:
+      primary: path
     description: Sort a sequence in place
     fields:
       path:
@@ -698,6 +747,8 @@ operations:
 
   unique:
     category: dtl
+    path_fields:
+      primary: path
     description: Deduplicate a sequence, keeping first occurrence
     fields:
       path:
@@ -756,6 +807,8 @@ operations:
 
   pick:
     category: dtl
+    path_fields:
+      primary: path
     description: Keep only specified keys in a mapping, remove the rest
     fields:
       path:
@@ -794,6 +847,8 @@ operations:
 
   omit:
     category: dtl
+    path_fields:
+      primary: path
     description: Remove specified keys from a mapping, keep the rest
     fields:
       path:
@@ -836,6 +891,8 @@ operations:
 
   assert:
     category: dcl
+    path_fields:
+      primary: path
     description: >
       Validate a condition against the document. Read-only — never mutates.
       Fail-fast: if the assertion fails, execution stops.

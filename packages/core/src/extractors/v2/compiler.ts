@@ -1,3 +1,4 @@
+import { registry as yopsRegistry } from '@t3x-dev/yops';
 import { SNAKE_CASE_KEY, type SourcedYOp, type YValue } from '../../t3x-yops/types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import type {
@@ -542,32 +543,26 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
 }
 
 /**
- * Returns the primary target path of an op, or null if the op shape doesn't
- * have one. Used by `dedupeDefineOps` to track which paths a batch implies
- * already exist at apply time (any non-define op that targets a path
- * effectively asserts the path already exists in the document, since
- * `populate` / `set` / `assert` / `unset` / etc. all require resolution).
+ * Returns the path strings on `op` that name nodes existing at apply
+ * time. `dedupeDefineOps` uses these to seed `knownExisting`, so it
+ * doesn't inject ancestor `define` ops for paths the batch has already
+ * brought into scope.
+ *
+ * `primary` and `source` paths name nodes the op assumes exist — a
+ * `populate` / `set` / `assert` / `unset` resolves its target, and a
+ * `move` / `clone` reads from `from`. `destination` paths (the `to`
+ * field on `move` / `clone`) are intentionally excluded: those nodes
+ * must NOT exist at apply time.
+ *
+ * Resolution is driven by `path_fields` metadata in `yops.yaml`, read
+ * through `yopsRegistry.getOpPaths`. Adding a 19th op upstream only
+ * needs to declare its `path_fields:` for this function to handle it.
  */
-function primaryPathOf(op: SourcedYOp): string | null {
-  if ('define' in op) return op.define.path;
-  if ('populate' in op) return op.populate.path;
-  if ('set' in op) return op.set.path;
-  if ('append' in op) return op.append.path;
-  if ('unset' in op) return op.unset.path;
-  if ('drop' in op) return op.drop.path;
-  if ('assert' in op) return op.assert.path;
-  if ('rename' in op) return op.rename.path;
-  if ('fold' in op) return op.fold.path;
-  if ('sort' in op) return op.sort.path;
-  if ('unique' in op) return op.unique.path;
-  if ('pick' in op) return op.pick.path;
-  if ('omit' in op) return op.omit.path;
-  if ('nest' in op) return op.nest.path;
-  if ('split' in op) return op.split.path;
-  if ('merge' in op) return op.merge.path;
-  if ('move' in op) return op.move.from;
-  if ('clone' in op) return op.clone.from;
-  return null;
+function existencePathsOf(op: SourcedYOp): string[] {
+  const tagged = yopsRegistry.getOpPaths(op as Record<string, unknown>);
+  return tagged
+    .filter((entry) => entry.role === 'primary' || entry.role === 'source')
+    .map((entry) => entry.path);
 }
 
 /**
@@ -621,8 +616,9 @@ function dedupeDefineOps(
 
   for (const op of ops) {
     if (!('define' in op)) {
-      const path = primaryPathOf(op);
-      if (path !== null) seedPathAndAncestors(knownExisting, path);
+      for (const path of existencePathsOf(op)) {
+        seedPathAndAncestors(knownExisting, path);
+      }
       kept.push(op);
       continue;
     }

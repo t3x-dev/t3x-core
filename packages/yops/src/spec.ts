@@ -17,10 +17,31 @@ export interface TestCase {
   error?: string;
 }
 
+/**
+ * Naming the field(s) on an op that carry YOps paths.
+ *
+ *   - `primary`     — single-path ops (e.g. `define.path`, `set.path`).
+ *   - `source`      — read-from path on two-path ops (`move.from`, `clone.from`).
+ *                     Source paths must already exist at apply time.
+ *   - `destination` — write-to path on two-path ops (`move.to`, `clone.to`).
+ *                     Destination paths must NOT exist at apply time.
+ *
+ * Tools that walk an op list (e.g. the extractor compiler's
+ * ancestor-define injector) use this metadata instead of pattern-matching
+ * each op shape directly. A 19th op only needs to declare its
+ * `path_fields` for that tooling to handle it.
+ */
+export interface PathFields {
+  primary?: string;
+  source?: string;
+  destination?: string;
+}
+
 export interface OpSpec {
   name: string;
   category: string; // 'ddl', 'dml', 'dtl', 'dcl'
   description: string;
+  path_fields: PathFields;
   fields: Record<string, FieldSpec>;
   errors: string[]; // error codes this op can produce
   rules: string[];
@@ -55,6 +76,7 @@ type RawField = {
 type RawOp = {
   category: string;
   description: string;
+  path_fields?: PathFields;
   fields?: Record<string, RawField>;
   errors?: Record<string, string>;
   rules?: string[];
@@ -108,6 +130,7 @@ export function parseSpec(yamlStr: string): YOpsSpec {
       name: opName,
       category: opDef.category,
       description: (opDef.description ?? '').trim(),
+      path_fields: opDef.path_fields ?? {},
       fields,
       errors,
       rules: opDef.rules ?? [],
