@@ -169,6 +169,37 @@ describe('useExtraction', () => {
     expect(callArgs?.preset).toBe('detailed');
   });
 
+  it('validates extraction against the latest workspace tree after hydration changes', async () => {
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    const hydratedTree = {
+      trees: [{ key: 'trip', slots: { destination: 'Beijing' }, children: [] }],
+      relations: [],
+    };
+    act(() => {
+      useWorkspaceStore.getState().setDerived({
+        tree: hydratedTree,
+        sourceIndex: new Map(),
+        opsLog: [{ define: { path: 'trip' } }],
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const runArgs = runExtractionMock.mock.calls[0]?.[0] as
+      | { baseTree?: typeof hydratedTree }
+      | undefined;
+    expect(runArgs?.baseTree).toBe(hydratedTree);
+  });
+
   it('toasts and skips extraction when project context has not loaded yet', async () => {
     // Simulates the race where /chat/[convId] renders before
     // `useChatInit.fetchConversationMeta` backfills `activeProjectId`.

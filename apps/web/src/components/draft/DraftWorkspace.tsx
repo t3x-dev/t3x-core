@@ -18,6 +18,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
+import {
+  countReadySemanticPoints,
+  countReviewSemanticPoints,
+  getSemanticPointsConversationId,
+  isLLMExtractionDraft,
+} from '@/domain/draft/llmMode';
 import { useDraftAutoPreview } from '@/hooks/drafts/useDraftAutoPreview';
 import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -147,14 +153,9 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     }
   }, [draftId, loadDraft]);
 
-  const isLLMMode = draft?.extraction_mode === 'llm' && Array.isArray(draft?.semantic_points);
-  const readyCount = isLLMMode
-    ? (draft.semantic_points ?? []).filter((p) => p.zone === 'ready' && p.status !== 'undone')
-        .length
-    : 0;
-  const reviewCount = isLLMMode
-    ? (draft.semantic_points ?? []).filter((p) => p.zone === 'review').length
-    : 0;
+  const isLLMMode = isLLMExtractionDraft(draft);
+  const readyCount = isLLMMode ? countReadySemanticPoints(draft.semantic_points) : 0;
+  const reviewCount = isLLMMode ? countReviewSemanticPoints(draft.semantic_points) : 0;
   const effectiveIncludedCount = isLLMMode ? readyCount : getIncludedCount();
   readyCountRef.current = readyCount;
 
@@ -249,7 +250,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
                 <DraftWorkbenchLLM
                   draftId={draftId!}
                   projectId={projectId}
-                  conversationId={draft.semantic_points?.[0]?.evidence?.[0]?.conversation_id ?? ''}
+                  conversationId={getSemanticPointsConversationId(draft.semantic_points)}
                   semanticPoints={draft.semantic_points ?? []}
                   onUpdate={() => loadDraft(draftId!)}
                   onCommit={() => setShowCommitDialog(true)}

@@ -16,6 +16,7 @@ import {
   type AnyDB,
   findConversationById,
   getCommit,
+  listActiveYOpsLogByConversation,
   listCommits,
   listYOpsLogByConversation,
 } from '@t3x-dev/storage';
@@ -57,7 +58,7 @@ export const replayYOpsLog = (entries: YOpsLogEntry[]): SemanticContent =>
 
 const EMPTY_CONTENT: SemanticContent = { trees: [], relations: [] };
 
-async function getParentCommitContent(
+export async function getParentCommitContent(
   db: AnyDB,
   parentCommitHash: string | null,
   projectId: string
@@ -87,6 +88,43 @@ function replayEntriesOnBaseline(
       return snapshot;
     }
   }, baseline);
+}
+
+export async function getConversationInheritedBaseline(
+  db: AnyDB,
+  conversationId: string
+): Promise<SemanticContent> {
+  const conv = await findConversationById(db, conversationId);
+  if (!conv) return EMPTY_CONTENT;
+
+  return getParentCommitContent(db, conv.parentCommitHash ?? null, conv.projectId);
+}
+
+export function replayEntriesOnBaselineFailFast(
+  baseline: SemanticContent,
+  entries: Array<{ id: string; yops: unknown }>
+): SemanticContent {
+  let current = baseline;
+  for (const entry of entries) {
+    const ops = extractOpsFromEntries([{ id: entry.id, yops: entry.yops }]);
+    const replay = replayYOps({ baseContent: current, ops });
+    if (!replay.ok) {
+      throw new Error(
+        `Existing yops_log entry ${entry.id} failed replay: ${replay.error?.message ?? 'unknown replay error'}`
+      );
+    }
+    current = replay.content;
+  }
+  return current;
+}
+
+export async function replayActiveDraftOnBaseline(
+  db: AnyDB,
+  conversationId: string
+): Promise<SemanticContent> {
+  const inheritedBaseline = await getConversationInheritedBaseline(db, conversationId);
+  const activeRows = await listActiveYOpsLogByConversation(db, conversationId);
+  return replayEntriesOnBaselineFailFast(inheritedBaseline, activeRows);
 }
 
 /**

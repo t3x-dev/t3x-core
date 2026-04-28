@@ -15,14 +15,13 @@ import {
   findProjectById,
   findTurnsByConversation,
   insertAgentDraft,
-  listActiveYOpsLogByConversation,
   updateAgentDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getLLMProvider } from '../lib/provider-registry';
 import { getUserId, recordUsageFireAndForget } from '../lib/usage-tracking';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 
 // ============================================================================
@@ -270,9 +269,8 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
 
 async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
   // Strategy 1: Tree snapshot
-  const yopsLogs = await listActiveYOpsLogByConversation(db, conversationId);
-  if (yopsLogs.length > 0) {
-    const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
+  const snapshot = await replayActiveDraftOnBaseline(db, conversationId);
+  if (snapshot.trees.length > 0) {
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustHave.length > 0) {
       return prefs.mustHave.slice(0, 15);
@@ -308,9 +306,8 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
 
 async function extractMustntHave(db: DBType, conversationId: string): Promise<string[]> {
   // Strategy 1: Tree snapshot
-  const yopsLogs = await listActiveYOpsLogByConversation(db, conversationId);
-  if (yopsLogs.length > 0) {
-    const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
+  const snapshot = await replayActiveDraftOnBaseline(db, conversationId);
+  if (snapshot.trees.length > 0) {
     const prefs = extractPreferencesFromFrames(snapshot);
     if (prefs.mustNotHave.length > 0) {
       return prefs.mustNotHave.slice(0, 10);

@@ -33,7 +33,10 @@ import { errorResponse, zodErrorHook } from '../lib/errors';
 import { runApiExtractionV2 } from '../lib/extraction-v2';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { syncYOpsToTrees } from '../lib/tree-state-sync';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import {
+  getConversationInheritedBaseline,
+  replayEntriesOnBaselineFailFast,
+} from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const treeAnswerRoutes = new OpenAPIHono({
@@ -143,9 +146,12 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
     const accessResult = await assertProjectAccess(c, db, conversation.projectId);
     if (accessResult instanceof Response) return accessResult;
 
-    // 2. Build current snapshot from yops log
+    // 2. Build current snapshot from the inherited parent commit plus active yops log.
     const yopsRecords = await listActiveYOpsLogByConversation(db, conversation_id);
-    const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
+    const currentSnapshot = replayEntriesOnBaselineFailFast(
+      await getConversationInheritedBaseline(db, conversation_id),
+      yopsRecords
+    );
 
     // 3. Process the first answer (single answer per request for now)
     const answer: UserAnswer = answers[0];

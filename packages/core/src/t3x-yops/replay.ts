@@ -139,7 +139,14 @@ export function extractOpsFromEntries(entries: Array<{ id: string; yops: unknown
     }
 
     for (const rawOp of entry.yops) {
-      const parsed = YOpSchema.safeParse(rawOp);
+      const opForValidation =
+        rawOp && typeof rawOp === 'object' && !Array.isArray(rawOp) && 'source' in rawOp
+          ? (() => {
+              const { source: _unused, ...op } = rawOp as Record<string, unknown>;
+              return op;
+            })()
+          : rawOp;
+      const parsed = YOpSchema.safeParse(opForValidation);
       if (!parsed.success) {
         throw new Error(
           `Invalid YOp in entry ${entry.id}: ${parsed.error.issues.map((i) => i.message).join(', ')}`

@@ -245,6 +245,87 @@ describe('extractAndApply', () => {
     expect(result.compiled.warnings).toContain('Dropped duplicate define op for path "game"');
   });
 
+  it('applies incremental update intent for a new provided-baseline path as an add', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'incremental',
+            items: [
+              {
+                id: 'item_mao_poetry',
+                intent: 'update',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: 'trip/cultural_interests/mao_poetry',
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: null,
+                  path_hint: null,
+                  slot: null,
+                  value_json: null,
+                  values_json: JSON.stringify({
+                    interest: "read Mao Zedong's poetry",
+                    notable_work: 'Snow',
+                  }),
+                  children_json: null,
+                },
+                evidence: [
+                  {
+                    turn_tag: 'T1',
+                    quote: "read Mao Zedong's poetry",
+                    role: 'primary',
+                  },
+                ],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 4, outputTokens: 2 },
+        };
+      },
+    };
+
+    const result = await extractAndApply({
+      turns: [
+        {
+          turn_hash: 'sha256:turn-1',
+          role: 'user',
+          content: "I want to visit the Great Wall and read Mao Zedong's poetry.",
+        },
+      ],
+      mode: 'incremental',
+      providerId: 'openai',
+      provider,
+      model: 'gpt-5.4',
+      snapshot: {
+        trees: [
+          {
+            key: 'trip',
+            slots: { destination: 'Beijing' },
+            children: [{ key: 'sightseeing', slots: {}, children: [] }],
+          },
+        ],
+        relations: [],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const trip = result.snapshot.trees[0];
+    expect(trip.children.map((child) => child.key)).toContain('cultural_interests');
+    expect(result.compiled.ops.map((op) => ('define' in op ? op.define.path : null))).toEqual([
+      'trip/cultural_interests',
+      'trip/cultural_interests/mao_poetry',
+      null,
+    ]);
+  });
+
   it('returns an executable_structure failure when compiled ops cannot be applied', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

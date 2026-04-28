@@ -4,11 +4,13 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  createCommit,
   deleteProject,
   findProjects,
   insertConversation,
   insertProject,
   insertTurn,
+  insertYOpsLogEntry,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,6 +98,48 @@ describe('Export Routes', () => {
       expect(turn.turn_hash).toBeDefined();
       expect(turn.role).toBe('user');
       expect(turn.content).toContain('$3000');
+    });
+
+    it('exports semantic snapshots from the inherited parent commit plus active yops', async () => {
+      const parent = await createCommit(mockDB, {
+        author: { type: 'human', name: 'test' },
+        content: {
+          trees: [
+            {
+              key: 'trip',
+              slots: { destination: 'Beijing' },
+              children: [{ key: 'sightseeing', slots: {}, children: [] }],
+            },
+          ],
+          relations: [],
+        },
+        project_id: projectId,
+        message: 'Parent trip baseline',
+        yops_log_ids: [],
+      });
+      const conv = await insertConversation(mockDB, {
+        projectId,
+        title: 'Inherited export conversation',
+        parentCommitHash: parent.hash,
+      });
+      await insertYOpsLogEntry(mockDB, {
+        conversationId: conv.conversationId,
+        projectId,
+        source: 'manual',
+        yops: [
+          {
+            define: { path: 'trip/sightseeing/great_wall' },
+            source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+          },
+        ],
+      });
+
+      const res = await app.request(`/v1/export/cfpack?project_id=${projectId}`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      const snapshot = data.semantic_snapshots[conv.conversationId];
+      expect(snapshot.trees[0].key).toBe('trip');
+      expect(snapshot.trees[0].children[0].children[0].key).toBe('great_wall');
     });
   });
 

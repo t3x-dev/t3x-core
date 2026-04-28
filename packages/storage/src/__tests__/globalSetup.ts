@@ -14,9 +14,14 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
+import {
+  getTestPostgresDataDir,
+  getTestPostgresPort,
+  resolveRepoRelativePath,
+} from './pgTestConfig';
 
-const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '5446', 10);
-const DATA_DIR = '.t3x/test-pg-data';
+const TEST_PORT = getTestPostgresPort();
+const DATA_DIR = getTestPostgresDataDir();
 const PASSWORD = 'password';
 
 let pg: InstanceType<typeof EmbeddedPostgres> | null = null;
@@ -42,25 +47,6 @@ function isPortInUse(port: number): Promise<boolean> {
   });
 }
 
-/**
- * Resolve DATA_DIR to an absolute path at the monorepo root.
- * Walks up the directory tree looking for pnpm-workspace.yaml.
- */
-function resolveDataDir(dataDir: string): string {
-  if (path.isAbsolute(dataDir)) return dataDir;
-
-  let dir = process.cwd();
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
-      return path.resolve(dir, dataDir);
-    }
-    dir = path.dirname(dir);
-  }
-
-  // Fallback to cwd if not in a pnpm monorepo
-  return path.resolve(process.cwd(), dataDir);
-}
-
 export async function setup(): Promise<void> {
   // If DATABASE_URL is set, CI is providing a real PG — skip embedded startup
   if (process.env.DATABASE_URL) {
@@ -74,7 +60,7 @@ export async function setup(): Promise<void> {
     return;
   }
 
-  const absoluteDataDir = resolveDataDir(DATA_DIR);
+  const absoluteDataDir = resolveRepoRelativePath(DATA_DIR);
 
   pg = new EmbeddedPostgres({
     databaseDir: absoluteDataDir,

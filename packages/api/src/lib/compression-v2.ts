@@ -15,7 +15,11 @@ import {
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
-import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
+import {
+  getConversationInheritedBaseline,
+  replayEntriesOnBaselineFailFast,
+  toYOpsLogEntries,
+} from './yops-log-utils';
 
 export interface ApiCompressionV2Input {
   db: AnyDB;
@@ -125,7 +129,10 @@ export async function runApiCompressionV2(
 
   const yopsRecords = await listActiveYOpsLogByConversation(input.db, input.conversationId);
   const yopsEntries = toYOpsLogEntries(yopsRecords);
-  const currentSnapshot = replayYOpsLog(yopsEntries);
+  const currentSnapshot = replayEntriesOnBaselineFailFast(
+    await getConversationInheritedBaseline(input.db, input.conversationId),
+    yopsRecords
+  );
   const currentFlat = flattenTrees(currentSnapshot.trees);
 
   if (currentFlat.length < 2) {

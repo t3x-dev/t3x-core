@@ -9,13 +9,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   findConversationsByProject,
   findTurnsByProject,
-  listYOpsLogByConversation,
+  listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import * as crypto from 'crypto';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { assertProjectAccess } from '../lib/project-access';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import { ErrorResponseSchema } from '../schemas/common';
 import { ExportQuery } from '../schemas/export-contracts';
 
@@ -232,9 +232,10 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
     // Build semantic snapshots from yops logs
     const semanticSnapshots: Record<string, unknown> = {};
     for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
-      const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
-      if (yopsLogs.length > 0) {
-        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
+      const yopsLogs = await listActiveYOpsLogByConversation(db, conv.conversationId);
+      if (yopsLogs.length > 0 || conv.parentCommitHash) {
+        const snapshot = await replayActiveDraftOnBaseline(db, conv.conversationId);
+        if (snapshot.trees.length === 0 && snapshot.relations.length === 0) continue;
         semanticSnapshots[conv.conversationId] = {
           trees: snapshot.trees,
           relations: snapshot.relations,
@@ -376,9 +377,10 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
 
     // Semantic snapshots
     for (const conv of conversations) {
-      const yopsLogs = await listYOpsLogByConversation(db, conv.conversationId);
-      if (yopsLogs.length > 0) {
-        const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
+      const yopsLogs = await listActiveYOpsLogByConversation(db, conv.conversationId);
+      if (yopsLogs.length > 0 || conv.parentCommitHash) {
+        const snapshot = await replayActiveDraftOnBaseline(db, conv.conversationId);
+        if (snapshot.trees.length === 0 && snapshot.relations.length === 0) continue;
         lines.push(
           JSON.stringify({
             type: 'semantic_snapshot',

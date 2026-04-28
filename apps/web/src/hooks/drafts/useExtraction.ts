@@ -282,7 +282,7 @@ export function useExtraction({
         toast.error(msg, { id: EXTRACTION_TOAST_ID });
       }
     },
-    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite]
+    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite, tree]
   );
 
   // Back-compat return shape for existing callers:
