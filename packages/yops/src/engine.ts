@@ -8,23 +8,12 @@
  */
 
 import { YOPS_ERRORS, yopsError } from './errors';
+import { isMappingObject, resolveOpName } from './opShape';
 import { deepClone } from './paths';
 import type { OpRegistry } from './registry';
 import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
 import type { YOp, YOpsResult, YValue } from './types';
-
-// Keys that may appear alongside the op key on the outer object. The op
-// name is the first key not in this set, so YAML emitters that sort keys
-// alphabetically can't accidentally elect `source` as the operation.
-const OP_METADATA_KEYS = new Set(['source']);
-
-function resolveOpName(op: Record<string, unknown>): string | null {
-  for (const key of Object.keys(op)) {
-    if (!OP_METADATA_KEYS.has(key)) return key;
-  }
-  return null;
-}
 
 // ── Field Validation ──
 
@@ -72,7 +61,27 @@ export function createEngine(registry: OpRegistry) {
     let current = deepClone(doc);
 
     for (let i = 0; i < ops.length; i++) {
-      const op = ops[i] as Record<string, unknown>;
+      const rawOp = ops[i] as unknown;
+
+      // 1. Outer-shape guard. `parseYOpsYaml` returns unvalidated ops, so
+      //    a literal `null`, a scalar, or an array can reach here. Treat
+      //    them as a typed INVALID_OP rather than letting downstream
+      //    code throw a TypeError on `Object.keys(null)` or `'x' in 'x'`.
+      if (!isMappingObject(rawOp)) {
+        return {
+          ok: false,
+          doc: current,
+          applied: i,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `Op at index ${i} must be a mapping, got ${rawOp === null ? 'null' : typeof rawOp}`,
+            i
+          ),
+        };
+      }
+      const op = rawOp;
+
+      // 2. Resolve the op key (first non-metadata key).
       const opName = resolveOpName(op);
       if (opName === null) {
         return {
@@ -82,9 +91,10 @@ export function createEngine(registry: OpRegistry) {
           error: yopsError(YOPS_ERRORS.INVALID_OP, `Op at index ${i} has no operation key`, i),
         };
       }
-      const fields = op[opName] as Record<string, unknown>;
 
-      // 1. Registry lookup
+      // 3. Registry lookup. Distinguishes "no such op" from any later
+      //    shape/contract error so consumers get UNKNOWN_OP instead of
+      //    a generic INVALID_OP.
       const handler = registry.getHandler(opName);
       if (!handler) {
         return {
@@ -95,14 +105,40 @@ export function createEngine(registry: OpRegistry) {
         };
       }
 
-      // 2. Field validation against spec
-      const opSpec = registry.getOpSpec(opName)!;
+      // 4. Inner-shape guard for the op payload before any contract
+      //    checks touch it. `{ set: null }` and `{ set: 'x' }` are valid
+      //    YAML but violate every op schema; rejecting here keeps
+      //    `validateFields` and the handlers free of null-payload
+      //    defenses.
+      const payload = op[opName];
+      if (!isMappingObject(payload)) {
+        return {
+          ok: false,
+          doc: current,
+          applied: i,
+          error: yopsError(
+            YOPS_ERRORS.INVALID_OP,
+            `${opName}: payload must be a mapping, got ${
+              payload === null ? 'null' : typeof payload
+            }`,
+            i
+          ),
+        };
+      }
+      const fields = payload;
+
+      // 5. Per-spec field validation (required / extra / enum). The
+      //    earlier shape guards already reject non-object payloads, so
+      //    `validateFields` cannot be reached with `null` or a scalar
+      //    for `fields` — its checks here are purely contract-level.
+      const opSpec = registry.getOpSpec(opName) as OpSpec;
       const fieldError = validateFields(opName, fields, opSpec, i);
       if (fieldError) {
         return { ok: false, doc: current, applied: i, error: fieldError };
       }
 
-      // 3. Shape/type validation against the same public schema contract
+      // 6. Schema validation against the same public Zod contract a
+      //    consumer sees — type mismatches in field values, etc.
       const schemaResult = YOpSchema.safeParse(op);
       if (!schemaResult.success) {
         const issue = schemaResult.error.issues[0];
@@ -118,7 +154,7 @@ export function createEngine(registry: OpRegistry) {
         };
       }
 
-      // 4. Execute handler
+      // 7. Execute handler.
       const result = handler(current, fields, i);
       if (result.error) {
         return {

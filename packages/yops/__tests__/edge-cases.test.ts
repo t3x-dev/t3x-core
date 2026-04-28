@@ -1550,11 +1550,11 @@ describe('nest — edge cases', () => {
     expect((r.doc as any).x).toEqual({ x: 1 });
   });
 
-  // 7. Error: key not found
+  // 7. Error: key not found among siblings
   it('errors if a key does not exist', () => {
     const r = applyYOps({ a: 1 }, [{ nest: { path: '', keys: ['a', 'missing'], under: 'w' } }]);
     expect(r.ok).toBe(false);
-    expect(r.error?.code).toBe('PATH_NOT_FOUND');
+    expect(r.error?.code).toBe('NOT_SIBLINGS');
   });
 
   // 8. Error: path is a sequence
@@ -1937,7 +1937,7 @@ describe('fold — edge cases', () => {
   it('errors on missing path', () => {
     const r = applyYOps({}, [{ fold: { path: 'missing' } }]);
     expect(r.ok).toBe(false);
-    expect(r.error?.code).toBe('NOT_FOLDABLE');
+    expect(r.error?.code).toBe('PATH_NOT_FOUND');
   });
 
   // 11. Fold preserves complex child value
@@ -2072,13 +2072,13 @@ describe('merge — edge cases', () => {
     expect(r.error?.code).toBe('NOT_A_MAPPING');
   });
 
-  // 6. Error: key not found
+  // 6. Error: key not found among siblings
   it('errors if a key does not exist', () => {
     const r = applyYOps({ r: { a: { x: 1 } } }, [
       { merge: { path: 'r', keys: ['a', 'missing'], into: 'm' } },
     ]);
     expect(r.ok).toBe(false);
-    expect(r.error?.code).toBe('PATH_NOT_FOUND');
+    expect(r.error?.code).toBe('NOT_SIBLINGS');
   });
 
   // 7. Merge empty mappings
