@@ -112,10 +112,18 @@ describe('error_reference[code].thrown_by matches handler emissions', () => {
   const reference = fullSpec.error_reference ?? {};
 
   for (const [code, body] of Object.entries(reference)) {
+    // UNKNOWN_OP is engine-only by construction (no handler emits it)
+    // and the reverse-index entry exists purely so consumers can look
+    // it up by code. Skip; everything else — including INVALID_OP,
+    // which engine *and* sort/split/unique emit — must validate.
     if (ENGINE_LEVEL_CODES.has(code)) continue;
-    if (Array.isArray(body.thrown_by) && body.thrown_by.includes('engine')) continue;
 
     it(`${code}: thrown_by lists every handler that emits it`, () => {
+      // The literal `engine` token is dropped on both sides before
+      // comparison. Mixed engine+handler codes (e.g. INVALID_OP) still
+      // get their handler list checked against actual emissions; the
+      // engine half is documentary and not something this scan can
+      // verify.
       const referenced = new Set((body.thrown_by ?? []).filter((op) => op !== 'engine'));
       const actual = new Set<string>();
       for (const op of handlerFiles) {
