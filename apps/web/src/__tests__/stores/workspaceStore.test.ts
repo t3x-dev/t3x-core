@@ -2,6 +2,7 @@ import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DRAFT_PERSISTENCE_CAP,
+  selectActiveUncommittedRowCount,
   selectPanelExpanded,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
@@ -23,6 +24,8 @@ describe('workspaceStore (state-only)', () => {
     expect(s.mode).toBe('idle');
     expect(s.turns).toEqual([]);
     expect(s.opsLog).toEqual([]);
+    expect(s.rowsById).toEqual({});
+    expect(s.opOrigins).toEqual([]);
     expect(s.tree.trees).toEqual([]);
     expect(s.sourceIndex.size).toBe(0);
     expect(s.conversationId).toBeNull();
@@ -58,6 +61,154 @@ describe('workspaceStore (state-only)', () => {
     expect(s.tree.trees).toHaveLength(1);
     expect(s.sourceIndex.get('trip/dest')?.type).toBe('human');
     expect(s.opsLog).toHaveLength(1);
+    expect(s.opOrigins).toEqual([{ rowId: null, opIndexInRow: null }]);
+  });
+
+  it('setDerived stores row metadata and parallel op origins', () => {
+    const tree: SemanticContent = { trees: [], relations: [] };
+    const sourceIndex = new Map<string, Source>();
+    const op: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({
+      tree,
+      sourceIndex,
+      opsLog: [op],
+      rowsById: {
+        yl_1: {
+          id: 'yl_1',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-12T00:00:00Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_1', opIndexInRow: 0 }],
+    });
+
+    const s = useWorkspaceStore.getState();
+    expect(s.rowsById.yl_1?.opCount).toBe(1);
+    expect(s.opOrigins).toEqual([{ rowId: 'yl_1', opIndexInRow: 0 }]);
+    expect(s.opOrigins).toHaveLength(s.opsLog.length);
+  });
+
+  it('treats ops without row metadata as active uncommitted for apply policy fallback', () => {
+    const op: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [op],
+    });
+
+    expect(selectActiveUncommittedRowCount(useWorkspaceStore.getState())).toBe(1);
+  });
+
+  it('does not count committed row metadata as active uncommitted', () => {
+    const op: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [op],
+      rowsById: {
+        yl_committed: {
+          id: 'yl_committed',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-12T00:00:00Z',
+          supersededAt: null,
+          isCommitted: true,
+          committedBy: ['sha256:commit'],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_committed', opIndexInRow: 0 }],
+    });
+
+    expect(selectActiveUncommittedRowCount(useWorkspaceStore.getState())).toBe(0);
+  });
+
+  it('ignores stale row metadata when no current op references it', () => {
+    const op: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [op],
+      rowsById: {
+        yl_active: {
+          id: 'yl_active',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-12T00:00:00Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_active', opIndexInRow: 0 }],
+    });
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+
+    expect(useWorkspaceStore.getState().rowsById.yl_active).toBeDefined();
+    expect(selectActiveUncommittedRowCount(useWorkspaceStore.getState())).toBe(0);
+  });
+
+  it('does not preserve row origins when ops are replaced with different objects', () => {
+    const firstOp: SourcedYOp = {
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+    const replacementOp: SourcedYOp = {
+      define: { path: 'food' },
+      source: { type: 'human', author: 'ethan', at: '2026-04-12T00:00:00Z' },
+    } as SourcedYOp;
+
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [firstOp],
+      rowsById: {
+        yl_active: {
+          id: 'yl_active',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-12T00:00:00Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_active', opIndexInRow: 0 }],
+    });
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [replacementOp],
+    });
+
+    expect(useWorkspaceStore.getState().opOrigins).toEqual([{ rowId: null, opIndexInRow: null }]);
   });
 
   it('select + clearSelection manages UI selection', () => {

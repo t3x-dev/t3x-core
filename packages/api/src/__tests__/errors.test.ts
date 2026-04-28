@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 69 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(69);
+  it('has 71 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(71);
   });
 
   it('key equals value for every code', () => {
@@ -87,10 +87,12 @@ describe('ErrorCodes', () => {
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
         "UNRESOLVED_PAIRS": "UNRESOLVED_PAIRS",
+        "UNSUPPORTED_OP": "UNSUPPORTED_OP",
         "UPDATE_FAILED": "UPDATE_FAILED",
         "VALIDATION_FAILED": "VALIDATION_FAILED",
         "VERIFY_FAILED": "VERIFY_FAILED",
         "WEBHOOK_NOT_FOUND": "WEBHOOK_NOT_FOUND",
+        "YOPS_LOG_SUPERSEDED": "YOPS_LOG_SUPERSEDED",
       }
     `);
   });

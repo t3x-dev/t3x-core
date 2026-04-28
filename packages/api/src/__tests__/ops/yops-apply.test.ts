@@ -114,6 +114,9 @@ describe('yopsApplyOp', () => {
       yops: mockRecord.yops,
       created_at: '2026-04-03T00:00:00.000Z',
       metadata: null,
+      superseded_at: null,
+      is_committed: false,
+      committed_by: [],
       // Default flag is off — no entries marked superseded, no flag in
       // input. Caller still sees the field (always present) for
       // observability; empty array means "no-op".
@@ -496,6 +499,70 @@ describe('yopsApplyOp', () => {
           metadata: {
             dropped_baseline_define_paths: ['trip'],
             supersedes: ['yl_active'],
+            replacement_reason: 'user_replaced_active_script',
+          },
+          yops: [
+            {
+              source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+              populate: { path: 'trip', values: { destination: 'Beijing revised' } },
+            },
+          ],
+        })
+      );
+    });
+
+    it('normalizes edited scripts against committed-only baseline rows without superseding them', async () => {
+      const ctx = buildMockContext();
+      const {
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeActiveUncommittedYOpsLogEntries,
+      } = await import('@t3x-dev/storage');
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce([]);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([
+        {
+          id: 'yl_committed',
+          yops: [
+            {
+              source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+              define: { path: 'trip' },
+            },
+          ],
+        },
+      ]);
+
+      const output = await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                define: { path: 'trip' },
+              },
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                populate: { path: 'trip', values: { destination: 'Beijing revised' } },
+              },
+            ],
+            replaceActiveScript: true,
+          },
+          ctx
+        )
+      );
+
+      expect(output.superseded_ids).toEqual([]);
+      expect(insertYOpsLogEntry).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: {
+            dropped_baseline_define_paths: ['trip'],
+            supersedes: [],
             replacement_reason: 'user_replaced_active_script',
           },
           yops: [

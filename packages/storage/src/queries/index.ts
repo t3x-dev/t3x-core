@@ -453,6 +453,7 @@ export {
 export {
   acquireProjectSupersedeLock,
   deleteYOpsLogEntry,
+  findCommitHashesByYOpsLogIds,
   getYOpsForCommit,
   getYOpsLogEntry,
   type InsertYOpsLogInput,

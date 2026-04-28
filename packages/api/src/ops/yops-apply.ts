@@ -80,6 +80,9 @@ export interface YopsApplyOutput {
   yops: any;
   created_at: string;
   metadata: Record<string, unknown> | null;
+  superseded_at: string | null;
+  is_committed: boolean;
+  committed_by: string[];
   /** IDs of entries marked superseded by this call (empty when the flag wasn't set). */
   superseded_ids: string[];
 }
@@ -299,6 +302,9 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
       yops: record.yops,
       created_at: record.createdAt.toISOString(),
       metadata: (record.metadata as Record<string, unknown> | null | undefined) ?? null,
+      superseded_at: null,
+      is_committed: false,
+      committed_by: [],
       superseded_ids: supersededIds,
     };
   },

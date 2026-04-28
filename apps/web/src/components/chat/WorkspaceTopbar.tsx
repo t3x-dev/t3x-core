@@ -24,7 +24,7 @@ export function WorkspaceTopbar() {
   // applies the PREVIOUS draft, not the latest (failed) attempt. The
   // generic "Apply the script to the tree" tooltip would mislead.
   const retainedDraftFailure = useWorkspaceStore((s) => s.retainedDraftFailure);
-  const { execute, canRun, disabledReason } = useScriptExecution();
+  const { execute, canRun, disabledReason, applyPolicy } = useScriptExecution();
 
   return (
     <div className="flex h-11 items-center gap-2 px-3 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
@@ -65,7 +65,7 @@ export function WorkspaceTopbar() {
             disabledReason ??
             (retainedDraftFailure
               ? formatApplyTooltipForRetainedFailure(retainedDraftFailure)
-              : 'Apply the script to the tree (commits a new yops_log entry)')
+              : applyPolicy.tooltip)
           }
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >

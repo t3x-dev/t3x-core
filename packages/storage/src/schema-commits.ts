@@ -108,6 +108,10 @@ export const commits = pgTable(
     projectIdx: index('idx_commits_project').on(table.projectId),
     branchIdx: index('idx_commits_branch').on(table.branch),
     committedAtIdx: index('idx_commits_committed_at').on(table.committedAt),
+    yopsLogIdsGinIdx: index('commits_yops_log_ids_gin').using(
+      'gin',
+      table.yopsLogIds.op('jsonb_path_ops')
+    ),
   })
 );
 

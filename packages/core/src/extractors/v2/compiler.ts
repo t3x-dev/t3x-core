@@ -1,5 +1,5 @@
-import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { registry as yopsRegistry } from '@t3x-dev/yops';
+import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { SNAKE_CASE_KEY, type SourcedYOp, type YValue } from '../../t3x-yops/types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import type {

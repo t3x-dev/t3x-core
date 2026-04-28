@@ -6,9 +6,14 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { createCommit } from '../queries/commits';
 import { insertConversation } from '../queries/conversations';
 import { insertProject } from '../queries/projects';
-import { getYOpsForCommit, insertYOpsLogEntry } from '../queries/yops-log';
+import {
+  findCommitHashesByYOpsLogIds,
+  getYOpsForCommit,
+  insertYOpsLogEntry,
+} from '../queries/yops-log';
 import { createTestDB, sleep, testData } from './setup';
 
 describe('getYOpsForCommit', () => {
@@ -63,5 +68,59 @@ describe('getYOpsForCommit', () => {
   it('returns empty array for empty IDs', async () => {
     const results = await getYOpsForCommit(db, []);
     expect(results).toEqual([]);
+  });
+
+  it('groups commit hashes by yops_log id within the project', async () => {
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
+    const entry = await insertYOpsLogEntry(db, {
+      conversationId: testConversationId,
+      projectId: testProjectId,
+      source: 'manual',
+      yops: [{ define: { path: 'shared' }, source: src }],
+    });
+    const first = await createCommit(db, {
+      author: { type: 'human', name: 'test' },
+      content: { trees: [{ key: 'first', slots: {}, children: [] }], relations: [] },
+      project_id: testProjectId,
+      message: 'first',
+      yops_log_ids: [entry.id],
+    });
+    const second = await createCommit(db, {
+      author: { type: 'human', name: 'test' },
+      content: { trees: [{ key: 'second', slots: {}, children: [] }], relations: [] },
+      project_id: testProjectId,
+      message: 'second',
+      yops_log_ids: [entry.id],
+    });
+
+    const committedBy = await findCommitHashesByYOpsLogIds(db, testProjectId, [entry.id]);
+
+    expect(new Set(committedBy.get(entry.id))).toEqual(new Set([first.hash, second.hash]));
+  });
+
+  it('does not return commit references from a different project', async () => {
+    const otherProject = await insertProject(db, testData.project({ name: 'Other Project' }));
+    const otherConversation = await insertConversation(
+      db,
+      testData.conversation(otherProject.projectId)
+    );
+    const src = { type: 'human' as const, author: 'test', at: '2026-04-25T00:00:00.000Z' };
+    const entry = await insertYOpsLogEntry(db, {
+      conversationId: otherConversation.conversationId,
+      projectId: otherProject.projectId,
+      source: 'manual',
+      yops: [{ define: { path: 'other' }, source: src }],
+    });
+    await createCommit(db, {
+      author: { type: 'human', name: 'test' },
+      content: { trees: [{ key: 'other', slots: {}, children: [] }], relations: [] },
+      project_id: otherProject.projectId,
+      message: 'other',
+      yops_log_ids: [entry.id],
+    });
+
+    const committedBy = await findCommitHashesByYOpsLogIds(db, testProjectId, [entry.id]);
+
+    expect(committedBy.get(entry.id)).toBeUndefined();
   });
 });

@@ -123,6 +123,57 @@ export async function getYOpsForCommit(db: AnyDB, yopsLogIds: string[]): Promise
 }
 
 /**
+ * Return commit hashes grouped by yops_log id for the current project.
+ *
+ * This is the API/WebUI row-facts source of truth: callers should not
+ * infer committed state from local UI state. The lookup is intentionally
+ * scoped by project_id and by the requested row IDs so large histories do
+ * not require scanning unrelated commits.
+ */
+export async function findCommitHashesByYOpsLogIds(
+  db: AnyDB,
+  projectId: string,
+  yopsLogIds: string[]
+): Promise<Map<string, string[]>> {
+  const committedBy = new Map<string, string[]>();
+  if (yopsLogIds.length === 0) return committedBy;
+
+  const idList = sql.join(
+    yopsLogIds.map((id) => sql`${id}`),
+    sql`, `
+  );
+  const containsAnyId = sql.join(
+    yopsLogIds.map((id) => sql`c.yops_log_ids @> jsonb_build_array(${id}::text)`),
+    sql` OR `
+  );
+  const result = await db.execute<{ yops_log_id: string; commit_hash: string }>(sql`
+    SELECT DISTINCT refs.yops_log_id, c.hash AS commit_hash, c.committed_at
+    FROM commits c
+    CROSS JOIN LATERAL jsonb_array_elements_text(
+      COALESCE(c.yops_log_ids, '[]'::jsonb)
+    ) AS refs(yops_log_id)
+    WHERE c.project_id = ${projectId}
+      AND (${containsAnyId})
+      AND refs.yops_log_id IN (${idList})
+    ORDER BY c.committed_at ASC, c.hash ASC
+  `);
+
+  const rows: Array<{ yops_log_id: string; commit_hash: string }> = Array.isArray(result)
+    ? (result as Array<{ yops_log_id: string; commit_hash: string }>)
+    : ((result as { rows?: Array<{ yops_log_id: string; commit_hash: string }> }).rows ?? []);
+  for (const row of rows) {
+    const existing = committedBy.get(row.yops_log_id);
+    if (existing) {
+      existing.push(row.commit_hash);
+    } else {
+      committedBy.set(row.yops_log_id, [row.commit_hash]);
+    }
+  }
+
+  return committedBy;
+}
+
+/**
  * Active-draft slice: entries for the conversation whose `superseded_at`
  * is NULL. The workspace's visible draft replays this list on top of
  * the committed baseline (see `replayCommittedBaseline` in the api

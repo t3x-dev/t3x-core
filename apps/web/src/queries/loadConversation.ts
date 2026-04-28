@@ -17,6 +17,7 @@
 import type { SemanticContent, Source, SourcedYOp, ValidationTurn } from '@t3x-dev/core';
 import { YOpsReplayError } from '@/commands/yops/errors';
 import { type ReplayPartial, replay } from '@/domain/replay';
+import type { YOpsOpOrigin, YOpsRowMeta } from '@/domain/yops/rowMeta';
 import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
 import { fetchCommitForInheritance } from './chatInitFetch';
 
@@ -41,6 +42,8 @@ export interface ConversationSnapshot {
   title: string | null;
   turns: WorkspaceTurn[];
   opsLog: SourcedYOp[];
+  rowsById: Record<string, YOpsRowMeta>;
+  opOrigins: YOpsOpOrigin[];
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
   committedAs: string | null;
@@ -80,12 +83,23 @@ export async function fetchConversationSnapshot(
   // Flatten row → ops while keeping a parallel index back to the source row,
   // so the UI can map a failing flat-op-index to the yops_log row to delete.
   const flatOps: SourcedYOp[] = [];
-  const flatToRow: Array<{ rowId: string; opIndexInRow: number }> = [];
+  const rowsById: Record<string, YOpsRowMeta> = {};
+  const opOrigins: YOpsOpOrigin[] = [];
   for (const entry of opsLog) {
     const ops = (entry.yops as SourcedYOp[] | undefined) ?? [];
+    rowsById[entry.id] = {
+      id: entry.id,
+      source: entry.source,
+      turnHash: entry.turn_hash ?? null,
+      createdAt: entry.created_at,
+      supersededAt: entry.superseded_at ?? null,
+      isCommitted: Boolean(entry.is_committed),
+      committedBy: entry.committed_by ?? [],
+      opCount: ops.length,
+    };
     for (let i = 0; i < ops.length; i++) {
       flatOps.push(ops[i]);
-      flatToRow.push({ rowId: entry.id, opIndexInRow: i });
+      opOrigins.push({ rowId: entry.id, opIndexInRow: i });
     }
   }
 
@@ -98,6 +112,8 @@ export async function fetchConversationSnapshot(
     title,
     turns: workspaceTurns,
     opsLog: flatOps,
+    rowsById,
+    opOrigins,
     tree,
     sourceIndex,
     committedAs,
@@ -107,7 +123,7 @@ export async function fetchConversationSnapshot(
   };
 
   if (partial) {
-    const origin = flatToRow[partial.opIndex];
+    const origin = opOrigins[partial.opIndex];
     snapshot.partial = {
       ...partial,
       rowId: origin?.rowId ?? '',

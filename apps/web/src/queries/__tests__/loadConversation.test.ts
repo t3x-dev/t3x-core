@@ -39,6 +39,9 @@ describe('fetchConversationSnapshot', () => {
           yops: [humanOp] as never,
           source: 'manual',
           created_at: '2026-04-12T00:00:00Z',
+          superseded_at: null,
+          is_committed: true,
+          committed_by: ['sha256:commit'],
         } as never,
       ],
     });
@@ -54,6 +57,14 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.sourceIndex).toBeInstanceOf(Map);
     expect(snapshot.committedAs).toBe('sha256:commit');
     expect(snapshot.committedAt).toBe('2026-04-12T00:00:01Z');
+    expect(snapshot.rowsById.yl_1).toMatchObject({
+      id: 'yl_1',
+      supersededAt: null,
+      isCommitted: true,
+      committedBy: ['sha256:commit'],
+      opCount: 1,
+    });
+    expect(snapshot.opOrigins).toEqual([{ rowId: 'yl_1', opIndexInRow: 0 }]);
   });
 
   it('propagates loader errors', async () => {
@@ -114,6 +125,10 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.partial?.rowId).toBe('yl_bad');
     expect(snapshot.partial?.opIndexInRow).toBe(0);
     expect(snapshot.partial?.code).toBeDefined();
+    expect(snapshot.opOrigins).toEqual([
+      { rowId: 'yl_good', opIndexInRow: 0 },
+      { rowId: 'yl_bad', opIndexInRow: 0 },
+    ]);
   });
 });
 

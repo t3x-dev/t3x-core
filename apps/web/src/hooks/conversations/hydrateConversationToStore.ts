@@ -51,6 +51,8 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
     tree: snapshot.tree,
     sourceIndex: snapshot.sourceIndex,
     opsLog: snapshot.opsLog,
+    rowsById: snapshot.rowsById,
+    opOrigins: snapshot.opOrigins,
     baselineCommitHash: snapshot.parentCommitHash,
     hasConversationChanges: snapshot.opsLog.length > 0 || Boolean(snapshot.committedAs),
   });

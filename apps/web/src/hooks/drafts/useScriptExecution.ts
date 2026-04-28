@@ -4,10 +4,19 @@ import * as yaml from 'js-yaml';
 import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { commitOps } from '@/commands/yops/yopsService';
+import {
+  type ApplyPayloadPolicy,
+  deriveWorkspaceScriptState,
+  getApplyPolicyForScriptState,
+} from '@/domain/yops/scriptApplyPolicy';
 import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  selectActiveUncommittedRowCount,
+  selectIsInheritedBaselineOnly,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 
 /**
  * The script editor's canonical wire format wraps ops in a `yops:` envelope
@@ -34,12 +43,46 @@ function parseScript(yamlStr: string): ReturnType<typeof parseYOpsYaml> {
   return parseYOpsYaml(yamlStr);
 }
 
+function commitOptionsFromPolicy(payload: ApplyPayloadPolicy) {
+  switch (payload.kind) {
+    case 'candidate':
+      return { replaceActiveLLMDraft: true };
+    case 'replace_active_script':
+      return { replaceActiveLLMDraft: false, replaceActiveScript: true };
+    case 'repair':
+      return { replaceActiveLLMDraft: false, repairYopsLogId: payload.repairYopsLogId };
+    case 'append':
+      return { replaceActiveLLMDraft: false };
+    case 'none':
+      return null;
+  }
+}
+
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const scriptDirty = useWorkspaceStore((s) => s.scriptDirty);
   const scriptText = useWorkspaceStore((s) => s.scriptText);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const mode = useWorkspaceStore((s) => s.mode);
+  const replayWarningRowId = useWorkspaceStore((s) => s.replayWarning?.rowId);
+  const activeUncommittedRowCount = useWorkspaceStore(selectActiveUncommittedRowCount);
+  const hasInheritedBaseline = useWorkspaceStore(selectIsInheritedBaselineOnly);
+  const scriptState = deriveWorkspaceScriptState({
+    hasDraft,
+    scriptDirty,
+    activeOpCount: opsLog.length,
+    activeUncommittedRowCount,
+    replayWarningRowId,
+  });
+  const applyPolicy = getApplyPolicyForScriptState({
+    state: scriptState,
+    scriptDirty,
+    replayWarningRowId,
+    mode,
+    hasInheritedBaseline,
+    activeOpCount: opsLog.length,
+    activeUncommittedRowCount,
+  });
 
   // Sync committed opsLog → scriptText so the editor reflects what
   // AfterPanel renders when no draft is staged. Once Extract stages a
@@ -78,14 +121,25 @@ export function useScriptExecution() {
     const projectId = useChatStore.getState().activeProjectId;
     if (!convId || !projectId) return;
 
-    // Defense in depth: the WorkspaceTopbar Apply button gates on `canRun`,
-    // but execute() may be invoked from tests, hotkeys, or future callers
-    // that bypass the button. Re-check the same guards here.
-    if (store.mode === 'streaming' || store.mode === 'committing') return;
-    // Apply only fires when there's something un-applied: either a fresh
-    // draft from Extract, or a manual edit. A clean script that mirrors
-    // committed state is a no-op.
-    if (!store.scriptDirty && !store.hasDraft) return;
+    const currentReplayWarningRowId = store.replayWarning?.rowId;
+    const currentActiveUncommittedRowCount = selectActiveUncommittedRowCount(store);
+    const currentScriptState = deriveWorkspaceScriptState({
+      hasDraft: store.hasDraft,
+      scriptDirty: store.scriptDirty,
+      activeOpCount: store.opsLog.length,
+      activeUncommittedRowCount: currentActiveUncommittedRowCount,
+      replayWarningRowId: currentReplayWarningRowId,
+    });
+    const currentPolicy = getApplyPolicyForScriptState({
+      state: currentScriptState,
+      scriptDirty: store.scriptDirty,
+      replayWarningRowId: currentReplayWarningRowId,
+      mode: store.mode,
+      hasInheritedBaseline: selectIsInheritedBaselineOnly(store),
+      activeOpCount: store.opsLog.length,
+      activeUncommittedRowCount: currentActiveUncommittedRowCount,
+    });
+    if (!currentPolicy.canApply) return;
 
     const parseResult = parseScript(store.scriptText);
     if (!parseResult.ok) {
@@ -112,36 +166,12 @@ export function useScriptExecution() {
       };
     }) as SourcedYOp[];
 
-    // When Apply's source is a staged Extract draft (`hasDraft === true` at
-    // the moment of Apply), tell the API to mark prior active LLM drafts
-    // for this conversation as superseded inside the same transaction as
-    // the new entry's insert. Without this flag, re-Extract → Apply just
-    // appends a fresh entry on top of the prior LLM suggestion — the
-    // workspace then renders both, and the user sees what looks like
-    // duplicated ops. The API explicitly preserves manual-edit
-    // (HumanSource) ops on prior entries regardless of this flag, so
-    // human edits never get clobbered by an LLM Apply.
-    //
-    // Manual-only Apply can be either:
-    //   - first script in an empty workspace: append normally;
-    //   - edit of the already-applied active script mirror: replace the
-    //     active uncommitted rows, otherwise the same `define` ops are
-    //     appended again and replay fails with ALREADY_EXISTS.
-    const replaceActiveLLMDraft = store.hasDraft;
-    const repairYopsLogId =
-      store.scriptDirty && !store.hasDraft && store.replayWarning?.rowId
-        ? store.replayWarning.rowId
-        : undefined;
-    const replaceActiveScript =
-      store.scriptDirty && !store.hasDraft && !repairYopsLogId && store.opsLog.length > 0;
+    const commitOptions = commitOptionsFromPolicy(currentPolicy.payload);
+    if (!commitOptions) return;
 
     try {
       store.setMode('committing');
-      await commitOps(convId, sourced, {
-        replaceActiveLLMDraft,
-        ...(repairYopsLogId ? { repairYopsLogId } : {}),
-        ...(replaceActiveScript ? { replaceActiveScript } : {}),
-      });
+      await commitOps(convId, sourced, commitOptions);
     } catch (err) {
       // Commit failed — yops_log was NOT written; the draft is still
       // applicable, leave it staged so the user can retry. This is the
@@ -191,15 +221,7 @@ export function useScriptExecution() {
   // draft from Extract (`hasDraft`) or a manual edit (`scriptDirty`). A
   // clean script that mirrors committed state is a no-op and keeps the
   // button disabled.
-  const canRun = mode !== 'streaming' && mode !== 'committing' && (scriptDirty || hasDraft);
-  const disabledReason =
-    mode === 'streaming'
-      ? ('Extraction running' as const)
-      : mode === 'committing'
-        ? ('Commit in progress' as const)
-        : !scriptDirty && !hasDraft
-          ? ('No script edits to apply' as const)
-          : null;
+  const disabledReason = applyPolicy.canApply ? null : applyPolicy.tooltip;
 
-  return { execute, canRun, disabledReason };
+  return { execute, canRun: applyPolicy.canApply, disabledReason, scriptState, applyPolicy };
 }

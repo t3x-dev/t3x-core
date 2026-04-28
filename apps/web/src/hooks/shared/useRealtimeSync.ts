@@ -25,6 +25,7 @@ const RECONNECT_DELAY = 5000;
 interface RealtimeEvent {
   type: string;
   conversationId: string;
+  projectId?: string;
   payload?: Record<string, unknown>;
   timestamp: number;
 }
@@ -32,6 +33,8 @@ interface RealtimeEvent {
 export function useRealtimeSync(conversationId: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenEventIdsRef = useRef<Set<string>>(new Set());
+  const activeProjectId = useChatStore((s) => s.activeProjectId);
 
   useEffect(() => {
     if (!conversationId || conversationId === 'new') return;
@@ -59,14 +62,27 @@ export function useRealtimeSync(conversationId: string | null) {
         wsRef.current = null;
       }
 
-      const ws = new WebSocket(
-        `${wsBase}/ws?conversation_id=${encodeURIComponent(conversationId!)}`
-      );
+      const params = new URLSearchParams({ conversation_id: conversationId! });
+      if (activeProjectId) params.set('project_id', activeProjectId);
+      const ws = new WebSocket(`${wsBase}/ws?${params.toString()}`);
       wsRef.current = ws;
 
       ws.onmessage = (evt) => {
         try {
           const event: RealtimeEvent = JSON.parse(evt.data);
+          const eventId =
+            event.payload && typeof event.payload.event_id === 'string'
+              ? event.payload.event_id
+              : null;
+          if (eventId) {
+            const seen = seenEventIdsRef.current;
+            if (seen.has(eventId)) return;
+            seen.add(eventId);
+            if (seen.size > 200) {
+              const oldest = seen.values().next().value;
+              if (oldest) seen.delete(oldest);
+            }
+          }
           handleEvent(event, conversationId!);
         } catch {}
       };
@@ -105,7 +121,7 @@ export function useRealtimeSync(conversationId: string | null) {
         wsRef.current = null;
       }
     };
-  }, [conversationId]);
+  }, [conversationId, activeProjectId]);
 }
 
 /**
@@ -163,8 +179,18 @@ function handleEvent(event: RealtimeEvent, conversationId: string) {
     }
 
     case 'commit.created': {
-      // Commit created by another source
-      // Future: refresh canvas and update commitStore
+      if (wsStore.mode === 'streaming') break;
+
+      const activeProjectId = useChatStore.getState().activeProjectId;
+      const eventProjectId = typeof event.projectId === 'string' ? event.projectId : undefined;
+      if (activeProjectId && eventProjectId && activeProjectId !== eventProjectId) break;
+
+      const projectId = activeProjectId ?? eventProjectId;
+      if (!projectId) break;
+
+      hydrateConversationToStore(projectId, conversationId).catch(() => {
+        // Hydration failed — non-critical for realtime path
+      });
       break;
     }
 

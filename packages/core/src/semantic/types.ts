@@ -55,15 +55,21 @@ export type YOpsSource = 'pipeline' | 'manual' | 'answer' | 'collapse' | 'compre
 
 export interface YOpsLogEntry {
   id: string;
+  conversation_id?: string;
+  project_id?: string;
   source: YOpsSource;
-  turn_hash?: string;
+  turn_hash?: string | null;
   yops: unknown;
   created_at: string;
+  superseded_at?: string | null;
+  is_committed?: boolean;
+  committed_by?: string[];
+  superseded_ids?: string[];
   model?: string;
   version?: number;
   pipeline_state?: 'completed' | 'failed';
   gate_result?: unknown;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | null;
 }
 
 // ── Validation ──

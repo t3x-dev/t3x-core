@@ -52,7 +52,7 @@ describe('useScriptExecution', () => {
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(false);
-    expect(result.current.disabledReason).toBe('No script edits to apply');
+    expect(result.current.disabledReason).toBe('No applied YOps');
   });
 
   it('enables Apply after a manual edit flips scriptDirty', () => {
@@ -332,6 +332,19 @@ describe('useScriptExecution', () => {
           },
         },
       ] as never,
+      rowsById: {
+        yl_active: {
+          id: 'yl_active',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-28T00:00:00.000Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_active', opIndexInRow: 0 }],
     });
     useWorkspaceStore
       .getState()
@@ -340,6 +353,89 @@ describe('useScriptExecution', () => {
       );
     useWorkspaceStore.getState().setScriptDirty(true);
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({
+      replaceActiveLLMDraft: false,
+      replaceActiveScript: true,
+    });
+  });
+
+  it('uses replaceActiveScript normalization when editing committed baseline rows', async () => {
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'human',
+            author: 'script-editor',
+            at: '2026-04-28T00:00:00.000Z',
+          },
+        },
+      ] as never,
+      rowsById: {
+        yl_committed: {
+          id: 'yl_committed',
+          source: 'manual',
+          turnHash: null,
+          createdAt: '2026-04-28T00:00:00.000Z',
+          supersededAt: null,
+          isCommitted: true,
+          committedBy: ['sha256:commit'],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_committed', opIndexInRow: 0 }],
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(
+        `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
+      );
+    useWorkspaceStore.getState().setScriptDirty(true);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({
+      replaceActiveLLMDraft: false,
+      replaceActiveScript: true,
+    });
+  });
+
+  it('falls back to replaceActiveScript when active ops have not been hydrated with row metadata yet', async () => {
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'human',
+            author: 'script-editor',
+            at: '2026-04-28T00:00:00.000Z',
+          },
+        },
+      ] as never,
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(
+        `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
+      );
+    useWorkspaceStore.getState().setScriptDirty(true);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {

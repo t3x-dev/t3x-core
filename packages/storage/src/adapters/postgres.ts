@@ -937,6 +937,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
 
     -- Migration: add yops_log_ids to existing commits table
     ALTER TABLE commits ADD COLUMN IF NOT EXISTS yops_log_ids JSONB DEFAULT '[]';
+    CREATE INDEX IF NOT EXISTS commits_yops_log_ids_gin
+      ON commits USING gin (yops_log_ids jsonb_path_ops);
 
     CREATE TABLE IF NOT EXISTS frame_lineage (
       id TEXT PRIMARY KEY,

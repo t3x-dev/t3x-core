@@ -2,6 +2,7 @@ import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from 
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { reconcileOpOrigins, type YOpsOpOrigin, type YOpsRowMeta } from '@/domain/yops/rowMeta';
 import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 
 export interface WorkspaceTurn {
@@ -106,6 +107,8 @@ interface WorkspaceState {
   conversationId: string | null;
   turns: WorkspaceTurn[];
   opsLog: SourcedYOp[];
+  rowsById: Record<string, YOpsRowMeta>;
+  opOrigins: YOpsOpOrigin[];
 
   // ── Derived state (populated by queries/replay) ──
   tree: SemanticContent;
@@ -189,6 +192,8 @@ interface WorkspaceState {
     tree: SemanticContent;
     sourceIndex: Map<string, Source>;
     opsLog: SourcedYOp[];
+    rowsById?: Record<string, YOpsRowMeta>;
+    opOrigins?: YOpsOpOrigin[];
     baselineCommitHash?: string | null;
     hasConversationChanges?: boolean;
   }) => void;
@@ -310,6 +315,26 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
       (state.tree.trees.length > 0 || state.tree.relations.length > 0)
   );
 
+export const selectActiveUncommittedRowCount = (state: WorkspaceState): number => {
+  const referencedRowIds = new Set<string>();
+  let hasUnknownOrigin = false;
+  for (const origin of state.opOrigins) {
+    if (!origin.rowId || !state.rowsById[origin.rowId]) {
+      hasUnknownOrigin = true;
+    } else {
+      referencedRowIds.add(origin.rowId);
+    }
+  }
+
+  let activeRows = 0;
+  for (const rowId of referencedRowIds) {
+    const row = state.rowsById[rowId];
+    if (!row.isCommitted && !row.supersededAt) activeRows++;
+  }
+
+  return activeRows + (hasUnknownOrigin ? 1 : 0);
+};
+
 /**
  * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
  * Note this object intentionally does NOT include `panelExpandedByProject` or
@@ -325,6 +350,8 @@ function conversationResetState() {
     conversationId: null,
     turns: [],
     opsLog: [],
+    rowsById: {},
+    opOrigins: [],
     tree: EMPTY_TREE,
     sourceIndex: new Map<string, Source>(),
     baselineCommitHash: null,
@@ -462,11 +489,21 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ activeProjectId });
       },
       setTurns: (turns) => set({ turns }),
-      setDerived: ({ tree, sourceIndex, opsLog, baselineCommitHash, hasConversationChanges }) =>
+      setDerived: ({
+        tree,
+        sourceIndex,
+        opsLog,
+        rowsById,
+        opOrigins,
+        baselineCommitHash,
+        hasConversationChanges,
+      }) =>
         set((s) => ({
           tree,
           sourceIndex,
           opsLog,
+          rowsById: rowsById ?? s.rowsById,
+          opOrigins: opOrigins ?? reconcileOpOrigins(s.opOrigins, s.opsLog, opsLog),
           baselineCommitHash:
             baselineCommitHash === undefined ? s.baselineCommitHash : baselineCommitHash,
           hasConversationChanges: hasConversationChanges ?? opsLog.length > 0,

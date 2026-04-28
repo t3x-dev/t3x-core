@@ -12,6 +12,7 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  createCommit,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
@@ -24,6 +25,19 @@ import { setupTestDB, testData } from './setup';
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper
 type ApiResponse = any;
+
+function testYOps(path: string) {
+  return [
+    {
+      define: { path },
+      source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+    },
+  ];
+}
+
+function testContent(key: string) {
+  return { trees: [{ key, slots: {}, children: [] }], relations: [] };
+}
 
 // Mock the database module before importing routes
 let mockDB: AnyDB;
@@ -312,5 +326,119 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ApiResponse;
     expect(body.data.trees.map((tree: { key: string }) => tree.key)).toEqual(['current_node']);
+  });
+
+  it('returns per-row committed and superseded facts for active rows', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'YOps Row Facts' }));
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'YOps Row Facts Conv' })
+    );
+    const committedEntry = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: testYOps('committed_node'),
+    });
+    const activeEntry = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: testYOps('active_node'),
+    });
+    const commit = await createCommit(mockDB, {
+      author: { type: 'human', name: 'test' },
+      content: testContent('committed_node'),
+      project_id: project.projectId,
+      message: 'Commit one yops row',
+      yops_log_ids: [committedEntry.id],
+    });
+
+    const res = await app.request(
+      `/v1/conversations/${conversation.conversationId}/yops?active_only=true`
+    );
+
+    const body = (await res.json()) as ApiResponse;
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    const rowsById = new Map(body.data.map((row: { id: string }) => [row.id, row]));
+
+    expect(rowsById.get(committedEntry.id)).toMatchObject({
+      id: committedEntry.id,
+      superseded_at: null,
+      is_committed: true,
+      committed_by: [commit.hash],
+      superseded_ids: [],
+    });
+    expect(rowsById.get(activeEntry.id)).toMatchObject({
+      id: activeEntry.id,
+      superseded_at: null,
+      is_committed: false,
+      committed_by: [],
+      superseded_ids: [],
+    });
+  });
+
+  it('returns every commit hash that references the same yops row', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'YOps Multi Commit' }));
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'YOps Multi Commit Conv' })
+    );
+    const entry = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: testYOps('shared_row'),
+    });
+    const first = await createCommit(mockDB, {
+      author: { type: 'human', name: 'test' },
+      content: testContent('first_commit'),
+      project_id: project.projectId,
+      message: 'First commit',
+      yops_log_ids: [entry.id],
+    });
+    const second = await createCommit(mockDB, {
+      author: { type: 'human', name: 'test' },
+      content: testContent('second_commit'),
+      project_id: project.projectId,
+      message: 'Second commit',
+      yops_log_ids: [entry.id],
+    });
+
+    const res = await app.request(
+      `/v1/conversations/${conversation.conversationId}/yops?active_only=true`
+    );
+
+    const body = (await res.json()) as ApiResponse;
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    const row = body.data.find((candidate: { id: string }) => candidate.id === entry.id);
+
+    expect(row.is_committed).toBe(true);
+    expect(new Set(row.committed_by)).toEqual(new Set([first.hash, second.hash]));
+  });
+
+  it('returns superseded_at for audit rows when listing the full yops log', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'YOps Superseded Fact' }));
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'YOps Superseded Fact Conv' })
+    );
+    const entry = await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: testYOps('old_active_node'),
+    });
+    await supersedeActiveUncommittedYOpsLogEntries(mockDB, conversation.conversationId);
+
+    const res = await app.request(`/v1/conversations/${conversation.conversationId}/yops`);
+
+    const body = (await res.json()) as ApiResponse;
+    expect(res.status, JSON.stringify(body)).toBe(200);
+    const row = body.data.find((candidate: { id: string }) => candidate.id === entry.id);
+
+    expect(row.superseded_at).toEqual(expect.any(String));
+    expect(row.is_committed).toBe(false);
+    expect(row.committed_by).toEqual([]);
   });
 });

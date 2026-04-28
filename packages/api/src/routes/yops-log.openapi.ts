@@ -17,6 +17,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { collectResult, runOperation } from '@t3x-dev/core';
 import {
   deleteYOpsLogEntry,
+  findCommitHashesByYOpsLogIds,
   findConversationById,
   getYOpsLogEntry,
   listActiveYOpsLogByConversation,
@@ -121,11 +122,14 @@ const YOpsLogEntryResponse = z.object({
   yops: z.any(),
   created_at: z.string(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  superseded_at: z.string().nullable().default(null),
+  is_committed: z.boolean().default(false),
+  committed_by: z.array(z.string()).default([]),
   /**
    * IDs of yops_log entries marked superseded by this request. Empty
-   * unless `replace_active_llm_draft: true` was passed AND there were
-   * active LLM-only entries to replace. Always present (`[]` default)
-   * so generated clients can rely on the field shape.
+   * for row-list responses and for append requests that did not replace
+   * or repair active rows. Always present (`[]` default) so generated
+   * clients can rely on the field shape.
    */
   superseded_ids: z.array(z.string()).default([]),
 });
@@ -181,8 +185,11 @@ function toApiYOpsEntry(record: {
   turnHash: string | null;
   yops: unknown;
   createdAt: Date;
+  supersededAt?: Date | null;
   metadata?: unknown;
+  committedBy?: string[];
 }) {
+  const committedBy = record.committedBy ?? [];
   return {
     id: record.id,
     conversation_id: record.conversationId,
@@ -192,6 +199,10 @@ function toApiYOpsEntry(record: {
     yops: record.yops,
     created_at: record.createdAt.toISOString(),
     metadata: (record.metadata as Record<string, unknown> | null | undefined) ?? null,
+    superseded_at: record.supersededAt ? record.supersededAt.toISOString() : null,
+    is_committed: committedBy.length > 0,
+    committed_by: committedBy,
+    superseded_ids: [],
   };
 }
 
@@ -417,8 +428,21 @@ yopsLogRoutes.openapi(listYOpsRoute, async (c) => {
       : topic_id
         ? await listYOpsLogByTopic(db, conversationId, topic_id)
         : await listYOpsLogByConversation(db, conversationId);
+    const committedBy = await findCommitHashesByYOpsLogIds(
+      db,
+      conversation.projectId,
+      records.map((record) => record.id)
+    );
 
-    return c.json({ success: true as const, data: records.map(toApiYOpsEntry) }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: records.map((record) =>
+          toApiYOpsEntry({ ...record, committedBy: committedBy.get(record.id) ?? [] })
+        ),
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'LIST_FAILED', message);
