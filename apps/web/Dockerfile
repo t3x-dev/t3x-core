@@ -12,6 +12,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY tools/hooks/install-hooks.sh ./tools/hooks/install-hooks.sh
 COPY packages/yops/package.json ./packages/yops/
 COPY packages/yschema/package.json ./packages/yschema/
 COPY packages/core/package.json ./packages/core/
@@ -36,10 +37,15 @@ RUN pnpm --filter @t3x-dev/yops build && \
 
 # Build webui
 # NEXT_PUBLIC_* vars must be set at build time (inlined into JS bundle)
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_RUNNER_ENABLED=true
+ARG NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_AUTH_DISABLED=false
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_RUNNER_ENABLED=true
-ENV NEXT_PUBLIC_RUNNER_API_URL=http://localhost:8080
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_RUNNER_ENABLED=$NEXT_PUBLIC_RUNNER_ENABLED
+ENV NEXT_PUBLIC_RUNNER_API_URL=$NEXT_PUBLIC_RUNNER_API_URL
+ENV NEXT_PUBLIC_AUTH_DISABLED=$NEXT_PUBLIC_AUTH_DISABLED
 RUN pnpm --filter t3x-webui build
 
 # Production stage

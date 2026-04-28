@@ -665,6 +665,18 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_share_tokens_entity ON share_tokens(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_project ON share_tokens(project_id);
 
+    -- Migration: rename delta_log to yops_log if old table exists.
+    -- Run before CREATE TABLE yops_log so old databases keep their history.
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'delta_log')
+         AND NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'yops_log') THEN
+        ALTER TABLE delta_log RENAME TO yops_log;
+        ALTER TABLE yops_log RENAME COLUMN delta TO yops;
+        ALTER INDEX IF EXISTS idx_delta_log_conv RENAME TO idx_yops_log_conv;
+        ALTER INDEX IF EXISTS idx_delta_log_project RENAME TO idx_yops_log_project;
+      END IF;
+    END $$;
+
     -- YOps Log table (semantic yops tracking)
     CREATE TABLE IF NOT EXISTS yops_log (
       id TEXT PRIMARY KEY,
@@ -693,16 +705,6 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE yops_log ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_yops_log_active
       ON yops_log (conversation_id) WHERE superseded_at IS NULL;
-
-    -- Migration: rename delta_log to yops_log if old table exists
-    DO $$ BEGIN
-      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'delta_log') THEN
-        ALTER TABLE delta_log RENAME TO yops_log;
-        ALTER TABLE yops_log RENAME COLUMN delta TO yops;
-        ALTER INDEX IF EXISTS idx_delta_log_conv RENAME TO idx_yops_log_conv;
-        ALTER INDEX IF EXISTS idx_delta_log_project RENAME TO idx_yops_log_project;
-      END IF;
-    END $$;
 
     -- Migration: per-op source provenance (was migrations/2026-04-12_yops-source-required.sql).
     -- The engine + replay require every op to carry source.type ∈ {'llm','human'}.
@@ -772,12 +774,23 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'knowledge_node_members' AND column_name = 'content_sentence_id'
+        WHERE table_schema = 'public'
+          AND table_name = 'knowledge_node_members'
+          AND column_name = 'content_sentence_id'
       ) THEN
         ALTER TABLE knowledge_node_members RENAME COLUMN content_sentence_id TO content_node_id;
+      ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'knowledge_node_members'
+          AND column_name = 'sentence_id'
+      ) THEN
+        ALTER TABLE knowledge_node_members RENAME COLUMN sentence_id TO content_node_id;
       END IF;
       IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_knm_content_sentence') THEN
         ALTER INDEX idx_knm_content_sentence RENAME TO idx_knm_content_node;
+      ELSIF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_knm_sentence') THEN
+        ALTER INDEX idx_knm_sentence RENAME TO idx_knm_content_node;
       END IF;
     END
     $$;

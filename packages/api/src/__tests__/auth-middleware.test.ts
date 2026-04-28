@@ -52,6 +52,8 @@ function createTestApp() {
 
 describe('Auth Middleware', () => {
   const originalEnv = process.env.AUTH_DISABLED;
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalAllowProductionAuthDisabled = process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
   let app: Hono;
 
   beforeEach(() => {
@@ -66,6 +68,16 @@ describe('Auth Middleware', () => {
     } else {
       process.env.AUTH_DISABLED = 'false';
     }
+    if (originalNodeEnv !== undefined) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+    if (originalAllowProductionAuthDisabled !== undefined) {
+      process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION = originalAllowProductionAuthDisabled;
+    } else {
+      delete process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
+    }
   });
 
   describe('AUTH_DISABLED=true', () => {
@@ -79,6 +91,21 @@ describe('Auth Middleware', () => {
       expect(data.success).toBe(true);
 
       // Should NOT call findApiKeyByValue
+      expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
+    });
+
+    it('requires an explicit production opt-in when NODE_ENV=production', async () => {
+      process.env.AUTH_DISABLED = 'true';
+      process.env.NODE_ENV = 'production';
+      delete process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION;
+
+      const blocked = await app.request('/api/v1/projects');
+      expect(blocked.status).toBe(401);
+
+      process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION = 'true';
+      const allowed = await app.request('/api/v1/projects');
+
+      expect(allowed.status).toBe(200);
       expect(mockFindApiKeyByValue).not.toHaveBeenCalled();
     });
   });

@@ -5,6 +5,7 @@
  *
  * Behavior:
  * - AUTH_DISABLED=true env var skips authentication (for local dev)
+ * - T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION=true allows that override in Docker/self-hosted
  * - Whitelisted paths bypass authentication
  * - Valid API key → sets apiKey in Hono context variables
  * - Invalid/missing key → 401 Unauthorized
@@ -63,11 +64,13 @@ function isPublicPath(path: string, method?: string): boolean {
  * Only disabled when AUTH_DISABLED is explicitly set to 'true'.
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive)
-  // WARNING: Should only be used for local development. In production (NODE_ENV=production),
-  // this setting is ignored to prevent accidental exposure.
+  // Skip auth only when explicitly disabled (AUTH_DISABLED=true, case-insensitive).
+  // Production builds require an additional explicit opt-in so a stray
+  // AUTH_DISABLED=true cannot silently expose a deployed API.
   if (process.env.AUTH_DISABLED?.toLowerCase() === 'true') {
-    if (process.env.NODE_ENV === 'production') {
+    const allowProductionDisable =
+      process.env.T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION?.toLowerCase() === 'true';
+    if (process.env.NODE_ENV === 'production' && !allowProductionDisable) {
       pinoLogger.warn('AUTH_DISABLED=true is ignored in production mode');
     } else {
       return next();
