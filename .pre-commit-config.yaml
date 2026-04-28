@@ -1,0 +1,28 @@
+minimum_pre_commit_version: "4.6.0"
+
+repos:
+  - repo: local
+    hooks:
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+        entry: sh tools/hooks/pre-commit-check-merge-conflict.sh
+        language: system
+        types: [text]
+
+      - id: end-of-file-fixer
+        name: Fix end of files
+        entry: sh tools/hooks/pre-commit-end-of-file-fixer.sh
+        language: system
+        types: [text]
+
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        entry: perl -pi -e 's/[ \t]+$//'
+        language: system
+        types: [text]
+
+      - id: biome-check
+        name: Biome check
+        entry: pnpm exec biome check --write --no-errors-on-unmatched
+        language: system
+        files: \.(cjs|cts|css|html|js|json|jsonc|jsx|mjs|mts|ts|tsx)$

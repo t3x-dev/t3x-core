@@ -8,7 +8,7 @@ auto_apply:
   # Minimum confidence score (0.0 - 1.0)
   # Finding must score at least this high to be considered
   confidence: 0.78
-  
+
   # Minimum margin between top-1 and top-2 evidence
   # Prevents auto-applying when two evidence scores are very close
   # (indicates uncertainty)
@@ -36,7 +36,7 @@ bm25:
   # Sigmoid steepness parameter
   # Higher = sharper transition between low/high scores
   k: 5.0
-  
+
   # Sigmoid midpoint
   # BM25 scores around this value map to 0.5
   x0: 3.0
