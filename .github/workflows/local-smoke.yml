@@ -7,9 +7,12 @@ on:
       - '.github/workflows/local-smoke.yml'
       - '.github/workflows/release.yml'
       - 'apps/cli/**'
+      - 'apps/api/**'
+      - 'apps/agent-demo/**'
       - 'apps/local/**'
       - 'apps/mcp/**'
       - 'apps/runner/**'
+      - 'apps/web/**'
       - 'packages/api-client/**'
       - 'packages/api/**'
       - 'packages/core/**'
@@ -17,8 +20,10 @@ on:
       - 'packages/storage/**'
       - 'packages/yops/**'
       - 'packages/yschema/**'
+      - 'biome.json'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'turbo.json'
       - 'tools/**'
   workflow_dispatch: {}
 
@@ -27,6 +32,20 @@ jobs:
     name: Clean install smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -69,6 +88,11 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres
+        run: pnpm test
 
       - name: Build runtime artifact
         run: pnpm build:local-runtime

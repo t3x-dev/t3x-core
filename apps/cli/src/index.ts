@@ -9,7 +9,7 @@
  *   t3x create project      t3x delete project <id>
  *   t3x commit <draft-id>   t3x generate leaf <id>
  */
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { registerAuthCommands } from './commands/auth.js';
 // Action-group handlers (refactored from resource-first)
 import {
@@ -77,8 +77,15 @@ program
   .name('t3x')
   .description('T3X CLI - Semantic version control for AI conversations')
   .version('0.1.1')
-  .option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)')
-  .option('--api-key <key>', 'API key for authentication (or set T3X_API_KEY env var)');
+  .addOption(
+    new Option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)').hideHelp()
+  )
+  .addOption(
+    new Option(
+      '--api-key <key>',
+      'API key for authentication (or set T3X_API_KEY env var)'
+    ).hideHelp()
+  );
 
 // ── Action-group commands (kubectl-style) ──────────────────────────
 

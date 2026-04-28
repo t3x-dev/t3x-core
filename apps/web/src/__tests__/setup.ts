@@ -12,6 +12,52 @@
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
+function installMemoryLocalStorage(): void {
+  const currentStorage = globalThis.localStorage as Storage | undefined;
+  if (
+    currentStorage &&
+    typeof currentStorage.getItem === 'function' &&
+    typeof currentStorage.setItem === 'function' &&
+    typeof currentStorage.removeItem === 'function' &&
+    typeof currentStorage.clear === 'function' &&
+    typeof currentStorage.key === 'function'
+  ) {
+    return;
+  }
+
+  const store = new Map<string, string>();
+  const memoryStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
+    key: (index: number) => [...store.keys()][index] ?? null,
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: memoryStorage,
+  });
+
+  if (typeof window !== 'undefined' && window.localStorage !== memoryStorage) {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: memoryStorage,
+    });
+  }
+}
+
+installMemoryLocalStorage();
+
 import { type AnyDB, closePostgresStorage, createPostgresStorage } from '@t3x-dev/storage';
 import postgres from 'postgres';
 import { vi } from 'vitest';
