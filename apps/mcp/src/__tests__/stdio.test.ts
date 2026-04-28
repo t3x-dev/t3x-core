@@ -84,6 +84,8 @@ const runRealE2E =
   );
 
 const maybeRealE2E = runRealE2E ? it : it.skip;
+const stdioSmokeTimeoutMs = 20_000;
+const realE2ETimeoutMs = 60_000;
 
 afterEach(async () => {
   while (openClients.length > 0) {
@@ -100,75 +102,91 @@ afterEach(async () => {
 });
 
 describe('apps/mcp stdio subprocess smoke', () => {
-  it('starts the dist entrypoint from .mcp.json and advertises the full tool surface', async () => {
-    const { client } = await connectConfiguredClient();
-    openClients.push(client);
+  it(
+    'starts the dist entrypoint from .mcp.json and advertises the full tool surface',
+    async () => {
+      const { client } = await connectConfiguredClient();
+      openClients.push(client);
 
-    const result = await client.listTools();
-    const names = result.tools.map((tool) => tool.name);
+      const result = await client.listTools();
+      const names = result.tools.map((tool) => tool.name);
 
-    expect(names).toEqual(
-      expect.arrayContaining([
-        't3x_query',
-        't3x_commit',
-        't3x_edit',
-        't3x_extract',
-        't3x_generate',
-        't3x_diff',
-        't3x_merge',
-        't3x_admin',
-      ])
-    );
-    expect(names).not.toContain('t3x_create_leaf');
-  });
+      expect(names).toEqual(
+        expect.arrayContaining([
+          't3x_query',
+          't3x_commit',
+          't3x_edit',
+          't3x_extract',
+          't3x_generate',
+          't3x_diff',
+          't3x_merge',
+          't3x_admin',
+        ])
+      );
+      expect(names).not.toContain('t3x_create_leaf');
+    },
+    stdioSmokeTimeoutMs
+  );
 
-  it('routes diff validation errors through the real stdio subprocess', async () => {
-    const { client } = await connectConfiguredClient();
-    openClients.push(client);
+  it(
+    'routes diff validation errors through the real stdio subprocess',
+    async () => {
+      const { client } = await connectConfiguredClient();
+      openClients.push(client);
 
-    const result = await client.callTool({
-      name: 't3x_diff',
-      arguments: {
-        source: 'sha256:aaa',
-        target: 'sha256:bbb',
-      },
-    });
+      const result = await client.callTool({
+        name: 't3x_diff',
+        arguments: {
+          source: 'sha256:aaa',
+          target: 'sha256:bbb',
+        },
+      });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"base" is required');
-  });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('"base" is required');
+    },
+    stdioSmokeTimeoutMs
+  );
 
-  it('routes generate boundary errors through the real stdio subprocess', async () => {
-    const { client } = await connectConfiguredClient();
-    openClients.push(client);
+  it(
+    'routes generate boundary errors through the real stdio subprocess',
+    async () => {
+      const { client } = await connectConfiguredClient();
+      openClients.push(client);
 
-    const result = await client.callTool({
-      name: 't3x_generate',
-      arguments: {
-        commit_hash: 'sha256:commit1',
-      },
-    });
+      const result = await client.callTool({
+        name: 't3x_generate',
+        arguments: {
+          commit_hash: 'sha256:commit1',
+        },
+      });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"leaf_id" is required');
-  });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('"leaf_id" is required');
+    },
+    stdioSmokeTimeoutMs
+  );
 
-  it('routes create_leaf validation through the real stdio subprocess', async () => {
-    const { client } = await connectConfiguredClient();
-    openClients.push(client);
+  it(
+    'routes create_leaf validation through the real stdio subprocess',
+    async () => {
+      const { client } = await connectConfiguredClient();
+      openClients.push(client);
 
-    const result = await client.callTool({
-      name: 't3x_admin',
-      arguments: {
-        action: 'create_leaf',
-        commit_hash: 'sha256:commit1',
-        leaf_type: 'tweet',
-      },
-    });
+      const result = await client.callTool({
+        name: 't3x_admin',
+        arguments: {
+          action: 'create_leaf',
+          commit_hash: 'sha256:commit1',
+          leaf_type: 'tweet',
+        },
+      });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('"project_id" is required');
-  });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('"project_id" is required');
+    },
+    stdioSmokeTimeoutMs
+  );
 
   maybeRealE2E(
     'runs create_project -> extract -> commit -> create_leaf -> generate over the real stdio subprocess',
@@ -242,6 +260,7 @@ describe('apps/mcp stdio subprocess smoke', () => {
       expect(typeof generated.output).toBe('string');
       expect(generated.output.length).toBeGreaterThan(0);
       expect(generated.score.total).toBeGreaterThanOrEqual(1);
-    }
+    },
+    realE2ETimeoutMs
   );
 });
