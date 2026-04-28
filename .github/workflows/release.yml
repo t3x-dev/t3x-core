@@ -11,8 +11,58 @@ permissions:
   pull-requests: write
 
 jobs:
+  changeset-state:
+    name: Changeset State
+    runs-on: ubuntu-latest
+    outputs:
+      has_changesets: ${{ steps.detect.outputs.has_changesets }}
+      is_version_packages: ${{ steps.detect.outputs.is_version_packages }}
+      should_release: ${{ steps.detect.outputs.should_release }}
+      should_publish: ${{ steps.detect.outputs.should_publish }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect release state
+        id: detect
+        shell: bash
+        run: |
+          changeset_count="$(find .changeset -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')"
+          if [[ "$changeset_count" -gt 0 ]]; then
+            has_changesets=true
+          else
+            has_changesets=false
+          fi
+
+          head_message="$(git log -1 --pretty=%B)"
+          if grep -Fq "chore: version packages" <<<"$head_message"; then
+            is_version_packages=true
+          else
+            is_version_packages=false
+          fi
+
+          should_release=false
+          if [[ "$has_changesets" == "true" || "$is_version_packages" == "true" ]]; then
+            should_release=true
+          fi
+
+          echo "has_changesets=$has_changesets" >> "$GITHUB_OUTPUT"
+          echo "is_version_packages=$is_version_packages" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+          echo "should_publish=$is_version_packages" >> "$GITHUB_OUTPUT"
+
+          echo "has_changesets=$has_changesets"
+          echo "is_version_packages=$is_version_packages"
+          echo "should_release=$should_release"
+          echo "should_publish=$is_version_packages"
+
   build-runtime:
     name: Build Runtime (${{ matrix.platform }})
+    needs: changeset-state
+    if: needs.changeset-state.outputs.should_publish == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -63,7 +113,16 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: build-runtime
+    needs:
+      - changeset-state
+      - build-runtime
+    if: |
+      always() &&
+      needs.changeset-state.outputs.should_release == 'true' &&
+      (
+        needs.changeset-state.outputs.should_publish != 'true' ||
+        needs.build-runtime.result == 'success'
+      )
 
     steps:
       - name: Checkout
@@ -81,6 +140,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download runtime artifacts
+        if: needs.changeset-state.outputs.should_publish == 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: runtime-*
@@ -88,10 +148,16 @@ jobs:
           merge-multiple: true
 
       - name: Generate full runtime manifest
+        if: needs.changeset-state.outputs.should_publish == 'true'
         run: pnpm --filter @t3x-dev/local generate:runtime-manifest
 
       - name: Verify fixed versions
+        if: needs.changeset-state.outputs.should_publish == 'true'
         run: pnpm verify:versions
+
+      - name: Verify fixed versions without runtime manifest
+        if: needs.changeset-state.outputs.should_publish != 'true'
+        run: pnpm verify:versions:no-manifest
 
       - name: Create Release PR or Publish
         id: changesets
