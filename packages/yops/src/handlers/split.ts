@@ -9,12 +9,14 @@ export const splitHandler: OpHandler = (doc, fields, index) => {
 
   const target = resolvePath(doc, path);
 
-  if (
-    target === undefined ||
-    target === null ||
-    typeof target !== 'object' ||
-    Array.isArray(target)
-  ) {
+  if (target === undefined) {
+    return {
+      doc,
+      error: yopsError(YOPS_ERRORS.PATH_NOT_FOUND, `Path "${path}" does not exist`, index),
+    };
+  }
+
+  if (target === null || typeof target !== 'object' || Array.isArray(target)) {
     return {
       doc,
       error: yopsError(YOPS_ERRORS.NOT_A_MAPPING, `Path "${path}" is not a mapping`, index),

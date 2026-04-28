@@ -1786,6 +1786,7 @@ describe('split — edge cases', () => {
   it('errors on missing path', () => {
     const r = applyYOps({}, [{ split: { path: 'missing', into: { g: ['a'] } } }]);
     expect(r.ok).toBe(false);
+    expect(r.error?.code).toBe('PATH_NOT_FOUND');
   });
 
   // 13. Split nested mapping

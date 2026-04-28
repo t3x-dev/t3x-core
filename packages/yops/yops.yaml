@@ -155,7 +155,6 @@ operations:
     errors:
       PATH_NOT_FOUND: path does not exist
       ALREADY_EXISTS: target key already exists
-      NOT_A_MAPPING: parent at the path is not a mapping
       INVALID_PATH: path ends with a non-key segment (index or match) which rename rejects
     example:
       - rename:
@@ -170,6 +169,14 @@ operations:
         input: { a: 1, b: 2 }
         ops: [{ rename: { path: a, to: b } }]
         error: ALREADY_EXISTS
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ rename: { path: missing, to: found } }]
+        error: PATH_NOT_FOUND
+      - name: errors if path ends with a non-key segment
+        input: { items: [1, 2] }
+        ops: [{ rename: { path: 'items/[0]', to: x } }]
+        error: INVALID_PATH
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DML — Data Manipulation (values)
@@ -205,6 +212,10 @@ operations:
         input: {}
         ops: [{ set: { path: a/b/c, value: 1 } }]
         output: { a: { b: { c: 1 } } }
+      - name: errors when an intermediate is a scalar
+        input: { config: 'scalar' }
+        ops: [{ set: { path: config/host, value: localhost } }]
+        error: INVALID_PATH
 
   unset:
     category: dml
@@ -274,6 +285,14 @@ operations:
         input: {}
         ops: [{ populate: { path: missing, values: { a: 1 } } }]
         error: PATH_NOT_FOUND
+      - name: errors if path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ populate: { path: items, values: { a: 1 } } }]
+        error: NOT_A_MAPPING
+      - name: errors when a value-key collides with a scalar intermediate
+        input: { config: { db: 'scalar' } }
+        ops: [{ populate: { path: config, values: { db/host: x } } }]
+        error: INVALID_PATH
 
   append:
     category: dml
@@ -305,6 +324,10 @@ operations:
         input: { config: {} }
         ops: [{ append: { path: config, value: x } }]
         error: NOT_A_SEQUENCE
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ append: { path: missing, value: x } }]
+        error: PATH_NOT_FOUND
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DTL — Data Transformation (restructure)
@@ -348,6 +371,10 @@ operations:
         input: { a: { child: { value: 1 } } }
         ops: [{ move: { from: a, to: a/child/copied } }]
         error: INVALID_PATH
+      - name: errors when destination already exists
+        input: { a: 1, b: 2 }
+        ops: [{ move: { from: a, to: b } }]
+        error: ALREADY_EXISTS
 
   clone:
     category: dtl
@@ -381,6 +408,10 @@ operations:
         input: { a: 1, b: 2 }
         ops: [{ clone: { from: a, to: b } }]
         error: ALREADY_EXISTS
+      - name: errors if source does not exist
+        input: {}
+        ops: [{ clone: { from: missing, to: copy } }]
+        error: PATH_NOT_FOUND
 
   nest:
     category: dtl
@@ -426,6 +457,14 @@ operations:
         input: {}
         ops: [{ nest: { path: missing, keys: [a], under: w } }]
         error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ nest: { path: items, keys: ['0'], under: w } }]
+        error: NOT_A_MAPPING
+      - name: errors when wrapper key already exists
+        input: { config: { host: x, port: 5432, database: {} } }
+        ops: [{ nest: { path: config, keys: [host, port], under: database } }]
+        error: ALREADY_EXISTS
 
   split:
     category: dtl
@@ -468,6 +507,14 @@ operations:
         input: { config: { a: 1, b: 2, group: 3 } }
         ops: [{ split: { path: config, into: { group: [a] } } }]
         error: ALREADY_EXISTS
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ split: { path: missing, into: { g: [a] } } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ split: { path: items, into: { g: ['0'] } } }]
+        error: NOT_A_MAPPING
 
   fold:
     category: dtl
@@ -546,6 +593,10 @@ operations:
         input: {}
         ops: [{ merge: { path: missing, keys: [a], into: m } }]
         error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ merge: { path: items, keys: ['0', '1'], into: m } }]
+        error: NOT_A_MAPPING
 
   sort:
     category: dtl
@@ -607,6 +658,14 @@ operations:
         input: { users: [{ name: alice }, { age: 30 }] }
         ops: [{ sort: { path: users, by: name } }]
         error: INVALID_OP
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ sort: { path: missing } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a sequence
+        input: { config: { host: x } }
+        ops: [{ sort: { path: config } }]
+        error: NOT_A_SEQUENCE
 
   unique:
     category: dtl
@@ -657,6 +716,14 @@ operations:
         input: { users: [{ name: alice }, { age: 30 }] }
         ops: [{ unique: { path: users, by: name } }]
         error: INVALID_OP
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ unique: { path: missing } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a sequence
+        input: { config: { host: x } }
+        ops: [{ unique: { path: config } }]
+        error: NOT_A_SEQUENCE
 
   pick:
     category: dtl
@@ -1153,7 +1220,7 @@ error_reference:
       Use set (which overwrites) or drop the existing key first.
 
   NOT_A_MAPPING:
-    thrown_by: [define, merge, nest, omit, pick, populate, rename, split, unset]
+    thrown_by: [define, merge, nest, omit, pick, populate, split, unset]
     meaning: >
       You targeted a path (or its parent) that isn't a mapping — it's a
       scalar, sequence, or null. Check the type with `assert` before

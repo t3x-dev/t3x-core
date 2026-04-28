@@ -73,6 +73,36 @@ describe('spec.operations[op].errors matches handler emissions', () => {
   }
 });
 
+describe('every declared per-op error code has a conformance test that produces it', () => {
+  // The static-scan check above answers "does the handler reference this
+  // code anywhere?" — which is a weak invariant. A handler that
+  // references PATH_NOT_FOUND in one branch and NOT_A_MAPPING in another
+  // satisfies the scan but can still emit the wrong code in a specific
+  // scenario. This check tightens the contract: every code listed under
+  // `operations[op].errors` must have at least one `tests` entry under
+  // the same op whose `error:` field equals that code, so the spec
+  // itself drives each declared error path through the engine.
+  for (const opName of Object.keys(spec.operations)) {
+    if (!handlerFiles.has(opName)) continue;
+    const opSpec = spec.operations[opName];
+    const declared = (opSpec.errors ?? []).filter((c) => !ENGINE_LEVEL_CODES.has(c));
+    if (declared.length === 0) continue;
+
+    it(`${opName}: every declared code is exercised by a conformance test`, () => {
+      const exercised = new Set<string>();
+      for (const t of opSpec.tests ?? []) {
+        if (t.error) exercised.add(t.error);
+      }
+      const uncovered = declared.filter((c) => !exercised.has(c)).sort();
+      expect(
+        uncovered,
+        `${opName} declares ${declared.join(',')} but conformance tests cover only ` +
+          `${[...exercised].join(',') || '∅'}; missing: ${uncovered.join(',') || '∅'}`
+      ).toEqual([]);
+    });
+  }
+});
+
 describe('error_reference[code].thrown_by matches handler emissions', () => {
   const raw = readFileSync(SPEC_PATH, 'utf-8');
   const yaml = require('js-yaml') as typeof import('js-yaml');
