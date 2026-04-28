@@ -55,6 +55,54 @@ path:
       example: users/[name=alice]/role
 
 # ----------------------------------------------------------------------------
+# Existence and type preconditions — how strict is each op?
+# ----------------------------------------------------------------------------
+#
+# YOps doesn't have one global "strictness" rule. Each op declares its own
+# preconditions in its `rules:` and `errors:` blocks. Three high-level
+# patterns recur — read this before scanning the catalog so the asymmetry
+# below doesn't surprise re-implementers:
+#
+#   - `define` is strict creation of one mapping key. The parent path must
+#     already exist as a mapping; the final key must be absent. There is
+#     no mkdir-p, and a non-mapping intermediate is never silently
+#     replaced. Multi-segment paths require defining each ancestor first.
+#
+#   - `set` creates missing mapping ancestors along the path on its way
+#     to the target ("lazy create"), but refuses to traverse through a
+#     scalar/null intermediate — that returns INVALID_PATH. So `set`
+#     is forgiving of *missing* parents, strict about *typed* ones.
+#
+#   - All other ops state their own existence/type preconditions in their
+#     `rules:` / `errors:` blocks. `populate` requires the target to
+#     exist and be a mapping; `append` requires it to exist and be a
+#     sequence; `nest`/`merge` require sibling keys to exist; etc.
+#     None of them auto-create anything — `set` is the only mkdir-p op.
+#
+# Cross-language implementations must preserve this asymmetry: a Python
+# or Rust engine that "helpfully" mkdir-p's `define`, or refuses to
+# auto-create for `set`, breaks behavioural conformance.
+
+# ----------------------------------------------------------------------------
+# path_fields — which fields on each op carry a path?
+# ----------------------------------------------------------------------------
+#
+# Every op declares a `path_fields:` block naming the field(s) that carry
+# YOps paths. Three roles:
+#
+#   - primary       — the single path the op operates on (most ops).
+#   - source        — for two-path ops (`move`, `clone`): where data is
+#                     read from. The source path must exist at apply time.
+#   - destination   — for two-path ops: where data is written. The
+#                     destination must NOT exist at apply time.
+#
+# Tools that walk an op list to reason about which paths exist (e.g. the
+# extractor compiler's ancestor-define injector) read this metadata
+# instead of pattern-matching every op shape. A 19th op added later only
+# needs to declare its `path_fields` for the existing tooling to handle
+# it correctly.
+
+# ----------------------------------------------------------------------------
 # Operations — 18 atomic YAML operations in 4 categories
 # ----------------------------------------------------------------------------
 operations:
@@ -65,6 +113,8 @@ operations:
 
   define:
     category: ddl
+    path_fields:
+      primary: path
     description: Create an empty mapping at a path
     fields:
       path:
@@ -80,21 +130,40 @@ operations:
       PATH_NOT_FOUND: parent path does not exist
       ALREADY_EXISTS: key already exists at path
       NOT_A_MAPPING: parent is not a mapping
+      INVALID_PATH: path uses non-key segments (index or match) which define rejects
     example:
       - define:
           path: config/database
     tests:
-      - name: creates empty mapping at path
+      - name: creates empty mapping at root
         input: {}
+        ops: [{ define: { path: config } }]
+        output: { config: {} }
+      - name: creates nested mapping when parent exists
+        input: { config: {} }
         ops: [{ define: { path: config/database } }]
         output: { config: { database: {} } }
       - name: errors if path already exists
         input: { config: { database: {} } }
         ops: [{ define: { path: config/database } }]
         error: ALREADY_EXISTS
+      - name: errors if parent does not exist
+        input: {}
+        ops: [{ define: { path: config/database } }]
+        error: PATH_NOT_FOUND
+      - name: errors if parent is not a mapping
+        input: { config: 'scalar' }
+        ops: [{ define: { path: config/database } }]
+        error: NOT_A_MAPPING
+      - name: errors if path uses an index segment
+        input: { items: [] }
+        ops: [{ define: { path: 'items/[0]' } }]
+        error: INVALID_PATH
 
   drop:
     category: ddl
+    path_fields:
+      primary: path
     description: Remove a key and its entire subtree from a mapping
     fields:
       path:
@@ -121,6 +190,8 @@ operations:
 
   rename:
     category: ddl
+    path_fields:
+      primary: path
     description: Change a key name without moving its value
     fields:
       path:
@@ -138,6 +209,7 @@ operations:
     errors:
       PATH_NOT_FOUND: path does not exist
       ALREADY_EXISTS: target key already exists
+      INVALID_PATH: path ends with a non-key segment (index or match) which rename rejects
     example:
       - rename:
           path: config/db
@@ -151,6 +223,14 @@ operations:
         input: { a: 1, b: 2 }
         ops: [{ rename: { path: a, to: b } }]
         error: ALREADY_EXISTS
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ rename: { path: missing, to: found } }]
+        error: PATH_NOT_FOUND
+      - name: errors if path ends with a non-key segment
+        input: { items: [1, 2] }
+        ops: [{ rename: { path: 'items/[0]', to: x } }]
+        error: INVALID_PATH
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DML — Data Manipulation (values)
@@ -158,6 +238,8 @@ operations:
 
   set:
     category: dml
+    path_fields:
+      primary: path
     description: Set a value at a path, creating intermediate mappings as needed
     fields:
       path:
@@ -186,9 +268,15 @@ operations:
         input: {}
         ops: [{ set: { path: a/b/c, value: 1 } }]
         output: { a: { b: { c: 1 } } }
+      - name: errors when an intermediate is a scalar
+        input: { config: 'scalar' }
+        ops: [{ set: { path: config/host, value: localhost } }]
+        error: INVALID_PATH
 
   unset:
     category: dml
+    path_fields:
+      primary: path
     description: Remove a key from a mapping
     fields:
       path:
@@ -222,6 +310,8 @@ operations:
 
   populate:
     category: dml
+    path_fields:
+      primary: path
     description: Set multiple keys on a mapping at once
     fields:
       path:
@@ -238,6 +328,7 @@ operations:
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_MAPPING: target is not a mapping
+      INVALID_PATH: a value-key collides with an existing scalar/null intermediate, blocking populate
     example:
       - populate:
           path: config/database
@@ -254,9 +345,19 @@ operations:
         input: {}
         ops: [{ populate: { path: missing, values: { a: 1 } } }]
         error: PATH_NOT_FOUND
+      - name: errors if path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ populate: { path: items, values: { a: 1 } } }]
+        error: NOT_A_MAPPING
+      - name: errors when a value-key collides with a scalar intermediate
+        input: { config: { db: 'scalar' } }
+        ops: [{ populate: { path: config, values: { db/host: x } } }]
+        error: INVALID_PATH
 
   append:
     category: dml
+    path_fields:
+      primary: path
     description: Add a value to the end of a sequence
     fields:
       path:
@@ -285,6 +386,10 @@ operations:
         input: { config: {} }
         ops: [{ append: { path: config, value: x } }]
         error: NOT_A_SEQUENCE
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ append: { path: missing, value: x } }]
+        error: PATH_NOT_FOUND
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DTL — Data Transformation (restructure)
@@ -292,6 +397,9 @@ operations:
 
   move:
     category: dtl
+    path_fields:
+      source: from
+      destination: to
     description: Relocate a subtree from one path to another
     fields:
       from:
@@ -328,9 +436,16 @@ operations:
         input: { a: { child: { value: 1 } } }
         ops: [{ move: { from: a, to: a/child/copied } }]
         error: INVALID_PATH
+      - name: errors when destination already exists
+        input: { a: 1, b: 2 }
+        ops: [{ move: { from: a, to: b } }]
+        error: ALREADY_EXISTS
 
   clone:
     category: dtl
+    path_fields:
+      source: from
+      destination: to
     description: Deep copy a subtree to a new path
     fields:
       from:
@@ -361,9 +476,15 @@ operations:
         input: { a: 1, b: 2 }
         ops: [{ clone: { from: a, to: b } }]
         error: ALREADY_EXISTS
+      - name: errors if source does not exist
+        input: {}
+        ops: [{ clone: { from: missing, to: copy } }]
+        error: PATH_NOT_FOUND
 
   nest:
     category: dtl
+    path_fields:
+      primary: path
     description: Group sibling keys under a new parent mapping
     fields:
       path:
@@ -398,9 +519,27 @@ operations:
         input: { config: { host: x, port: 5432, debug: true } }
         ops: [{ nest: { path: config, keys: [host, port], under: database } }]
         output: { config: { database: { host: x, port: 5432 }, debug: true } }
+      - name: errors when a listed key is not a sibling
+        input: { config: { host: x } }
+        ops: [{ nest: { path: config, keys: [host, port], under: database } }]
+        error: NOT_SIBLINGS
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ nest: { path: missing, keys: [a], under: w } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ nest: { path: items, keys: ['0'], under: w } }]
+        error: NOT_A_MAPPING
+      - name: errors when wrapper key already exists
+        input: { config: { host: x, port: 5432, database: {} } }
+        ops: [{ nest: { path: config, keys: [host, port], under: database } }]
+        error: ALREADY_EXISTS
 
   split:
     category: dtl
+    path_fields:
+      primary: path
     description: Distribute a mapping's keys into new child mappings
     fields:
       path:
@@ -417,8 +556,9 @@ operations:
       - a key cannot appear in multiple children
       - unlisted keys stay on the original mapping
     errors:
-      PATH_NOT_FOUND: path does not exist
+      PATH_NOT_FOUND: path does not exist (or a referenced source key is missing)
       NOT_A_MAPPING: target is not a mapping
+      ALREADY_EXISTS: a target group name collides with a key that wasn't moved into a group
       INVALID_OP: a source key cannot be assigned to multiple split groups
     example:
       - split:
@@ -435,9 +575,23 @@ operations:
         input: { config: { host: x, port: 5432 } }
         ops: [{ split: { path: config, into: { db: [host], dup: [host] } } }]
         error: INVALID_OP
+      - name: errors when group name collides with an unmoved key
+        input: { config: { a: 1, b: 2, group: 3 } }
+        ops: [{ split: { path: config, into: { group: [a] } } }]
+        error: ALREADY_EXISTS
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ split: { path: missing, into: { g: [a] } } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ split: { path: items, into: { g: ['0'] } } }]
+        error: NOT_A_MAPPING
 
   fold:
     category: dtl
+    path_fields:
+      primary: path
     description: >
       Collapse a single-child mapping by promoting its only child.
       The wrapper key is removed and the child takes its place.
@@ -465,9 +619,15 @@ operations:
         input: { wrapper: { a: 1, b: 2 } }
         ops: [{ fold: { path: wrapper } }]
         error: NOT_FOLDABLE
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ fold: { path: missing } }]
+        error: PATH_NOT_FOUND
 
   merge:
     category: dtl
+    path_fields:
+      primary: path
     description: Combine sibling keys into one mapping
     fields:
       path:
@@ -501,9 +661,23 @@ operations:
         input: { config: { a: { x: 1 }, b: { y: 2 } } }
         ops: [{ merge: { path: config, keys: [a, b], into: merged } }]
         output: { config: { merged: { x: 1, y: 2 } } }
+      - name: errors when a listed key is not a sibling
+        input: { config: { a: { x: 1 } } }
+        ops: [{ merge: { path: config, keys: [a, b], into: merged } }]
+        error: NOT_SIBLINGS
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ merge: { path: missing, keys: [a], into: m } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ merge: { path: items, keys: ['0', '1'], into: m } }]
+        error: NOT_A_MAPPING
 
   sort:
     category: dtl
+    path_fields:
+      primary: path
     description: Sort a sequence in place
     fields:
       path:
@@ -525,6 +699,15 @@ operations:
     rules:
       - target must exist and be a sequence
       - if 'by' is provided, items must be mappings with that key
+      - >
+        comparison is deterministic and language-portable: type rank
+        null < boolean < number < string < array < mapping; within a type,
+        strings compare by Unicode codepoint (NOT UTF-16 code unit, NOT
+        locale collation — implementations must iterate codepoints, not
+        UTF-16 chars, otherwise non-BMP characters sort differently from
+        the spec), numbers by numeric value, arrays/mappings by their
+        canonical encoding (mapping keys sorted by Unicode codepoint
+        before comparison).
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
@@ -539,6 +722,12 @@ operations:
         input: { items: [cherry, apple, banana] }
         ops: [{ sort: { path: items } }]
         output: { items: [apple, banana, cherry] }
+      - name: sorts by Unicode codepoint, not locale
+        # 'B' (U+0042) < 'a' (U+0061) in codepoint order, but locale order
+        # often interleaves them. Result must be codepoint-ordered.
+        input: { items: ['a', 'B', 'c'] }
+        ops: [{ sort: { path: items } }]
+        output: { items: ['B', 'a', 'c'] }
       - name: errors when sort by sees non-mapping item
         input: { users: [{ name: alice }, bob] }
         ops: [{ sort: { path: users, by: name } }]
@@ -547,9 +736,19 @@ operations:
         input: { users: [{ name: alice }, { age: 30 }] }
         ops: [{ sort: { path: users, by: name } }]
         error: INVALID_OP
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ sort: { path: missing } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a sequence
+        input: { config: { host: x } }
+        ops: [{ sort: { path: config } }]
+        error: NOT_A_SEQUENCE
 
   unique:
     category: dtl
+    path_fields:
+      primary: path
     description: Deduplicate a sequence, keeping first occurrence
     fields:
       path:
@@ -566,6 +765,11 @@ operations:
       - target must exist and be a sequence
       - if 'by' is provided, items must be mappings with that key
       - keeps first occurrence, removes subsequent duplicates
+      - >
+        equality is by canonical encoding: scalars by value; arrays element-wise;
+        mappings with keys sorted by Unicode codepoint (NOT UTF-16 code
+        unit) before comparison. This is language-portable and independent
+        of YAML key insertion order or runtime string representation.
     errors:
       PATH_NOT_FOUND: path does not exist
       NOT_A_SEQUENCE: target is not a sequence
@@ -578,6 +782,12 @@ operations:
         input: { tags: [a, b, a, c, b] }
         ops: [{ unique: { path: tags } }]
         output: { tags: [a, b, c] }
+      - name: deduplicates mappings irrespective of key order
+        # The two mappings are equal under canonical encoding even though
+        # their keys are written in different orders.
+        input: { items: [{ a: 1, b: 2 }, { b: 2, a: 1 }] }
+        ops: [{ unique: { path: items } }]
+        output: { items: [{ a: 1, b: 2 }] }
       - name: errors when unique by sees non-mapping item
         input: { users: [{ name: alice }, bob] }
         ops: [{ unique: { path: users, by: name } }]
@@ -586,9 +796,19 @@ operations:
         input: { users: [{ name: alice }, { age: 30 }] }
         ops: [{ unique: { path: users, by: name } }]
         error: INVALID_OP
+      - name: errors when path does not exist
+        input: {}
+        ops: [{ unique: { path: missing } }]
+        error: PATH_NOT_FOUND
+      - name: errors when path is not a sequence
+        input: { config: { host: x } }
+        ops: [{ unique: { path: config } }]
+        error: NOT_A_SEQUENCE
 
   pick:
     category: dtl
+    path_fields:
+      primary: path
     description: Keep only specified keys in a mapping, remove the rest
     fields:
       path:
@@ -616,9 +836,19 @@ operations:
         input: { config: { host: x, port: 5432, secret: abc } }
         ops: [{ pick: { path: config, keys: [host, port] } }]
         output: { config: { host: x, port: 5432 } }
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ pick: { path: missing, keys: [a] } }]
+        error: PATH_NOT_FOUND
+      - name: errors if path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ pick: { path: items, keys: ['0'] } }]
+        error: NOT_A_MAPPING
 
   omit:
     category: dtl
+    path_fields:
+      primary: path
     description: Remove specified keys from a mapping, keep the rest
     fields:
       path:
@@ -646,6 +876,14 @@ operations:
         input: { config: { host: x, secret: abc } }
         ops: [{ omit: { path: config, keys: [secret, missing] } }]
         output: { config: { host: x } }
+      - name: errors if path does not exist
+        input: {}
+        ops: [{ omit: { path: missing, keys: [a] } }]
+        error: PATH_NOT_FOUND
+      - name: errors if path is not a mapping
+        input: { items: [1, 2] }
+        ops: [{ omit: { path: items, keys: ['0'] } }]
+        error: NOT_A_MAPPING
 
   # ═══════════════════════════════════════════════════════════════════════════
   # DCL — Data Control (assertions)
@@ -653,6 +891,8 @@ operations:
 
   assert:
     category: dcl
+    path_fields:
+      primary: path
     description: >
       Validate a condition against the document. Read-only — never mutates.
       Fail-fast: if the assertion fails, execution stops.
@@ -726,6 +966,12 @@ errors:
     description: An assert condition was not met
   UNKNOWN_OP:
     description: Operation name not recognized
+  INVALID_OP:
+    description: >
+      Operation shape or runtime contract violated (e.g. malformed payload,
+      enum field outside the allowed set, split groups claiming the same
+      source key). Distinct from UNKNOWN_OP, which means the op key
+      itself wasn't recognised.
 
 # ----------------------------------------------------------------------------
 # Execution
@@ -1047,22 +1293,24 @@ recipes:
 error_reference:
 
   PATH_NOT_FOUND:
-    thrown_by: [drop, rename, populate, move, clone, nest, split, merge, sort, unique]
+    thrown_by:
+      [append, clone, define, drop, fold, merge, move, nest, omit, pick, populate, rename, sort, split, unique]
     meaning: >
       The path you specified doesn't exist. For strict ops, this is a hard error.
       Use resolvePath or assert to check before operating.
 
   ALREADY_EXISTS:
-    thrown_by: [define, rename, move, clone, nest, split]
+    thrown_by: [clone, define, move, nest, rename, split]
     meaning: >
       The target key/path already exists. These ops refuse to overwrite.
       Use set (which overwrites) or drop the existing key first.
 
   NOT_A_MAPPING:
-    thrown_by: [populate, nest, split, merge, pick, omit]
+    thrown_by: [define, merge, nest, omit, pick, populate, split, unset]
     meaning: >
-      You targeted a path that isn't a mapping (it's a scalar, sequence, or null).
-      Check the type with assert before operating, or use set to reshape first.
+      You targeted a path (or its parent) that isn't a mapping — it's a
+      scalar, sequence, or null. Check the type with `assert` before
+      operating, or use `set` to reshape first.
 
   NOT_A_SEQUENCE:
     thrown_by: [append, sort, unique]
@@ -1071,7 +1319,7 @@ error_reference:
       Use set to create a sequence first, e.g. set path: items, value: []
 
   NOT_SIBLINGS:
-    thrown_by: [nest, merge]
+    thrown_by: [merge, nest]
     meaning: >
       One or more keys you referenced don't exist as siblings in the parent mapping.
       Verify key names match exactly.
@@ -1084,11 +1332,21 @@ error_reference:
       a different restructuring op.
 
   INVALID_PATH:
-    thrown_by: [set, populate]
+    thrown_by: [define, move, populate, rename, set]
     meaning: >
       The path can't be traversed because an intermediate value is a scalar
-      or null (not a mapping/sequence). The engine won't silently overwrite
-      intermediate values — reshape the document first.
+      or null (not a mapping/sequence), or because the op only accepts key
+      segments and the path includes an index/match segment. The engine
+      won't silently overwrite intermediate values — reshape the document
+      first.
+
+  INVALID_OP:
+    thrown_by: [engine, sort, split, unique]
+    meaning: >
+      The op shape doesn't satisfy a runtime contract that the YAML schema
+      can't express on its own — e.g. an enum field outside the allowed
+      set, or two split groups claiming the same source key. Distinct
+      from UNKNOWN_OP, which means the op key wasn't recognised at all.
 
   ASSERTION_FAILED:
     thrown_by: [assert]

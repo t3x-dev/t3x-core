@@ -1,3 +1,4 @@
+import { canonicalKey } from '../canonical';
 import { YOPS_ERRORS, yopsError } from '../errors';
 import { deepClone, resolvePath, setAtPath } from '../paths';
 import type { OpHandler } from '../registry';
@@ -58,10 +59,10 @@ export const uniqueHandler: OpHandler = (doc, fields, index) => {
       const val =
         item !== null && typeof item === 'object' && !Array.isArray(item)
           ? (item as { [key: string]: YValue })[by]
-          : undefined;
-      key = JSON.stringify(val);
+          : null;
+      key = canonicalKey(val as YValue);
     } else {
-      key = JSON.stringify(item);
+      key = canonicalKey(item);
     }
 
     if (!seen.has(key)) {

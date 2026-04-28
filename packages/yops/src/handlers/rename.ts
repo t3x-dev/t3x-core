@@ -39,25 +39,13 @@ export const renameHandler: OpHandler = (doc, fields, index) => {
     })
     .join('/');
 
-  const parent = parentPath === '' ? doc : resolvePath(doc, parentPath);
-
-  if (
-    parent === null ||
-    parent === undefined ||
-    typeof parent !== 'object' ||
-    Array.isArray(parent)
-  ) {
-    return {
-      doc,
-      error: yopsError(
-        YOPS_ERRORS.NOT_A_MAPPING,
-        `Parent at "${parentPath}" is not a mapping`,
-        index
-      ),
-    };
-  }
-
-  const parentMap = parent as { [key: string]: YValue };
+  // resolvePath returned a value above, so the parent must exist and
+  // be traversable as a mapping with `oldKey` in scope. (resolvePath
+  // returns undefined for a key segment against an array or scalar, so
+  // those cases are already filtered into PATH_NOT_FOUND.)
+  const parentMap = (parentPath === '' ? doc : resolvePath(doc, parentPath)) as {
+    [key: string]: YValue;
+  };
 
   if (to in parentMap) {
     return {

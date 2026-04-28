@@ -60,7 +60,9 @@ services:
       - PORT=8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://t3x:t3x_dev_password@postgres:5432/t3x}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      - T3X_ALLOW_AUTH_DISABLED_IN_PRODUCTION=${AUTH_DISABLED:-false}
       - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
       - GOOGLE_AI_STUDIO_KEY
     restart: unless-stopped
     healthcheck:
@@ -78,9 +80,14 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_RUNNER_ENABLED: ${NEXT_PUBLIC_RUNNER_ENABLED:-true}
+        NEXT_PUBLIC_RUNNER_API_URL: ${NEXT_PUBLIC_RUNNER_API_URL:-http://localhost:8080}
+        NEXT_PUBLIC_AUTH_DISABLED: ${AUTH_DISABLED:-false}
     container_name: t3x-webui
     ports:
-      - "3000:3000"
+      - "${WEBUI_PORT:-3000}:3000"
     environment:
       - DATABASE_ADAPTER=postgres
       - DATABASE_URL=postgresql://t3x:t3x_dev_password@postgres:5432/t3x
@@ -96,8 +103,10 @@ services:
       # Keep API and WebUI auth settings aligned if you override AUTH_DISABLED.
       # Users register via built-in username/password at /login
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      - NEXT_PUBLIC_AUTH_DISABLED=${AUTH_DISABLED:-false}
       # API keys for chat functionality (chat/stream is handled by WebUI's API route)
       - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
     depends_on:
       postgres:
         condition: service_healthy

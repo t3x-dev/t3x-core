@@ -12,6 +12,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace config and package files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY tools/hooks/install-hooks.sh ./tools/hooks/install-hooks.sh
 COPY packages/yops/package.json ./packages/yops/
 COPY packages/yschema/package.json ./packages/yschema/
 COPY packages/core/package.json ./packages/core/

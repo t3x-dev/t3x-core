@@ -162,14 +162,21 @@ describe('extractors/v2 pipeline', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.compiled.ops).toHaveLength(4);
+    // Strict define inserts ancestor defines for each missing parent in
+    // a multi-segment path, so the bootstrap compile produces:
+    //   define trip
+    //   define trip/duration_days
+    //   set    trip/duration_days/value = 5
+    //   define trip/preferences        ← injected ancestor
+    //   define trip/preferences/must_visit_pois
+    //   set    trip/preferences/must_visit_pois/value = [...]
+    expect(result.compiled.ops).toHaveLength(6);
     expect(result.compiled.ops).toEqual(
       expect.arrayContaining([
-        // Compiler normalises dotted LLM paths (`trip.duration_days`) to
-        // slashed YOps paths so the workspace renders the result as a
-        // proper nested tree, not a flat root with literal-dot keys.
+        expect.objectContaining({ define: { path: 'trip' } }),
         expect.objectContaining({ define: { path: 'trip/duration_days' } }),
         expect.objectContaining({ set: { path: 'trip/duration_days/value', value: 5 } }),
+        expect.objectContaining({ define: { path: 'trip/preferences' } }),
         expect.objectContaining({ define: { path: 'trip/preferences/must_visit_pois' } }),
         expect.objectContaining({
           set: {

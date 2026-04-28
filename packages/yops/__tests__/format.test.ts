@@ -8,7 +8,7 @@ const SAMPLE_OPS: YOp[] = [
   { append: { path: 'tags', value: 'typescript' } },
 ];
 
-const SAMPLE_YAML = `- define:
+const SAMPLE_BARE_YAML = `- define:
     path: title
 - set:
     path: title
@@ -18,14 +18,32 @@ const SAMPLE_YAML = `- define:
     value: typescript
 `;
 
+const SAMPLE_KEYED_YAML = `yops:
+  - define:
+      path: title
+  - set:
+      path: title
+      value: Hello World
+  - append:
+      path: tags
+      value: typescript
+`;
+
 describe('parseYOpsYaml', () => {
-  it('parses a valid YAML string into YOp[]', () => {
-    const result = parseYOpsYaml(SAMPLE_YAML);
+  it('parses a bare YAML array into YOp[]', () => {
+    const result = parseYOpsYaml(SAMPLE_BARE_YAML);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.ops).toHaveLength(3);
     expect(result.ops[0]).toEqual({ define: { path: 'title' } });
-    expect(result.ops[1]).toEqual({ set: { path: 'title', value: 'Hello World' } });
+  });
+
+  it('parses the normative { yops: [...] } envelope', () => {
+    const result = parseYOpsYaml(SAMPLE_KEYED_YAML);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toHaveLength(3);
+    expect(result.ops[0]).toEqual({ define: { path: 'title' } });
   });
 
   it('returns error for invalid YAML syntax', () => {
@@ -35,8 +53,15 @@ describe('parseYOpsYaml', () => {
     expect(result.error).toBeTruthy();
   });
 
-  it('returns error for non-array YAML (plain object)', () => {
+  it('returns error for plain object without a yops key', () => {
     const result = parseYOpsYaml('key: value');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/array/i);
+  });
+
+  it('returns error when yops key is not an array', () => {
+    const result = parseYOpsYaml('yops: not-an-array');
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/array/i);
@@ -51,17 +76,18 @@ describe('parseYOpsYaml', () => {
 });
 
 describe('formatYOps', () => {
-  it('serializes YOp[] to a YAML string', () => {
-    const yaml = formatYOps(SAMPLE_OPS);
-    expect(typeof yaml).toBe('string');
-    expect(yaml).toContain('define:');
-    expect(yaml).toContain('path: title');
-    expect(yaml).toContain('Hello World');
+  it('serializes YOp[] to a YAML string with the yops envelope', () => {
+    const yamlStr = formatYOps(SAMPLE_OPS);
+    expect(typeof yamlStr).toBe('string');
+    expect(yamlStr.startsWith('yops:')).toBe(true);
+    expect(yamlStr).toContain('define:');
+    expect(yamlStr).toContain('path: title');
+    expect(yamlStr).toContain('Hello World');
   });
 
   it('round-trips: parse(format(ops)) deepEquals ops', () => {
-    const yaml = formatYOps(SAMPLE_OPS);
-    const result = parseYOpsYaml(yaml);
+    const yamlStr = formatYOps(SAMPLE_OPS);
+    const result = parseYOpsYaml(yamlStr);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.ops).toEqual(SAMPLE_OPS);

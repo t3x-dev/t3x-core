@@ -1,4 +1,5 @@
 import type { SemanticContent, TreeNode } from '../../semantic/types';
+import { registry as yopsRegistry } from '@t3x-dev/yops';
 import { SNAKE_CASE_KEY, type SourcedYOp, type YValue } from '../../t3x-yops/types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import type {
@@ -275,6 +276,46 @@ function resolveTargetPath(
     { field: 'candidate.path_hint', raw: item.candidate.path_hint },
     { field: 'candidate.key', raw: item.candidate.key },
   ]);
+}
+
+/**
+ * Return the normalised path of a node the item declares already exists in
+ * the snapshot the compile will be applied to, or `null` if the item names
+ * none.
+ *
+ * `target_ref` is the model's "this node exists" channel. Both `path` and
+ * `node_key` resolve through `normalizePath` into the same op-shape that
+ * `resolveTargetPath` emits — meaning either field, when set, names a
+ * pre-existing node in the live snapshot. The dedupe pass uses this to
+ * skip ancestor-define injection for that node and every prefix of it,
+ * so an `update` whose only addressing is `target_ref.node_key` doesn't
+ * trip ALREADY_EXISTS by recreating its own ancestors.
+ *
+ * Mirrors `resolveTargetPath` in two ways:
+ *   - Same field priority: `target_ref.path` first, then `target_ref.node_key`.
+ *     `candidate.*` is intentionally NOT included — those name *new* paths
+ *     for `add` intents, not pre-existing references; seeding from them
+ *     would block legitimate ancestor-define injection.
+ *   - Same fail-fast semantics: a higher-priority field that is present
+ *     but malformed stops the walk and returns `null`. Falling through
+ *     to `node_key` on a malformed `path` would let an item that
+ *     `resolveTargetPath` rejects (and which `compileExtractionDraft`
+ *     drops in `allowPartial` mode) still seed `knownExisting`,
+ *     suppressing ancestor defines that surviving items legitimately
+ *     need.
+ */
+function preExistingTargetPath(item: ExtractionDraftItem): string | null {
+  const fields: Array<string | undefined | null> = [
+    item.target_ref?.path,
+    item.target_ref?.node_key,
+  ];
+  for (const raw of fields) {
+    const result = normalizePath(raw);
+    if (result.kind === 'ok') return result.path;
+    if (result.kind === 'invalid') return null;
+    // 'absent' → continue to the next priority candidate.
+  }
+  return null;
 }
 
 function synthesizeAddPath(item: ExtractionDraftItem): string {
@@ -637,20 +678,106 @@ function compileItem(
   };
 }
 
-function dedupeDefineOps(ops: SourcedYOp[]): { ops: SourcedYOp[]; warnings: string[] } {
+/**
+ * Returns the path strings on `op` that name nodes existing at apply
+ * time. `dedupeDefineOps` uses these to seed `knownExisting`, so it
+ * doesn't inject ancestor `define` ops for paths the batch has already
+ * brought into scope.
+ *
+ * `primary` and `source` paths name nodes the op assumes exist — a
+ * `populate` / `set` / `assert` / `unset` resolves its target, and a
+ * `move` / `clone` reads from `from`. `destination` paths (the `to`
+ * field on `move` / `clone`) are intentionally excluded: those nodes
+ * must NOT exist at apply time.
+ *
+ * Resolution is driven by `path_fields` metadata in `yops.yaml`, read
+ * through `yopsRegistry.getOpPaths`. Adding a 19th op upstream only
+ * needs to declare its `path_fields:` for this function to handle it.
+ */
+function existencePathsOf(op: SourcedYOp): string[] {
+  const tagged = yopsRegistry.getOpPaths(op as Record<string, unknown>);
+  return tagged
+    .filter((entry) => entry.role === 'primary' || entry.role === 'source')
+    .map((entry) => entry.path);
+}
+
+/**
+ * Normalize the define ops in a compiled batch:
+ *
+ *   1. Insert ancestor defines so every multi-segment `define` path is
+ *      preceded by defines for each parent that the batch hasn't already
+ *      brought into scope. The YOps `define` op is strict ("parent must
+ *      exist and be a mapping") — there is no mkdir-p — so a bootstrap
+ *      add at `trip/duration_days` compiles to `define trip` followed by
+ *      `define trip/duration_days`. Auto-emitted parents inherit the
+ *      triggering op's `source`.
+ *
+ *      A non-define op (populate / set / etc.) earlier in the batch is
+ *      taken as evidence that its target path already exists at apply
+ *      time. So an `update` item that emits `populate characters` and
+ *      then `define characters/rival` does NOT receive an injected
+ *      `define characters` — that would fail with ALREADY_EXISTS.
+ *
+ *   2. Drop redundant `define` ops at paths already defined earlier in
+ *      the batch. Inferred parent defines are silent; explicit duplicates
+ *      from the LLM still produce a warning so callers can see the model
+ *      proposed the same path twice.
+ */
+/**
+ * Add `path` and every ancestor segment to `set`. A path that exists at
+ * apply time implies all of its ancestors also exist; tracking only the
+ * leaf would leave a deeper sibling-of-ancestor define injecting a
+ * recreation op against a live node (ALREADY_EXISTS at apply time).
+ */
+function seedPathAndAncestors(set: Set<string>, path: string): void {
+  const segments = path.split('/').filter((s) => s.length > 0);
+  let prefix = '';
+  for (const segment of segments) {
+    prefix = prefix === '' ? segment : `${prefix}/${segment}`;
+    set.add(prefix);
+  }
+}
+
+function dedupeDefineOps(
+  ops: SourcedYOp[],
+  preExistingPaths: Iterable<string> = []
+): { ops: SourcedYOp[]; warnings: string[] } {
+  const knownExisting = new Set<string>();
+  for (const path of preExistingPaths) {
+    seedPathAndAncestors(knownExisting, path);
+  }
   const defined = new Set<string>();
   const kept: SourcedYOp[] = [];
   const warnings: string[] = [];
 
   for (const op of ops) {
-    if ('define' in op) {
-      const path = op.define.path;
-      if (defined.has(path)) {
-        warnings.push(`Dropped duplicate define op for path "${path}"`);
-        continue;
+    if (!('define' in op)) {
+      for (const path of existencePathsOf(op)) {
+        seedPathAndAncestors(knownExisting, path);
       }
-      defined.add(path);
+      kept.push(op);
+      continue;
     }
+
+    const path = op.define.path;
+    const segments = path.split('/').filter((s) => s.length > 0);
+
+    let prefix = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      prefix = prefix === '' ? segments[i] : `${prefix}/${segments[i]}`;
+      if (!knownExisting.has(prefix) && !defined.has(prefix)) {
+        kept.push({ define: { path: prefix }, source: op.source } as SourcedYOp);
+        defined.add(prefix);
+        knownExisting.add(prefix);
+      }
+    }
+
+    if (defined.has(path)) {
+      warnings.push(`Dropped duplicate define op for path "${path}"`);
+      continue;
+    }
+    defined.add(path);
+    knownExisting.add(path);
     kept.push(op);
   }
 
@@ -767,6 +894,16 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   const ops: SourcedYOp[] = [];
   const warnings: string[] = [];
   const baselineIndex = buildBaselineIndex(input.baseline);
+  const baselineExistingPaths = [...baselineIndex.nodes];
+
+  // `preExisting` records target paths from items whose ops survive into
+  // the final list. Dropped items (compile failure in `allowPartial`,
+  // empty-defines filter, etc.) contribute nothing — including no seed.
+  // Trusting target_ref claims from items we couldn't apply leaks
+  // unverified existence assertions into surviving items' ancestor-define
+  // injection, suppressing defines that the live snapshot actually
+  // needs. See #932.
+  const preExisting: string[] = [];
 
   for (const item of input.draft.items) {
     const compiled = compileItem(item, input, baselineIndex);
@@ -802,9 +939,17 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     recordOpsInIndex(compiled.ops, baselineIndex);
     ops.push(...compiled.ops);
     warnings.push(...compiled.warnings);
+
+    // Item contributed — its target_ref now informs the pre-existing seed.
+    // `preExistingTargetPath` is fail-fast on malformed paths, but a
+    // valid path on a dropped item used to bleed through this loop in a
+    // separate pass over `input.draft.items`. Folding it inline ties the
+    // seed to the contribute-or-drop decision.
+    const seeded = preExistingTargetPath(item);
+    if (seeded !== null) preExisting.push(seeded);
   }
 
-  const deduped = dedupeDefineOps(ops);
+  const deduped = dedupeDefineOps(ops, [...baselineExistingPaths, ...preExisting]);
   // Path-level pruning runs after dedupe so it sees the full
   // post-merge scaffold. A define from item A that supports a populate
   // from item B is preserved; a leaf define with no populate descendant

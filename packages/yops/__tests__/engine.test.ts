@@ -50,6 +50,69 @@ describe('applyYOps — engine behavior', () => {
     expect(result.doc).toEqual({ a: 1 });
   });
 
+  it('resolves the op key when source appears first (alphabetical YAML emit)', () => {
+    const doc: YValue = {};
+    // Object.keys order matches insertion: source first, then set.
+    const ops = [
+      {
+        source: { type: 'human', author: 'tester' },
+        set: { path: 'a', value: 1 },
+      },
+    ] as unknown as YOp[];
+    const result = applyYOps(doc, ops);
+    expect(result.ok).toBe(true);
+    expect(result.doc).toEqual({ a: 1 });
+  });
+
+  it('returns INVALID_OP for a literal null op', () => {
+    const doc: YValue = {};
+    const ops = [null] as unknown as YOp[];
+    const result = applyYOps(doc, ops);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+    expect(result.error?.message).toMatch(/null/);
+  });
+
+  it('returns INVALID_OP for a non-object op (string, number, array)', () => {
+    for (const bad of ['op-string', 42, ['set', 'a']]) {
+      const result = applyYOps({}, [bad] as unknown as YOp[]);
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe('INVALID_OP');
+    }
+  });
+
+  it('returns INVALID_OP when an op payload is null', () => {
+    // `{ set: null }` is valid YAML and survives parseYOpsYaml. Used to
+    // throw `'path' in null` inside validateFields; now produces a typed
+    // INVALID_OP at the shape boundary.
+    const result = applyYOps({}, [{ set: null }] as unknown as YOp[]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+    expect(result.error?.message).toMatch(/payload must be a mapping/);
+  });
+
+  it('returns INVALID_OP when an op payload is a scalar', () => {
+    const result = applyYOps({}, [{ set: 'x' }] as unknown as YOp[]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+    expect(result.error?.message).toMatch(/payload must be a mapping/);
+  });
+
+  it('returns INVALID_OP when an op payload is an array', () => {
+    const result = applyYOps({}, [{ set: [1, 2, 3] }] as unknown as YOp[]);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+    expect(result.error?.message).toMatch(/payload must be a mapping/);
+  });
+
+  it('returns INVALID_OP when only metadata keys are present', () => {
+    const doc: YValue = {};
+    const ops = [{ source: { type: 'human', author: 'tester' } }] as unknown as YOp[];
+    const result = applyYOps(doc, ops);
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe('INVALID_OP');
+  });
+
   it('unknown op returns UNKNOWN_OP error', () => {
     const doc: YValue = {};
     const ops = [{ bogus: { path: 'x' } }] as unknown as YOp[];
