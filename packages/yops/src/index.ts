@@ -15,7 +15,7 @@ export type { OpHandler, OpResult } from './registry';
 export { OpRegistry } from './registry';
 export type { ValidationResult } from './schema';
 export { validateOps, YOpSchema } from './schema';
-export type { FieldSpec, OpSpec, TestCase, YOpsSpec } from './spec';
+export type { FieldSpec, OpSpec, PathFields, TestCase, YOpsSpec } from './spec';
 export { parseSpec } from './spec';
 export type {
   AppendOp,
