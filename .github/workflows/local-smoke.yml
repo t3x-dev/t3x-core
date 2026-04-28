@@ -7,9 +7,12 @@ on:
       - '.github/workflows/local-smoke.yml'
       - '.github/workflows/release.yml'
       - 'apps/cli/**'
+      - 'apps/api/**'
+      - 'apps/agent-demo/**'
       - 'apps/local/**'
       - 'apps/mcp/**'
       - 'apps/runner/**'
+      - 'apps/web/**'
       - 'packages/api-client/**'
       - 'packages/api/**'
       - 'packages/core/**'
@@ -17,8 +20,10 @@ on:
       - 'packages/storage/**'
       - 'packages/yops/**'
       - 'packages/yschema/**'
+      - 'biome.json'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'turbo.json'
       - 'tools/**'
   workflow_dispatch: {}
 
@@ -69,6 +74,9 @@ jobs:
 
       - name: Build packages
         run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
 
       - name: Build runtime artifact
         run: pnpm build:local-runtime
