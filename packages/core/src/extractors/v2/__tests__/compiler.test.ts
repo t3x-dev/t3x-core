@@ -1353,6 +1353,69 @@ describe('extractors/v2 compiler', () => {
       expect(definePaths).toEqual(['trip', 'trip/itinerary']);
     });
 
+    it('dropped item with VALID target_ref.path does not seed knownExisting either', () => {
+      // Issue #932: the previous fix made the seed helper fail-fast on
+      // malformed paths, but a *valid* target_ref.path on a dropped item
+      // still bled into preExisting because the seed loop ran over every
+      // input item regardless of whether it contributed ops.
+      //
+      // Concrete reproducer: an `update` item with a perfectly valid
+      // `target_ref.path: 'characters/main_protagonist'` is dropped
+      // because its only child has a bad key (fails SNAKE_CASE_KEY).
+      // A surviving sibling add at `characters/sister` must still get
+      // its `define characters` ancestor injected — we don't trust an
+      // existence claim from an item whose ops we couldn't use.
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'incremental',
+          items: [
+            {
+              id: 'item_dropped_valid_target',
+              intent: 'update',
+              confidence: 0.9,
+              reasoning_type: 'cross_turn',
+              target_ref: { path: 'characters/main_protagonist' },
+              candidate: {
+                children: [{ key: 'BadKey', values: { v: 1 } }],
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'protagonist', role: 'primary' }],
+            },
+            {
+              id: 'item_surviving',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'characters.sister',
+                values: { name: 'Karin' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'sister Karin', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'claude-sonnet-4-6',
+        extractedAt: '2026-04-25T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+        allowPartial: true,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const droppedWarning = result.warnings.find((w) => w.includes('item_dropped_valid_target'));
+      expect(droppedWarning).toBeDefined();
+
+      const definePaths = result.ops
+        .filter((op): op is Extract<typeof op, { define: unknown }> => 'define' in op)
+        .map((op) => op.define.path);
+      // Pre-fix: definePaths === ['characters/sister'] (`define characters`
+      // missing because the dropped item's target_ref had seeded `characters`
+      // and `characters/main_protagonist` into knownExisting).
+      // Post-fix: the dropped item contributes nothing, including no seed.
+      expect(definePaths).toEqual(['characters', 'characters/sister']);
+    });
+
     it('default (allowPartial omitted) preserves strict fail-fast — backward compat guard', () => {
       // Existing callers (golden tests, the strict pipeline path) rely
       // on one bad item killing the whole batch. Don't quietly demote

@@ -758,6 +758,15 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   const ops: SourcedYOp[] = [];
   const warnings: string[] = [];
 
+  // `preExisting` records target paths from items whose ops survive into
+  // the final list. Dropped items (compile failure in `allowPartial`,
+  // empty-defines filter, etc.) contribute nothing — including no seed.
+  // Trusting target_ref claims from items we couldn't apply leaks
+  // unverified existence assertions into surviving items' ancestor-define
+  // injection, suppressing defines that the live snapshot actually
+  // needs. See #932.
+  const preExisting: string[] = [];
+
   for (const item of input.draft.items) {
     const compiled = compileItem(item, input);
     if (!compiled.ok) {
@@ -791,10 +800,12 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
 
     ops.push(...compiled.ops);
     warnings.push(...compiled.warnings);
-  }
 
-  const preExisting: string[] = [];
-  for (const item of input.draft.items) {
+    // Item contributed — its target_ref now informs the pre-existing seed.
+    // `preExistingTargetPath` is fail-fast on malformed paths, but a
+    // valid path on a dropped item used to bleed through this loop in a
+    // separate pass over `input.draft.items`. Folding it inline ties the
+    // seed to the contribute-or-drop decision.
     const seeded = preExistingTargetPath(item);
     if (seeded !== null) preExisting.push(seeded);
   }
