@@ -24,6 +24,7 @@ const mockRecord = {
 
 vi.mock('@t3x-dev/storage', () => ({
   insertYOpsLogEntry: vi.fn(() => Promise.resolve(mockRecord)),
+  listActiveYOpsLogByConversation: vi.fn(() => Promise.resolve([])),
   // RFC 2026-04-26: yopsApplyOp now also imports the supersede query so
   // it can flip prior LLM suggestions to superseded inside the same
   // transaction when `replaceActiveLLMDraft` is set. Default mock is a
@@ -31,6 +32,8 @@ vi.mock('@t3x-dev/storage', () => ({
   // committed-id exclusion now lives inside the SQL UPDATE itself
   // (single atomic statement), so the op no longer pre-fetches anything.
   supersedeActiveLLMSuggestions: vi.fn(() => Promise.resolve([])),
+  supersedeActiveUncommittedYOpsLogEntries: vi.fn(() => Promise.resolve([])),
+  supersedeYOpsLogEntryForRepair: vi.fn(() => Promise.resolve([])),
 }));
 
 vi.mock('../../lib/tree-state-sync', () => ({
@@ -110,6 +113,7 @@ describe('yopsApplyOp', () => {
       turn_hash: 'sha256:turn1',
       yops: mockRecord.yops,
       created_at: '2026-04-03T00:00:00.000Z',
+      metadata: null,
       // Default flag is off — no entries marked superseded, no flag in
       // input. Caller still sees the field (always present) for
       // observability; empty array means "no-op".
@@ -235,6 +239,304 @@ describe('yopsApplyOp', () => {
       // observers (logs / tests / future UI affordance) can audit the
       // replacement.
       expect(output.superseded_ids).toEqual(['yl_old_suggestion']);
+    });
+  });
+
+  describe('repairYopsLogId', () => {
+    it('supersedes active repair rows inside the same transaction before inserting repaired ops', async () => {
+      const ctx = buildMockContext();
+      const { insertYOpsLogEntry, supersedeYOpsLogEntryForRepair } = await import(
+        '@t3x-dev/storage'
+      );
+      (insertYOpsLogEntry as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockResolvedValueOnce(['yl_before', 'yl_failing']);
+
+      const output = await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [{ define: { path: 'repaired' } }],
+            repairYopsLogId: 'yl_failing',
+          },
+          ctx
+        )
+      );
+
+      expect(supersedeYOpsLogEntryForRepair).toHaveBeenCalledWith(
+        expect.anything(),
+        'conv_abc',
+        'yl_failing'
+      );
+      expect(insertYOpsLogEntry).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: {
+            repair_of: 'yl_failing',
+            supersedes: ['yl_before', 'yl_failing'],
+            repair_reason: 'user_edited_replay_failure',
+          },
+        })
+      );
+      expect(output.superseded_ids).toEqual(['yl_before', 'yl_failing']);
+    });
+
+    it('fails without inserting when the repair target cannot be superseded', async () => {
+      const ctx = buildMockContext();
+      const { insertYOpsLogEntry, supersedeYOpsLogEntryForRepair } = await import(
+        '@t3x-dev/storage'
+      );
+      (insertYOpsLogEntry as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockResolvedValueOnce([]);
+
+      await expect(
+        collectResult(
+          runOperation(
+            yopsApplyOp,
+            {
+              conversationId: 'conv_abc',
+              source: 'manual',
+              yops: [{ define: { path: 'repaired' } }],
+              repairYopsLogId: 'yl_failing',
+            },
+            ctx
+          )
+        )
+      ).rejects.toThrow(/Cannot repair yops_log entry/);
+
+      expect(insertYOpsLogEntry).not.toHaveBeenCalled();
+    });
+
+    it('dry-runs the edited repair script before inserting', async () => {
+      const ctx = buildMockContext();
+      const {
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeYOpsLogEntryForRepair,
+      } = await import('@t3x-dev/storage');
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockClear();
+      (supersedeYOpsLogEntryForRepair as any).mockResolvedValueOnce(['yl_failing']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+
+      await expect(
+        collectResult(
+          runOperation(
+            yopsApplyOp,
+            {
+              conversationId: 'conv_abc',
+              source: 'manual',
+              yops: [{ define: { path: 'duplicate' } }, { define: { path: 'duplicate' } }],
+              repairYopsLogId: 'yl_failing',
+            },
+            ctx
+          )
+        )
+      ).rejects.toThrow(/failed dry-run/);
+
+      expect(insertYOpsLogEntry).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('replaceActiveScript', () => {
+    it('supersedes active uncommitted rows and dry-runs the edited full script before inserting', async () => {
+      const ctx = buildMockContext();
+      const { listActiveYOpsLogByConversation, supersedeActiveUncommittedYOpsLogEntries } =
+        await import('@t3x-dev/storage');
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce(['yl_active']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+
+      const output = await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [
+              { define: { path: 'trip' } },
+              { populate: { path: 'trip', values: { destination: 'Beijing' } } },
+            ],
+            replaceActiveScript: true,
+          },
+          ctx
+        )
+      );
+
+      expect(supersedeActiveUncommittedYOpsLogEntries).toHaveBeenCalledWith(
+        expect.anything(),
+        'conv_abc'
+      );
+      expect(output.superseded_ids).toEqual(['yl_active']);
+    });
+
+    it('records replacement lineage metadata on inserted active-script replacements', async () => {
+      const ctx = buildMockContext();
+      const { insertYOpsLogEntry, listActiveYOpsLogByConversation } = await import(
+        '@t3x-dev/storage'
+      );
+      const { supersedeActiveUncommittedYOpsLogEntries } = await import('@t3x-dev/storage');
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce(['yl_active']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+
+      await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [{ define: { path: 'trip' } }],
+            replaceActiveScript: true,
+          },
+          ctx
+        )
+      );
+
+      expect(insertYOpsLogEntry).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: {
+            supersedes: ['yl_active'],
+            replacement_reason: 'user_replaced_active_script',
+          },
+        })
+      );
+    });
+
+    it('dry-runs sourced replacement ops without treating source as an operation', async () => {
+      const ctx = buildMockContext();
+      const { listActiveYOpsLogByConversation, supersedeActiveUncommittedYOpsLogEntries } =
+        await import('@t3x-dev/storage');
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce(['yl_active']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+
+      const output = await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                define: { path: 'trip' },
+              },
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                populate: { path: 'trip', values: { destination: 'Beijing' } },
+              },
+            ],
+            replaceActiveScript: true,
+          },
+          ctx
+        )
+      );
+
+      expect(output.superseded_ids).toEqual(['yl_active']);
+    });
+
+    it('treats committed active rows as baseline when replacing an edited full script', async () => {
+      const ctx = buildMockContext();
+      const {
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeActiveUncommittedYOpsLogEntries,
+      } = await import('@t3x-dev/storage');
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce(['yl_active']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([
+        {
+          id: 'yl_committed',
+          yops: [
+            {
+              source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+              define: { path: 'trip' },
+            },
+          ],
+        },
+      ]);
+
+      await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'manual',
+            yops: [
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                define: { path: 'trip' },
+              },
+              {
+                source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+                populate: { path: 'trip', values: { destination: 'Beijing revised' } },
+              },
+            ],
+            replaceActiveScript: true,
+          },
+          ctx
+        )
+      );
+
+      expect(insertYOpsLogEntry).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: {
+            dropped_baseline_define_paths: ['trip'],
+            supersedes: ['yl_active'],
+            replacement_reason: 'user_replaced_active_script',
+          },
+          yops: [
+            {
+              source: { type: 'human', author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+              populate: { path: 'trip', values: { destination: 'Beijing revised' } },
+            },
+          ],
+        })
+      );
+    });
+
+    it('does not insert when the replacement script fails dry-run', async () => {
+      const ctx = buildMockContext();
+      const {
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeActiveUncommittedYOpsLogEntries,
+      } = await import('@t3x-dev/storage');
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockClear();
+      (supersedeActiveUncommittedYOpsLogEntries as any).mockResolvedValueOnce(['yl_active']);
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+
+      await expect(
+        collectResult(
+          runOperation(
+            yopsApplyOp,
+            {
+              conversationId: 'conv_abc',
+              source: 'manual',
+              yops: [{ define: { path: 'trip' } }, { define: { path: 'trip' } }],
+              replaceActiveScript: true,
+            },
+            ctx
+          )
+        )
+      ).rejects.toThrow(/failed dry-run/);
+
+      expect(insertYOpsLogEntry).not.toHaveBeenCalled();
     });
   });
 });

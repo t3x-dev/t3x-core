@@ -25,8 +25,21 @@
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
 
-import type { Operation, PipelineEvent } from '@t3x-dev/core';
-import { insertYOpsLogEntry, supersedeActiveLLMSuggestions } from '@t3x-dev/storage';
+import {
+  applyYOps,
+  extractOpsFromEntries,
+  type Operation,
+  type PipelineEvent,
+  type SemanticContent,
+  type YOp,
+} from '@t3x-dev/core';
+import {
+  insertYOpsLogEntry,
+  listActiveYOpsLogByConversation,
+  supersedeActiveLLMSuggestions,
+  supersedeActiveUncommittedYOpsLogEntries,
+  supersedeYOpsLogEntryForRepair,
+} from '@t3x-dev/storage';
 import { syncYOpsToTrees } from '../lib/tree-state-sync';
 import type { ApiPipelineContext } from './context';
 
@@ -35,12 +48,27 @@ export interface YopsApplyInput {
   source: string; // 'pipeline' | 'manual' | 'answer' | 'collapse' | 'compress'
   turnHash?: string;
   yops: any[]; // YOp[] — use any[] to match current route behavior
+  metadata?: Record<string, unknown>;
   /**
    * When true, mark every active-draft LLM-sourced entry for this
    * conversation as superseded inside the same transaction as the
    * insert. HumanSource ops are never touched. Default false.
    */
   replaceActiveLLMDraft?: boolean;
+  /**
+   * Explicit repair mode: use this replay-failing yops_log row as the repair
+   * target, supersede the conversation's active uncommitted script rows, then
+   * insert the edited script. If the target row is missing, already
+   * superseded, or committed into an immutable baseline, apply fails before
+   * inserting anything.
+   */
+  repairYopsLogId?: string;
+  /**
+   * Full active-script replacement mode for editing the already-applied
+   * Script editor mirror. Supersedes active uncommitted rows, dry-runs the
+   * edited full script on the remaining active baseline, then inserts it.
+   */
+  replaceActiveScript?: boolean;
 }
 
 export interface YopsApplyOutput {
@@ -51,14 +79,150 @@ export interface YopsApplyOutput {
   turn_hash: string | null;
   yops: any;
   created_at: string;
+  metadata: Record<string, unknown> | null;
   /** IDs of entries marked superseded by this call (empty when the flag wasn't set). */
   superseded_ids: string[];
+}
+
+function replayActiveRowsFailFast(records: Array<{ id: string; yops: unknown }>): SemanticContent {
+  let current: SemanticContent = { trees: [], relations: [] };
+  for (const record of records) {
+    const ops = extractOpsFromEntries([{ id: record.id, yops: record.yops }]);
+    const result = applyYOps(current, ops);
+    if (!result.ok) {
+      throw new Error(
+        `Existing yops_log entry ${record.id} failed replay before repair: ${result.error?.message ?? 'unknown replay error'}`
+      );
+    }
+    current = { trees: result.trees, relations: result.relations };
+  }
+  return current;
+}
+
+interface PreparedEditedScript {
+  yopsForInsert: unknown[];
+  opsForDryRun: YOp[];
+  droppedBaselineDefinePaths: string[];
+}
+
+function collectTreePaths(content: SemanticContent): Set<string> {
+  const paths = new Set<string>();
+  const visit = (node: SemanticContent['trees'][number], prefix?: string) => {
+    const path = prefix ? `${prefix}/${node.key}` : node.key;
+    paths.add(path);
+    for (const child of node.children) {
+      visit(child, path);
+    }
+  };
+
+  for (const tree of content.trees) {
+    visit(tree);
+  }
+
+  return paths;
+}
+
+function getDefinePath(rawOp: unknown): string | null {
+  if (!rawOp || typeof rawOp !== 'object') return null;
+  const maybeDefine = (rawOp as Record<string, unknown>).define;
+  if (!maybeDefine || typeof maybeDefine !== 'object') return null;
+  const path = (maybeDefine as Record<string, unknown>).path;
+  return typeof path === 'string' && path.length > 0 ? path : null;
+}
+
+function prepareEditedScriptForBaseline(
+  base: SemanticContent,
+  yops: unknown[]
+): PreparedEditedScript {
+  try {
+    extractOpsFromEntries([{ id: 'edited-script', yops }]);
+  } catch (err) {
+    throw new Error(
+      `Edited script failed dry-run parse: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  const baselinePaths = collectTreePaths(base);
+  const yopsForInsert: unknown[] = [];
+  const droppedBaselineDefinePaths: string[] = [];
+
+  for (const rawOp of yops) {
+    const definePath = getDefinePath(rawOp);
+    if (definePath && baselinePaths.has(definePath)) {
+      droppedBaselineDefinePaths.push(definePath);
+      continue;
+    }
+    yopsForInsert.push(rawOp);
+  }
+
+  let opsForDryRun: YOp[];
+  try {
+    opsForDryRun = extractOpsFromEntries([{ id: 'edited-script', yops: yopsForInsert }]);
+  } catch (err) {
+    throw new Error(
+      `Edited script failed dry-run parse: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  return { yopsForInsert, opsForDryRun, droppedBaselineDefinePaths };
+}
+
+function assertEditedOpsApply(base: SemanticContent, ops: YOp[]): void {
+  const result = applyYOps(base, ops);
+  if (!result.ok) {
+    throw new Error(
+      `Edited script failed dry-run at op ${result.applied}: ${result.error?.message ?? 'unknown replay error'}`
+    );
+  }
+}
+
+function buildLineageMetadata(input: {
+  base?: Record<string, unknown>;
+  repairYopsLogId?: string;
+  replaceActiveScript?: boolean;
+  supersededIds: string[];
+  droppedBaselineDefinePaths?: string[];
+}): Record<string, unknown> | undefined {
+  const normalized =
+    input.droppedBaselineDefinePaths && input.droppedBaselineDefinePaths.length > 0
+      ? { dropped_baseline_define_paths: input.droppedBaselineDefinePaths }
+      : {};
+
+  if (input.repairYopsLogId) {
+    return {
+      ...(input.base ?? {}),
+      ...normalized,
+      repair_of: input.repairYopsLogId,
+      supersedes: input.supersededIds,
+      repair_reason: input.base?.repair_reason ?? 'user_edited_replay_failure',
+    };
+  }
+
+  if (input.replaceActiveScript) {
+    return {
+      ...(input.base ?? {}),
+      ...normalized,
+      supersedes: input.supersededIds,
+      replacement_reason: input.base?.replacement_reason ?? 'user_replaced_active_script',
+    };
+  }
+
+  return input.base && Object.keys(input.base).length > 0 ? input.base : undefined;
 }
 
 export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
   name: 'yops-apply',
   async *run(input: YopsApplyInput, ctx): AsyncGenerator<PipelineEvent, YopsApplyOutput> {
-    const { conversationId, source, turnHash, yops, replaceActiveLLMDraft } = input;
+    const {
+      conversationId,
+      source,
+      turnHash,
+      yops,
+      metadata,
+      replaceActiveLLMDraft,
+      repairYopsLogId,
+      replaceActiveScript,
+    } = input;
     const { db, projectId } = ctx as ApiPipelineContext;
 
     yield { type: 'step_start', step: 'persist' };
@@ -79,15 +243,47 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
       // Together those two paths serialise the critical section and
       // make the "row both committed AND superseded" outcome
       // unreachable. Neither path alone is sufficient.
-      const ids = replaceActiveLLMDraft
-        ? await supersedeActiveLLMSuggestions(tx, conversationId)
-        : [];
+      let ids: string[] = [];
+      let yopsForInsert: unknown[] = yops;
+      let droppedBaselineDefinePaths: string[] = [];
+      if (repairYopsLogId) {
+        ids = await supersedeYOpsLogEntryForRepair(tx, conversationId, repairYopsLogId);
+        if (!ids.includes(repairYopsLogId)) {
+          throw new Error(
+            `Cannot repair yops_log entry ${repairYopsLogId}: row is missing, already superseded, or committed`
+          );
+        }
+        const activeRows = await listActiveYOpsLogByConversation(tx, conversationId);
+        const repairBaseline = replayActiveRowsFailFast(activeRows);
+        const prepared = prepareEditedScriptForBaseline(repairBaseline, yops);
+        yopsForInsert = prepared.yopsForInsert;
+        droppedBaselineDefinePaths = prepared.droppedBaselineDefinePaths;
+        assertEditedOpsApply(repairBaseline, prepared.opsForDryRun);
+      } else if (replaceActiveScript) {
+        ids = await supersedeActiveUncommittedYOpsLogEntries(tx, conversationId);
+        const activeRows = await listActiveYOpsLogByConversation(tx, conversationId);
+        const replacementBaseline = replayActiveRowsFailFast(activeRows);
+        const prepared = prepareEditedScriptForBaseline(replacementBaseline, yops);
+        yopsForInsert = prepared.yopsForInsert;
+        droppedBaselineDefinePaths = prepared.droppedBaselineDefinePaths;
+        assertEditedOpsApply(replacementBaseline, prepared.opsForDryRun);
+      } else if (replaceActiveLLMDraft) {
+        ids = await supersedeActiveLLMSuggestions(tx, conversationId);
+      }
+      const entryMetadata = buildLineageMetadata({
+        base: metadata,
+        repairYopsLogId,
+        replaceActiveScript,
+        supersededIds: ids,
+        droppedBaselineDefinePaths,
+      });
       const rec = await insertYOpsLogEntry(tx, {
         conversationId,
         projectId,
         source,
         turnHash: turnHash ?? undefined,
-        yops,
+        yops: yopsForInsert,
+        ...(entryMetadata ? { metadata: entryMetadata } : {}),
       });
       await syncYOpsToTrees(tx, conversationId, projectId);
       return { record: rec, supersededIds: ids };
@@ -102,6 +298,7 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
       turn_hash: record.turnHash ?? null,
       yops: record.yops,
       created_at: record.createdAt.toISOString(),
+      metadata: (record.metadata as Record<string, unknown> | null | undefined) ?? null,
       superseded_ids: supersededIds,
     };
   },

@@ -12,13 +12,17 @@ describe('syncSavedTurnIntoWorkspace', () => {
   it('appends a new turn when the workspace tracks the same conversation', () => {
     const ws = useWorkspaceStore.getState();
     ws.setConversation('conv_1');
-    ws.setTurns([{ turn_hash: 'sha256:t0', content: 'existing' }]);
+    ws.setTurns([{ turn_hash: 'sha256:t0', role: 'user', content: 'existing' }]);
 
-    syncSavedTurnIntoWorkspace('conv_1', { turn_hash: 'sha256:t1', content: 'fresh user msg' });
+    syncSavedTurnIntoWorkspace('conv_1', {
+      turn_hash: 'sha256:t1',
+      role: 'user',
+      content: 'fresh user msg',
+    });
 
     expect(useWorkspaceStore.getState().turns).toEqual([
-      { turn_hash: 'sha256:t0', content: 'existing' },
-      { turn_hash: 'sha256:t1', content: 'fresh user msg' },
+      { turn_hash: 'sha256:t0', role: 'user', content: 'existing' },
+      { turn_hash: 'sha256:t1', role: 'user', content: 'fresh user msg' },
     ]);
   });
 
@@ -27,24 +31,32 @@ describe('syncSavedTurnIntoWorkspace', () => {
     // must not contaminate the workspace of the conv they are viewing.
     const ws = useWorkspaceStore.getState();
     ws.setConversation('conv_current');
-    ws.setTurns([{ turn_hash: 'sha256:current', content: 'current' }]);
+    ws.setTurns([{ turn_hash: 'sha256:current', role: 'assistant', content: 'current' }]);
 
-    syncSavedTurnIntoWorkspace('conv_other', { turn_hash: 'sha256:t1', content: 'leaked' });
+    syncSavedTurnIntoWorkspace('conv_other', {
+      turn_hash: 'sha256:t1',
+      role: 'user',
+      content: 'leaked',
+    });
 
     expect(useWorkspaceStore.getState().turns).toEqual([
-      { turn_hash: 'sha256:current', content: 'current' },
+      { turn_hash: 'sha256:current', role: 'assistant', content: 'current' },
     ]);
   });
 
   it('de-dupes by turn_hash so a retried save is idempotent', () => {
     const ws = useWorkspaceStore.getState();
     ws.setConversation('conv_1');
-    ws.setTurns([{ turn_hash: 'sha256:t1', content: 'first' }]);
+    ws.setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'first' }]);
 
-    syncSavedTurnIntoWorkspace('conv_1', { turn_hash: 'sha256:t1', content: 'first' });
+    syncSavedTurnIntoWorkspace('conv_1', {
+      turn_hash: 'sha256:t1',
+      role: 'user',
+      content: 'first',
+    });
 
     expect(useWorkspaceStore.getState().turns).toEqual([
-      { turn_hash: 'sha256:t1', content: 'first' },
+      { turn_hash: 'sha256:t1', role: 'user', content: 'first' },
     ]);
   });
 });

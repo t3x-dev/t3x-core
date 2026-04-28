@@ -69,6 +69,22 @@ describe('appendYOps', () => {
     });
   });
 
+  it('forwards repairYopsLogId option to createYOpsEntry', async () => {
+    const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
+    await appendYOps('c1', [humanOp], { repairYopsLogId: 'yl_failing' });
+    expect(spy).toHaveBeenCalledWith('c1', [humanOp], 'manual', undefined, {
+      repairYopsLogId: 'yl_failing',
+    });
+  });
+
+  it('forwards replaceActiveScript option to createYOpsEntry', async () => {
+    const spy = vi.spyOn(client, 'createYOpsEntry').mockResolvedValue({} as never);
+    await appendYOps('c1', [humanOp], { replaceActiveScript: true });
+    expect(spy).toHaveBeenCalledWith('c1', [humanOp], 'manual', undefined, {
+      replaceActiveScript: true,
+    });
+  });
+
   it('omits replaceActiveLLMDraft when not provided (preserves legacy callers)', async () => {
     // Gold edits, compression, and any caller that doesn't pass options
     // must keep their existing append-only semantics — dropping the
@@ -97,10 +113,16 @@ describe('appendYOps', () => {
 });
 
 describe('loadYOpsLog', () => {
-  it('delegates to listYOpsLog', async () => {
+  it('loads active yops by default', async () => {
     const spy = vi.spyOn(client, 'listYOpsLog').mockResolvedValue([]);
     await loadYOpsLog('c1');
-    expect(spy).toHaveBeenCalledWith('c1', undefined);
+    expect(spy).toHaveBeenCalledWith('c1', undefined, { activeOnly: true });
+  });
+
+  it('can request the full audit log when needed', async () => {
+    const spy = vi.spyOn(client, 'listYOpsLog').mockResolvedValue([]);
+    await loadYOpsLog('c1', undefined, { activeOnly: false });
+    expect(spy).toHaveBeenCalledWith('c1', undefined, { activeOnly: false });
   });
 
   it('wraps errors with operation="load"', async () => {

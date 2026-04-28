@@ -29,7 +29,9 @@ describe('useGoldEdit.applyEdit', () => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.getState().setConversation('conv_123');
-    useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
+    useWorkspaceStore
+      .getState()
+      .setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
     replayAppendedMock.mockReturnValue({
       tree: { trees: [], relations: [] },
       sourceIndex: new Map(),

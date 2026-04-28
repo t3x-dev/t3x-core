@@ -33,7 +33,7 @@ import {
   getConversationTurnCount,
   getLeavesByIds,
   insertConversation,
-  listYOpsLogByConversation,
+  listActiveYOpsLogByConversation,
   renameConversation,
   setConversationContext,
   updateConversation,
@@ -761,7 +761,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     //    - Committed frames (HEAD, fallback)
     //    The YAML tree IS the knowledge — no flattening to nodes.
     let yamlKnowledge = '';
-    const yopsRecords = await listYOpsLogByConversation(db, conversationId);
+    const yopsRecords = await listActiveYOpsLogByConversation(db, conversationId);
     if (yopsRecords.length > 0) {
       const snapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
       if (snapshot.trees.length > 0) {

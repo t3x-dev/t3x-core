@@ -38,7 +38,9 @@ describe('useAddSpan', () => {
     useWorkspaceStore.getState().setConversation('conv_1');
     useWorkspaceStore
       .getState()
-      .setTurns([{ turn_hash: 'sha256:t1', content: 'Stay near West Lake. Lingyin Temple.' }]);
+      .setTurns([
+        { turn_hash: 'sha256:t1', role: 'user', content: 'Stay near West Lake. Lingyin Temple.' },
+      ]);
     useUndoStore.getState().clear();
   });
 

@@ -281,6 +281,7 @@ export function useConversationChat({
               if (userTurn?.turn_hash) {
                 syncSavedTurnIntoWorkspace(currentConversationId, {
                   turn_hash: userTurn.turn_hash,
+                  role: 'user',
                   content: userMessage,
                 });
               }
@@ -304,6 +305,7 @@ export function useConversationChat({
                 if (assistantTurn?.turn_hash) {
                   syncSavedTurnIntoWorkspace(currentConversationId, {
                     turn_hash: assistantTurn.turn_hash,
+                    role: 'assistant',
                     content: fullResponse,
                   });
                 }

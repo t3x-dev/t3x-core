@@ -216,6 +216,230 @@ describe('extractors/v2 pipeline', () => {
     expect(capturedPrompt).toContain('Mode: incremental');
   });
 
+  it('treats caller mode as authoritative when provider draft mode drifts', async () => {
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            // Drift shape observed in real failures: caller selected
+            // incremental, but provider still emits bootstrap.
+            mode: 'bootstrap',
+            items: [
+              {
+                id: 'item_update',
+                intent: 'update',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: 'existing_node',
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: null,
+                  path_hint: null,
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"note":"refined"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: 'refined', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'refined' }],
+      mode: 'incremental',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.draft.mode).toBe('incremental');
+    expect(result.compiled.ops.some((op) => 'define' in op)).toBe(false);
+    expect(result.compiled.ops).toContainEqual(
+      expect.objectContaining({ populate: { path: 'existing_node', values: { note: 'refined' } } })
+    );
+    expect(result.compiled.warnings).not.toContain(
+      expect.stringContaining('Promoted update to add in bootstrap mode')
+    );
+  });
+
+  it('compiles incremental add on existing snapshot nodes as updates that apply cleanly', async () => {
+    const snapshot = {
+      trees: [
+        {
+          key: 'trip',
+          slots: {},
+          children: [{ key: 'budget', slots: { currency: 'CNY' }, children: [] }],
+        },
+      ],
+      relations: [],
+    };
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'incremental',
+            items: [
+              {
+                id: 'item_existing_budget',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'budget',
+                  path_hint: 'trip/budget',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"total":"5000 yuan"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: '5000 yuan', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'budget is 5000 yuan' }],
+      mode: 'incremental',
+      snapshot,
+      providerId: 'openai',
+      model: 'gpt-5.4',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.compiled.ops.some((op) => 'define' in op && op.define.path === 'trip/budget')
+    ).toBe(false);
+    expect(result.compiled.ops).toContainEqual(
+      expect.objectContaining({
+        populate: { path: 'trip/budget', values: { total: '5000 yuan' } },
+      })
+    );
+    expect(result.compiled.warnings).toContain(
+      'Rewrote add intent for existing baseline node "trip/budget" to update semantics (item item_existing_budget)'
+    );
+
+    const applied = applyYOps(snapshot, result.compiled.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.compiled.ops.length);
+  });
+
+  it('routes incremental structured facts away from existing snapshot slots', async () => {
+    const snapshot = {
+      trees: [
+        {
+          key: 'travel',
+          slots: {},
+          children: [
+            {
+              key: 'destination_trip',
+              slots: { budget: 'old budget summary' },
+              children: [],
+            },
+          ],
+        },
+      ],
+      relations: [],
+    };
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured() {
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'incremental',
+            items: [
+              {
+                id: 'item_budget_details',
+                intent: 'add',
+                confidence: 0.9,
+                reasoning_type: 'direct',
+                target_ref: {
+                  node_key: null,
+                  path: null,
+                  existing_node_id: null,
+                },
+                candidate: {
+                  key: 'budget',
+                  path_hint: 'travel/destination_trip/budget',
+                  slot: null,
+                  value_json: null,
+                  values_json: '{"simple_meal":"20-35 RMB","expected_total":"1,800-2,500 RMB"}',
+                  children_json: null,
+                },
+                evidence: [{ turn_tag: 'T1', quote: '20-35 RMB', role: 'primary' }],
+              },
+            ],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [
+        {
+          turn_hash: 'sha256:1',
+          role: 'assistant',
+          content: 'For meals, simple meal 20-35 RMB and total 1,800-2,500 RMB.',
+        },
+      ],
+      mode: 'incremental',
+      snapshot,
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      provider,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.compiled.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'travel/destination_trip/budget_details' } })
+    );
+    expect(result.compiled.ops).toContainEqual(
+      expect.objectContaining({
+        populate: {
+          path: 'travel/destination_trip/budget_details',
+          values: {
+            expected_total: '1,800-2,500 RMB',
+            simple_meal: '20-35 RMB',
+          },
+        },
+      })
+    );
+
+    const applied = applyYOps(snapshot, result.compiled.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.compiled.ops.length);
+  });
+
   it('uses one provider-agnostic prompt (F9): no per-provider branches, no shape rules', async () => {
     // F9 removed the per-provider prompt branches and the redundant shape
     // rules. All providers now receive the same short prompt; shape drift

@@ -318,6 +318,70 @@ describe('useScriptExecution', () => {
     expect(options).toEqual({ replaceActiveLLMDraft: false });
   });
 
+  it('passes replaceActiveScript when editing the already-applied active script mirror', async () => {
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'human',
+            author: 'script-editor',
+            at: '2026-04-28T00:00:00.000Z',
+          },
+        },
+      ] as never,
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(
+        `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
+      );
+    useWorkspaceStore.getState().setScriptDirty(true);
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({
+      replaceActiveLLMDraft: false,
+      replaceActiveScript: true,
+    });
+  });
+
+  it('passes repairYopsLogId when applying dirty script over a replay warning', async () => {
+    useWorkspaceStore.getState().setReplayWarning({
+      opIndex: 5,
+      code: 'ALREADY_EXISTS',
+      message: 'Path "food" already exists',
+      rowId: 'yl_failing',
+      opIndexInRow: 4,
+      appliedCount: 5,
+    });
+    useWorkspaceStore
+      .getState()
+      .setScriptText(`- set:\n    path: food/description\n    value: fixed\n`);
+    useWorkspaceStore.getState().setScriptDirty(true);
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, , options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({
+      replaceActiveLLMDraft: false,
+      repairYopsLogId: 'yl_failing',
+    });
+  });
+
   it('execute() refuses to commit when there is no draft and no manual edit', async () => {
     // Defense in depth: the Apply button is disabled in this state, but
     // execute() may be reached via hotkeys, tests, or programmatic calls.

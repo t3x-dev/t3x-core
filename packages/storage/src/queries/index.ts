@@ -461,4 +461,6 @@ export {
   listYOpsLogByConversation,
   listYOpsLogByTopic,
   supersedeActiveLLMSuggestions,
+  supersedeActiveUncommittedYOpsLogEntries,
+  supersedeYOpsLogEntryForRepair,
 } from './yops-log';

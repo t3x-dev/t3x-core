@@ -17,7 +17,7 @@ vi.mock('@/infrastructure/core', async () => {
   };
 });
 
-import { createYOpsEntry } from '@/infrastructure/trees';
+import { createYOpsEntry, listYOpsLog } from '@/infrastructure/trees';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify({ success: true, data: body }), {
@@ -116,5 +116,50 @@ describe('createYOpsEntry HTTP body shape', () => {
     const body = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
     expect(body.metadata).toEqual({ extracted_at: '2026-04-26T00:00:00Z' });
     expect(body.replace_active_llm_draft).toBe(true);
+  });
+
+  it('emits repair_yops_log_id when repair option is set', async () => {
+    fetchWithTimeoutMock.mockResolvedValueOnce(jsonResponse(baseEntry));
+
+    await createYOpsEntry('conv_1', ops, 'manual', undefined, {
+      repairYopsLogId: 'yl_failing',
+    });
+
+    const [, init] = fetchWithTimeoutMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.repair_yops_log_id).toBe('yl_failing');
+  });
+
+  it('emits replace_active_script when full active-script replacement is requested', async () => {
+    fetchWithTimeoutMock.mockResolvedValueOnce(jsonResponse(baseEntry));
+
+    await createYOpsEntry('conv_1', ops, 'manual', undefined, {
+      replaceActiveScript: true,
+    });
+
+    const [, init] = fetchWithTimeoutMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.replace_active_script).toBe(true);
+  });
+});
+
+describe('listYOpsLog URL shape', () => {
+  it('requests active rows by default', async () => {
+    fetchWithTimeoutMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await listYOpsLog('conv_1');
+
+    const [url] = fetchWithTimeoutMock.mock.calls[0];
+    expect(url).toContain('/conversations/conv_1/yops?active_only=true');
+  });
+
+  it('can request the full audit log', async () => {
+    fetchWithTimeoutMock.mockResolvedValueOnce(jsonResponse([]));
+
+    await listYOpsLog('conv_1', undefined, { activeOnly: false });
+
+    const [url] = fetchWithTimeoutMock.mock.calls[0];
+    expect(url).toContain('/conversations/conv_1/yops');
+    expect(url).not.toContain('active_only=true');
   });
 });

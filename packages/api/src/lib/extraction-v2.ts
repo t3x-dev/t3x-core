@@ -4,8 +4,7 @@ import {
   deleteYOpsLogEntry,
   findConversationById,
   findTurnsByConversation,
-  listYOpsLogByConversation,
-  listYOpsLogByTopic,
+  listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
@@ -93,8 +92,10 @@ export async function runApiExtractionV2(
   }
 
   let yopsRecords = input.topicId
-    ? await listYOpsLogByTopic(input.db, input.conversationId, input.topicId)
-    : await listYOpsLogByConversation(input.db, input.conversationId);
+    ? (await listActiveYOpsLogByConversation(input.db, input.conversationId)).filter(
+        (record) => record.topicId === input.topicId
+      )
+    : await listActiveYOpsLogByConversation(input.db, input.conversationId);
 
   if (input.forceExtract && yopsRecords.length > 0) {
     for (const record of yopsRecords) {

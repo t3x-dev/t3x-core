@@ -74,6 +74,7 @@ vi.mock('@/infrastructure', () => ({
   updateConversation: (...args: unknown[]) => updateConversationMock(...args),
 }));
 
+import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 
 async function* emptyChatStream() {
@@ -174,5 +175,36 @@ describe('useConversationChat', () => {
       expect(createTurnMock).toHaveBeenCalled();
     });
     expect(updateConversationMock).not.toHaveBeenCalled();
+  });
+
+  it('mirrors saved user and assistant turns into the workspace with roles', async () => {
+    createTurnMock
+      .mockResolvedValueOnce({ turn_hash: 'sha256:user_turn' })
+      .mockResolvedValueOnce({ turn_hash: 'sha256:assistant_turn' });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(syncSavedTurnIntoWorkspace).toHaveBeenCalledWith('conv_existing', {
+        turn_hash: 'sha256:user_turn',
+        role: 'user',
+        content: 'I want to eat chestnuts.',
+      });
+    });
+    expect(syncSavedTurnIntoWorkspace).toHaveBeenCalledWith('conv_existing', {
+      turn_hash: 'sha256:assistant_turn',
+      role: 'assistant',
+      content: 'assistant response',
+    });
   });
 });

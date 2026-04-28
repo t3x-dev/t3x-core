@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { SemanticContent } from '../../../semantic/types';
+import { applyYOps } from '../../../t3x-yops/engine';
 import { compileExtractionDraft, normalizePath } from '../compiler';
 import { EXTRACTION_DRAFT_SCHEMA, type ExtractionDraft } from '../types';
 
@@ -138,6 +140,195 @@ describe('extractors/v2 compiler', () => {
         },
       },
     ]);
+  });
+
+  it('rewrites incremental add on an existing baseline node into populate without define', () => {
+    const baseline: SemanticContent = {
+      trees: [{ key: 'trip', slots: {}, children: [{ key: 'budget', slots: {}, children: [] }] }],
+      relations: [],
+    };
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'incremental',
+      items: [
+        {
+          id: 'item_existing_node',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/budget',
+            values: { total: '5000 yuan' },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'budget is 5000 yuan', role: 'primary' }],
+        },
+      ],
+    };
+    const input = {
+      draft,
+      sourceModel: 'gpt-5.4',
+      extractedAt: '2026-04-28T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+      baseline,
+    } as Parameters<typeof compileExtractionDraft>[0] & { baseline: SemanticContent };
+
+    const result = compileExtractionDraft(input);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops.some((op) => 'define' in op && op.define.path === 'trip/budget')).toBe(false);
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({
+        populate: { path: 'trip/budget', values: { total: '5000 yuan' } },
+      })
+    );
+    expect(result.warnings).toContain(
+      'Rewrote add intent for existing baseline node "trip/budget" to update semantics (item item_existing_node)'
+    );
+  });
+
+  it('routes structured incremental add away from existing baseline slots', () => {
+    const baseline: SemanticContent = {
+      trees: [
+        {
+          key: 'travel',
+          slots: {},
+          children: [
+            {
+              key: 'destination_trip',
+              slots: { budget: 'old budget summary' },
+              children: [],
+            },
+          ],
+        },
+      ],
+      relations: [],
+    };
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'incremental',
+      items: [
+        {
+          id: 'item_budget_details',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'travel/destination_trip/budget',
+            values: {
+              simple_meal: '20-35 RMB',
+              expected_total: '1,800-2,500 RMB',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: '20-35 RMB', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      baseline,
+      sourceModel: 'gpt-5.4',
+      extractedAt: '2026-04-28T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.ops.some((op) => 'define' in op && op.define.path === 'travel/destination_trip/budget')
+    ).toBe(false);
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'travel/destination_trip/budget_details' } })
+    );
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({
+        populate: {
+          path: 'travel/destination_trip/budget_details',
+          values: {
+            expected_total: '1,800-2,500 RMB',
+            simple_meal: '20-35 RMB',
+          },
+        },
+      })
+    );
+    expect(result.warnings).toContain(
+      'Routed structured data for existing baseline slot "travel/destination_trip/budget" to "travel/destination_trip/budget_details" (item item_budget_details)'
+    );
+
+    const applied = applyYOps(baseline, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
+  });
+
+  it('reserves routed detail paths across items in the same compile batch', () => {
+    const baseline: SemanticContent = {
+      trees: [
+        {
+          key: 'travel',
+          slots: {},
+          children: [
+            {
+              key: 'destination_trip',
+              slots: { budget: 'old budget summary' },
+              children: [],
+            },
+          ],
+        },
+      ],
+      relations: [],
+    };
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'incremental',
+      items: [
+        {
+          id: 'item_budget_meals',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'travel/destination_trip/budget',
+            values: { simple_meal: '20-35 RMB' },
+          },
+          evidence: [{ turn_tag: 'T1', quote: '20-35 RMB', role: 'primary' }],
+        },
+        {
+          id: 'item_budget_hotels',
+          intent: 'add',
+          confidence: 0.88,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'travel/destination_trip/budget',
+            values: { hotel_night: '300-500 RMB' },
+          },
+          evidence: [{ turn_tag: 'T1', quote: '300-500 RMB', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      baseline,
+      sourceModel: 'gpt-5.4',
+      extractedAt: '2026-04-28T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const definePaths = result.ops.flatMap((op) => ('define' in op ? [op.define.path] : []));
+    expect(definePaths).toEqual([
+      'travel/destination_trip/budget_details',
+      'travel/destination_trip/budget_details_2',
+    ]);
+
+    const applied = applyYOps(baseline, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
   });
 
   it('folds duplicate define ops on the same path and warns', () => {

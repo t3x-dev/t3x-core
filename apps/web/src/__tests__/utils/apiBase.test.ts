@@ -60,4 +60,19 @@ describe('utils/apiBase', () => {
 
     expect(module.API_BASE).toBe('');
   });
+
+  it('derives a websocket base from the API base', async () => {
+    const module = await loadApiBaseModule();
+
+    expect(module.resolveWebSocketBase('http://localhost:8000')).toBe('ws://localhost:8000');
+    expect(module.resolveWebSocketBase('https://api.example.com')).toBe('wss://api.example.com');
+  });
+
+  it('uses browser origin for websocket base when API base is same-origin', async () => {
+    const module = await loadApiBaseModule();
+
+    expect(module.resolveWebSocketBase('', { protocol: 'https:', host: 'app.example.com' })).toBe(
+      'wss://app.example.com'
+    );
+  });
 });

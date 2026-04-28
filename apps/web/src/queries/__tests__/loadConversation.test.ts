@@ -24,6 +24,12 @@ describe('fetchConversationSnapshot', () => {
           role: 'user',
           created_at: '2026-04-12T00:00:00Z',
         } as never,
+        {
+          turn_hash: 'sha256:t2',
+          content: 'assistant reply',
+          role: 'assistant',
+          created_at: '2026-04-12T00:00:01Z',
+        } as never,
       ],
       committedAs: 'sha256:commit',
       committedAt: '2026-04-12T00:00:01Z',
@@ -39,8 +45,10 @@ describe('fetchConversationSnapshot', () => {
 
     const snapshot = await fetchConversationSnapshot('p1', 'c1');
 
-    expect(snapshot.turns).toHaveLength(1);
+    expect(snapshot.turns).toHaveLength(2);
     expect(snapshot.turns[0].turn_hash).toBe('sha256:t1');
+    expect((snapshot.turns[0] as { role?: string }).role).toBe('user');
+    expect((snapshot.turns[1] as { role?: string }).role).toBe('assistant');
     expect(snapshot.opsLog).toHaveLength(1);
     expect(snapshot.tree.trees.length).toBeGreaterThan(0);
     expect(snapshot.sourceIndex).toBeInstanceOf(Map);
@@ -116,7 +124,7 @@ describe('replayAppended', () => {
       source: { type: 'human', author: 'a', at: '2026-04-12T00:00:00Z' },
     };
     const prevOps = [firstOp];
-    const turns = [{ turn_hash: 'sha256:t1', content: 'x' }];
+    const turns = [{ turn_hash: 'sha256:t1', role: 'user' as const, content: 'x' }];
     const secondOp: SourcedYOp = {
       set: { path: 'trip/k', value: 'v' },
       source: { type: 'human', author: 'b', at: '2026-04-12T00:00:01Z' },
@@ -144,7 +152,11 @@ describe('replayAppended', () => {
     };
 
     expect(() =>
-      replayAppended([firstOp], [{ turn_hash: 'sha256:t1', content: 'x' }], [invalidOp])
+      replayAppended(
+        [firstOp],
+        [{ turn_hash: 'sha256:t1', role: 'user', content: 'x' }],
+        [invalidOp]
+      )
     ).toThrow(YOpsReplayError);
   });
 });

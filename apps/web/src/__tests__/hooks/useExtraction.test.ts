@@ -73,11 +73,13 @@ describe('useExtraction', () => {
       activeProjectId: null,
       draftsByConversation: {},
     });
-    useWorkspaceStore.getState().setTurns([{ turn_hash: 'sha256:t1', content: 'hello' }]);
+    useWorkspaceStore
+      .getState()
+      .setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
     runExtractionMock.mockImplementation(
       async ({ llm }: { llm: (input: unknown) => Promise<unknown> }) => {
         await llm({
-          turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+          turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
           failingOps: undefined,
         });
         // Propose-only model: worker returns validated ops; hook writes them
@@ -117,7 +119,7 @@ describe('useExtraction', () => {
 
     expect(callExtractionLLMMock).toHaveBeenCalledWith({
       conversationId: 'conv_123',
-      turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+      turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
       failingOps: undefined,
       provider: 'openai',
       model: 'gpt-4o-mini',

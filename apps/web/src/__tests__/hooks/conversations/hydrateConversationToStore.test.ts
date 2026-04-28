@@ -38,7 +38,11 @@ function snapshot(opts: {
   parentCommitHash?: string | null;
   parentCommitBranch?: string | null;
 }): {
-  turns: Array<{ turn_hash: string; content: string }>;
+  turns: Array<{
+    turn_hash: string;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+  }>;
   opsLog: SourcedYOp[];
   tree: SemanticContent;
   sourceIndex: Map<string, Source>;
@@ -48,7 +52,7 @@ function snapshot(opts: {
   parentCommitBranch?: string | null;
 } {
   return {
-    turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+    turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
     opsLog: opts.ops ?? [],
     tree: opts.tree ?? EMPTY_TREE,
     sourceIndex: new Map<string, Source>(),

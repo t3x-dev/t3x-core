@@ -11,7 +11,12 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertProject } from '@t3x-dev/storage';
+import {
+  insertConversation,
+  insertProject,
+  insertYOpsLogEntry,
+  supersedeActiveUncommittedYOpsLogEntries,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateSourcedYOpsStructure } from '../routes/yops-log.openapi';
@@ -269,5 +274,43 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
 
     // 201 = passed; 500 = downstream failed but validation passed
     expect([201, 500]).toContain(res.status);
+  });
+
+  it('draft fallback replays active yops only and ignores superseded audit rows', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Draft Active Only' }));
+    const conversation = await insertConversation(
+      mockDB,
+      testData.conversation(project.projectId, { title: 'Draft Active Only Conv' })
+    );
+
+    await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'old_audit_node' },
+          source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+        },
+      ],
+    });
+    await supersedeActiveUncommittedYOpsLogEntries(mockDB, conversation.conversationId);
+    await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'current_node' },
+          source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+        },
+      ],
+    });
+
+    const res = await app.request(`/v1/conversations/${conversation.conversationId}/draft`);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ApiResponse;
+    expect(body.data.trees.map((tree: { key: string }) => tree.key)).toEqual(['current_node']);
   });
 });

@@ -18,11 +18,7 @@ import { useEffect, useRef } from 'react';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-
-const WS_BASE =
-  typeof window !== 'undefined'
-    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-    : '';
+import { API_BASE, resolveWebSocketBase } from '@/utils/apiBase';
 
 const RECONNECT_DELAY = 5000;
 
@@ -39,15 +35,32 @@ export function useRealtimeSync(conversationId: string | null) {
 
   useEffect(() => {
     if (!conversationId || conversationId === 'new') return;
+    let disposed = false;
+    const wsBase = resolveWebSocketBase(
+      API_BASE,
+      typeof window !== 'undefined' ? window.location : undefined
+    );
+
+    function clearReconnectTimer() {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    }
 
     function connect() {
+      if (disposed) return;
+      clearReconnectTimer();
       if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
         wsRef.current.close();
         wsRef.current = null;
       }
 
       const ws = new WebSocket(
-        `${WS_BASE}/ws?conversation_id=${encodeURIComponent(conversationId!)}`
+        `${wsBase}/ws?conversation_id=${encodeURIComponent(conversationId!)}`
       );
       wsRef.current = ws;
 
@@ -59,7 +72,10 @@ export function useRealtimeSync(conversationId: string | null) {
       };
 
       ws.onclose = () => {
-        wsRef.current = null;
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
+        if (disposed) return;
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY);
       };
 
@@ -78,9 +94,13 @@ export function useRealtimeSync(conversationId: string | null) {
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      disposed = true;
       document.removeEventListener('visibilitychange', onVisibility);
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      clearReconnectTimer();
       if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
         wsRef.current.close();
         wsRef.current = null;
       }

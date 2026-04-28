@@ -26,7 +26,7 @@ import {
   insertProject,
   insertTurn,
   insertYOpsLogEntry,
-  listYOpsLogByConversation,
+  listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -144,7 +144,7 @@ treeAnswerRoutes.openapi(answerRoute, async (c) => {
     if (accessResult instanceof Response) return accessResult;
 
     // 2. Build current snapshot from yops log
-    const yopsRecords = await listYOpsLogByConversation(db, conversation_id);
+    const yopsRecords = await listActiveYOpsLogByConversation(db, conversation_id);
     const currentSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
 
     // 3. Process the first answer (single answer per request for now)
@@ -388,7 +388,7 @@ async function handleDriftChoice3(
     limit: 500,
   });
 
-  const yopsRecords = await listYOpsLogByConversation(db, conversation.conversationId);
+  const yopsRecords = await listActiveYOpsLogByConversation(db, conversation.conversationId);
 
   // Find post-drift turns (turns after last extraction)
   let postDriftTurns = allTurns;

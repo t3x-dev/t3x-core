@@ -19,6 +19,7 @@ import {
   deleteYOpsLogEntry,
   findConversationById,
   getYOpsLogEntry,
+  listActiveYOpsLogByConversation,
   listYOpsLogByConversation,
   listYOpsLogByTopic,
 } from '@t3x-dev/storage';
@@ -81,6 +82,7 @@ const CreateYOpsRequest = z.object({
   source: YOpsSourceSchema,
   turn_hash: z.string().optional(),
   yops: z.array(SourcedYOpSchema),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   /**
    * When true, the persistence step first marks every active-draft
    * LLM-sourced entry for this conversation as `superseded_at = now()`
@@ -93,6 +95,21 @@ const CreateYOpsRequest = z.object({
    * caller (compression, manual edits, MCP, etc.).
    */
   replace_active_llm_draft: z.boolean().optional().default(false),
+  /**
+   * Explicit repair mode for a replay-failing persisted yops_log row.
+   * The API uses this as the repair target, supersedes active uncommitted
+   * script rows, and inserts the edited script in the same transaction;
+   * it does not append over the still-failing row.
+   */
+  repair_yops_log_id: z.string().optional(),
+  /**
+   * Full active-script replacement mode. Used when the Script editor is
+   * showing the already-applied active rows and the user edits that full
+   * script, then clicks Apply again. The API supersedes active uncommitted
+   * rows before inserting the edited script, instead of appending the whole
+   * script on top of itself.
+   */
+  replace_active_script: z.boolean().optional().default(false),
 });
 
 const YOpsLogEntryResponse = z.object({
@@ -103,6 +120,7 @@ const YOpsLogEntryResponse = z.object({
   turn_hash: z.string().nullable(),
   yops: z.any(),
   created_at: z.string(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   /**
    * IDs of yops_log entries marked superseded by this request. Empty
    * unless `replace_active_llm_draft: true` was passed AND there were
@@ -163,6 +181,7 @@ function toApiYOpsEntry(record: {
   turnHash: string | null;
   yops: unknown;
   createdAt: Date;
+  metadata?: unknown;
 }) {
   return {
     id: record.id,
@@ -172,6 +191,7 @@ function toApiYOpsEntry(record: {
     turn_hash: record.turnHash ?? null,
     yops: record.yops,
     created_at: record.createdAt.toISOString(),
+    metadata: (record.metadata as Record<string, unknown> | null | undefined) ?? null,
   };
 }
 
@@ -220,6 +240,14 @@ const TopicIdQuery = z.object({
   topic_id: z.string().optional(),
 });
 
+const ListYOpsQuery = TopicIdQuery.extend({
+  active_only: z.string().optional(),
+});
+
+function isTruthyQueryFlag(value: string | undefined): boolean {
+  return value === 'true' || value === '1';
+}
+
 // GET /v1/conversations/:conversationId/yops
 const listYOpsRoute = createRoute({
   method: 'get',
@@ -227,10 +255,10 @@ const listYOpsRoute = createRoute({
   tags: ['YOps Log'],
   summary: 'List yops for a conversation',
   description:
-    'Returns all yops log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id.',
+    'Returns yops log entries for a conversation, ordered by created_at ASC. Optionally filter by topic_id or active_only=true.',
   request: {
     params: ConversationIdParam,
-    query: TopicIdQuery,
+    query: ListYOpsQuery,
   },
   responses: {
     200: {
@@ -348,7 +376,10 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
           source: body.source,
           turnHash: body.turn_hash,
           yops: body.yops,
+          metadata: body.metadata,
           replaceActiveLLMDraft: body.replace_active_llm_draft,
+          repairYopsLogId: body.repair_yops_log_id,
+          replaceActiveScript: body.replace_active_script,
         },
         ctx
       )
@@ -364,7 +395,7 @@ yopsLogRoutes.openapi(createYOpsRoute, async (c) => {
 // GET /v1/conversations/:conversationId/yops
 yopsLogRoutes.openapi(listYOpsRoute, async (c) => {
   const { conversationId } = c.req.valid('param');
-  const { topic_id } = c.req.valid('query');
+  const { topic_id, active_only } = c.req.valid('query');
 
   try {
     const db = await getDB();
@@ -378,9 +409,14 @@ yopsLogRoutes.openapi(listYOpsRoute, async (c) => {
       );
     }
 
-    const records = topic_id
-      ? await listYOpsLogByTopic(db, conversationId, topic_id)
-      : await listYOpsLogByConversation(db, conversationId);
+    const activeOnly = isTruthyQueryFlag(active_only);
+    const records = activeOnly
+      ? (await listActiveYOpsLogByConversation(db, conversationId)).filter(
+          (record) => !topic_id || record.topicId === topic_id
+        )
+      : topic_id
+        ? await listYOpsLogByTopic(db, conversationId, topic_id)
+        : await listYOpsLogByConversation(db, conversationId);
 
     return c.json({ success: true as const, data: records.map(toApiYOpsEntry) }, 200);
   } catch (err) {
@@ -411,8 +447,10 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
     if (draft.trees.length === 0) {
       // Fallback: replay yops log for legacy conversations without trees
       const records = topic_id
-        ? await listYOpsLogByTopic(db, conversationId, topic_id)
-        : await listYOpsLogByConversation(db, conversationId);
+        ? (await listActiveYOpsLogByConversation(db, conversationId)).filter(
+            (record) => record.topicId === topic_id
+          )
+        : await listActiveYOpsLogByConversation(db, conversationId);
       draft = replayYOpsLog(toYOpsLogEntries(records));
     }
 
@@ -439,7 +477,7 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
     // Undo: delete yops entry + rebuild trees atomically
     await (db as any).transaction(async (tx: any) => {
       await deleteYOpsLogEntry(tx, yopsId);
-      const remainingRecords = await listYOpsLogByConversation(tx, conversationId);
+      const remainingRecords = await listActiveYOpsLogByConversation(tx, conversationId);
       const remainingEntries = toYOpsLogEntries(remainingRecords);
       const rebuilt = replayYOpsLog(remainingEntries);
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);

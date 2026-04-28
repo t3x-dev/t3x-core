@@ -9,7 +9,11 @@ import {
   type SemanticContent,
   type SourcedYOp,
 } from '@t3x-dev/core';
-import { type AnyDB, findConversationById, listYOpsLogByConversation } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  findConversationById,
+  listActiveYOpsLogByConversation,
+} from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
 import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
 
@@ -119,7 +123,7 @@ export async function runApiCompressionV2(
     };
   }
 
-  const yopsRecords = await listYOpsLogByConversation(input.db, input.conversationId);
+  const yopsRecords = await listActiveYOpsLogByConversation(input.db, input.conversationId);
   const yopsEntries = toYOpsLogEntries(yopsRecords);
   const currentSnapshot = replayYOpsLog(yopsEntries);
   const currentFlat = flattenTrees(currentSnapshot.trees);

@@ -1,3 +1,4 @@
+import type { SemanticContent, TreeNode } from '../../semantic/types';
 import { SNAKE_CASE_KEY, type SourcedYOp, type YValue } from '../../t3x-yops/types';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import type {
@@ -8,6 +9,85 @@ import type {
 } from './types';
 
 const DEFAULT_VALUE_SLOT = 'value';
+
+interface BaselineIndex {
+  nodes: Set<string>;
+  slots: Set<string>;
+}
+
+function splitPath(path: string): { parentPath: string; key: string } | null {
+  const index = path.lastIndexOf('/');
+  if (index === -1) return null;
+  return { parentPath: path.slice(0, index), key: path.slice(index + 1) };
+}
+
+function makeDetailsPath(slotPath: string, baselineIndex: BaselineIndex): string {
+  const split = splitPath(slotPath);
+  const parentPath = split?.parentPath;
+  const key = split?.key ?? slotPath;
+  const base = parentPath ? `${parentPath}/${key}_details` : `${key}_details`;
+  let candidate = base;
+  let suffix = 2;
+  while (baselineIndex.nodes.has(candidate) || baselineIndex.slots.has(candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function routeStructuredDataAwayFromSlot(
+  path: string,
+  itemId: string,
+  baselineIndex: BaselineIndex,
+  warnings: string[]
+): string {
+  const routedPath = makeDetailsPath(path, baselineIndex);
+  warnings.push(
+    `Routed structured data for existing baseline slot "${path}" to "${routedPath}" (item ${itemId})`
+  );
+  return routedPath;
+}
+
+function buildBaselineIndex(content: SemanticContent | undefined): BaselineIndex {
+  const nodes = new Set<string>();
+  const slots = new Set<string>();
+
+  function visit(node: TreeNode, parentPath: string | null): void {
+    const path = parentPath ? `${parentPath}/${node.key}` : node.key;
+    nodes.add(path);
+    for (const slot of Object.keys(node.slots ?? {})) {
+      slots.add(`${path}/${slot}`);
+    }
+    for (const child of node.children ?? []) {
+      visit(child, path);
+    }
+  }
+
+  for (const tree of content?.trees ?? []) {
+    visit(tree, null);
+  }
+
+  return { nodes, slots };
+}
+
+function recordOpsInIndex(ops: readonly SourcedYOp[], index: BaselineIndex): void {
+  for (const op of ops) {
+    if ('define' in op) {
+      index.nodes.add(op.define.path);
+      continue;
+    }
+    if ('populate' in op) {
+      index.nodes.add(op.populate.path);
+      for (const slot of Object.keys(op.populate.values)) {
+        index.slots.add(`${op.populate.path}/${slot}`);
+      }
+      continue;
+    }
+    if ('set' in op) {
+      index.slots.add(op.set.path);
+    }
+  }
+}
 
 /**
  * Result of normalizing an LLM-emitted path string.
@@ -251,7 +331,8 @@ function compileChildren(
   item: ExtractionDraftItem,
   parentPath: string,
   source: SourcedYOp['source'],
-  warnings: string[]
+  warnings: string[],
+  baselineIndex: BaselineIndex
 ): { ok: true; ops: SourcedYOp[] } | { ok: false; failure: ExtractionFailure; warnings: string[] } {
   const children = item.candidate.children ?? [];
   const ops: SourcedYOp[] = [];
@@ -293,10 +374,19 @@ function compileChildren(
       };
     }
     const childPath = `${parentPath}/${result.path}`;
-    ops.push({ define: { path: childPath }, source });
+    const routedChildPath = baselineIndex.slots.has(childPath)
+      ? routeStructuredDataAwayFromSlot(childPath, item.id, baselineIndex, warnings)
+      : childPath;
+    if (!baselineIndex.nodes.has(routedChildPath)) {
+      ops.push({ define: { path: routedChildPath }, source });
+    } else {
+      warnings.push(
+        `Rewrote add intent for existing baseline node "${routedChildPath}" to update semantics (item ${item.id})`
+      );
+    }
     if (child.values && Object.keys(child.values).length > 0) {
       ops.push({
-        populate: { path: childPath, values: sortRecordValues(child.values) },
+        populate: { path: routedChildPath, values: sortRecordValues(child.values) },
         source,
       });
     }
@@ -304,7 +394,11 @@ function compileChildren(
   return { ok: true, ops };
 }
 
-function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileResult {
+function compileItem(
+  item: ExtractionDraftItem,
+  input: CompileInput,
+  baselineIndex: BaselineIndex
+): CompileResult {
   const primaryEvidence =
     item.evidence.find((evidence) => evidence.role === 'primary') ?? item.evidence[0];
   const source = buildSource(primaryEvidence, input);
@@ -388,23 +482,48 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
       warnings.push(`Promoted ${promotedFrom} to add in bootstrap mode for item ${item.id}`);
     }
 
-    const ops: SourcedYOp[] = [{ define: { path }, source }];
+    const pathExistsAsBaselineNode =
+      input.draft.mode === 'incremental' && baselineIndex.nodes.has(path);
+    if (pathExistsAsBaselineNode) {
+      warnings.push(
+        `Rewrote add intent for existing baseline node "${path}" to update semantics (item ${item.id})`
+      );
+    }
+
+    const pathExistsAsBaselineSlot =
+      input.draft.mode === 'incremental' && baselineIndex.slots.has(path);
+    const hasStructuredPayload =
+      (item.candidate.values && Object.keys(item.candidate.values).length > 0) ||
+      (item.candidate.children && item.candidate.children.length > 0);
+    const shouldRouteBaselineSlot = pathExistsAsBaselineSlot && hasStructuredPayload;
+    const structuralPath = shouldRouteBaselineSlot
+      ? routeStructuredDataAwayFromSlot(path, item.id, baselineIndex, warnings)
+      : path;
+
+    const ops: SourcedYOp[] =
+      pathExistsAsBaselineNode || (pathExistsAsBaselineSlot && !shouldRouteBaselineSlot)
+        ? []
+        : [{ define: { path: structuralPath }, source }];
     if (item.candidate.values && Object.keys(item.candidate.values).length > 0) {
       ops.push({
-        populate: { path, values: sortRecordValues(item.candidate.values) },
+        populate: { path: structuralPath, values: sortRecordValues(item.candidate.values) },
         source,
       });
     }
 
     const targetSlot = getTargetSlot(item);
     if (targetSlot && item.candidate.value !== undefined) {
+      const setPath =
+        pathExistsAsBaselineSlot && targetSlot === DEFAULT_VALUE_SLOT
+          ? path
+          : `${structuralPath}/${targetSlot}`;
       ops.push({
-        set: { path: `${path}/${targetSlot}`, value: item.candidate.value },
+        set: { path: setPath, value: item.candidate.value },
         source,
       });
     }
 
-    const childrenResult = compileChildren(item, path, source, warnings);
+    const childrenResult = compileChildren(item, structuralPath, source, warnings, baselineIndex);
     if (!childrenResult.ok) return childrenResult;
     ops.push(...childrenResult.ops);
 
@@ -449,17 +568,34 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
 
     const ops: SourcedYOp[] = [];
     const warnings: string[] = [];
+    const pathExistsAsBaselineSlot =
+      input.draft.mode === 'incremental' && baselineIndex.slots.has(path);
+    const needsStructuredSlotRoute =
+      pathExistsAsBaselineSlot &&
+      ((item.candidate.values && Object.keys(item.candidate.values).length > 0) ||
+        (item.candidate.children && item.candidate.children.length > 0));
+    const structuralPath = needsStructuredSlotRoute
+      ? routeStructuredDataAwayFromSlot(path, item.id, baselineIndex, warnings)
+      : path;
+    if (needsStructuredSlotRoute) {
+      ops.push({ define: { path: structuralPath }, source });
+    }
+
     if (item.candidate.values && Object.keys(item.candidate.values).length > 0) {
       ops.push({
-        populate: { path, values: sortRecordValues(item.candidate.values) },
+        populate: { path: structuralPath, values: sortRecordValues(item.candidate.values) },
         source,
       });
     }
 
     const targetSlot = getTargetSlot(item);
     if (targetSlot && item.candidate.value !== undefined) {
+      const setPath =
+        pathExistsAsBaselineSlot && targetSlot === DEFAULT_VALUE_SLOT
+          ? path
+          : `${structuralPath}/${targetSlot}`;
       ops.push({
-        set: { path: `${path}/${targetSlot}`, value: item.candidate.value },
+        set: { path: setPath, value: item.candidate.value },
         source,
       });
     }
@@ -469,7 +605,7 @@ function compileItem(item: ExtractionDraftItem, input: CompileInput): CompileRes
     // an update is saying "also add these subnodes under the resolved
     // target path." Pre-fix the compiler ignored them silently; same P1
     // shape as the add branch, just outside bootstrap-promotion.
-    const childrenResult = compileChildren(item, path, source, warnings);
+    const childrenResult = compileChildren(item, structuralPath, source, warnings, baselineIndex);
     if (!childrenResult.ok) return childrenResult;
     ops.push(...childrenResult.ops);
 
@@ -630,9 +766,10 @@ function pruneUnreachableScaffold(ops: readonly SourcedYOp[]): {
 export function compileExtractionDraft(input: CompileInput): CompileResult {
   const ops: SourcedYOp[] = [];
   const warnings: string[] = [];
+  const baselineIndex = buildBaselineIndex(input.baseline);
 
   for (const item of input.draft.items) {
-    const compiled = compileItem(item, input);
+    const compiled = compileItem(item, input, baselineIndex);
     if (!compiled.ok) {
       // Strict path (default): one bad item kills the whole batch — every
       // existing caller relies on this contract.
@@ -662,6 +799,7 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
       continue;
     }
 
+    recordOpsInIndex(compiled.ops, baselineIndex);
     ops.push(...compiled.ops);
     warnings.push(...compiled.warnings);
   }

@@ -86,11 +86,15 @@ export async function answerTreeQuestion(
 
 export async function listYOpsLog(
   conversationId: string,
-  topicId?: string
+  topicId?: string,
+  opts: { activeOnly?: boolean } = { activeOnly: true }
 ): Promise<YOpsLogEntry[]> {
-  const params = topicId ? `?topic_id=${encodeURIComponent(topicId)}` : '';
+  const params = new URLSearchParams();
+  if (topicId) params.set('topic_id', topicId);
+  if (opts.activeOnly ?? true) params.set('active_only', 'true');
+  const query = params.size > 0 ? `?${params.toString()}` : '';
   const res = await fetchWithTimeout(
-    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops${params}`
+    `${API_V1}/conversations/${encodeURIComponent(conversationId)}/yops${query}`
   );
   return handleResponse<YOpsLogEntry[]>(res);
 }
@@ -124,6 +128,19 @@ export interface CreateYOpsEntryOptions {
    * compression, MCP, etc.).
    */
   replaceActiveLLMDraft?: boolean;
+  /**
+   * Repair mode for a replay-failing persisted yops_log row. Maps to
+   * `repair_yops_log_id`; the API supersedes that row and inserts the
+   * edited script atomically.
+   */
+  repairYopsLogId?: string;
+  /**
+   * Full active-script replacement mode. Used when the user edits the
+   * Script editor after the script has already been applied; maps to
+   * `replace_active_script` so the API supersedes active uncommitted rows
+   * instead of appending the whole script a second time.
+   */
+  replaceActiveScript?: boolean;
 }
 
 export async function createYOpsEntry(
@@ -144,6 +161,10 @@ export async function createYOpsEntry(
         ...(metadata && { metadata }),
         ...(options?.replaceActiveLLMDraft !== undefined && {
           replace_active_llm_draft: options.replaceActiveLLMDraft,
+        }),
+        ...(options?.repairYopsLogId && { repair_yops_log_id: options.repairYopsLogId }),
+        ...(options?.replaceActiveScript !== undefined && {
+          replace_active_script: options.replaceActiveScript,
         }),
       }),
     }

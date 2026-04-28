@@ -34,7 +34,7 @@ describe('workspaceStore (state-only)', () => {
   });
 
   it('setTurns replaces turns array', () => {
-    const turns = [{ turn_hash: 'sha256:t1', content: 'hi' }];
+    const turns = [{ turn_hash: 'sha256:t1', role: 'user' as const, content: 'hi' }];
     useWorkspaceStore.getState().setTurns(turns);
     expect(useWorkspaceStore.getState().turns).toEqual(turns);
   });

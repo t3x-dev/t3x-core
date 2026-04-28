@@ -15,7 +15,7 @@ import {
   findProjectById,
   findTurnsByConversation,
   insertAgentDraft,
-  listYOpsLogByConversation,
+  listActiveYOpsLogByConversation,
   updateAgentDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -270,7 +270,7 @@ function extractPreferencesFromFrames(snapshot: SemanticContent): {
 
 async function extractMustHave(db: DBType, conversationId: string): Promise<string[]> {
   // Strategy 1: Tree snapshot
-  const yopsLogs = await listYOpsLogByConversation(db, conversationId);
+  const yopsLogs = await listActiveYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
     const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
     const prefs = extractPreferencesFromFrames(snapshot);
@@ -308,7 +308,7 @@ async function extractMustHave(db: DBType, conversationId: string): Promise<stri
 
 async function extractMustntHave(db: DBType, conversationId: string): Promise<string[]> {
   // Strategy 1: Tree snapshot
-  const yopsLogs = await listYOpsLogByConversation(db, conversationId);
+  const yopsLogs = await listActiveYOpsLogByConversation(db, conversationId);
   if (yopsLogs.length > 0) {
     const snapshot = replayYOpsLog(toYOpsLogEntries(yopsLogs));
     const prefs = extractPreferencesFromFrames(snapshot);

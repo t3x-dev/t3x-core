@@ -271,3 +271,118 @@ export async function supersedeActiveLLMSuggestions(
     return rows.map((r) => r.id);
   })) as string[];
 }
+
+/**
+ * Mark every active, uncommitted yops_log row for a conversation as
+ * superseded. This is the Script editor's full-replacement path: when the
+ * user edits the already-applied active script mirror, Apply must replace
+ * that active script instead of appending the whole script on top of itself.
+ *
+ * Unlike `supersedeActiveLLMSuggestions`, this intentionally supersedes
+ * manual and mixed rows too because the user is editing the full active
+ * script as the new source of truth. Committed rows are immutable and are
+ * excluded by the same commits.yops_log_ids guard used elsewhere.
+ */
+export async function supersedeActiveUncommittedYOpsLogEntries(
+  db: AnyDB,
+  conversationId: string
+): Promise<string[]> {
+  return (await (db as unknown as TxRunner).transaction(async (tx) => {
+    const projectRow = await (tx as AnyDB).execute<{ project_id: string }>(
+      sql`SELECT project_id FROM conversations WHERE conversation_id = ${conversationId}`
+    );
+    const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
+      ? (projectRow as Array<{ project_id: string }>)
+      : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
+    const projectId = projectRows[0]?.project_id;
+    if (!projectId) return [];
+
+    await acquireProjectSupersedeLock(tx as AnyDB, projectId);
+
+    const result = await (tx as AnyDB).execute<{ id: string }>(sql`
+      UPDATE ${yopsLog}
+      SET superseded_at = NOW()
+      WHERE conversation_id = ${conversationId}
+        AND superseded_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM commits c
+          WHERE c.project_id = ${projectId}
+            AND c.yops_log_ids @> jsonb_build_array(${yopsLog.id})
+        )
+      RETURNING ${yopsLog.id}
+    `);
+
+    const rows: Array<{ id: string }> = Array.isArray(result)
+      ? (result as Array<{ id: string }>)
+      : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
+    return rows.map((r) => r.id);
+  })) as string[];
+}
+
+/**
+ * Explicit repair path for a replay-failing yops_log row.
+ *
+ * Unlike `supersedeActiveLLMSuggestions`, this is allowed to supersede
+ * manual/mixed rows: the user is editing the Script editor specifically to
+ * repair a replay-failing row. Because the editor shows the active script as
+ * one source-of-truth YAML document, the repair replaces every active,
+ * uncommitted row for the conversation after proving the selected failing row
+ * itself is repairable. Committed rows remain immutable and are excluded by
+ * the same commits.yops_log_ids guard used by the LLM-suggestion replacement
+ * path.
+ */
+export async function supersedeYOpsLogEntryForRepair(
+  db: AnyDB,
+  conversationId: string,
+  yopsLogId: string
+): Promise<string[]> {
+  return (await (db as unknown as TxRunner).transaction(async (tx) => {
+    const projectRow = await (tx as AnyDB).execute<{ project_id: string }>(sql`
+      SELECT project_id
+      FROM ${yopsLog}
+      WHERE id = ${yopsLogId}
+        AND conversation_id = ${conversationId}
+      LIMIT 1
+    `);
+    const projectRows: Array<{ project_id: string }> = Array.isArray(projectRow)
+      ? (projectRow as Array<{ project_id: string }>)
+      : ((projectRow as { rows?: Array<{ project_id: string }> }).rows ?? []);
+    const projectId = projectRows[0]?.project_id;
+    if (!projectId) return [];
+
+    await acquireProjectSupersedeLock(tx as AnyDB, projectId);
+
+    const result = await (tx as AnyDB).execute<{ id: string }>(sql`
+      UPDATE ${yopsLog}
+      SET superseded_at = NOW()
+      WHERE conversation_id = ${conversationId}
+        AND superseded_at IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM ${yopsLog} target
+          WHERE target.id = ${yopsLogId}
+            AND target.conversation_id = ${conversationId}
+            AND target.superseded_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM commits c
+              WHERE c.project_id = ${projectId}
+                AND c.yops_log_ids @> jsonb_build_array(target.id)
+            )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM commits c
+          WHERE c.project_id = ${projectId}
+            AND c.yops_log_ids @> jsonb_build_array(${yopsLog.id})
+        )
+      RETURNING ${yopsLog.id}
+    `);
+
+    const rows: Array<{ id: string }> = Array.isArray(result)
+      ? (result as Array<{ id: string }>)
+      : ((result as { rows?: Array<{ id: string }> }).rows ?? []);
+    return rows.map((r) => r.id);
+  })) as string[];
+}

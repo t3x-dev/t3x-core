@@ -10,6 +10,8 @@ import {
   listActiveYOpsLogByConversation,
   listYOpsLogByConversation,
   supersedeActiveLLMSuggestions,
+  supersedeActiveUncommittedYOpsLogEntries,
+  supersedeYOpsLogEntryForRepair,
 } from '../queries/yops-log';
 import { createTestDB, sleep, testData } from './setup';
 
@@ -495,6 +497,78 @@ describe('YOps Log Storage', () => {
       // The audit / GET-all path still surfaces the superseded entry —
       // history must remain readable.
       expect(all.map((e) => e.id).sort()).toEqual([llmEntry.id, humanEntry.id].sort());
+    });
+
+    it('repair supersedes active uncommitted rows after validating the target row', async () => {
+      const convId = await freshConv();
+      const firstDraft = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('first_draft')],
+      });
+      const failingDraft = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('failing_draft')],
+      });
+      const committedEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('committed_root')],
+      });
+      await createCommit(db, {
+        author: { type: 'human', name: 'test' },
+        content: { trees: [], relations: [] },
+        project_id: testProjectId,
+        message: 'baseline',
+        yops_log_ids: [committedEntry.id],
+      });
+
+      const supersededIds = await supersedeYOpsLogEntryForRepair(db, convId, failingDraft.id);
+
+      expect(supersededIds.sort()).toEqual([firstDraft.id, failingDraft.id].sort());
+      expect((await getYOpsLogEntry(db, firstDraft.id))?.supersededAt).toBeInstanceOf(Date);
+      expect((await getYOpsLogEntry(db, failingDraft.id))?.supersededAt).toBeInstanceOf(Date);
+      expect((await getYOpsLogEntry(db, committedEntry.id))?.supersededAt).toBeNull();
+    });
+
+    it('full script replacement supersedes active uncommitted rows without touching committed rows', async () => {
+      const convId = await freshConv();
+      const manualDraft = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('manual_draft')],
+      });
+      const llmDraft = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'pipeline',
+        yops: [llmOp('llm_draft')],
+      });
+      const committedEntry = await insertYOpsLogEntry(db, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [humanOp('committed_root')],
+      });
+      await createCommit(db, {
+        author: { type: 'human', name: 'test' },
+        content: { trees: [], relations: [] },
+        project_id: testProjectId,
+        message: 'baseline',
+        yops_log_ids: [committedEntry.id],
+      });
+
+      const supersededIds = await supersedeActiveUncommittedYOpsLogEntries(db, convId);
+
+      expect(supersededIds.sort()).toEqual([manualDraft.id, llmDraft.id].sort());
+      expect((await getYOpsLogEntry(db, manualDraft.id))?.supersededAt).toBeInstanceOf(Date);
+      expect((await getYOpsLogEntry(db, llmDraft.id))?.supersededAt).toBeInstanceOf(Date);
+      expect((await getYOpsLogEntry(db, committedEntry.id))?.supersededAt).toBeNull();
     });
   });
 });

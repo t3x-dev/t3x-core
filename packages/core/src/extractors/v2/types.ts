@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SemanticContent } from '../../semantic/types';
 import type { SourcedYOp, YValue } from '../../t3x-yops/types';
 
 export const EXTRACTION_DRAFT_SCHEMA = 't3x/extraction-draft' as const;
@@ -86,6 +87,12 @@ export type ExtractionDraft = z.infer<typeof ExtractionDraftSchema>;
 
 export interface CompileInput {
   draft: ExtractionDraft;
+  /**
+   * Optional committed baseline used by incremental compilation. When
+   * present, the compiler can avoid emitting structure-creating ops
+   * for paths that already exist in the baseline.
+   */
+  baseline?: SemanticContent;
   sourceModel: string;
   extractedAt: string;
   turnHashByTag: Record<string, string>;

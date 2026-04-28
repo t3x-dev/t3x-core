@@ -681,13 +681,29 @@ export async function runExtractionV2Pipeline(
       };
     }
 
+    // The caller-owned mode is authoritative. Provider drafts carry a
+    // mode field because the schema asks for it, but LLMs can drift
+    // (e.g. return bootstrap while the API computed incremental from a
+    // committed baseline). Compile semantics must follow the caller's
+    // baseline decision, not the model's self-report.
+    const modeWarnings =
+      generated.draft.mode === input.mode
+        ? []
+        : [
+            `Provider draft mode "${generated.draft.mode}" overridden by caller mode "${input.mode}".`,
+          ];
+    const authoritativeDraft =
+      generated.draft.mode === input.mode
+        ? generated.draft
+        : { ...generated.draft, mode: input.mode };
+
     // Apply the style cap deterministically at the canonical-draft layer,
     // before compile. This is the hard counterpart to the prompt budget:
     // even if the model ignores "≤6 items" and emits 14, selection
     // trims to the top 6 by confidence and surfaces what was dropped
     // through compiled.warnings. See `selectTopItemsByStyle`.
-    const totalItemsFromModel = generated.draft.items.length;
-    const selection = selectTopItemsByStyle(generated.draft, input.style);
+    const totalItemsFromModel = authoritativeDraft.items.length;
+    const selection = selectTopItemsByStyle(authoritativeDraft, input.style);
     const selectionWarnings: string[] =
       selection.droppedIds.length > 0 && input.style?.max_items !== undefined
         ? [selectionWarningLine(selection.droppedIds, input.style.max_items, totalItemsFromModel)]
@@ -695,6 +711,7 @@ export async function runExtractionV2Pipeline(
 
     const compiled = compileExtractionDraft({
       draft: selection.draft,
+      baseline: input.snapshot,
       sourceModel: input.model,
       extractedAt: input.extractedAt ?? new Date().toISOString(),
       turnHashByTag,
@@ -728,6 +745,7 @@ export async function runExtractionV2Pipeline(
         // strict pass.
         const partial = compileExtractionDraft({
           draft: selection.draft,
+          baseline: input.snapshot,
           sourceModel: input.model,
           extractedAt: input.extractedAt ?? new Date().toISOString(),
           turnHashByTag,
@@ -758,6 +776,7 @@ export async function runExtractionV2Pipeline(
             compiled: {
               ops: partial.ops,
               warnings: [
+                ...modeWarnings,
                 ...selectionWarnings,
                 `Partial compile after reask exhaustion: ${compiled.failure.message}`,
                 ...partial.warnings,
@@ -819,7 +838,7 @@ export async function runExtractionV2Pipeline(
         ops: compiled.ops,
         // Selection warnings precede compile warnings so a reader
         // sees the cap action before any downstream notes.
-        warnings: [...selectionWarnings, ...compiled.warnings],
+        warnings: [...modeWarnings, ...selectionWarnings, ...compiled.warnings],
       },
       turnHashByTag,
     };

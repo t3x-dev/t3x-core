@@ -122,14 +122,26 @@ export function useScriptExecution() {
     // (HumanSource) ops on prior entries regardless of this flag, so
     // human edits never get clobbered by an LLM Apply.
     //
-    // Manual-only Apply (scriptDirty without hasDraft) leaves it false:
-    // a hand-written script edit shouldn't supersede a separate LLM
-    // suggestion the user might still want.
+    // Manual-only Apply can be either:
+    //   - first script in an empty workspace: append normally;
+    //   - edit of the already-applied active script mirror: replace the
+    //     active uncommitted rows, otherwise the same `define` ops are
+    //     appended again and replay fails with ALREADY_EXISTS.
     const replaceActiveLLMDraft = store.hasDraft;
+    const repairYopsLogId =
+      store.scriptDirty && !store.hasDraft && store.replayWarning?.rowId
+        ? store.replayWarning.rowId
+        : undefined;
+    const replaceActiveScript =
+      store.scriptDirty && !store.hasDraft && !repairYopsLogId && store.opsLog.length > 0;
 
     try {
       store.setMode('committing');
-      await commitOps(convId, sourced, { replaceActiveLLMDraft });
+      await commitOps(convId, sourced, {
+        replaceActiveLLMDraft,
+        ...(repairYopsLogId ? { repairYopsLogId } : {}),
+        ...(replaceActiveScript ? { replaceActiveScript } : {}),
+      });
     } catch (err) {
       // Commit failed — yops_log was NOT written; the draft is still
       // applicable, leave it staged so the user can retry. This is the

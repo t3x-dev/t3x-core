@@ -6,6 +6,7 @@
 
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import { commitOps } from '@/commands/yops/yopsService';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { removeYOpsEntry } from '@/infrastructure/yopsLog';
 import { useChatStore } from '@/store/chatStore';
@@ -21,7 +22,39 @@ export function useReplayWarningActions() {
     setReplayWarning(null);
   }, [setReplayWarning]);
 
-  const deleteFailingOp = useCallback(async () => {
+  const removeFailingOp = useCallback(async () => {
+    if (!replayWarning || !conversationId || busy) return;
+    const projectId = useChatStore.getState().activeProjectId;
+    if (!projectId) return;
+    if (!replayWarning.rowId) {
+      toast.error('Could not remove op: missing yops_log row id');
+      return;
+    }
+
+    const { opsLog } = useWorkspaceStore.getState();
+    if (replayWarning.opIndex < 0 || replayWarning.opIndex >= opsLog.length) {
+      toast.error('Could not remove op: replay warning is no longer aligned with the script');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const repairedOps = opsLog.filter((_, index) => index !== replayWarning.opIndex);
+      await commitOps(conversationId, repairedOps, {
+        replaceActiveLLMDraft: false,
+        repairYopsLogId: replayWarning.rowId,
+      });
+      await hydrateConversationToStore(projectId, conversationId);
+      toast.success('Removed failing op — workspace re-replayed');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Could not remove op: ${msg}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [replayWarning, conversationId, busy]);
+
+  const deleteFailingEntry = useCallback(async () => {
     if (!replayWarning || !conversationId || busy) return;
     const projectId = useChatStore.getState().activeProjectId;
     if (!projectId) return;
@@ -29,10 +62,10 @@ export function useReplayWarningActions() {
     try {
       await removeYOpsEntry(conversationId, replayWarning.rowId);
       await hydrateConversationToStore(projectId, conversationId);
-      toast.success('Deleted failing op — workspace re-replayed');
+      toast.success('Deleted failing entry — workspace re-replayed');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Could not delete op: ${msg}`);
+      toast.error(`Could not delete entry: ${msg}`);
     } finally {
       setBusy(false);
     }
@@ -42,6 +75,8 @@ export function useReplayWarningActions() {
     replayWarning,
     busy,
     dismiss,
-    deleteFailingOp,
+    removeFailingOp,
+    deleteFailingEntry,
+    deleteFailingOp: deleteFailingEntry,
   };
 }

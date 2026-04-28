@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Trash2, Wrench, X } from 'lucide-react';
 import { useReplayWarningActions } from '@/hooks/conversations/useReplayWarningActions';
 
 /**
@@ -12,7 +12,8 @@ import { useReplayWarningActions } from '@/hooks/conversations/useReplayWarningA
  * Renders nothing when there's no warning — safe to mount unconditionally.
  */
 export function ReplayWarningBanner() {
-  const { replayWarning, busy, dismiss, deleteFailingOp } = useReplayWarningActions();
+  const { replayWarning, busy, dismiss, removeFailingOp, deleteFailingEntry } =
+    useReplayWarningActions();
 
   if (!replayWarning) return null;
 
@@ -38,17 +39,29 @@ export function ReplayWarningBanner() {
       <div className="flex items-center gap-1 shrink-0">
         <button
           type="button"
-          onClick={deleteFailingOp}
+          onClick={removeFailingOp}
           disabled={busy || !replayWarning.rowId}
           className="rounded border border-[var(--status-warning)]/40 bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] font-medium hover:bg-[var(--hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? (
             <span className="flex items-center gap-1">
-              <Loader2 size={10} className="animate-spin" /> Deleting…
+              <Loader2 size={10} className="animate-spin" /> Applying…
             </span>
           ) : (
-            'Delete this op'
+            <span className="flex items-center gap-1">
+              <Wrench size={10} /> Remove failing op
+            </span>
           )}
+        </button>
+        <button
+          type="button"
+          onClick={deleteFailingEntry}
+          disabled={busy || !replayWarning.rowId}
+          className="rounded border border-[var(--status-warning)]/25 px-2 py-0.5 text-[10px] font-medium opacity-80 hover:bg-[var(--hover-bg)] disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className="flex items-center gap-1">
+            <Trash2 size={10} /> Delete failing entry
+          </span>
         </button>
         <button
           type="button"

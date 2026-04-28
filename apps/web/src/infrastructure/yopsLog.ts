@@ -16,6 +16,9 @@ import {
 } from '@/infrastructure/trees';
 
 export type AppendYOpsOptions = CreateYOpsEntryOptions;
+export interface LoadYOpsLogOptions {
+  activeOnly?: boolean;
+}
 
 export class PersistenceError extends Error {
   constructor(
@@ -75,10 +78,11 @@ export async function appendYOps(
 
 export async function loadYOpsLog(
   conversationId: string,
-  topicId?: string
+  topicId?: string,
+  options?: LoadYOpsLogOptions
 ): Promise<YOpsLogEntry[]> {
   try {
-    return await listYOpsLog(conversationId, topicId);
+    return await listYOpsLog(conversationId, topicId, { activeOnly: options?.activeOnly ?? true });
   } catch (err) {
     throw wrapError('load', err);
   }

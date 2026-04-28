@@ -22,6 +22,7 @@ import { fetchCommitForInheritance } from './chatInitFetch';
 
 export interface WorkspaceTurn {
   turn_hash: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
 }
 
@@ -72,6 +73,7 @@ export async function fetchConversationSnapshot(
 
   const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     turn_hash: t.turn_hash,
+    role: t.role,
     content: t.content,
   }));
 

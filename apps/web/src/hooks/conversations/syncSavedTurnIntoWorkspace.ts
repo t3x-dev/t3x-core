@@ -21,7 +21,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export function syncSavedTurnIntoWorkspace(
   conversationId: string,
-  turn: { turn_hash: string; content: string }
+  turn: { turn_hash: string; role: 'user' | 'assistant' | 'system' | 'tool'; content: string }
 ): void {
   const ws = useWorkspaceStore.getState();
   if (ws.conversationId !== conversationId) return;
