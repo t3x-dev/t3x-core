@@ -6,6 +6,7 @@
  * the engine is allowed to run.
  */
 
+import { resolveOpName } from './opShape';
 import type { OpSpec, PathFields, YOpsSpec } from './spec';
 import type { YOpsError, YValue } from './types';
 
@@ -100,10 +101,19 @@ export class OpRegistry {
    * payload isn't a mapping, or none of the declared fields contain a
    * non-empty string. Non-string values are silently skipped (the engine
    * boundary already rejects malformed payloads).
+   *
+   * Op-key resolution uses the same `resolveOpName` semantics as the
+   * engine: skip known metadata keys (`source`), then take the first
+   * remaining key. If that key isn't a registered op (e.g. a typo, or a
+   * future op this engine version doesn't know), return `[]` — never
+   * fall through to a later key. Falling through would let
+   * `{ frobnicate: {…}, set: { path: 'a' } }` extract \`a\` here while
+   * the engine rejects the same op as UNKNOWN_OP, reintroducing the
+   * exact op-key-drift class fixed for `source` ordering in #926.
    */
   getOpPaths(op: Record<string, unknown>): Array<{ role: keyof PathFields; path: string }> {
-    const opName = Object.keys(op).find((k) => this.spec.operations[k] !== undefined);
-    if (opName === undefined) return [];
+    const opName = resolveOpName(op);
+    if (opName === null) return [];
     const pathFields = this.getPathFields(opName);
     if (!pathFields) return [];
     const inner = op[opName];
