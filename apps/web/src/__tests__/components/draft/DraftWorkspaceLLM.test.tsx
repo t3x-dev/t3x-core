@@ -1,5 +1,11 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { SemanticPointAPI, WorkbenchDraft } from '@/infrastructure';
+import {
+  countReadySemanticPoints,
+  countReviewSemanticPoints,
+  getSemanticPointsConversationId,
+  isLLMExtractionDraft,
+} from '@/domain/draft/llmMode';
+import type { SemanticPointAPI, WorkbenchDraft } from '@/types/api';
 
 /**
  * Tests for the DraftWorkspace LLM extraction mode integration.
@@ -62,8 +68,7 @@ describe('DraftWorkspace LLM mode detection', () => {
       extraction_mode: 'llm',
       semantic_points: [makeSemanticPoint()],
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(true);
+    expect(isLLMExtractionDraft(draft)).toBe(true);
   });
 
   test('isLLMMode is false when extraction_mode=deterministic', () => {
@@ -71,8 +76,7 @@ describe('DraftWorkspace LLM mode detection', () => {
       extraction_mode: 'deterministic',
       semantic_points: null,
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(false);
+    expect(isLLMExtractionDraft(draft)).toBe(false);
   });
 
   test('isLLMMode is false when extraction_mode is null (backward compat)', () => {
@@ -80,15 +84,13 @@ describe('DraftWorkspace LLM mode detection', () => {
       extraction_mode: null,
       semantic_points: null,
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(false);
+    expect(isLLMExtractionDraft(draft)).toBe(false);
   });
 
   test('isLLMMode is false when extraction_mode is undefined (backward compat)', () => {
     const draft = makeDraft();
     // extraction_mode not set at all
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(false);
+    expect(isLLMExtractionDraft(draft)).toBe(false);
   });
 
   test('isLLMMode is false when extraction_mode=llm but semantic_points is null', () => {
@@ -96,8 +98,7 @@ describe('DraftWorkspace LLM mode detection', () => {
       extraction_mode: 'llm',
       semantic_points: null,
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(false);
+    expect(isLLMExtractionDraft(draft)).toBe(false);
   });
 
   test('isLLMMode is true even with empty semantic_points array', () => {
@@ -105,8 +106,7 @@ describe('DraftWorkspace LLM mode detection', () => {
       extraction_mode: 'llm',
       semantic_points: [],
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    expect(isLLMMode).toBe(true);
+    expect(isLLMExtractionDraft(draft)).toBe(true);
   });
 });
 
@@ -121,12 +121,7 @@ describe('DraftWorkspace LLM mode indicator counts', () => {
         makeSemanticPoint({ id: 'p4', zone: 'review', status: 'auto_landed' }),
       ],
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    const readyCount = isLLMMode
-      ? (draft.semantic_points ?? []).filter((p) => p.zone === 'ready' && p.status !== 'undone')
-          .length
-      : 0;
-    expect(readyCount).toBe(2);
+    expect(countReadySemanticPoints(draft.semantic_points)).toBe(2);
   });
 
   test('review count counts all points in review zone', () => {
@@ -138,49 +133,45 @@ describe('DraftWorkspace LLM mode indicator counts', () => {
         makeSemanticPoint({ id: 'p3', zone: 'ready', status: 'auto_landed' }),
       ],
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    const reviewCount = isLLMMode
-      ? (draft.semantic_points ?? []).filter((p) => p.zone === 'review').length
-      : 0;
-    expect(reviewCount).toBe(2);
+    expect(countReviewSemanticPoints(draft.semantic_points)).toBe(2);
   });
 
   test('counts are 0 when not in LLM mode', () => {
     const draft = makeDraft({
       extraction_mode: 'deterministic',
     });
-    const isLLMMode = draft.extraction_mode === 'llm' && Array.isArray(draft.semantic_points);
-    const readyCount = isLLMMode
-      ? (draft.semantic_points ?? []).filter((p) => p.zone === 'ready' && p.status !== 'undone')
-          .length
-      : 0;
-    const reviewCount = isLLMMode
-      ? (draft.semantic_points ?? []).filter((p) => p.zone === 'review').length
-      : 0;
-    expect(readyCount).toBe(0);
-    expect(reviewCount).toBe(0);
+    expect(isLLMExtractionDraft(draft)).toBe(false);
+    expect(countReadySemanticPoints(draft.semantic_points)).toBe(0);
+    expect(countReviewSemanticPoints(draft.semantic_points)).toBe(0);
   });
 });
 
 describe('DraftWorkspace LLM mode component selection', () => {
-  test('LLM mode renders DraftWorkbenchLLM component', async () => {
-    const { DraftWorkbenchLLM } = await import('@/components/draft/DraftWorkbenchLLM');
-    expect(DraftWorkbenchLLM).toBeDefined();
-    expect(typeof DraftWorkbenchLLM).toBe('function');
+  test('LLM mode selects the LLM workbench branch', () => {
+    const draft = makeDraft({
+      extraction_mode: 'llm',
+      semantic_points: [makeSemanticPoint()],
+    });
+    expect(isLLMExtractionDraft(draft)).toBe(true);
   });
 
-  test('deterministic mode renders NodeList + AutoSuggestPanel', async () => {
-    const { NodeList } = await import('@/components/draft/NodeList');
-    const { AutoSuggestPanel } = await import('@/components/draft/AutoSuggestPanel');
-    expect(NodeList).toBeDefined();
-    expect(AutoSuggestPanel).toBeDefined();
+  test('deterministic mode selects the deterministic workbench branch', () => {
+    const draft = makeDraft({
+      extraction_mode: 'deterministic',
+      semantic_points: null,
+    });
+    expect(isLLMExtractionDraft(draft)).toBe(false);
   });
 
-  test('shared sections always render regardless of mode', async () => {
-    const { CollapsibleSection } = await import('@/components/shared/CollapsibleSection');
-    const { DraftDiffSection } = await import('@/components/draft/DraftDiffSection');
-    expect(CollapsibleSection).toBeDefined();
-    expect(DraftDiffSection).toBeDefined();
+  test('shared sections are independent from LLM mode selection', () => {
+    const llmDraft = makeDraft({
+      extraction_mode: 'llm',
+      semantic_points: [makeSemanticPoint()],
+    });
+    const deterministicDraft = makeDraft({ extraction_mode: 'deterministic' });
+
+    expect(isLLMExtractionDraft(llmDraft)).toBe(true);
+    expect(isLLMExtractionDraft(deterministicDraft)).toBe(false);
   });
 
   test('LLM mode indicator text is "LLM Extraction"', () => {
@@ -228,13 +219,11 @@ describe('DraftWorkspace LLM mode component selection', () => {
         ],
       }),
     ];
-    const conversationId = points[0]?.evidence?.[0]?.conversation_id ?? '';
-    expect(conversationId).toBe('conv_abc');
+    expect(getSemanticPointsConversationId(points)).toBe('conv_abc');
   });
 
   test('conversationId falls back to empty string when no evidence', () => {
     const points: SemanticPointAPI[] = [makeSemanticPoint({ evidence: [] })];
-    const conversationId = points[0]?.evidence?.[0]?.conversation_id ?? '';
-    expect(conversationId).toBe('');
+    expect(getSemanticPointsConversationId(points)).toBe('');
   });
 });

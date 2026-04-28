@@ -11,6 +11,7 @@
 import postgres from 'postgres';
 import type { AnyDB } from '../adapters';
 import { closePostgresStorage, createPostgresStorage } from '../adapters/postgres';
+import { getTestPostgresPort } from './pgTestConfig';
 
 /**
  * SQL to create all tables (matching schema.ts)
@@ -601,7 +602,7 @@ CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at);
 /** SQL for pgvector tables (created separately, may fail if vector unavailable) */
 export const CREATE_VECTOR_TABLES_SQL = '';
 
-const TEST_PORT = parseInt(process.env.T3X_TEST_PG_PORT || '5446', 10);
+const TEST_PORT = getTestPostgresPort();
 const TEST_HOST = 'localhost';
 const TEST_USER = 'postgres';
 const TEST_PASSWORD = 'password';

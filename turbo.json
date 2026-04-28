@@ -14,7 +14,7 @@
     "test": {
       "dependsOn": ["build"],
       "outputs": [],
-      "env": ["DATABASE_URL", "T3X_TEST_PG_PORT"],
+      "env": ["DATABASE_URL", "T3X_TEST_PG_PORT", "T3X_TEST_PG_DATA_DIR"],
       "cache": true
     },
     "lint": {
