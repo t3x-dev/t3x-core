@@ -7,6 +7,13 @@
  *   key   — mapping key: `config/database/host`
  *   index — array index: `items/[0]`
  *   match — array key match: `users/[name=alice]/role`
+ *
+ * Quoted-segment escape (proposal A′ from #930): a segment that starts
+ * with `"` is read as a quoted key. Inside the quotes, `\"` is a literal
+ * double quote and `\\` is a literal backslash; every other character
+ * (including `/`, `[`, `]`, `=`) is itself. This lets paths address keys
+ * that contain reserved characters without forking the wire format —
+ * `config/"db/prod"/host` resolves to the key `db/prod` under `config`.
  */
 
 import type { YValue } from './types';
@@ -39,29 +46,160 @@ export type PathSegment =
 
 // ── parsePath ──────────────────────────────────────────────────────────────
 
+/** Per-segment classification used after a path has been split on `/`. */
+function classifyRawSegment(raw: string): PathSegment {
+  // Array index: [n]
+  const indexMatch = raw.match(/^\[(\d+)\]$/);
+  if (indexMatch) {
+    return { type: 'index', value: parseInt(indexMatch[1], 10) };
+  }
+
+  // Key match: [key=value]
+  const matchMatch = raw.match(/^\[([^=\]]+)=([^\]]*)\]$/);
+  if (matchMatch) {
+    return { type: 'match', key: matchMatch[1], value: matchMatch[2] };
+  }
+
+  // Plain mapping key
+  return { type: 'key', value: raw };
+}
+
+/**
+ * Result type for the strict parser. Used by the validator (which surfaces
+ * `YOPS_PATH_UNCLOSED_QUOTE` and `YOPS_PATH_INVALID_ESCAPE` diagnostics)
+ * when callers need to know about parse-level errors. `parsePath` itself
+ * stays permissive — it's used by handlers that already accept whatever
+ * shape the user gave them.
+ */
+export type ParsePathResult =
+  | { ok: true; segments: PathSegment[] }
+  | {
+      ok: false;
+      code: 'UNCLOSED_QUOTE' | 'INVALID_ESCAPE';
+      message: string;
+      offset: number;
+    };
+
+/**
+ * Strict parse: returns segments on success or a typed error on quoted-segment
+ * malformation. Existing callers should keep using `parsePath` (which is
+ * permissive); this is the entry point the validator builds on.
+ */
+export function tryParsePath(path: string): ParsePathResult {
+  if (path === '') return { ok: true, segments: [] };
+
+  const segments: PathSegment[] = [];
+  let i = 0;
+
+  while (i <= path.length) {
+    if (i === path.length) {
+      // Trailing `/` produces an empty final segment, matching today's
+      // `path.split('/')` behaviour.
+      segments.push({ type: 'key', value: '' });
+      break;
+    }
+
+    if (path[i] === '"') {
+      // Quoted segment. Read until the closing `"`, decoding escapes.
+      const start = i;
+      i++; // skip opening quote
+      let value = '';
+      let closed = false;
+      while (i < path.length) {
+        const c = path[i];
+        if (c === '\\') {
+          if (i + 1 >= path.length) {
+            return {
+              ok: false,
+              code: 'INVALID_ESCAPE',
+              message: `Trailing backslash inside quoted segment starting at offset ${start}`,
+              offset: i,
+            };
+          }
+          const next = path[i + 1];
+          if (next === '"' || next === '\\') {
+            value += next;
+            i += 2;
+            continue;
+          }
+          return {
+            ok: false,
+            code: 'INVALID_ESCAPE',
+            message: `Invalid escape sequence "\\${next}" inside quoted segment starting at offset ${start}; only \\" and \\\\ are allowed`,
+            offset: i,
+          };
+        }
+        if (c === '"') {
+          closed = true;
+          i++; // consume closing quote
+          break;
+        }
+        value += c;
+        i++;
+      }
+      if (!closed) {
+        return {
+          ok: false,
+          code: 'UNCLOSED_QUOTE',
+          message: `Unclosed quoted segment starting at offset ${start}`,
+          offset: start,
+        };
+      }
+      segments.push({ type: 'key', value });
+    } else {
+      // Plain segment: read until next `/` (no quote-tracking — `"` mid-
+      // segment is treated as a literal in today's behaviour and we
+      // preserve that for backwards compat).
+      const start = i;
+      while (i < path.length && path[i] !== '/') i++;
+      segments.push(classifyRawSegment(path.slice(start, i)));
+    }
+
+    // Expect `/` separator or end of input.
+    if (i < path.length) {
+      if (path[i] !== '/') {
+        // Quoted segment followed by non-slash garbage (e.g. `"foo"bar/...`).
+        // For now, treat as a plain segment continuation: read the trailing
+        // chars and concat. This preserves a permissive surface; the
+        // validator can warn on it later if needed.
+        const start = i;
+        while (i < path.length && path[i] !== '/') i++;
+        const trailing = path.slice(start, i);
+        const last = segments.pop();
+        if (last && last.type === 'key') {
+          segments.push({ type: 'key', value: last.value + trailing });
+        } else {
+          // Index/match followed by garbage — push as key concat for now.
+          segments.push({ type: 'key', value: trailing });
+        }
+      }
+      if (i < path.length && path[i] === '/') i++;
+    } else {
+      break;
+    }
+  }
+
+  return { ok: true, segments };
+}
+
 /**
  * Parse a path string into an array of PathSegments.
- * Empty string returns [].
+ *
+ * Permissive: invalid quoted-segment shapes fall back to the legacy
+ * `path.split('/')` behaviour so existing callers see no change for any
+ * path that doesn't use the new escape syntax. Callers that need to
+ * detect parse errors (the validator) should use `tryParsePath` instead.
  */
 export function parsePath(path: string): PathSegment[] {
+  const result = tryParsePath(path);
+  if (result.ok) return result.segments;
+
+  // Fallback: replicate the legacy split-on-slash behaviour for paths
+  // whose quoted segments are malformed. The strict parser surfaces the
+  // error via `tryParsePath`; this entry point stays lenient so handlers
+  // that today accept these inputs continue to.
   if (path === '') return [];
-
-  return path.split('/').map((segment) => {
-    // Array index: [n]
-    const indexMatch = segment.match(/^\[(\d+)\]$/);
-    if (indexMatch) {
-      return { type: 'index', value: parseInt(indexMatch[1], 10) } as PathSegment;
-    }
-
-    // Key match: [key=value]
-    const matchMatch = segment.match(/^\[([^=\]]+)=([^\]]*)\]$/);
-    if (matchMatch) {
-      return { type: 'match', key: matchMatch[1], value: matchMatch[2] } as PathSegment;
-    }
-
-    // Plain mapping key
-    return { type: 'key', value: segment } as PathSegment;
-  });
+  return path.split('/').map(classifyRawSegment);
 }
 
 // ── deepClone ──────────────────────────────────────────────────────────────

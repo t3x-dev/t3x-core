@@ -53,6 +53,60 @@ path:
         Find first item in a sequence where item.key equals value.
         Type coercion: [id=1] matches both "1" and 1.
       example: users/[name=alice]/role
+    quoted_key:
+      syntax: '"name"'
+      description: >
+        Mapping key wrapped in double quotes. Used when a key contains a
+        reserved character (`/`, `[`, `]`, `=`) or whitespace. Inside the
+        quotes, every character is a literal except for two escapes:
+        `\"` is a literal double quote, `\\` is a literal backslash.
+        Reserved characters never need escaping inside a quoted segment.
+      example: config/"db/prod"/host
+  escape:
+    rule: >
+      A path segment that begins with `"` is read as a quoted key. The
+      quoted segment ends at the first unescaped `"`. Inside the quotes,
+      `\"` decodes to `"` and `\\` decodes to `\`. Any other backslash
+      sequence is a parse error (`YOPS_PATH_INVALID_ESCAPE`). A quote
+      that opens but never closes is `YOPS_PATH_UNCLOSED_QUOTE`. Outside
+      a quoted segment, the existing key / index / match rules are
+      unchanged.
+    examples:
+      - description: key contains a slash
+        path: config/"db/prod"/host
+        decodes_to_key: db/prod
+      - description: key contains a literal double quote
+        path: '"some \"weird\" key"'
+        decodes_to_key: 'some "weird" key'
+      - description: key contains a literal backslash
+        path: '"path\\with\\backslashes"'
+        decodes_to_key: 'path\with\backslashes'
+      - description: match value with reserved characters (clarity-quoted)
+        path: 'users/[email="alice@x.com"]/role'
+        notes: >
+          Match-value quoting is allowed for clarity but not required —
+          the bracket grammar already terminates on `]`.
+    yaml_double_escape_note: >
+      YAML and YOps both use double quotes. To avoid two escape layers,
+      prefer single-quoted YAML strings or block scalars when a path
+      contains literal double quotes. The validator may emit an
+      advisory `YOPS_PATH_LIKELY_DOUBLE_ESCAPED` (info, not error) when
+      it sees patterns that suggest accidental double-escape — but it
+      cannot reliably distinguish intent from accident without raw
+      YAML source positions, so the warning is heuristic only.
+    yaml_examples:
+      - description: preferred — YAML single quotes pass YOps double quotes through verbatim
+        yaml: |
+          - set: { path: 'config/"db/prod"/host', value: x }
+      - description: also valid — two escape layers (YAML and YOps both quoting)
+        yaml: |
+          - set: { path: "config/\"db/prod\"/host", value: x }
+      - description: useful for paths with many quotes — YAML block scalar
+        yaml: |
+          - set:
+              path: |-
+                config/"db/prod"/host
+              value: x
 
 # ----------------------------------------------------------------------------
 # Existence and type preconditions — how strict is each op?
@@ -1360,3 +1414,126 @@ error_reference:
     meaning: >
       The operation name wasn't recognized by the registry. Check for typos
       or verify your engine version supports the op.
+
+# ============================================================================
+# Diagnostic Codes — what the validator emits (separate from runtime errors)
+# ============================================================================
+#
+# Engine errors (above) fire at runtime when an op fails to apply. Diagnostics
+# fire BEFORE apply, when a YOps document or op list is validated for shape
+# correctness. The two surfaces overlap (a malformed payload fails both
+# pre-flight validation AND runtime apply), but the codes are distinct so
+# UI / API consumers can treat them differently:
+#
+#   - Engine errors block apply by definition; they're always errors.
+#   - Diagnostics carry severity (error / warning / info). An advisory
+#     diagnostic does NOT block apply and is NOT a parse error — it's a
+#     hint for the human or LLM authoring the document.
+#
+# Adding new codes is non-breaking. Removing or renaming an existing code
+# is breaking and requires a major version bump on @t3x-dev/yops.
+
+diagnostic_codes:
+
+  # ── Document / envelope (op_index === null) ──────────────────────────────
+
+  YOPS_INVALID_YAML:
+    severity: error
+    meaning: The input string failed to parse as YAML.
+
+  YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY:
+    severity: error
+    meaning: >
+      The top-level YAML value is a scalar. A YOps document must be either
+      a bare array of ops or a mapping with a `yops:` key whose value is
+      an array.
+
+  YOPS_DOCUMENT_YOPS_NOT_ARRAY:
+    severity: error
+    meaning: >
+      The document is a mapping with a `yops:` key, but that key's value
+      isn't an array.
+
+  # ── Op-level ──────────────────────────────────────────────────────────────
+
+  YOPS_OP_NOT_MAPPING:
+    severity: error
+    meaning: An op item is null, a scalar, or an array. Ops must be mappings.
+
+  YOPS_OP_NO_KEY:
+    severity: error
+    meaning: >
+      An op object has no non-metadata key. Metadata keys (currently
+      `source`) are skipped when picking the operation key; an op that
+      has only metadata is invalid.
+
+  YOPS_OP_UNKNOWN:
+    severity: error
+    meaning: >
+      The op key isn't a registered op name. Distinct from
+      YOPS_OP_NO_KEY (where no key is found at all).
+
+  YOPS_OP_PAYLOAD_NOT_MAPPING:
+    severity: error
+    meaning: >
+      The value under the op key is null, a scalar, or an array. Op
+      payloads must be mappings holding the op's fields.
+
+  YOPS_OP_FIELD_MISSING:
+    severity: error
+    meaning: A required field on this op is absent from the payload.
+
+  YOPS_OP_FIELD_UNKNOWN:
+    severity: error
+    meaning: The payload contains a field name not declared in the spec for this op.
+
+  YOPS_OP_FIELD_TYPE_MISMATCH:
+    severity: error
+    meaning: A field's runtime value type disagrees with its declared type in the spec.
+
+  YOPS_OP_ENUM_VIOLATION:
+    severity: error
+    meaning: A field's value is not in the declared enum (e.g. `sort.order` outside [asc, desc]).
+
+  # ── Path syntax ──────────────────────────────────────────────────────────
+
+  YOPS_PATH_EMPTY:
+    severity: error
+    meaning: Path string is empty (zero-length input).
+
+  YOPS_PATH_INVALID_KEY:
+    severity: error
+    meaning: >
+      An unquoted segment fails SNAKE_CASE_KEY (lowercase letters, digits,
+      underscores; cannot start with a digit). Use a quoted segment if
+      the key legitimately contains other characters.
+
+  YOPS_PATH_UNCLOSED_QUOTE:
+    severity: error
+    meaning: A quoted segment was opened with `"` but never closed.
+
+  YOPS_PATH_INVALID_ESCAPE:
+    severity: error
+    meaning: >
+      Inside a quoted segment, a backslash precedes a character other
+      than `"` or `\`. Only `\"` and `\\` are valid escapes.
+
+  YOPS_PATH_INVALID_INDEX_SYNTAX:
+    severity: error
+    meaning: A bracket segment looks like an index but isn't `[<digits>]`.
+
+  YOPS_PATH_INVALID_MATCH_SYNTAX:
+    severity: error
+    meaning: A bracket segment looks like a match but isn't `[<key>=<value>]`.
+
+  YOPS_PATH_LIKELY_DOUBLE_ESCAPED:
+    severity: info
+    meaning: >
+      Heuristic; advisory only. The path contains `\"` patterns that often
+      mean the YAML quote layer and the YOps quote layer were both applied
+      (e.g. a JSON-encoded string round-tripped through a YAML emitter).
+      May be a real literal-backslash-quote key — the validator cannot
+      tell without raw YAML source positions, so this is never an error
+      and never blocks apply. Authors should prefer single-quoted YAML
+      strings or block scalars when paths contain literal double quotes
+      (see `path.escape.yaml_double_escape_note`).

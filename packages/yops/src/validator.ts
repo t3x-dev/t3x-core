@@ -1,0 +1,508 @@
+/**
+ * @yops-dev/core — YOps document validator
+ *
+ * Pre-flight validation surface for YOps documents and op lists. Returns
+ * a list of diagnostics; never throws, never auto-fixes. Stable diagnostic
+ * codes are documented in `yops.yaml` under `diagnostic_codes:` and
+ * mirrored here as exported constants.
+ *
+ * Two entry points:
+ *
+ *   - `validateYOpsYaml(yaml: string)` — parses YAML, unwraps the
+ *     `{ yops: [...] }` envelope (or accepts a bare array), then
+ *     delegates to `validateYOpsOps`.
+ *
+ *   - `validateYOpsOps(ops: unknown[])` — validates an already-parsed
+ *     op list. Used by callers that don't pay a YAML round-trip
+ *     (API, MCP, CLI, the WebUI when it has the parsed object on hand).
+ *
+ * Both return `YOpsDiagnostic[]`. Empty array means the document passes
+ * pre-flight; presence of any diagnostic with `severity: 'error'` means
+ * apply should not proceed without consumer-level intervention.
+ *
+ * Out of scope for this surface (deferred to follow-up PRs / consumers):
+ *
+ *   - Dry-run preflight against a current document (lives in
+ *     `@t3x-dev/core` because it needs the engine).
+ *   - `source_span` population (reserved in the type, returns null in
+ *     this version; needs a position-aware YAML reader).
+ *   - Auto-apply of `suggestion` text (consumers' UI decision).
+ */
+
+import * as yaml from 'js-yaml';
+import { isMappingObject, OP_METADATA_KEYS, resolveOpName } from './opShape';
+import { tryParsePath } from './paths';
+import { parseSpec, type YOpsSpec } from './spec';
+import { SPEC_YAML } from './specData';
+
+// ── Diagnostic shape ─────────────────────────────────────────────────────
+
+/**
+ * A single validator finding. Stable shape: field names baked into UI
+ * quick-fix logic, so changes here are breaking.
+ */
+export interface YOpsDiagnostic {
+  severity: 'error' | 'warning' | 'info';
+  /** Stable code from `yops.yaml` `diagnostic_codes:`. See {@link YOPS_DIAGNOSTIC_CODES}. */
+  code: string;
+  message: string;
+  /** Index into the op list, or `null` for envelope/document-level findings. */
+  op_index: number | null;
+  /**
+   * Dotted path naming the field this diagnostic concerns. Always uses
+   * a documented root: `document.*` for envelope-level fields,
+   * `<op_name>.*` for op-level fields. UI tooling pattern-matches on
+   * this; never invent your own format.
+   */
+  field: string | null;
+  /** The offending path string, if relevant. */
+  path: string | null;
+  /** Human-readable quick-fix hint. Never auto-applied. */
+  suggestion: string | null;
+  /**
+   * Reserved for editor red-lines. Always `null` in this version of
+   * the validator; populated in a later PR by a position-aware YAML
+   * reader.
+   */
+  source_span: { line: number; column: number } | null;
+}
+
+// ── Stable code constants ────────────────────────────────────────────────
+
+/**
+ * Stable diagnostic codes. Adding new codes is non-breaking; removing
+ * or renaming requires a major version bump on `@t3x-dev/yops`. Each
+ * code's meaning is documented in `yops.yaml` under `diagnostic_codes:`.
+ */
+export const YOPS_DIAGNOSTIC_CODES = {
+  // Document / envelope (op_index === null)
+  YOPS_INVALID_YAML: 'YOPS_INVALID_YAML',
+  YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY: 'YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY',
+  YOPS_DOCUMENT_YOPS_NOT_ARRAY: 'YOPS_DOCUMENT_YOPS_NOT_ARRAY',
+  // Op-level
+  YOPS_OP_NOT_MAPPING: 'YOPS_OP_NOT_MAPPING',
+  YOPS_OP_NO_KEY: 'YOPS_OP_NO_KEY',
+  YOPS_OP_UNKNOWN: 'YOPS_OP_UNKNOWN',
+  YOPS_OP_PAYLOAD_NOT_MAPPING: 'YOPS_OP_PAYLOAD_NOT_MAPPING',
+  YOPS_OP_FIELD_MISSING: 'YOPS_OP_FIELD_MISSING',
+  YOPS_OP_FIELD_UNKNOWN: 'YOPS_OP_FIELD_UNKNOWN',
+  YOPS_OP_FIELD_TYPE_MISMATCH: 'YOPS_OP_FIELD_TYPE_MISMATCH',
+  YOPS_OP_ENUM_VIOLATION: 'YOPS_OP_ENUM_VIOLATION',
+  // Path syntax
+  YOPS_PATH_EMPTY: 'YOPS_PATH_EMPTY',
+  YOPS_PATH_INVALID_KEY: 'YOPS_PATH_INVALID_KEY',
+  YOPS_PATH_UNCLOSED_QUOTE: 'YOPS_PATH_UNCLOSED_QUOTE',
+  YOPS_PATH_INVALID_ESCAPE: 'YOPS_PATH_INVALID_ESCAPE',
+  YOPS_PATH_INVALID_INDEX_SYNTAX: 'YOPS_PATH_INVALID_INDEX_SYNTAX',
+  YOPS_PATH_INVALID_MATCH_SYNTAX: 'YOPS_PATH_INVALID_MATCH_SYNTAX',
+  YOPS_PATH_LIKELY_DOUBLE_ESCAPED: 'YOPS_PATH_LIKELY_DOUBLE_ESCAPED',
+} as const;
+
+export type YOpsDiagnosticCode = (typeof YOPS_DIAGNOSTIC_CODES)[keyof typeof YOPS_DIAGNOSTIC_CODES];
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+const SNAKE_CASE_KEY = /^[a-z_][a-z0-9_]*$/;
+
+function diagnostic(
+  severity: YOpsDiagnostic['severity'],
+  code: YOpsDiagnosticCode,
+  message: string,
+  fields: Partial<Pick<YOpsDiagnostic, 'op_index' | 'field' | 'path' | 'suggestion'>> = {}
+): YOpsDiagnostic {
+  return {
+    severity,
+    code,
+    message,
+    op_index: fields.op_index ?? null,
+    field: fields.field ?? null,
+    path: fields.path ?? null,
+    suggestion: fields.suggestion ?? null,
+    source_span: null,
+  };
+}
+
+/**
+ * Type-name helper aligned with the spec's `type:` declarations: 'string',
+ * 'number', 'boolean', 'mapping', 'sequence', 'any'. The spec field type
+ * 'any' matches every concrete value (including null).
+ */
+function runtimeMatchesSpecType(value: unknown, specType: string): boolean {
+  if (specType === 'any') return true;
+  if (specType === 'string') return typeof value === 'string';
+  if (specType === 'number') return typeof value === 'number';
+  if (specType === 'boolean') return typeof value === 'boolean';
+  if (specType === 'mapping') {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+  if (specType === 'sequence') return Array.isArray(value);
+  // Unknown spec type — be permissive rather than fail closed; the spec
+  // itself is wrong if this hits.
+  return true;
+}
+
+function describeRuntimeType(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'sequence';
+  return typeof value;
+}
+
+// ── Path validation ──────────────────────────────────────────────────────
+
+/**
+ * Run path-syntax checks on a single path string. Used by the op-level
+ * walker for every field whose value the spec marks as a path (per
+ * `path_fields:` metadata).
+ */
+function validatePath(path: unknown, ctx: { op_index: number; field: string }): YOpsDiagnostic[] {
+  // The op-level walker already checks field type before calling us; if
+  // we somehow get a non-string, emit nothing — the upstream
+  // YOPS_OP_FIELD_TYPE_MISMATCH covers it.
+  if (typeof path !== 'string') return [];
+
+  const out: YOpsDiagnostic[] = [];
+
+  if (path.length === 0) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_PATH_EMPTY,
+        `Path string is empty (zero-length input)`,
+        { op_index: ctx.op_index, field: ctx.field, path }
+      )
+    );
+    return out;
+  }
+
+  const parsed = tryParsePath(path);
+  if (!parsed.ok) {
+    if (parsed.code === 'UNCLOSED_QUOTE') {
+      out.push(
+        diagnostic('error', YOPS_DIAGNOSTIC_CODES.YOPS_PATH_UNCLOSED_QUOTE, parsed.message, {
+          op_index: ctx.op_index,
+          field: ctx.field,
+          path,
+        })
+      );
+    } else {
+      out.push(
+        diagnostic('error', YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_ESCAPE, parsed.message, {
+          op_index: ctx.op_index,
+          field: ctx.field,
+          path,
+        })
+      );
+    }
+    return out;
+  }
+
+  // Per-segment heuristics: SNAKE_CASE_KEY for unquoted keys, well-formed
+  // brackets, etc. We re-walk the raw string here because parsePath has
+  // already absorbed quoting decisions; for the heuristic checks we want
+  // to know "did this segment use quoting or not?" which needs the raw
+  // text.
+  const rawSegments = splitRawSegments(path);
+  for (const raw of rawSegments) {
+    if (raw.startsWith('"')) {
+      // Quoted — content already validated by tryParsePath above.
+      continue;
+    }
+    if (raw.startsWith('[')) {
+      // Bracket segment. Either index `[N]` or match `[k=v]`.
+      const isIndex = /^\[(\d+)\]$/.test(raw);
+      const isMatch = /^\[([^=\]]+)=([^\]]*)\]$/.test(raw);
+      if (!isIndex && !isMatch) {
+        const code = raw.includes('=')
+          ? YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_MATCH_SYNTAX
+          : YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_INDEX_SYNTAX;
+        out.push(
+          diagnostic('error', code, `Malformed bracket segment "${raw}" in path "${path}"`, {
+            op_index: ctx.op_index,
+            field: ctx.field,
+            path,
+          })
+        );
+      }
+      continue;
+    }
+    // Plain key segment — must satisfy SNAKE_CASE_KEY.
+    if (!SNAKE_CASE_KEY.test(raw)) {
+      const suggestion = `If "${raw}" is meant as a literal key with special characters, wrap it in double quotes: "${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_KEY,
+          `Path segment "${raw}" must match SNAKE_CASE_KEY (lowercase letters, digits, underscores; cannot start with a digit)`,
+          { op_index: ctx.op_index, field: ctx.field, path, suggestion }
+        )
+      );
+    }
+  }
+
+  // Heuristic: `\"` patterns inside a path string suggest the YAML quote
+  // layer and the YOps quote layer were both applied. Advisory only.
+  if (path.includes('\\"')) {
+    out.push(
+      diagnostic(
+        'info',
+        YOPS_DIAGNOSTIC_CODES.YOPS_PATH_LIKELY_DOUBLE_ESCAPED,
+        `Path contains \\" patterns that may indicate accidental YAML+YOps double-quoting. The validator cannot tell intent from accident — treat as advisory.`,
+        {
+          op_index: ctx.op_index,
+          field: ctx.field,
+          path,
+          suggestion:
+            'If the backslash-quote was meant by your YAML emitter to encode a literal `"`, prefer single-quoted YAML strings or block scalars. If it is a real literal-backslash key, ignore this warning.',
+        }
+      )
+    );
+  }
+
+  return out;
+}
+
+/**
+ * Walk the raw path string, splitting on `/` while respecting quoted
+ * segments. Returns the raw text of each segment (quoted segments still
+ * include their surrounding quotes). Mirrors the segment boundaries
+ * `tryParsePath` uses internally.
+ */
+function splitRawSegments(path: string): string[] {
+  const segments: string[] = [];
+  let i = 0;
+  let segStart = 0;
+  while (i < path.length) {
+    if (path[i] === '"') {
+      // Skip to closing quote (handling escapes). If unclosed, the
+      // entire rest is one segment.
+      i++;
+      while (i < path.length) {
+        if (path[i] === '\\' && i + 1 < path.length) {
+          i += 2;
+          continue;
+        }
+        if (path[i] === '"') {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (path[i] === '/') {
+      segments.push(path.slice(segStart, i));
+      i++;
+      segStart = i;
+      continue;
+    }
+    i++;
+  }
+  segments.push(path.slice(segStart));
+  return segments;
+}
+
+// ── Op walker ────────────────────────────────────────────────────────────
+
+let _lazySpec: YOpsSpec | null = null;
+function getSpec(): YOpsSpec {
+  if (_lazySpec) return _lazySpec;
+  // Parse from the bundled spec string. Avoids an import cycle with
+  // `index.ts` (which imports the validator).
+  _lazySpec = parseSpec(SPEC_YAML);
+  return _lazySpec;
+}
+
+function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
+  const out: YOpsDiagnostic[] = [];
+
+  if (!isMappingObject(op)) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_NOT_MAPPING,
+        `Op at index ${op_index} must be a mapping, got ${describeRuntimeType(op)}`,
+        { op_index, field: null }
+      )
+    );
+    return out;
+  }
+
+  const opName = resolveOpName(op);
+  if (opName === null) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_NO_KEY,
+        `Op at index ${op_index} has no operation key (only metadata keys: ${[...OP_METADATA_KEYS].join(', ')})`,
+        { op_index, field: null }
+      )
+    );
+    return out;
+  }
+
+  const opSpec = getSpec().operations[opName];
+  if (!opSpec) {
+    out.push(
+      diagnostic('error', YOPS_DIAGNOSTIC_CODES.YOPS_OP_UNKNOWN, `Unknown operation: ${opName}`, {
+        op_index,
+        field: `${opName}`,
+      })
+    );
+    return out;
+  }
+
+  const payload = op[opName];
+  if (!isMappingObject(payload)) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_PAYLOAD_NOT_MAPPING,
+        `${opName}: payload must be a mapping, got ${describeRuntimeType(payload)}`,
+        { op_index, field: opName }
+      )
+    );
+    return out;
+  }
+
+  // Required fields present
+  for (const [fieldName, fieldSpec] of Object.entries(opSpec.fields)) {
+    if (fieldSpec.required && !(fieldName in payload)) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_FIELD_MISSING,
+          `${opName}: required field "${fieldName}" is missing`,
+          { op_index, field: `${opName}.${fieldName}` }
+        )
+      );
+    }
+  }
+
+  // No unknown fields
+  for (const fieldName of Object.keys(payload)) {
+    if (!(fieldName in opSpec.fields)) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_FIELD_UNKNOWN,
+          `${opName}: unknown field "${fieldName}"`,
+          { op_index, field: `${opName}.${fieldName}` }
+        )
+      );
+    }
+  }
+
+  // Per-field type / enum / path checks
+  for (const [fieldName, fieldSpec] of Object.entries(opSpec.fields)) {
+    if (!(fieldName in payload)) continue;
+    const value = payload[fieldName];
+
+    if (!runtimeMatchesSpecType(value, fieldSpec.type)) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_FIELD_TYPE_MISMATCH,
+          `${opName}: field "${fieldName}" expected ${fieldSpec.type}, got ${describeRuntimeType(value)}`,
+          { op_index, field: `${opName}.${fieldName}` }
+        )
+      );
+      continue;
+    }
+
+    if (fieldSpec.enum && typeof value === 'string' && !fieldSpec.enum.includes(value)) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_ENUM_VIOLATION,
+          `${opName}: field "${fieldName}" must be one of [${fieldSpec.enum.join(', ')}], got "${value}"`,
+          { op_index, field: `${opName}.${fieldName}` }
+        )
+      );
+      continue;
+    }
+
+    // Path-shaped field? Run path syntax checks.
+    const pathFields = opSpec.path_fields ?? {};
+    const isPathField = Object.values(pathFields).includes(fieldName);
+    if (isPathField) {
+      out.push(...validatePath(value, { op_index, field: `${opName}.${fieldName}` }));
+    }
+  }
+
+  return out;
+}
+
+// ── Public entry points ──────────────────────────────────────────────────
+
+/**
+ * Validate a parsed YOps op list. Returns a list of diagnostics; never
+ * throws, never auto-fixes. Use this when you already have the array
+ * (no YAML round-trip).
+ */
+export function validateYOpsOps(ops: unknown[]): YOpsDiagnostic[] {
+  if (!Array.isArray(ops)) {
+    return [
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY,
+        `Expected an array of ops, got ${describeRuntimeType(ops)}`,
+        { op_index: null, field: 'document.yops' }
+      ),
+    ];
+  }
+
+  const out: YOpsDiagnostic[] = [];
+  for (let i = 0; i < ops.length; i++) {
+    out.push(...validateOp(ops[i], i));
+  }
+  return out;
+}
+
+/**
+ * Validate a YAML string holding a YOps document. Accepts both the
+ * normative `{ yops: [...] }` form and a bare array.
+ */
+export function validateYOpsYaml(yamlStr: string): YOpsDiagnostic[] {
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(yamlStr);
+  } catch (err) {
+    return [
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_INVALID_YAML,
+        `YAML parse error: ${err instanceof Error ? err.message : String(err)}`,
+        { op_index: null, field: null }
+      ),
+    ];
+  }
+
+  if (Array.isArray(parsed)) {
+    return validateYOpsOps(parsed);
+  }
+
+  if (parsed === null || typeof parsed !== 'object') {
+    return [
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY,
+        `Top-level YAML value must be a mapping with a 'yops:' key or a bare array, got ${describeRuntimeType(parsed)}`,
+        { op_index: null, field: null }
+      ),
+    ];
+  }
+
+  const inner = (parsed as { yops?: unknown }).yops;
+  if (!Array.isArray(inner)) {
+    return [
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_DOCUMENT_YOPS_NOT_ARRAY,
+        `Document has a 'yops:' key but its value is not an array (got ${describeRuntimeType(inner)})`,
+        { op_index: null, field: 'document.yops' }
+      ),
+    ];
+  }
+
+  return validateYOpsOps(inner);
+}
