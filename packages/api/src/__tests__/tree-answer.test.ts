@@ -11,6 +11,7 @@
 
 import type { AnyDB } from '@t3x-dev/storage';
 import {
+  createCommit,
   insertConversation,
   insertProject,
   insertTurn,
@@ -33,6 +34,16 @@ type ApiResponse = any;
 const withSrc = (op: Record<string, unknown>, author = 'test') => ({
   ...op,
   source: { type: 'human' as const, author, at: '2026-04-25T00:00:00.000Z' },
+});
+
+const withLLMSrc = (op: Record<string, unknown>) => ({
+  ...op,
+  source: {
+    type: 'llm' as const,
+    model: 'test-model',
+    at: '2026-04-25T00:00:00.000Z',
+    turn_ref: { turn_hash: 'sha256:test-turn', quote: 'drift' },
+  },
 });
 
 let mockDB: AnyDB;
@@ -142,7 +153,7 @@ describe('Tree Answer Routes', () => {
           trees: [{ id: 'tree_new', key: 'new_topic', slots: {}, children: [] }],
           relations: [],
         },
-        ops: [{ define: { path: 'new_topic' }, source: { type: 'llm' } }],
+        ops: [withLLMSrc({ define: { path: 'new_topic' } })],
         lastTurnHash: afterTurn.turnHash,
       });
 
@@ -234,7 +245,7 @@ describe('Tree Answer Routes', () => {
           trees: [{ id: 'tree_new', key: 'new', slots: {}, children: [] }],
           relations: [],
         },
-        ops: [{ define: { path: 'new' }, source: { type: 'llm' } }],
+        ops: [withLLMSrc({ define: { path: 'new' } })],
         lastTurnHash: afterTurn.turnHash,
       });
 
@@ -256,6 +267,66 @@ describe('Tree Answer Routes', () => {
       const relateOp = (latest.yops as any[]).find((op) => 'relate' in op);
       expect(relateOp).toBeDefined();
       expect(relateOp.relate.type).toBe('follows');
+    });
+
+    it('uses the parent commit as the current snapshot when the conversation has no active yops yet', async () => {
+      const parent = await createCommit(mockDB, {
+        author: { type: 'human', name: 'test' },
+        content: {
+          trees: [{ key: 'old_topic', slots: { marker: 'parent' }, children: [] }],
+          relations: [],
+        },
+        project_id: projectId,
+        message: 'Parent knowledge',
+        yops_log_ids: [],
+      });
+      const conv = await insertConversation(mockDB, {
+        projectId,
+        title: 'Tree Answer Parent Baseline',
+        parentCommitHash: parent.hash,
+      });
+      await insertTurn(
+        mockDB,
+        testData.turn(projectId, conv.conversationId, { content: 'new drift material' })
+      );
+
+      mockRunApiExtractionV2.mockResolvedValue({
+        ok: true,
+        mode: 'incremental',
+        snapshot: {
+          trees: [{ id: 'tree_new', key: 'new_topic', slots: {}, children: [] }],
+          relations: [],
+        },
+        ops: [withLLMSrc({ define: { path: 'new_topic' } })],
+        lastTurnHash: 'sha256:new-turn',
+      });
+
+      const res = await app.request('/v1/extract/trees/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conv.conversationId,
+          answers: [{ question_id: 'q_parent_drift', drift_choice: 'keep_both_together' }],
+          drift_context: { relation: 'causes' },
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body: ApiResponse = await res.json();
+      expect(body.success).toBe(true);
+
+      const persisted = await listYOpsLogByConversation(mockDB, conv.conversationId);
+      const latest = persisted[persisted.length - 1];
+      // biome-ignore lint/suspicious/noExplicitAny: generic yops shape
+      const persistedYops = latest.yops as any[];
+      const relateOp = persistedYops.find((op) => 'relate' in op);
+      expect(relateOp).toBeDefined();
+      expect(relateOp.relate.type).toBe('causes');
+
+      const treeRows = await listTreesByConversation(mockDB, conv.conversationId);
+      expect(treeRows.map((r) => r.type)).toEqual(
+        expect.arrayContaining(['old_topic', 'new_topic'])
+      );
     });
 
     it('surfaces v2 extraction failures via the EXTRACTION_FAILED error code', async () => {

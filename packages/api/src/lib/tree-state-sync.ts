@@ -34,7 +34,10 @@ import {
   upsertTree,
   upsertTreeRelation,
 } from '@t3x-dev/storage';
-import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
+import {
+  getConversationInheritedBaseline,
+  replayEntriesOnBaselineFailFast,
+} from './yops-log-utils';
 
 /**
  * Replay the **active** yops log slice (committed entries + non-superseded
@@ -54,7 +57,8 @@ export async function syncYOpsToTrees(
   opts?: { topicId?: string }
 ): Promise<void> {
   const records = await listActiveYOpsLogByConversation(db, conversationId);
-  const snapshot = replayYOpsLog(toYOpsLogEntries(records));
+  const inheritedBaseline = await getConversationInheritedBaseline(db, conversationId);
+  const snapshot = replayEntriesOnBaselineFailFast(inheritedBaseline, records);
   await rebuildTreesFromSnapshot(db, conversationId, projectId, snapshot, opts?.topicId);
 }
 

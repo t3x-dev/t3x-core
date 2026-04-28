@@ -27,7 +27,10 @@ import {
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { readDraftFromTrees, rebuildTreesFromSnapshot } from '../lib/tree-state-sync';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import {
+  getConversationInheritedBaseline,
+  replayEntriesOnBaselineFailFast,
+} from '../lib/yops-log-utils';
 import { buildPipelineContext } from '../ops/context';
 import { yopsApplyOp } from '../ops/yops-apply';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -475,7 +478,10 @@ yopsLogRoutes.openapi(getDraftRoute, async (c) => {
             (record) => record.topicId === topic_id
           )
         : await listActiveYOpsLogByConversation(db, conversationId);
-      draft = replayYOpsLog(toYOpsLogEntries(records));
+      draft = replayEntriesOnBaselineFailFast(
+        await getConversationInheritedBaseline(db, conversationId),
+        records
+      );
     }
 
     return c.json({ success: true as const, data: draft }, 200);
@@ -502,8 +508,10 @@ yopsLogRoutes.openapi(deleteYOpsRoute, async (c) => {
     await (db as any).transaction(async (tx: any) => {
       await deleteYOpsLogEntry(tx, yopsId);
       const remainingRecords = await listActiveYOpsLogByConversation(tx, conversationId);
-      const remainingEntries = toYOpsLogEntries(remainingRecords);
-      const rebuilt = replayYOpsLog(remainingEntries);
+      const rebuilt = replayEntriesOnBaselineFailFast(
+        await getConversationInheritedBaseline(tx, conversationId),
+        remainingRecords
+      );
       await rebuildTreesFromSnapshot(tx, conversationId, existing.projectId, rebuilt);
     });
 

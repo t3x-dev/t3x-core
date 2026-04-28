@@ -188,6 +188,69 @@ describe('extractors/v2 compiler', () => {
     );
   });
 
+  it('rewrites incremental update on a missing provided-baseline path into an add that applies', () => {
+    const baseline: SemanticContent = {
+      trees: [
+        {
+          key: 'trip',
+          slots: { destination: 'Beijing' },
+          children: [{ key: 'sightseeing', slots: {}, children: [] }],
+        },
+      ],
+      relations: [],
+    };
+    const result = compileExtractionDraft({
+      draft: {
+        schema: EXTRACTION_DRAFT_SCHEMA,
+        version: 1,
+        mode: 'incremental',
+        items: [
+          {
+            id: 'item_mao_poetry',
+            intent: 'update',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { path: 'trip/cultural_interests/mao_poetry' },
+            candidate: {
+              values: {
+                interest: "read Mao Zedong's poetry",
+                notable_work: 'Snow',
+              },
+            },
+            evidence: [
+              {
+                turn_tag: 'T1',
+                quote: "read Mao Zedong's poetry",
+                role: 'primary',
+              },
+            ],
+          },
+        ],
+      },
+      sourceModel: 'claude-sonnet-4-6',
+      extractedAt: '2026-04-28T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+      baseline,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const opShapes = result.ops.map((op) => {
+      if ('define' in op) return { kind: 'define', path: op.define.path };
+      if ('populate' in op) return { kind: 'populate', path: op.populate.path };
+      return { kind: 'other' };
+    });
+    expect(opShapes).toEqual([
+      { kind: 'define', path: 'trip/cultural_interests' },
+      { kind: 'define', path: 'trip/cultural_interests/mao_poetry' },
+      { kind: 'populate', path: 'trip/cultural_interests/mao_poetry' },
+    ]);
+    expect(result.warnings).toContain(
+      'Rewrote update intent for missing baseline path "trip/cultural_interests/mao_poetry" to add semantics (item item_mao_poetry)'
+    );
+    expect(applyYOps(baseline, result.ops).ok).toBe(true);
+  });
+
   it('routes structured incremental add away from existing baseline slots', () => {
     const baseline: SemanticContent = {
       trees: [

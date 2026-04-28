@@ -35,12 +35,12 @@ import {
 } from '@t3x-dev/core';
 import {
   insertYOpsLogEntry,
-  listActiveYOpsLogByConversation,
   supersedeActiveLLMSuggestions,
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from '@t3x-dev/storage';
 import { syncYOpsToTrees } from '../lib/tree-state-sync';
+import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import type { ApiPipelineContext } from './context';
 
 export interface YopsApplyInput {
@@ -85,21 +85,6 @@ export interface YopsApplyOutput {
   committed_by: string[];
   /** IDs of entries marked superseded by this call (empty when the flag wasn't set). */
   superseded_ids: string[];
-}
-
-function replayActiveRowsFailFast(records: Array<{ id: string; yops: unknown }>): SemanticContent {
-  let current: SemanticContent = { trees: [], relations: [] };
-  for (const record of records) {
-    const ops = extractOpsFromEntries([{ id: record.id, yops: record.yops }]);
-    const result = applyYOps(current, ops);
-    if (!result.ok) {
-      throw new Error(
-        `Existing yops_log entry ${record.id} failed replay before repair: ${result.error?.message ?? 'unknown replay error'}`
-      );
-    }
-    current = { trees: result.trees, relations: result.relations };
-  }
-  return current;
 }
 
 interface PreparedEditedScript {
@@ -175,6 +160,25 @@ function assertEditedOpsApply(base: SemanticContent, ops: YOp[]): void {
   if (!result.ok) {
     throw new Error(
       `Edited script failed dry-run at op ${result.applied}: ${result.error?.message ?? 'unknown replay error'}`
+    );
+  }
+}
+
+function parseOpsForDryRun(yops: unknown[], label: string): YOp[] {
+  try {
+    return extractOpsFromEntries([{ id: label, yops }]);
+  } catch (err) {
+    throw new Error(
+      `${label} failed dry-run parse: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+function assertNewOpsApply(base: SemanticContent, ops: YOp[]): void {
+  const result = applyYOps(base, ops);
+  if (!result.ok) {
+    throw new Error(
+      `YOps entry failed dry-run at op ${result.applied}: ${result.error?.message ?? 'unknown replay error'}`
     );
   }
 }
@@ -256,22 +260,25 @@ export const yopsApplyOp: Operation<YopsApplyInput, YopsApplyOutput> = {
             `Cannot repair yops_log entry ${repairYopsLogId}: row is missing, already superseded, or committed`
           );
         }
-        const activeRows = await listActiveYOpsLogByConversation(tx, conversationId);
-        const repairBaseline = replayActiveRowsFailFast(activeRows);
+        const repairBaseline = await replayActiveDraftOnBaseline(tx, conversationId);
         const prepared = prepareEditedScriptForBaseline(repairBaseline, yops);
         yopsForInsert = prepared.yopsForInsert;
         droppedBaselineDefinePaths = prepared.droppedBaselineDefinePaths;
         assertEditedOpsApply(repairBaseline, prepared.opsForDryRun);
       } else if (replaceActiveScript) {
         ids = await supersedeActiveUncommittedYOpsLogEntries(tx, conversationId);
-        const activeRows = await listActiveYOpsLogByConversation(tx, conversationId);
-        const replacementBaseline = replayActiveRowsFailFast(activeRows);
+        const replacementBaseline = await replayActiveDraftOnBaseline(tx, conversationId);
         const prepared = prepareEditedScriptForBaseline(replacementBaseline, yops);
         yopsForInsert = prepared.yopsForInsert;
         droppedBaselineDefinePaths = prepared.droppedBaselineDefinePaths;
         assertEditedOpsApply(replacementBaseline, prepared.opsForDryRun);
       } else if (replaceActiveLLMDraft) {
         ids = await supersedeActiveLLMSuggestions(tx, conversationId);
+        const baseline = await replayActiveDraftOnBaseline(tx, conversationId);
+        assertNewOpsApply(baseline, parseOpsForDryRun(yops, 'YOps entry'));
+      } else {
+        const baseline = await replayActiveDraftOnBaseline(tx, conversationId);
+        assertNewOpsApply(baseline, parseOpsForDryRun(yops, 'YOps entry'));
       }
       const entryMetadata = buildLineageMetadata({
         base: metadata,

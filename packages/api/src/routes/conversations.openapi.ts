@@ -41,7 +41,7 @@ import {
 import { formatContextForExport } from '../lib/context-formatter';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { replayYOpsLog, toYOpsLogEntries } from '../lib/yops-log-utils';
+import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -763,7 +763,7 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     let yamlKnowledge = '';
     const yopsRecords = await listActiveYOpsLogByConversation(db, conversationId);
     if (yopsRecords.length > 0) {
-      const snapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
+      const snapshot = await replayActiveDraftOnBaseline(db, conversationId);
       if (snapshot.trees.length > 0) {
         yamlKnowledge = serializeSnapshotForContext(snapshot);
       }

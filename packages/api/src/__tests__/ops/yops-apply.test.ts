@@ -16,13 +16,19 @@ const mockRecord = {
   projectId: 'proj_123',
   source: 'pipeline',
   turnHash: 'sha256:turn1',
-  yops: [
-    { op: 'add_sentence', path: '/topics/0/sentences/-', value: { id: 's_1', text: 'hello' } },
-  ],
+  yops: [{ define: { path: 'test' } }],
   createdAt: new Date('2026-04-03T00:00:00Z'),
 };
 
 vi.mock('@t3x-dev/storage', () => ({
+  findConversationById: vi.fn(() =>
+    Promise.resolve({
+      conversationId: 'conv_abc',
+      projectId: 'proj_123',
+      parentCommitHash: null,
+    })
+  ),
+  getCommit: vi.fn(() => Promise.resolve(null)),
   insertYOpsLogEntry: vi.fn(() => Promise.resolve(mockRecord)),
   listActiveYOpsLogByConversation: vi.fn(() => Promise.resolve([])),
   // RFC 2026-04-26: yopsApplyOp now also imports the supersede query so
@@ -68,6 +74,30 @@ function buildMockContext(overrides: Partial<ApiPipelineContext> = {}): ApiPipel
 // ---------------------------------------------------------------------------
 
 describe('yopsApplyOp', () => {
+  const humanSource = {
+    source: { type: 'human' as const, author: 'script-editor', at: '2026-04-28T00:00:00Z' },
+  };
+  const inheritedTripCommit = {
+    hash: 'sha256:parent',
+    project_id: 'proj_123',
+    content: {
+      trees: [
+        {
+          key: 'trip',
+          slots: { destination: 'Beijing' },
+          children: [
+            {
+              key: 'sightseeing',
+              slots: { places: ['Forbidden City'] },
+              children: [],
+            },
+          ],
+        },
+      ],
+      relations: [],
+    },
+  };
+
   it('has the correct name', () => {
     expect(yopsApplyOp.name).toBe('yops-apply');
   });
@@ -164,7 +194,7 @@ describe('yopsApplyOp', () => {
           conversationId: 'conv_abc',
           source: 'pipeline',
           turnHash: 'sha256:turn1',
-          yops: [{ op: 'test' }],
+          yops: [{ define: { path: 'test' } }],
         },
         ctx
       )
@@ -177,7 +207,7 @@ describe('yopsApplyOp', () => {
         projectId: 'proj_123',
         source: 'pipeline',
         turnHash: 'sha256:turn1',
-        yops: [{ op: 'test' }],
+        yops: [{ define: { path: 'test' } }],
       }
     );
 
@@ -200,7 +230,7 @@ describe('yopsApplyOp', () => {
           {
             conversationId: 'conv_abc',
             source: 'manual',
-            yops: [{ op: 'test' }],
+            yops: [{ define: { path: 'test' } }],
             // flag intentionally absent
           },
           ctx
@@ -223,7 +253,7 @@ describe('yopsApplyOp', () => {
             conversationId: 'conv_abc',
             source: 'pipeline',
             turnHash: 'sha256:turn1',
-            yops: [{ op: 'test' }],
+            yops: [{ define: { path: 'test' } }],
             replaceActiveLLMDraft: true,
           },
           ctx
@@ -242,6 +272,99 @@ describe('yopsApplyOp', () => {
       // observers (logs / tests / future UI affordance) can audit the
       // replacement.
       expect(output.superseded_ids).toEqual(['yl_old_suggestion']);
+    });
+
+    it('rejects replacement draft ops that fail against the inherited parent commit baseline', async () => {
+      const ctx = buildMockContext();
+      const {
+        findConversationById,
+        getCommit,
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeActiveLLMSuggestions,
+      } = await import('@t3x-dev/storage');
+      (findConversationById as any).mockResolvedValueOnce({
+        conversationId: 'conv_abc',
+        projectId: 'proj_123',
+        parentCommitHash: 'sha256:parent',
+      });
+      (getCommit as any).mockResolvedValueOnce(inheritedTripCommit);
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+      (supersedeActiveLLMSuggestions as any).mockResolvedValueOnce(['yl_old_suggestion']);
+
+      await expect(
+        collectResult(
+          runOperation(
+            yopsApplyOp,
+            {
+              conversationId: 'conv_abc',
+              source: 'pipeline',
+              yops: [
+                { ...humanSource, define: { path: 'trip/sightseeing/great_wall' } },
+                {
+                  ...humanSource,
+                  populate: {
+                    path: 'trip/sightseeing/great_wall',
+                    values: { activity: 'visit the Great Wall' },
+                  },
+                },
+                { ...humanSource, define: { path: 'trip/cultural_interest/mao_poetry' } },
+              ],
+              replaceActiveLLMDraft: true,
+            },
+            ctx
+          )
+        )
+      ).rejects.toThrow(/trip\/cultural_interest/);
+
+      expect(insertYOpsLogEntry).not.toHaveBeenCalled();
+    });
+
+    it('accepts replacement draft ops that extend an inherited parent commit path', async () => {
+      const ctx = buildMockContext();
+      const {
+        findConversationById,
+        getCommit,
+        insertYOpsLogEntry,
+        listActiveYOpsLogByConversation,
+        supersedeActiveLLMSuggestions,
+      } = await import('@t3x-dev/storage');
+      (findConversationById as any).mockResolvedValueOnce({
+        conversationId: 'conv_abc',
+        projectId: 'proj_123',
+        parentCommitHash: 'sha256:parent',
+      });
+      (getCommit as any).mockResolvedValueOnce(inheritedTripCommit);
+      (insertYOpsLogEntry as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockClear();
+      (listActiveYOpsLogByConversation as any).mockResolvedValueOnce([]);
+      (supersedeActiveLLMSuggestions as any).mockResolvedValueOnce(['yl_old_suggestion']);
+
+      await collectResult(
+        runOperation(
+          yopsApplyOp,
+          {
+            conversationId: 'conv_abc',
+            source: 'pipeline',
+            yops: [
+              { ...humanSource, define: { path: 'trip/sightseeing/great_wall' } },
+              {
+                ...humanSource,
+                populate: {
+                  path: 'trip/sightseeing/great_wall',
+                  values: { activity: 'visit the Great Wall' },
+                },
+              },
+            ],
+            replaceActiveLLMDraft: true,
+          },
+          ctx
+        )
+      );
+
+      expect(insertYOpsLogEntry).toHaveBeenCalled();
     });
   });
 

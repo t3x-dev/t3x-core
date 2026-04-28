@@ -609,8 +609,21 @@ function compileItem(
 
     const ops: SourcedYOp[] = [];
     const warnings: string[] = [];
+    const targetSlot = getTargetSlot(item);
     const pathExistsAsBaselineSlot =
       input.draft.mode === 'incremental' && baselineIndex.slots.has(path);
+    const pathExistsAsBaselineNode =
+      input.draft.mode === 'incremental' && baselineIndex.nodes.has(path);
+    const hasConcretePayload =
+      (item.candidate.values && Object.keys(item.candidate.values).length > 0) ||
+      (targetSlot && item.candidate.value !== undefined) ||
+      (item.candidate.children && item.candidate.children.length > 0);
+    const shouldCreateMissingTarget =
+      input.draft.mode === 'incremental' &&
+      input.baseline !== undefined &&
+      !pathExistsAsBaselineNode &&
+      !pathExistsAsBaselineSlot &&
+      hasConcretePayload;
     const needsStructuredSlotRoute =
       pathExistsAsBaselineSlot &&
       ((item.candidate.values && Object.keys(item.candidate.values).length > 0) ||
@@ -621,6 +634,12 @@ function compileItem(
     if (needsStructuredSlotRoute) {
       ops.push({ define: { path: structuralPath }, source });
     }
+    if (shouldCreateMissingTarget) {
+      warnings.push(
+        `Rewrote ${item.intent} intent for missing baseline path "${path}" to add semantics (item ${item.id})`
+      );
+      ops.push({ define: { path: structuralPath }, source });
+    }
 
     if (item.candidate.values && Object.keys(item.candidate.values).length > 0) {
       ops.push({
@@ -629,7 +648,6 @@ function compileItem(
       });
     }
 
-    const targetSlot = getTargetSlot(item);
     if (targetSlot && item.candidate.value !== undefined) {
       const setPath =
         pathExistsAsBaselineSlot && targetSlot === DEFAULT_VALUE_SLOT
@@ -895,6 +913,8 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
   const warnings: string[] = [];
   const baselineIndex = buildBaselineIndex(input.baseline);
   const baselineExistingPaths = [...baselineIndex.nodes];
+  const initialBaselineNodes = new Set(baselineIndex.nodes);
+  const initialBaselineSlots = new Set(baselineIndex.slots);
 
   // `preExisting` records target paths from items whose ops survive into
   // the final list. Dropped items (compile failure in `allowPartial`,
@@ -946,7 +966,14 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     // separate pass over `input.draft.items`. Folding it inline ties the
     // seed to the contribute-or-drop decision.
     const seeded = preExistingTargetPath(item);
-    if (seeded !== null) preExisting.push(seeded);
+    if (
+      seeded !== null &&
+      (input.baseline === undefined ||
+        initialBaselineNodes.has(seeded) ||
+        initialBaselineSlots.has(seeded))
+    ) {
+      preExisting.push(seeded);
+    }
   }
 
   const deduped = dedupeDefineOps(ops, [...baselineExistingPaths, ...preExisting]);

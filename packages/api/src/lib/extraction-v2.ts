@@ -7,7 +7,10 @@ import {
   listActiveYOpsLogByConversation,
 } from '@t3x-dev/storage';
 import { resolveProviderAndModel } from './provider-resolver';
-import { replayYOpsLog, toYOpsLogEntries } from './yops-log-utils';
+import {
+  getConversationInheritedBaseline,
+  replayEntriesOnBaselineFailFast,
+} from './yops-log-utils';
 
 export interface ApiExtractionV2Input {
   db: AnyDB;
@@ -104,7 +107,10 @@ export async function runApiExtractionV2(
     yopsRecords = [];
   }
 
-  const replayedSnapshot = replayYOpsLog(toYOpsLogEntries(yopsRecords));
+  const replayedSnapshot = replayEntriesOnBaselineFailFast(
+    await getConversationInheritedBaseline(input.db, input.conversationId),
+    yopsRecords
+  );
   const mode: ExtractionMode = replayedSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
   const result = await extractAndApply({

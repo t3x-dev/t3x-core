@@ -328,6 +328,73 @@ describe('POST /v1/conversations/:id/yops — source enforcement', () => {
     expect(body.data.trees.map((tree: { key: string }) => tree.key)).toEqual(['current_node']);
   });
 
+  it('draft fallback replays active yops on top of the inherited parent commit', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'Draft Inherited Parent' })
+    );
+    const parent = await createCommit(mockDB, {
+      author: { type: 'human', name: 'test' },
+      content: {
+        trees: [
+          {
+            key: 'trip',
+            slots: { destination: 'Beijing' },
+            children: [{ key: 'sightseeing', slots: {}, children: [] }],
+          },
+        ],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'Parent trip baseline',
+      yops_log_ids: [],
+    });
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Draft Inherited Parent Conv',
+      parentCommitHash: parent.hash,
+    });
+
+    await insertYOpsLogEntry(mockDB, {
+      conversationId: conversation.conversationId,
+      projectId: project.projectId,
+      source: 'manual',
+      yops: [
+        {
+          define: { path: 'trip/sightseeing/great_wall' },
+          source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+        },
+        {
+          populate: {
+            path: 'trip/sightseeing/great_wall',
+            values: { activity: 'visit the Great Wall' },
+          },
+          source: { type: 'human', author: 'test', at: '2026-04-28T00:00:00Z' },
+        },
+      ],
+    });
+
+    const res = await app.request(`/v1/conversations/${conversation.conversationId}/draft`);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ApiResponse;
+    const [trip] = body.data.trees as Array<{
+      key: string;
+      slots: Record<string, unknown>;
+      children: Array<{
+        key: string;
+        children: Array<{ key: string; slots: Record<string, unknown> }>;
+      }>;
+    }>;
+    expect(trip.key).toBe('trip');
+    expect(trip.slots.destination).toBe('Beijing');
+    expect(trip.children[0].key).toBe('sightseeing');
+    expect(trip.children[0].children[0]).toMatchObject({
+      key: 'great_wall',
+      slots: { activity: 'visit the Great Wall' },
+    });
+  });
+
   it('returns per-row committed and superseded facts for active rows', async () => {
     const project = await insertProject(mockDB, testData.project({ name: 'YOps Row Facts' }));
     const conversation = await insertConversation(
