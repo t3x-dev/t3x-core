@@ -91,12 +91,14 @@ function ProjectDetailPageContent() {
     }
   }, [projectsInitialized, projectsLoading, fetchProjects]);
 
-  // Load project data when entering the page
+  // Load fresh project data whenever this page is entered. The canvas store
+  // persists across routes, so returning from Chat after a commit must not
+  // reuse a stale draft/staging view for the same project.
   useEffect(() => {
-    if (projectId && projectId !== loadedProjectId) {
+    if (projectId) {
       void loadCanvas(projectId);
     }
-  }, [projectId, loadedProjectId, loadCanvas]);
+  }, [projectId, loadCanvas]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.
