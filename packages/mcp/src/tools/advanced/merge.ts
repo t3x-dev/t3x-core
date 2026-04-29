@@ -357,6 +357,7 @@ async function handleExecute(args: Record<string, unknown>) {
     message,
     branch: draft.targetBranch ?? 'main',
     provenance: { method: 'human_curation' },
+    enforceMainLinearity: true,
   });
 
   // Mark draft as committed

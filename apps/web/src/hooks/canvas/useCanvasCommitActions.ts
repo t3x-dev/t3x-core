@@ -146,6 +146,11 @@ export function useCanvasCommitActions() {
     const title = 'Untitled Unit';
     const parentCommitHash = source.data.commitHash || source.id;
     const position = computeAttachedPosition(source, 'unit', commitQuickOffset);
+    const latestMainId = resolveLatestMainUnitId(state.nodes, state.latestMainCommitId);
+    const pendingBranch =
+      !state.hasMainCommit || (source.data.branchType === 'main' && source.id === latestMainId)
+        ? 'main'
+        : 'branch';
     const conversation = await createConversation(state.projectId, title, parentCommitHash, {
       x: position.x,
       y: position.y,
@@ -165,6 +170,8 @@ export function useCanvasCommitActions() {
         kind: 'unit',
         conversationId: conversation.conversation_id,
         commitStatus: 'staging',
+        pendingBranch,
+        pendingBranchName: '',
         sourceCommitHash: parentCommitHash,
         inheritFromCommitHash: parentCommitHash,
       },

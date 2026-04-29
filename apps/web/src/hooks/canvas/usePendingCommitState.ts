@@ -255,7 +255,7 @@ export function usePendingCommitState({
         }
       }
 
-      const result = await api.commitWorkbenchDraft(extraction.draftId, data.title);
+      const result = await api.commitWorkbenchDraft(extraction.draftId, data.title, branch);
       const commitHash = result.commit.hash as string;
 
       const parentHash = data.sourceCommitHash || null;

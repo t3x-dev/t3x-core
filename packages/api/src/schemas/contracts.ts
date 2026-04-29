@@ -723,6 +723,7 @@ export const PreviewDraftResponse = SuccessResponse(
 // POST /v1/drafts/:id/commit
 export const CommitDraftRequest = z.object({
   message: z.string().optional(),
+  branch: z.string().optional(),
 });
 
 export const CommitDraftResponse = SuccessResponse(

@@ -91,6 +91,7 @@ export const commitOp: Operation<CommitInput, CommitOutput> = {
       provenance: input.provenance,
       yops_log_ids: input.yops_log_ids ?? [],
       sources: input.sources,
+      enforceMainLinearity: true,
     });
     yield { type: 'step_done', step: 'persist' };
 

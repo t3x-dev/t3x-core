@@ -28,6 +28,7 @@ import {
   updateCommitMessage,
   updateCommitPosition,
 } from '@t3x-dev/storage';
+import { mapMainBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -232,6 +233,8 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
     // draft / autopilot / drafts-workflow commit routes.
     const conflict = mapSupersededError(c, err);
     if (conflict) return conflict;
+    const linearity = mapMainBranchLinearityError(c, err);
+    if (linearity) return linearity;
     const message = err instanceof Error ? err.message : 'Failed to create commit';
     return errorResponse(c, 'CREATE_FAILED', message);
   }

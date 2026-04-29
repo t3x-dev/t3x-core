@@ -165,6 +165,7 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
       branch: input.branch || undefined,
       provenance: { method: 'merge' },
       yops_log_ids: [],
+      enforceMainLinearity: true,
     });
 
     if (input.branch && projectId) {

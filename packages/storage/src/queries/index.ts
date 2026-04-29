@@ -77,6 +77,7 @@ export {
   getLatestCommit,
   type ListCommitsOptions,
   listCommits,
+  MainBranchLinearityError,
   SupersededYOpsLogIdsError,
   updateCommitMessage,
   updateCommitPosition,

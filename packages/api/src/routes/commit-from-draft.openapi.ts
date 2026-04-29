@@ -13,6 +13,7 @@
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
+import { mapMainBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -156,6 +157,7 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       branch: targetBranch,
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
+      enforceMainLinearity: true,
     });
 
     // Step 6: Mark draft as committed
@@ -187,6 +189,8 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
       201
     );
   } catch (err) {
+    const linearity = mapMainBranchLinearityError(c, err);
+    if (linearity) return linearity;
     // Suggestion-vs-baseline: if a concurrent re-extract superseded
     // any of the candidate yops_log_ids between findUncommittedYOpsIds
     // and createCommit, surface as 409 retryable conflict instead of

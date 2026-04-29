@@ -36,6 +36,16 @@ export class SupersededYOpsLogIdsError extends Error {
   }
 }
 
+export class MainBranchLinearityError extends Error {
+  constructor(
+    public readonly code: 'MAIN_ROOT_EXISTS' | 'MAIN_NOT_HEAD',
+    message: string
+  ) {
+    super(message);
+    this.name = 'MainBranchLinearityError';
+  }
+}
+
 // Drizzle's tx vs db types vary by adapter; the runtime contract
 // (transaction(fn)) is uniform and callers narrow tx to AnyDB.
 type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
@@ -54,6 +64,7 @@ export interface CreateCommitInput {
   provenance?: Provenance;
   yops_log_ids?: string[];
   sources?: Array<{ type: 'conversation' | 'import' | 'leaf'; id: string; title?: string }>;
+  enforceMainLinearity?: boolean;
 }
 
 export interface ListCommitsOptions {
@@ -110,9 +121,16 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
     return row;
   };
 
+  const insertWithMainLinearityGuard = async (txOrDb: AnyDB): Promise<CommitRecord> => {
+    if (input.enforceMainLinearity) {
+      await assertMainBranchLinearity(txOrDb, input.project_id, branch, parents);
+    }
+    return insertCommit(txOrDb);
+  };
+
   // Fast path: nothing to lock. Skip the transaction entirely.
-  if (yopsLogIds.length === 0) {
-    const row = await insertCommit(db);
+  if (yopsLogIds.length === 0 && !input.enforceMainLinearity) {
+    const row = await insertWithMainLinearityGuard(db);
     return rowToCommit(row);
   }
 
@@ -154,14 +172,21 @@ export async function createCommit(db: AnyDB, input: CreateCommitInput): Promise
       throw new SupersededYOpsLogIdsError(superseded.map((row) => row.id));
     }
 
-    return insertCommit(txOrDb);
+    return insertWithMainLinearityGuard(txOrDb);
+  };
+
+  const insertWithGuards = async (txOrDb: AnyDB): Promise<CommitRecord> => {
+    if (yopsLogIds.length > 0) {
+      return insertWithSupersedeGuard(txOrDb);
+    }
+    return insertWithMainLinearityGuard(txOrDb);
   };
 
   const runner = db as unknown as Partial<TxRunner>;
   const result =
     typeof runner.transaction === 'function'
-      ? await runner.transaction(async (tx) => insertWithSupersedeGuard(tx as AnyDB))
-      : await insertWithSupersedeGuard(db);
+      ? await runner.transaction(async (tx) => insertWithGuards(tx as AnyDB))
+      : await insertWithGuards(db);
 
   return rowToCommit(result as CommitRecord);
 }
@@ -336,6 +361,35 @@ export async function updateCommitMessage(
 // ============================================================
 // Helpers
 // ============================================================
+
+async function assertMainBranchLinearity(
+  db: AnyDB,
+  projectId: string,
+  branch: string,
+  parents: string[]
+): Promise<void> {
+  if (branch !== 'main') {
+    return;
+  }
+
+  const latestMain = await getLatestCommit(db, projectId, 'main');
+  if (parents.length === 0) {
+    if (latestMain) {
+      throw new MainBranchLinearityError(
+        'MAIN_ROOT_EXISTS',
+        'A root commit on main branch already exists'
+      );
+    }
+    return;
+  }
+
+  if (!latestMain || !parents.includes(latestMain.hash)) {
+    throw new MainBranchLinearityError(
+      'MAIN_NOT_HEAD',
+      'Main branch commits must extend the current main head'
+    );
+  }
+}
 
 /**
  * Convert database row to Commit type.

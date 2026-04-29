@@ -26,6 +26,7 @@ import {
   updateAutopilotConfig,
 } from '@t3x-dev/storage';
 import { eq } from 'drizzle-orm';
+import { mapMainBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -413,6 +414,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       branch: config.target_branch,
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
+      enforceMainLinearity: true,
     });
 
     // 10. Update draft with the real commit hash
@@ -460,6 +462,8 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       200
     );
   } catch (err) {
+    const linearity = mapMainBranchLinearityError(c, err);
+    if (linearity) return linearity;
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500.
     const conflict = mapSupersededError(c, err);
