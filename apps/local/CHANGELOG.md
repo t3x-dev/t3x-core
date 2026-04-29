@@ -1,5 +1,15 @@
 # @t3x-dev/local
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/cli@0.2.0
+  - @t3x-dev/api@0.2.0
+  - @t3x-dev/storage@0.2.0
+  - @t3x-dev/mcp@0.2.0
+
 ## 0.1.5
 
 ### Patch Changes
