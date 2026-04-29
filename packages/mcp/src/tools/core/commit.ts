@@ -145,7 +145,7 @@ export const commitHandler: ToolHandler = async (args) => {
     message,
     branch,
     provenance: { method: 'human_curation' },
-    enforceMainLinearity: true,
+    enforceBranchLinearity: true,
   });
 
   // Step 7: Mark draft as committed

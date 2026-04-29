@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { createCommit, type MainBranchLinearityError } from '../queries/commits';
+import { type BranchLinearityError, createCommit } from '../queries/commits';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
@@ -10,7 +10,7 @@ const content = {
 };
 const author = { type: 'human' as const, name: 'test' };
 
-describe('main branch linearity', () => {
+describe('branch linearity', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
 
@@ -31,7 +31,7 @@ describe('main branch linearity', () => {
       content,
       project_id: project.projectId,
       branch: 'main',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
 
     const child = await createCommit(db, {
@@ -40,7 +40,7 @@ describe('main branch linearity', () => {
       project_id: project.projectId,
       parents: [root.hash],
       branch: 'main',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
 
     expect(child.parents).toEqual([root.hash]);
@@ -54,7 +54,7 @@ describe('main branch linearity', () => {
       content,
       project_id: project.projectId,
       branch: 'main',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
 
     await expect(
@@ -63,12 +63,12 @@ describe('main branch linearity', () => {
         content,
         project_id: project.projectId,
         branch: 'main',
-        enforceMainLinearity: true,
+        enforceBranchLinearity: true,
       })
     ).rejects.toMatchObject({
-      name: 'MainBranchLinearityError',
-      code: 'MAIN_ROOT_EXISTS',
-    } satisfies Partial<MainBranchLinearityError>);
+      name: 'BranchLinearityError',
+      code: 'BRANCH_ROOT_EXISTS',
+    } satisfies Partial<BranchLinearityError>);
   });
 
   it('rejects a main child from an older main commit but allows a branch child', async () => {
@@ -78,7 +78,7 @@ describe('main branch linearity', () => {
       content,
       project_id: project.projectId,
       branch: 'main',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
     await createCommit(db, {
       author,
@@ -86,7 +86,7 @@ describe('main branch linearity', () => {
       project_id: project.projectId,
       parents: [root.hash],
       branch: 'main',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
 
     await expect(
@@ -96,12 +96,12 @@ describe('main branch linearity', () => {
         project_id: project.projectId,
         parents: [root.hash],
         branch: 'main',
-        enforceMainLinearity: true,
+        enforceBranchLinearity: true,
       })
     ).rejects.toMatchObject({
-      name: 'MainBranchLinearityError',
-      code: 'MAIN_NOT_HEAD',
-    } satisfies Partial<MainBranchLinearityError>);
+      name: 'BranchLinearityError',
+      code: 'BRANCH_NOT_HEAD',
+    } satisfies Partial<BranchLinearityError>);
 
     const branchCommit = await createCommit(db, {
       author,
@@ -109,8 +109,100 @@ describe('main branch linearity', () => {
       project_id: project.projectId,
       parents: [root.hash],
       branch: 'branch-one',
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
     expect(branchCommit.branch).toBe('branch-one');
+  });
+
+  it('rejects reusing an existing branch name from a different fork point', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Branch name collision' }));
+    const root = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const mainChild = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [root.hash],
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const branchRoot = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [root.hash],
+      branch: 'branch-one',
+      enforceBranchLinearity: true,
+    });
+
+    await expect(
+      createCommit(db, {
+        author,
+        content,
+        project_id: project.projectId,
+        parents: [mainChild.hash],
+        branch: 'branch-one',
+        enforceBranchLinearity: true,
+      })
+    ).rejects.toMatchObject({
+      name: 'BranchLinearityError',
+      code: 'BRANCH_NOT_HEAD',
+    } satisfies Partial<BranchLinearityError>);
+
+    const branchChild = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [branchRoot.hash],
+      branch: 'branch-one',
+      enforceBranchLinearity: true,
+    });
+    expect(branchChild.branch).toBe('branch-one');
+  });
+
+  it('rejects committing an existing branch from its older branch node', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Branch history reject' }));
+    const root = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const branchRoot = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [root.hash],
+      branch: 'branch-one',
+      enforceBranchLinearity: true,
+    });
+    await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [branchRoot.hash],
+      branch: 'branch-one',
+      enforceBranchLinearity: true,
+    });
+
+    await expect(
+      createCommit(db, {
+        author,
+        content,
+        project_id: project.projectId,
+        parents: [branchRoot.hash],
+        branch: 'branch-one',
+        enforceBranchLinearity: true,
+      })
+    ).rejects.toMatchObject({
+      name: 'BranchLinearityError',
+      code: 'BRANCH_NOT_HEAD',
+    } satisfies Partial<BranchLinearityError>);
   });
 });

@@ -148,7 +148,7 @@ export function PendingCommitView({
               commitError={state.commitError}
               branches={state.branches}
               branchesLoading={state.branchesLoading}
-              isMainBranchInvalid={state.isMainBranchInvalid}
+              branchLinearityError={state.branchLinearityError}
               isMergeDraft={state.isMergeDraft}
               shouldShowBranchSelect={state.shouldShowBranchSelect}
               requireBranchName={state.requireBranchName}

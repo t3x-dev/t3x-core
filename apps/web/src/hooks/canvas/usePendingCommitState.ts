@@ -57,7 +57,7 @@ export interface UsePendingCommitStateReturn {
       modifiedCount: number;
     } | null;
   } | null;
-  isMainBranchInvalid: boolean;
+  branchLinearityError: string | null;
 
   // Layout state
   sidebarSourceDividerPos: number;
@@ -125,14 +125,34 @@ export function usePendingCommitState({
     )
   );
 
-  const isMainBranchInvalid = useMemo(() => {
-    if (data.pendingBranch === 'branch') return false;
-    if (!hasMainCommit) return false;
+  const branchLinearityError = useMemo(() => {
+    const targetBranch =
+      data.pendingBranch === 'branch' ? data.pendingBranchName?.trim() || '' : 'main';
+    if (!targetBranch) return null;
+
     const effectiveSourceHash = data.sourceCommitHash || upstreamCommitHash;
-    if (!effectiveSourceHash) return true;
-    return effectiveSourceHash !== latestMainCommitId;
+
+    if (targetBranch === 'main') {
+      if (!hasMainCommit) return null;
+      if (!effectiveSourceHash) {
+        return 'A root commit on main branch already exists. Please select a different branch.';
+      }
+      if (effectiveSourceHash !== latestMainCommitId) {
+        return 'Can only extend main branch from its latest commit. Please select a different branch or create a new branch.';
+      }
+      return null;
+    }
+
+    const existingBranch = branches.find((branch) => branch.name === targetBranch);
+    const branchHeadHash = existingBranch?.head_commit_hash;
+    if (!branchHeadHash) return null;
+    if (effectiveSourceHash === branchHeadHash) return null;
+
+    return `Branch "${targetBranch}" already exists. Continue from its latest node or choose a new branch name.`;
   }, [
+    branches,
     data.pendingBranch,
+    data.pendingBranchName,
     data.sourceCommitHash,
     hasMainCommit,
     latestMainCommitId,
@@ -177,6 +197,11 @@ export function usePendingCommitState({
   }, [projectId]);
 
   const handleProceed = useCallback(async () => {
+    if (branchLinearityError) {
+      setCommitError(branchLinearityError);
+      return;
+    }
+
     try {
       await extraction.handleProceed(
         {
@@ -193,7 +218,7 @@ export function usePendingCommitState({
       // Unlock config on failure so the user can retry.
       setConfigLocked(false);
     }
-  }, [projectId, data, extraction]);
+  }, [projectId, data, extraction, branchLinearityError]);
 
   const handleReExtract = useCallback(async () => {
     const sourceConversationId = data.sourceConversationId || data.conversationId;
@@ -222,27 +247,10 @@ export function usePendingCommitState({
           ? data.pendingBranchName?.trim() || `branch-${Date.now()}`
           : 'main';
 
-      // Validate main-branch linearity.
-      if (branch === 'main') {
-        const canvasState = useCanvasStore.getState();
-        if (!data.sourceCommitHash) {
-          if (canvasState.hasMainCommit) {
-            setCommitError(
-              'A root commit on main branch already exists. Please select a different branch.'
-            );
-            setIsCommitting(false);
-            return;
-          }
-        } else if (
-          canvasState.hasMainCommit &&
-          data.sourceCommitHash !== canvasState.latestMainCommitId
-        ) {
-          setCommitError(
-            'Can only extend main branch from its latest commit. Please select a different branch or create a new branch.'
-          );
-          setIsCommitting(false);
-          return;
-        }
+      if (branchLinearityError) {
+        setCommitError(branchLinearityError);
+        setIsCommitting(false);
+        return;
       }
 
       // Create branch if needed.
@@ -304,7 +312,7 @@ export function usePendingCommitState({
     } finally {
       setIsCommitting(false);
     }
-  }, [extraction, projectId, data, node, template, onUpdate, branches]);
+  }, [extraction, projectId, data, node, template, onUpdate, branches, branchLinearityError]);
 
   return {
     template,
@@ -322,7 +330,7 @@ export function usePendingCommitState({
     branches,
     branchesLoading,
     commitSuccess,
-    isMainBranchInvalid,
+    branchLinearityError,
 
     sidebarSourceDividerPos: layout.sidebarSourceDividerPos,
     openingAsDraft: postCommit.openingAsDraft,

@@ -68,6 +68,7 @@ export {
 } from './commit-rewrites';
 // Commits (tree-based)
 export {
+  BranchLinearityError,
   type CreateCommitInput,
   collectYOpsForCommitRange,
   createCommit,
@@ -77,7 +78,6 @@ export {
   getLatestCommit,
   type ListCommitsOptions,
   listCommits,
-  MainBranchLinearityError,
   SupersededYOpsLogIdsError,
   updateCommitMessage,
   updateCommitPosition,

@@ -224,6 +224,42 @@ describe('usePendingCommitState — LLM commit flow', () => {
     expect(result.current.configLocked).toBe(false);
   });
 
+  it('blocks extracting when an existing branch is selected from a non-head node', async () => {
+    (api.listBranches as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      branches: [
+        {
+          branch_id: 'br_branch_one',
+          name: 'branch-one',
+          project_id: 'proj_1',
+          head_commit_hash: 'sha256:branch-head',
+          is_current: false,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+    });
+
+    const node = makeNode({
+      pendingBranch: 'branch',
+      pendingBranchName: 'branch-one',
+      sourceCommitHash: 'sha256:older-node',
+    });
+    const { result } = renderHook(() =>
+      usePendingCommitState({ node, onClose, onUpdate, projectId, onConvertDraft })
+    );
+
+    await waitForHook();
+
+    expect(result.current.branchLinearityError).toContain('Branch "branch-one" already exists');
+
+    await act(async () => {
+      await result.current.handleProceed();
+    });
+
+    expect(api.createWorkbenchDraft).not.toHaveBeenCalled();
+    expect(result.current.commitError).toContain('Branch "branch-one" already exists');
+  });
+
   it('commits via commitWorkbenchDraft', async () => {
     (api.createWorkbenchDraft as ReturnType<typeof vi.fn>).mockResolvedValue(mockDraft);
     (api.extractIncremental as ReturnType<typeof vi.fn>).mockResolvedValue(mockExtractResult);
