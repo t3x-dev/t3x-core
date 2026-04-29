@@ -40,7 +40,7 @@ export interface CommitConfigStepProps {
   commitError: string | null;
   branches: Branch[];
   branchesLoading: boolean;
-  isMainBranchInvalid: boolean;
+  branchLinearityError: string | null;
 
   // Derived values
   isMergeDraft: boolean;
@@ -72,7 +72,7 @@ export function CommitConfigStep({
   commitError,
   branches,
   branchesLoading,
-  isMainBranchInvalid,
+  branchLinearityError,
   isMergeDraft,
   shouldShowBranchSelect,
   requireBranchName,
@@ -177,16 +177,11 @@ export function CommitConfigStep({
                     ))}
                   <option value="__new__">+ New {t('branch').toLowerCase()}...</option>
                 </select>
-                {/* Warning when main branch selection is invalid */}
-                {isMainBranchInvalid && (
+                {/* Warning when selected branch cannot be extended from this node */}
+                {branchLinearityError && (
                   <div className="flex items-start gap-2 mt-1.5 p-2 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/25 rounded text-[var(--status-warning)] text-xs">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <span>
-                      {!data.sourceCommitHash
-                        ? 'A root commit on main branch already exists.'
-                        : 'Can only extend main branch from its latest commit.'}{' '}
-                      Please select a different branch.
-                    </span>
+                    <span>{branchLinearityError}</span>
                   </div>
                 )}
               </div>
@@ -239,7 +234,7 @@ export function CommitConfigStep({
             <div className="flex gap-2 mt-2">
               <Button
                 onClick={handleProceed}
-                disabled={!hasSourceConversation}
+                disabled={!hasSourceConversation || !!branchLinearityError}
                 title="Lock configuration and start LLM extraction"
                 className="flex-1 gap-1.5 bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-500"
               >

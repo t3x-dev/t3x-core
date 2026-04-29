@@ -22,7 +22,7 @@ import {
   forkDraft,
   updateDraftPreview,
 } from '@t3x-dev/storage';
-import { mapMainBranchLinearityError } from '../lib/commit-linearity';
+import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
@@ -492,7 +492,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       branch: body?.branch ?? draft.target_branch ?? 'main',
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
-      enforceMainLinearity: true,
+      enforceBranchLinearity: true,
     });
 
     // 5b. Best-effort: populate node vectors (skip on failure)
@@ -573,7 +573,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (err) {
-    const linearity = mapMainBranchLinearityError(c, err);
+    const linearity = mapBranchLinearityError(c, err);
     if (linearity) return linearity;
     // Suggestion-vs-baseline: surface concurrent-supersede races as
     // 409 retryable conflict, not opaque 500.

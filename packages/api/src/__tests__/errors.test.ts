@@ -28,6 +28,8 @@ describe('ErrorCodes', () => {
         "API_KEY_REVOKED": "API_KEY_REVOKED",
         "AUTH_ERROR": "AUTH_ERROR",
         "AUTOPILOT_CONFIG_INVALID": "AUTOPILOT_CONFIG_INVALID",
+        "BRANCH_NOT_HEAD": "BRANCH_NOT_HEAD",
+        "BRANCH_ROOT_EXISTS": "BRANCH_ROOT_EXISTS",
         "CHECK_FAILED": "CHECK_FAILED",
         "COMMIT_FAILED": "COMMIT_FAILED",
         "COMMIT_NOT_FOUND": "COMMIT_NOT_FOUND",
@@ -62,8 +64,6 @@ describe('ErrorCodes', () => {
         "LEARN_FAILED": "LEARN_FAILED",
         "LIST_FAILED": "LIST_FAILED",
         "LLM_NOT_CONFIGURED": "LLM_NOT_CONFIGURED",
-        "MAIN_NOT_HEAD": "MAIN_NOT_HEAD",
-        "MAIN_ROOT_EXISTS": "MAIN_ROOT_EXISTS",
         "MERGE_FAILED": "MERGE_FAILED",
         "MISSING_AUTHOR": "MISSING_AUTHOR",
         "MISSING_PROJECT_FOR_ALIAS": "MISSING_PROJECT_FOR_ALIAS",
@@ -124,8 +124,8 @@ describe('ErrorStatusCodes', () => {
   it('maps conflict codes to 409', () => {
     expect(ErrorStatusCodes.DUPLICATE_PIN).toBe(409);
     expect(ErrorStatusCodes.HASH_CONFLICT).toBe(409);
-    expect(ErrorStatusCodes.MAIN_NOT_HEAD).toBe(409);
-    expect(ErrorStatusCodes.MAIN_ROOT_EXISTS).toBe(409);
+    expect(ErrorStatusCodes.BRANCH_NOT_HEAD).toBe(409);
+    expect(ErrorStatusCodes.BRANCH_ROOT_EXISTS).toBe(409);
   });
 
   it('maps operation failures to 500', () => {
