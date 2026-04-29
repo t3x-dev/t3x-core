@@ -73,6 +73,28 @@ const createStagingUnitNode = (
   },
 });
 
+// Helper to create a mock workbench draft node
+const createDraftUnitNode = (
+  id: string,
+  overrides: Partial<CanvasNodeData> = {}
+): Node<CanvasNodeData> => ({
+  id,
+  type: 'unit',
+  position: { x: 50, y: 0 },
+  data: {
+    kind: 'unit',
+    entryId: id,
+    title: 'Draft Unit',
+    summary: '2 nodes',
+    status: 'draft',
+    timestamp: 'just now',
+    tags: ['draft'],
+    commitStatus: 'draft',
+    draftId: id,
+    ...overrides,
+  },
+});
+
 // Helper to create a mock committed unit node
 const createCommittedUnitNode = (
   id: string,
@@ -360,6 +382,43 @@ describe('Canvas Store - Unit Node Model', () => {
       const state = useCanvasStore.getState();
       expect(state.nodes[0].data.title).toBe('Updated');
       expect(state.nodes[1].data.title).toBe('Title 2');
+    });
+  });
+
+  // ===========================================================================
+  // mergeProjectData Tests
+  // ===========================================================================
+  describe('mergeProjectData', () => {
+    it('removes stale server-backed draft and staging nodes during incremental refresh', () => {
+      const committedUnit = createCommittedUnitNode('sha256:new', 'sha256:new');
+      const staleDraft = createDraftUnitNode('draft_old');
+      const staleConversation = createStagingUnitNode('conv_old', {
+        conversationId: 'conv_old',
+      });
+      const localPending = createStagingUnitNode('unit_local', {
+        conversationId: undefined,
+      });
+
+      useCanvasStore.setState({
+        nodes: [committedUnit, staleDraft, staleConversation, localPending],
+        edges: [
+          { id: 'edge-draft', source: 'sha256:new', target: 'draft_old' },
+          { id: 'edge-conv', source: 'sha256:new', target: 'conv_old' },
+          { id: 'edge-local', source: 'sha256:new', target: 'unit_local' },
+        ],
+      });
+
+      useCanvasStore.getState().mergeProjectData({
+        nodes: [committedUnit],
+        edges: [],
+        hasMainCommit: true,
+        latestMainCommitId: 'sha256:new',
+        hasDbPositions: false,
+      });
+
+      const state = useCanvasStore.getState();
+      expect(state.nodes.map((node) => node.id).sort()).toEqual(['sha256:new', 'unit_local']);
+      expect(state.edges.map((edge) => edge.id)).toEqual(['edge-local']);
     });
   });
 

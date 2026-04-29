@@ -226,7 +226,8 @@ export async function suggestForDraft(draftId: string, limit?: number): Promise<
 
 export async function commitWorkbenchDraft(
   draftId: string,
-  message?: string
+  message?: string,
+  branch?: string
 ): Promise<{
   commit: Record<string, unknown>;
   leaf: Record<string, unknown> | null;
@@ -235,7 +236,7 @@ export async function commitWorkbenchDraft(
   const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/commit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, branch }),
   });
   return handleResponse<{
     commit: Record<string, unknown>;

@@ -146,6 +146,11 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       });
 
       const inputTextHash = `sha256:${sourceExcerptText.length}-${Date.now()}`;
+      const latestMainId = resolveLatestMainUnitId(state.nodes, state.latestMainCommitId);
+      const pendingBranch =
+        !state.hasMainCommit || (source.data.branchType === 'main' && source.id === latestMainId)
+          ? 'main'
+          : 'branch';
 
       const newNode: Node<CanvasNodeData> = {
         id: nextNodeId(),
@@ -160,7 +165,7 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
           tags: ['unit'],
           kind: 'unit',
           bridgePrompt: 'prose',
-          pendingBranch: 'main',
+          pendingBranch,
           pendingBranchName: '',
           commitStatus: 'staging',
           baselineSummary: sourceExcerptText,

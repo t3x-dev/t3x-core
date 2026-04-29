@@ -11,6 +11,7 @@ import {
   collectAffectedStagingUnits,
   computeAttachedPosition,
   computeUnitTone,
+  determineStagingUnitBranchMode,
   getLockedNodeIds,
   getNumericId,
   isUpstreamOfStagingUnit,
@@ -319,5 +320,60 @@ describe('computeAttachedPosition', () => {
     const pos = computeAttachedPosition(source, 'unit', 400);
     expect(pos.x).toBe(snapPosition({ x: 500, y: 0 }).x);
     expect(typeof pos.y).toBe('number');
+  });
+});
+
+describe('determineStagingUnitBranchMode', () => {
+  it('allows branch selection when staging descends from latest main', () => {
+    const nodes = [
+      makeNode('main-1', 'unit', {
+        commitStatus: 'committed',
+        branchType: 'main',
+        timestamp: '2024-01-01T00:00:00Z',
+      }),
+      makeNode('staging', 'unit', { commitStatus: 'staging' }),
+    ];
+    const edges = [makeEdge('main-1', 'staging')];
+
+    expect(
+      determineStagingUnitBranchMode(
+        {
+          nodes,
+          edges,
+          hasMainCommit: true,
+          latestMainCommitId: 'main-1',
+        } as never,
+        'staging'
+      )
+    ).toBe('select');
+  });
+
+  it('forces branch-only when staging descends from older main', () => {
+    const nodes = [
+      makeNode('main-1', 'unit', {
+        commitStatus: 'committed',
+        branchType: 'main',
+        timestamp: '2024-01-01T00:00:00Z',
+      }),
+      makeNode('main-2', 'unit', {
+        commitStatus: 'committed',
+        branchType: 'main',
+        timestamp: '2024-02-01T00:00:00Z',
+      }),
+      makeNode('staging', 'unit', { commitStatus: 'staging' }),
+    ];
+    const edges = [makeEdge('main-1', 'main-2'), makeEdge('main-1', 'staging')];
+
+    expect(
+      determineStagingUnitBranchMode(
+        {
+          nodes,
+          edges,
+          hasMainCommit: true,
+          latestMainCommitId: 'main-2',
+        } as never,
+        'staging'
+      )
+    ).toBe('branch-only');
   });
 });

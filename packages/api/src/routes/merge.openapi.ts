@@ -37,6 +37,7 @@ import {
   updateMergeDraft,
 } from '@t3x-dev/storage';
 import { getAuthorFromContext } from '../lib/auth';
+import { mapMainBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess } from '../lib/project-access';
@@ -731,6 +732,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         branch: targetBranch,
         provenance: { method: 'merge' },
         yops_log_ids: [],
+        enforceMainLinearity: true,
       });
       savedDraftCommitHash = saved.hash;
       await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
@@ -775,6 +777,8 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       201
     );
   } catch (error) {
+    const linearity = mapMainBranchLinearityError(c, error);
+    if (linearity) return linearity;
     return c.json(
       {
         success: false as const,

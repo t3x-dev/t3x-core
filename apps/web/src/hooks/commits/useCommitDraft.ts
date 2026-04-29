@@ -10,7 +10,8 @@ import { commitWorkbenchDraft } from '@/commands/drafts';
 
 export function useCommitDraft() {
   const commit = useCallback(
-    async (draftId: string, message?: string) => commitWorkbenchDraft(draftId, message),
+    async (draftId: string, message?: string, branch?: string) =>
+      commitWorkbenchDraft(draftId, message, branch),
     []
   );
   return { commit };

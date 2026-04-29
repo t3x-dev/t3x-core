@@ -252,7 +252,7 @@ describe('usePendingCommitState — LLM commit flow', () => {
       await result.current.handleCommit();
     });
 
-    expect(api.commitWorkbenchDraft).toHaveBeenCalledWith('draft_abc', 'Test Commit');
+    expect(api.commitWorkbenchDraft).toHaveBeenCalledWith('draft_abc', 'Test Commit', 'main');
     expect(result.current.commitSuccess).not.toBeNull();
     expect(result.current.commitSuccess?.commitHash).toBe('sha256:abc123');
   });

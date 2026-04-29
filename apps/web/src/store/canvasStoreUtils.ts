@@ -388,7 +388,7 @@ const hasPrimaryAncestor = (
   if (!node) {
     return false;
   }
-  if (node.data.kind === 'unit') {
+  if (node.data.kind === 'unit' && node.data.commitStatus !== 'staging') {
     return node.data.branchType === 'main' || node.data.branchType === 'branch';
   }
   const sources = incomingMap.get(nodeId);

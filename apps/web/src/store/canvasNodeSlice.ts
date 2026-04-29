@@ -50,11 +50,34 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
   mergeProjectData: ({ nodes, edges, hasMainCommit, latestMainCommitId, hasDbPositions }) =>
     set((state) => {
       const existingNodeIds = new Set(state.nodes.map((n) => n.id));
-      const existingEdgeIds = new Set(state.edges.map((e) => e.id));
+      const incomingNodeIds = new Set(nodes.map((n) => n.id));
       const newNodes = nodes.filter((n) => !existingNodeIds.has(n.id));
-      const newEdges = edges.filter((e) => !existingEdgeIds.has(e.id));
+      const retainedNodes = state.nodes.filter(
+        (node) =>
+          incomingNodeIds.has(node.id) ||
+          (node.data.kind === 'unit' && node.data.commitStatus === 'committed') ||
+          node.data.kind === 'leaf' ||
+          (node.data.kind === 'unit' &&
+            node.data.commitStatus !== 'committed' &&
+            !node.data.draftId &&
+            !node.data.conversationId)
+      );
+      const retainedNodeIds = new Set(retainedNodes.map((n) => n.id));
+      const incomingEdgeIds = new Set(edges.map((e) => e.id));
+      const retainedEdges = state.edges.filter(
+        (edge) =>
+          incomingEdgeIds.has(edge.id) ||
+          (retainedNodeIds.has(edge.source) && retainedNodeIds.has(edge.target))
+      );
+      const retainedEdgeIds = new Set(retainedEdges.map((e) => e.id));
+      const newEdges = edges.filter((e) => !retainedEdgeIds.has(e.id));
 
-      if (newNodes.length === 0 && newEdges.length === 0) {
+      if (
+        retainedNodes.length === state.nodes.length &&
+        retainedEdges.length === state.edges.length &&
+        newNodes.length === 0 &&
+        newEdges.length === 0
+      ) {
         // Nothing structural changed — still reconcile root flags
         return {
           hasMainCommit,
@@ -64,8 +87,8 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       }
 
       return {
-        nodes: [...state.nodes, ...newNodes],
-        edges: [...state.edges, ...newEdges],
+        nodes: [...retainedNodes, ...newNodes],
+        edges: [...retainedEdges, ...newEdges],
         hasMainCommit,
         latestMainCommitId,
         hasDbPositions: state.hasDbPositions || hasDbPositions,
