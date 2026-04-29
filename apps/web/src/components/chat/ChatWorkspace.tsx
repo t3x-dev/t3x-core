@@ -2,6 +2,7 @@
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
@@ -194,8 +195,12 @@ export function ChatWorkspace({
       if (detail?.sourcePinIds) {
         // Came from source panel confirm — extract with selected pins
         handleExtract(detail.sourcePinIds);
-      } else if (detail?.chooseSources && pins.length > 0) {
-        // Explicit request to review pinned sources before extracting.
+      } else if (detail?.chooseSources) {
+        if (pins.length === 0) {
+          toast.message('No pinned sources yet');
+          return;
+        }
+
         setShowSourcePanel(true);
         requestAnimationFrame(() => {
           chatContainerRef.current?.scrollTo({
