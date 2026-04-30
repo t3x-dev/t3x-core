@@ -24,13 +24,13 @@ describe('callExtractionLLM', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const ops = await callExtractionLLM({
+    const result = await callExtractionLLM({
       conversationId: 'c1',
       turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
       failingOps: undefined,
     });
 
-    expect(ops).toHaveLength(1);
+    expect(result.ops).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalled();
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body as string);
@@ -104,6 +104,40 @@ describe('callExtractionLLM', () => {
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body as string);
     expect(body.preset).toBe('concise');
+  });
+
+  it('returns variants from the success envelope', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          ops: [{ define: { path: 'balanced_root' } }],
+          variants: {
+            concise: [{ define: { path: 'concise_root' } }],
+            balanced: [{ define: { path: 'balanced_root' } }],
+            detailed: [{ define: { path: 'detailed_root' } }],
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      callExtractionLLM({
+        conversationId: 'c1',
+        turns: [{ turn_hash: 'sha256:t1', content: 'hello' }],
+        preset: 'balanced',
+      })
+    ).resolves.toEqual({
+      ops: [{ define: { path: 'balanced_root' } }],
+      variants: {
+        concise: [{ define: { path: 'concise_root' } }],
+        balanced: [{ define: { path: 'balanced_root' } }],
+        detailed: [{ define: { path: 'detailed_root' } }],
+      },
+    });
   });
 
   it('omits preset from the wire when not provided', async () => {

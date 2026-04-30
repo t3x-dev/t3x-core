@@ -16,6 +16,13 @@ interface BaselineIndex {
   slots: Set<string>;
 }
 
+function cloneBaselineIndex(index: BaselineIndex): BaselineIndex {
+  return {
+    nodes: new Set(index.nodes),
+    slots: new Set(index.slots),
+  };
+}
+
 function splitPath(path: string): { parentPath: string; key: string } | null {
   const index = path.lastIndexOf('/');
   if (index === -1) return null;
@@ -36,6 +43,16 @@ function makeDetailsPath(slotPath: string, baselineIndex: BaselineIndex): string
   return candidate;
 }
 
+function findKnownSlotPrefix(path: string, baselineIndex: BaselineIndex): string | null {
+  const segments = path.split('/').filter((segment) => segment.length > 0);
+  let prefix = '';
+  for (const segment of segments) {
+    prefix = prefix === '' ? segment : `${prefix}/${segment}`;
+    if (baselineIndex.slots.has(prefix)) return prefix;
+  }
+  return null;
+}
+
 function routeStructuredDataAwayFromSlot(
   path: string,
   itemId: string,
@@ -47,6 +64,18 @@ function routeStructuredDataAwayFromSlot(
     `Routed structured data for existing baseline slot "${path}" to "${routedPath}" (item ${itemId})`
   );
   return routedPath;
+}
+
+function routePathAwayFromSlotPrefix(
+  path: string,
+  slotPath: string,
+  itemId: string,
+  baselineIndex: BaselineIndex,
+  warnings: string[]
+): string {
+  const routedPrefix = routeStructuredDataAwayFromSlot(slotPath, itemId, baselineIndex, warnings);
+  if (path === slotPath) return routedPrefix;
+  return `${routedPrefix}/${path.slice(slotPath.length + 1)}`;
 }
 
 function buildBaselineIndex(content: SemanticContent | undefined): BaselineIndex {
@@ -149,6 +178,45 @@ export function normalizePath(raw: string | undefined | null): NormalizePathResu
   return { kind: 'ok', path: segments.join('/') };
 }
 
+function slugifyCreatePathSegment(segment: string): string {
+  const slug = segment
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (slug.length === 0) return '';
+  return /^\d/.test(slug) ? `item_${slug}` : slug;
+}
+
+/**
+ * Add/create paths are often emitted as human labels ("Changsha trip") even
+ * when the model has the right semantic target. Normalize those label-shaped
+ * segments deterministically instead of spending the retry budget on a path
+ * formatting issue. Existing-node references still use `normalizePath` so an
+ * invalid target_ref cannot be silently redirected to another node.
+ */
+function normalizeCreatePath(raw: string | undefined | null): NormalizePathResult {
+  const strict = normalizePath(raw);
+  if (strict.kind !== 'invalid') return strict;
+  if (raw == null) return strict;
+
+  const trimmed = raw.trim();
+  if (!/[\s-]/.test(trimmed)) return strict;
+
+  const rawSegments = trimmed
+    .replace(/\./g, '/')
+    .split('/')
+    .filter((segment) => segment.trim().length > 0);
+  if (rawSegments.length === 0) return strict;
+
+  const normalizedSegments = rawSegments.map(slugifyCreatePathSegment);
+  if (normalizedSegments.some((segment) => segment.length === 0 || !SNAKE_CASE_KEY.test(segment))) {
+    return strict;
+  }
+
+  return { kind: 'ok', path: normalizedSegments.join('/') };
+}
+
 /**
  * Walk a priority-ordered list of (field, raw) candidates and return:
  *
@@ -166,13 +234,15 @@ export function normalizePath(raw: string | undefined | null): NormalizePathResu
  */
 function resolvePathFromCandidates(
   itemId: string,
-  candidates: Array<{ field: string; raw: string | undefined | null }>
+  candidates: Array<{ field: string; raw: string | undefined | null }>,
+  options: { normalizer?: (raw: string | undefined | null) => NormalizePathResult } = {}
 ):
   | { kind: 'ok'; path: string }
   | { kind: 'invalid'; failure: ExtractionFailure }
   | { kind: 'absent' } {
+  const normalize = options.normalizer ?? normalizePath;
   for (const { field, raw } of candidates) {
-    const r = normalizePath(raw);
+    const r = normalize(raw);
     if (r.kind === 'ok') return { kind: 'ok', path: r.path };
     if (r.kind === 'invalid') {
       return {
@@ -415,22 +485,27 @@ function compileChildren(
       };
     }
     const childPath = `${parentPath}/${result.path}`;
-    const routedChildPath = baselineIndex.slots.has(childPath)
-      ? routeStructuredDataAwayFromSlot(childPath, item.id, baselineIndex, warnings)
-      : childPath;
+    const slotConflictPath = findKnownSlotPrefix(childPath, baselineIndex);
+    const routedChildPath =
+      slotConflictPath !== null
+        ? routePathAwayFromSlotPrefix(childPath, slotConflictPath, item.id, baselineIndex, warnings)
+        : childPath;
+    const childOps: SourcedYOp[] = [];
     if (!baselineIndex.nodes.has(routedChildPath)) {
-      ops.push({ define: { path: routedChildPath }, source });
+      childOps.push({ define: { path: routedChildPath }, source });
     } else {
       warnings.push(
         `Rewrote add intent for existing baseline node "${routedChildPath}" to update semantics (item ${item.id})`
       );
     }
     if (child.values && Object.keys(child.values).length > 0) {
-      ops.push({
+      childOps.push({
         populate: { path: routedChildPath, values: sortRecordValues(child.values) },
         source,
       });
     }
+    ops.push(...childOps);
+    recordOpsInIndex(childOps, baselineIndex);
   }
   return { ok: true, ops };
 }
@@ -485,7 +560,9 @@ function compileItem(
       );
     }
 
-    const resolved = resolvePathFromCandidates(item.id, addCandidates);
+    const resolved = resolvePathFromCandidates(item.id, addCandidates, {
+      normalizer: normalizeCreatePath,
+    });
     if (resolved.kind === 'invalid') {
       return { ok: false, failure: resolved.failure, warnings };
     }
@@ -531,18 +608,27 @@ function compileItem(
       );
     }
 
-    const pathExistsAsBaselineSlot =
-      input.draft.mode === 'incremental' && baselineIndex.slots.has(path);
+    const slotConflictPath = findKnownSlotPrefix(path, baselineIndex);
+    const pathExistsAsKnownSlot = slotConflictPath === path;
     const hasStructuredPayload =
       (item.candidate.values && Object.keys(item.candidate.values).length > 0) ||
       (item.candidate.children && item.candidate.children.length > 0);
-    const shouldRouteBaselineSlot = pathExistsAsBaselineSlot && hasStructuredPayload;
-    const structuralPath = shouldRouteBaselineSlot
-      ? routeStructuredDataAwayFromSlot(path, item.id, baselineIndex, warnings)
-      : path;
+    const targetSlot = getTargetSlot(item);
+    const hasNestedSlotSet =
+      pathExistsAsKnownSlot &&
+      targetSlot !== null &&
+      targetSlot !== DEFAULT_VALUE_SLOT &&
+      item.candidate.value !== undefined;
+    const shouldRouteKnownSlot =
+      slotConflictPath !== null &&
+      (slotConflictPath !== path || hasStructuredPayload || hasNestedSlotSet);
+    const structuralPath =
+      shouldRouteKnownSlot && slotConflictPath !== null
+        ? routePathAwayFromSlotPrefix(path, slotConflictPath, item.id, baselineIndex, warnings)
+        : path;
 
     const ops: SourcedYOp[] =
-      pathExistsAsBaselineNode || (pathExistsAsBaselineSlot && !shouldRouteBaselineSlot)
+      pathExistsAsBaselineNode || (pathExistsAsKnownSlot && !shouldRouteKnownSlot)
         ? []
         : [{ define: { path: structuralPath }, source }];
     if (item.candidate.values && Object.keys(item.candidate.values).length > 0) {
@@ -552,10 +638,9 @@ function compileItem(
       });
     }
 
-    const targetSlot = getTargetSlot(item);
     if (targetSlot && item.candidate.value !== undefined) {
       const setPath =
-        pathExistsAsBaselineSlot && targetSlot === DEFAULT_VALUE_SLOT
+        pathExistsAsKnownSlot && targetSlot === DEFAULT_VALUE_SLOT
           ? path
           : `${structuralPath}/${targetSlot}`;
       ops.push({
@@ -564,7 +649,9 @@ function compileItem(
       });
     }
 
-    const childrenResult = compileChildren(item, structuralPath, source, warnings, baselineIndex);
+    const localIndex = cloneBaselineIndex(baselineIndex);
+    recordOpsInIndex(ops, localIndex);
+    const childrenResult = compileChildren(item, structuralPath, source, warnings, localIndex);
     if (!childrenResult.ok) return childrenResult;
     ops.push(...childrenResult.ops);
 
@@ -965,7 +1052,12 @@ export function compileExtractionDraft(input: CompileInput): CompileResult {
     // valid path on a dropped item used to bleed through this loop in a
     // separate pass over `input.draft.items`. Folding it inline ties the
     // seed to the contribute-or-drop decision.
-    const seeded = preExistingTargetPath(item);
+    // `target_ref` is an existing-node signal for update/reinforce/remove.
+    // Add intents create `candidate.*` paths; if a model also fills
+    // target_ref during bootstrap, trusting it as pre-existing suppresses
+    // required ancestor defines (e.g. `beijing` before
+    // `beijing/roast_duck`) and the compiled batch fails at apply time.
+    const seeded = item.intent === 'add' ? null : preExistingTargetPath(item);
     if (
       seeded !== null &&
       (input.baseline === undefined ||

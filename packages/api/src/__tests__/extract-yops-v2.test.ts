@@ -141,6 +141,53 @@ describe('POST /v1/extract-yops (v2)', () => {
     expect(body.error.details.failure_code).toBe('draft_schema');
   });
 
+  it('returns preset variants when the pipeline produces them', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    extractAndApply.mockResolvedValue({
+      ok: true,
+      draft: {
+        schema: 't3x/extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [],
+      },
+      compiled: { ops: [{ define: { path: 'balanced_root' } }], warnings: [] },
+      variants: {
+        concise: { ops: [{ define: { path: 'concise_root' } }], warnings: [] },
+        balanced: { ops: [{ define: { path: 'balanced_root' } }], warnings: [] },
+        detailed: { ops: [{ define: { path: 'detailed_root' } }], warnings: [] },
+      },
+      snapshot: { trees: [], relations: [] },
+      turnHashByTag: { T1: 'sha256:aabbcc' },
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello world' }],
+        provider: 'openai',
+        model: 'gpt-5.4',
+        preset: 'balanced',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.ops).toEqual([{ define: { path: 'balanced_root' } }]);
+    expect(body.data.variants).toEqual({
+      concise: [{ define: { path: 'concise_root' } }],
+      balanced: [{ define: { path: 'balanced_root' } }],
+      detailed: [{ define: { path: 'detailed_root' } }],
+    });
+  });
+
   describe('committed-baseline snapshot derivation', () => {
     /**
      * RFC 2026-04-26: the snapshot fed to extractAndApply is the

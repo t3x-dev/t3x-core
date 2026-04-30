@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type LLMProvider, LLMProviderError } from '../../../llm/types';
 import { applyYOps } from '../../../t3x-yops/engine';
+import { PRESETS } from '../../extractionStyleConfig';
 import { runExtractionV2Pipeline } from '../pipeline';
 
 describe('extractors/v2 pipeline', () => {
@@ -1408,7 +1409,7 @@ describe('extractors/v2 pipeline', () => {
       expect(system).not.toMatch(/Concise budget/i);
     });
 
-    it('concise style adds the configured item budget + single-tree shape rule', async () => {
+    it('custom concise style adds the configured item budget + single-tree shape rule', async () => {
       const { captured, provider } = captureSystem();
       await runExtractionV2Pipeline({
         turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
@@ -1421,14 +1422,14 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'conservative',
           tier3: 'extract',
-          max_items: 6,
+          max_items: 7,
         },
       });
       const system = captured.system ?? '';
       // Style summary line is present.
-      expect(system).toMatch(/Extraction mode: concise/i);
+      expect(system).toMatch(/granularity=concise|Extraction mode: concise/i);
       // Item budget cites the configured max_items, not a hardcoded value.
-      expect(system).toMatch(/at most ~6 items/i);
+      expect(system).toMatch(/at most ~7 items/i);
       // Single-tree shape rule — direct fix for the "17 parallel root
       // nodes" failure mode in the Sony camera reproduction.
       expect(system).toMatch(/path prefix/i);
@@ -1499,7 +1500,7 @@ describe('extractors/v2 pipeline', () => {
       expect(system).toMatch(/path prefix/i);
     });
 
-    it('concise style WITH max_items keeps the hard-limits header', async () => {
+    it('custom concise style WITH max_items keeps the hard-limits header', async () => {
       // Inverse pin for the conditional header — when a cap IS
       // configured, the prompt must keep the "hard limits" framing
       // so the model takes the number seriously.
@@ -1515,7 +1516,7 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'conservative',
           tier3: 'extract',
-          max_items: 6,
+          max_items: 7,
         },
       });
       const system = captured.system ?? '';
@@ -1545,7 +1546,7 @@ describe('extractors/v2 pipeline', () => {
       expect(system).toMatch(/not a flat root/i);
     });
 
-    it('balanced style emits the summary but no extra budget rules', async () => {
+    it('custom balanced style emits summary but no extra budget rules', async () => {
       const { captured, provider } = captureSystem();
       await runExtractionV2Pipeline({
         turns: [{ turn_hash: 'sha256:1', role: 'user', content: 'a' }],
@@ -1558,15 +1559,11 @@ describe('extractors/v2 pipeline', () => {
           quote_length: 'representative',
           update_stance: 'balanced',
           tier3: 'extract',
-          max_items: 20, // matches PRESETS.balanced; without it
-          // matchPreset rightly reports 'custom' (drift coverage in
-          // extractionStyleConfig.test). Pass the full preset shape
-          // here so styleSummaryLine returns the friendly 'balanced'
-          // summary line.
+          max_items: 19,
         },
       });
       const system = captured.system ?? '';
-      expect(system).toMatch(/Extraction mode: balanced/i);
+      expect(system).toMatch(/granularity=balanced|Extraction mode: balanced/i);
       expect(system).not.toMatch(/at most ~6 items/i);
     });
 
@@ -1667,6 +1664,54 @@ describe('extractors/v2 pipeline', () => {
         },
       };
     }
+
+    it('built-in presets return monotonic variants from one detailed canonical draft', async () => {
+      const items = Array.from({ length: 25 }, (_, i) =>
+        buildItem(`item_${i}`, `root_${i}`, 0.99 - i * 0.01, 1)
+      );
+      let calls = 0;
+      let capturedSystem = '';
+      const provider: Pick<LLMProvider, 'generateStructured'> = {
+        async generateStructured(prompt) {
+          calls += 1;
+          capturedSystem = prompt.system ?? '';
+          return {
+            data: {
+              schema: 't3x/provider-extraction-draft',
+              version: 1,
+              mode: 'bootstrap',
+              items,
+              warnings: [],
+            },
+            usage: { inputTokens: 1, outputTokens: 1 },
+          };
+        },
+      };
+
+      const result = await runExtractionV2Pipeline({
+        turns: [{ turn_hash: 'sha256:turn-1', role: 'user', content: 'a' }],
+        mode: 'bootstrap',
+        providerId: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        provider,
+        style: PRESETS.balanced,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(calls).toBe(1);
+      expect(capturedSystem).toMatch(/Extraction mode: detailed/i);
+      expect(capturedSystem).not.toMatch(/Extraction mode: balanced/i);
+      expect(result.variants).toBeDefined();
+      expect(result.compiled.ops).toEqual(result.variants?.balanced.ops);
+
+      const countDefines = (ops: typeof result.compiled.ops) =>
+        ops.filter((op) => 'define' in op).length;
+      expect(countDefines(result.variants?.concise.ops ?? [])).toBe(6);
+      expect(countDefines(result.variants?.balanced.ops ?? [])).toBe(20);
+      expect(countDefines(result.variants?.detailed.ops ?? [])).toBe(25);
+    });
 
     it('concise (max_items=6) trims a 10-item draft to 6 by confidence', async () => {
       // High-confidence first 6 + low-confidence last 4. After cap, the

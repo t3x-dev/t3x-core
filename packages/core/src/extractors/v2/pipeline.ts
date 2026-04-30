@@ -10,7 +10,13 @@ import {
   validateSource,
 } from '../../t3x-yops/sourceValidator';
 import type { SourcedYOp } from '../../t3x-yops/types';
-import { type ExtractionStyleConfig, styleSummaryLine } from '../extractionStyleConfig';
+import {
+  type ExtractionStyleConfig,
+  matchPreset,
+  PRESETS,
+  type PresetName,
+  styleSummaryLine,
+} from '../extractionStyleConfig';
 import { compileExtractionDraft } from './compiler';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
 import { buildPromptTurnMap, normalizeExtractionText, type PromptTurnInput } from './normalization';
@@ -47,6 +53,7 @@ export type ExtractionV2PipelineResult =
       ok: true;
       draft: ExtractionDraft;
       compiled: CompiledMutationPlan;
+      variants?: Record<PresetName, CompiledMutationPlan>;
       turnHashByTag: Record<string, string>;
     }
   | {
@@ -312,6 +319,85 @@ function safeStringify(value: unknown): string | undefined {
  */
 function validationTurnsFor(turns: readonly PromptTurnInput[]): ValidationTurn[] {
   return turns.map((t) => ({ turn_hash: t.turn_hash, content: t.content }));
+}
+
+function validateCompiledPlanSources(
+  compiled: CompiledMutationPlan,
+  turns: readonly PromptTurnInput[],
+  turnHashByTag: Record<string, string>
+): { ok: true } | { ok: false; failure: ExtractionFailure } {
+  const opsForValidation = compiled.ops as SourcedYOp[];
+  const strictValidationTurns = validationTurnsFor(turns);
+  normalizeOpTurnHashes(opsForValidation, strictValidationTurns);
+  repairOpQuotes(opsForValidation, strictValidationTurns);
+  const sourceCheck = validateSource(opsForValidation, strictValidationTurns);
+  if (sourceCheck.ok) return { ok: true };
+  return {
+    ok: false,
+    failure: buildUnverifiableQuoteFailure(sourceCheck.failingOps, turnHashByTag),
+  };
+}
+
+function compilePlanForStyle(input: {
+  draft: ExtractionDraft;
+  style: ExtractionStyleConfig | undefined;
+  snapshot?: SemanticContent;
+  model: string;
+  extractedAt?: string;
+  turns: readonly PromptTurnInput[];
+  turnHashByTag: Record<string, string>;
+  modeWarnings: string[];
+}):
+  | { ok: true; draft: ExtractionDraft; compiled: CompiledMutationPlan }
+  | { ok: false; failure: ExtractionFailure } {
+  const totalItemsFromModel = input.draft.items.length;
+  const selection = selectTopItemsByStyle(input.draft, input.style);
+  const selectionWarnings: string[] =
+    selection.droppedIds.length > 0 && input.style?.max_items !== undefined
+      ? [selectionWarningLine(selection.droppedIds, input.style.max_items, totalItemsFromModel)]
+      : [];
+
+  const compiled = compileExtractionDraft({
+    draft: selection.draft,
+    baseline: input.snapshot,
+    sourceModel: input.model,
+    extractedAt: input.extractedAt ?? new Date().toISOString(),
+    turnHashByTag: input.turnHashByTag,
+  });
+  if (!compiled.ok) return { ok: false, failure: compiled.failure };
+
+  const plan: CompiledMutationPlan = {
+    ops: compiled.ops,
+    warnings: [...input.modeWarnings, ...selectionWarnings, ...compiled.warnings],
+  };
+  const validation = validateCompiledPlanSources(plan, input.turns, input.turnHashByTag);
+  if (!validation.ok) return validation;
+
+  return { ok: true, draft: selection.draft, compiled: plan };
+}
+
+function buildPresetVariants(input: {
+  draft: ExtractionDraft;
+  snapshot?: SemanticContent;
+  model: string;
+  extractedAt?: string;
+  turns: readonly PromptTurnInput[];
+  turnHashByTag: Record<string, string>;
+  modeWarnings: string[];
+}): Record<PresetName, CompiledMutationPlan> | undefined {
+  const variants = {} as Record<PresetName, CompiledMutationPlan>;
+  const presetNames: PresetName[] = ['concise', 'balanced', 'detailed'];
+
+  for (const name of presetNames) {
+    const compiled = compilePlanForStyle({
+      ...input,
+      style: PRESETS[name],
+    });
+    if (!compiled.ok) return undefined;
+    variants[name] = compiled.compiled;
+  }
+
+  return variants;
 }
 
 /**
@@ -657,12 +743,14 @@ export async function runExtractionV2Pipeline(
   input: ExtractionV2PipelineInput
 ): Promise<ExtractionV2PipelineResult> {
   const { taggedTurns, turnHashByTag } = buildPromptTurnMap(input.turns);
+  const requestedPreset = input.style ? matchPreset(input.style) : null;
+  const generationStyle = requestedPreset ? PRESETS.detailed : input.style;
   const basePrompt = buildDraftPrompt({
     mode: input.mode,
     providerId: input.providerId,
     turns: taggedTurns,
     snapshot: input.snapshot,
-    style: input.style,
+    style: generationStyle,
   });
   let prompt = basePrompt;
   const maxAttempts = 2;
@@ -696,6 +784,7 @@ export async function runExtractionV2Pipeline(
       generated.draft.mode === input.mode
         ? generated.draft
         : { ...generated.draft, mode: input.mode };
+    const extractedAt = input.extractedAt ?? new Date().toISOString();
 
     // Apply the style cap deterministically at the canonical-draft layer,
     // before compile. This is the hard counterpart to the prompt budget:
@@ -713,7 +802,7 @@ export async function runExtractionV2Pipeline(
       draft: selection.draft,
       baseline: input.snapshot,
       sourceModel: input.model,
-      extractedAt: input.extractedAt ?? new Date().toISOString(),
+      extractedAt,
       turnHashByTag,
     });
 
@@ -747,7 +836,7 @@ export async function runExtractionV2Pipeline(
           draft: selection.draft,
           baseline: input.snapshot,
           sourceModel: input.model,
-          extractedAt: input.extractedAt ?? new Date().toISOString(),
+          extractedAt,
           turnHashByTag,
           allowPartial: true,
         });
@@ -808,28 +897,35 @@ export async function runExtractionV2Pipeline(
     // Mutates ops in place: hash-prefix expansion + deterministic quote
     // repair (markdown / smart-quote / punct / case+whitespace variants).
     // Quotes that can't be repaired stay untouched and fail validation.
-    const opsForValidation = compiled.ops as SourcedYOp[];
-    const strictValidationTurns = validationTurnsFor(input.turns);
-    normalizeOpTurnHashes(opsForValidation, strictValidationTurns);
-    repairOpQuotes(opsForValidation, strictValidationTurns);
-    const sourceCheck = validateSource(opsForValidation, strictValidationTurns);
+    const sourceCheck = validateCompiledPlanSources(compiled, input.turns, turnHashByTag);
 
     if (!sourceCheck.ok) {
       // Same retry shape as compile/provenance failures: budget aware,
       // targeted reask carrying the failing ops back to the model so
       // it can fix the specific quotes (rather than re-rolling the
       // whole extraction blindly).
-      const sourceFailure = buildUnverifiableQuoteFailure(sourceCheck.failingOps, turnHashByTag);
       if (attempt < maxAttempts) {
-        prompt = buildTargetedReaskPrompt(basePrompt, sourceFailure, turnHashByTag);
+        prompt = buildTargetedReaskPrompt(basePrompt, sourceCheck.failure, turnHashByTag);
         continue;
       }
       return {
         ok: false,
-        failure: sourceFailure,
+        failure: sourceCheck.failure,
         turnHashByTag,
       };
     }
+
+    const variants = requestedPreset
+      ? buildPresetVariants({
+          draft: authoritativeDraft,
+          snapshot: input.snapshot,
+          model: input.model,
+          extractedAt,
+          turns: input.turns,
+          turnHashByTag,
+          modeWarnings,
+        })
+      : undefined;
 
     return {
       ok: true,
@@ -840,6 +936,7 @@ export async function runExtractionV2Pipeline(
         // sees the cap action before any downstream notes.
         warnings: [...modeWarnings, ...selectionWarnings, ...compiled.warnings],
       },
+      ...(variants ? { variants } : {}),
       turnHashByTag,
     };
   }

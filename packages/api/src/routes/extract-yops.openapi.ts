@@ -72,6 +72,13 @@ const ExtractYopsRequest = z.object({
 // Response schema — ops is opaque YOp[]; OpenAPI uses z.any() for the payload.
 const ExtractYopsResponse = z.object({
   ops: z.array(z.any()),
+  variants: z
+    .object({
+      concise: z.array(z.any()),
+      balanced: z.array(z.any()),
+      detailed: z.array(z.any()),
+    })
+    .optional(),
 });
 
 function mapExtractionFailureToApiError(failure: {
@@ -224,7 +231,24 @@ extractYopsRoutes.openapi(route, async (c) => {
         );
       }
 
-      return c.json({ success: true as const, data: { ops: pipelineResult.compiled.ops } }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            ops: pipelineResult.compiled.ops,
+            ...(pipelineResult.variants
+              ? {
+                  variants: {
+                    concise: pipelineResult.variants.concise.ops,
+                    balanced: pipelineResult.variants.balanced.ops,
+                    detailed: pipelineResult.variants.detailed.ops,
+                  },
+                }
+              : {}),
+          },
+        },
+        200
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LLM provider error';
       return errorResponse(c, 'EXTRACTION_FAILED', message);
