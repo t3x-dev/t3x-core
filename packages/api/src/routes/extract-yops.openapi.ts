@@ -247,10 +247,14 @@ extractYopsRoutes.openapi(route, async (c) => {
         unavailableMessage: 'No configured extraction provider is available',
       });
       if (!resolution.ok) {
-        // Provider not configured / no usable key. This is a request-
-        // level configuration problem, NOT an extraction-domain failure
-        // — the pipeline never ran.
-        return errorResponse(c, 'PROVIDER_KEY_MISSING', resolution.message);
+        // Resolver distinguishes "no usable key configured" (`unavailable`)
+        // from genuine bad-request shapes (unknown provider, unknown
+        // model, provider/model mismatch). Collapsing them all onto
+        // PROVIDER_KEY_MISSING would mislead a caller who typo'd a
+        // provider name into thinking they need to set an API key.
+        const errorCode =
+          resolution.code === 'unavailable' ? 'PROVIDER_KEY_MISSING' : 'INVALID_REQUEST';
+        return errorResponse(c, errorCode, resolution.message);
       }
 
       // Map the wire-level preset name to the full ExtractionStyleConfig

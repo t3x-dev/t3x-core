@@ -54,21 +54,21 @@ function isExtractionFailureCode(value: unknown): value is ExtractionFailureCode
 }
 
 /**
- * Non-domain HTTP error codes the API now uses for genuine transport /
- * configuration / infrastructure failures. The post-#949 contract keeps
- * these on 4xx/5xx (success:false) so generic client error handlers
- * (retry-after, re-auth, "provider not configured" toast) can branch
- * on HTTP status; pipeline domain failures travel as 200 + kind:'failed'.
+ * Non-domain HTTP error codes that map to the core `transport` failure
+ * because retrying the same request has a real chance of succeeding
+ * without anything else changing — upstream 5xx, rate-limit waits, and
+ * provider-side auth that may recover on its own.
  *
- * The worker treats `transport` as retryable, which matches the spirit
- * of these (transient or recoverable-by-config), so we map them all
- * onto the `transport` ExtractionFailureCode rather than inventing a
- * parallel client-side classification.
+ * Configuration / bad-request codes (PROVIDER_KEY_MISSING,
+ * INVALID_REQUEST, INTERNAL_ERROR) are intentionally NOT here: the
+ * worker auto-retries `transport`, and burning N retries on "you
+ * haven't set an API key" is just N identical failures before the
+ * toast fires. Those fall through to `draft_parse` below, which the
+ * worker explicitly does not retry (`isTransport` gate in
+ * extractionWorker.ts).
  */
 const NON_DOMAIN_TRANSPORT_API_CODES = new Set([
-  'PROVIDER_KEY_MISSING',
   'PROVIDER_UNAVAILABLE',
-  'INTERNAL_ERROR',
   'AUTH_ERROR',
   'RATE_LIMITED',
 ]);
