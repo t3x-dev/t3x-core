@@ -20,6 +20,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env_
+.env.*
 
 # IDE
 .idea/
