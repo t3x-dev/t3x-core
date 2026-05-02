@@ -9,6 +9,7 @@ import {
   createExtractionFailure,
   EXTRACTION_FAILURE_CODES,
   type ExtractionFailureCode,
+  type ExtractionOutcome,
   type SourcedYOp,
   type ValidationTurn,
 } from '@t3x-dev/core';
@@ -52,6 +53,26 @@ function isExtractionFailureCode(value: unknown): value is ExtractionFailureCode
   );
 }
 
+/**
+ * Non-domain HTTP error codes the API now uses for genuine transport /
+ * configuration / infrastructure failures. The post-#949 contract keeps
+ * these on 4xx/5xx (success:false) so generic client error handlers
+ * (retry-after, re-auth, "provider not configured" toast) can branch
+ * on HTTP status; pipeline domain failures travel as 200 + kind:'failed'.
+ *
+ * The worker treats `transport` as retryable, which matches the spirit
+ * of these (transient or recoverable-by-config), so we map them all
+ * onto the `transport` ExtractionFailureCode rather than inventing a
+ * parallel client-side classification.
+ */
+const NON_DOMAIN_TRANSPORT_API_CODES = new Set([
+  'PROVIDER_KEY_MISSING',
+  'PROVIDER_UNAVAILABLE',
+  'INTERNAL_ERROR',
+  'AUTH_ERROR',
+  'RATE_LIMITED',
+]);
+
 function buildRequestError(
   status: number,
   body: ExtractYopsErrorBody | null,
@@ -69,8 +90,13 @@ function buildRequestError(
     );
   }
 
+  const apiCode = body?.error.code;
+  const isTransportApiCode =
+    typeof apiCode === 'string' && NON_DOMAIN_TRANSPORT_API_CODES.has(apiCode);
   const fallbackFailure = createExtractionFailure(
-    status === 429 || status === 401 || status === 403 ? 'transport' : 'draft_parse',
+    isTransportApiCode || status === 429 || status === 401 || status === 403
+      ? 'transport'
+      : 'draft_parse',
     body?.error.message ?? fallbackText,
     {
       details: { statusCode: status, ...(body?.error.details ?? {}) },
@@ -115,9 +141,7 @@ export async function callExtractionLLM(
       `extract-yops HTTP ${res.status}: ${text}`
     );
   }
-  const body = parsedBody as
-    | { success: true; data: { ops: SourcedYOp[]; variants?: ExtractionVariants } }
-    | ExtractYopsErrorBody;
+  const body = parsedBody as { success: true; data: ExtractionOutcome } | ExtractYopsErrorBody;
   if (!body.success) {
     throw buildRequestError(
       res.status,
@@ -125,8 +149,46 @@ export async function callExtractionLLM(
       `extract-yops ${body.error.code}: ${body.error.message}`
     );
   }
+
+  // 200 envelope carries an ExtractionOutcome discriminator. `failed`
+  // means the pipeline ran but couldn't produce a usable result —
+  // surface as ExtractionRequestError so the worker / UI flow handles
+  // it the same way it handles a 4xx-class failure today. `partial`
+  // and `ok` both yield ops; partial-vs-ok UX is a follow-up PR (PR 2)
+  // and the warnings are logged here so they don't silently disappear.
+  const outcome = body.data;
+  if (outcome.kind === 'failed') {
+    throw new ExtractionRequestError(
+      createExtractionFailure(outcome.reason as ExtractionFailureCode, outcome.message, {
+        details: { statusCode: 200, ...(outcome.details ?? {}) },
+      }),
+      200
+    );
+  }
+
+  if (outcome.kind === 'partial') {
+    console.warn('[extract-yops] partial outcome', {
+      reason: outcome.reason,
+      message: outcome.message,
+      droppedCount: outcome.dropped.length,
+      warningCount: outcome.warnings.length,
+    });
+  } else if (outcome.warnings.length > 0) {
+    console.info('[extract-yops] non-fatal warnings', {
+      warnings: outcome.warnings.map((w) => w.message),
+    });
+  }
+
+  // For ops shape on the wire, variants come keyed by preset name. The
+  // existing `ExtractionVariants` shape is { concise, balanced, detailed }
+  // so we narrow the record back to that surface for downstream callers.
+  const variants =
+    outcome.kind === 'ok' && outcome.variants
+      ? (outcome.variants as ExtractionVariants)
+      : undefined;
+
   return {
-    ops: body.data.ops,
-    ...(body.data.variants ? { variants: body.data.variants } : {}),
+    ops: outcome.ops as SourcedYOp[],
+    ...(variants ? { variants } : {}),
   };
 }

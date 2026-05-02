@@ -192,7 +192,11 @@ describe('POST /v1/extract-yops', () => {
         ],
       }),
     });
-    expect(res.status).not.toBe(400);
+    // The wire schema accepts the legacy `failing_ops` field (it just
+    // ignores it) — the request must NOT be rejected as a validation
+    // error. Provider availability is independent: with no provider set
+    // up, this test path returns PROVIDER_KEY_MISSING (400), which is a
+    // separate failure mode and not a contract violation.
     const body = await res.json();
     if (!body.success) {
       expect(body.error.code).not.toBe('INVALID_REQUEST');
@@ -347,6 +351,15 @@ describe('POST /v1/extract-yops', () => {
       }),
     });
 
-    expect(res.status).not.toBe(400);
+    // The schema must not reject `role` as unknown. We don't assert on
+    // status here because PROVIDER_KEY_MISSING (400) is a legitimate
+    // post-validation outcome when no provider is configured for the
+    // test; we only care that this isn't an INVALID_REQUEST.
+    if (res.status === 400) {
+      const body = await res.json();
+      if (!body.success) {
+        expect(body.error.code).not.toBe('INVALID_REQUEST');
+      }
+    }
   });
 });

@@ -108,7 +108,7 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
   });
 
-  it('surfaces typed v2 failures without collapsing them into opaque 500s', async () => {
+  it('surfaces exhausted pipeline failures as 200 + kind:"failed" (extraction outcome envelope)', async () => {
     await upsertProviderCredential(mockDB, {
       providerId: 'openai',
       apiKey: 'sk-local-openai',
@@ -120,6 +120,7 @@ describe('POST /v1/extract-yops (v2)', () => {
         code: 'draft_schema',
         message: 'Draft schema validation failed',
         retry: { retryable: true, strategy: 'targeted_reask', maxAttempts: 2 },
+        details: { attempts: 2 },
       },
     });
 
@@ -134,11 +135,105 @@ describe('POST /v1/extract-yops (v2)', () => {
       }),
     });
 
-    expect(res.status).toBe(400);
+    // New contract: domain-level pipeline failures ride a 200 envelope.
+    // 4xx is reserved for transport / configuration / auth / rate.
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.kind).toBe('failed');
+    expect(body.data.reason).toBe('draft_schema');
+    expect(body.data.message).toBe('Draft schema validation failed');
+    expect(body.data.details).toEqual({ attempts: 2 });
+  });
+
+  it('routes transport failures with rate-limit status to RATE_LIMITED 429 (not the 200 envelope)', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    extractAndApply.mockResolvedValue({
+      ok: false,
+      failure: {
+        code: 'transport',
+        message: 'Provider rate-limited',
+        retry: { retryable: true, strategy: 'backoff', maxAttempts: 3 },
+        details: { statusCode: 429 },
+      },
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello world' }],
+        provider: 'openai',
+        model: 'gpt-5.4',
+      }),
+    });
+
+    expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('EXTRACTION_FAILED');
-    expect(body.error.details.failure_code).toBe('draft_schema');
+    expect(body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('routes non-specific transport failures to PROVIDER_UNAVAILABLE 502', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    extractAndApply.mockResolvedValue({
+      ok: false,
+      failure: {
+        code: 'transport',
+        message: 'Upstream connection reset',
+        retry: { retryable: true, strategy: 'backoff', maxAttempts: 3 },
+      },
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', content: 'hello world' }],
+        provider: 'openai',
+        model: 'gpt-5.4',
+      }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it('returns kind:"ok" with empty ops + no warnings when turns is empty', async () => {
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: testConversationId,
+        turns: [],
+        provider: 'openai',
+        model: 'gpt-5.4',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual({ kind: 'ok', ops: [], warnings: [] });
+    // No LLM call when turns are empty.
+    expect(extractAndApply).not.toHaveBeenCalled();
   });
 
   it('returns preset variants when the pipeline produces them', async () => {
@@ -180,6 +275,7 @@ describe('POST /v1/extract-yops (v2)', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.data.kind).toBe('ok');
     expect(body.data.ops).toEqual([{ define: { path: 'balanced_root' } }]);
     expect(body.data.variants).toEqual({
       concise: [{ define: { path: 'concise_root' } }],

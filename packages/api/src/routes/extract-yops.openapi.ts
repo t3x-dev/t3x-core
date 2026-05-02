@@ -3,37 +3,48 @@
  *
  * Server-validated extraction endpoint. Takes turns, calls the LLM via
  * the provider registry, runs the v2 pipeline (parse → schema validate
- * → compile → source-quote validate), and returns { ops }.
+ * → compile → source-quote validate), and returns an `ExtractionOutcome`.
  *
  * Does NOT persist to yops_log. Does NOT do drift detection.
  *
- * Validation + retry policy (post-server-side-validation move):
- *   - The pipeline owns ALL retry budget. Draft schema, provenance,
+ * Wire contract (canonical envelope):
+ *   - 200 = "extraction domain outcome delivered". Body:
+ *       `{ success: true, data: ExtractionOutcome }` where
+ *       `ExtractionOutcome.kind ∈ { 'ok', 'partial', 'failed' }`.
+ *     This includes pipeline failures that exhausted retries — they
+ *     ride as `kind:'failed'` inside a 200, NOT as a 4xx error code.
+ *   - 4xx/5xx = transport / configuration / auth / rate failures that
+ *     prevented the extraction domain process from running:
+ *       PROVIDER_KEY_MISSING (400)
+ *       AUTH_ERROR (401)
+ *       CONVERSATION_NOT_FOUND (404)
+ *       RATE_LIMITED (429)
+ *       INTERNAL_ERROR (500)
+ *       PROVIDER_UNAVAILABLE (502)
+ *
+ * Retry policy:
+ *   - The pipeline owns ALL reask budget. Draft schema, provenance,
  *     compile, AND source-quote validation each get their own targeted
  *     reask attempts inside `runExtractionV2Pipeline` before the route
  *     ever returns.
- *   - A 200 response means every op carries a verbatim-substring quote
- *     from the named turn. Clients trust this contract and do not
- *     re-validate.
- *   - A non-2xx response with code `EXTRACTION_FAILED` carries a
- *     typed `failure_code` (`unverifiable_quote`, `compile`, etc.) so
- *     clients can render the right UI without re-deriving cause from
- *     the message text.
- *   - Clients should NOT retry non-`transport` failures: by the time
- *     they're returned, the server has already exhausted its internal
- *     reask budget. Retrying with the same turns/provider/model/preset
- *     just doubles model spend for the same predictable failure.
- *     Transport-class failures (rate-limit, network, provider 5xx)
- *     remain client-retryable.
+ *   - On `kind:'ok'` every op carries a verbatim-substring quote from
+ *     the named turn. Clients trust this contract and do not re-validate.
+ *   - On `kind:'partial'` the pipeline salvaged a usable subset after
+ *     reask exhaustion (compile failure). Clients render the warning +
+ *     partial ops; they SHOULD NOT silently re-call with the same
+ *     payload — same predictable failure.
+ *   - Clients SHOULD NOT retry `kind:'failed'` for the same reason.
+ *     Transport-class 4xx/5xx (rate-limit, provider 5xx) remain
+ *     client-retryable per their HTTP semantics.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: extract-yops route queries provider registry through a dynamic runtime surface pending shared provider interfaces */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { extractAndApply, PRESETS, type PresetName } from '@t3x-dev/core';
+import { extractAndApply, extractToOutcome, PRESETS, type PresetName } from '@t3x-dev/core';
 import { findConversationById } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
-import { errorJson, errorResponse, zodErrorHook } from '../lib/errors';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import { replayCommittedBaseline } from '../lib/yops-log-utils';
@@ -69,51 +80,65 @@ const ExtractYopsRequest = z.object({
   preset: z.enum(['concise', 'balanced', 'detailed']).optional(),
 });
 
-// Response schema — ops is opaque YOp[]; OpenAPI uses z.any() for the payload.
-const ExtractYopsResponse = z.object({
-  ops: z.array(z.any()),
-  variants: z
-    .object({
-      concise: z.array(z.any()),
-      balanced: z.array(z.any()),
-      detailed: z.array(z.any()),
-    })
-    .optional(),
-});
+// Response schema — `data` is the canonical ExtractionOutcome envelope.
+// `ops` and `variants` are opaque (YOp shape lives in core); OpenAPI
+// describes the discriminator + the always-present fields and leaves the
+// op shape as z.any() to avoid duplicating the YOps schema here.
+const ExtractionOutcomeSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('ok'),
+    ops: z.array(z.any()),
+    warnings: z.array(z.object({ message: z.string() })),
+    variants: z.record(z.string(), z.array(z.any())).optional(),
+  }),
+  z.object({
+    kind: z.literal('partial'),
+    ops: z.array(z.any()),
+    warnings: z.array(z.object({ message: z.string() })),
+    dropped: z.array(z.object({ item_id: z.string(), reason: z.string() })),
+    reason: z.string(),
+    message: z.string(),
+    details: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({
+    kind: z.literal('failed'),
+    reason: z.string(),
+    message: z.string(),
+    details: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
 
-function mapExtractionFailureToApiError(failure: {
+/**
+ * Reclassify a pipeline `transport` failure into the appropriate HTTP
+ * error code. Non-transport failures never reach this — they ride as
+ * `kind:'failed'` inside a 200 ExtractionOutcome.
+ *
+ * Returns `null` when the transport failure is non-specific (no usable
+ * statusCode) — caller falls back to PROVIDER_UNAVAILABLE 502.
+ */
+function classifyTransportFailure(failure: {
   code: string;
   message: string;
   details?: Record<string, unknown>;
-}): {
-  code: 'EXTRACTION_FAILED' | 'RATE_LIMITED' | 'AUTH_ERROR';
-  status?: 400 | 401 | 429;
-  details: Record<string, unknown>;
-} {
+}): { code: 'RATE_LIMITED' | 'AUTH_ERROR'; details: Record<string, unknown> } | null {
   const statusCode =
     typeof failure.details?.statusCode === 'number' ? failure.details.statusCode : undefined;
 
-  if (failure.code === 'transport' && statusCode === 429) {
+  if (statusCode === 429) {
     return {
       code: 'RATE_LIMITED',
-      status: 429,
       details: { failure_code: failure.code, ...failure.details },
     };
   }
 
-  if (failure.code === 'transport' && (statusCode === 401 || statusCode === 403)) {
+  if (statusCode === 401 || statusCode === 403) {
     return {
       code: 'AUTH_ERROR',
-      status: 401,
       details: { failure_code: failure.code, ...failure.details },
     };
   }
 
-  return {
-    code: 'EXTRACTION_FAILED',
-    status: 400,
-    details: { failure_code: failure.code, ...failure.details },
-  };
+  return null;
 }
 
 // ── Route ──
@@ -124,7 +149,7 @@ const route = createRoute({
   tags: ['Extraction'],
   summary: 'Produce server-validated YOps from turns via LLM',
   description:
-    'Runs the v2 extraction pipeline end-to-end (LLM call → schema validate → compile → source-quote validate). A 200 response guarantees every op carries a verbatim-substring quote from the named turn; the pipeline owns all reask budget for draft, compile, and source failures. Does not persist to yops_log — that is a separate Apply step. Clients SHOULD NOT retry non-transport `EXTRACTION_FAILED` responses; the server has already exhausted internal reasks before returning.',
+    'Runs the v2 extraction pipeline end-to-end (LLM call → schema validate → compile → source-quote validate). A 200 response carries an `ExtractionOutcome` with `kind: "ok" | "partial" | "failed"` — domain failures (compile, unverifiable_quote, ...) are reported in the 200 envelope, NOT as 4xx. Only transport / configuration / auth / rate failures use 4xx/5xx. The pipeline owns all reask budget; clients SHOULD NOT silently retry `partial` or `failed` outcomes for the same payload.',
   request: {
     body: {
       content: { 'application/json': { schema: ExtractYopsRequest } },
@@ -132,19 +157,35 @@ const route = createRoute({
   },
   responses: {
     200: {
-      description: 'YOps successfully produced',
+      description: 'Extraction domain outcome delivered (ok | partial | failed)',
       content: {
         'application/json': {
-          schema: SuccessResponseSchema(ExtractYopsResponse),
+          schema: SuccessResponseSchema(ExtractionOutcomeSchema),
         },
       },
+    },
+    400: {
+      description: 'Provider key missing or other request-level failure',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    401: {
+      description: 'Provider authentication failed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
       description: 'Conversation not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    429: {
+      description: 'Provider rate-limited the request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     500: {
-      description: 'Server error',
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    502: {
+      description: 'Upstream LLM provider unavailable',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -174,9 +215,17 @@ extractYopsRoutes.openapi(route, async (c) => {
       );
     }
 
-    // Short-circuit: empty turns → no LLM call needed
+    // Short-circuit: empty turns → no LLM call needed. Travels as a
+    // clean `kind:'ok'` outcome with no warnings so clients consume the
+    // same envelope on every code path.
     if (turns.length === 0) {
-      return c.json({ success: true as const, data: { ops: [] } }, 200);
+      return c.json(
+        {
+          success: true as const,
+          data: { kind: 'ok' as const, ops: [], warnings: [] },
+        },
+        200
+      );
     }
 
     // Snapshot is the **committed baseline** only — the immutable
@@ -198,7 +247,10 @@ extractYopsRoutes.openapi(route, async (c) => {
         unavailableMessage: 'No configured extraction provider is available',
       });
       if (!resolution.ok) {
-        return errorResponse(c, 'EXTRACTION_FAILED', resolution.message);
+        // Provider not configured / no usable key. This is a request-
+        // level configuration problem, NOT an extraction-domain failure
+        // — the pipeline never ran.
+        return errorResponse(c, 'PROVIDER_KEY_MISSING', resolution.message);
       }
 
       // Map the wire-level preset name to the full ExtractionStyleConfig
@@ -220,42 +272,45 @@ extractYopsRoutes.openapi(route, async (c) => {
         style,
       });
 
-      if (!pipelineResult.ok) {
-        const apiFailure = mapExtractionFailureToApiError(pipelineResult.failure);
-        return errorJson(
-          c,
-          apiFailure.code,
-          pipelineResult.failure.message,
-          apiFailure.status,
-          apiFailure.details
-        );
+      // Transport failures (rate-limit, auth, upstream 5xx) carry HTTP
+      // semantics in their own right and must not be buried inside a
+      // 200 `kind:'failed'` envelope — generic client error handlers
+      // (retry-after, re-auth flow) depend on the HTTP status.
+      if (!pipelineResult.ok && pipelineResult.failure.code === 'transport') {
+        const transport = classifyTransportFailure(pipelineResult.failure);
+        if (transport) {
+          return errorResponse(
+            c,
+            transport.code,
+            pipelineResult.failure.message,
+            transport.details
+          );
+        }
+        // Non-specific transport failure — upstream provider unavailable.
+        return errorResponse(c, 'PROVIDER_UNAVAILABLE', pipelineResult.failure.message, {
+          failure_code: pipelineResult.failure.code,
+          ...pipelineResult.failure.details,
+        });
       }
 
-      return c.json(
-        {
-          success: true as const,
-          data: {
-            ops: pipelineResult.compiled.ops,
-            ...(pipelineResult.variants
-              ? {
-                  variants: {
-                    concise: pipelineResult.variants.concise.ops,
-                    balanced: pipelineResult.variants.balanced.ops,
-                    detailed: pipelineResult.variants.detailed.ops,
-                  },
-                }
-              : {}),
-          },
-        },
-        200
-      );
+      // Every other outcome — clean ok, salvaged partial, exhausted
+      // domain failure — is the extraction process *delivering* a
+      // verdict. Travel as a 200 ExtractionOutcome so clients branch on
+      // `data.kind` rather than HTTP status.
+      const outcome = extractToOutcome(pipelineResult);
+      return c.json({ success: true as const, data: outcome }, 200);
     } catch (err) {
+      // Unexpected error from the LLM/provider call path. The pipeline
+      // is supposed to convert provider errors to typed failures, so
+      // landing here means something genuinely unexpected happened.
       const message = err instanceof Error ? err.message : 'LLM provider error';
-      return errorResponse(c, 'EXTRACTION_FAILED', message);
+      return errorResponse(c, 'INTERNAL_ERROR', message);
     }
   } catch (err) {
+    // Outer catch: failures from getDB / findConversationById /
+    // replayCommittedBaseline. Genuine infrastructure errors.
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'EXTRACTION_FAILED', message);
+    return errorResponse(c, 'INTERNAL_ERROR', message);
   }
 });
 
