@@ -148,11 +148,38 @@ function describeRuntimeType(value: unknown): string {
 // ── Path validation ──────────────────────────────────────────────────────
 
 /**
+ * Op + field combinations that accept the empty path (root) at apply
+ * time. Mirrors `RootablePathSchema = z.string()` (no `.min(1)`) in
+ * `schema.ts`, vs the default `PathSchema = z.string().min(1)` used by
+ * every other path field. Re-implementations should keep these in
+ * sync; the engine accepts a root path on these ops because the
+ * operation logically targets the document root (`pick: { path: '' }`
+ * keeps top-level keys, etc.).
+ *
+ * If you change this list, also update `schema.ts` and the engine
+ * handlers, then re-run the validator-engine alignment property test.
+ */
+const ROOTABLE_PATH_FIELDS: Record<string, Set<string>> = {
+  nest: new Set(['path']),
+  split: new Set(['path']),
+  merge: new Set(['path']),
+  pick: new Set(['path']),
+  omit: new Set(['path']),
+};
+
+function isRootablePathField(opName: string, fieldName: string): boolean {
+  return ROOTABLE_PATH_FIELDS[opName]?.has(fieldName) ?? false;
+}
+
+/**
  * Run path-syntax checks on a single path string. Used by the op-level
  * walker for every field whose value the spec marks as a path (per
  * `path_fields:` metadata).
  */
-function validatePath(path: unknown, ctx: { op_index: number; field: string }): YOpsDiagnostic[] {
+function validatePath(
+  path: unknown,
+  ctx: { op_index: number; field: string; rootable: boolean }
+): YOpsDiagnostic[] {
   // The op-level walker already checks field type before calling us; if
   // we somehow get a non-string, emit nothing — the upstream
   // YOPS_OP_FIELD_TYPE_MISMATCH covers it.
@@ -161,6 +188,11 @@ function validatePath(path: unknown, ctx: { op_index: number; field: string }): 
   const out: YOpsDiagnostic[] = [];
 
   if (path.length === 0) {
+    if (ctx.rootable) {
+      // Rootable path field accepts empty as "the document root".
+      // Schema permits, engine applies — validator must not flag.
+      return out;
+    }
     out.push(
       diagnostic(
         'error',
@@ -419,7 +451,13 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
     const pathFields = opSpec.path_fields ?? {};
     const isPathField = Object.values(pathFields).includes(fieldName);
     if (isPathField) {
-      out.push(...validatePath(value, { op_index, field: `${opName}.${fieldName}` }));
+      out.push(
+        ...validatePath(value, {
+          op_index,
+          field: `${opName}.${fieldName}`,
+          rootable: isRootablePathField(opName, fieldName),
+        })
+      );
     }
   }
 
@@ -434,11 +472,31 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
 }
 
 /**
- * Cross-field refinements that go beyond per-field type / required / enum
- * checks. Today only `assert` carries one — at least one of `equals`,
- * `exists`, or `type` must be provided. Other ops with refinements
- * (audited separately) will be folded in here as part of #938.A.
+ * Cross-field and string-length refinements that go beyond per-field
+ * type / required / enum checks. Each entry mirrors a `.refine(...)` or
+ * `.min(...)` clause in `schema.ts` so validator and runtime engine
+ * agree on which payloads are well-formed.
+ *
+ * Two kinds covered today:
+ *
+ *   1. Cross-field rules — e.g. `assert` must declare at least one of
+ *      `equals` / `exists` / `type`.
+ *   2. Required non-path strings that must be non-empty. Spec marks
+ *      these fields as `type: string`, `required: true`; the schema
+ *      adds an implicit `.min(1)`. Path fields are handled separately
+ *      (see `YOPS_PATH_EMPTY` and `ROOTABLE_PATH_FIELDS`); the names
+ *      below are deliberately the *non-path* string fields.
+ *
+ * Re-implementations should keep these aligned with `schema.ts`. If a
+ * new rule is added to the schema, also extend the bundle here and add
+ * a fixture to `__tests__/validator-engine-alignment.test.ts`.
  */
+const NON_EMPTY_STRING_FIELDS: Record<string, Set<string>> = {
+  rename: new Set(['to']),
+  nest: new Set(['under']),
+  merge: new Set(['into']),
+};
+
 function validateOpRefinements(
   opName: string,
   payload: { [key: string]: unknown },
@@ -446,6 +504,7 @@ function validateOpRefinements(
 ): YOpsDiagnostic[] {
   const out: YOpsDiagnostic[] = [];
 
+  // Cross-field: `assert` requires at least one condition.
   if (opName === 'assert') {
     const hasCondition =
       payload.equals !== undefined || payload.exists !== undefined || payload.type !== undefined;
@@ -458,6 +517,24 @@ function validateOpRefinements(
           { op_index, field: null }
         )
       );
+    }
+  }
+
+  // String length: required non-path strings reject empty values.
+  const nonEmpty = NON_EMPTY_STRING_FIELDS[opName];
+  if (nonEmpty) {
+    for (const fieldName of nonEmpty) {
+      const value = payload[fieldName];
+      if (typeof value === 'string' && value.length === 0) {
+        out.push(
+          diagnostic(
+            'error',
+            YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+            `${opName}: field "${fieldName}" must be a non-empty string`,
+            { op_index, field: `${opName}.${fieldName}` }
+          )
+        );
+      }
     }
   }
 
