@@ -1,5 +1,14 @@
 # @t3x-dev/api
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies [[`17e9670`](https://github.com/t3x-dev/t3x-core/commit/17e9670c2bc64e8d623cc82ee4bb54cb307d7dc4), [`235dd13`](https://github.com/t3x-dev/t3x-core/commit/235dd13c82ed3639f2b2e5554a00e4d75d01623f), [`b6c1828`](https://github.com/t3x-dev/t3x-core/commit/b6c18280a67c942945dc0ab5a2e8b06dde9d01e2)]:
+  - @t3x-dev/core@0.2.0
+  - @t3x-dev/runner@0.0.10
+  - @t3x-dev/storage@0.2.0
+
 ## 0.1.5
 
 ### Patch Changes

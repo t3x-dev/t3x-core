@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/storage",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "T3X Storage - PostgreSQL persistence layer with Drizzle ORM",
   "license": "Apache-2.0",
   "main": "dist/index.js",
