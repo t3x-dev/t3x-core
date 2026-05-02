@@ -148,11 +148,38 @@ function describeRuntimeType(value: unknown): string {
 // ── Path validation ──────────────────────────────────────────────────────
 
 /**
+ * Op + field combinations that accept the empty path (root) at apply
+ * time. Mirrors `RootablePathSchema = z.string()` (no `.min(1)`) in
+ * `schema.ts`, vs the default `PathSchema = z.string().min(1)` used by
+ * every other path field. Re-implementations should keep these in
+ * sync; the engine accepts a root path on these ops because the
+ * operation logically targets the document root (`pick: { path: '' }`
+ * keeps top-level keys, etc.).
+ *
+ * If you change this list, also update `schema.ts` and the engine
+ * handlers, then re-run the validator-engine alignment property test.
+ */
+const ROOTABLE_PATH_FIELDS: Record<string, Set<string>> = {
+  nest: new Set(['path']),
+  split: new Set(['path']),
+  merge: new Set(['path']),
+  pick: new Set(['path']),
+  omit: new Set(['path']),
+};
+
+function isRootablePathField(opName: string, fieldName: string): boolean {
+  return ROOTABLE_PATH_FIELDS[opName]?.has(fieldName) ?? false;
+}
+
+/**
  * Run path-syntax checks on a single path string. Used by the op-level
  * walker for every field whose value the spec marks as a path (per
  * `path_fields:` metadata).
  */
-function validatePath(path: unknown, ctx: { op_index: number; field: string }): YOpsDiagnostic[] {
+function validatePath(
+  path: unknown,
+  ctx: { op_index: number; field: string; rootable: boolean }
+): YOpsDiagnostic[] {
   // The op-level walker already checks field type before calling us; if
   // we somehow get a non-string, emit nothing — the upstream
   // YOPS_OP_FIELD_TYPE_MISMATCH covers it.
@@ -161,6 +188,11 @@ function validatePath(path: unknown, ctx: { op_index: number; field: string }): 
   const out: YOpsDiagnostic[] = [];
 
   if (path.length === 0) {
+    if (ctx.rootable) {
+      // Rootable path field accepts empty as "the document root".
+      // Schema permits, engine applies — validator must not flag.
+      return out;
+    }
     out.push(
       diagnostic(
         'error',
@@ -334,6 +366,32 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
     return out;
   }
 
+  // Outer-level unknown keys. The schema applies `.strict()` to the
+  // outer op object, so anything other than the resolved op name and
+  // declared metadata keys (`source`) is a rejection at apply time.
+  // Without this, `{ set: { … }, extra: true }` slips through the
+  // validator while the engine refuses it.
+  for (const key of Object.keys(op)) {
+    if (key === opName) continue;
+    if (OP_METADATA_KEYS.has(key)) continue;
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_FIELD_UNKNOWN,
+        `${opName}: unexpected outer-level key "${key}" (only the op name and metadata keys [${[...OP_METADATA_KEYS].join(', ')}] are allowed)`,
+        { op_index, field: null }
+      )
+    );
+  }
+
+  // Source metadata, if present, must satisfy `SourceSchema` (a
+  // discriminated union on `type`). Apply-time rejects malformed
+  // sources (e.g. `{ source: { type: 'human', author: '' } }`); the
+  // validator must too.
+  if ('source' in op) {
+    out.push(...validateSource(op.source, op_index));
+  }
+
   const opSpec = getSpec().operations[opName];
   if (!opSpec) {
     out.push(
@@ -419,7 +477,13 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
     const pathFields = opSpec.path_fields ?? {};
     const isPathField = Object.values(pathFields).includes(fieldName);
     if (isPathField) {
-      out.push(...validatePath(value, { op_index, field: `${opName}.${fieldName}` }));
+      out.push(
+        ...validatePath(value, {
+          op_index,
+          field: `${opName}.${fieldName}`,
+          rootable: isRootablePathField(opName, fieldName),
+        })
+      );
     }
   }
 
@@ -434,11 +498,130 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
 }
 
 /**
- * Cross-field refinements that go beyond per-field type / required / enum
- * checks. Today only `assert` carries one — at least one of `equals`,
- * `exists`, or `type` must be provided. Other ops with refinements
- * (audited separately) will be folded in here as part of #938.A.
+ * Cross-field and string-length refinements that go beyond per-field
+ * type / required / enum checks. Each entry mirrors a `.refine(...)` or
+ * `.min(...)` clause in `schema.ts` so validator and runtime engine
+ * agree on which payloads are well-formed.
+ *
+ * Two kinds covered today:
+ *
+ *   1. Cross-field rules — e.g. `assert` must declare at least one of
+ *      `equals` / `exists` / `type`.
+ *   2. Required non-path strings that must be non-empty. Spec marks
+ *      these fields as `type: string`, `required: true`; the schema
+ *      adds an implicit `.min(1)`. Path fields are handled separately
+ *      (see `YOPS_PATH_EMPTY` and `ROOTABLE_PATH_FIELDS`); the names
+ *      below are deliberately the *non-path* string fields.
+ *
+ * Re-implementations should keep these aligned with `schema.ts`. If a
+ * new rule is added to the schema, also extend the bundle here and add
+ * a fixture to `__tests__/validator-engine-alignment.test.ts`.
  */
+const NON_EMPTY_STRING_FIELDS: Record<string, Set<string>> = {
+  rename: new Set(['to']),
+  nest: new Set(['under']),
+  merge: new Set(['into']),
+};
+
+/**
+ * Sequence fields whose elements must be strings. Mirrors
+ * `z.array(z.string())` clauses in `schema.ts` for `nest.keys`,
+ * `merge.keys`, `pick.keys`, `omit.keys`, and the inner arrays of
+ * `split.into`. Spec-level type check only verifies `Array.isArray`,
+ * so without this the validator would accept `{ pick: { keys: [1] } }`
+ * while the engine rejects.
+ */
+const STRING_ARRAY_FIELDS: Record<string, Set<string>> = {
+  nest: new Set(['keys']),
+  merge: new Set(['keys']),
+  pick: new Set(['keys']),
+  omit: new Set(['keys']),
+};
+
+/**
+ * Source metadata schema mirror. Mirrors `SourceSchema` in `schema.ts`,
+ * a discriminated union on `type` ('llm' | 'human') with non-empty
+ * string requirements on the inner fields. Engine and validator must
+ * agree because handlers may persist these values verbatim.
+ */
+function validateSource(value: unknown, op_index: number): YOpsDiagnostic[] {
+  const out: YOpsDiagnostic[] = [];
+
+  if (!isMappingObject(value)) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+        `source: must be a mapping, got ${describeRuntimeType(value)}`,
+        { op_index, field: null }
+      )
+    );
+    return out;
+  }
+
+  const type = value.type;
+  if (type !== 'llm' && type !== 'human') {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+        `source.type: must be one of ['llm', 'human'], got ${JSON.stringify(type)}`,
+        { op_index, field: null }
+      )
+    );
+    return out;
+  }
+
+  if (type === 'human') {
+    if (typeof value.author !== 'string' || value.author.length === 0) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+          `source.author: must be a non-empty string for human sources`,
+          { op_index, field: null }
+        )
+      );
+    }
+    return out;
+  }
+
+  // type === 'llm'
+  const turnRef = value.turn_ref;
+  if (!isMappingObject(turnRef)) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+        `source.turn_ref: must be a mapping with turn_hash and quote for llm sources`,
+        { op_index, field: null }
+      )
+    );
+    return out;
+  }
+  if (typeof turnRef.turn_hash !== 'string' || turnRef.turn_hash.length === 0) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+        `source.turn_ref.turn_hash: must be a non-empty string`,
+        { op_index, field: null }
+      )
+    );
+  }
+  if (typeof turnRef.quote !== 'string' || turnRef.quote.length === 0) {
+    out.push(
+      diagnostic(
+        'error',
+        YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+        `source.turn_ref.quote: must be a non-empty string`,
+        { op_index, field: null }
+      )
+    );
+  }
+  return out;
+}
+
 function validateOpRefinements(
   opName: string,
   payload: { [key: string]: unknown },
@@ -446,6 +629,7 @@ function validateOpRefinements(
 ): YOpsDiagnostic[] {
   const out: YOpsDiagnostic[] = [];
 
+  // Cross-field: `assert` requires at least one condition.
   if (opName === 'assert') {
     const hasCondition =
       payload.equals !== undefined || payload.exists !== undefined || payload.type !== undefined;
@@ -458,6 +642,78 @@ function validateOpRefinements(
           { op_index, field: null }
         )
       );
+    }
+  }
+
+  // String length: required non-path strings reject empty values.
+  const nonEmpty = NON_EMPTY_STRING_FIELDS[opName];
+  if (nonEmpty) {
+    for (const fieldName of nonEmpty) {
+      const value = payload[fieldName];
+      if (typeof value === 'string' && value.length === 0) {
+        out.push(
+          diagnostic(
+            'error',
+            YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+            `${opName}: field "${fieldName}" must be a non-empty string`,
+            { op_index, field: `${opName}.${fieldName}` }
+          )
+        );
+      }
+    }
+  }
+
+  // Array element types: `keys` arrays must contain strings.
+  const stringArrays = STRING_ARRAY_FIELDS[opName];
+  if (stringArrays) {
+    for (const fieldName of stringArrays) {
+      const value = payload[fieldName];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          if (typeof value[i] !== 'string') {
+            out.push(
+              diagnostic(
+                'error',
+                YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+                `${opName}: field "${fieldName}[${i}]" must be a string, got ${describeRuntimeType(value[i])}`,
+                { op_index, field: `${opName}.${fieldName}` }
+              )
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // `split.into` is a mapping whose values are arrays of strings.
+  // Spec-level type check verifies `mapping`, but the schema's
+  // `z.record(z.string(), z.array(z.string()))` also requires the
+  // inner arrays to hold strings.
+  if (opName === 'split' && isMappingObject(payload.into)) {
+    for (const [groupName, members] of Object.entries(payload.into)) {
+      if (!Array.isArray(members)) {
+        out.push(
+          diagnostic(
+            'error',
+            YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+            `split: field "into.${groupName}" must be an array of strings, got ${describeRuntimeType(members)}`,
+            { op_index, field: `split.into` }
+          )
+        );
+        continue;
+      }
+      for (let i = 0; i < members.length; i++) {
+        if (typeof members[i] !== 'string') {
+          out.push(
+            diagnostic(
+              'error',
+              YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+              `split: field "into.${groupName}[${i}]" must be a string, got ${describeRuntimeType(members[i])}`,
+              { op_index, field: `split.into` }
+            )
+          );
+        }
+      }
     }
   }
 
