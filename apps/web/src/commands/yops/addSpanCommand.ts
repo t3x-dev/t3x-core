@@ -54,12 +54,13 @@ export async function addSpanAsYOps(input: AddSpanInput): Promise<SourcedYOp[]> 
   const trimmed = input.text.trim();
   if (trimmed.length === 0) return [];
 
-  const ops = await callExtractionLLM({
+  const extraction = await callExtractionLLM({
     conversationId: input.conversationId,
     turns: [{ turn_hash: input.turnHash, content: input.text }],
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
   });
+  const ops = extraction.ops;
 
   for (const op of ops) shiftOffsets(op, input.start);
   return ops;

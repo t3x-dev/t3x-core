@@ -14,7 +14,12 @@ import {
 } from '@t3x-dev/core';
 import { postExtractYops } from '@/infrastructure/llm';
 import { ExtractionRequestError } from './errors';
-import type { RetryFailingOp } from './types';
+import type {
+  ExtractionLLMResult,
+  ExtractionPreset,
+  ExtractionVariants,
+  RetryFailingOp,
+} from './types';
 
 export interface CallExtractionLLMInput {
   conversationId: string;
@@ -29,7 +34,7 @@ export interface CallExtractionLLMInput {
    * granularity-aware budget block to the system prompt. Omitting
    * `preset` reproduces the historical "no style guidance" call.
    */
-  preset?: 'concise' | 'balanced' | 'detailed';
+  preset?: ExtractionPreset;
 }
 
 interface ExtractYopsErrorBody {
@@ -75,7 +80,9 @@ function buildRequestError(
   return new ExtractionRequestError(fallbackFailure, status, body?.error.code);
 }
 
-export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<SourcedYOp[]> {
+export async function callExtractionLLM(
+  input: CallExtractionLLMInput
+): Promise<ExtractionLLMResult> {
   // `failingOps` is intentionally NOT forwarded to the server. The v2
   // `extractAndApply` pipeline owns retry semantics internally and the
   // server schema no longer accepts a surgical-retry payload. The
@@ -108,7 +115,9 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
       `extract-yops HTTP ${res.status}: ${text}`
     );
   }
-  const body = parsedBody as { success: true; data: { ops: SourcedYOp[] } } | ExtractYopsErrorBody;
+  const body = parsedBody as
+    | { success: true; data: { ops: SourcedYOp[]; variants?: ExtractionVariants } }
+    | ExtractYopsErrorBody;
   if (!body.success) {
     throw buildRequestError(
       res.status,
@@ -116,5 +125,8 @@ export async function callExtractionLLM(input: CallExtractionLLMInput): Promise<
       `extract-yops ${body.error.code}: ${body.error.message}`
     );
   }
-  return body.data.ops;
+  return {
+    ops: body.data.ops,
+    ...(body.data.variants ? { variants: body.data.variants } : {}),
+  };
 }

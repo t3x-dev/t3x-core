@@ -81,6 +81,42 @@ describe('extractors/v2 compiler', () => {
     ]);
   });
 
+  it('does not treat bootstrap target_ref paths as pre-existing ancestors', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_roast_duck',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: { path: 'beijing' },
+          candidate: {
+            path_hint: 'beijing/roast_duck',
+            values: { restaurant: 'Quanjude' },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Beijing roast duck', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'claude-sonnet-4-6',
+      extractedAt: '2026-04-30T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const definePaths = result.ops.flatMap((op) => ('define' in op ? [op.define.path] : []));
+    expect(definePaths).toEqual(['beijing', 'beijing/roast_duck']);
+    expect(applyYOps({ trees: [], relations: [] }, result.ops).ok).toBe(true);
+  });
+
   it('lowers incremental updates deterministically', () => {
     const draft: ExtractionDraft = {
       schema: EXTRACTION_DRAFT_SCHEMA,
@@ -322,6 +358,241 @@ describe('extractors/v2 compiler', () => {
     );
 
     const applied = applyYOps(baseline, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
+  });
+
+  it('routes structured bootstrap add away from slots created earlier in the same batch', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_day_summary',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_2',
+            values: {
+              evening: ['Hefang Street / IFS area', 'Changsha nightlife'],
+              theme: 'Food & Modern Culture',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Day 2: Food & Modern Culture', role: 'primary' }],
+        },
+        {
+          id: 'item_evening_details',
+          intent: 'add',
+          confidence: 0.88,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_2/evening',
+            values: {
+              area: 'Hefang Street / IFS area',
+              activity: 'Changsha nightlife',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Changsha nightlife', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'gpt-5.4-mini',
+      extractedAt: '2026-04-30T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'trip/itinerary/day_2/evening_details' } })
+    );
+    expect(
+      result.ops.some((op) => 'define' in op && op.define.path === 'trip/itinerary/day_2/evening')
+    ).toBe(false);
+
+    const applied = applyYOps({ trees: [], relations: [] }, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
+  });
+
+  it('routes structured descendants away from slot ancestors created earlier in the same batch', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_day_summary',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_1',
+            values: {
+              morning: ['Yuelu Academy', 'Yuelu Mountain'],
+              theme: 'History & Culture',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Day 1: History & Culture', role: 'primary' }],
+        },
+        {
+          id: 'item_morning_attractions',
+          intent: 'add',
+          confidence: 0.88,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_1/morning/attractions',
+            values: {
+              name: 'Yuelu Academy',
+              local_name: '岳麓书院',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Yuelu Academy', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'gpt-5.4-mini',
+      extractedAt: '2026-04-30T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'trip/itinerary/day_1/morning_details' } })
+    );
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({
+        define: { path: 'trip/itinerary/day_1/morning_details/attractions' },
+      })
+    );
+    expect(
+      result.ops.some((op) => 'define' in op && op.define.path === 'trip/itinerary/day_1/morning')
+    ).toBe(false);
+
+    const applied = applyYOps({ trees: [], relations: [] }, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
+  });
+
+  it('routes nested scalar sets away from exact slots created earlier in the same batch', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_day_summary',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_2',
+            values: {
+              evening: ['Hefang Street / IFS area', 'Changsha nightlife'],
+              theme: 'Food & Modern Culture',
+            },
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Day 2: Food & Modern Culture', role: 'primary' }],
+        },
+        {
+          id: 'item_evening_description',
+          intent: 'add',
+          confidence: 0.88,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip/itinerary/day_2/evening',
+            slot: 'description',
+            value: 'Shopping, food, and Changsha nightlife',
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Changsha nightlife', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'gpt-5.4-mini',
+      extractedAt: '2026-04-30T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'trip/itinerary/day_2/evening_details' } })
+    );
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({
+        set: {
+          path: 'trip/itinerary/day_2/evening_details/description',
+          value: 'Shopping, food, and Changsha nightlife',
+        },
+      })
+    );
+
+    const applied = applyYOps({ trees: [], relations: [] }, result.ops);
+    expect(applied.ok).toBe(true);
+    expect(applied.applied).toBe(result.ops.length);
+  });
+
+  it('routes children away from slots created by their parent item values', () => {
+    const draft: ExtractionDraft = {
+      schema: EXTRACTION_DRAFT_SCHEMA,
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_trip',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          candidate: {
+            path_hint: 'trip',
+            values: {
+              destination: 'Changsha',
+              duration: 'three-day trip',
+            },
+            children: [
+              {
+                key: 'destination',
+                values: {
+                  city: 'Changsha',
+                  province: 'Hunan Province',
+                },
+              },
+            ],
+          },
+          evidence: [{ turn_tag: 'T1', quote: 'Changsha', role: 'primary' }],
+        },
+      ],
+    };
+
+    const result = compileExtractionDraft({
+      draft,
+      sourceModel: 'gpt-5.4-mini',
+      extractedAt: '2026-04-30T00:00:00.000Z',
+      turnHashByTag: { T1: 'sha256:turn-1' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toContainEqual(
+      expect.objectContaining({ define: { path: 'trip/destination_details' } })
+    );
+    expect(result.ops.some((op) => 'define' in op && op.define.path === 'trip/destination')).toBe(
+      false
+    );
+
+    const applied = applyYOps({ trees: [], relations: [] }, result.ops);
     expect(applied.ok).toBe(true);
     expect(applied.applied).toBe(result.ops.length);
   });
@@ -759,6 +1030,42 @@ describe('extractors/v2 compiler', () => {
       // fall through to the next candidate.
       const result = normalizePath('//');
       expect(result.kind).toBe('invalid');
+    });
+  });
+
+  describe('create-path label normalization', () => {
+    it('add: normalizes natural-language candidate.path_hint labels without falling through', () => {
+      const result = compileExtractionDraft({
+        draft: {
+          schema: EXTRACTION_DRAFT_SCHEMA,
+          version: 1,
+          mode: 'bootstrap',
+          items: [
+            {
+              id: 'item_1',
+              intent: 'add',
+              confidence: 0.9,
+              reasoning_type: 'direct',
+              candidate: {
+                path_hint: 'Changsha trip',
+                key: 'fallback_key',
+                values: { city: 'Changsha' },
+              },
+              evidence: [{ turn_tag: 'T1', quote: 'Changsha trip', role: 'primary' }],
+            },
+          ],
+        },
+        sourceModel: 'gpt-5.4-mini',
+        extractedAt: '2026-04-30T00:00:00.000Z',
+        turnHashByTag: { T1: 'sha256:turn-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.ops.map((op) => ('define' in op ? op.define.path : op.populate.path))).toEqual([
+        'changsha_trip',
+        'changsha_trip',
+      ]);
     });
   });
 

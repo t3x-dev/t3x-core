@@ -26,7 +26,41 @@ describe('callExtractionLLM', () => {
         conversationId: 'conv_123',
         turns: [],
       })
-    ).resolves.toEqual([{ define: { path: 'project' } }]);
+    ).resolves.toEqual({ ops: [{ define: { path: 'project' } }] });
+  });
+
+  it('returns preset variants on success when the API includes them', async () => {
+    postExtractYopsMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          ops: [{ define: { path: 'balanced_root' } }],
+          variants: {
+            concise: [{ define: { path: 'concise_root' } }],
+            balanced: [{ define: { path: 'balanced_root' } }],
+            detailed: [{ define: { path: 'detailed_root' } }],
+          },
+        },
+      }),
+      text: async () => '',
+    });
+
+    await expect(
+      callExtractionLLM({
+        conversationId: 'conv_123',
+        turns: [],
+        preset: 'balanced',
+      })
+    ).resolves.toEqual({
+      ops: [{ define: { path: 'balanced_root' } }],
+      variants: {
+        concise: [{ define: { path: 'concise_root' } }],
+        balanced: [{ define: { path: 'balanced_root' } }],
+        detailed: [{ define: { path: 'detailed_root' } }],
+      },
+    });
   });
 
   it('maps API failure_code into an ExtractionRequestError', async () => {

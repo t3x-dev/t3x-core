@@ -34,7 +34,7 @@ describe('addSpanAsYOps', () => {
   });
 
   it('calls the extraction LLM with a single synthetic turn carrying the selected text', async () => {
-    callExtractionLLMMock.mockResolvedValue([]);
+    callExtractionLLMMock.mockResolvedValue({ ops: [] });
 
     await addSpanAsYOps({
       conversationId: 'conv_1',
@@ -56,7 +56,7 @@ describe('addSpanAsYOps', () => {
 
   it('shifts start_char/end_char by the selection start so offsets align with the full turn', async () => {
     // LLM sees content="Lingyin Temple" (14 chars) and emits a quote at [0, 14) of that substring.
-    callExtractionLLMMock.mockResolvedValue([sourcedOp(0, 14, 'Lingyin Temple')]);
+    callExtractionLLMMock.mockResolvedValue({ ops: [sourcedOp(0, 14, 'Lingyin Temple')] });
 
     const [op] = await addSpanAsYOps({
       conversationId: 'conv_1',
@@ -74,7 +74,7 @@ describe('addSpanAsYOps', () => {
   });
 
   it('returns an empty array without calling the LLM when the selected text is blank', async () => {
-    callExtractionLLMMock.mockResolvedValue([sourcedOp(0, 0, '')]);
+    callExtractionLLMMock.mockResolvedValue({ ops: [sourcedOp(0, 0, '')] });
     const ops = await addSpanAsYOps({
       conversationId: 'conv_1',
       turnHash: 'sha256:t1',
@@ -96,7 +96,7 @@ describe('addSpanAsYOps', () => {
         turn_ref: { turn_hash: 'sha256:t1', quote: 'sights' },
       },
     } as SourcedYOp;
-    callExtractionLLMMock.mockResolvedValue([opNoOffsets]);
+    callExtractionLLMMock.mockResolvedValue({ ops: [opNoOffsets] });
 
     const [op] = await addSpanAsYOps({
       conversationId: 'conv_1',

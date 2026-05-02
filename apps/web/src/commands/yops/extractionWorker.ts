@@ -23,13 +23,18 @@ import type {
 import { ExtractionFailedError, ExtractionRequestError } from './errors';
 import { repairMissingDefinesForPopulate } from './repairMissingDefines';
 import { validateExecutableStructure } from './structureValidator';
-import type { LLMCallInput, RetryFailingOp } from './types';
+import type {
+  ExtractionLLMResult,
+  ExtractionVariants,
+  LLMCallInput,
+  RetryFailingOp,
+} from './types';
 import { commitOps } from './yopsService';
 
 const MAX_RETRIES = 2;
 const ENABLE_LAST_RESORT_REPAIR = true;
 
-export type LLMCall = (input: LLMCallInput) => Promise<SourcedYOp[]>;
+export type LLMCall = (input: LLMCallInput) => Promise<SourcedYOp[] | ExtractionLLMResult>;
 
 export interface ExtractionInput {
   baseTree: SemanticContent;
@@ -52,11 +57,17 @@ export interface ExtractionInput {
 export interface ExtractionResult {
   /** The validated, possibly repaired ops the worker arrived at. */
   ops: SourcedYOp[];
+  /** Preset variants derived from the same server extraction, when available. */
+  variants?: ExtractionVariants;
   /**
    * True when the worker called `commitOps` itself (i.e. `commit !== false`).
    * Callers reading this can avoid double-applying.
    */
   committed: boolean;
+}
+
+function normalizeLLMResult(result: SourcedYOp[] | ExtractionLLMResult): ExtractionLLMResult {
+  return Array.isArray(result) ? { ops: result } : result;
 }
 
 function collectInsertedDefinePaths(
@@ -138,8 +149,11 @@ export async function runExtraction({
 
   while (true) {
     let ops: SourcedYOp[];
+    let variants: ExtractionVariants | undefined;
     try {
-      ops = await llm({ turns, failingOps: prevFailing });
+      const llmResult = normalizeLLMResult(await llm({ turns, failingOps: prevFailing }));
+      ops = llmResult.ops;
+      variants = llmResult.variants;
     } catch (e) {
       attempt++;
 
@@ -209,7 +223,7 @@ export async function runExtraction({
     const structureResult = validateExecutableStructure(baseTree, ops);
     if (structureResult.ok) {
       if (commit) await commitOps(conversationId, ops);
-      return { ops, committed: commit };
+      return { ops, ...(variants ? { variants } : {}), committed: commit };
     }
 
     attempt++;
