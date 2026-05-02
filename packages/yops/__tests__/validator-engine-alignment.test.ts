@@ -89,6 +89,49 @@ const SCHEMA_REJECTS: AlignmentCase[] = [
   // ── Cross-field refinements ─────────────────────────────────────────────
   { name: 'assert with no condition', op: { assert: { path: 'a' } } },
 
+  // ── Outer-level extras (schema's outer .strict()) ───────────────────────
+  {
+    name: 'outer extra field beyond op + metadata',
+    op: { set: { path: 'a', value: 1 }, extra: true },
+  },
+
+  // ── Source metadata (SourceSchema discriminated union) ──────────────────
+  {
+    name: 'human source.author empty',
+    op: { set: { path: 'a', value: 1 }, source: { type: 'human', author: '' } },
+  },
+  {
+    name: 'source.type outside discriminated union',
+    op: { set: { path: 'a', value: 1 }, source: { type: 'unicorn' } },
+  },
+  {
+    name: 'source not a mapping',
+    op: { set: { path: 'a', value: 1 }, source: 'human' },
+  },
+  {
+    name: 'llm source missing turn_ref',
+    op: { set: { path: 'a', value: 1 }, source: { type: 'llm' } },
+  },
+  {
+    name: 'llm source.turn_ref.quote empty',
+    op: {
+      set: { path: 'a', value: 1 },
+      source: { type: 'llm', turn_ref: { turn_hash: 'sha256:abc', quote: '' } },
+    },
+  },
+
+  // ── Array element types (z.array(z.string())) ──────────────────────────
+  { name: 'pick.keys with numeric element', op: { pick: { path: 'x', keys: [1] } } },
+  { name: 'omit.keys with boolean element', op: { omit: { path: 'x', keys: [true] } } },
+  {
+    name: 'split.into group with non-string element',
+    op: { split: { path: 'x', into: { g1: ['a', 2] } } },
+  },
+  {
+    name: 'split.into group is not an array',
+    op: { split: { path: 'x', into: { g1: 'not-an-array' } } },
+  },
+
   // ── Unknown op ──────────────────────────────────────────────────────────
   { name: 'unknown operation', op: { frobnicate: { path: 'x' } } },
 ];
@@ -170,6 +213,28 @@ const ENGINE_ACCEPTS: AlignmentApplyCase[] = [
     name: 'quoted segment path',
     doc: {},
     op: { set: { path: 'config/"db/prod"/host', value: 'x' } },
+  },
+
+  // Well-formed source metadata (both branches of the discriminated union)
+  {
+    name: 'human source with non-empty author',
+    doc: {},
+    op: {
+      define: { path: 'foo' },
+      source: { type: 'human', author: 'tester' },
+    },
+  },
+  {
+    name: 'llm source with full turn_ref',
+    doc: {},
+    op: {
+      define: { path: 'foo' },
+      source: {
+        type: 'llm',
+        model: 'claude-opus-4-7',
+        turn_ref: { turn_hash: 'sha256:abc', quote: 'hello' },
+      },
+    },
   },
 ];
 

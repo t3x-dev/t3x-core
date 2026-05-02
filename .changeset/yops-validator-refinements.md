@@ -7,7 +7,10 @@ YOps validator–engine alignment: cross-field refinements + rootable paths.
 The pre-flight validator added in #938 caught most schema-level errors but missed three classes of misalignment with the runtime engine. Without these fixes, callers using `validateYOpsOps` as a preflight gate would either let invalid payloads through (false negatives) or block valid ones (false positives).
 
 **Fixed false negatives** (validator was passing inputs the engine rejects):
-- Required non-path string fields must be non-empty: `rename.to`, `nest.under`, `merge.into`. Mirrors `z.string().min(1)` in `schema.ts`. Now emits `YOPS_OP_REFINEMENT_VIOLATION`.
+- Required non-path string fields must be non-empty: `rename.to`, `nest.under`, `merge.into`. Mirrors `z.string().min(1)` in `schema.ts`. Emits `YOPS_OP_REFINEMENT_VIOLATION`.
+- Outer-level extra keys are rejected. The schema applies `.strict()` to the outer op object; the validator now matches by emitting `YOPS_OP_FIELD_UNKNOWN` for any outer key that isn't the resolved op name or a documented metadata key (`source`).
+- Source metadata is validated against the `SourceSchema` discriminated union: `type` must be `'llm'` or `'human'`; `human` requires non-empty `author`; `llm` requires `turn_ref` with non-empty `turn_hash` and `quote`. Emits `YOPS_OP_REFINEMENT_VIOLATION`.
+- Sequence fields whose elements must be strings (`nest.keys`, `merge.keys`, `pick.keys`, `omit.keys`, and the inner arrays of `split.into`) now have their elements type-checked. Mirrors `z.array(z.string())` clauses. Emits `YOPS_OP_REFINEMENT_VIOLATION`.
 
 **Fixed false positives** (validator was blocking inputs the engine accepts):
 - `path: ''` on rootable-path ops (`nest`, `split`, `merge`, `pick`, `omit`) targets the document root and is accepted by the runtime parser and engine. The validator no longer emits `YOPS_PATH_EMPTY` for these. Mirrors `RootablePathSchema = z.string()` in `schema.ts` for these five ops.
