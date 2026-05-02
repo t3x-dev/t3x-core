@@ -22,9 +22,25 @@ that returns `YOpsDiagnostic[]` for pre-flight checks: never throws, never
 auto-fixes. Two entry points so callers with parsed objects (API, MCP, CLI)
 don't pay a YAML round-trip. Catches: YAML envelope shape, op-key
 uniqueness/recognition, payload mapping shape, required/unknown/typed/enum
-fields, path syntax errors. Advisory `YOPS_PATH_LIKELY_DOUBLE_ESCAPED`
-emitted at `severity: info` for heuristic detection of accidental
-YAML+YOps double-quoting; never blocks apply.
+fields, path-syntax errors, and op-specific cross-field refinements
+(starting with `assert` requiring at least one of `equals`, `exists`, or
+`type` — mirrors the `.refine(...)` clause in `schema.ts` so preflight
+and apply-time agree on which payloads are well-formed).
+
+**Engine-validator alignment.** The validator deliberately does NOT
+impose a key-format grammar (no SNAKE_CASE_KEY rule). The runtime parser
+and engine accept any non-empty string as a plain key — including
+hyphens, dots, and whitespace — and there are explicit edge-case tests
+covering keys like `my-config.v2` and `my key`. Validator findings must
+not reject inputs the engine would happily apply. Reserved characters
+(`/`, `[`, `]`, `=`, `"`) are addressed via the quoted-segment escape,
+not via a SNAKE_CASE-style restriction.
+
+**Advisory `YOPS_PATH_LIKELY_DOUBLE_ESCAPED`.** Emitted at `severity:
+info` when `\"` patterns appear OUTSIDE any quoted segment (heuristic
+for accidental YAML+YOps double-quoting). Inside a quoted segment `\"`
+is the documented escape for a literal `"` and never triggers the
+advisory. Never blocks apply.
 
 **Stable diagnostic codes.** All codes documented in `yops.yaml` under
 `diagnostic_codes:` and exported as `YOPS_DIAGNOSTIC_CODES`. Adding new

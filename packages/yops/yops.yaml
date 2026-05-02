@@ -81,11 +81,13 @@ path:
       - description: key contains a literal backslash
         path: '"path\\with\\backslashes"'
         decodes_to_key: 'path\with\backslashes'
-      - description: match value with reserved characters (clarity-quoted)
-        path: 'users/[email="alice@x.com"]/role'
-        notes: >
-          Match-value quoting is allowed for clarity but not required —
-          the bracket grammar already terminates on `]`.
+    match_value_note: >
+      Match values inside `[key=value]` are read literally up to the
+      closing `]` and are NOT quoted. Wrapping the value in double quotes
+      (e.g. `[email="alice@x.com"]`) makes the parsed value include the
+      literal quote characters and will fail to match a normal field.
+      Reserved-character keys are addressed via quoted key segments,
+      not via match-value quoting.
     yaml_double_escape_note: >
       YAML and YOps both use double quotes. To avoid two escape layers,
       prefer single-quoted YAML strings or block scalars when a path
@@ -1495,18 +1497,28 @@ diagnostic_codes:
     severity: error
     meaning: A field's value is not in the declared enum (e.g. `sort.order` outside [asc, desc]).
 
+  YOPS_OP_REFINEMENT_VIOLATION:
+    severity: error
+    meaning: >
+      An op-specific cross-field rule (beyond per-field type / required /
+      enum) failed. Mirrors a `.refine(...)` clause from the runtime
+      schema so preflight and apply-time agree on which payloads are
+      well-formed. Example: `assert` requires at least one of `equals`,
+      `exists`, or `type`.
+
   # ── Path syntax ──────────────────────────────────────────────────────────
+  #
+  # Path-syntax diagnostics flag inputs that the runtime parser cannot make
+  # sense of, or that are almost certainly a typo against the documented
+  # grammar. They do NOT impose a key-format grammar on plain key segments:
+  # the runtime engine accepts any non-empty string as a plain key
+  # (including hyphens, dots, and whitespace), so the validator must too.
+  # Reserved characters (`/`, `[`, `]`, `=`, `"`) are addressed via the
+  # quoted-segment escape, not via a SNAKE_CASE-style key restriction.
 
   YOPS_PATH_EMPTY:
     severity: error
     meaning: Path string is empty (zero-length input).
-
-  YOPS_PATH_INVALID_KEY:
-    severity: error
-    meaning: >
-      An unquoted segment fails SNAKE_CASE_KEY (lowercase letters, digits,
-      underscores; cannot start with a digit). Use a quoted segment if
-      the key legitimately contains other characters.
 
   YOPS_PATH_UNCLOSED_QUOTE:
     severity: error
@@ -1529,11 +1541,13 @@ diagnostic_codes:
   YOPS_PATH_LIKELY_DOUBLE_ESCAPED:
     severity: info
     meaning: >
-      Heuristic; advisory only. The path contains `\"` patterns that often
-      mean the YAML quote layer and the YOps quote layer were both applied
-      (e.g. a JSON-encoded string round-tripped through a YAML emitter).
-      May be a real literal-backslash-quote key — the validator cannot
-      tell without raw YAML source positions, so this is never an error
-      and never blocks apply. Authors should prefer single-quoted YAML
+      Heuristic; advisory only. The path contains `\"` patterns OUTSIDE
+      any quoted segment, which often means the YAML quote layer and the
+      YOps quote layer were both applied (e.g. a JSON-encoded string
+      round-tripped through a YAML emitter). Inside a quoted segment,
+      `\"` is the documented escape for a literal `"` and never triggers
+      this advisory. The validator cannot tell intent from accident
+      without raw YAML source positions, so this is never an error and
+      never blocks apply. Authors should prefer single-quoted YAML
       strings or block scalars when paths contain literal double quotes
       (see `path.escape.yaml_double_escape_note`).

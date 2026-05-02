@@ -88,9 +88,9 @@ export const YOPS_DIAGNOSTIC_CODES = {
   YOPS_OP_FIELD_UNKNOWN: 'YOPS_OP_FIELD_UNKNOWN',
   YOPS_OP_FIELD_TYPE_MISMATCH: 'YOPS_OP_FIELD_TYPE_MISMATCH',
   YOPS_OP_ENUM_VIOLATION: 'YOPS_OP_ENUM_VIOLATION',
+  YOPS_OP_REFINEMENT_VIOLATION: 'YOPS_OP_REFINEMENT_VIOLATION',
   // Path syntax
   YOPS_PATH_EMPTY: 'YOPS_PATH_EMPTY',
-  YOPS_PATH_INVALID_KEY: 'YOPS_PATH_INVALID_KEY',
   YOPS_PATH_UNCLOSED_QUOTE: 'YOPS_PATH_UNCLOSED_QUOTE',
   YOPS_PATH_INVALID_ESCAPE: 'YOPS_PATH_INVALID_ESCAPE',
   YOPS_PATH_INVALID_INDEX_SYNTAX: 'YOPS_PATH_INVALID_INDEX_SYNTAX',
@@ -101,8 +101,6 @@ export const YOPS_DIAGNOSTIC_CODES = {
 export type YOpsDiagnosticCode = (typeof YOPS_DIAGNOSTIC_CODES)[keyof typeof YOPS_DIAGNOSTIC_CODES];
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-const SNAKE_CASE_KEY = /^[a-z_][a-z0-9_]*$/;
 
 function diagnostic(
   severity: YOpsDiagnostic['severity'],
@@ -196,11 +194,16 @@ function validatePath(path: unknown, ctx: { op_index: number; field: string }): 
     return out;
   }
 
-  // Per-segment heuristics: SNAKE_CASE_KEY for unquoted keys, well-formed
-  // brackets, etc. We re-walk the raw string here because parsePath has
-  // already absorbed quoting decisions; for the heuristic checks we want
-  // to know "did this segment use quoting or not?" which needs the raw
-  // text.
+  // Per-segment checks. We re-walk the raw string because parsePath has
+  // already absorbed quoting decisions; for these heuristics we want to
+  // know "did this segment use quoting or not?", which needs the raw text.
+  //
+  // Note: we deliberately do NOT impose a key-format grammar (no
+  // SNAKE_CASE_KEY rule). The runtime parser and engine accept any
+  // non-empty string as a plain key — including hyphens, dots, and
+  // whitespace — and there are explicit edge-case tests covering keys
+  // like `my-config.v2` and `my key`. Validator findings must not
+  // reject inputs the engine would happily apply.
   const rawSegments = splitRawSegments(path);
   for (const raw of rawSegments) {
     if (raw.startsWith('"')) {
@@ -225,37 +228,28 @@ function validatePath(path: unknown, ctx: { op_index: number; field: string }): 
       }
       continue;
     }
-    // Plain key segment — must satisfy SNAKE_CASE_KEY.
-    if (!SNAKE_CASE_KEY.test(raw)) {
-      const suggestion = `If "${raw}" is meant as a literal key with special characters, wrap it in double quotes: "${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    // Plain key segment outside any quoted region — emit the
+    // double-escape advisory if it contains `\"`. Inside a quoted
+    // segment `\"` is the documented escape for a literal `"` and
+    // must not trigger the heuristic. Per-segment placement keeps the
+    // signal aligned with intent: only out-of-quote `\"` suggests the
+    // YAML layer leaked an escape into the YOps layer.
+    if (raw.includes('\\"')) {
       out.push(
         diagnostic(
-          'error',
-          YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_KEY,
-          `Path segment "${raw}" must match SNAKE_CASE_KEY (lowercase letters, digits, underscores; cannot start with a digit)`,
-          { op_index: ctx.op_index, field: ctx.field, path, suggestion }
+          'info',
+          YOPS_DIAGNOSTIC_CODES.YOPS_PATH_LIKELY_DOUBLE_ESCAPED,
+          `Path contains \\" patterns outside any quoted segment that may indicate accidental YAML+YOps double-quoting. The validator cannot tell intent from accident — treat as advisory.`,
+          {
+            op_index: ctx.op_index,
+            field: ctx.field,
+            path,
+            suggestion:
+              'If the backslash-quote was meant by your YAML emitter to encode a literal `"`, prefer single-quoted YAML strings or block scalars. If it is a real literal-backslash key, ignore this warning.',
+          }
         )
       );
     }
-  }
-
-  // Heuristic: `\"` patterns inside a path string suggest the YAML quote
-  // layer and the YOps quote layer were both applied. Advisory only.
-  if (path.includes('\\"')) {
-    out.push(
-      diagnostic(
-        'info',
-        YOPS_DIAGNOSTIC_CODES.YOPS_PATH_LIKELY_DOUBLE_ESCAPED,
-        `Path contains \\" patterns that may indicate accidental YAML+YOps double-quoting. The validator cannot tell intent from accident — treat as advisory.`,
-        {
-          op_index: ctx.op_index,
-          field: ctx.field,
-          path,
-          suggestion:
-            'If the backslash-quote was meant by your YAML emitter to encode a literal `"`, prefer single-quoted YAML strings or block scalars. If it is a real literal-backslash key, ignore this warning.',
-        }
-      )
-    );
   }
 
   return out;
@@ -426,6 +420,44 @@ function validateOp(op: unknown, op_index: number): YOpsDiagnostic[] {
     const isPathField = Object.values(pathFields).includes(fieldName);
     if (isPathField) {
       out.push(...validatePath(value, { op_index, field: `${opName}.${fieldName}` }));
+    }
+  }
+
+  // Op-specific cross-field refinements that the spec-level checks above
+  // don't capture. Each refinement mirrors a `.refine(...)` clause in
+  // `schema.ts` so the validator and the runtime engine agree on which
+  // payloads are well-formed. Without this, callers using the validator
+  // as a preflight gate would still hit `INVALID_OP` at apply time.
+  out.push(...validateOpRefinements(opName, payload, op_index));
+
+  return out;
+}
+
+/**
+ * Cross-field refinements that go beyond per-field type / required / enum
+ * checks. Today only `assert` carries one — at least one of `equals`,
+ * `exists`, or `type` must be provided. Other ops with refinements
+ * (audited separately) will be folded in here as part of #938.A.
+ */
+function validateOpRefinements(
+  opName: string,
+  payload: { [key: string]: unknown },
+  op_index: number
+): YOpsDiagnostic[] {
+  const out: YOpsDiagnostic[] = [];
+
+  if (opName === 'assert') {
+    const hasCondition =
+      payload.equals !== undefined || payload.exists !== undefined || payload.type !== undefined;
+    if (!hasCondition) {
+      out.push(
+        diagnostic(
+          'error',
+          YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION,
+          `assert: at least one of equals, exists, or type must be provided`,
+          { op_index, field: null }
+        )
+      );
     }
   }
 

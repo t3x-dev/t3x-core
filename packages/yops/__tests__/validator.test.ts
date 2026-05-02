@@ -114,17 +114,36 @@ describe('validateYOpsOps — op-level codes', () => {
     const diags = validateYOpsOps([{ define: { path: 'foo' } }]);
     expect(diags).toEqual([]);
   });
+
+  it('YOPS_OP_REFINEMENT_VIOLATION (assert with no condition)', () => {
+    const diags = validateYOpsOps([{ assert: { path: 'a' } }]);
+    expect(diags.map((d) => d.code)).toContain(YOPS_DIAGNOSTIC_CODES.YOPS_OP_REFINEMENT_VIOLATION);
+  });
+
+  it('assert with at least one condition validates clean', () => {
+    const equalsClean = validateYOpsOps([{ assert: { path: 'a', equals: 1 } }]);
+    const existsClean = validateYOpsOps([{ assert: { path: 'a', exists: true } }]);
+    const typeClean = validateYOpsOps([{ assert: { path: 'a', type: 'mapping' } }]);
+    expect(equalsClean).toEqual([]);
+    expect(existsClean).toEqual([]);
+    expect(typeClean).toEqual([]);
+  });
+
+  it('engine accepts hyphens, dots, and whitespace in plain keys — validator must agree', () => {
+    // Mirrors `applyYOps` edge-case fixtures for `my-config.v2` and
+    // `my key`: the runtime engine creates these keys verbatim, so
+    // the validator must not reject them as INVALID_KEY.
+    const hyphensAndDots = validateYOpsOps([{ define: { path: 'my-config.v2' } }]);
+    const whitespace = validateYOpsOps([{ define: { path: 'my key' } }]);
+    expect(hyphensAndDots).toEqual([]);
+    expect(whitespace).toEqual([]);
+  });
 });
 
 describe('validateYOpsOps — path syntax codes', () => {
   it('YOPS_PATH_EMPTY (zero-length)', () => {
     const diags = validateYOpsOps([{ define: { path: '' } }]);
     expect(diags.map((d) => d.code)).toContain(YOPS_DIAGNOSTIC_CODES.YOPS_PATH_EMPTY);
-  });
-
-  it('YOPS_PATH_INVALID_KEY (segment fails SNAKE_CASE_KEY)', () => {
-    const diags = validateYOpsOps([{ define: { path: 'bad-key' } }]);
-    expect(diags.map((d) => d.code)).toContain(YOPS_DIAGNOSTIC_CODES.YOPS_PATH_INVALID_KEY);
   });
 
   it('YOPS_PATH_UNCLOSED_QUOTE', () => {
@@ -165,6 +184,18 @@ describe('validateYOpsOps — path syntax codes', () => {
 
   it('quoted segment with reserved characters validates clean', () => {
     const diags = validateYOpsOps([{ define: { path: 'config/"db/prod"/host' } }]);
+    expect(diags).toEqual([]);
+  });
+
+  it('legitimate \\" inside a quoted segment does NOT fire LIKELY_DOUBLE_ESCAPED', () => {
+    // Path is `"weird \"name\""` — one quoted segment whose key is
+    // `weird "name"`. The `\"` sequences are documented escapes inside
+    // the quoted region and must not trigger the advisory; the
+    // heuristic only fires for `\"` outside any quoted segment.
+    const diags = validateYOpsOps([{ define: { path: '"weird \\"name\\""' } }]);
+    expect(diags.map((d) => d.code)).not.toContain(
+      YOPS_DIAGNOSTIC_CODES.YOPS_PATH_LIKELY_DOUBLE_ESCAPED
+    );
     expect(diags).toEqual([]);
   });
 });
@@ -214,13 +245,13 @@ describe('YOpsDiagnostic shape is stable', () => {
       { define: { path: 42 } },
       { define: { path: 'foo', extra: 1 } },
       { define: { path: '' } },
-      { define: { path: 'bad-key' } },
       { define: { path: 'config/"unclosed' } },
       { define: { path: '"a\\nb"' } },
       { define: { path: 'items/[0' } },
       { define: { path: 'users/[name=alice' } },
       { sort: { path: 'items', order: 'sideways' } },
       { define: { path: 'config/\\"k\\"/host' } },
+      { assert: { path: 'a' } },
     ];
     const diags = validateYOpsOps(sampleInputs);
     expect(diags.length).toBeGreaterThan(0);
@@ -283,11 +314,11 @@ describe('every error-severity diagnostic code is reachable from a fixture', () 
       { ops: [{ define: { path: 'foo', extra: 1 } }] },
       { ops: [{ sort: { path: 'items', order: 'sideways' } }] },
       { ops: [{ define: { path: '' } }] },
-      { ops: [{ define: { path: 'bad-key' } }] },
       { ops: [{ define: { path: 'config/"unclosed' } }] },
       { ops: [{ define: { path: '"a\\nb"' } }] },
       { ops: [{ define: { path: 'items/[0' } }] },
       { ops: [{ define: { path: 'users/[name=alice' } }] },
+      { ops: [{ assert: { path: 'a' } }] },
     ];
 
     const seen = new Set<string>();
