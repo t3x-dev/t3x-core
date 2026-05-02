@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 71 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(71);
+  it('has 73 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(73);
   });
 
   it('key equals value for every code', () => {
@@ -74,6 +74,8 @@ describe('ErrorCodes', () => {
         "PIN_NOT_FOUND": "PIN_NOT_FOUND",
         "PROJECT_NOT_FOUND": "PROJECT_NOT_FOUND",
         "PROMOTE_FAILED": "PROMOTE_FAILED",
+        "PROVIDER_KEY_MISSING": "PROVIDER_KEY_MISSING",
+        "PROVIDER_UNAVAILABLE": "PROVIDER_UNAVAILABLE",
         "RATE_LIMITED": "RATE_LIMITED",
         "REFERENCE_NOT_FOUND": "REFERENCE_NOT_FOUND",
         "RESTORE_FAILED": "RESTORE_FAILED",

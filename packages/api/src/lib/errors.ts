@@ -111,6 +111,14 @@ export const ErrorCodes = {
   LEARN_FAILED: 'LEARN_FAILED',
   EXTRACTION_FAILED: 'EXTRACTION_FAILED',
 
+  // Extraction transport/config codes — reserved for genuine
+  // upstream/configuration failures so domain-level extraction outcomes
+  // (compile, unverifiable_quote, ...) can travel as `kind:'failed'`
+  // inside a 200 ExtractionOutcome envelope without being conflated
+  // with infrastructure problems.
+  PROVIDER_KEY_MISSING: 'PROVIDER_KEY_MISSING',
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+
   // Verification / merge state errors
   VERIFY_FAILED: 'VERIFY_FAILED',
   INVALID_STATUS: 'INVALID_STATUS',
@@ -245,6 +253,8 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   MERGE_FAILED: 500,
   LEARN_FAILED: 500,
   EXTRACTION_FAILED: 500,
+  PROVIDER_KEY_MISSING: 400,
+  PROVIDER_UNAVAILABLE: 502,
 
   // Verification / merge state errors
   VERIFY_FAILED: 500,

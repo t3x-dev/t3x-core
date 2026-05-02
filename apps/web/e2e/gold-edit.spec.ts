@@ -153,7 +153,10 @@ test.describe('Gold-edit flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { ops: validOps(userTurnHash) } }),
+        body: JSON.stringify({
+          success: true,
+          data: { kind: 'ok', ops: validOps(userTurnHash), warnings: [] },
+        }),
       });
     });
 
@@ -249,7 +252,10 @@ test.describe('Gold-edit flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { ops: validOps(userTurnHash) } }),
+        body: JSON.stringify({
+          success: true,
+          data: { kind: 'ok', ops: validOps(userTurnHash), warnings: [] },
+        }),
       });
     });
 

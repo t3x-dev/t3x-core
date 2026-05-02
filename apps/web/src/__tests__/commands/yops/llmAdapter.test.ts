@@ -13,11 +13,14 @@ vi.mock('@/infrastructure/llm', () => ({
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
 
 describe('callExtractionLLM', () => {
-  it('returns ops on success', async () => {
+  it('returns ops on a kind:"ok" outcome envelope', async () => {
     postExtractYopsMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { ops: [{ define: { path: 'project' } }] } }),
+      json: async () => ({
+        success: true,
+        data: { kind: 'ok', ops: [{ define: { path: 'project' } }], warnings: [] },
+      }),
       text: async () => '',
     });
 
@@ -36,7 +39,9 @@ describe('callExtractionLLM', () => {
       json: async () => ({
         success: true,
         data: {
+          kind: 'ok',
           ops: [{ define: { path: 'balanced_root' } }],
+          warnings: [],
           variants: {
             concise: [{ define: { path: 'concise_root' } }],
             balanced: [{ define: { path: 'balanced_root' } }],
@@ -61,6 +66,62 @@ describe('callExtractionLLM', () => {
         detailed: [{ define: { path: 'detailed_root' } }],
       },
     });
+  });
+
+  it('treats kind:"partial" as success and surfaces ops, logging the salvage reason', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    postExtractYopsMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          kind: 'partial',
+          ops: [{ define: { path: 'project' } }],
+          warnings: [{ message: 'Style cap dropped 1 of 3' }],
+          dropped: [],
+          reason: 'compile',
+          message: 'compile failed for item_2',
+        },
+      }),
+      text: async () => '',
+    });
+
+    await expect(callExtractionLLM({ conversationId: 'conv_123', turns: [] })).resolves.toEqual({
+      ops: [{ define: { path: 'project' } }],
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[extract-yops] partial outcome',
+      expect.objectContaining({ reason: 'compile' })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('throws ExtractionRequestError when 200 envelope carries kind:"failed"', async () => {
+    postExtractYopsMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          kind: 'failed',
+          reason: 'unverifiable_quote',
+          message: 'Could not verify 2 source quotes',
+          details: { failingOps: [{ opIndex: 0 }] },
+        },
+      }),
+      text: async () => '',
+    });
+
+    await expect(callExtractionLLM({ conversationId: 'conv_123', turns: [] })).rejects.toEqual(
+      new ExtractionRequestError(
+        createExtractionFailure('unverifiable_quote', 'Could not verify 2 source quotes', {
+          details: { statusCode: 200, failingOps: [{ opIndex: 0 }] },
+        }),
+        200
+      )
+    );
   });
 
   it('maps API failure_code into an ExtractionRequestError', async () => {

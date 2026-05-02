@@ -13,6 +13,8 @@ describe('callExtractionLLM', () => {
       json: async () => ({
         success: true,
         data: {
+          kind: 'ok',
+          warnings: [],
           ops: [
             {
               set: { path: 'x', value: 'y' },
@@ -42,7 +44,7 @@ describe('callExtractionLLM', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { ops: [] } }),
+      json: async () => ({ success: true, data: { kind: 'ok', ops: [], warnings: [] } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -67,7 +69,7 @@ describe('callExtractionLLM', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { ops: [] } }),
+      json: async () => ({ success: true, data: { kind: 'ok', ops: [], warnings: [] } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -91,7 +93,7 @@ describe('callExtractionLLM', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { ops: [] } }),
+      json: async () => ({ success: true, data: { kind: 'ok', ops: [], warnings: [] } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -113,6 +115,8 @@ describe('callExtractionLLM', () => {
       json: async () => ({
         success: true,
         data: {
+          kind: 'ok',
+          warnings: [],
           ops: [{ define: { path: 'balanced_root' } }],
           variants: {
             concise: [{ define: { path: 'concise_root' } }],
@@ -146,7 +150,7 @@ describe('callExtractionLLM', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { ops: [] } }),
+      json: async () => ({ success: true, data: { kind: 'ok', ops: [], warnings: [] } }),
     });
     vi.stubGlobal('fetch', fetchMock);
 

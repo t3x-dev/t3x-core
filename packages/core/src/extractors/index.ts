@@ -44,6 +44,7 @@ export {
   extractAndApplyResilient,
   type ResilientExtractAndApplyResult,
 } from './v2/extract-and-apply-resilient';
+export { type ExtractToOutcomeInput, extractToOutcome } from './v2/extractToOutcome';
 export {
   createExtractionFailure,
   EXTRACTION_FAILURE_CODES,
@@ -60,6 +61,14 @@ export {
   type PromptTurn,
   type PromptTurnInput,
 } from './v2/normalization';
+export {
+  type DroppedExtractionItem,
+  type ExtractionOutcome,
+  type ExtractionWarning,
+  type FailureDetails,
+  isPartialCompileWarning,
+  PARTIAL_COMPILE_SALVAGE_PREFIX,
+} from './v2/outcome';
 export {
   type ExtractionV2PipelineInput,
   type ExtractionV2PipelineResult,
