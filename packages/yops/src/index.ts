@@ -9,8 +9,8 @@ export { YOPS_ERRORS, type YOpsErrorCode } from './errors';
 export type { ParseResult } from './format';
 export { formatYOps, parseYOpsYaml } from './format';
 export { registerAllHandlers } from './handlers';
-export type { PathSegment } from './paths';
-export { parsePath, resolvePath } from './paths';
+export type { ParsePathResult, PathSegment } from './paths';
+export { parsePath, resolvePath, tryParsePath } from './paths';
 export type { OpHandler, OpResult } from './registry';
 export { OpRegistry } from './registry';
 export type { ValidationResult } from './schema';
@@ -42,6 +42,8 @@ export type {
   YOpsResult,
   YValue,
 } from './types';
+export type { YOpsDiagnostic, YOpsDiagnosticCode } from './validator';
+export { validateYOpsOps, validateYOpsYaml, YOPS_DIAGNOSTIC_CODES } from './validator';
 
 // ── Bootstrap: spec -> registry -> engine ──
 // specData.ts is generated from yops.yaml at build time (pnpm generate:spec).
