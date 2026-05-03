@@ -19,7 +19,7 @@ import {
 } from '@/domain/draft/retainedFailureLabel';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
-import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
+import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useCommitStore } from '@/store/commitStore';
 import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
@@ -660,26 +660,16 @@ export function AfterPanel({
     [commitTrees]
   );
 
+  // Discard semantics live in `useDiscardDraft` (introduced for the
+  // workbench header in this PR). AfterPanel and the topbar share the
+  // exact same path so there's only one discard implementation —
+  // earlier the panel had its own copy with stale setScriptText /
+  // setScriptDirty calls that PR 1 retired.
+  const discardDraft = useDiscardDraft();
   const handleDiscard = useCallback(async () => {
-    const convId = useWorkspaceStore.getState().conversationId;
-    if (!projectId || !convId || isCommitting) return;
-    // Discard means "throw away anything un-applied". hydrate alone only
-    // refreshes server state — the local draft (preview tree, draftOps,
-    // hasDraft, scriptText, scriptDirty) would survive and stay
-    // applicable, letting the user Apply a draft they thought was gone.
-    // Clear all of that here before re-hydrating.
-    const store = useWorkspaceStore.getState();
-    store.clearDraft();
-    // clearDraft already routes through writeDraftProposal which nulls
-    // the editor override; this explicit clear is now redundant but kept
-    // as a defensive no-op for any future transition that might leave an
-    // override behind.
-    store.clearEditorOverride();
-    await hydrateConversationToStore(projectId, convId);
-    useWorkspaceStore.getState().clearSelection();
-    useWorkspaceStore.getState().setMode('idle');
-    toast.success('Workspace reverted to last commit');
-  }, [isCommitting, projectId]);
+    if (isCommitting) return;
+    await discardDraft();
+  }, [discardDraft, isCommitting]);
 
   return (
     <div data-testid="after-panel" className="relative flex h-full min-h-0 w-full flex-1 flex-col">
