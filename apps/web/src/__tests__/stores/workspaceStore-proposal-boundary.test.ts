@@ -17,16 +17,15 @@
  * proposal-writes.md` §5):
  *
  *   draftOps / draftTree / draftVariants
- *     → writeDraftProposal, clearDraft (deprecated direct path; routed
- *       through writer post-refactor), restoreDraftFor (also routed
- *       through writer), conversationResetState, <store-bootstrap>
+ *     → writeDraftProposal, clearDraft, restoreDraftFor,
+ *       conversationResetState, <store-bootstrap>, migrate
  *
- *   scriptText / scriptDirty
- *     → above PLUS setScriptText (own field), setScriptDirty (own field)
+ *   editorOverride (replaces scriptText + scriptDirty as of PR 1)
+ *     → above PLUS setEditorOverride, clearEditorOverride
  *
  *   draftsByConversation
- *     → writeDraftProposal, conversationResetState, <store-bootstrap>,
- *       setScriptText (mirrors edits), setScriptDirty (mirrors edits)
+ *     → above PLUS setEditorOverride / clearEditorOverride
+ *       (snapshot mirroring), partialize (read-only persist callback)
  *
  * "<store-bootstrap>" is the anonymous arrow that is the first argument
  * to `persist()` / `create()` — recognized structurally, not by name.
@@ -52,9 +51,12 @@ import { describe, expect, it } from 'vitest';
 const STORE_FILE = resolve(__dirname, '../../store/workspaceStore.ts');
 
 const STRUCTURAL_FIELDS = ['draftOps', 'draftTree', 'draftVariants'] as const;
-const SCRIPT_FIELDS = ['scriptText', 'scriptDirty'] as const;
+// PR 1 collapsed the prior `scriptText` + `scriptDirty` field pair into
+// a single `editorOverride: string | null`. The boundary still applies
+// to the new field — it's the override piece of the proposal mirror.
+const EDITOR_FIELD = 'editorOverride' as const;
 const SNAPSHOT_FIELD = 'draftsByConversation' as const;
-const PROPOSAL_FIELDS: readonly string[] = [...STRUCTURAL_FIELDS, ...SCRIPT_FIELDS, SNAPSHOT_FIELD];
+const PROPOSAL_FIELDS: readonly string[] = [...STRUCTURAL_FIELDS, EDITOR_FIELD, SNAPSHOT_FIELD];
 
 const STRUCTURAL_WHITELIST = new Set([
   'writeDraftProposal',
@@ -62,27 +64,37 @@ const STRUCTURAL_WHITELIST = new Set([
   'restoreDraftFor',
   'conversationResetState',
   '<store-bootstrap>',
+  // `migrate` runs on persist rehydration to convert v1 entries to v2
+  // PersistedDraft shape. It writes draftsByConversation as part of
+  // returning the migrated state — a one-time, well-scoped construction.
+  'migrate',
 ]);
 
-const SCRIPT_TEXT_WHITELIST = new Set([...STRUCTURAL_WHITELIST, 'setScriptText']);
-const SCRIPT_DIRTY_WHITELIST = new Set([...STRUCTURAL_WHITELIST, 'setScriptDirty']);
+// The user-facing override setters — the only places that may write the
+// editor override field outside the writer.
+const EDITOR_WHITELIST = new Set([
+  ...STRUCTURAL_WHITELIST,
+  'setEditorOverride',
+  'clearEditorOverride',
+]);
 // `partialize` is the persist config callback that names which subset
 // of state to write to localStorage. It necessarily mentions
 // `draftsByConversation` because that's the persisted field — the
 // reference is read-only, not a state mutation, but the AST scan can't
 // distinguish without dataflow analysis. Whitelist explicitly so the
-// allowed-write list stays accurate.
+// allowed-write list stays accurate. `setEditorOverride` and
+// `clearEditorOverride` mirror the editor override into the snapshot,
+// so they need snapshot write rights too.
 const SNAPSHOT_WHITELIST = new Set([
   ...STRUCTURAL_WHITELIST,
-  'setScriptText',
-  'setScriptDirty',
+  'setEditorOverride',
+  'clearEditorOverride',
   'partialize',
 ]);
 
 function whitelistFor(field: string): Set<string> {
   if ((STRUCTURAL_FIELDS as readonly string[]).includes(field)) return STRUCTURAL_WHITELIST;
-  if (field === 'scriptText') return SCRIPT_TEXT_WHITELIST;
-  if (field === 'scriptDirty') return SCRIPT_DIRTY_WHITELIST;
+  if (field === EDITOR_FIELD) return EDITOR_WHITELIST;
   if (field === SNAPSHOT_FIELD) return SNAPSHOT_WHITELIST;
   // Should never reach here — tests below iterate PROPOSAL_FIELDS.
   return new Set();
@@ -257,8 +269,7 @@ describe('workspaceStore proposal boundary', () => {
     const source = readFileSync(STORE_FILE, 'utf8');
     const allNames = new Set<string>([
       ...STRUCTURAL_WHITELIST,
-      ...SCRIPT_TEXT_WHITELIST,
-      ...SCRIPT_DIRTY_WHITELIST,
+      ...EDITOR_WHITELIST,
       ...SNAPSHOT_WHITELIST,
     ]);
     for (const name of allNames) {

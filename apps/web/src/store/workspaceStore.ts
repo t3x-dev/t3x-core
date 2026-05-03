@@ -193,8 +193,24 @@ interface WorkspaceState {
   draftVariants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
 
   // ── Script editor state ──
-  scriptText: string;
-  scriptDirty: boolean;
+  /**
+   * The user's manual override of the canonical YAML mirror.
+   *
+   * - `null`: no override. The editor renders `serializeOpsToYaml(draftOps)`,
+   *   read via the `selectScriptText` selector. `selectScriptDirty` returns
+   *   false because there is nothing to preserve.
+   * - `string`: the user typed in the editor. The selector returns this
+   *   verbatim and `selectScriptDirty` returns true. Apply parses this
+   *   string. Subsequent preset chip clicks will NOT swap `draftOps` — the
+   *   override is treated as the source of truth until the user explicitly
+   *   reverts (Discard, successful Apply, or `clearEditorOverride()`).
+   *
+   * This replaces the previous `scriptText` + `scriptDirty` field pair. The
+   * pair could drift (one updated without the other) — see PRs #952/#953/#955
+   * for the bug class. Routing all reads through selectors of this single
+   * nullable field makes drift impossible: there is nothing to keep in sync.
+   */
+  editorOverride: string | null;
 
   // ── State setters (no business logic) ──
   setConversation: (id: string | null) => void;
@@ -247,8 +263,14 @@ interface WorkspaceState {
   setExtractionPreset: (preset: 'concise' | 'balanced' | 'detailed') => void;
   setLastExtractionPinIds: (ids: string[]) => void;
 
-  setScriptText: (text: string) => void;
-  setScriptDirty: (dirty: boolean) => void;
+  /**
+   * The user typed in the editor. Sets `editorOverride` to the typed text;
+   * `selectScriptDirty` flips to true; preset-swap is then guarded.
+   * Clearing back to the canonical mirror is `clearEditorOverride()`.
+   */
+  setEditorOverride: (text: string) => void;
+  /** Revert to the canonical YAML mirror of `draftOps`. */
+  clearEditorOverride: () => void;
 
   // ── Draft (uncommitted extraction proposal) ──
   /**
@@ -309,8 +331,12 @@ interface WorkspaceState {
 
 export interface PersistedDraft {
   ops: SourcedYOp[];
-  scriptText: string;
-  scriptDirty: boolean;
+  /**
+   * Manual override of the canonical YAML mirror. `null` (or absent) means
+   * the user hadn't typed anything — restore from canonical. A string means
+   * the user had a manual edit in flight; restore preserves it verbatim.
+   */
+  editorOverride: string | null;
 }
 
 const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
@@ -330,6 +356,39 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
       !state.hasDraft &&
       (state.tree.trees.length > 0 || state.tree.relations.length > 0)
   );
+
+/**
+ * The text the editor renders and Apply parses. Always defined.
+ *
+ * Resolution order:
+ *   1. `editorOverride` — the user typed something. Wins over everything.
+ *   2. `serializeOpsToYaml(draftOps)` — a draft is staged; show the canonical
+ *      YAML mirror so the editor agrees with AfterPanel's preview.
+ *   3. `serializeOpsToYaml(opsLog)` — no draft; show the committed ledger
+ *      so the editor isn't blank when there's applied history. This
+ *      replaces the `useScriptExecution` committed-mirror useEffect that
+ *      previously kept `scriptText` in sync via setScriptText / setDirty
+ *      writes — derivation makes the effect unnecessary.
+ *   4. `''` — empty conversation, no draft, no committed ops.
+ *
+ * Consumers must read via this selector — never `state.scriptText`
+ * (no longer a field). The boundary test enforces no direct write to
+ * a `scriptText` field exists in this file.
+ */
+export const selectScriptText = (state: WorkspaceState): string => {
+  if (state.editorOverride !== null) return state.editorOverride;
+  if (state.draftOps.length > 0) return serializeOpsToYaml(state.draftOps);
+  if (state.opsLog.length > 0) return serializeOpsToYaml(state.opsLog);
+  return '';
+};
+
+/**
+ * True when the user has typed an override that diverges from the canonical
+ * YAML mirror. Equivalent to `editorOverride !== null`. By construction, when
+ * `selectScriptDirty` is false, `selectScriptText === serializeOpsToYaml(draftOps)`
+ * — drift is structurally impossible.
+ */
+export const selectScriptDirty = (state: WorkspaceState): boolean => state.editorOverride !== null;
 
 export const selectActiveUncommittedRowCount = (state: WorkspaceState): number => {
   const referencedRowIds = new Set<string>();
@@ -384,8 +443,7 @@ function conversationResetState() {
     scrollToCenter: false,
     extractionPreset: 'balanced' as const,
     lastExtractionPinIds: [],
-    scriptText: '',
-    scriptDirty: false,
+    editorOverride: null as string | null,
     draftOps: [] as SourcedYOp[],
     draftTree: null as SemanticContent | null,
     hasDraft: false,
@@ -458,13 +516,13 @@ function writeDraftProposal(
     ops: SourcedYOp[];
     tree: SemanticContent | null;
     variants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
-    // Intentionally `text` / `dirty` (not `scriptText` / `scriptDirty`)
-    // so the input literal at call sites doesn't share key names with
-    // state fields. The boundary test scans for state-field property
-    // names; using collision-free input names avoids ambiguity between
-    // "passing a value to the writer" and "writing state."
-    text: string;
-    dirty: boolean;
+    // `override` is the manual editor text. `null` = no override, the
+    // editor renders the canonical YAML mirror via `selectScriptText`.
+    // A string = the user typed in the editor and the override should
+    // be preserved through this write. Intentionally a different name
+    // than the state field (`editorOverride`) so the boundary test can
+    // distinguish "passing a value to the writer" from "writing state".
+    override: string | null;
   }
 ): Partial<WorkspaceState> {
   const hasDraft = next.ops.length > 0;
@@ -472,14 +530,13 @@ function writeDraftProposal(
     draftOps: next.ops,
     draftTree: next.tree,
     draftVariants: hasDraft ? next.variants : null,
-    scriptText: next.text,
-    scriptDirty: next.dirty,
+    editorOverride: next.override,
     hasDraft,
     retainedDraftFailure: null,
   };
   if (!s.conversationId) return baseUpdate;
   const snapshot: PersistedDraft | null = hasDraft
-    ? { ops: next.ops, scriptText: next.text, scriptDirty: next.dirty }
+    ? { ops: next.ops, editorOverride: next.override }
     : null;
   return {
     ...baseUpdate,
@@ -661,14 +718,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({ extractionPreset });
           return;
         }
-        // Hand-edited YAML guard: useScriptExecution commits by parsing
-        // `scriptText`, not `draftOps`. If the user has typed into the
-        // editor, silently swapping the ops would leave AfterPanel
-        // showing the new variant while Apply commits whatever YAML
-        // they were holding. Preserve their edit and only update the
-        // preset; a follow-up Extract is the unambiguous way to flip
-        // density without losing manual work.
-        if (s.scriptDirty) {
+        // Hand-edited YAML guard: when the user has typed an override,
+        // Apply parses that override (via selectScriptText). Silently
+        // swapping draftOps would leave AfterPanel showing the new
+        // variant while the editor still shows the typed override and
+        // Apply commits the override. Preserve their edit and only
+        // update the preset; a follow-up Extract is the unambiguous way
+        // to flip density without losing manual work.
+        if (s.editorOverride !== null) {
           set({ extractionPreset });
           return;
         }
@@ -680,68 +737,75 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         // writeDraftProposal handles draftOps/draftTree/draftVariants/
         // scriptText/scriptDirty/snapshot atomically; we just add
         // extractionPreset to the same set() call.
+        // Live-swap clears any (non-existent — we already returned
+        // early when override was set) override; the canonical YAML
+        // mirror of the new variant becomes the rendered text.
         set({
           extractionPreset,
           ...writeDraftProposal(s, {
             ops: cached,
             tree: previewTree,
             variants: s.draftVariants,
-            text: serializeOpsToYaml(cached),
-            dirty: false,
+            override: null,
           }),
         });
       },
       setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
 
-      setScriptText: (scriptText) => {
+      setEditorOverride: (text) => {
+        // Preserve the user's text verbatim — including empty string.
+        // Earlier we collapsed '' / whitespace-only to null here, which
+        // round-trips Ctrl-A-delete back to canonical YAML via the
+        // selector fallback. That made the editor un-clearable. The
+        // empty-string-as-revert behavior, if wanted, belongs to
+        // `clearEditorOverride()` which the caller invokes explicitly.
+        // Persisted snapshots are still normalized at restore time
+        // (see `restoreDraftFor`) so a meaningless blank doesn't
+        // survive a refresh.
         const s = get();
-        // Mirror to the persisted map only while a draft is staged. A
-        // committed-mirror script (hasDraft=false) doesn't need
-        // persistence — opsLog is the source of truth and re-syncs
-        // from server on hydrate.
         if (s.hasDraft && s.conversationId) {
           set({
-            scriptText,
+            editorOverride: text,
             draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
               ops: s.draftOps,
-              scriptText,
-              scriptDirty: s.scriptDirty,
+              editorOverride: text,
             }),
           });
         } else {
-          set({ scriptText });
+          set({ editorOverride: text });
         }
       },
-      setScriptDirty: (scriptDirty) => {
+      clearEditorOverride: () => {
+        // Revert to canonical YAML. Discard, successful Apply, and the
+        // pre-extract overwrite-confirm path all call this. With the
+        // override cleared, `selectScriptText` derives from `draftOps`
+        // and `selectScriptDirty` returns false.
         const s = get();
         if (s.hasDraft && s.conversationId) {
           set({
-            scriptDirty,
+            editorOverride: null,
             draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
               ops: s.draftOps,
-              scriptText: s.scriptText,
-              scriptDirty,
+              editorOverride: null,
             }),
           });
         } else {
-          set({ scriptDirty });
+          set({ editorOverride: null });
         }
       },
 
       setDraft: ({ ops, tree, variants }) => {
-        // Atomic write through the single writer. scriptText is derived
-        // from `ops` here so the editor mirror always matches the new
-        // draft — callers no longer need to manually setScriptText +
-        // setScriptDirty(false) after setDraft (the old useExtraction
-        // triplet that PR #952's P1 demonstrated could drift).
+        // A new draft replaces any prior override. The editor renders
+        // the canonical YAML mirror of the fresh ops via
+        // `selectScriptText`; manual edits, if needed, come AFTER the
+        // user opens the editor and types (`setEditorOverride`).
         const s = get();
         set(
           writeDraftProposal(s, {
             ops,
             tree,
             variants: variants ?? null,
-            text: ops.length > 0 ? serializeOpsToYaml(ops) : '',
-            dirty: false,
+            override: null,
           })
         );
       },
@@ -749,21 +813,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const s = get();
         // Discard, successful Apply, and any other "throw away the
         // proposal" path call clearDraft. Routed through the single
-        // writer with empty payload so scriptText/scriptDirty also
-        // clear in lockstep — old behavior left them alone, requiring
-        // the discard sequence (clearDraft + setScriptText('') +
-        // setScriptDirty(false)) to fully release Apply. The triplet
-        // call site in AfterPanel still works (the explicit setters
-        // become redundant no-ops after this), and the boundary test
-        // doesn't have to make special exceptions for "structural
-        // fields cleared without scriptText" inconsistency.
+        // writer with empty payload; the writer's `override: null` plus
+        // empty ops produces `selectScriptText === ''` and
+        // `selectScriptDirty === false` automatically — no separate
+        // setScriptText('')/setScriptDirty(false) calls needed by
+        // callers (the triplet that the old behavior required is gone).
         set(
           writeDraftProposal(s, {
             ops: [],
             tree: null,
             variants: null,
-            text: '',
-            dirty: false,
+            override: null,
           })
         );
       },
@@ -782,26 +842,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ? { trees: previewResult.trees, relations: previewResult.relations }
           : s.tree;
 
-        // Defensive scriptText derivation: a persisted snapshot with
-        // ops but an empty scriptText is structurally inconsistent —
-        // restoring `scriptText: ''` against `hasDraft: true` would
-        // leave the editor blank while AfterPanel renders the draft
-        // preview, and the committed-mirror gate in useScriptExecution
-        // would not fire because hasDraft is true. Treat empty
-        // scriptText as a missing mirror and reconstruct it from ops.
-        //
-        // When we derive scriptText, the persisted scriptDirty flag is
-        // stale too: there is no actual user edit to mark, the
-        // canonical YAML mirror is what's now in the editor. Restoring
-        // `scriptDirty: true` against a derived script would surface
-        // an overwrite-confirm prompt on the next re-extract for
-        // content the user never typed. The dirty flag is preserved
-        // verbatim ONLY on the preserve-real-edit branch.
-        const persistedScriptIsEmpty = snapshot.scriptText.trim() === '';
-        const restoredScriptText = persistedScriptIsEmpty
-          ? serializeOpsToYaml(snapshot.ops)
-          : snapshot.scriptText;
-        const restoredScriptDirty = persistedScriptIsEmpty ? false : snapshot.scriptDirty;
+        // Defensive override derivation: an override that is empty or
+        // whitespace-only is not a meaningful manual edit — it would
+        // produce `selectScriptText === ''` (blank editor) while
+        // AfterPanel renders the draft preview, and force a stale
+        // overwrite-confirm prompt on the next re-extract for content
+        // the user never typed. Treat empty/whitespace overrides as
+        // missing and let the canonical mirror take over.
+        const restoredOverride =
+          snapshot.editorOverride && snapshot.editorOverride.trim() !== ''
+            ? snapshot.editorOverride
+            : null;
 
         // Route through the single writer. `variants` is null because
         // the per-conversation snapshot intentionally does NOT persist
@@ -813,8 +864,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             ops: snapshot.ops,
             tree: previewTree,
             variants: null,
-            text: restoredScriptText,
-            dirty: restoredScriptDirty,
+            override: restoredOverride,
           })
         );
         return true;
@@ -828,6 +878,44 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 't3x-workspace-ui',
+      // Bumped from implicit v1 to v2 when `PersistedDraft` shape changed
+      // from { ops, scriptText, scriptDirty } to { ops, editorOverride }.
+      // The migrate function below converts pre-existing localStorage
+      // entries from any user who had a draft staged at the time of
+      // the upgrade — without this, those drafts would be silently
+      // dropped on first load post-upgrade.
+      version: 2,
+      migrate: (persistedState, version) => {
+        if (!persistedState || typeof persistedState !== 'object') return persistedState;
+        if (version >= 2) return persistedState;
+        const state = persistedState as { draftsByConversation?: Record<string, unknown> };
+        const oldMap = state.draftsByConversation;
+        if (!oldMap || typeof oldMap !== 'object') return persistedState;
+        const newMap: Record<string, PersistedDraft> = {};
+        for (const [convId, raw] of Object.entries(oldMap)) {
+          if (!raw || typeof raw !== 'object') continue;
+          const legacy = raw as {
+            ops?: SourcedYOp[];
+            scriptText?: string;
+            scriptDirty?: boolean;
+            editorOverride?: string | null;
+          };
+          if (!Array.isArray(legacy.ops) || legacy.ops.length === 0) continue;
+          // Migration rule: a v1 entry with `scriptDirty=true` carried a
+          // real manual edit — preserve as override. A v1 entry with
+          // `scriptDirty=false` was a canonical mirror (scriptText
+          // matched serializeOpsToYaml(ops)) — discard, the v2 selector
+          // re-derives. v2 entries pass through unchanged.
+          const editorOverride =
+            typeof legacy.editorOverride === 'string'
+              ? legacy.editorOverride
+              : legacy.scriptDirty && typeof legacy.scriptText === 'string'
+                ? legacy.scriptText
+                : null;
+          newMap[convId] = { ops: legacy.ops, editorOverride };
+        }
+        return { ...state, draftsByConversation: newMap };
+      },
       partialize: (state) => ({
         panelExpandedByProject: state.panelExpandedByProject,
         draftsByConversation: state.draftsByConversation,

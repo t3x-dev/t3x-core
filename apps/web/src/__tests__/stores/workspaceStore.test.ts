@@ -5,27 +5,32 @@ import {
   DRAFT_PERSISTENCE_CAP,
   selectActiveUncommittedRowCount,
   selectPanelExpanded,
+  selectScriptDirty,
+  selectScriptText,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
 
 /**
  * The invariant the single-writer refactor exists to enforce:
  *
- *   When `hasDraft && !scriptDirty`, scriptText is the canonical YAML
- *   mirror of draftOps, and the per-conversation snapshot agrees with
- *   what's in memory.
+ *   When `hasDraft && !selectScriptDirty(s)`, the derived script text equals
+ *   the canonical YAML mirror of draftOps, and the per-conversation snapshot
+ *   agrees with what's in memory.
  *
- * This isn't a separate test — it's an oracle threaded through other
- * tests after each proposal-mutating transition. Any failure here
- * proves the writer let scriptText/draftOps/snapshot drift apart, the
- * exact bug class that caused PR #952's P1.
+ * Post-PR-1 the invariant is structurally enforced: scriptText is no longer
+ * a stored field, it's derived via `selectScriptText` from
+ * `editorOverride ?? serializeOpsToYaml(draftOps)`. The assertion still
+ * runs to catch regressions in the snapshot persistence path (e.g. a
+ * missing override mirror that would survive a refresh diverged from
+ * what the editor showed at the moment of the snapshot).
  */
 function assertProposalInvariant(): void {
   const s = useWorkspaceStore.getState();
-  if (!s.hasDraft || s.scriptDirty) return;
-  expect(s.scriptText, 'scriptText must equal serializeOpsToYaml(draftOps) when clean').toBe(
-    serializeOpsToYaml(s.draftOps)
-  );
+  if (!s.hasDraft || selectScriptDirty(s)) return;
+  expect(
+    selectScriptText(s),
+    'selectScriptText must equal serializeOpsToYaml(draftOps) when clean'
+  ).toBe(serializeOpsToYaml(s.draftOps));
   if (s.conversationId) {
     const snap = s.draftsByConversation[s.conversationId];
     expect(
@@ -34,8 +39,10 @@ function assertProposalInvariant(): void {
     ).toBeDefined();
     if (snap) {
       expect(snap.ops, 'snapshot ops must match draftOps').toEqual(s.draftOps);
-      expect(snap.scriptText, 'snapshot scriptText must match scriptText').toBe(s.scriptText);
-      expect(snap.scriptDirty, 'snapshot scriptDirty must match scriptDirty').toBe(s.scriptDirty);
+      expect(
+        snap.editorOverride,
+        'snapshot editorOverride must match in-memory editorOverride'
+      ).toBe(s.editorOverride);
     }
   }
 }
@@ -368,20 +375,18 @@ describe('workspaceStore (state-only)', () => {
       ] as never,
       tree: { trees: [], relations: [] },
     });
-    useWorkspaceStore.getState().setScriptText('yops:\n  - set: ...');
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride('yops:\n  - set: ...');
 
     // Discard sequence (must mirror AfterPanel.handleDiscard):
     useWorkspaceStore.getState().clearDraft();
-    useWorkspaceStore.getState().setScriptText('');
-    useWorkspaceStore.getState().setScriptDirty(false);
+    useWorkspaceStore.getState().clearEditorOverride();
 
     const s = useWorkspaceStore.getState();
     expect(s.hasDraft).toBe(false);
     expect(s.draftOps).toEqual([]);
     expect(s.draftTree).toBeNull();
-    expect(s.scriptText).toBe('');
-    expect(s.scriptDirty).toBe(false);
+    expect(selectScriptText(s)).toBe('');
+    expect(selectScriptDirty(s)).toBe(false);
   });
 
   describe('setExtractionPreset — live variant swap (#951)', () => {
@@ -493,54 +498,58 @@ describe('workspaceStore (state-only)', () => {
       // that contains the concise path/value proves it tracks the new
       // variant. We don't pin the exact serialization because that's
       // the serializer's contract, not this setter's.
-      expect(s.scriptText).not.toBe('OLD-BALANCED-YAML');
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptText).not.toContain('trip/budget'); // concise drops the second op
-      expect(s.scriptDirty).toBe(false);
+      expect(selectScriptText(s)).not.toBe('OLD-BALANCED-YAML');
+      expect(selectScriptText(s)).toContain('trip/dest');
+      expect(selectScriptText(s)).not.toContain('trip/budget'); // concise drops the second op
+      expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('mirrors the new scriptText into the persisted snapshot, not the stale one', () => {
+    it('persists the swapped ops with a null override (canonical mirror) on live swap', () => {
+      // After a chip swap with no manual edit, the snapshot should show
+      // the swapped ops and null editorOverride. selectScriptText reads
+      // from draftOps; the snapshot mirrors that derivation source. A
+      // refresh restores the variant the user was viewing without
+      // resurrecting any stale override.
       useWorkspaceStore.getState().setConversation('conv_xyz');
       useWorkspaceStore.getState().setDraft({
         ops: balancedOps,
         tree: { trees: [], relations: [] },
         variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
       });
-      useWorkspaceStore.setState({ scriptText: 'STALE-BALANCED', scriptDirty: false });
 
       useWorkspaceStore.getState().setExtractionPreset('detailed');
 
       const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_xyz;
-      // Snapshot persists the *new* mirror so a refresh restores the
-      // (ops, scriptText) pair the user was actually viewing.
       expect(snapshot?.ops).toEqual(detailedOps);
-      expect(snapshot?.scriptText).not.toBe('STALE-BALANCED');
-      expect(snapshot?.scriptText).toContain('trip/duration'); // detailed-only op
-      expect(snapshot?.scriptDirty).toBe(false);
+      expect(snapshot?.editorOverride).toBeNull();
+      // Selector-derived script reflects the new variant.
+      const s = useWorkspaceStore.getState();
+      expect(selectScriptText(s)).toContain('trip/duration'); // detailed-only op
+      expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('refuses to swap ops while scriptDirty is true (preserves hand-edited YAML)', () => {
+    it('refuses to swap ops while editorOverride is set (preserves hand-edited YAML)', () => {
       // The user typed into the editor between Extract and chip click;
-      // scriptDirty being true means scriptText IS the source of truth.
-      // Silently overwriting it with serializeOpsToYaml(cached) would
-      // delete user work — exactly the regression #951's "fall back
-      // gracefully when variants are absent" exists to prevent.
+      // editorOverride !== null means selectScriptText IS the source of
+      // truth for Apply. Silently overwriting it with the cached variant
+      // would delete user work — exactly the regression the live-swap
+      // guard exists to prevent.
       useWorkspaceStore.getState().setDraft({
         ops: balancedOps,
         tree: { trees: [], relations: [] },
         variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
       });
-      useWorkspaceStore.setState({ scriptText: 'USER-HAND-EDITED', scriptDirty: true });
+      useWorkspaceStore.getState().setEditorOverride('USER-HAND-EDITED');
 
       useWorkspaceStore.getState().setExtractionPreset('concise');
 
       const s = useWorkspaceStore.getState();
       // Preset moves so the next Extract picks it up.
       expect(s.extractionPreset).toBe('concise');
-      // Ops, tree, scriptText, scriptDirty all preserved verbatim.
+      // Ops preserved verbatim (no swap), override preserved verbatim.
       expect(s.draftOps).toEqual(balancedOps);
-      expect(s.scriptText).toBe('USER-HAND-EDITED');
-      expect(s.scriptDirty).toBe(true);
+      expect(selectScriptText(s)).toBe('USER-HAND-EDITED');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
     it('clearDraft drops cached variants so the next chip toggle does not stale-swap', () => {
@@ -842,8 +851,10 @@ describe('workspaceStore (state-only)', () => {
       // scriptText is a canonical YAML mirror of ops, written by
       // setDraft itself (single-writer contract). Snapshot captures
       // that mirror, not whatever the editor happened to hold.
-      expect(map.conv_a.scriptText).toContain('trip/dest');
-      expect(map.conv_a.scriptDirty).toBe(false);
+      // editorOverride is null when the draft was just staged (canonical
+      // mirror via selectScriptText reads from draftOps); the snapshot
+      // mirrors that null.
+      expect(map.conv_a.editorOverride).toBeNull();
     });
 
     it('setDraft does not write to the map without a conversationId (no key to use)', () => {
@@ -852,22 +863,20 @@ describe('workspaceStore (state-only)', () => {
       expect(useWorkspaceStore.getState().draftsByConversation).toEqual({});
     });
 
-    it('setScriptText / setScriptDirty mirror to the map only while a draft is staged', () => {
+    it('setEditorOverride mirrors to the map only while a draft is staged', () => {
       useWorkspaceStore.getState().setConversation('conv_a');
-      // No draft yet → setScriptText writes only the in-memory field.
-      useWorkspaceStore.getState().setScriptText('orphan edit');
+      // No draft yet → setEditorOverride writes only the in-memory field.
+      useWorkspaceStore.getState().setEditorOverride('orphan edit');
       expect(useWorkspaceStore.getState().draftsByConversation).toEqual({});
 
-      // Stage a draft, then edit the script. Both writes should be
-      // captured in the persisted snapshot so an F5 restores the latest
+      // Stage a draft, then edit the script. The override write should
+      // be captured in the persisted snapshot so an F5 restores the
       // edited form, not the original LLM proposal.
       useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
-      useWorkspaceStore.getState().setScriptText('user edited the proposal');
-      useWorkspaceStore.getState().setScriptDirty(true);
+      useWorkspaceStore.getState().setEditorOverride('user edited the proposal');
 
       const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_a;
-      expect(snapshot.scriptText).toBe('user edited the proposal');
-      expect(snapshot.scriptDirty).toBe(true);
+      expect(snapshot.editorOverride).toBe('user edited the proposal');
     });
 
     it('clearDraft removes the entry for the current conversation', () => {
@@ -918,7 +927,7 @@ describe('workspaceStore (state-only)', () => {
       const after = useWorkspaceStore.getState();
       expect(after.hasDraft).toBe(before.hasDraft);
       expect(after.draftOps).toBe(before.draftOps);
-      expect(after.scriptText).toBe(before.scriptText);
+      expect(after.editorOverride).toBe(before.editorOverride);
     });
 
     it('restoreDraftFor restores ops + script + dirty + re-derives draftTree against current tree', () => {
@@ -928,8 +937,7 @@ describe('workspaceStore (state-only)', () => {
       // restoreDraftFor layers the draft on top.
       useWorkspaceStore.getState().setConversation('conv_a');
       useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
-      useWorkspaceStore.getState().setScriptText('user edit before reload');
-      useWorkspaceStore.getState().setScriptDirty(true);
+      useWorkspaceStore.getState().setEditorOverride('user edit before reload');
 
       // Simulate the F5: in-memory state wiped, persisted map intact.
       useWorkspaceStore.getState().reset();
@@ -948,8 +956,8 @@ describe('workspaceStore (state-only)', () => {
       const s = useWorkspaceStore.getState();
       expect(s.hasDraft).toBe(true);
       expect(s.draftOps).toEqual(draftOps);
-      expect(s.scriptText).toBe('user edit before reload');
-      expect(s.scriptDirty).toBe(true);
+      expect(selectScriptText(s)).toBe('user edit before reload');
+      expect(selectScriptDirty(s)).toBe(true);
       // Preview tree is re-derived from `tree` (committed) + draftOps —
       // not the stale persisted preview from before the reload. The
       // committed tree didn't have `dest` but the draft adds it.
@@ -957,96 +965,79 @@ describe('workspaceStore (state-only)', () => {
       expect(s.draftTree?.trees[0]?.slots.dest).toBe('HZ');
     });
 
-    it('restoreDraftFor derives scriptText from ops when persisted snapshot has empty scriptText (PR-D hardening)', () => {
-      // A persisted snapshot with non-empty ops but `scriptText: ''` is
-      // structurally inconsistent — restoring it as-is would produce
-      // `hasDraft=true` with an empty editor while AfterPanel renders
-      // the draft preview tree, AND the committed-mirror gate in
-      // useScriptExecution would skip (because hasDraft is true). The
-      // restore path defends against this by deriving scriptText from
-      // serializeOpsToYaml(ops) whenever the persisted scriptText is
-      // empty/whitespace.
+    it('restoreDraftFor falls back to canonical when persisted snapshot has no override', () => {
+      // A persisted snapshot with `editorOverride: null` represents
+      // "user hadn't typed anything; restore from canonical". The
+      // selectScriptText derives from draftOps. This is the common
+      // case (post-Extract, no manual edit, F5).
       useWorkspaceStore.setState({
         draftsByConversation: {
-          conv_inconsistent: {
+          conv_no_override: {
             ops: draftOps,
-            scriptText: '',
-            scriptDirty: false,
+            editorOverride: null,
           },
         },
       });
-      useWorkspaceStore.getState().setConversation('conv_inconsistent');
+      useWorkspaceStore.getState().setConversation('conv_no_override');
       useWorkspaceStore.getState().setDerived({
         tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
         sourceIndex: new Map(),
         opsLog: [],
       });
 
-      const restored = useWorkspaceStore.getState().restoreDraftFor('conv_inconsistent');
+      const restored = useWorkspaceStore.getState().restoreDraftFor('conv_no_override');
 
       expect(restored).toBe(true);
       const s = useWorkspaceStore.getState();
       expect(s.hasDraft).toBe(true);
-      // scriptText is derived from ops, not the empty persisted value.
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptText).toContain('HZ');
-      // Derived script + scriptDirty=false from snapshot stays false.
-      // The next test covers the case where the snapshot itself was
-      // doubly inconsistent (scriptDirty=true alongside empty
-      // scriptText) and the dirty flag must NOT be restored.
-      expect(s.scriptDirty).toBe(false);
+      // scriptText is derived from ops via the selector.
+      expect(selectScriptText(s)).toContain('trip/dest');
+      expect(selectScriptText(s)).toContain('HZ');
+      expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('restoreDraftFor clears stale scriptDirty when scriptText is derived from ops', () => {
-      // P3 from the #918 review: a persisted snapshot can be doubly
-      // inconsistent — `{ ops: non-empty, scriptText: '', scriptDirty:
-      // true }`. The empty scriptText is already treated as a missing
-      // mirror (derived from ops); the dirty flag is correspondingly
-      // stale, since there's no actual user edit to mark. Restoring
-      // `scriptDirty: true` against a derived script would surface an
-      // overwrite-confirm prompt on the next re-extract for content
-      // the user never typed.
-      //
-      // Contract: derive both scriptText AND scriptDirty when the
-      // persisted scriptText is empty. Preserve snapshot.scriptDirty
-      // verbatim ONLY on the preserve-real-edit branch.
+    it('restoreDraftFor downgrades empty/whitespace override to null (defensive)', () => {
+      // A persisted snapshot with a meaningless override (empty string
+      // or whitespace-only) shouldn't surface as a dirty edit — it
+      // would produce `selectScriptText === ''` (blank editor) while
+      // AfterPanel renders the draft preview, and trigger an
+      // overwrite-confirm prompt on next re-extract for content the
+      // user never typed. Defensive: empty/whitespace = no real edit.
       useWorkspaceStore.setState({
         draftsByConversation: {
-          conv_doubly_inconsistent: {
+          conv_empty_override: {
             ops: draftOps,
-            scriptText: '',
-            scriptDirty: true,
+            editorOverride: '',
           },
         },
       });
-      useWorkspaceStore.getState().setConversation('conv_doubly_inconsistent');
+      useWorkspaceStore.getState().setConversation('conv_empty_override');
       useWorkspaceStore.getState().setDerived({
         tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
         sourceIndex: new Map(),
         opsLog: [],
       });
 
-      useWorkspaceStore.getState().restoreDraftFor('conv_doubly_inconsistent');
+      useWorkspaceStore.getState().restoreDraftFor('conv_empty_override');
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toContain('trip/dest');
+      // Override was downgraded to null, so script derives from ops.
+      expect(selectScriptText(s)).toContain('trip/dest');
       // The load-bearing assertion: dirty flag was NOT restored from
-      // the persisted snapshot. The derived script is canonical, not
-      // a manual edit.
-      expect(s.scriptDirty).toBe(false);
+      // the persisted empty override.
+      expect(selectScriptDirty(s)).toBe(false);
+      expect(s.editorOverride).toBeNull();
     });
 
-    it('restoreDraftFor preserves a non-empty persisted scriptText (real edit not overwritten)', () => {
-      // Inverse of the PR-D hardening: when the persisted scriptText
-      // has actual content, restore it verbatim — that may be a manual
-      // edit the user wants back, distinct from what
-      // serializeOpsToYaml(ops) would produce.
+    it('restoreDraftFor preserves a non-empty persisted override (real edit not overwritten)', () => {
+      // When the persisted override has actual content, restore it
+      // verbatim — that's a manual edit the user wants back, distinct
+      // from what serializeOpsToYaml(ops) would produce.
       useWorkspaceStore.setState({
         draftsByConversation: {
           conv_real_edit: {
             ops: draftOps,
-            scriptText: 'yops:\n  - {set: {path: hand/typed, value: x}}\n',
-            scriptDirty: true,
+            editorOverride: 'yops:\n  - {set: {path: hand/typed, value: x}}\n',
           },
         },
       });
@@ -1060,8 +1051,8 @@ describe('workspaceStore (state-only)', () => {
       useWorkspaceStore.getState().restoreDraftFor('conv_real_edit');
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toBe('yops:\n  - {set: {path: hand/typed, value: x}}\n');
-      expect(s.scriptDirty).toBe(true);
+      expect(selectScriptText(s)).toBe('yops:\n  - {set: {path: hand/typed, value: x}}\n');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
     it('restoreDraftFor with empty ops snapshot is a no-op (avoids stale-draft state)', () => {
@@ -1069,7 +1060,7 @@ describe('workspaceStore (state-only)', () => {
       // hasDraft true or change anything. setDraft also rejects empty
       // ops at write time, but restore must mirror that contract.
       useWorkspaceStore.setState({
-        draftsByConversation: { conv_x: { ops: [], scriptText: 'oops', scriptDirty: false } },
+        draftsByConversation: { conv_x: { ops: [], editorOverride: 'oops' } },
       });
       const result = useWorkspaceStore.getState().restoreDraftFor('conv_x');
       expect(result).toBe(false);
@@ -1113,8 +1104,8 @@ describe('workspaceStore (state-only)', () => {
       expect(s.draftOps).toEqual(draftOps);
       // conv_a's scriptText must trace to conv_a's ops (trip/dest), not
       // conv_b's (other_root). That's the cross-leak guard.
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptText).not.toContain('other_root');
+      expect(selectScriptText(s)).toContain('trip/dest');
+      expect(selectScriptText(s)).not.toContain('other_root');
 
       // Now switch to conv_b. Reset wipes A's in-memory draft; restore
       // for B brings B's draft back. A's persisted entry is left
@@ -1125,8 +1116,8 @@ describe('workspaceStore (state-only)', () => {
       expect(restoredB).toBe(true);
       s = useWorkspaceStore.getState();
       expect(s.draftOps).toEqual(opsB);
-      expect(s.scriptText).toContain('other_root');
-      expect(s.scriptText).not.toContain('trip/dest');
+      expect(selectScriptText(s)).toContain('other_root');
+      expect(selectScriptText(s)).not.toContain('trip/dest');
       // Sanity: both persisted entries still present.
       expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
       expect(useWorkspaceStore.getState().draftsByConversation.conv_b).toBeDefined();
@@ -1167,20 +1158,20 @@ describe('workspaceStore (state-only)', () => {
       expect(Object.keys(useWorkspaceStore.getState().draftsByConversation)).toEqual(['conv_a']);
     });
 
-    it('discard sequence (clearDraft + clear scriptText/Dirty) removes persisted entry', () => {
+    it('discard (clearDraft) removes the persisted entry', () => {
       // Mirrors AfterPanel.handleDiscard. After discard, the persisted
       // map must not retain an applicable draft — otherwise an F5
       // would restore something the user explicitly threw away.
+      // Post-PR-1, clearDraft alone is sufficient: it routes through
+      // writeDraftProposal which nulls the editor override and writes
+      // null to the snapshot, removing the entry. No separate
+      // setScriptText('')/setScriptDirty(false) needed.
       useWorkspaceStore.getState().setConversation('conv_a');
-      useWorkspaceStore.getState().setScriptText('user edits');
       useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
-      useWorkspaceStore.getState().setScriptDirty(true);
+      useWorkspaceStore.getState().setEditorOverride('user edits');
       expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
 
-      // Discard sequence:
       useWorkspaceStore.getState().clearDraft();
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.getState().setScriptDirty(false);
 
       expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeUndefined();
     });

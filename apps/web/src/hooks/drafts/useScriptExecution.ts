@@ -1,7 +1,7 @@
 import type { SourcedYOp } from '@t3x-dev/core';
 import { parseYOpsYaml } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { commitOps } from '@/commands/yops/yopsService';
 import {
@@ -9,12 +9,13 @@ import {
   deriveWorkspaceScriptState,
   getApplyPolicyForScriptState,
 } from '@/domain/yops/scriptApplyPolicy';
-import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import {
   selectActiveUncommittedRowCount,
   selectIsInheritedBaselineOnly,
+  selectScriptDirty,
+  selectScriptText,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
 
@@ -60,8 +61,7 @@ function commitOptionsFromPolicy(payload: ApplyPayloadPolicy) {
 
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
-  const scriptDirty = useWorkspaceStore((s) => s.scriptDirty);
-  const scriptText = useWorkspaceStore((s) => s.scriptText);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const mode = useWorkspaceStore((s) => s.mode);
   const replayWarningRowId = useWorkspaceStore((s) => s.replayWarning?.rowId);
@@ -84,36 +84,15 @@ export function useScriptExecution() {
     activeUncommittedRowCount,
   });
 
-  // Sync committed opsLog → scriptText so the editor reflects what
-  // AfterPanel renders when no draft is staged. Once Extract stages a
-  // draft, `useExtraction` owns the script content (via setDraft +
-  // setScriptText). Once the user starts editing, `scriptDirty` owns it
-  // — but only if the dirty content is actually meaningful.
-  //
-  // The gate intentionally distinguishes "real manual edit" from "empty
-  // dirty marker". A non-empty dirty script is protected from being
-  // overwritten by a fresh hydrate of committed ops; an empty dirty
-  // marker (`scriptText.trim() === ''`) is treated as no meaningful
-  // content and the mirror runs anyway, clearing the stale dirty flag.
-  // Without this carve-out, an in-session state where `scriptDirty=true`
-  // but `scriptText=''` (e.g. a transient code path that flipped the
-  // flag without actually writing edits) leaves the editor blank even
-  // though `opsLog.length > 0` and the AfterPanel header reads
-  // "Committed result" — a UI coherence violation.
-  useEffect(() => {
-    if (hasDraft) return;
-    if (opsLog.length === 0) return;
-    if (scriptDirty && scriptText.trim() !== '') return;
-    const yaml = serializeOpsToYaml(opsLog);
-    // Idempotent guard: if the editor already shows the canonical
-    // mirror, don't write again. This avoids spurious setScriptText
-    // calls that would re-trigger the effect's deps and loop, and
-    // keeps `scriptDirty` quiet when nothing actually changed.
-    if (yaml === scriptText && !scriptDirty) return;
-    const store = useWorkspaceStore.getState();
-    store.setScriptText(yaml);
-    if (scriptDirty) store.setScriptDirty(false);
-  }, [opsLog, scriptDirty, hasDraft, scriptText]);
+  // The committed-mirror sync that previously lived here (opsLog →
+  // scriptText writes) is no longer needed. `selectScriptText` derives
+  // the editor text from `editorOverride` → `draftOps` → `opsLog` →
+  // `''`, so when there's no draft and committed opsLog exists the
+  // selector returns the committed YAML automatically — no effect, no
+  // dirty-flag bookkeeping, no idempotent guard against re-entrance.
+  // This is the structural simplification PR 1 buys us: the entire
+  // class of "scriptText drifted from its source" bug is impossible
+  // because scriptText is no longer a stored mirror.
 
   const execute = useCallback(async () => {
     const store = useWorkspaceStore.getState();
@@ -123,16 +102,17 @@ export function useScriptExecution() {
 
     const currentReplayWarningRowId = store.replayWarning?.rowId;
     const currentActiveUncommittedRowCount = selectActiveUncommittedRowCount(store);
+    const currentScriptDirty = selectScriptDirty(store);
     const currentScriptState = deriveWorkspaceScriptState({
       hasDraft: store.hasDraft,
-      scriptDirty: store.scriptDirty,
+      scriptDirty: currentScriptDirty,
       activeOpCount: store.opsLog.length,
       activeUncommittedRowCount: currentActiveUncommittedRowCount,
       replayWarningRowId: currentReplayWarningRowId,
     });
     const currentPolicy = getApplyPolicyForScriptState({
       state: currentScriptState,
-      scriptDirty: store.scriptDirty,
+      scriptDirty: currentScriptDirty,
       replayWarningRowId: currentReplayWarningRowId,
       mode: store.mode,
       hasInheritedBaseline: selectIsInheritedBaselineOnly(store),
@@ -141,7 +121,7 @@ export function useScriptExecution() {
     });
     if (!currentPolicy.canApply) return;
 
-    const parseResult = parseScript(store.scriptText);
+    const parseResult = parseScript(selectScriptText(store));
     if (!parseResult.ok) {
       store.setError(`YAML parse error: ${parseResult.error}`);
       toast.error(`YAML parse error: ${parseResult.error}`);
@@ -182,19 +162,10 @@ export function useScriptExecution() {
       toast.error(msg);
       return;
     }
-
-    // Commit succeeded — the draft is now in yops_log. Clear local
-    // draft state IMMEDIATELY (before hydrate) so a hydrate failure
-    // or a page refresh can't restore an already-applied draft and
-    // let the user duplicate-apply against the server. This is the
-    // split-failure case persistence opened up: previously the draft
-    // was only cleared after hydrate resolved, so a hydrate error left
-    // the persisted entry intact and an F5 would re-stage applied ops.
-    {
-      const post = useWorkspaceStore.getState();
-      post.setScriptDirty(false);
-      post.clearDraft();
-    }
+    // clearDraft routes through writeDraftProposal which nulls the
+    // editor override, so selectScriptDirty automatically returns false
+    // after this call — no separate dirty-flag clear needed.
+    useWorkspaceStore.getState().clearDraft();
 
     try {
       await hydrateConversationToStore(projectId, convId);

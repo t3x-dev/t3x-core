@@ -670,8 +670,11 @@ export function AfterPanel({
     // Clear all of that here before re-hydrating.
     const store = useWorkspaceStore.getState();
     store.clearDraft();
-    store.setScriptText('');
-    store.setScriptDirty(false);
+    // clearDraft already routes through writeDraftProposal which nulls
+    // the editor override; this explicit clear is now redundant but kept
+    // as a defensive no-op for any future transition that might leave an
+    // override behind.
+    store.clearEditorOverride();
     await hydrateConversationToStore(projectId, convId);
     useWorkspaceStore.getState().clearSelection();
     useWorkspaceStore.getState().setMode('idle');

@@ -29,7 +29,7 @@ vi.mock('@/store/chatStore', () => ({
 }));
 
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('useScriptExecution', () => {
   beforeEach(() => {
@@ -48,7 +48,7 @@ describe('useScriptExecution', () => {
 
   it('disables Apply when there is no draft and no manual edit', () => {
     // Idle state: nothing un-applied, script mirrors committed yops_log.
-    useWorkspaceStore.getState().setScriptDirty(false);
+    useWorkspaceStore.getState().clearEditorOverride();
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(false);
@@ -56,8 +56,7 @@ describe('useScriptExecution', () => {
   });
 
   it('enables Apply after a manual edit flips scriptDirty', () => {
-    useWorkspaceStore.getState().setScriptText('yops:\n  - {set: {path: foo, value: bar}}');
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride('yops:\n  - {set: {path: foo, value: bar}}');
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(true);
     expect(result.current.disabledReason).toBeNull();
@@ -92,34 +91,36 @@ describe('useScriptExecution', () => {
       });
     }
 
-    it('repopulates Script from committed ops when scriptDirty is set but scriptText is blank', () => {
-      // The exact incoherent state the PR is targeting. Mirror should
-      // run, write the YAML, AND clear the stale scriptDirty flag (an
-      // empty dirty marker isn't meaningful manual content to preserve).
+    it('preserves an empty editor override verbatim (Ctrl-A delete must stick)', () => {
+      // The reviewer-flagged regression: setEditorOverride('') used to
+      // collapse to null and selectScriptText then fell back to opsLog,
+      // re-mirroring the canonical YAML right back into the editor.
+      // That made the editor un-clearable. Now '' is preserved, and
+      // an empty editor reads as a real (dirty) override.
       seedCommitted(sampleOps);
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.getState().setScriptDirty(true);
+      useWorkspaceStore.getState().setEditorOverride('');
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptText).toContain('HZ');
-      expect(s.scriptDirty).toBe(false);
+      expect(selectScriptText(s)).toBe('');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
-    it('repopulates Script when scriptDirty is set with whitespace-only text', () => {
-      // `trim() === ''` matches whitespace too — a stray newline or
-      // space character isn't a meaningful edit either.
+    it('preserves whitespace-only editor override (every keystroke counts)', () => {
+      // Same logic as the empty-string case: the user typed something
+      // (even if just whitespace); the in-memory state preserves it.
+      // Restore-time normalization (`restoreDraftFor`) downgrades
+      // whitespace-only to null so a meaningless persisted override
+      // doesn't survive a refresh — but the live setter does NOT.
       seedCommitted(sampleOps);
-      useWorkspaceStore.getState().setScriptText('   \n\n  ');
-      useWorkspaceStore.getState().setScriptDirty(true);
+      useWorkspaceStore.getState().setEditorOverride('   \n\n  ');
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptDirty).toBe(false);
+      expect(selectScriptText(s)).toBe('   \n\n  ');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
     it('does NOT overwrite a non-empty dirty script (real manual edit protected)', () => {
@@ -129,48 +130,38 @@ describe('useScriptExecution', () => {
       seedCommitted(sampleOps);
       useWorkspaceStore
         .getState()
-        .setScriptText('yops:\n  - set:\n      path: user/edit\n      value: keep\n');
-      useWorkspaceStore.getState().setScriptDirty(true);
+        .setEditorOverride('yops:\n  - set:\n      path: user/edit\n      value: keep\n');
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toContain('user/edit');
-      expect(s.scriptText).not.toContain('trip/dest');
-      expect(s.scriptDirty).toBe(true);
+      expect(selectScriptText(s)).toContain('user/edit');
+      expect(selectScriptText(s)).not.toContain('trip/dest');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
     it('mirrors when scriptDirty is false and scriptText is empty (existing path)', () => {
       // Preserves the steady-state mirror: clean script, committed ops
       // present → write the YAML.
       seedCommitted(sampleOps);
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.getState().setScriptDirty(false);
+      useWorkspaceStore.getState().setEditorOverride('');
+      useWorkspaceStore.getState().clearEditorOverride();
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toContain('trip/dest');
-      expect(s.scriptDirty).toBe(false);
+      expect(selectScriptText(s)).toContain('trip/dest');
+      expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('skips when hasDraft is true regardless of dirty/empty state', () => {
-      // Draft owns the script via useExtraction's setDraft path; the
-      // mirror must never step on it. Even if the script is somehow
-      // empty (a bug elsewhere), we don't reach in here — the failure
-      // surfaces through the dedicated retained-draft / Apply path
-      // instead.
+    it('selectScriptText falls through draftOps → opsLog when no override is set', () => {
+      // The selector resolution order: editorOverride → draftOps →
+      // opsLog → ''. With no override and a staged draft, draftOps
+      // wins; opsLog is the next fallback for the no-draft case.
       useWorkspaceStore.getState().setDraft({
         ops: sampleOps as never,
         tree: { trees: [], relations: [] },
       });
-      // setDraft populates the per-conversation snapshot, but does NOT
-      // write scriptText — useExtraction does that on success. Force
-      // the empty-script state directly.
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.getState().setScriptDirty(true);
-      // Seed committed ops in addition to the draft to make the test
-      // distinguish from "no committed history" cases.
       useWorkspaceStore.getState().setDerived({
         tree: { trees: [], relations: [] },
         sourceIndex: new Map(),
@@ -180,21 +171,20 @@ describe('useScriptExecution', () => {
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toBe('');
-      expect(s.scriptDirty).toBe(true);
+      // No override → draftOps wins.
+      expect(selectScriptText(s)).toContain('trip/dest');
+      expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('is a no-op when committed opsLog is empty (nothing to mirror)', () => {
-      // No committed history to mirror means there's no canonical
-      // YAML to write — leave whatever state the editor is in alone.
-      useWorkspaceStore.getState().setScriptText('');
-      useWorkspaceStore.getState().setScriptDirty(true);
-
+    it('selectScriptText returns empty string when there is nothing to show (no draft, no opsLog, no override)', () => {
+      // Truly empty conversation. No setEditorOverride call — the
+      // setter would now preserve '' and flip dirty to true. Idle
+      // state means override is null; selector returns ''.
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(s.scriptText).toBe('');
-      expect(s.scriptDirty).toBe(true);
+      expect(selectScriptText(s)).toBe('');
+      expect(selectScriptDirty(s)).toBe(false);
     });
   });
 
@@ -219,8 +209,8 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(false);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().clearEditorOverride();
 
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(true);
@@ -233,8 +223,7 @@ describe('useScriptExecution', () => {
     // editor's canonical wire format round-trips.
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -251,8 +240,7 @@ describe('useScriptExecution', () => {
   });
 
   it('execute accepts a top-level array (manual edit without envelope)', async () => {
-    useWorkspaceStore.getState().setScriptText(`- set:\n    path: trip/dest\n    value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride(`- set:\n    path: trip/dest\n    value: HZ\n`);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -285,10 +273,10 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
     // scriptDirty stays false — the script is the canonical proposal,
     // not a user edit. hasDraft alone enables Apply.
-    useWorkspaceStore.getState().setScriptDirty(false);
+    useWorkspaceStore.getState().clearEditorOverride();
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -304,8 +292,7 @@ describe('useScriptExecution', () => {
     // Hand-written script edits shouldn't supersede a separate LLM
     // suggestion the user might still want — manual edits append, LLM
     // re-extract replaces. The flag is exclusively driven by hasDraft.
-    useWorkspaceStore.getState().setScriptText(`- set:\n    path: trip/dest\n    value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride(`- set:\n    path: trip/dest\n    value: HZ\n`);
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 
     const { result } = renderHook(() => useScriptExecution());
@@ -348,10 +335,9 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(
+      .setEditorOverride(
         `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
       );
-    useWorkspaceStore.getState().setScriptDirty(true);
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 
     const { result } = renderHook(() => useScriptExecution());
@@ -397,10 +383,9 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(
+      .setEditorOverride(
         `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
       );
-    useWorkspaceStore.getState().setScriptDirty(true);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -432,10 +417,9 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(
+      .setEditorOverride(
         `yops:\n  - define:\n      path: trip\n  - populate:\n      path: trip\n      values:\n        destination: Beijing\n`
       );
-    useWorkspaceStore.getState().setScriptDirty(true);
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -461,8 +445,7 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText(`- set:\n    path: food/description\n    value: fixed\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+      .setEditorOverride(`- set:\n    path: food/description\n    value: fixed\n`);
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 
     const { result } = renderHook(() => useScriptExecution());
@@ -485,8 +468,8 @@ describe('useScriptExecution', () => {
     // committed state — re-applying would duplicate the ops in yops_log.
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(false);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().clearEditorOverride();
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 
     const { result } = renderHook(() => useScriptExecution());
@@ -504,8 +487,7 @@ describe('useScriptExecution', () => {
     // execute() so a fast double-trigger can't slip through.
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(true);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
     useWorkspaceStore.getState().setMode('streaming');
 
     const { result } = renderHook(() => useScriptExecution());
@@ -542,8 +524,8 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
-    useWorkspaceStore.getState().setScriptDirty(false);
+      .setEditorOverride('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
+    useWorkspaceStore.getState().clearEditorOverride();
     expect(useWorkspaceStore.getState().draftsByConversation.conv_xyz).toBeDefined();
 
     // Commit succeeds, hydrate explodes.
@@ -565,7 +547,7 @@ describe('useScriptExecution', () => {
     expect(after.hasDraft).toBe(false);
     expect(after.draftOps).toEqual([]);
     expect(after.draftTree).toBeNull();
-    expect(after.scriptDirty).toBe(false);
+    expect(selectScriptDirty(after)).toBe(false);
     expect(after.draftsByConversation.conv_xyz).toBeUndefined();
     // Hydrate failure surfaces as a distinct error, NOT a commit-failure
     // error. Mode lands at idle (not 'executed') so the UI knows the
@@ -596,8 +578,8 @@ describe('useScriptExecution', () => {
     });
     useWorkspaceStore
       .getState()
-      .setScriptText('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
-    useWorkspaceStore.getState().setScriptDirty(false);
+      .setEditorOverride('yops:\n  - set:\n      path: trip/dest\n      value: HZ\n');
+    useWorkspaceStore.getState().clearEditorOverride();
 
     commitOpsMock.mockRejectedValueOnce(new Error('persist conflict'));
 
@@ -730,8 +712,8 @@ describe('useScriptExecution', () => {
     expect(useWorkspaceStore.getState().draftsByConversation.conv_xyz).toBeDefined();
     useWorkspaceStore
       .getState()
-      .setScriptText(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
-    useWorkspaceStore.getState().setScriptDirty(false);
+      .setEditorOverride(`yops:\n  - set:\n      path: trip/dest\n      value: HZ\n`);
+    useWorkspaceStore.getState().clearEditorOverride();
 
     const { result } = renderHook(() => useScriptExecution());
     await act(async () => {
@@ -744,7 +726,7 @@ describe('useScriptExecution', () => {
     // persisted map entry is removed so an F5 right after Apply doesn't
     // restore a draft that's already been applied.
     const after = useWorkspaceStore.getState();
-    expect(after.scriptDirty).toBe(false);
+    expect(selectScriptDirty(after)).toBe(false);
     expect(after.hasDraft).toBe(false);
     expect(after.draftOps).toEqual([]);
     expect(after.draftTree).toBeNull();
