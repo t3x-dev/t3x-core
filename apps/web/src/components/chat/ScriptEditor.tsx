@@ -5,7 +5,7 @@ import { yaml } from '@codemirror/lang-yaml';
 import { Compartment, EditorState } from '@codemirror/state';
 import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { useEffect, useRef } from 'react';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
 const PLACEHOLDER = `yops:
@@ -17,7 +17,7 @@ export function ScriptEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
-  const scriptText = useWorkspaceStore((s) => s.scriptText);
+  const scriptText = useWorkspaceStore(selectScriptText);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const isExternalUpdate = useRef(false);
   const readOnlyCompartment = useRef(new Compartment());
@@ -35,8 +35,10 @@ export function ScriptEditor() {
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !isExternalUpdate.current) {
             const text = update.state.doc.toString();
-            useWorkspaceStore.getState().setScriptText(text);
-            useWorkspaceStore.getState().setScriptDirty(true);
+            // User typed in the editor — set the override. `setEditorOverride`
+            // both stores the text and (via the derived selector) flips
+            // `selectScriptDirty` to true. No separate dirty-flag write.
+            useWorkspaceStore.getState().setEditorOverride(text);
           }
         }),
         EditorView.theme({

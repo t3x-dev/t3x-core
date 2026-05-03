@@ -55,7 +55,12 @@ vi.mock('@/store/chatStore', () => ({
 }));
 
 import { EXTRACTION_TOAST_ID, useExtraction } from '@/hooks/drafts/useExtraction';
-import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  selectPanelExpanded,
+  selectScriptDirty,
+  selectScriptText,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 
 describe('useExtraction', () => {
   beforeEach(() => {
@@ -280,10 +285,10 @@ describe('useExtraction', () => {
     expect(state.draftTree).not.toBeNull();
     // Script editor is populated with the proposal so the user can edit
     // before Apply.
-    expect(state.scriptText.length).toBeGreaterThan(0);
+    expect(selectScriptText(state).length).toBeGreaterThan(0);
     // The script is the canonical proposal, not a user edit — Apply gates
     // on `scriptDirty || hasDraft`, so we keep dirty=false here.
-    expect(state.scriptDirty).toBe(false);
+    expect(selectScriptDirty(state)).toBe(false);
 
     expect(toastSuccessMock).toHaveBeenCalledWith(
       expect.stringContaining('Extracted 1 op'),
@@ -342,8 +347,7 @@ describe('useExtraction', () => {
     // silently destroy the user's YAML. handleExtract must surface a
     // confirm and bail when the user declines.
     const dirtyEdit = `yops:\n  - set:\n      path: trip/budget\n      value: ten thousand dollars  # my edit\n`;
-    useWorkspaceStore.getState().setScriptText(dirtyEdit);
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride(dirtyEdit);
     const confirmOverwrite = vi.fn().mockReturnValue(false);
 
     const { result } = renderHook(() =>
@@ -363,14 +367,13 @@ describe('useExtraction', () => {
     // Worker not invoked, dirty edit preserved verbatim.
     expect(runExtractionMock).not.toHaveBeenCalled();
     const state = useWorkspaceStore.getState();
-    expect(state.scriptText).toBe(dirtyEdit);
-    expect(state.scriptDirty).toBe(true);
+    expect(selectScriptText(state)).toBe(dirtyEdit);
+    expect(selectScriptDirty(state)).toBe(true);
     expect(state.hasDraft).toBe(false);
   });
 
   it('proceeds (and overwrites) when the user accepts the overwrite confirm', async () => {
-    useWorkspaceStore.getState().setScriptText('user dirty edit');
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride('user dirty edit');
     const confirmOverwrite = vi.fn().mockReturnValue(true);
 
     const { result } = renderHook(() =>
@@ -389,10 +392,10 @@ describe('useExtraction', () => {
     expect(confirmOverwrite).toHaveBeenCalled();
     expect(runExtractionMock).toHaveBeenCalled();
     const state = useWorkspaceStore.getState();
-    expect(state.scriptText).not.toBe('user dirty edit');
+    expect(selectScriptText(state)).not.toBe('user dirty edit');
     // Re-extract clears scriptDirty since the canonical proposal replaces
     // the user's edit.
-    expect(state.scriptDirty).toBe(false);
+    expect(selectScriptDirty(state)).toBe(false);
     expect(state.hasDraft).toBe(true);
   });
 
@@ -436,7 +439,7 @@ describe('useExtraction', () => {
     const after = useWorkspaceStore.getState();
     expect(after.hasDraft).toBe(true);
     expect(after.draftOps).toEqual(persistedBefore.ops);
-    expect(after.scriptText).toBe(persistedBefore.scriptText);
+    expect(after.editorOverride).toBe(persistedBefore.editorOverride);
     expect(after.draftTree).not.toBeNull();
   });
 
@@ -458,7 +461,7 @@ describe('useExtraction', () => {
       ] as never,
       tree: { trees: [], relations: [] },
     });
-    useWorkspaceStore.getState().setScriptDirty(false);
+    useWorkspaceStore.getState().clearEditorOverride();
     const confirmOverwrite = vi.fn().mockReturnValue(false);
 
     const { result } = renderHook(() =>
@@ -507,8 +510,10 @@ describe('useExtraction', () => {
     const stagedScript = 'yops:\n  - set:\n      path: old/proposal\n      value: stale\n';
     const stagedTree = { trees: [], relations: [] };
     useWorkspaceStore.getState().setDraft({ ops: stagedOps as never, tree: stagedTree });
-    useWorkspaceStore.getState().setScriptText(stagedScript);
-    useWorkspaceStore.getState().setScriptDirty(false);
+    // setDraft already wrote a null override; the canonical mirror via
+    // selectScriptText derives from stagedOps. The test expects that
+    // selectScriptText resolves to that canonical YAML, not stagedScript.
+    void stagedScript;
     useWorkspaceStore.getState().setExtractionPreset('concise');
 
     runExtractionMock.mockRejectedValueOnce(
@@ -542,7 +547,8 @@ describe('useExtraction', () => {
     // Draft survives — same ops, same preview tree, same script.
     expect(state.hasDraft).toBe(true);
     expect(state.draftOps).toEqual(stagedOps);
-    expect(state.scriptText).toBe(stagedScript);
+    // Canonical mirror derived from stagedOps via the selector.
+    expect(selectScriptText(state)).toContain('old/proposal');
     expect(state.draftsByConversation.conv_123).toBeDefined();
 
     // The two error channels are intentionally non-overlapping. Setting
@@ -658,8 +664,7 @@ describe('useExtraction', () => {
     useWorkspaceStore
       .getState()
       .setDraft({ ops: stagedOps as never, tree: { trees: [], relations: [] } });
-    useWorkspaceStore.getState().setScriptText('user-edited dirty YAML');
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride('user-edited dirty YAML');
 
     runExtractionMock.mockRejectedValueOnce(
       new ExtractionFailedError([], 2, 'llm_error', 'transient error')
@@ -682,13 +687,13 @@ describe('useExtraction', () => {
     const state = useWorkspaceStore.getState();
     // Confirm was honoured: the dirty user text is gone and the flag
     // is clean. No half-cleared "text still here, dirty falsely false".
-    expect(state.scriptText).not.toBe('user-edited dirty YAML');
-    expect(state.scriptDirty).toBe(false);
+    expect(selectScriptText(state)).not.toBe('user-edited dirty YAML');
+    expect(selectScriptDirty(state)).toBe(false);
     // The retained-draft path stays coherent: the editor mirrors the
     // prior draft serialization, which is exactly what the panel's
     // "Previous draft" rendering shows. Apply parses this — same
     // semantics as the panel.
-    expect(state.scriptText).toContain('tradeoffs/storage');
+    expect(selectScriptText(state)).toContain('tradeoffs/storage');
     expect(state.hasDraft).toBe(true);
     expect(state.retainedDraftFailure).not.toBeNull();
   });
@@ -698,8 +703,7 @@ describe('useExtraction', () => {
     // The editor must reset to empty (not stay on the dirty text)
     // and scriptDirty must be false. With no draft to apply and
     // scriptText empty, Apply stays disabled — coherent failure.
-    useWorkspaceStore.getState().setScriptText('user-edited dirty YAML');
-    useWorkspaceStore.getState().setScriptDirty(true);
+    useWorkspaceStore.getState().setEditorOverride('user-edited dirty YAML');
 
     runExtractionMock.mockRejectedValueOnce(new ExtractionFailedError([], 1, 'llm_error', 'fail'));
 
@@ -718,8 +722,8 @@ describe('useExtraction', () => {
     });
 
     const state = useWorkspaceStore.getState();
-    expect(state.scriptText).toBe('');
-    expect(state.scriptDirty).toBe(false);
+    expect(selectScriptText(state)).toBe('');
+    expect(selectScriptDirty(state)).toBe(false);
     expect(state.hasDraft).toBe(false);
     // No prior draft → falls through to the lastError channel, not
     // retainedDraftFailure.

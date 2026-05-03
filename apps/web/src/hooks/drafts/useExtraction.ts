@@ -29,10 +29,9 @@ import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
-import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { useChatStore } from '@/store/chatStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 
 /**
  * Stable sonner id for every toast emitted from `handleExtract`. Using a
@@ -105,7 +104,7 @@ export function useExtraction({
       // false) is a different case: that's the previous proposal, replacing
       // it with a new one is the natural retry flow and doesn't need a
       // confirm. So we only gate on scriptDirty.
-      if (useWorkspaceStore.getState().scriptDirty && !confirmOverwrite()) {
+      if (selectScriptDirty(useWorkspaceStore.getState()) && !confirmOverwrite()) {
         return;
       }
 
@@ -143,27 +142,16 @@ export function useExtraction({
       //   - on failure: if true, set retainedDraftFailure and PRESERVE
       //                 the existing draft instead of dropping it.
       const hadDraftAtStart = store.hasDraft;
-      const draftOpsAtStart = store.draftOps;
 
       // Honour the dirty-edit overwrite confirm BEFORE the LLM call.
       // The user explicitly accepted "throw away my edits" via the
-      // confirm at the top of this handler — leaving scriptText with
-      // the old dirty content while flipping scriptDirty=false would
-      // produce an incoherent half-clear (Apply gated on
-      // `scriptDirty || hasDraft` ignores the visible text; if a
-      // prior draft is retained, Apply parses scriptText that no
-      // longer matches the panel's "Previous draft" rendering).
-      //
-      // Replace scriptText with the canonical mirror of whatever the
-      // panel will keep showing through both branches: prior draft
-      // YAML if a draft is staged, empty otherwise. The success branch
-      // overwrites with the new proposal's serialization; the failure
-      // branch leaves this canonical mirror in place. Either way,
-      // `scriptText` always agrees with what AfterPanel renders.
-      if (store.scriptDirty) {
-        store.setScriptText(hadDraftAtStart ? serializeOpsToYaml(draftOpsAtStart) : '');
-      }
-      store.setScriptDirty(false);
+      // confirm at the top of this handler. Clear the override so the
+      // editor falls back to the canonical mirror via selectScriptText
+      // (prior draftOps if any → opsLog → ''). The success branch
+      // replaces draftOps entirely and the editor follows automatically;
+      // the failure branch keeps the prior canonical mirror visible.
+      // Either way, the editor and AfterPanel can't disagree.
+      store.clearEditorOverride();
 
       // Read the extraction preset at the moment of Extract — the
       // dropdown in ChatHeader updates `workspaceStore.extractionPreset`
