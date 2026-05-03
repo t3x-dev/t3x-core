@@ -36,9 +36,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const [showBefore, setShowBefore] = useState(false);
   // Default to whichever tab has live content: a staged draft, otherwise
   // applied ops, otherwise committed history, falling through to the
-  // raw YAML editor when there's nothing to render. The user can pick
-  // any tab manually; this just avoids landing them on an empty state
-  // when something more interesting is one tab away.
+  // raw YAML editor when there's nothing to render.
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
@@ -49,11 +47,34 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     if (applied.length > 0) return 'applied';
     if (committed.length > 0) return 'committed';
     return 'script';
-    // Computed once on mount; `topView` becomes user-controlled after.
-    // Recomputing on every store change would clobber the user's pick.
+    // Computed once on mount; `topView` becomes user-controlled after,
+    // unless the user hasn't manually picked yet AND a draft arrives
+    // (the auto-switch effect below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [topView, setTopView] = useState<TopView>(initialTab);
+  const [topView, setTopViewState] = useState<TopView>(initialTab);
+  // Tracks whether the user has manually picked a tab. Once true, we
+  // stop auto-switching — the user's pick wins. Reset to false only
+  // on Discard / clearDraft (no auto-switch needed in that direction;
+  // the next draft will re-engage the watcher).
+  const userPickedTabRef = useRef(false);
+  const setTopView = useCallback((next: TopView) => {
+    userPickedTabRef.current = true;
+    setTopViewState(next);
+  }, []);
+  // Auto-switch to the Draft tab when a fresh draft arrives, IFF the
+  // user hasn't picked a tab manually yet. Common flow: workspace
+  // mounts on Raw YAML (empty conversation) → user clicks Extract →
+  // draftCount > 0 → tab switches to Draft so the proposal is the
+  // visible surface, matching the "elevate structured ops" thesis.
+  // Once the user clicks a tab manually, the ref locks and store
+  // updates stop dragging the view around.
+  useEffect(() => {
+    if (userPickedTabRef.current) return;
+    if (draftCount > 0 && topView !== 'draft') {
+      setTopViewState('draft');
+    }
+  }, [draftCount, topView]);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const prevExpandedRef = useRef(panelExpanded);
