@@ -594,19 +594,37 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({ extractionPreset });
           return;
         }
+        // Hand-edited YAML guard: useScriptExecution commits by parsing
+        // `scriptText`, not `draftOps`. If the user has typed into the
+        // editor, silently swapping the ops would leave AfterPanel
+        // showing the new variant while Apply commits whatever YAML
+        // they were holding. Preserve their edit and only update the
+        // preset; a follow-up Extract is the unambiguous way to flip
+        // density without losing manual work.
+        if (s.scriptDirty) {
+          set({ extractionPreset });
+          return;
+        }
         const previewResult = applySourcedYOps(s.tree, cached);
         const previewTree: SemanticContent = previewResult.ok
           ? { trees: previewResult.trees, relations: previewResult.relations }
           : s.tree;
+        // scriptText must move with draftOps. Apply reads scriptText —
+        // any drift between them would commit the wrong variant.
+        // scriptDirty resets to false because this is a canonical YAML
+        // mirror of the swapped ops, not a user edit.
+        const newScriptText = serializeOpsToYaml(cached);
         const baseUpdate = {
           extractionPreset,
           draftOps: cached,
           draftTree: previewTree,
+          scriptText: newScriptText,
+          scriptDirty: false,
         };
-        // Mirror the new ops into the persisted snapshot when a
-        // conversation is active, so a refresh restores the variant
-        // the user was actually looking at — not the one that
-        // happened to be `result.ops` at extraction time.
+        // Mirror the new ops AND the new scriptText into the persisted
+        // snapshot when a conversation is active, so a refresh restores
+        // the variant the user was actually looking at — not the
+        // ops/scriptText pair that happened to be active at extract time.
         if (!s.conversationId) {
           set(baseUpdate);
           return;
@@ -615,8 +633,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ...baseUpdate,
           draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
             ops: cached,
-            scriptText: s.scriptText,
-            scriptDirty: s.scriptDirty,
+            scriptText: newScriptText,
+            scriptDirty: false,
           }),
         });
       },
