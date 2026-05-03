@@ -420,6 +420,73 @@ export const DRAFT_PERSISTENCE_CAP = 50;
  * objects preserve insertion order for non-numeric keys, which is what
  * this scheme depends on.
  */
+/**
+ * Single private writer for the draft-proposal mirror state.
+ *
+ * Six fields describe the same logical thing — the user's current
+ * uncommitted proposal — but are read by different surfaces:
+ *
+ *   draftOps              → AfterPanel render
+ *   draftTree             → AfterPanel preview
+ *   draftVariants         → chip swap (cached preset variants)
+ *   scriptText            → Apply commits THIS
+ *   scriptDirty           → "is the editor source of truth?"
+ *   draftsByConversation  → refresh restore
+ *
+ * Any caller that writes one without the others can put AfterPanel and
+ * Apply out of sync (PR #952's P1 was exactly this). To make drift
+ * impossible-by-construction rather than convention-by-review, ALL
+ * proposal mutations route through this function. The boundary test
+ * (`workspaceStore-proposal-boundary.test.ts`) AST-scans this file and
+ * fails CI if any of those six fields is written outside the whitelist.
+ *
+ * Whitelist for the structural fields (draftOps / draftTree /
+ * draftVariants): only this function, `clearDraft`, `restoreDraftFor`,
+ * and `conversationResetState`. `setScriptText` / `setScriptDirty` are
+ * allowed to touch their own field plus the snapshot, but NOT the
+ * structural triple. The boundary test enforces per-field, not per-
+ * function.
+ *
+ * Returns a Partial<WorkspaceState> rather than calling set() directly
+ * so callers can compose it with their own writes (e.g.
+ * setExtractionPreset also writes `extractionPreset` alongside the
+ * proposal swap).
+ */
+function writeDraftProposal(
+  s: WorkspaceState,
+  next: {
+    ops: SourcedYOp[];
+    tree: SemanticContent | null;
+    variants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
+    // Intentionally `text` / `dirty` (not `scriptText` / `scriptDirty`)
+    // so the input literal at call sites doesn't share key names with
+    // state fields. The boundary test scans for state-field property
+    // names; using collision-free input names avoids ambiguity between
+    // "passing a value to the writer" and "writing state."
+    text: string;
+    dirty: boolean;
+  }
+): Partial<WorkspaceState> {
+  const hasDraft = next.ops.length > 0;
+  const baseUpdate: Partial<WorkspaceState> = {
+    draftOps: next.ops,
+    draftTree: next.tree,
+    draftVariants: hasDraft ? next.variants : null,
+    scriptText: next.text,
+    scriptDirty: next.dirty,
+    hasDraft,
+    retainedDraftFailure: null,
+  };
+  if (!s.conversationId) return baseUpdate;
+  const snapshot: PersistedDraft | null = hasDraft
+    ? { ops: next.ops, scriptText: next.text, scriptDirty: next.dirty }
+    : null;
+  return {
+    ...baseUpdate,
+    draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, snapshot),
+  };
+}
+
 function writeDraftSnapshot(
   map: Record<string, PersistedDraft>,
   convId: string | null,
@@ -609,32 +676,18 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const previewTree: SemanticContent = previewResult.ok
           ? { trees: previewResult.trees, relations: previewResult.relations }
           : s.tree;
-        // scriptText must move with draftOps. Apply reads scriptText —
-        // any drift between them would commit the wrong variant.
-        // scriptDirty resets to false because this is a canonical YAML
-        // mirror of the swapped ops, not a user edit.
-        const newScriptText = serializeOpsToYaml(cached);
-        const baseUpdate = {
-          extractionPreset,
-          draftOps: cached,
-          draftTree: previewTree,
-          scriptText: newScriptText,
-          scriptDirty: false,
-        };
-        // Mirror the new ops AND the new scriptText into the persisted
-        // snapshot when a conversation is active, so a refresh restores
-        // the variant the user was actually looking at — not the
-        // ops/scriptText pair that happened to be active at extract time.
-        if (!s.conversationId) {
-          set(baseUpdate);
-          return;
-        }
+        // Compose: write the new preset alongside the proposal swap.
+        // writeDraftProposal handles draftOps/draftTree/draftVariants/
+        // scriptText/scriptDirty/snapshot atomically; we just add
+        // extractionPreset to the same set() call.
         set({
-          ...baseUpdate,
-          draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
+          extractionPreset,
+          ...writeDraftProposal(s, {
             ops: cached,
-            scriptText: newScriptText,
-            scriptDirty: false,
+            tree: previewTree,
+            variants: s.draftVariants,
+            text: serializeOpsToYaml(cached),
+            dirty: false,
           }),
         });
       },
@@ -676,55 +729,43 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       setDraft: ({ ops, tree, variants }) => {
+        // Atomic write through the single writer. scriptText is derived
+        // from `ops` here so the editor mirror always matches the new
+        // draft — callers no longer need to manually setScriptText +
+        // setScriptDirty(false) after setDraft (the old useExtraction
+        // triplet that PR #952's P1 demonstrated could drift).
         const s = get();
-        const hasDraft = ops.length > 0;
-        // A successful new draft always retires any retained-failure
-        // marker — the staged tree IS the new attempt, so the AfterPanel
-        // header should flip back to "Draft preview" and the Apply
-        // tooltip should stop saying "previous draft".
-        //
-        // `variants` is sticky to the draft: when the new draft is
-        // empty (clear-equivalent setDraft) the cached variants from
-        // the previous draft are no longer meaningful — null them so
-        // the chip falls back to "next-extract" semantics until the
-        // next real Extract repopulates them.
-        const baseUpdate = {
-          draftOps: ops,
-          draftTree: tree,
-          hasDraft,
-          draftVariants: hasDraft ? (variants ?? null) : null,
-          retainedDraftFailure: null as RetainedDraftFailure | null,
-        };
-        if (!s.conversationId) {
-          set(baseUpdate);
-          return;
-        }
-        const snapshot: PersistedDraft | null = hasDraft
-          ? { ops, scriptText: s.scriptText, scriptDirty: s.scriptDirty }
-          : null;
-        set({
-          ...baseUpdate,
-          draftsByConversation: writeDraftSnapshot(
-            s.draftsByConversation,
-            s.conversationId,
-            snapshot
-          ),
-        });
+        set(
+          writeDraftProposal(s, {
+            ops,
+            tree,
+            variants: variants ?? null,
+            text: ops.length > 0 ? serializeOpsToYaml(ops) : '',
+            dirty: false,
+          })
+        );
       },
       clearDraft: () => {
         const s = get();
         // Discard, successful Apply, and any other "throw away the
-        // proposal" path call clearDraft. Either branch invalidates a
-        // retained-failure marker: if we had one, it referred to the
-        // draft that's now gone.
-        set({
-          draftOps: [],
-          draftTree: null,
-          hasDraft: false,
-          draftVariants: null,
-          retainedDraftFailure: null,
-          draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, null),
-        });
+        // proposal" path call clearDraft. Routed through the single
+        // writer with empty payload so scriptText/scriptDirty also
+        // clear in lockstep — old behavior left them alone, requiring
+        // the discard sequence (clearDraft + setScriptText('') +
+        // setScriptDirty(false)) to fully release Apply. The triplet
+        // call site in AfterPanel still works (the explicit setters
+        // become redundant no-ops after this), and the boundary test
+        // doesn't have to make special exceptions for "structural
+        // fields cleared without scriptText" inconsistency.
+        set(
+          writeDraftProposal(s, {
+            ops: [],
+            tree: null,
+            variants: null,
+            text: '',
+            dirty: false,
+          })
+        );
       },
 
       restoreDraftFor: (conversationId) => {
@@ -762,13 +803,20 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           : snapshot.scriptText;
         const restoredScriptDirty = persistedScriptIsEmpty ? false : snapshot.scriptDirty;
 
-        set({
-          draftOps: snapshot.ops,
-          draftTree: previewTree,
-          hasDraft: true,
-          scriptText: restoredScriptText,
-          scriptDirty: restoredScriptDirty,
-        });
+        // Route through the single writer. `variants` is null because
+        // the per-conversation snapshot intentionally does NOT persist
+        // cached variants (memory-only by design — see draftVariants
+        // doc above). Post-refresh, the chip falls back to "next-
+        // extract" semantics until the user re-extracts.
+        set(
+          writeDraftProposal(s, {
+            ops: snapshot.ops,
+            tree: previewTree,
+            variants: null,
+            text: restoredScriptText,
+            dirty: restoredScriptDirty,
+          })
+        );
         return true;
       },
 
