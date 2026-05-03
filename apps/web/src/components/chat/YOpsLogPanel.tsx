@@ -14,16 +14,12 @@
  * state machine surfaces it.
  */
 
-import type { LLMSource, Source, SourcedYOp } from '@t3x-dev/core';
+import type { Source, SourcedYOp } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Sparkles, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { summarizeOp, verbOf } from '@/domain/yops/opSummary';
+import { buildOpCardModel, type OpCardModel } from '@/domain/yops/opCardModel';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
-
-function isLLM(src: Source): src is LLMSource {
-  return src.type === 'llm';
-}
 
 function relativeAgo(iso: string): string {
   const then = Date.parse(iso);
@@ -38,21 +34,20 @@ function relativeAgo(iso: string): string {
   return `${diffDay}d`;
 }
 
-function stripSource(op: SourcedYOp): Record<string, unknown> {
-  const { source: _drop, ...rest } = op as unknown as Record<string, unknown>;
-  return rest;
+/**
+ * Truncate a quote excerpt for the always-visible card header. Long
+ * source quotes would push the time chip and source chip off the right
+ * edge; we surface the first ~60 chars and let the disclosure body show
+ * the full quote.
+ */
+function truncateQuote(quote: string, max = 60): string {
+  if (quote.length <= max) return quote;
+  return `${quote.slice(0, max - 1).trimEnd()}…`;
 }
 
-function serializeOpCore(op: SourcedYOp): string {
-  return JSON.stringify(stripSource(op), null, 2);
-}
-
-function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
+function OpRow({ model, index }: { model: OpCardModel; index: number }) {
   const [open, setOpen] = useState(false);
-  const src = (op as unknown as { source: Source }).source;
-  const human = src.type === 'human';
-  const llm = isLLM(src) ? src : null;
-  const verb = verbOf(op);
+  const human = model.source.kind === 'human';
 
   return (
     <div
@@ -67,45 +62,73 @@ function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
+        className="w-full flex flex-col gap-0.5 px-2.5 py-1.5 text-left"
       >
-        {open ? (
-          <ChevronDown className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
-        )}
-        <span className="font-mono text-[10px] text-[var(--text-tertiary)] shrink-0 tabular-nums">
-          {String(index + 1).padStart(2, '0')}
-        </span>
-        <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--text-tertiary)] shrink-0">
-          {verb}
-        </span>
-        <span className="flex-1 text-[12px] text-[var(--text-primary)] truncate">
-          {summarizeOp(op)}
-        </span>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold shrink-0',
-            human
-              ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
-              : 'bg-[var(--source)]/10 text-[var(--source)]'
-          )}
-        >
-          {human ? (
-            <>
-              <User className="h-2.5 w-2.5" />
-              you
-            </>
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
           ) : (
-            <>
-              <Sparkles className="h-2.5 w-2.5" />
-              llm
-            </>
+            <ChevronRight className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
           )}
-        </span>
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)] shrink-0 w-8 text-right">
-          {relativeAgo(src.at)}
-        </span>
+          <span className="font-mono text-[10px] text-[var(--text-tertiary)] shrink-0 tabular-nums">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--text-tertiary)] shrink-0">
+            {model.verb}
+          </span>
+          <span className="flex-1 text-[12px] text-[var(--text-primary)] truncate">
+            {model.summary}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold shrink-0',
+              human
+                ? 'bg-[var(--status-success)]/15 text-[var(--status-success)]'
+                : 'bg-[var(--source)]/10 text-[var(--source)]'
+            )}
+            // Surface attribution (model for LLM, author for human) as a
+            // tooltip — the chip's space is shared with the verb badge so
+            // we can't fit it inline without truncation noise.
+            title={model.source.attribution ?? undefined}
+          >
+            {human ? (
+              <>
+                <User className="h-2.5 w-2.5" />
+                you
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-2.5 w-2.5" />
+                llm
+              </>
+            )}
+          </span>
+          <span className="text-[9px] font-mono text-[var(--text-tertiary)] shrink-0 w-8 text-right">
+            {relativeAgo(model.source.at)}
+          </span>
+        </div>
+        {/*
+          Provenance excerpt + attribution chip surfaced into the
+          collapsed card row (workbench plan §4 op-block requirements
+          — "source quote" promoted out of the disclosure). For LLM
+          ops with a turn quote, this lets users scan provenance
+          without expanding every card.
+        */}
+        {model.provenance && model.provenance.quote ? (
+          <div className="flex items-center gap-2 pl-7 text-[10.5px] text-[var(--text-tertiary)] truncate">
+            <span className="font-mono text-[9px] uppercase tracking-wide opacity-70 shrink-0">
+              from
+            </span>
+            <span className="italic truncate">
+              &ldquo;{truncateQuote(model.provenance.quote)}&rdquo;
+            </span>
+            {model.source.attribution && (
+              <span className="font-mono text-[9px] opacity-60 shrink-0">
+                · {model.source.attribution}
+              </span>
+            )}
+          </div>
+        ) : null}
       </button>
 
       {open && (
@@ -114,8 +137,15 @@ function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
             <div className="text-[9px] uppercase tracking-wide font-semibold text-[var(--text-tertiary)] mb-1">
               YOps core
             </div>
+            {/*
+              Pretty YAML (js-yaml.dump) replaces the prior JSON dump.
+              Matches the wire format Apply parses, the format the
+              extraction pipeline emits, and the format the Raw YAML
+              tab shows — one canonical YAML representation across
+              every surface.
+            */}
             <pre className="text-[11px] font-mono text-[var(--text-primary)] bg-[var(--panel)] border border-[var(--stroke-default)] rounded px-2 py-1.5 overflow-x-auto whitespace-pre">
-              {serializeOpCore(op)}
+              {model.rawYaml}
             </pre>
           </section>
 
@@ -125,38 +155,36 @@ function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] font-mono">
               <dt className="text-[var(--text-tertiary)]">origin</dt>
-              <dd className="text-[var(--text-primary)]">{src.type}</dd>
+              <dd className="text-[var(--text-primary)]">{model.source.kind}</dd>
               <dt className="text-[var(--text-tertiary)]">at</dt>
-              <dd className="text-[var(--text-primary)]">{src.at}</dd>
-              {human && (
+              <dd className="text-[var(--text-primary)]">{model.source.at}</dd>
+              {model.source.attribution && (
                 <>
-                  <dt className="text-[var(--text-tertiary)]">author</dt>
-                  <dd className="text-[var(--text-primary)]">
-                    {(src as { author: string }).author}
-                  </dd>
+                  <dt className="text-[var(--text-tertiary)]">
+                    {model.source.kind === 'llm' ? 'model' : 'author'}
+                  </dt>
+                  <dd className="text-[var(--text-primary)]">{model.source.attribution}</dd>
                 </>
               )}
-              {llm && (
+              {model.provenance && (
                 <>
-                  <dt className="text-[var(--text-tertiary)]">model</dt>
-                  <dd className="text-[var(--text-primary)]">{llm.model}</dd>
                   <dt className="text-[var(--text-tertiary)]">turn</dt>
                   <dd className="text-[var(--text-primary)] truncate">
-                    {llm.turn_ref.turn_hash.slice(0, 14)}…
+                    {model.provenance.turnHash.slice(0, 14)}…
                   </dd>
-                  {llm.turn_ref.quote && (
+                  {model.provenance.quote && (
                     <>
                       <dt className="text-[var(--text-tertiary)]">quote</dt>
                       <dd className="text-[var(--text-primary)] italic">
-                        &ldquo;{llm.turn_ref.quote}&rdquo;
+                        &ldquo;{model.provenance.quote}&rdquo;
                       </dd>
                     </>
                   )}
-                  {llm.turn_ref.start_char != null && llm.turn_ref.end_char != null && (
+                  {model.provenance.startChar != null && model.provenance.endChar != null && (
                     <>
                       <dt className="text-[var(--text-tertiary)]">span</dt>
                       <dd className="text-[var(--text-primary)]">
-                        [{llm.turn_ref.start_char}, {llm.turn_ref.end_char})
+                        [{model.provenance.startChar}, {model.provenance.endChar})
                       </dd>
                     </>
                   )}
@@ -312,9 +340,15 @@ export function YOpsLogPanel({ tab = 'applied' }: YOpsLogPanelProps = {}) {
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
+          {/*
+            Tab-filtered `visibleOps` (PR 2) feeds the structured
+            OpCardModel (PR 3) into the OpRow renderer. Index is
+            local to the rendered tab, not the global opsLog position
+            — users see "01, 02, …" within the active tab.
+          */}
           {visibleOps.map((op, i) => {
-            const src = (op as unknown as { source: Source }).source;
-            return <OpRow key={`${src.at}-${i}-${verbOf(op)}`} op={op} index={i} />;
+            const model = buildOpCardModel(op);
+            return <OpRow key={`${model.key}-${i}`} model={model} index={i} />;
           })}
         </div>
       )}
