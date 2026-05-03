@@ -351,6 +351,98 @@ describe('workspaceStore (state-only)', () => {
     expect(s.scriptDirty).toBe(false);
   });
 
+  describe('setExtractionPreset — live variant swap (#951)', () => {
+    const opForPath = (path: string, value: string): SourcedYOp =>
+      ({
+        set: { path, value },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: value },
+        },
+      }) as never;
+
+    const conciseOps = [opForPath('trip/dest', 'HZ')];
+    const balancedOps = [opForPath('trip/dest', 'HZ'), opForPath('trip/budget', '5k')];
+    const detailedOps = [
+      opForPath('trip/dest', 'HZ'),
+      opForPath('trip/budget', '5k'),
+      opForPath('trip/duration', '7d'),
+    ];
+
+    it('swaps draftOps to the cached variant when chip changes and variant exists', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      // Sanity check: starts with balanced ops and balanced preset.
+      expect(useWorkspaceStore.getState().draftOps).toEqual(balancedOps);
+      expect(useWorkspaceStore.getState().extractionPreset).toBe('balanced');
+
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      expect(s.draftOps).toEqual(detailedOps);
+      // Preview tree is re-derived against current committed tree (empty
+      // here) — failure mode would surface as draftTree === null.
+      expect(s.draftTree).not.toBeNull();
+    });
+
+    it('falls back to preset-only when no variants are cached (legacy / no-Extract-yet)', () => {
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      // No draft, no swap — draftOps stays empty.
+      expect(s.draftOps).toEqual([]);
+      expect(s.hasDraft).toBe(false);
+    });
+
+    it('falls back to preset-only when the picked preset is missing from a partial variants set', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { balanced: balancedOps },
+      });
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      // No `detailed` variant cached — keep the existing draft as-is.
+      expect(s.draftOps).toEqual(balancedOps);
+    });
+
+    it('mirrors the swapped ops into the per-conversation draft snapshot', () => {
+      useWorkspaceStore.getState().setConversation('conv_xyz');
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+      const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_xyz;
+      // Persisting the swapped ops means a refresh restores the variant
+      // the user was actually viewing, not the one that happened to be
+      // result.ops at extract time.
+      expect(snapshot?.ops).toEqual(conciseOps);
+    });
+
+    it('clearDraft drops cached variants so the next chip toggle does not stale-swap', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.getState().clearDraft();
+      expect(useWorkspaceStore.getState().draftVariants).toBeNull();
+
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      // No variants left to read; setter behaves like the legacy no-op-on-ops path.
+      expect(useWorkspaceStore.getState().draftOps).toEqual([]);
+    });
+  });
+
   it('reset clears the draft along with other conversation-scoped state', () => {
     useWorkspaceStore.getState().setDraft({
       ops: [

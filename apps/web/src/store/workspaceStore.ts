@@ -179,6 +179,18 @@ interface WorkspaceState {
   // ── Extraction config ──
   extractionPreset: 'concise' | 'balanced' | 'detailed';
   lastExtractionPinIds: string[];
+  /**
+   * Cached preset variants from the most recent Extract. The pipeline
+   * computes all three presets in one LLM round (see core
+   * `buildPresetVariants`), the API ships them in `ExtractionOutcome.variants`,
+   * and we keep them here so the chip can swap the displayed proposal
+   * without a re-extract. Memory-only: not persisted to localStorage —
+   * after a refresh the variants are gone, but the active draft survives,
+   * and the next Extract repopulates them. Sparse on purpose: a partial
+   * outcome may carry only a subset, and a non-preset extraction carries
+   * none. Keys: 'concise' | 'balanced' | 'detailed'.
+   */
+  draftVariants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | null;
 
   // ── Script editor state ──
   scriptText: string;
@@ -259,7 +271,11 @@ interface WorkspaceState {
    * `useScriptExecution.canRun` and AfterPanel's "Draft" badge.
    */
   hasDraft: boolean;
-  setDraft: (input: { ops: SourcedYOp[]; tree: SemanticContent }) => void;
+  setDraft: (input: {
+    ops: SourcedYOp[];
+    tree: SemanticContent;
+    variants?: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>>;
+  }) => void;
   clearDraft: () => void;
 
   // ── Draft persistence (per-conversation) ──
@@ -373,6 +389,9 @@ function conversationResetState() {
     draftOps: [] as SourcedYOp[],
     draftTree: null as SemanticContent | null,
     hasDraft: false,
+    draftVariants: null as Partial<
+      Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>
+    > | null,
   };
 }
 
@@ -556,7 +575,51 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           scrollToCenter: false,
         }),
 
-      setExtractionPreset: (extractionPreset) => set({ extractionPreset }),
+      setExtractionPreset: (extractionPreset) => {
+        // Live-swap path: when the most recent Extract returned variants
+        // for all three presets, the chip click acts as a view-mode
+        // switch — replace the displayed ops with the cached variant
+        // and re-derive the preview tree against the current committed
+        // tree. Avoids a redundant LLM round-trip when the user just
+        // wants to see the same conversation extracted at a different
+        // density.
+        //
+        // Fallback path: when no cached variant exists for the picked
+        // preset (no extraction yet, partial outcome that didn't ship
+        // all three, post-refresh memory loss), behave like the legacy
+        // setter — only set the preset; the next Extract picks it up.
+        const s = get();
+        const cached = s.draftVariants?.[extractionPreset];
+        if (!cached || !s.hasDraft) {
+          set({ extractionPreset });
+          return;
+        }
+        const previewResult = applySourcedYOps(s.tree, cached);
+        const previewTree: SemanticContent = previewResult.ok
+          ? { trees: previewResult.trees, relations: previewResult.relations }
+          : s.tree;
+        const baseUpdate = {
+          extractionPreset,
+          draftOps: cached,
+          draftTree: previewTree,
+        };
+        // Mirror the new ops into the persisted snapshot when a
+        // conversation is active, so a refresh restores the variant
+        // the user was actually looking at — not the one that
+        // happened to be `result.ops` at extraction time.
+        if (!s.conversationId) {
+          set(baseUpdate);
+          return;
+        }
+        set({
+          ...baseUpdate,
+          draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
+            ops: cached,
+            scriptText: s.scriptText,
+            scriptDirty: s.scriptDirty,
+          }),
+        });
+      },
       setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
 
       setScriptText: (scriptText) => {
@@ -594,17 +657,24 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
       },
 
-      setDraft: ({ ops, tree }) => {
+      setDraft: ({ ops, tree, variants }) => {
         const s = get();
         const hasDraft = ops.length > 0;
         // A successful new draft always retires any retained-failure
         // marker — the staged tree IS the new attempt, so the AfterPanel
         // header should flip back to "Draft preview" and the Apply
         // tooltip should stop saying "previous draft".
+        //
+        // `variants` is sticky to the draft: when the new draft is
+        // empty (clear-equivalent setDraft) the cached variants from
+        // the previous draft are no longer meaningful — null them so
+        // the chip falls back to "next-extract" semantics until the
+        // next real Extract repopulates them.
         const baseUpdate = {
           draftOps: ops,
           draftTree: tree,
           hasDraft,
+          draftVariants: hasDraft ? (variants ?? null) : null,
           retainedDraftFailure: null as RetainedDraftFailure | null,
         };
         if (!s.conversationId) {
@@ -633,6 +703,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           draftOps: [],
           draftTree: null,
           hasDraft: false,
+          draftVariants: null,
           retainedDraftFailure: null,
           draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, null),
         });
