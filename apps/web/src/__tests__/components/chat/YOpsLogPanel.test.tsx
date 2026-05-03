@@ -32,10 +32,14 @@ function llmOp(): SourcedYOp {
 
 describe('YOpsLogPanel', () => {
   beforeEach(() => {
-    useWorkspaceStore.getState().reset();
+    act(() => {
+      useWorkspaceStore.getState().reset();
+    });
   });
   afterEach(() => {
-    useWorkspaceStore.getState().reset();
+    act(() => {
+      useWorkspaceStore.getState().reset();
+    });
   });
 
   it('renders an empty state when no ops are in the log', () => {
@@ -81,5 +85,45 @@ describe('YOpsLogPanel', () => {
     expect(header).toMatch(/3\s*ops/i);
     expect(header).toMatch(/2\s*you/i);
     expect(header).toMatch(/1\s*llm/i);
+  });
+
+  it('renders staged draft ops when a draft is present and the applied log is empty', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+
+    const { container } = render(<YOpsLogPanel />);
+    const text = container.textContent ?? '';
+    const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+
+    expect(text).toMatch(/draft ops/i);
+    expect(text).toMatch(/1\s*draft ops/i);
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Created sights');
+  });
+
+  it('prefers staged draft ops over the applied log while Apply is pending', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [humanOp()],
+      });
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+
+    const { container } = render(<YOpsLogPanel />);
+    const text = container.textContent ?? '';
+    const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+
+    expect(rows.length).toBe(1);
+    expect(text).toContain('Created sights');
+    expect(text).not.toContain('Set trip.destination to "Hangzhou"');
   });
 });

@@ -58,7 +58,19 @@ export function useChatInit({
     if (!inheritedRef.current) {
       useWorkspaceStore.getState().reset();
     }
-    useWorkspaceStore.getState().setConversation(convId === 'new' ? null : convId);
+    const workspaceStore = useWorkspaceStore.getState();
+    const activeConvId = convId === 'new' ? null : convId;
+    workspaceStore.setConversation(activeConvId);
+    // In-app navigation reuses the already-hydrated Zustand store. `reset()`
+    // clears the active draft fields but intentionally preserves
+    // draftsByConversation; without restoring here, the workspace can paint
+    // an empty state until the async server hydrate finishes. F5 did not show
+    // the same gap because persisted middleware restores the snapshot during
+    // page load. Restore immediately for navigation, then hydrate will
+    // re-layer the same snapshot against the fresh server tree.
+    if (activeConvId) {
+      workspaceStore.restoreDraftFor(activeConvId);
+    }
     if (resolvedProjectId) {
       useSessionStore.getState().setLastSession(resolvedProjectId, convId);
     }

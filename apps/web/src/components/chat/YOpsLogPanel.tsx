@@ -1,17 +1,16 @@
 'use client';
 
 /**
- * YOpsLogPanel — ledger view of the current draft's opsLog.
+ * YOpsLogPanel — ledger view of the current applied or staged ops.
  *
  * Replaces the sparse YAML feel of ScriptEditor with a stack of action
  * blocks: each op gets a plain-language header, an origin badge, and an
  * expandable body showing YOps core + source meta (per §3a.6d of the
  * YOps change-request UX design doc).
  *
- * Pending vs auto-applied is not yet modeled on disk — all persisted
- * ops have either LLMSource or HumanSource. This panel renders those
- * two today; a future pass can add the pending bucket once the draft
- * state machine surfaces it.
+ * When a draft is staged, the workspace preview and Apply path operate on
+ * draftOps, so the inspectable ledger must follow that staged proposal.
+ * Otherwise it falls back to the persisted applied ops log.
  */
 
 import type { LLMSource, Source, SourcedYOp } from '@t3x-dev/core';
@@ -172,28 +171,33 @@ function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
 
 export function YOpsLogPanel() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const draftOps = useWorkspaceStore((s) => s.draftOps);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const visibleOps = hasDraft ? draftOps : opsLog;
+  const showingDraft = hasDraft;
 
   const stats = useMemo(() => {
     let human = 0;
     let llm = 0;
-    for (const op of opsLog) {
+    for (const op of visibleOps) {
       const src = (op as unknown as { source: Source }).source;
       if (src.type === 'human') human++;
       else llm++;
     }
-    return { total: opsLog.length, human, llm };
-  }, [opsLog]);
+    return { total: visibleOps.length, human, llm };
+  }, [visibleOps]);
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel-alt)]">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel)]">
         <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           <span className="inline-block h-2 w-2 rounded-full bg-[var(--status-success)]" />
-          Ops log
+          {showingDraft ? 'Draft ops' : 'Ops log'}
         </span>
         <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
           <span>
-            <span className="text-[var(--text-primary)] font-semibold">{stats.total}</span> ops
+            <span className="text-[var(--text-primary)] font-semibold">{stats.total}</span>{' '}
+            {showingDraft ? 'draft ops' : 'ops'}
           </span>
           {stats.human > 0 && (
             <span>
@@ -208,16 +212,17 @@ export function YOpsLogPanel() {
         </span>
       </div>
 
-      {opsLog.length === 0 ? (
+      {visibleOps.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="text-[11px] text-[var(--text-tertiary)] leading-relaxed max-w-[260px]">
-            The ops log is empty. Run an extraction or quote a span from chat — every action (yours
-            or the LLM&rsquo;s) shows up here as a block you can inspect and audit.
+            {showingDraft
+              ? 'The staged draft has no ops to inspect.'
+              : "The applied ops log is empty. Run an extraction or quote a span from chat — every action (yours or the LLM's) shows up here as a block you can inspect and audit."}
           </div>
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
-          {opsLog.map((op, i) => {
+          {visibleOps.map((op, i) => {
             const src = (op as unknown as { source: Source }).source;
             return <OpRow key={`${src.at}-${i}-${verbOf(op)}`} op={op} index={i} />;
           })}
