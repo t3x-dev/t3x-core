@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/local",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "T3X local entry package",
   "license": "Apache-2.0",
   "type": "module",
@@ -38,10 +38,10 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.15.2",
-    "@t3x-dev/api": "workspace:0.2.0",
-    "@t3x-dev/cli": "workspace:0.2.0",
-    "@t3x-dev/mcp": "workspace:0.2.0",
-    "@t3x-dev/storage": "workspace:0.2.0",
+    "@t3x-dev/api": "workspace:0.3.0",
+    "@t3x-dev/cli": "workspace:0.3.0",
+    "@t3x-dev/mcp": "workspace:0.3.0",
+    "@t3x-dev/storage": "workspace:0.3.0",
     "commander": "^13.1.0"
   },
   "devDependencies": {
