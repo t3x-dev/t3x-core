@@ -1,5 +1,15 @@
 # @t3x-dev/mcp-lib
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [[`b96e862`](https://github.com/t3x-dev/t3x-core/commit/b96e862f393e3471b0c838e6a082cb4e94b632e8), [`7b7c9b6`](https://github.com/t3x-dev/t3x-core/commit/7b7c9b69cf4cf4960327f5050386c8dbe9c6f422)]:
+  - @t3x-dev/yops@0.3.0
+  - @t3x-dev/core@0.3.0
+  - @t3x-dev/storage@0.3.0
+  - @t3x-dev/api-client@0.3.0
+
 ## 0.1.6
 
 ### Patch Changes
