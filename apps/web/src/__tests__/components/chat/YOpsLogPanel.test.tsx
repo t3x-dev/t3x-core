@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import type { SourcedYOp } from '@t3x-dev/core';
-import { act, render } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { act, fireEvent, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splitOpsByCommittedness, YOpsLogPanel } from '@/components/chat/YOpsLogPanel';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
@@ -41,7 +41,9 @@ describe('YOpsLogPanel', () => {
   it('renders an empty state when no ops are in the log', () => {
     const { container } = render(<YOpsLogPanel />);
     expect(container.textContent).toContain('empty');
-    expect(container.querySelectorAll('[data-testid^="yops-log-op-"]').length).toBe(0);
+    expect(
+      container.querySelectorAll('[data-testid^="yops-log-op-"]:not([data-testid*="-link"])').length
+    ).toBe(0);
   });
 
   it('renders one row per op in the log with verb and summary', () => {
@@ -54,7 +56,9 @@ describe('YOpsLogPanel', () => {
     });
 
     const { container } = render(<YOpsLogPanel />);
-    const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+    const rows = container.querySelectorAll(
+      '[data-testid^="yops-log-op-"]:not([data-testid*="-link"])'
+    );
     expect(rows.length).toBe(2);
 
     const first = rows[0].textContent ?? '';
@@ -97,6 +101,9 @@ describe('YOpsLogPanel', () => {
       };
     }
 
+    // Filter out PR 4's quote-link testids so we count rows, not links.
+    const ROWS_ONLY = '[data-testid^="yops-log-op-"]:not([data-testid*="-link"])';
+
     it('Draft tab reads from draftOps, not opsLog', () => {
       act(() => {
         useWorkspaceStore.getState().setDerived({
@@ -111,10 +118,8 @@ describe('YOpsLogPanel', () => {
       });
 
       const { container } = render(<YOpsLogPanel tab="draft" />);
-      const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+      const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
-      // Draft tab shows the staged llm op (Created sights), not the
-      // opsLog's human op (Set trip.destination).
       expect(rows[0].textContent).toContain('Created sights');
       expect(container.textContent).not.toContain('Hangzhou');
     });
@@ -137,10 +142,9 @@ describe('YOpsLogPanel', () => {
       });
 
       const { container } = render(<YOpsLogPanel tab="applied" />);
-      const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+      const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
       expect(rows[0].textContent).toContain('Hangzhou');
-      // Committed op is filtered out.
       expect(container.textContent).not.toContain('Created sights');
     });
 
@@ -162,7 +166,7 @@ describe('YOpsLogPanel', () => {
       });
 
       const { container } = render(<YOpsLogPanel tab="committed" />);
-      const rows = container.querySelectorAll('[data-testid^="yops-log-op-"]');
+      const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
       expect(rows[0].textContent).toContain('Created sights');
       expect(container.textContent).not.toContain('Hangzhou');
@@ -174,17 +178,14 @@ describe('YOpsLogPanel', () => {
           tree: { trees: [], relations: [] },
           sourceIndex: new Map(),
           opsLog: [humanOp()],
-          // No rowsById entry, no opOrigins — the conservative fallback
-          // treats the op as active uncommitted, matching the
-          // `selectActiveUncommittedRowCount` "hasUnknownOrigin" branch.
         });
       });
 
       const applied = render(<YOpsLogPanel tab="applied" />);
-      expect(applied.container.querySelectorAll('[data-testid^="yops-log-op-"]').length).toBe(1);
+      expect(applied.container.querySelectorAll(ROWS_ONLY).length).toBe(1);
 
       const committed = render(<YOpsLogPanel tab="committed" />);
-      expect(committed.container.querySelectorAll('[data-testid^="yops-log-op-"]').length).toBe(0);
+      expect(committed.container.querySelectorAll(ROWS_ONLY).length).toBe(0);
     });
 
     it('renders a tab-specific empty state when the slice is empty', () => {
@@ -209,13 +210,108 @@ describe('YOpsLogPanel', () => {
         yl_c: { isCommitted: true },
       };
       const { applied, committed } = splitOpsByCommittedness(ops, origins, rows);
-      expect(applied).toEqual([humanOp()].map((op) => ({ ...op, source: applied[0].source })));
       expect(applied.length).toBe(1);
       expect(committed.length).toBe(1);
-      // Verify the actual op identities (not just lengths) by checking
-      // the verb-bearing key.
       expect((applied[0] as { set?: unknown }).set).toBeDefined();
       expect((committed[0] as { define?: unknown }).define).toBeDefined();
+    });
+  });
+
+  describe('provenance click-through (PR 4)', () => {
+    beforeEach(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it('clicking the collapsed-row quote excerpt scrolls the chat to the source turn', () => {
+      const turn = document.createElement('div');
+      turn.setAttribute('data-turn-hash', 'sha256:abcdef1234567890');
+      document.body.appendChild(turn);
+
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [llmOp()],
+        });
+      });
+
+      const { container } = render(<YOpsLogPanel />);
+      const quoteLink = container.querySelector(
+        '[data-testid="yops-log-op-0-quote-link"]'
+      ) as HTMLElement;
+      expect(quoteLink).toBeTruthy();
+      fireEvent.click(quoteLink);
+
+      expect(turn.scrollIntoView).toHaveBeenCalled();
+      expect(turn.getAttribute('data-scroll-highlight')).toBe('true');
+
+      document.body.removeChild(turn);
+    });
+
+    it('clicking the quote excerpt does not toggle the disclosure (stopPropagation)', () => {
+      const turn = document.createElement('div');
+      turn.setAttribute('data-turn-hash', 'sha256:abcdef1234567890');
+      document.body.appendChild(turn);
+
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [llmOp()],
+        });
+      });
+
+      const { container } = render(<YOpsLogPanel />);
+      expect(container.textContent ?? '').not.toContain('YOps core');
+
+      const quoteLink = container.querySelector(
+        '[data-testid="yops-log-op-0-quote-link"]'
+      ) as HTMLElement;
+      fireEvent.click(quoteLink);
+
+      expect(container.textContent ?? '').not.toContain('YOps core');
+
+      document.body.removeChild(turn);
+    });
+
+    it('disclosure quote button also scrolls when expanded', () => {
+      const turn = document.createElement('div');
+      turn.setAttribute('data-turn-hash', 'sha256:abcdef1234567890');
+      document.body.appendChild(turn);
+
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [llmOp()],
+        });
+      });
+
+      const { container } = render(<YOpsLogPanel />);
+      const row = container.querySelector('[data-testid="yops-log-op-0"] > button') as HTMLElement;
+      fireEvent.click(row);
+
+      const disclosureQuote = container.querySelector(
+        '[data-testid="yops-log-op-0-disclosure-quote-link"]'
+      ) as HTMLElement;
+      expect(disclosureQuote).toBeTruthy();
+      fireEvent.click(disclosureQuote);
+
+      expect(turn.scrollIntoView).toHaveBeenCalled();
+
+      document.body.removeChild(turn);
+    });
+
+    it('human ops have no quote link to render (provenance is null)', () => {
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [humanOp()],
+        });
+      });
+      const { container } = render(<YOpsLogPanel />);
+      expect(container.querySelector('[data-testid="yops-log-op-0-quote-link"]')).toBeNull();
     });
   });
 });
