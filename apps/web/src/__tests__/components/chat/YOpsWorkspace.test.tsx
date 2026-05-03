@@ -23,6 +23,11 @@ vi.mock('@/components/chat/YOpsLogPanel', async () => {
     ),
   };
 });
+vi.mock('@/components/chat/ArchivedOpsPanel', () => ({
+  ArchivedOpsPanel: ({ conversationId }: { conversationId: string | null }) => (
+    <div data-testid="archived-ops-panel-stub">archived: {conversationId ?? 'no-conv'}</div>
+  ),
+}));
 vi.mock('@/components/chat/WorkspaceTopbar', () => ({
   WorkspaceTopbar: () => <div data-testid="topbar-stub" />,
 }));
@@ -98,5 +103,19 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
     // Still on Applied, not auto-switched to Draft.
     expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+  });
+
+  it('clicking the Archived tab mounts ArchivedOpsPanel with the active conversationId', () => {
+    act(() => {
+      useWorkspaceStore.getState().setConversation('conv_xyz');
+    });
+    const { container, getByText } = render(<YOpsWorkspace />);
+    fireEvent.click(getByText('Archived'));
+    const panel = container.querySelector('[data-testid="archived-ops-panel-stub"]');
+    expect(panel).toBeTruthy();
+    expect(panel?.textContent).toContain('archived: conv_xyz');
+    // The other panels are not rendered while Archived is active.
+    expect(container.querySelector('[data-testid^="yops-log-panel-stub-"]')).toBeNull();
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
   });
 });

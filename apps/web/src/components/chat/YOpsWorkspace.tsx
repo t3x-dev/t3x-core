@@ -6,24 +6,23 @@ import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
+import { ArchivedOpsPanel } from './ArchivedOpsPanel';
 import { ReplayWarningBanner } from './ReplayWarningBanner';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 import { splitOpsByCommittedness, YOpsLogPanel } from './YOpsLogPanel';
 
 /**
- * Top-half tabs in the workspace, post plan PR 2.
+ * Top-half tabs in the workspace, post plan PR 2 + PR 5.
  *
- * Per the workbench plan §8 the OPS panel splits into real states:
+ * Per the workbench plan §8 + §11:
  *   - draft     → uncommitted proposal staged via Extract or manual edit
  *   - applied   → yops_log rows not yet referenced by a commit
  *   - committed → yops_log rows referenced by `commits.yops_log_ids`
+ *   - archived  → yops_log rows with `superseded_at != null` (read-only audit)
  *   - script    → raw YAML editor (the "Raw YAML" tab; renamed in PR 3)
- *
- * `archived` (rows with `superseded_at != null`) is intentionally not
- * included here — that's plan PR 5, which needs a separate fetch path.
  */
-type TopView = 'draft' | 'applied' | 'committed' | 'script';
+type TopView = 'draft' | 'applied' | 'committed' | 'archived' | 'script';
 
 const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 48;
@@ -39,6 +38,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   // raw YAML editor when there's nothing to render.
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const conversationId = useWorkspaceStore((s) => s.conversationId);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
   const initialTab = useMemo<TopView>(() => {
@@ -165,6 +165,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
               { id: 'draft', label: 'Draft' },
               { id: 'applied', label: 'Applied' },
               { id: 'committed', label: 'Committed' },
+              { id: 'archived', label: 'Archived' },
               // 'Raw YAML' visually demotes the editor to an advanced tab
               // (workbench plan §1: hide raw YAML, elevate structured ops).
               // The id stays 'script' to minimize churn in tests / a11y
@@ -190,7 +191,13 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
           ))}
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
-          {topView === 'script' ? <ScriptEditor /> : <YOpsLogPanel tab={topView} />}
+          {topView === 'script' ? (
+            <ScriptEditor />
+          ) : topView === 'archived' ? (
+            <ArchivedOpsPanel conversationId={conversationId} />
+          ) : (
+            <YOpsLogPanel tab={topView} />
+          )}
         </div>
       </div>
 
