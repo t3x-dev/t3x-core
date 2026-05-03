@@ -18,6 +18,7 @@ import type { Source, SourcedYOp } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Sparkles, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { buildOpCardModel, type OpCardModel } from '@/domain/yops/opCardModel';
+import { useScrollToTurn } from '@/hooks/shared/useScrollToTurn';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
@@ -48,6 +49,15 @@ function truncateQuote(quote: string, max = 60): string {
 function OpRow({ model, index }: { model: OpCardModel; index: number }) {
   const [open, setOpen] = useState(false);
   const human = model.source.kind === 'human';
+  const scrollToTurn = useScrollToTurn();
+  const turnHash = model.provenance?.turnHash;
+  const handleScrollToSource = (ev: React.MouseEvent | React.KeyboardEvent) => {
+    if (!turnHash) return;
+    // Stop the click from also toggling the disclosure when the user
+    // clicks the inline quote excerpt — the row is wrapped in a button.
+    ev.stopPropagation();
+    scrollToTurn(turnHash);
+  };
 
   return (
     <div
@@ -114,8 +124,30 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
           ops with a turn quote, this lets users scan provenance
           without expanding every card.
         */}
-        {model.provenance && model.provenance.quote ? (
-          <div className="flex items-center gap-2 pl-7 text-[10.5px] text-[var(--text-tertiary)] truncate">
+        {model.provenance?.quote ? (
+          <span
+            // The excerpt acts as a click target for jumping to the
+            // source turn. We can't render a nested <button> (parent
+            // is already a button — invalid HTML), so this is a span
+            // with a click handler. Keyboard reachability is provided
+            // by tabbing into the parent button + Enter, then into
+            // the disclosure where the disclosure-quote-link IS a
+            // real <button> with full a11y. The collapsed-row excerpt
+            // is a convenience surface; the disclosure path is the
+            // canonical accessible path.
+            onClick={handleScrollToSource}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                handleScrollToSource(ev);
+              }
+            }}
+            className={cn(
+              'flex items-center gap-2 pl-7 text-[10.5px] text-[var(--text-tertiary)] truncate',
+              'hover:text-[var(--source)] cursor-pointer transition-colors'
+            )}
+            data-testid={`yops-log-op-${index}-quote-link`}
+            title={`Jump to source turn ${model.provenance.turnHash.slice(0, 14)}…`}
+          >
             <span className="font-mono text-[9px] uppercase tracking-wide opacity-70 shrink-0">
               from
             </span>
@@ -127,7 +159,7 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
                 · {model.source.attribution}
               </span>
             )}
-          </div>
+          </span>
         ) : null}
       </button>
 
@@ -169,14 +201,28 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
               {model.provenance && (
                 <>
                   <dt className="text-[var(--text-tertiary)]">turn</dt>
-                  <dd className="text-[var(--text-primary)] truncate">
-                    {model.provenance.turnHash.slice(0, 14)}…
+                  <dd className="truncate">
+                    <button
+                      type="button"
+                      onClick={handleScrollToSource}
+                      className="text-[var(--source)] hover:underline font-mono"
+                      data-testid={`yops-log-op-${index}-turn-link`}
+                    >
+                      {model.provenance.turnHash.slice(0, 14)}…
+                    </button>
                   </dd>
                   {model.provenance.quote && (
                     <>
                       <dt className="text-[var(--text-tertiary)]">quote</dt>
-                      <dd className="text-[var(--text-primary)] italic">
-                        &ldquo;{model.provenance.quote}&rdquo;
+                      <dd>
+                        <button
+                          type="button"
+                          onClick={handleScrollToSource}
+                          className="text-[var(--text-primary)] italic hover:text-[var(--source)] text-left"
+                          data-testid={`yops-log-op-${index}-disclosure-quote-link`}
+                        >
+                          &ldquo;{model.provenance.quote}&rdquo;
+                        </button>
                       </dd>
                     </>
                   )}
