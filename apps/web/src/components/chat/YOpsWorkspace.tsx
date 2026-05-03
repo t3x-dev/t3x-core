@@ -1,7 +1,7 @@
 'use client';
 
 import { PanelRightOpen } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
@@ -9,9 +9,21 @@ import { AfterPanel } from './AfterPanel';
 import { ReplayWarningBanner } from './ReplayWarningBanner';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
-import { YOpsLogPanel } from './YOpsLogPanel';
+import { splitOpsByCommittedness, YOpsLogPanel } from './YOpsLogPanel';
 
-type TopView = 'ops' | 'script';
+/**
+ * Top-half tabs in the workspace, post plan PR 2.
+ *
+ * Per the workbench plan §8 the OPS panel splits into real states:
+ *   - draft     → uncommitted proposal staged via Extract or manual edit
+ *   - applied   → yops_log rows not yet referenced by a commit
+ *   - committed → yops_log rows referenced by `commits.yops_log_ids`
+ *   - script    → raw YAML editor (the "Raw YAML" tab; renamed in PR 3)
+ *
+ * `archived` (rows with `superseded_at != null`) is intentionally not
+ * included here — that's plan PR 5, which needs a separate fetch path.
+ */
+type TopView = 'draft' | 'applied' | 'committed' | 'script';
 
 const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 48;
@@ -22,11 +34,26 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const [splitRatio, setSplitRatio] = useState(DEFAULT_SPLIT_RATIO);
   const [showBefore, setShowBefore] = useState(false);
-  // Script is the canonical product in the propose/apply flow — what the
-  // user reviews, edits, and Applies. Ops view is the per-op audit
-  // surface (source provenance, turn refs, replay order). Script comes
-  // first as the default and visually leads in the tab order.
-  const [topView, setTopView] = useState<TopView>('script');
+  // Default to whichever tab has live content: a staged draft, otherwise
+  // applied ops, otherwise committed history, falling through to the
+  // raw YAML editor when there's nothing to render. The user can pick
+  // any tab manually; this just avoids landing them on an empty state
+  // when something more interesting is one tab away.
+  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
+  const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const opOrigins = useWorkspaceStore((s) => s.opOrigins);
+  const rowsById = useWorkspaceStore((s) => s.rowsById);
+  const initialTab = useMemo<TopView>(() => {
+    if (draftCount > 0) return 'draft';
+    const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
+    if (applied.length > 0) return 'applied';
+    if (committed.length > 0) return 'committed';
+    return 'script';
+    // Computed once on mount; `topView` becomes user-controlled after.
+    // Recomputing on every store change would clobber the user's pick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [topView, setTopView] = useState<TopView>(initialTab);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const prevExpandedRef = useRef(panelExpanded);
@@ -114,8 +141,14 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         >
           {(
             [
-              { id: 'script', label: 'Script' },
-              { id: 'ops', label: 'Ops' },
+              { id: 'draft', label: 'Draft' },
+              { id: 'applied', label: 'Applied' },
+              { id: 'committed', label: 'Committed' },
+              // 'Raw YAML' visually demotes the editor to an advanced tab
+              // (workbench plan §1: hide raw YAML, elevate structured ops).
+              // The id stays 'script' to minimize churn in tests / a11y
+              // labels — the visible label is what users see.
+              { id: 'script', label: 'Raw YAML' },
             ] as const
           ).map((tab) => (
             <button
@@ -136,7 +169,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
           ))}
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
-          {topView === 'ops' ? <YOpsLogPanel /> : <ScriptEditor />}
+          {topView === 'script' ? <ScriptEditor /> : <YOpsLogPanel tab={topView} />}
         </div>
       </div>
 

@@ -170,26 +170,117 @@ function OpRow({ op, index }: { op: SourcedYOp; index: number }) {
   );
 }
 
-export function YOpsLogPanel() {
+/**
+ * Which slice of the proposal/ledger this panel renders. Each value
+ * picks a different data source from the store and tunes the empty-
+ * state copy accordingly. Per the workbench plan §8 — naming + filtering
+ * makes draft / applied / committed visually distinct without faking
+ * counts when a tab has nothing to show.
+ *
+ *   - 'draft':     `workspaceStore.draftOps` (the staged proposal)
+ *   - 'applied':   active `opsLog` rows where `is_committed === false`
+ *   - 'committed': active `opsLog` rows where `is_committed === true`
+ *
+ * `archived` (rows with `superseded_at != null`) is deliberately NOT
+ * surfaced here — it needs a separate fetch path and is its own panel
+ * in plan PR 5.
+ */
+export type YOpsLogTab = 'draft' | 'applied' | 'committed';
+
+const EMPTY_STATE_BY_TAB: Record<YOpsLogTab, { title: string; body: string }> = {
+  draft: {
+    title: 'No draft staged',
+    body: 'Run an extraction (or edit the script directly) to stage a proposal here. The ops you see in this tab are the candidate changes Apply will commit.',
+  },
+  applied: {
+    title: 'No applied ops',
+    body: 'Applied ops are written to yops_log but not yet wrapped in a commit. They show up here once you Apply a draft. Until then, this tab stays empty.',
+  },
+  committed: {
+    title: 'No committed ops',
+    body: 'Committed ops are part of an immutable commit hash-chain. This tab fills in once you commit applied ops on this conversation.',
+  },
+};
+
+interface YOpsLogPanelProps {
+  /** Which slice of the proposal/ledger to render. Defaults to 'applied'. */
+  tab?: YOpsLogTab;
+}
+
+/**
+ * Split the active opsLog into applied (uncommitted) and committed by
+ * walking the parallel `opOrigins` array and looking up each row's
+ * `isCommitted` flag. Ops without row metadata (e.g. a draft that
+ * hasn't been hydrated against rowsById yet) are conservatively
+ * classified as applied — that mirrors `selectActiveUncommittedRowCount`'s
+ * fallback so the two surfaces agree.
+ *
+ * Exported so the boundary test for tab data sources can pin the
+ * mapping without touching the rendering code.
+ */
+export function splitOpsByCommittedness(
+  opsLog: readonly SourcedYOp[],
+  opOrigins: readonly { rowId: string | null }[],
+  rowsById: Record<string, { isCommitted: boolean }>
+): { applied: SourcedYOp[]; committed: SourcedYOp[] } {
+  const applied: SourcedYOp[] = [];
+  const committed: SourcedYOp[] = [];
+  for (let i = 0; i < opsLog.length; i++) {
+    const origin = opOrigins[i];
+    const rowId = origin?.rowId;
+    const row = rowId ? rowsById[rowId] : undefined;
+    if (row?.isCommitted) {
+      committed.push(opsLog[i]);
+    } else {
+      applied.push(opsLog[i]);
+    }
+  }
+  return { applied, committed };
+}
+
+export function YOpsLogPanel({ tab = 'applied' }: YOpsLogPanelProps = {}) {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const opOrigins = useWorkspaceStore((s) => s.opOrigins);
+  const rowsById = useWorkspaceStore((s) => s.rowsById);
+  const draftOps = useWorkspaceStore((s) => s.draftOps);
+
+  const visibleOps = useMemo<readonly SourcedYOp[]>(() => {
+    if (tab === 'draft') return draftOps;
+    const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
+    return tab === 'committed' ? committed : applied;
+  }, [tab, opsLog, opOrigins, rowsById, draftOps]);
 
   const stats = useMemo(() => {
     let human = 0;
     let llm = 0;
-    for (const op of opsLog) {
+    for (const op of visibleOps) {
       const src = (op as unknown as { source: Source }).source;
       if (src.type === 'human') human++;
       else llm++;
     }
-    return { total: opsLog.length, human, llm };
-  }, [opsLog]);
+    return { total: visibleOps.length, human, llm };
+  }, [visibleOps]);
+
+  const empty = EMPTY_STATE_BY_TAB[tab];
 
   return (
-    <div className="flex flex-col h-full bg-[var(--panel-alt)]">
+    <div
+      className="flex flex-col h-full bg-[var(--panel-alt)]"
+      data-testid={`yops-log-panel-${tab}`}
+    >
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel)]">
         <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[var(--status-success)]" />
-          Ops log
+          <span
+            className={cn(
+              'inline-block h-2 w-2 rounded-full',
+              tab === 'draft'
+                ? 'bg-[var(--source)]'
+                : tab === 'committed'
+                  ? 'bg-[var(--status-success)]'
+                  : 'bg-[var(--status-warning,#facc15)]'
+            )}
+          />
+          {tab === 'draft' ? 'Draft' : tab === 'committed' ? 'Committed' : 'Applied'}
         </span>
         <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
           <span>
@@ -208,16 +299,20 @@ export function YOpsLogPanel() {
         </span>
       </div>
 
-      {opsLog.length === 0 ? (
+      {visibleOps.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
-          <div className="text-[11px] text-[var(--text-tertiary)] leading-relaxed max-w-[260px]">
-            The ops log is empty. Run an extraction or quote a span from chat — every action (yours
-            or the LLM&rsquo;s) shows up here as a block you can inspect and audit.
+          <div className="max-w-[280px]">
+            <div className="text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
+              {empty.title}
+            </div>
+            <div className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">
+              {empty.body}
+            </div>
           </div>
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
-          {opsLog.map((op, i) => {
+          {visibleOps.map((op, i) => {
             const src = (op as unknown as { source: Source }).source;
             return <OpRow key={`${src.at}-${i}-${verbOf(op)}`} op={op} index={i} />;
           })}
