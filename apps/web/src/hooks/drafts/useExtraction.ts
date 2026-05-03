@@ -222,12 +222,14 @@ export function useExtraction({
         // the chip in ChatHeader can swap density without a re-extract.
         // `result.variants` is undefined when the pipeline didn't
         // request a preset (legacy callers) — setDraft tolerates that.
+        //
+        // setDraft is the single public action that mutates draft
+        // proposal state — it now writes scriptText (canonical YAML
+        // mirror) and scriptDirty (false) atomically. Callers no
+        // longer follow up with setScriptText / setScriptDirty: that
+        // triplet was the drift surface PR #952's P1 exposed
+        // (extractionWorker swapped ops without rewriting scriptText).
         store.setDraft({ ops: result.ops, tree: previewTree, variants: result.variants });
-        store.setScriptText(serializeOpsToYaml(result.ops));
-        // The script is the canonical proposal — not "dirty" in the
-        // user-edited sense. Apply is gated on `scriptDirty || hasDraft`
-        // (see useScriptExecution), so this still enables the button.
-        store.setScriptDirty(false);
         store.setMode('idle');
         toast.success(
           `Extracted ${result.ops.length} op${result.ops.length === 1 ? '' : 's'} — review and click Apply`,

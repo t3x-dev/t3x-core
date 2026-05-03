@@ -1,11 +1,44 @@
 import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import {
   DRAFT_PERSISTENCE_CAP,
   selectActiveUncommittedRowCount,
   selectPanelExpanded,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
+
+/**
+ * The invariant the single-writer refactor exists to enforce:
+ *
+ *   When `hasDraft && !scriptDirty`, scriptText is the canonical YAML
+ *   mirror of draftOps, and the per-conversation snapshot agrees with
+ *   what's in memory.
+ *
+ * This isn't a separate test — it's an oracle threaded through other
+ * tests after each proposal-mutating transition. Any failure here
+ * proves the writer let scriptText/draftOps/snapshot drift apart, the
+ * exact bug class that caused PR #952's P1.
+ */
+function assertProposalInvariant(): void {
+  const s = useWorkspaceStore.getState();
+  if (!s.hasDraft || s.scriptDirty) return;
+  expect(s.scriptText, 'scriptText must equal serializeOpsToYaml(draftOps) when clean').toBe(
+    serializeOpsToYaml(s.draftOps)
+  );
+  if (s.conversationId) {
+    const snap = s.draftsByConversation[s.conversationId];
+    expect(
+      snap,
+      'snapshot must exist when hasDraft is true and conversation is active'
+    ).toBeDefined();
+    if (snap) {
+      expect(snap.ops, 'snapshot ops must match draftOps').toEqual(s.draftOps);
+      expect(snap.scriptText, 'snapshot scriptText must match scriptText').toBe(s.scriptText);
+      expect(snap.scriptDirty, 'snapshot scriptDirty must match scriptDirty').toBe(s.scriptDirty);
+    }
+  }
+}
 
 describe('workspaceStore (state-only)', () => {
   beforeEach(() => {
@@ -372,16 +405,24 @@ describe('workspaceStore (state-only)', () => {
     ];
 
     it('swaps draftOps to the cached variant when chip changes and variant exists', () => {
+      useWorkspaceStore.getState().setConversation('conv_xyz');
       useWorkspaceStore.getState().setDraft({
         ops: balancedOps,
         tree: { trees: [], relations: [] },
         variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
       });
+      // After setDraft: scriptText/draftOps/snapshot must agree.
+      assertProposalInvariant();
       // Sanity check: starts with balanced ops and balanced preset.
       expect(useWorkspaceStore.getState().draftOps).toEqual(balancedOps);
       expect(useWorkspaceStore.getState().extractionPreset).toBe('balanced');
 
       useWorkspaceStore.getState().setExtractionPreset('detailed');
+
+      // After live-swap: same invariant must still hold. This is the
+      // canary for #952's P1 — pre-fix the swap rewrote draftOps but
+      // not scriptText, and this assertion would fail.
+      assertProposalInvariant();
 
       const s = useWorkspaceStore.getState();
       expect(s.extractionPreset).toBe('detailed');
@@ -420,7 +461,9 @@ describe('workspaceStore (state-only)', () => {
         tree: { trees: [], relations: [] },
         variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
       });
+      assertProposalInvariant();
       useWorkspaceStore.getState().setExtractionPreset('concise');
+      assertProposalInvariant();
       const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_xyz;
       // Persisting the swapped ops means a refresh restores the variant
       // the user was actually viewing, not the one that happened to be
@@ -791,13 +834,15 @@ describe('workspaceStore (state-only)', () => {
 
     it('setDraft writes to draftsByConversation when a conversation is active', () => {
       useWorkspaceStore.getState().setConversation('conv_a');
-      useWorkspaceStore.getState().setScriptText('yops:\n  - set: ...');
       useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
 
       const map = useWorkspaceStore.getState().draftsByConversation;
       expect(map.conv_a).toBeDefined();
       expect(map.conv_a.ops).toEqual(draftOps);
-      expect(map.conv_a.scriptText).toBe('yops:\n  - set: ...');
+      // scriptText is a canonical YAML mirror of ops, written by
+      // setDraft itself (single-writer contract). Snapshot captures
+      // that mirror, not whatever the editor happened to hold.
+      expect(map.conv_a.scriptText).toContain('trip/dest');
       expect(map.conv_a.scriptDirty).toBe(false);
     });
 
@@ -1035,8 +1080,11 @@ describe('workspaceStore (state-only)', () => {
       // Stage two distinct drafts and verify each restore reads ONLY
       // the matching id's snapshot. A bug here would show up as
       // conv_a's draft appearing in conv_b after a switch+F5.
+      // scriptText pre-seeding is no longer meaningful — setDraft now
+      // writes its own canonical YAML mirror. We assert isolation by
+      // matching ops and checking scriptText was derived from those
+      // ops, not from the other conversation's.
       useWorkspaceStore.getState().setConversation('conv_a');
-      useWorkspaceStore.getState().setScriptText('script for A');
       useWorkspaceStore.getState().setDraft({ ops: draftOps as never, tree: previewTree });
 
       const opsB = [
@@ -1051,7 +1099,6 @@ describe('workspaceStore (state-only)', () => {
         },
       ];
       useWorkspaceStore.getState().setConversation('conv_b');
-      useWorkspaceStore.getState().setScriptText('script for B');
       useWorkspaceStore.getState().setDraft({
         ops: opsB as never,
         tree: { trees: [{ key: 'other_root', slots: {}, children: [] }], relations: [] },
@@ -1064,7 +1111,10 @@ describe('workspaceStore (state-only)', () => {
       expect(restoredA).toBe(true);
       let s = useWorkspaceStore.getState();
       expect(s.draftOps).toEqual(draftOps);
-      expect(s.scriptText).toBe('script for A');
+      // conv_a's scriptText must trace to conv_a's ops (trip/dest), not
+      // conv_b's (other_root). That's the cross-leak guard.
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptText).not.toContain('other_root');
 
       // Now switch to conv_b. Reset wipes A's in-memory draft; restore
       // for B brings B's draft back. A's persisted entry is left
@@ -1075,7 +1125,8 @@ describe('workspaceStore (state-only)', () => {
       expect(restoredB).toBe(true);
       s = useWorkspaceStore.getState();
       expect(s.draftOps).toEqual(opsB);
-      expect(s.scriptText).toBe('script for B');
+      expect(s.scriptText).toContain('other_root');
+      expect(s.scriptText).not.toContain('trip/dest');
       // Sanity: both persisted entries still present.
       expect(useWorkspaceStore.getState().draftsByConversation.conv_a).toBeDefined();
       expect(useWorkspaceStore.getState().draftsByConversation.conv_b).toBeDefined();

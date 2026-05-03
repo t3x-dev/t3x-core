@@ -619,6 +619,95 @@ describe('useScriptExecution', () => {
     expect(after.lastError).toBe('persist conflict');
   });
 
+  describe('preset live-swap → Apply (user-path regression for #951/#952)', () => {
+    // The exact scenario PR #952's P1 surfaced: extract with preset
+    // variants cached, switch the chip, click Apply. Before the
+    // single-writer refactor this would commit the variant active at
+    // EXTRACT time, not at APPLY time, because setExtractionPreset
+    // swapped draftOps without updating scriptText. parseScript reads
+    // scriptText, so Apply was committing stale YAML while AfterPanel
+    // showed the swapped variant.
+    //
+    // This test fails against the pre-fix code and passes after.
+    // It's the canary for the entire mirror-state drift class.
+
+    const opForPath = (path: string, value: string) =>
+      ({
+        set: { path, value },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: value },
+        },
+      }) as never;
+
+    const balancedOps = [opForPath('trip/dest', 'HZ'), opForPath('trip/budget', '5k')];
+    const conciseOps = [opForPath('trip/dest', 'HZ')];
+    const detailedOps = [
+      opForPath('trip/dest', 'HZ'),
+      opForPath('trip/budget', '5k'),
+      opForPath('trip/duration', '7d'),
+    ];
+
+    it('Apply commits the variant currently displayed, not the one active at extract time', async () => {
+      // Mimic what useExtraction does after a successful Extract with
+      // preset variants: setDraft writes draftOps, scriptText, and
+      // caches all three variants for chip swap.
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+
+      // User clicks the chip to switch to Concise.
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+
+      // Sanity: AfterPanel would now render the concise ops.
+      expect(useWorkspaceStore.getState().draftOps).toEqual(conciseOps);
+
+      // Apply.
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      // Apply commits the concise ops. Pre-fix this would have
+      // committed the balanced ops (scriptText held the balanced YAML
+      // because setExtractionPreset didn't rewrite it).
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, committedOps] = commitOpsMock.mock.calls[0];
+      expect(committedOps).toHaveLength(conciseOps.length);
+      // Map by path so we don't depend on serializer ordering.
+      const committedPaths = (committedOps as Array<{ set: { path: string } }>).map(
+        (op) => op.set.path
+      );
+      expect(committedPaths).toEqual(['trip/dest']);
+      expect(committedPaths).not.toContain('trip/budget');
+    });
+
+    it('Apply commits the variant after switching twice (Concise → Detailed)', async () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      const [, committedOps] = commitOpsMock.mock.calls[0];
+      const committedPaths = (committedOps as Array<{ set: { path: string } }>).map(
+        (op) => op.set.path
+      );
+      expect(committedPaths).toEqual(['trip/dest', 'trip/budget', 'trip/duration']);
+    });
+  });
+
   it('execute clears scriptDirty + draft state + persisted map after a successful commit', async () => {
     // Setup: simulate the propose-only flow's pre-Apply state by
     // staging a draft AND priming the persisted map (since setConversation

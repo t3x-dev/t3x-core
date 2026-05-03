@@ -86,6 +86,16 @@ jobs:
       - name: Verify fixed versions
         run: pnpm verify:versions:no-manifest
 
+      # Lint and format gate. Placed before build so style/import-rule
+      # failures surface fast without paying for a full workspace build.
+      # Note: this step alone makes Biome part of CI, but for `local-
+      # smoke / Clean install smoke` to actually BLOCK merge, the repo
+      # branch protection rule on `main` must mark this workflow as a
+      # required status check (one-time GitHub repo setting, not in
+      # this file).
+      - name: Lint and format check
+        run: pnpm check
+
       - name: Build packages
         run: pnpm build
 
