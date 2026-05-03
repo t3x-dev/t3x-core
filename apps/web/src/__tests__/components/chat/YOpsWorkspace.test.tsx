@@ -1,0 +1,102 @@
+// @vitest-environment jsdom
+
+import type { SourcedYOp } from '@t3x-dev/core';
+import { act, fireEvent, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Stub child panels so the test focuses on tab-switch behavior, not
+// panel rendering (those have their own dedicated tests).
+vi.mock('@/components/chat/AfterPanel', () => ({
+  AfterPanel: () => <div data-testid="after-panel-stub" />,
+}));
+vi.mock('@/components/chat/ScriptEditor', () => ({
+  ScriptEditor: () => <div data-testid="script-editor-stub">Raw YAML</div>,
+}));
+vi.mock('@/components/chat/YOpsLogPanel', async () => {
+  const actual = await vi.importActual<typeof import('@/components/chat/YOpsLogPanel')>(
+    '@/components/chat/YOpsLogPanel'
+  );
+  return {
+    ...actual,
+    YOpsLogPanel: ({ tab }: { tab?: string }) => (
+      <div data-testid={`yops-log-panel-stub-${tab ?? 'default'}`}>panel: {tab}</div>
+    ),
+  };
+});
+vi.mock('@/components/chat/WorkspaceTopbar', () => ({
+  WorkspaceTopbar: () => <div data-testid="topbar-stub" />,
+}));
+vi.mock('@/components/chat/ReplayWarningBanner', () => ({
+  ReplayWarningBanner: () => null,
+}));
+
+import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+
+function llmOp(): SourcedYOp {
+  return {
+    define: { path: 'sights' },
+    source: {
+      type: 'llm',
+      model: 'm',
+      at: '2026-04-26T00:00:00Z',
+      turn_ref: { turn_hash: 'sha256:t1', quote: 'sights', start_char: 0, end_char: 6 },
+    },
+  } as SourcedYOp;
+}
+
+describe('YOpsWorkspace tab default + auto-switch', () => {
+  beforeEach(() => {
+    useWorkspaceStore.getState().reset();
+    useWorkspaceStore.setState({
+      panelExpandedByProject: { proj_a: true },
+      activeProjectId: 'proj_a',
+      draftsByConversation: {},
+    });
+  });
+  afterEach(() => {
+    useWorkspaceStore.getState().reset();
+  });
+
+  it('mounts on Raw YAML when the conversation is empty', () => {
+    const { container } = render(<YOpsWorkspace />);
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+  });
+
+  it('auto-switches to the Draft tab when the first draft arrives', () => {
+    const { container } = render(<YOpsWorkspace />);
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
+
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+
+    // Auto-switch fires: Draft tab is now visible, Raw YAML is hidden.
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
+  });
+
+  it('a manual tab pick locks the view — subsequent draft arrival does NOT clobber it', () => {
+    const { container, getByText } = render(<YOpsWorkspace />);
+    // User manually clicks the Applied tab.
+    const appliedTab = getByText('Applied');
+    fireEvent.click(appliedTab);
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
+
+    // Draft arrives — auto-switch should NOT fire because the user
+    // already picked.
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+    // Still on Applied, not auto-switched to Draft.
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+  });
+});
