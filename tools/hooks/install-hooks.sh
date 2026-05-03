@@ -17,18 +17,24 @@ fi
 GIT_DIR=$(git rev-parse --git-path hooks 2>/dev/null || echo ".git/hooks")
 mkdir -p "$GIT_DIR"
 
-HOOK_SRC="tools/hooks/pre-push.sh"
-HOOK_DST="$GIT_DIR/pre-push"
+install_hook() {
+  hook_name="$1"
+  hook_src="tools/hooks/${hook_name}.sh"
+  hook_dst="$GIT_DIR/$hook_name"
 
-if [ ! -f "$HOOK_SRC" ]; then
-  echo "[install-hooks] $HOOK_SRC not found; skipping"
-  exit 0
-fi
+  if [ ! -f "$hook_src" ]; then
+    echo "[install-hooks] $hook_src not found; skipping $hook_name"
+    return
+  fi
 
-cat > "$HOOK_DST" <<'EOF'
+  cat > "$hook_dst" <<EOF
 #!/usr/bin/env sh
-exec sh tools/hooks/pre-push.sh "$@"
+exec sh tools/hooks/${hook_name}.sh "\$@"
 EOF
-chmod +x "$HOOK_DST"
+  chmod +x "$hook_dst"
 
-echo "[install-hooks] pre-push hook installed at $HOOK_DST"
+  echo "[install-hooks] $hook_name hook installed at $hook_dst"
+}
+
+install_hook pre-commit
+install_hook pre-push
