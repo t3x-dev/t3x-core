@@ -218,7 +218,11 @@ export function useExtraction({
         // previous draft (if any) is replaced. A failed attempt above
         // would have skipped this branch entirely and the previous
         // draft survives untouched.
-        store.setDraft({ ops: result.ops, tree: previewTree });
+        // Forward the per-preset variants alongside the active ops so
+        // the chip in ChatHeader can swap density without a re-extract.
+        // `result.variants` is undefined when the pipeline didn't
+        // request a preset (legacy callers) — setDraft tolerates that.
+        store.setDraft({ ops: result.ops, tree: previewTree, variants: result.variants });
         store.setScriptText(serializeOpsToYaml(result.ops));
         // The script is the canonical proposal — not "dirty" in the
         // user-edited sense. Apply is gated on `scriptDirty || hasDraft`

@@ -351,6 +351,170 @@ describe('workspaceStore (state-only)', () => {
     expect(s.scriptDirty).toBe(false);
   });
 
+  describe('setExtractionPreset — live variant swap (#951)', () => {
+    const opForPath = (path: string, value: string): SourcedYOp =>
+      ({
+        set: { path, value },
+        source: {
+          type: 'llm' as const,
+          model: 'gpt-4o-mini',
+          at: '2026-04-26T00:00:00Z',
+          turn_ref: { turn_hash: 'sha256:t1', quote: value },
+        },
+      }) as never;
+
+    const conciseOps = [opForPath('trip/dest', 'HZ')];
+    const balancedOps = [opForPath('trip/dest', 'HZ'), opForPath('trip/budget', '5k')];
+    const detailedOps = [
+      opForPath('trip/dest', 'HZ'),
+      opForPath('trip/budget', '5k'),
+      opForPath('trip/duration', '7d'),
+    ];
+
+    it('swaps draftOps to the cached variant when chip changes and variant exists', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      // Sanity check: starts with balanced ops and balanced preset.
+      expect(useWorkspaceStore.getState().draftOps).toEqual(balancedOps);
+      expect(useWorkspaceStore.getState().extractionPreset).toBe('balanced');
+
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      expect(s.draftOps).toEqual(detailedOps);
+      // Preview tree is re-derived against current committed tree (empty
+      // here) — failure mode would surface as draftTree === null.
+      expect(s.draftTree).not.toBeNull();
+    });
+
+    it('falls back to preset-only when no variants are cached (legacy / no-Extract-yet)', () => {
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      // No draft, no swap — draftOps stays empty.
+      expect(s.draftOps).toEqual([]);
+      expect(s.hasDraft).toBe(false);
+    });
+
+    it('falls back to preset-only when the picked preset is missing from a partial variants set', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { balanced: balancedOps },
+      });
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      const s = useWorkspaceStore.getState();
+      expect(s.extractionPreset).toBe('detailed');
+      // No `detailed` variant cached — keep the existing draft as-is.
+      expect(s.draftOps).toEqual(balancedOps);
+    });
+
+    it('mirrors the swapped ops into the per-conversation draft snapshot', () => {
+      useWorkspaceStore.getState().setConversation('conv_xyz');
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+      const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_xyz;
+      // Persisting the swapped ops means a refresh restores the variant
+      // the user was actually viewing, not the one that happened to be
+      // result.ops at extract time.
+      expect(snapshot?.ops).toEqual(conciseOps);
+    });
+
+    it('keeps scriptText and scriptDirty in lockstep with the swapped ops', () => {
+      // Apply commits by parsing scriptText, not draftOps. If the chip
+      // swap mutates ops without rewriting scriptText, AfterPanel would
+      // show one variant while Apply commits the previous YAML — a
+      // silent commit-mismatch that survives the refresh because the
+      // snapshot would also keep the stale text.
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      // Seed scriptText with the balanced YAML, scriptDirty false (the
+      // canonical mirror useExtraction writes after a successful Extract).
+      useWorkspaceStore.setState({ scriptText: 'OLD-BALANCED-YAML', scriptDirty: false });
+
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+
+      const s = useWorkspaceStore.getState();
+      // scriptText was rewritten from the cached concise ops — anything
+      // that contains the concise path/value proves it tracks the new
+      // variant. We don't pin the exact serialization because that's
+      // the serializer's contract, not this setter's.
+      expect(s.scriptText).not.toBe('OLD-BALANCED-YAML');
+      expect(s.scriptText).toContain('trip/dest');
+      expect(s.scriptText).not.toContain('trip/budget'); // concise drops the second op
+      expect(s.scriptDirty).toBe(false);
+    });
+
+    it('mirrors the new scriptText into the persisted snapshot, not the stale one', () => {
+      useWorkspaceStore.getState().setConversation('conv_xyz');
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.setState({ scriptText: 'STALE-BALANCED', scriptDirty: false });
+
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+
+      const snapshot = useWorkspaceStore.getState().draftsByConversation.conv_xyz;
+      // Snapshot persists the *new* mirror so a refresh restores the
+      // (ops, scriptText) pair the user was actually viewing.
+      expect(snapshot?.ops).toEqual(detailedOps);
+      expect(snapshot?.scriptText).not.toBe('STALE-BALANCED');
+      expect(snapshot?.scriptText).toContain('trip/duration'); // detailed-only op
+      expect(snapshot?.scriptDirty).toBe(false);
+    });
+
+    it('refuses to swap ops while scriptDirty is true (preserves hand-edited YAML)', () => {
+      // The user typed into the editor between Extract and chip click;
+      // scriptDirty being true means scriptText IS the source of truth.
+      // Silently overwriting it with serializeOpsToYaml(cached) would
+      // delete user work — exactly the regression #951's "fall back
+      // gracefully when variants are absent" exists to prevent.
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.setState({ scriptText: 'USER-HAND-EDITED', scriptDirty: true });
+
+      useWorkspaceStore.getState().setExtractionPreset('concise');
+
+      const s = useWorkspaceStore.getState();
+      // Preset moves so the next Extract picks it up.
+      expect(s.extractionPreset).toBe('concise');
+      // Ops, tree, scriptText, scriptDirty all preserved verbatim.
+      expect(s.draftOps).toEqual(balancedOps);
+      expect(s.scriptText).toBe('USER-HAND-EDITED');
+      expect(s.scriptDirty).toBe(true);
+    });
+
+    it('clearDraft drops cached variants so the next chip toggle does not stale-swap', () => {
+      useWorkspaceStore.getState().setDraft({
+        ops: balancedOps,
+        tree: { trees: [], relations: [] },
+        variants: { concise: conciseOps, balanced: balancedOps, detailed: detailedOps },
+      });
+      useWorkspaceStore.getState().clearDraft();
+      expect(useWorkspaceStore.getState().draftVariants).toBeNull();
+
+      useWorkspaceStore.getState().setExtractionPreset('detailed');
+      // No variants left to read; setter behaves like the legacy no-op-on-ops path.
+      expect(useWorkspaceStore.getState().draftOps).toEqual([]);
+    });
+  });
+
   it('reset clears the draft along with other conversation-scoped state', () => {
     useWorkspaceStore.getState().setDraft({
       ops: [
