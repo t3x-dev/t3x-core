@@ -91,32 +91,36 @@ describe('useScriptExecution', () => {
       });
     }
 
-    it('repopulates Script from committed ops when scriptDirty is set but scriptText is blank', () => {
-      // The exact incoherent state the PR is targeting. Mirror should
-      // run, write the YAML, AND clear the stale scriptDirty flag (an
-      // empty dirty marker isn't meaningful manual content to preserve).
+    it('preserves an empty editor override verbatim (Ctrl-A delete must stick)', () => {
+      // The reviewer-flagged regression: setEditorOverride('') used to
+      // collapse to null and selectScriptText then fell back to opsLog,
+      // re-mirroring the canonical YAML right back into the editor.
+      // That made the editor un-clearable. Now '' is preserved, and
+      // an empty editor reads as a real (dirty) override.
       seedCommitted(sampleOps);
       useWorkspaceStore.getState().setEditorOverride('');
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(selectScriptText(s)).toContain('trip/dest');
-      expect(selectScriptText(s)).toContain('HZ');
-      expect(selectScriptDirty(s)).toBe(false);
+      expect(selectScriptText(s)).toBe('');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
-    it('repopulates Script when scriptDirty is set with whitespace-only text', () => {
-      // `trim() === ''` matches whitespace too — a stray newline or
-      // space character isn't a meaningful edit either.
+    it('preserves whitespace-only editor override (every keystroke counts)', () => {
+      // Same logic as the empty-string case: the user typed something
+      // (even if just whitespace); the in-memory state preserves it.
+      // Restore-time normalization (`restoreDraftFor`) downgrades
+      // whitespace-only to null so a meaningless persisted override
+      // doesn't survive a refresh — but the live setter does NOT.
       seedCommitted(sampleOps);
       useWorkspaceStore.getState().setEditorOverride('   \n\n  ');
 
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      expect(selectScriptText(s)).toContain('trip/dest');
-      expect(selectScriptDirty(s)).toBe(false);
+      expect(selectScriptText(s)).toBe('   \n\n  ');
+      expect(selectScriptDirty(s)).toBe(true);
     });
 
     it('does NOT overwrite a non-empty dirty script (real manual edit protected)', () => {
@@ -150,17 +154,14 @@ describe('useScriptExecution', () => {
       expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('selectScriptText resolves to draftOps YAML when draft staged + opsLog present', () => {
-      // Draft owns the script. Even if both a draft and a committed
-      // opsLog exist, selectScriptText resolves draftOps first
-      // (override → draftOps → opsLog → ''). Post-PR-1 there is no
-      // committed-mirror useEffect — the selector orders the cases
-      // declaratively.
+    it('selectScriptText falls through draftOps → opsLog when no override is set', () => {
+      // The selector resolution order: editorOverride → draftOps →
+      // opsLog → ''. With no override and a staged draft, draftOps
+      // wins; opsLog is the next fallback for the no-draft case.
       useWorkspaceStore.getState().setDraft({
         ops: sampleOps as never,
         tree: { trees: [], relations: [] },
       });
-      useWorkspaceStore.getState().setEditorOverride('');
       useWorkspaceStore.getState().setDerived({
         tree: { trees: [], relations: [] },
         sourceIndex: new Map(),
@@ -170,17 +171,15 @@ describe('useScriptExecution', () => {
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();
-      // Empty override normalized to null; draftOps wins.
+      // No override → draftOps wins.
       expect(selectScriptText(s)).toContain('trip/dest');
       expect(selectScriptDirty(s)).toBe(false);
     });
 
-    it('selectScriptText returns empty string when there is no draft, no opsLog, no override', () => {
-      // The truly-empty case: nothing staged, nothing applied, nothing
-      // typed. The editor is blank because there's literally nothing
-      // to show — not because of a stale override.
-      useWorkspaceStore.getState().setEditorOverride('');
-
+    it('selectScriptText returns empty string when there is nothing to show (no draft, no opsLog, no override)', () => {
+      // Truly empty conversation. No setEditorOverride call — the
+      // setter would now preserve '' and flip dirty to true. Idle
+      // state means override is null; selector returns ''.
       renderHook(() => useScriptExecution());
 
       const s = useWorkspaceStore.getState();

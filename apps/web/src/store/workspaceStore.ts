@@ -753,30 +753,26 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setLastExtractionPinIds: (lastExtractionPinIds) => set({ lastExtractionPinIds }),
 
       setEditorOverride: (text) => {
-        // The user typed in the editor. Set the override and mirror
-        // into the persisted snapshot (only when a draft is staged —
-        // an override on top of a non-draft state has nothing to apply
-        // and isn't persisted). The override survives a refresh.
-        //
-        // Empty / whitespace-only text is normalized to `null`. The
-        // user pressing Ctrl-A delete is "no manual edit", not "the
-        // override IS empty" — selectScriptDirty would otherwise return
-        // true on a meaningless string, and `restoreDraftFor` already
-        // applies the same downgrade for persisted snapshots. Keeping
-        // setter and restore symmetric prevents the in-memory state
-        // from holding values that survive a refresh as null.
-        const normalized = text.trim() === '' ? null : text;
+        // Preserve the user's text verbatim — including empty string.
+        // Earlier we collapsed '' / whitespace-only to null here, which
+        // round-trips Ctrl-A-delete back to canonical YAML via the
+        // selector fallback. That made the editor un-clearable. The
+        // empty-string-as-revert behavior, if wanted, belongs to
+        // `clearEditorOverride()` which the caller invokes explicitly.
+        // Persisted snapshots are still normalized at restore time
+        // (see `restoreDraftFor`) so a meaningless blank doesn't
+        // survive a refresh.
         const s = get();
         if (s.hasDraft && s.conversationId) {
           set({
-            editorOverride: normalized,
+            editorOverride: text,
             draftsByConversation: writeDraftSnapshot(s.draftsByConversation, s.conversationId, {
               ops: s.draftOps,
-              editorOverride: normalized,
+              editorOverride: text,
             }),
           });
         } else {
-          set({ editorOverride: normalized });
+          set({ editorOverride: text });
         }
       },
       clearEditorOverride: () => {
