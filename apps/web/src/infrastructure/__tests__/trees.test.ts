@@ -65,11 +65,11 @@ describe('createYOpsEntry HTTP body shape', () => {
   });
 
   it('emits replace_active_llm_draft: true when option is set', async () => {
-    // Apply-from-staged-Extract-draft path: the hook reads hasDraft and
-    // passes { replaceActiveLLMDraft: true } so the API marks prior
-    // active LLM drafts as superseded inside the same transaction. Pin
-    // the wire field name + value here — earlier tests pin the
-    // function-arg shape; this one pins what actually goes over HTTP.
+    // Explicit-supersede passthrough: when a caller opts in, the wire
+    // field name + value must round-trip verbatim. Pin it here —
+    // earlier tests pin the function-arg shape; this one pins what
+    // actually goes over HTTP. Note: the WebUI staged-Extract Apply
+    // path no longer sets this; re-extract is review-first append.
     fetchWithTimeoutMock.mockResolvedValueOnce(jsonResponse(baseEntry));
 
     await createYOpsEntry('conv_1', ops, 'pipeline', undefined, {

@@ -64,7 +64,7 @@ describe('Workspace script apply policy', () => {
     expect(policy.payload).toEqual({ kind: 'none', reason: 'Inherited baseline' });
   });
 
-  it('applies staged extract drafts with replaceActiveLLMDraft', () => {
+  it('applies staged extract drafts as an append (no LLM supersede)', () => {
     const policy = getApplyPolicyForScriptState({
       state: 'candidate',
       scriptDirty: false,
@@ -76,7 +76,7 @@ describe('Workspace script apply policy', () => {
 
     expect(policy.canApply).toBe(true);
     expect(policy.tooltip).toBe('Draft ready to apply');
-    expect(policy.payload).toEqual({ kind: 'candidate', replaceActiveLLMDraft: true });
+    expect(policy.payload).toEqual({ kind: 'append' });
   });
 
   it('disables active clean scripts', () => {

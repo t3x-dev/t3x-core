@@ -235,9 +235,12 @@ type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promis
 
 /**
  * Mark active-draft, **all-LLM** entries for the conversation as
- * superseded. Called atomically with the new extract entry's insert
- * so the workspace flips from "old suggestion + new suggestion" to
- * just "new suggestion" in a single transaction.
+ * superseded. Called atomically with the new entry's insert so the
+ * supersede + append happen in a single transaction. Used by callers
+ * that opt into `replace_active_llm_draft: true` — typically legacy
+ * clients or agent flows that genuinely want to overwrite prior LLM
+ * proposals. The WebUI staged-Extract Apply path does NOT trigger
+ * this (post-2026-05-04 review-first append flip).
  *
  * The function **always wraps its work in a database transaction**
  * (or, when the caller already passes a `tx`, opens a savepoint).

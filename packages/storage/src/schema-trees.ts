@@ -893,12 +893,16 @@ export const yopsLog = pgTable(
     /**
      * Marks an entry obsolete within the active draft (uncommitted)
      * window. NULL = active. Set by `supersedeActiveLLMSuggestions`
-     * when a re-extract replaces the prior LLM suggestion. Never set
-     * on committed entries — once an id appears in some commit's
-     * `yops_log_ids` it is part of the immutable baseline and must
-     * stay `superseded_at = NULL` forever. `createCommit` defends
-     * this by rejecting any `yops_log_ids` whose `superseded_at IS
-     * NOT NULL` at insert time.
+     * when a non-WebUI caller passes `replaceActiveLLMDraft: true`,
+     * by `supersedeActiveUncommittedYOpsLogEntries` on an explicit
+     * Replace (active_dirty Apply with `replaceActiveScript`), or by
+     * `supersedeYOpsLogEntryForRepair` on a Repair flow. The WebUI
+     * staged-Extract Apply path no longer triggers supersede — it
+     * appends. Never set on committed entries — once an id appears
+     * in some commit's `yops_log_ids` it is part of the immutable
+     * baseline and must stay `superseded_at = NULL` forever.
+     * `createCommit` defends this by rejecting any `yops_log_ids`
+     * whose `superseded_at IS NOT NULL` at insert time.
      */
     supersededAt: timestamp('superseded_at', { withTimezone: true }),
   },

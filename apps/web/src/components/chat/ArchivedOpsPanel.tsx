@@ -3,11 +3,15 @@
 /**
  * ArchivedOpsPanel — read-only timeline of superseded yops_log rows.
  *
- * Plan PR 5: when a re-extract replaces applied-but-uncommitted ops,
- * the prior rows stay in `yops_log` with `superseded_at` set. They're
- * not part of the live tree (replay walks active rows only) but they
- * are audit-relevant. This panel renders them as a faded timeline so
- * users can see what got replaced and when.
+ * Rows enter `superseded_at` state when an explicit Replace
+ * (active_dirty Apply with `replaceActiveScript: true`) or Repair
+ * (`repairYopsLogId`) flow runs. Re-extracting a staged Extract draft
+ * no longer fills this panel — the WebUI Apply path for staged drafts
+ * is append-only as of the review-first mechanism flip; see
+ * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+ * Superseded rows are not part of the live tree (replay walks active
+ * rows only) but they are audit-relevant. This panel renders them as
+ * a faded timeline so users can see what got replaced and when.
  *
  * Visually quieter than the active op cards: muted colors, no chevron,
  * no click-to-edit. The plan §11 first-iteration scope intentionally
@@ -92,8 +96,9 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
               No archived ops
             </div>
             <div className="text-[11px] text-[var(--text-tertiary)] leading-relaxed">
-              Re-extracting replaces prior LLM-sourced rows; replaced rows show up here as a
-              read-only audit trail. Until then this tab stays empty.
+              Replacing the active script (after editing) or running the Repair flow archives the
+              superseded rows here as a read-only audit trail. Re-extracting now appends instead of
+              replacing, so it does not fill this tab. Until then this tab stays empty.
             </div>
           </div>
         </div>

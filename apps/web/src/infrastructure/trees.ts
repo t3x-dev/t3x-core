@@ -115,17 +115,21 @@ export interface CreateYOpsEntryOptions {
    * Maps to the `replace_active_llm_draft` field on POST /yops. When true,
    * the API marks every active-draft LLM-sourced entry for this
    * conversation as `superseded_at = now()` inside the same transaction
-   * as the new entry's insert. Used by the WebUI Apply-from-staged-draft
-   * path so re-Extract → Apply replaces the prior LLM suggestion atomically
-   * instead of stacking it on top.
+   * as the new entry's insert. Manual-edit (HumanSource) ops on prior
+   * entries are explicitly preserved by the API regardless of this flag
+   * — that's the v1 contract from the suggestion-vs-baseline RFC.
    *
-   * Manual-edit (HumanSource) ops on prior entries are explicitly
-   * preserved by the API regardless of this flag — that's the v1 contract
-   * from the suggestion-vs-baseline RFC.
+   * Note (2026-05-04): the WebUI Apply path no longer opts into this
+   * supersede branch — staged Extract drafts and manual edits both send
+   * explicit `false`, so re-extract appends rather than stacking-then-
+   * replacing. This option is retained for non-WebUI callers (legacy
+   * clients, future agent flows) that genuinely want explicit-supersede
+   * semantics. See
+   * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
    *
-   * Default omitted = API treats as `false`, preserving the legacy
-   * append-only behaviour for every existing caller (gold edits,
-   * compression, MCP, etc.).
+   * Default omitted = API treats as `false`, preserving append-only
+   * behaviour for every existing caller (gold edits, compression,
+   * MCP, etc.).
    */
   replaceActiveLLMDraft?: boolean;
   /**
