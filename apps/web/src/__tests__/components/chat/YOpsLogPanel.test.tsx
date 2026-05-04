@@ -75,8 +75,32 @@ describe('YOpsLogPanel', () => {
     expect(screen.getByText('AI proposal')).toBeInTheDocument();
     const userEditsGroup = screen.getByText('User edits').closest('section');
     expect(userEditsGroup).toBeInTheDocument();
-    expect(within(userEditsGroup as HTMLElement).getByText('Set trip.destination to "Hangzhou"')).toBeInTheDocument();
+    expect(
+      within(userEditsGroup as HTMLElement).getByText('Set trip.destination to "Hangzhou"')
+    ).toBeInTheDocument();
     expect(within(userEditsGroup as HTMLElement).getByText(/via Tree/)).toBeInTheDocument();
+  });
+
+  it('keeps pending count separate from materialized op total', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [llmOp()],
+      });
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp(), llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+      useWorkspaceStore.getState().setEditorOverride('yops:\n  - define:\n      path: changed\n');
+    });
+
+    const { container } = render(<YOpsLogPanel />);
+    const header = container.querySelector('[data-testid="yops-log-panel-materialized"]')
+      ?.firstElementChild?.textContent;
+    expect(header).toMatch(/1\s*ops/i);
+    expect(header).toMatch(/3\s*pending/i);
+    expect(header).not.toMatch(/4\s*ops/i);
   });
 
   it('renders one row per op in the log with verb and summary', () => {
@@ -370,7 +394,7 @@ describe('YOpsLogPanel', () => {
       expect(surfaceTag?.textContent).toContain('via Tree');
     });
 
-    it('renders "via Raw YAML" for script editor edits', () => {
+    it('renders "via YOps" for script editor edits', () => {
       act(() => {
         useWorkspaceStore.getState().setDerived({
           tree: { trees: [], relations: [] },
@@ -380,7 +404,7 @@ describe('YOpsLogPanel', () => {
       });
       const { container } = render(<YOpsLogPanel mode="ledger" />);
       const surfaceTag = container.querySelector('[data-testid="yops-log-op-0-surface"]');
-      expect(surfaceTag?.textContent).toContain('via Raw YAML');
+      expect(surfaceTag?.textContent).toContain('via YOps');
     });
 
     it('omits the suffix entirely for legacy human rows without a surface', () => {

@@ -17,12 +17,12 @@
 import type { Source, SourcedYOp } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Sparkles, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
 import {
   buildOpCardModel,
   humanEditSurfaceLabel,
   type OpCardModel,
 } from '@/domain/yops/opCardModel';
-import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
 import { useScrollToTurn } from '@/hooks/shared/useScrollToTurn';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
@@ -185,9 +185,9 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
             {/*
               Pretty YAML (js-yaml.dump) replaces the prior JSON dump.
               Matches the wire format Apply parses, the format the
-              extraction pipeline emits, and the format the Raw YAML
-              tab shows — one canonical YAML representation across
-              every surface.
+              extraction pipeline emits, and the format the YOps tab
+              shows — one canonical YAML representation across every
+              surface.
             */}
             <pre className="text-[11px] font-mono text-[var(--text-primary)] bg-[var(--panel)] border border-[var(--stroke-default)] rounded px-2 py-1.5 overflow-x-auto whitespace-pre">
               {model.rawYaml}
@@ -408,7 +408,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
       pendingDraftOps: draftOps,
       scriptDirty,
     });
-    const total = groups.ai.count + groups.user.count + groups.pending.count;
+    const materializedTotal = groups.ai.count + groups.user.count;
 
     return (
       <div
@@ -422,7 +422,8 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
           </span>
           <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
             <span>
-              <span className="text-[var(--text-primary)] font-semibold">{total}</span> ops
+              <span className="text-[var(--text-primary)] font-semibold">{materializedTotal}</span>{' '}
+              ops
             </span>
             <span>
               <span className="text-[var(--source)] font-semibold">{groups.ai.count}</span> llm
@@ -433,6 +434,14 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
               </span>{' '}
               you
             </span>
+            {groups.pending.count > 0 && (
+              <span>
+                <span className="text-[var(--status-warning,#facc15)] font-semibold">
+                  {groups.pending.count}
+                </span>{' '}
+                pending
+              </span>
+            )}
           </span>
         </div>
 

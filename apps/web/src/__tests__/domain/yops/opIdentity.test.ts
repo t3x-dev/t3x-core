@@ -41,9 +41,7 @@ describe('buildOpIdentity', () => {
 
   it('accepts bare parsed YOps without source metadata', () => {
     const op = { set: { path: 'trip/destination', value: 'Tokyo' } } satisfies YOp;
-    expect(
-      buildOpIdentity(op)
-    ).toMatchObject({
+    expect(buildOpIdentity(op)).toMatchObject({
       kind: 'set',
       primaryPath: 'trip/destination',
     });

@@ -207,10 +207,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
           ) : topView === 'archived' ? (
             <ArchivedOpsPanel conversationId={conversationId} />
           ) : (
-            <YOpsLogPanel
-              tab={topView}
-              mode={topView === 'applied' ? 'materialized' : 'ledger'}
-            />
+            <YOpsLogPanel tab={topView} mode={topView === 'applied' ? 'materialized' : 'ledger'} />
           )}
         </div>
       </div>

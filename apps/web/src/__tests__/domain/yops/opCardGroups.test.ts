@@ -6,14 +6,27 @@ describe('buildMaterializedOpGroups', () => {
   it('groups materialized ops by source family', () => {
     const groups = buildMaterializedOpGroups({
       ops: [
-        { define: { path: 'trip' }, source: { type: 'llm', model: 'gpt', at: '2026-01-01T00:00:00.000Z' } },
+        {
+          define: { path: 'trip' },
+          source: { type: 'llm', model: 'gpt', at: '2026-01-01T00:00:00.000Z' },
+        },
         {
           set: { path: 'trip/destination', value: 'Kyoto' },
-          source: { type: 'human', author: 'ethan', surface: 'script', at: '2026-01-02T00:00:00.000Z' },
+          source: {
+            type: 'human',
+            author: 'ethan',
+            surface: 'script',
+            at: '2026-01-02T00:00:00.000Z',
+          },
         },
         {
           set: { path: 'trip/style', value: 'quiet' },
-          source: { type: 'human', author: 'ethan', surface: 'tree', at: '2026-01-03T00:00:00.000Z' },
+          source: {
+            type: 'human',
+            author: 'ethan',
+            surface: 'tree',
+            at: '2026-01-03T00:00:00.000Z',
+          },
         },
       ] as unknown as SourcedYOp[],
       pendingDraftOps: [],
@@ -30,7 +43,10 @@ describe('buildMaterializedOpGroups', () => {
     const groups = buildMaterializedOpGroups({
       ops: [],
       pendingDraftOps: [
-        { define: { path: 'trip' }, source: { type: 'llm', model: 'gpt', at: '2026-01-01T00:00:00.000Z' } },
+        {
+          define: { path: 'trip' },
+          source: { type: 'llm', model: 'gpt', at: '2026-01-01T00:00:00.000Z' },
+        },
       ] as unknown as SourcedYOp[],
       scriptDirty: true,
     });

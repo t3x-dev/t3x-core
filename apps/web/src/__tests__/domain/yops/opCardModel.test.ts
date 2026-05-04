@@ -123,7 +123,7 @@ describe('buildOpCardModel', () => {
       expect(m.source.surface).toBe('tree');
     });
 
-    it('exposes surface: script for Raw YAML editor edits', () => {
+    it('exposes surface: script for YOps editor edits', () => {
       const m = buildOpCardModel({
         set: { path: 'a/b', value: 'x' },
         source: { type: 'human', author: 'alice', at: HUMAN_AT, surface: 'script' },
@@ -161,7 +161,7 @@ describe('buildOpCardModel', () => {
   describe('humanEditSurfaceLabel', () => {
     it('maps each surface to a stable user-facing label', () => {
       expect(humanEditSurfaceLabel('tree')).toBe('Tree');
-      expect(humanEditSurfaceLabel('script')).toBe('Raw YAML');
+      expect(humanEditSurfaceLabel('script')).toBe('YOps');
       expect(humanEditSurfaceLabel('inline')).toBe('Inline');
     });
   });

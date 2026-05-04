@@ -1,5 +1,5 @@
 import type { HumanSource, Source, SourcedYOp, YOp } from '@t3x-dev/core';
-import { buildOpIdentity, opIdentityKey, opPathKey, type OpIdentity } from './opIdentity';
+import { buildOpIdentity, type OpIdentity, opIdentityKey, opPathKey } from './opIdentity';
 
 export type ReconciliationKind = 'unchanged' | 'changed' | 'inserted' | 'ambiguous';
 

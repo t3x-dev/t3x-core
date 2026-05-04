@@ -34,7 +34,7 @@ export interface OpCardSource {
   /**
    * For human ops: the UI surface that produced the edit, when known.
    * `null` for LLM ops and for legacy human rows that pre-date the
-   * surface field. The card renders this as a "via Tree / via Raw YAML
+   * surface field. The card renders this as a "via Tree / via YOps
    * / via Inline" suffix; absence just renders without a suffix.
    */
   surface: HumanEditSurface | null;
@@ -179,7 +179,7 @@ export function humanEditSurfaceLabel(surface: HumanEditSurface): string {
     case 'tree':
       return 'Tree';
     case 'script':
-      return 'Raw YAML';
+      return 'YOps';
     case 'inline':
       return 'Inline';
   }
