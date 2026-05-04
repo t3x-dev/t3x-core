@@ -22,8 +22,9 @@ import {
   humanEditSurfaceLabel,
   type OpCardModel,
 } from '@/domain/yops/opCardModel';
+import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
 import { useScrollToTurn } from '@/hooks/shared/useScrollToTurn';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
 function relativeAgo(iso: string): string {
@@ -280,6 +281,7 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
  * in plan PR 5.
  */
 export type YOpsLogTab = 'draft' | 'applied' | 'committed';
+export type YOpsLogMode = 'materialized' | 'ledger';
 
 const EMPTY_STATE_BY_TAB: Record<YOpsLogTab, { title: string; body: string }> = {
   draft: {
@@ -299,6 +301,48 @@ const EMPTY_STATE_BY_TAB: Record<YOpsLogTab, { title: string; body: string }> = 
 interface YOpsLogPanelProps {
   /** Which slice of the proposal/ledger to render. Defaults to 'applied'. */
   tab?: YOpsLogTab;
+  /** Materialized OpsCards are the default; ledger preserves transition tabs. */
+  mode?: YOpsLogMode;
+}
+
+function Group({
+  title,
+  count,
+  empty,
+  children,
+}: {
+  title: string;
+  count: number;
+  empty: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-1.5">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+          {title}
+        </h3>
+        <span className="text-[9px] font-mono text-[var(--text-tertiary)]">
+          <span className="font-semibold text-[var(--text-primary)]">{count}</span> ops
+        </span>
+      </div>
+      {count === 0 ? (
+        <div className="rounded border border-dashed border-[var(--stroke-default)] bg-[var(--panel)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
+          {empty}
+        </div>
+      ) : (
+        <div className="space-y-1.5">{children}</div>
+      )}
+    </section>
+  );
+}
+
+function PendingRow({ label }: { label: string }) {
+  return (
+    <div className="rounded border border-[var(--stroke-default)] bg-[var(--panel)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)]">
+      {label}
+    </div>
+  );
 }
 
 /**
@@ -332,11 +376,12 @@ export function splitOpsByCommittedness(
   return { applied, committed };
 }
 
-export function YOpsLogPanel({ tab = 'applied' }: YOpsLogPanelProps = {}) {
+export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLogPanelProps = {}) {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
   const draftOps = useWorkspaceStore((s) => s.draftOps);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
 
   const visibleOps = useMemo<readonly SourcedYOp[]>(() => {
     if (tab === 'draft') return draftOps;
@@ -356,6 +401,76 @@ export function YOpsLogPanel({ tab = 'applied' }: YOpsLogPanelProps = {}) {
   }, [visibleOps]);
 
   const empty = EMPTY_STATE_BY_TAB[tab];
+
+  if (mode === 'materialized') {
+    const groups = buildMaterializedOpGroups({
+      ops: opsLog,
+      pendingDraftOps: draftOps,
+      scriptDirty,
+    });
+    const total = groups.ai.count + groups.user.count + groups.pending.count;
+
+    return (
+      <div
+        className="flex flex-col h-full bg-[var(--panel-alt)]"
+        data-testid="yops-log-panel-materialized"
+      >
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel)]">
+          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[var(--source)]" />
+            Materialized
+          </span>
+          <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
+            <span>
+              <span className="text-[var(--text-primary)] font-semibold">{total}</span> ops
+            </span>
+            <span>
+              <span className="text-[var(--source)] font-semibold">{groups.ai.count}</span> llm
+            </span>
+            <span>
+              <span className="text-[var(--status-success)] font-semibold">
+                {groups.user.count}
+              </span>{' '}
+              you
+            </span>
+          </span>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-3">
+          <Group
+            title="AI proposal"
+            count={groups.ai.count}
+            empty="No AI proposal in the current materialized YOps."
+          >
+            {groups.ai.ops.map((op, i) => {
+              const model = buildOpCardModel(op);
+              return <OpRow key={`${model.key}-ai-${i}`} model={model} index={i} />;
+            })}
+          </Group>
+
+          <Group title="User edits" count={groups.user.count} empty="No user edits applied yet.">
+            {groups.user.ops.map((op, i) => {
+              const model = buildOpCardModel(op);
+              return <OpRow key={`${model.key}-user-${i}`} model={model} index={i} />;
+            })}
+          </Group>
+
+          <Group title="Pending" count={groups.pending.count} empty="No pending edits.">
+            {groups.pending.reasons.map((reason) =>
+              reason === 'staged-draft' ? (
+                <PendingRow
+                  key={reason}
+                  label={`Staged extract: ${groups.pending.draftOps.length} ops`}
+                />
+              ) : (
+                <PendingRow key={reason} label="Inline YOps changes" />
+              )
+            )}
+          </Group>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

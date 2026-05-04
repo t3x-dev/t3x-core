@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom';
 import type { SourcedYOp } from '@t3x-dev/core';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splitOpsByCommittedness, YOpsLogPanel } from '@/components/chat/YOpsLogPanel';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -32,18 +33,48 @@ function llmOp(): SourcedYOp {
 
 describe('YOpsLogPanel', () => {
   beforeEach(() => {
-    useWorkspaceStore.getState().reset();
+    act(() => {
+      useWorkspaceStore.getState().reset();
+    });
   });
   afterEach(() => {
-    useWorkspaceStore.getState().reset();
+    act(() => {
+      useWorkspaceStore.getState().reset();
+    });
   });
 
   it('renders an empty state when no ops are in the log', () => {
     const { container } = render(<YOpsLogPanel />);
-    expect(container.textContent).toContain('empty');
+    expect(screen.getByText('No user edits applied yet.')).toBeInTheDocument();
     expect(
       container.querySelectorAll('[data-testid^="yops-log-op-"]:not([data-testid*="-link"])').length
     ).toBe(0);
+  });
+
+  it('renders materialized ops grouped by source by default', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDerived({
+        tree: { trees: [], relations: [] },
+        sourceIndex: new Map(),
+        opsLog: [
+          llmOp(),
+          {
+            set: { path: 'trip/destination', value: 'Hangzhou' },
+            source: {
+              type: 'human',
+              author: 'alice',
+              at: new Date().toISOString(),
+              surface: 'script',
+            },
+          } as SourcedYOp,
+        ],
+      });
+    });
+
+    render(<YOpsLogPanel />);
+    expect(screen.getByText('AI proposal')).toBeInTheDocument();
+    expect(screen.getByText('User edits')).toBeInTheDocument();
+    expect(screen.getByText(/via Raw YAML|via YOps/)).toBeInTheDocument();
   });
 
   it('renders one row per op in the log with verb and summary', () => {
@@ -55,7 +86,7 @@ describe('YOpsLogPanel', () => {
       });
     });
 
-    const { container } = render(<YOpsLogPanel />);
+    const { container } = render(<YOpsLogPanel mode="ledger" />);
     const rows = container.querySelectorAll(
       '[data-testid^="yops-log-op-"]:not([data-testid*="-link"])'
     );
@@ -80,7 +111,7 @@ describe('YOpsLogPanel', () => {
         opsLog: [humanOp(), humanOp(), llmOp()],
       });
     });
-    const { container } = render(<YOpsLogPanel />);
+    const { container } = render(<YOpsLogPanel mode="ledger" />);
     const header = container.textContent ?? '';
     expect(header).toMatch(/3\s*ops/i);
     expect(header).toMatch(/2\s*you/i);
@@ -117,7 +148,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel tab="draft" />);
+      const { container } = render(<YOpsLogPanel tab="draft" mode="ledger" />);
       const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
       expect(rows[0].textContent).toContain('Created sights');
@@ -141,7 +172,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel tab="applied" />);
+      const { container } = render(<YOpsLogPanel tab="applied" mode="ledger" />);
       const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
       expect(rows[0].textContent).toContain('Hangzhou');
@@ -165,7 +196,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel tab="committed" />);
+      const { container } = render(<YOpsLogPanel tab="committed" mode="ledger" />);
       const rows = container.querySelectorAll(ROWS_ONLY);
       expect(rows.length).toBe(1);
       expect(rows[0].textContent).toContain('Created sights');
@@ -181,21 +212,21 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const applied = render(<YOpsLogPanel tab="applied" />);
+      const applied = render(<YOpsLogPanel tab="applied" mode="ledger" />);
       expect(applied.container.querySelectorAll(ROWS_ONLY).length).toBe(1);
 
-      const committed = render(<YOpsLogPanel tab="committed" />);
+      const committed = render(<YOpsLogPanel tab="committed" mode="ledger" />);
       expect(committed.container.querySelectorAll(ROWS_ONLY).length).toBe(0);
     });
 
     it('renders a tab-specific empty state when the slice is empty', () => {
-      const draft = render(<YOpsLogPanel tab="draft" />);
+      const draft = render(<YOpsLogPanel tab="draft" mode="ledger" />);
       expect(draft.container.textContent).toContain('No draft staged');
 
-      const applied = render(<YOpsLogPanel tab="applied" />);
+      const applied = render(<YOpsLogPanel tab="applied" mode="ledger" />);
       expect(applied.container.textContent).toContain('No applied ops');
 
-      const committed = render(<YOpsLogPanel tab="committed" />);
+      const committed = render(<YOpsLogPanel tab="committed" mode="ledger" />);
       expect(committed.container.textContent).toContain('No committed ops');
     });
 
@@ -235,7 +266,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       const quoteLink = container.querySelector(
         '[data-testid="yops-log-op-0-quote-link"]'
       ) as HTMLElement;
@@ -261,7 +292,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       expect(container.textContent ?? '').not.toContain('YOps core');
 
       const quoteLink = container.querySelector(
@@ -287,7 +318,7 @@ describe('YOpsLogPanel', () => {
         });
       });
 
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       const row = container.querySelector('[data-testid="yops-log-op-0"] > button') as HTMLElement;
       fireEvent.click(row);
 
@@ -310,7 +341,7 @@ describe('YOpsLogPanel', () => {
           opsLog: [humanOp()],
         });
       });
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       expect(container.querySelector('[data-testid="yops-log-op-0-quote-link"]')).toBeNull();
     });
   });
@@ -331,7 +362,7 @@ describe('YOpsLogPanel', () => {
           opsLog: [humanOpWithSurface('tree')],
         });
       });
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       const surfaceTag = container.querySelector('[data-testid="yops-log-op-0-surface"]');
       expect(surfaceTag).toBeTruthy();
       expect(surfaceTag?.textContent).toContain('via Tree');
@@ -345,7 +376,7 @@ describe('YOpsLogPanel', () => {
           opsLog: [humanOpWithSurface('script')],
         });
       });
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       const surfaceTag = container.querySelector('[data-testid="yops-log-op-0-surface"]');
       expect(surfaceTag?.textContent).toContain('via Raw YAML');
     });
@@ -358,7 +389,7 @@ describe('YOpsLogPanel', () => {
           opsLog: [humanOp()],
         });
       });
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       expect(container.querySelector('[data-testid="yops-log-op-0-surface"]')).toBeNull();
     });
 
@@ -370,7 +401,7 @@ describe('YOpsLogPanel', () => {
           opsLog: [llmOp()],
         });
       });
-      const { container } = render(<YOpsLogPanel />);
+      const { container } = render(<YOpsLogPanel mode="ledger" />);
       expect(container.querySelector('[data-testid="yops-log-op-0-surface"]')).toBeNull();
     });
   });
