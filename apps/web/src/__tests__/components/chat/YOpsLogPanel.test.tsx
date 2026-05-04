@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import type { SourcedYOp } from '@t3x-dev/core';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splitOpsByCommittedness, YOpsLogPanel } from '@/components/chat/YOpsLogPanel';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -64,7 +64,7 @@ describe('YOpsLogPanel', () => {
               type: 'human',
               author: 'alice',
               at: new Date().toISOString(),
-              surface: 'script',
+              surface: 'tree',
             },
           } as SourcedYOp,
         ],
@@ -73,8 +73,10 @@ describe('YOpsLogPanel', () => {
 
     render(<YOpsLogPanel />);
     expect(screen.getByText('AI proposal')).toBeInTheDocument();
-    expect(screen.getByText('User edits')).toBeInTheDocument();
-    expect(screen.getByText(/via Raw YAML|via YOps/)).toBeInTheDocument();
+    const userEditsGroup = screen.getByText('User edits').closest('section');
+    expect(userEditsGroup).toBeInTheDocument();
+    expect(within(userEditsGroup as HTMLElement).getByText('Set trip.destination to "Hangzhou"')).toBeInTheDocument();
+    expect(within(userEditsGroup as HTMLElement).getByText(/via Tree/)).toBeInTheDocument();
   });
 
   it('renders one row per op in the log with verb and summary', () => {

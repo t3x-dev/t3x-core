@@ -49,7 +49,12 @@ describe('useGoldEdit.applyEdit', () => {
     // hydrate a sourceIndex that doesn't match the pre-refresh local state.
     const sourced = {
       unset: { path: 'trip/style' },
-      source: { type: 'human' as const, author: 'ethan', at: '2026-04-25T12:00:00.000Z' },
+      source: {
+        type: 'human' as const,
+        author: 'ethan',
+        at: '2026-04-25T12:00:00.000Z',
+        surface: 'tree' as const,
+      },
     };
     sourceGoldEditMock.mockReturnValue(sourced);
 
@@ -67,6 +72,8 @@ describe('useGoldEdit.applyEdit', () => {
     const persistedSourcedOp = commitGoldEditMock.mock.calls[0][1];
     expect(optimisticOps[0].source).toBe(sourced.source);
     expect(persistedSourcedOp.source).toBe(sourced.source);
+    expect(optimisticOps[0].source).toMatchObject({ type: 'human', surface: 'tree' });
+    expect(persistedSourcedOp.source).toMatchObject({ type: 'human', surface: 'tree' });
     expect(optimisticOps[0]).toBe(persistedSourcedOp);
   });
 
