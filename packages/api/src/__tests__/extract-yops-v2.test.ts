@@ -284,12 +284,14 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
   });
 
-  describe('committed-baseline snapshot derivation', () => {
+  describe('active-baseline snapshot derivation', () => {
     /**
-     * RFC 2026-04-26: the snapshot fed to extractAndApply is the
-     * **committed baseline** only — uncommitted yops_log entries (the
-     * active draft) deliberately never enter the LLM prompt. These
-     * tests assert the boundary at the route layer.
+     * Review-first YOps workbench: the snapshot fed to extractAndApply
+     * must match the materialized tree the web client validates against.
+     * That means parent/committed baseline plus active uncommitted
+     * yops_log rows. Otherwise a re-extract after Apply receives a
+     * bootstrap prompt, returns duplicate define/populate ops, and the
+     * web worker rejects them against the already-applied tree.
      */
     async function freshConv(): Promise<string> {
       const conv = await insertConversation(
@@ -309,10 +311,11 @@ describe('POST /v1/extract-yops (v2)', () => {
       },
     });
 
-    it("calls extractAndApply with mode='bootstrap' when only an uncommitted draft exists", async () => {
+    it("calls extractAndApply with mode='incremental' when an uncommitted active row exists", async () => {
       const convId = await freshConv();
-      // Plant an uncommitted LLM suggestion entry — this is the
-      // "active draft" that the route must NOT include in the snapshot.
+      // Plant an uncommitted applied row. Re-extract must compute
+      // against this active materialized baseline, not the empty
+      // committed baseline.
       await insertYOpsLogEntry(mockDB, {
         conversationId: convId,
         projectId: testProjectId,
@@ -345,10 +348,8 @@ describe('POST /v1/extract-yops (v2)', () => {
 
       expect(res.status).toBe(200);
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
-      // Bootstrap, not incremental — the draft entry must not have
-      // promoted the conversation to incremental mode.
-      expect(callArgs?.mode).toBe('bootstrap');
-      expect(callArgs?.snapshot).toBeUndefined();
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('foo');
     });
 
     it("calls extractAndApply with mode='incremental' + committed snapshot when a commit references the entry", async () => {
@@ -359,8 +360,8 @@ describe('POST /v1/extract-yops (v2)', () => {
         source: 'pipeline',
         yops: [llmOp('committed_root')],
       });
-      // Promote the entry into a real commit — this is the boundary
-      // that flips it from "active draft" into "committed baseline".
+      // Promote the entry into a real commit. The active-baseline route
+      // should still include committed rows exactly once.
       await createCommit(mockDB, {
         author: { type: 'human', name: 'test' },
         content: {
