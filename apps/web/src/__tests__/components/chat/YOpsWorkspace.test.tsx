@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom';
 import type { SourcedYOp } from '@t3x-dev/core';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Stub child panels so the test focuses on tab-switch behavior, not
@@ -63,8 +64,10 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
     useWorkspaceStore.getState().reset();
   });
 
-  it('mounts on Raw YAML when the conversation is empty', () => {
+  it('mounts on YOps when the conversation is empty', () => {
     const { container } = render(<YOpsWorkspace />);
+    expect(screen.getByRole('tab', { name: 'YOps' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Raw YAML' })).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
   });
@@ -80,7 +83,7 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
       });
     });
 
-    // Auto-switch fires: Draft tab is now visible, Raw YAML is hidden.
+    // Auto-switch fires: Draft tab is now visible, YOps is hidden.
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
   });
@@ -103,6 +106,35 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
     // Still on Applied, not auto-switched to Draft.
     expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+  });
+
+  it('re-enables draft auto-switch after the staged draft is cleared', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+    const { container, getByText } = render(<YOpsWorkspace />);
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
+
+    fireEvent.click(getByText('Applied'));
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
+
+    act(() => {
+      useWorkspaceStore.getState().clearDraft();
+    });
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
+
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeNull();
   });
 
   it('clicking the Archived tab mounts ArchivedOpsPanel with the active conversationId', () => {
