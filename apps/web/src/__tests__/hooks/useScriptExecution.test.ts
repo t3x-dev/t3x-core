@@ -311,9 +311,11 @@ describe('useScriptExecution', () => {
   });
 
   it('passes replaceActiveLLMDraft: false on a manual-edit Apply (no staged draft)', async () => {
-    // Hand-written script edits shouldn't supersede a separate LLM
-    // suggestion the user might still want — manual edits append, LLM
-    // re-extract replaces. The flag is exclusively driven by hasDraft.
+    // Hand-written script edits append, never opting into the LLM-draft
+    // supersede branch. The staged-Extract Apply path also appends now
+    // (post review-first flip), so both web Apply paths send `false`;
+    // the explicit-supersede branch is reachable only by non-WebUI
+    // callers, active_dirty Replace, or Repair.
     useWorkspaceStore.getState().setEditorOverride(`- set:\n    path: trip/dest\n    value: HZ\n`);
     expect(useWorkspaceStore.getState().hasDraft).toBe(false);
 

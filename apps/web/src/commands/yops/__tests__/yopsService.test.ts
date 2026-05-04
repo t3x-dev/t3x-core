@@ -31,10 +31,12 @@ describe('commitOps', () => {
   });
 
   it('forwards options.replaceActiveLLMDraft to infrastructure.appendYOps', async () => {
-    // Apply-from-staged-Extract-draft path: caller passes the flag so
-    // the API marks prior active LLM drafts as superseded inside the
-    // same transaction as the new entry's insert. commitOps must
-    // pass it through unchanged.
+    // Explicit-supersede passthrough: any caller that opts in
+    // (legacy clients, agent flows, the active_dirty Replace path) gets
+    // the flag relayed verbatim down through commitOps → appendYOps.
+    // Note: the WebUI staged-Extract Apply path no longer sets this —
+    // re-extract appends post review-first flip. This test pins the
+    // forwarding contract, not the WebUI caller story.
     const spy = vi.spyOn(yopsLogInfra, 'appendYOps').mockResolvedValue({} as never);
     await commitOps('c1', [llmOp], { replaceActiveLLMDraft: true });
     expect(spy).toHaveBeenCalledWith('c1', [llmOp], { replaceActiveLLMDraft: true });

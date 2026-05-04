@@ -23,11 +23,13 @@
  * — the contract lives in the pair.
  *
  * Note (2026-05-04): the WebUI Apply path for staged Extract drafts
- * no longer sends `replace_active_llm_draft`. Re-extract semantics
- * are review-first append: prior applied LLM rows stay active and
- * are only superseded by an explicit Replace (active_dirty Apply)
- * or Repair flow. This parameter is retained for non-WebUI callers
- * that want explicit-supersede semantics. See
+ * no longer sets `replace_active_llm_draft: true` — it sends explicit
+ * `false` so the API takes the append branch instead of opting into
+ * supersede. Re-extract semantics are review-first append: prior
+ * applied LLM rows stay active and are only superseded by an explicit
+ * Replace (active_dirty Apply) or Repair flow. The parameter itself is
+ * retained for non-WebUI callers that want explicit-supersede
+ * semantics. See
  * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
  */
 
@@ -63,9 +65,10 @@ export interface YopsApplyInput {
    * insert. HumanSource ops are never touched. Default false.
    *
    * Note: the WebUI Apply path for staged Extract drafts intentionally
-   * does NOT set this — re-extract semantics are append, not replace.
-   * Retained for explicit-supersede callers (legacy clients, future
-   * agent flows that genuinely want to overwrite prior LLM proposals).
+   * sends `false` — re-extract semantics are append, not replace. The
+   * `true` branch is retained for explicit-supersede callers (legacy
+   * clients, future agent flows that genuinely want to overwrite prior
+   * LLM proposals).
    */
   replaceActiveLLMDraft?: boolean;
   /**

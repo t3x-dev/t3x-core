@@ -93,13 +93,17 @@ const CreateYOpsRequest = z.object({
   /**
    * When true, the persistence step first marks every active-draft
    * LLM-sourced entry for this conversation as `superseded_at = now()`
-   * inside the same transaction as the new entry's insert. Used by
-   * the WebUI re-extract flow so the workspace flips from
-   * "old suggestion + new suggestion" to just "new suggestion"
-   * atomically. Manual-edit (HumanSource) ops are explicitly preserved
-   * — that's the v1 contract from the suggestion-vs-baseline RFC.
-   * Default false preserves backward compatibility for every existing
-   * caller (compression, manual edits, MCP, etc.).
+   * inside the same transaction as the new entry's insert. Manual-edit
+   * (HumanSource) ops are explicitly preserved — that's the v1 contract
+   * from the suggestion-vs-baseline RFC. Default false preserves
+   * append-only behavior for every existing caller (compression,
+   * manual edits, MCP, etc.).
+   *
+   * Note (2026-05-04): the WebUI Apply path for staged Extract drafts
+   * sends `false` here — re-extract semantics are review-first append,
+   * not replace. This `true` branch is retained for non-WebUI callers
+   * that want explicit-supersede semantics. See
+   * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
    */
   replace_active_llm_draft: z.boolean().optional().default(false),
   /**
