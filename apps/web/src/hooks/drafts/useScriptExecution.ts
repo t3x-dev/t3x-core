@@ -128,11 +128,12 @@ export function useScriptExecution() {
       return;
     }
 
-    // Second canonicalization gate (plan: canonicalize-proposed-yops §gates).
-    // Manual edits to the Script editor bypass the extractor pipeline, so
-    // a user-typed `value: a, b, c` would otherwise apply as a scalar
-    // string. Run the same deterministic transform here so both LLM and
-    // human paths persist canonical YOps.
+    // Second canonicalization gate. Manual edits to the Script editor
+    // bypass the extractor pipeline, so a user-typed `value: a, b, c`
+    // would otherwise apply as a scalar string. Run the same
+    // deterministic transform here so both LLM and human paths persist
+    // canonical YOps. Mirror of the lift-time gate in providerDraft.ts;
+    // see issue #964 for context.
     const ops = canonicalizeYOps(
       parseResult.ops as ReadonlyArray<Record<string, unknown>>
     ) as SourcedYOp[];

@@ -318,8 +318,8 @@ function canonicalizeChildShape(value: unknown): unknown {
       // Canonicalize multi-value scalars at the child level too. The compiler
       // emits child.values straight into `populate.values`, so without this
       // pass an LLM emitting children_json with comma-string slot values
-      // would slip canonicalization and persist as scalar strings.
-      // (Plan: canonicalize-proposed-yops §gates, child path.)
+      // would slip canonicalization and persist as scalar strings. Mirrors
+      // the parent-candidate gate above; see issue #964.
       out.values = canonicalizeMultiValueScalarsInRecord(folded);
     }
     return out;
@@ -386,7 +386,8 @@ export function liftProviderDraftToExtractionDraft(
     // canonical extraction draft. The compiler downstream emits set.value
     // and populate.values[k] verbatim from these slots, so this is the
     // single point where comma-string scalars become arrays. Non-string
-    // values pass through unchanged. Plan: canonicalize-proposed-yops §V1.
+    // values pass through unchanged. See canonicalizeMultiValueScalar in
+    // normalization.ts for the rule, and issue #964 for context.
     if (liftedValue !== undefined) {
       liftedValue = canonicalizeMultiValueScalar(liftedValue);
     }

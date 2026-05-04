@@ -38,12 +38,20 @@ export function buildPromptTurnMap(turns: PromptTurnInput[]): {
 // but the canonical YOp shape for a multi-value slot is a YAML sequence:
 //   value: ["landscape", "studio", "fashion", "commercial"]
 //
-// `canonicalizeMultiValueScalar` turns highly likely list-strings into arrays
-// using a deterministic, conservative rule. Anything ambiguous (prose with
-// commas, dates, ranges, URLs, code-like text, decimals) stays scalar.
+// `canonicalizeMultiValueScalar` turns highly likely list-strings into
+// arrays using a deterministic, conservative rule. The prompt remains
+// advisory — this transform is the contract. See issue #964 for context.
 //
-// Per the plan (docs/plans/2026-05-04-canonicalize-proposed-yops.md §V1):
-// the prompt remains advisory — this transform is the contract.
+// Convert a string to an array iff all hold:
+//   1. has at least one comma
+//   2. ≥ 2 non-empty parts after splitting and trimming
+//   3. ≤ 12 parts total
+//   4. each part ≤ 6 words and ≤ 48 chars
+//   5. no part contains sentence punctuation (`.;:!?`)
+//   6. nothing in the string looks like a URL, ISO date, year mention,
+//      decimal number, numeric range, or code-like token
+// Anything else stays scalar. Non-string inputs (numbers, booleans, arrays,
+// nulls, objects) pass through unchanged.
 
 const CANONICALIZE_MAX_PARTS = 12;
 const CANONICALIZE_MAX_WORDS_PER_PART = 6;
