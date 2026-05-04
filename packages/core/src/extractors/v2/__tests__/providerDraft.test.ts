@@ -984,6 +984,47 @@ describe('F12 inner _json repair', () => {
       });
     });
 
+    it('canonicalizes per-key inside child values from children_json', () => {
+      // Compiler emits child.values straight into `populate.values`, so the
+      // child path needs the same gate as the parent. Without it, an LLM
+      // response that nests slot values inside children would slip the
+      // canonicalization invariant.
+      const lifted = liftProviderDraftToExtractionDraft({
+        schema: 't3x/provider-extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { node_key: null, path: null, existing_node_id: null },
+            candidate: {
+              key: 'cameras',
+              path_hint: 'cameras/sony/full_frame',
+              slot: null,
+              value_json: null,
+              values_json: null,
+              children_json:
+                '[{"key":"r_series","values":{"primary_use_case":"landscape, studio, fashion","resolution":"61 megapixels"}}]',
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'r_series', role: 'primary' }],
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(lifted.ok).toBe(true);
+      if (!lifted.ok) return;
+      const child = lifted.draft.items[0]?.candidate.children?.[0];
+      expect(child?.key).toBe('r_series');
+      expect(child?.values).toEqual({
+        primary_use_case: ['landscape', 'studio', 'fashion'],
+        resolution: '61 megapixels',
+      });
+    });
+
     it('leaves prose strings with commas as scalar', () => {
       const lifted = liftProviderDraftToExtractionDraft({
         schema: 't3x/provider-extraction-draft',

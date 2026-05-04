@@ -314,7 +314,14 @@ function canonicalizeChildShape(value: unknown): unknown {
         out.key = firstStringValue;
       }
     }
-    if (Object.keys(folded).length > 0) out.values = folded;
+    if (Object.keys(folded).length > 0) {
+      // Canonicalize multi-value scalars at the child level too. The compiler
+      // emits child.values straight into `populate.values`, so without this
+      // pass an LLM emitting children_json with comma-string slot values
+      // would slip canonicalization and persist as scalar strings.
+      // (Plan: canonicalize-proposed-yops §gates, child path.)
+      out.values = canonicalizeMultiValueScalarsInRecord(folded);
+    }
     return out;
   });
 }
