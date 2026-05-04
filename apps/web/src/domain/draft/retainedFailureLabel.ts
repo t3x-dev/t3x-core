@@ -51,6 +51,17 @@ export function formatRetainedFailureRow(input: RetainedFailureFormatInput): str
 }
 
 /**
+ * Header-row line shown above an already-applied result when the latest
+ * Extract failed before it could stage a replacement draft. In this state
+ * the visible tree is still valid, but it is the prior materialized result.
+ */
+export function formatAppliedResultFailureRow(input: RetainedFailureFormatInput): string {
+  const context = formatRetainedFailureContext(input);
+  const prefix = context ? `Last extract failed (${context})` : 'Last extract failed';
+  return `${prefix}: ${input.message} Applied result unchanged.`;
+}
+
+/**
  * Tooltip for the Apply button when a retained-draft failure is in
  * effect. The button is the load-bearing affordance — without this
  * change, hovering it after a failed re-extract reads "Apply the
