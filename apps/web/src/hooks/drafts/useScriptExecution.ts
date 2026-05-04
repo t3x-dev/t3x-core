@@ -48,6 +48,8 @@ function parseScript(yamlStr: string): ReturnType<typeof parseYOpsYaml> {
 
 function commitOptionsFromPolicy(payload: ApplyPayloadPolicy) {
   switch (payload.kind) {
+    case 'candidate':
+      return { replaceActiveLLMDraft: true };
     case 'replace_active_script':
       return { replaceActiveLLMDraft: false, replaceActiveScript: true };
     case 'repair':
