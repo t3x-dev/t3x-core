@@ -412,6 +412,7 @@ export type {
   FailingOp,
   FailureReason,
   FoldOp,
+  HumanEditSurface,
   HumanSource,
   LLMSource,
   MergeOp,

@@ -1,8 +1,10 @@
-import type { SourcedYOp } from '@t3x-dev/core';
+import type { HumanSource, SourcedYOp } from '@t3x-dev/core';
 import { canonicalizeYOps, parseYOpsYaml } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { SourceValidationError } from '@/commands/yops/errors';
+import { buildHumanSource } from '@/commands/yops/goldEditBuilder';
 import { commitOps } from '@/commands/yops/yopsService';
 import {
   type ApplyPayloadPolicy,
@@ -145,14 +147,36 @@ export function useScriptExecution() {
     // Add HumanSource to ops that lack source metadata (manual edits in
     // script). Draft ops from Extract already carry an `llm` source, so
     // they pass through unchanged.
-    const now = new Date().toISOString();
-    const sourced = ops.map((op) => {
-      if ((op as Record<string, unknown>).source) return op;
-      return {
-        ...op,
-        source: { type: 'human' as const, author: 'script-editor', at: now },
-      };
-    }) as SourcedYOp[];
+    //
+    // The HumanSource is built lazily and only once: when every op
+    // already carries source (e.g. an Extract proposal that arrives
+    // pre-sourced) Apply must NOT require a session user, because
+    // none is needed. Building eagerly would block Apply in
+    // auth-disabled / self-hosted contexts where `t3x-user` is absent.
+    // Build on first miss; reuse across every other miss so all manual
+    // rows share an identical `at` (gold-edit invariant).
+    let scriptSource: HumanSource | null = null;
+    let sourced: SourcedYOp[];
+    try {
+      sourced = ops.map((op) => {
+        if ((op as Record<string, unknown>).source) return op;
+        if (!scriptSource) scriptSource = buildHumanSource('script');
+        return { ...op, source: scriptSource };
+      }) as SourcedYOp[];
+    } catch (err) {
+      // No session user — surface a clear error rather than persisting
+      // a placeholder identity. Same posture as gold-edit. Only reached
+      // when at least one op was missing source.
+      const msg =
+        err instanceof SourceValidationError
+          ? 'Cannot apply: no session user available to attribute the edit.'
+          : err instanceof Error
+            ? err.message
+            : 'Cannot apply: source validation failed.';
+      store.setError(msg);
+      toast.error(msg);
+      return;
+    }
 
     const commitOptions = commitOptionsFromPolicy(currentPolicy.payload);
     if (!commitOptions) return;

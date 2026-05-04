@@ -17,7 +17,11 @@
 import type { Source, SourcedYOp } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Sparkles, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { buildOpCardModel, type OpCardModel } from '@/domain/yops/opCardModel';
+import {
+  buildOpCardModel,
+  humanEditSurfaceLabel,
+  type OpCardModel,
+} from '@/domain/yops/opCardModel';
 import { useScrollToTurn } from '@/hooks/shared/useScrollToTurn';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
@@ -113,6 +117,14 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
               </>
             )}
           </span>
+          {model.source.surface && (
+            <span
+              data-testid={`yops-log-op-${index}-surface`}
+              className="text-[9px] font-mono text-[var(--text-tertiary)] shrink-0"
+            >
+              via {humanEditSurfaceLabel(model.source.surface)}
+            </span>
+          )}
           <span className="text-[9px] font-mono text-[var(--text-tertiary)] shrink-0 w-8 text-right">
             {relativeAgo(model.source.at)}
           </span>
@@ -196,6 +208,14 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
                     {model.source.kind === 'llm' ? 'model' : 'author'}
                   </dt>
                   <dd className="text-[var(--text-primary)]">{model.source.attribution}</dd>
+                </>
+              )}
+              {model.source.surface && (
+                <>
+                  <dt className="text-[var(--text-tertiary)]">surface</dt>
+                  <dd className="text-[var(--text-primary)]">
+                    {humanEditSurfaceLabel(model.source.surface)}
+                  </dd>
                 </>
               )}
               {model.provenance && (

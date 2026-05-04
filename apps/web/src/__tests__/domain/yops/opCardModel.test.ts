@@ -1,6 +1,6 @@
 import type { SourcedYOp } from '@t3x-dev/core';
 import { describe, expect, it } from 'vitest';
-import { buildOpCardModel } from '@/domain/yops/opCardModel';
+import { buildOpCardModel, humanEditSurfaceLabel } from '@/domain/yops/opCardModel';
 
 const HUMAN_AT = '2026-04-26T00:00:00Z';
 const LLM_AT = '2026-04-26T00:01:00Z';
@@ -46,6 +46,9 @@ describe('buildOpCardModel', () => {
       kind: 'human',
       at: HUMAN_AT,
       attribution: 'alice',
+      // Legacy human row without `surface` resolves to null. The render
+      // layer omits the "via X" suffix in that case.
+      surface: null,
     });
     // Human ops never carry provenance — that lives on LLM turn refs.
     expect(m.provenance).toBeNull();
@@ -109,5 +112,57 @@ describe('buildOpCardModel', () => {
     } as unknown as SourcedYOp;
     const m = buildOpCardModel(op);
     expect(m.source.attribution).toBeNull();
+  });
+
+  describe('human edit surface (provenance "where")', () => {
+    it('exposes surface: tree for canvas/gold edits', () => {
+      const m = buildOpCardModel({
+        unset: { path: 'a' },
+        source: { type: 'human', author: 'alice', at: HUMAN_AT, surface: 'tree' },
+      } as SourcedYOp);
+      expect(m.source.surface).toBe('tree');
+    });
+
+    it('exposes surface: script for Raw YAML editor edits', () => {
+      const m = buildOpCardModel({
+        set: { path: 'a/b', value: 'x' },
+        source: { type: 'human', author: 'alice', at: HUMAN_AT, surface: 'script' },
+      } as SourcedYOp);
+      expect(m.source.surface).toBe('script');
+    });
+
+    it('returns null surface for legacy human rows without it', () => {
+      const m = buildOpCardModel({
+        set: { path: 'a/b', value: 'x' },
+        source: { type: 'human', author: 'alice', at: HUMAN_AT },
+      } as SourcedYOp);
+      expect(m.source.surface).toBeNull();
+    });
+
+    it('rejects unknown surface values defensively', () => {
+      const m = buildOpCardModel({
+        set: { path: 'a/b', value: 'x' },
+        source: {
+          type: 'human',
+          author: 'alice',
+          at: HUMAN_AT,
+          surface: 'haxxor' as never,
+        },
+      } as SourcedYOp);
+      expect(m.source.surface).toBeNull();
+    });
+
+    it('LLM ops never carry a surface', () => {
+      const m = buildOpCardModel(llmDefineOp());
+      expect(m.source.surface).toBeNull();
+    });
+  });
+
+  describe('humanEditSurfaceLabel', () => {
+    it('maps each surface to a stable user-facing label', () => {
+      expect(humanEditSurfaceLabel('tree')).toBe('Tree');
+      expect(humanEditSurfaceLabel('script')).toBe('Raw YAML');
+      expect(humanEditSurfaceLabel('inline')).toBe('Inline');
+    });
   });
 });

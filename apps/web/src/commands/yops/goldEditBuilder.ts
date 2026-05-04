@@ -22,12 +22,20 @@
  * to both `replayAppended` (optimistic) and `commitGoldEdit` (persist).
  */
 
-import type { HumanSource, SourcedYOp, YOp } from '@t3x-dev/core';
+import type { HumanEditSurface, HumanSource, SourcedYOp, YOp } from '@t3x-dev/core';
 import { getSessionUser } from '@/infrastructure/session';
 import { SourceValidationError } from './errors';
 import { commitOps } from './yopsService';
 
-export function buildHumanSource(): HumanSource {
+/**
+ * Build a HumanSource for the current session user, stamped with the
+ * UI surface that produced the edit. Surface and author are independent:
+ * `author` answers WHO, `surface` answers WHERE.
+ *
+ * Throws SourceValidationError when no session user is available. Callers
+ * should never silently substitute a placeholder identity.
+ */
+export function buildHumanSource(surface?: HumanEditSurface): HumanSource {
   const user = getSessionUser();
   const author = user?.username ?? user?.name ?? null;
   if (!author) {
@@ -37,6 +45,7 @@ export function buildHumanSource(): HumanSource {
     type: 'human',
     author,
     at: new Date().toISOString(),
+    ...(surface ? { surface } : {}),
   };
 }
 
@@ -46,7 +55,8 @@ export function buildHumanSource(): HumanSource {
  * optimistic replay and the server commit.
  */
 export function sourceGoldEdit(op: YOp): SourcedYOp {
-  return { ...op, source: buildHumanSource() } as SourcedYOp;
+  // Gold edits originate from the canvas / tree surface.
+  return { ...op, source: buildHumanSource('tree') } as SourcedYOp;
 }
 
 /**

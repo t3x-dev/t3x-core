@@ -21,6 +21,11 @@ const LLMSourceSchema = z.object({
 const HumanSourceSchema = z.object({
   type: z.literal('human'),
   author: z.string().min(1),
+  // Optional UI surface that produced the edit. Forward-only: existing
+  // rows without it parse fine. Decouples "who" (author) from "where"
+  // (surface) so the Ops card can render "via Tree / via Raw YAML"
+  // without inferring surface from author string.
+  surface: z.enum(['tree', 'script', 'inline']).optional(),
 });
 
 export const SourceSchema = z.discriminatedUnion('type', [LLMSourceSchema, HumanSourceSchema]);

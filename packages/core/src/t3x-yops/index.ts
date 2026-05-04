@@ -23,7 +23,7 @@ export { extractOpsFromEntries, replayYOps, replayYOpsLog, verifyReplay } from '
 // ── Schema ──
 export { YOpSchema, YOpsDocumentSchema } from './schema';
 // ── Source provenance ──
-export type { HumanSource, LLMSource, Source, TurnRef } from './source';
+export type { HumanEditSurface, HumanSource, LLMSource, Source, TurnRef } from './source';
 export { isHumanSource, isLLMSource } from './source';
 export type { FailingOp, FailureReason, ValidationResult, ValidationTurn } from './sourceValidator';
 // ── Source validator ──
