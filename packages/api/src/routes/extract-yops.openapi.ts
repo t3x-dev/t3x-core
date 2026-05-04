@@ -47,7 +47,7 @@ import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
-import { replayCommittedBaseline } from '../lib/yops-log-utils';
+import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const extractYopsRoutes = new OpenAPIHono({
@@ -228,12 +228,11 @@ extractYopsRoutes.openapi(route, async (c) => {
       );
     }
 
-    // Snapshot is the **committed baseline** only — the immutable
-    // semantic content this conversation has under any prior commit.
-    // Active draft entries (uncommitted yops_log rows) deliberately
-    // never enter the prompt: re-extract is a *full recompute* of the
-    // suggestion, not an "add more on top of the previous draft" step.
-    const baselineSnapshot = await replayCommittedBaseline(db, conversation_id);
+    // Snapshot must match the workspace's active applied tree. Apply for
+    // staged Extract drafts is append-oriented, so re-extract should
+    // extend the current active yops_log replay instead of compiling
+    // against only the committed baseline.
+    const baselineSnapshot = await replayActiveDraftOnBaseline(db, conversation_id);
     const mode = baselineSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
     // Call the LLM via the unified provider/model selection chain.

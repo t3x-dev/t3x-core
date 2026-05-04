@@ -284,12 +284,11 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
   });
 
-  describe('committed-baseline snapshot derivation', () => {
+  describe('active-apply baseline snapshot derivation', () => {
     /**
-     * RFC 2026-04-26: the snapshot fed to extractAndApply is the
-     * **committed baseline** only — uncommitted yops_log entries (the
-     * active draft) deliberately never enter the LLM prompt. These
-     * tests assert the boundary at the route layer.
+     * The snapshot fed to extractAndApply must match the workspace's
+     * active applied tree: committed history plus active uncommitted
+     * rows. These tests assert the boundary at the route layer.
      */
     async function freshConv(): Promise<string> {
       const conv = await insertConversation(
@@ -309,10 +308,10 @@ describe('POST /v1/extract-yops (v2)', () => {
       },
     });
 
-    it("calls extractAndApply with mode='bootstrap' when only an uncommitted draft exists", async () => {
+    it("calls extractAndApply with mode='incremental' when an active LLM row exists", async () => {
       const convId = await freshConv();
-      // Plant an uncommitted LLM suggestion entry — this is the
-      // "active draft" that the route must NOT include in the snapshot.
+      // Plant an already-applied, uncommitted LLM entry. Re-extract is
+      // append-oriented, so the LLM must see the active applied tree.
       await insertYOpsLogEntry(mockDB, {
         conversationId: convId,
         projectId: testProjectId,
@@ -345,10 +344,51 @@ describe('POST /v1/extract-yops (v2)', () => {
 
       expect(res.status).toBe(200);
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
-      // Bootstrap, not incremental — the draft entry must not have
-      // promoted the conversation to incremental mode.
-      expect(callArgs?.mode).toBe('bootstrap');
-      expect(callArgs?.snapshot).toBeUndefined();
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('foo');
+    });
+
+    it("calls extractAndApply with mode='incremental' when an active manual row exists", async () => {
+      const convId = await freshConv();
+      await insertYOpsLogEntry(mockDB, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [
+          {
+            define: { path: 'manual_root' },
+            source: { type: 'human', author: 'tester', surface: 'script' },
+          },
+        ],
+      });
+
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: { schema: 't3x/extraction-draft', version: 1, mode: 'incremental', items: [] },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: convId,
+          turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('manual_root');
     });
 
     it("calls extractAndApply with mode='incremental' + committed snapshot when a commit references the entry", async () => {
