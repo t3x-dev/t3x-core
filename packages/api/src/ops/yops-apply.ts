@@ -21,6 +21,14 @@
  * interleave with the supersede in a way that leaves a row both
  * committed AND marked superseded. Neither side alone is sufficient
  * — the contract lives in the pair.
+ *
+ * Note (2026-05-04): the WebUI Apply path for staged Extract drafts
+ * no longer sends `replace_active_llm_draft`. Re-extract semantics
+ * are review-first append: prior applied LLM rows stay active and
+ * are only superseded by an explicit Replace (active_dirty Apply)
+ * or Repair flow. This parameter is retained for non-WebUI callers
+ * that want explicit-supersede semantics. See
+ * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
@@ -53,6 +61,11 @@ export interface YopsApplyInput {
    * When true, mark every active-draft LLM-sourced entry for this
    * conversation as superseded inside the same transaction as the
    * insert. HumanSource ops are never touched. Default false.
+   *
+   * Note: the WebUI Apply path for staged Extract drafts intentionally
+   * does NOT set this — re-extract semantics are append, not replace.
+   * Retained for explicit-supersede callers (legacy clients, future
+   * agent flows that genuinely want to overwrite prior LLM proposals).
    */
   replaceActiveLLMDraft?: boolean;
   /**

@@ -273,12 +273,12 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('passes replaceActiveLLMDraft: true to commitOps when applying a staged Extract draft', async () => {
-    // Root-cause fix for the "re-extract piles up duplicate suggestions"
-    // symptom: backend already supports replace_active_llm_draft to
-    // supersede prior active LLM drafts atomically, but web's commitOps
-    // call chain was dropping the flag. Apply on a staged draft must
-    // tell the API to replace the prior LLM suggestion.
+  it('passes replaceActiveLLMDraft: false to commitOps when applying a staged Extract draft', async () => {
+    // Review-first model: a staged-extract Apply appends to the
+    // applied YOps log, it does not supersede prior LLM rows.
+    // Only an explicit Replace (active_dirty) or Repair
+    // (replay_failed) flow may set replaceActiveLLMDraft: true.
+    // Spec: docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md
     useWorkspaceStore.getState().setDraft({
       ops: [
         {
@@ -307,7 +307,7 @@ describe('useScriptExecution', () => {
 
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
     const [, , options] = commitOpsMock.mock.calls[0];
-    expect(options).toEqual({ replaceActiveLLMDraft: true });
+    expect(options).toEqual({ replaceActiveLLMDraft: false });
   });
 
   it('passes replaceActiveLLMDraft: false on a manual-edit Apply (no staged draft)', async () => {

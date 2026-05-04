@@ -18,7 +18,6 @@ export interface WorkspaceScriptFacts {
 export type ApplyPayloadPolicy =
   | { kind: 'none'; reason: string }
   | { kind: 'append' }
-  | { kind: 'candidate'; replaceActiveLLMDraft: true }
   | { kind: 'replace_active_script'; replaceActiveScript: true }
   | { kind: 'repair'; repairYopsLogId: string };
 
@@ -66,7 +65,7 @@ export function getApplyPolicyForScriptState(input: {
         canApply: true,
         label: 'Apply',
         tooltip: 'Draft ready to apply',
-        payload: { kind: 'candidate', replaceActiveLLMDraft: true },
+        payload: { kind: 'append' },
       };
     case 'active_clean':
       return disabled('Applied script is up to date');
