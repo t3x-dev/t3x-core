@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
+import {
+  canonicalizeMultiValueScalar,
+  canonicalizeMultiValueScalarsInRecord,
+} from './normalization';
 import { type ExtractionDraft, ExtractionDraftSchema, ExtractionModeSchema } from './types';
 
 export const PROVIDER_EXTRACTION_DRAFT_SCHEMA = 't3x/provider-extraction-draft' as const;
@@ -369,6 +373,18 @@ export function liftProviderDraftToExtractionDraft(
         liftedValue = liftedValues;
       }
       liftedValues = undefined;
+    }
+
+    // Canonicalize multi-value scalars before the candidate flows into the
+    // canonical extraction draft. The compiler downstream emits set.value
+    // and populate.values[k] verbatim from these slots, so this is the
+    // single point where comma-string scalars become arrays. Non-string
+    // values pass through unchanged. Plan: canonicalize-proposed-yops §V1.
+    if (liftedValue !== undefined) {
+      liftedValue = canonicalizeMultiValueScalar(liftedValue);
+    }
+    if (liftedValues && typeof liftedValues === 'object' && !Array.isArray(liftedValues)) {
+      liftedValues = canonicalizeMultiValueScalarsInRecord(liftedValues as Record<string, unknown>);
     }
 
     items.push({

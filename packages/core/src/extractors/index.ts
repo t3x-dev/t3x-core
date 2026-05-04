@@ -57,6 +57,10 @@ export {
 } from './v2/failures';
 export {
   buildPromptTurnMap,
+  canonicalizeMultiValueScalar,
+  canonicalizeMultiValueScalarsInRecord,
+  canonicalizeYOp,
+  canonicalizeYOps,
   normalizeExtractionText,
   type PromptTurn,
   type PromptTurnInput,

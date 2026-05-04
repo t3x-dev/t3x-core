@@ -55,4 +55,43 @@ describe('replayYOpsLog', () => {
 
     expect(snapshot.relations).toEqual([{ from: 'budget', to: 'trip', type: 'conditions' }]);
   });
+
+  it('preserves array slot values through replay (canonicalize-proposed-yops round-trip)', () => {
+    // Canonicalization upstream emits arrays for multi-value slots. The
+    // replay path is the round-trip we depend on at Apply time — if it
+    // collapsed arrays back to strings the canonicalization would be
+    // cosmetic. Pin both `set.value` and `populate.values[k]`.
+    const snapshot = replayYOpsLog([
+      {
+        id: 'yops_1',
+        source: 'pipeline',
+        turn_hash: 'sha256:t1',
+        created_at: '2026-04-21T00:00:00.000Z',
+        yops: [
+          { define: { path: 'cameras' } },
+          { define: { path: 'cameras/r5' } },
+          {
+            set: {
+              path: 'cameras/r5/primary_use_case',
+              value: ['landscape', 'studio', 'fashion'],
+            },
+          },
+          {
+            populate: {
+              path: 'cameras/r5',
+              values: {
+                tags: ['sports', 'wildlife'],
+                resolution: '61 megapixels',
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    const r5 = snapshot.trees[0]?.children?.[0];
+    expect(r5?.slots?.primary_use_case).toEqual(['landscape', 'studio', 'fashion']);
+    expect(r5?.slots?.tags).toEqual(['sports', 'wildlife']);
+    expect(r5?.slots?.resolution).toBe('61 megapixels');
+  });
 });

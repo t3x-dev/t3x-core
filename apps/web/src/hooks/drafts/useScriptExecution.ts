@@ -1,5 +1,5 @@
 import type { SourcedYOp } from '@t3x-dev/core';
-import { parseYOpsYaml } from '@t3x-dev/core';
+import { canonicalizeYOps, parseYOpsYaml } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -128,7 +128,14 @@ export function useScriptExecution() {
       return;
     }
 
-    const ops = parseResult.ops as SourcedYOp[];
+    // Second canonicalization gate (plan: canonicalize-proposed-yops §gates).
+    // Manual edits to the Script editor bypass the extractor pipeline, so
+    // a user-typed `value: a, b, c` would otherwise apply as a scalar
+    // string. Run the same deterministic transform here so both LLM and
+    // human paths persist canonical YOps.
+    const ops = canonicalizeYOps(
+      parseResult.ops as ReadonlyArray<Record<string, unknown>>
+    ) as SourcedYOp[];
     if (ops.length === 0) {
       store.setError('No ops to execute');
       return;
