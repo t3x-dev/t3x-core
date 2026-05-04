@@ -36,6 +36,10 @@ describe('buildMaterializedOpGroups', () => {
     expect(groups.ai.count).toBe(1);
     expect(groups.user.count).toBe(2);
     expect(groups.user.surfaces).toEqual({ script: 1, tree: 1, inline: 0, unknown: 0 });
+    expect(groups.user.bySurface.script.count).toBe(1);
+    expect(groups.user.bySurface.tree.count).toBe(1);
+    expect(groups.user.bySurface.inline.count).toBe(0);
+    expect(groups.user.bySurface.unknown.count).toBe(0);
     expect(groups.pending.count).toBe(0);
   });
 

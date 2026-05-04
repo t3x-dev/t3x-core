@@ -11,6 +11,16 @@ import {
   useWorkspaceStore,
 } from '@/store/workspaceStore';
 
+function formatSurfaceSummary(groups: ReturnType<typeof buildMaterializedOpGroups>): string {
+  const parts: string[] = [];
+  const { surfaces } = groups.user;
+  if (surfaces.script > 0) parts.push(`YOps: ${surfaces.script}`);
+  if (surfaces.tree > 0) parts.push(`Tree: ${surfaces.tree}`);
+  if (surfaces.inline > 0) parts.push(`Inline: ${surfaces.inline}`);
+  if (surfaces.unknown > 0) parts.push(`User: ${surfaces.unknown}`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const mode = useWorkspaceStore((s) => s.mode);
@@ -70,7 +80,7 @@ export function WorkspaceTopbar() {
           ) : (
             <>
               Materialized: {opsLog.length} ops
-              {groups.user.count > 0 ? ` · Manual: ${groups.user.count}` : ''}
+              {formatSurfaceSummary(groups)}
               {groups.pending.count > 0 ? ` · Pending: ${groups.pending.count}` : ''}
             </>
           )}

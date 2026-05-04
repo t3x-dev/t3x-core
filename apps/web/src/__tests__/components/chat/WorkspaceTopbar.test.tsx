@@ -32,7 +32,19 @@ function manualOp(path: string): SourcedYOp {
     set: { path, value: 'manual' },
     source: {
       type: 'human',
-      surface: 'inline',
+      surface: 'tree',
+      at: '2026-04-26T00:00:00Z',
+    },
+  } as SourcedYOp;
+}
+
+function scriptOp(path: string): SourcedYOp {
+  return {
+    set: { path, value: 'script' },
+    source: {
+      type: 'human',
+      surface: 'script',
+      author: 'alice',
       at: '2026-04-26T00:00:00Z',
     },
   } as SourcedYOp;
@@ -63,9 +75,9 @@ describe('WorkspaceTopbar', () => {
     expect(screen.queryByText(/0 applied/)).toBeNull();
   });
 
-  it('labels normal workspace state with materialized, manual, and pending counts', () => {
+  it('labels normal workspace state with materialized, surface, and pending counts', () => {
     useWorkspaceStore.setState({
-      opsLog: [llmOp('sights'), manualOp('food/desired_food')],
+      opsLog: [llmOp('sights'), manualOp('food/desired_food'), scriptOp('food/style')],
       draftOps: [llmOp('routes')],
       hasDraft: true,
       baselineCommitHash: null,
@@ -74,8 +86,10 @@ describe('WorkspaceTopbar', () => {
 
     render(<WorkspaceTopbar />);
 
-    expect(screen.getByText(/Materialized: 2 ops/)).not.toBeNull();
-    expect(screen.getByText(/Manual: 1/)).not.toBeNull();
+    expect(screen.getByText(/Materialized: 3 ops/)).not.toBeNull();
+    expect(screen.getByText(/YOps: 1/)).not.toBeNull();
+    expect(screen.getByText(/Tree: 1/)).not.toBeNull();
+    expect(screen.queryByText(/Manual:/)).toBeNull();
     expect(screen.getByText(/Pending: 1/)).not.toBeNull();
   });
 });

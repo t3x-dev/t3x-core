@@ -14,6 +14,18 @@ function humanOp(): SourcedYOp {
   } as SourcedYOp;
 }
 
+function scriptOp(): SourcedYOp {
+  return {
+    set: { path: 'trip/style', value: 'quiet' },
+    source: {
+      type: 'human',
+      author: 'alice',
+      surface: 'script',
+      at: new Date().toISOString(),
+    },
+  } as SourcedYOp;
+}
+
 function llmOp(): SourcedYOp {
   return {
     define: { path: 'sights' },
@@ -45,7 +57,9 @@ describe('YOpsLogPanel', () => {
 
   it('renders an empty state when no ops are in the log', () => {
     const { container } = render(<YOpsLogPanel />);
-    expect(screen.getByText('No user edits applied yet.')).toBeInTheDocument();
+    expect(screen.getByText('No YOps editor changes applied yet.')).toBeInTheDocument();
+    expect(screen.getByText('No YAML tree edits applied yet.')).toBeInTheDocument();
+    expect(screen.getByText('No source include/exclude edits applied yet.')).toBeInTheDocument();
     expect(
       container.querySelectorAll('[data-testid^="yops-log-op-"]:not([data-testid*="-link"])').length
     ).toBe(0);
@@ -58,6 +72,7 @@ describe('YOpsLogPanel', () => {
         sourceIndex: new Map(),
         opsLog: [
           llmOp(),
+          scriptOp(),
           {
             set: { path: 'trip/destination', value: 'Hangzhou' },
             source: {
@@ -73,12 +88,18 @@ describe('YOpsLogPanel', () => {
 
     render(<YOpsLogPanel />);
     expect(screen.getByText('AI proposal')).toBeInTheDocument();
-    const userEditsGroup = screen.getByText('User edits').closest('section');
-    expect(userEditsGroup).toBeInTheDocument();
+    const scriptGroup = screen.getByText('YOps editor').closest('section');
+    expect(scriptGroup).toBeInTheDocument();
     expect(
-      within(userEditsGroup as HTMLElement).getByText('Set trip.destination to "Hangzhou"')
+      within(scriptGroup as HTMLElement).getByText('Set trip.style to "quiet"')
     ).toBeInTheDocument();
-    expect(within(userEditsGroup as HTMLElement).getByText(/via Tree/)).toBeInTheDocument();
+
+    const treeGroup = screen.getByText('Tree edits').closest('section');
+    expect(treeGroup).toBeInTheDocument();
+    expect(
+      within(treeGroup as HTMLElement).getByText('Set trip.destination to "Hangzhou"')
+    ).toBeInTheDocument();
+    expect(within(treeGroup as HTMLElement).getByText(/via Tree/)).toBeInTheDocument();
   });
 
   it('keeps pending count separate from materialized op total', () => {

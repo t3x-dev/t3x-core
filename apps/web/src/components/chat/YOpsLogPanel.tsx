@@ -457,12 +457,51 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
             })}
           </Group>
 
-          <Group title="User edits" count={groups.user.count} empty="No user edits applied yet.">
-            {groups.user.ops.map((op, i) => {
+          <Group
+            title="YOps editor"
+            count={groups.user.bySurface.script.count}
+            empty="No YOps editor changes applied yet."
+          >
+            {groups.user.bySurface.script.ops.map((op, i) => {
               const model = buildOpCardModel(op);
-              return <OpRow key={`${model.key}-user-${i}`} model={model} index={i} />;
+              return <OpRow key={`${model.key}-script-${i}`} model={model} index={i} />;
             })}
           </Group>
+
+          <Group
+            title="Tree edits"
+            count={groups.user.bySurface.tree.count}
+            empty="No YAML tree edits applied yet."
+          >
+            {groups.user.bySurface.tree.ops.map((op, i) => {
+              const model = buildOpCardModel(op);
+              return <OpRow key={`${model.key}-tree-${i}`} model={model} index={i} />;
+            })}
+          </Group>
+
+          <Group
+            title="Inline edits"
+            count={groups.user.bySurface.inline.count}
+            empty="No source include/exclude edits applied yet."
+          >
+            {groups.user.bySurface.inline.ops.map((op, i) => {
+              const model = buildOpCardModel(op);
+              return <OpRow key={`${model.key}-inline-${i}`} model={model} index={i} />;
+            })}
+          </Group>
+
+          {groups.user.bySurface.unknown.count > 0 && (
+            <Group
+              title="User edits"
+              count={groups.user.bySurface.unknown.count}
+              empty="No legacy user edits applied yet."
+            >
+              {groups.user.bySurface.unknown.ops.map((op, i) => {
+                const model = buildOpCardModel(op);
+                return <OpRow key={`${model.key}-unknown-${i}`} model={model} index={i} />;
+              })}
+            </Group>
+          )}
 
           <Group title="Pending" count={groups.pending.count} empty="No pending edits.">
             {groups.pending.reasons.map((reason) =>

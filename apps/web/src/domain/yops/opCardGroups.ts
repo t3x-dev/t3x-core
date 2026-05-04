@@ -7,6 +7,11 @@ type SurfaceCounts = {
   unknown: number;
 };
 
+type SurfaceGroup = {
+  ops: SourcedYOp[];
+  count: number;
+};
+
 type PendingReason = 'staged-draft' | 'dirty-script';
 
 export interface MaterializedOpGroups {
@@ -16,6 +21,12 @@ export interface MaterializedOpGroups {
     ops: SourcedYOp[];
     count: number;
     surfaces: SurfaceCounts;
+    bySurface: {
+      script: SurfaceGroup;
+      tree: SurfaceGroup;
+      inline: SurfaceGroup;
+      unknown: SurfaceGroup;
+    };
   };
   pending: {
     title: 'Pending';
@@ -26,22 +37,17 @@ export interface MaterializedOpGroups {
   };
 }
 
-function countHumanSurface(source: Source, surfaces: SurfaceCounts): void {
-  if (source.type !== 'human') return;
-
+function surfaceKeyFor(source: Source): keyof SurfaceCounts | null {
+  if (source.type !== 'human') return null;
   switch ((source as { surface?: unknown }).surface) {
     case 'script':
-      surfaces.script += 1;
-      break;
+      return 'script';
     case 'tree':
-      surfaces.tree += 1;
-      break;
+      return 'tree';
     case 'inline':
-      surfaces.inline += 1;
-      break;
+      return 'inline';
     default:
-      surfaces.unknown += 1;
-      break;
+      return 'unknown';
   }
 }
 
@@ -53,13 +59,22 @@ export function buildMaterializedOpGroups(input: {
   const aiOps: SourcedYOp[] = [];
   const userOps: SourcedYOp[] = [];
   const surfaces: SurfaceCounts = { script: 0, tree: 0, inline: 0, unknown: 0 };
+  const bySurface: MaterializedOpGroups['user']['bySurface'] = {
+    script: { ops: [], count: 0 },
+    tree: { ops: [], count: 0 },
+    inline: { ops: [], count: 0 },
+    unknown: { ops: [], count: 0 },
+  };
 
   for (const op of input.ops) {
     if (op.source.type === 'llm') {
       aiOps.push(op);
     } else if (op.source.type === 'human') {
       userOps.push(op);
-      countHumanSurface(op.source, surfaces);
+      const surface = surfaceKeyFor(op.source) ?? 'unknown';
+      surfaces[surface] += 1;
+      bySurface[surface].ops.push(op);
+      bySurface[surface].count += 1;
     }
   }
 
@@ -69,7 +84,7 @@ export function buildMaterializedOpGroups(input: {
 
   return {
     ai: { title: 'AI proposal', ops: aiOps, count: aiOps.length },
-    user: { title: 'User edits', ops: userOps, count: userOps.length, surfaces },
+    user: { title: 'User edits', ops: userOps, count: userOps.length, surfaces, bySurface },
     pending: {
       title: 'Pending',
       count: input.pendingDraftOps.length + (input.scriptDirty ? 1 : 0),
