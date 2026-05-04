@@ -1,5 +1,13 @@
+// @vitest-environment jsdom
+
+import { render, screen } from '@testing-library/react';
+import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { shouldDisableCommit } from '@/components/chat/AfterPanel';
+import {
+  formatSlotPreviewValue,
+  SlotPreviewInline,
+  shouldDisableCommit,
+} from '@/components/chat/AfterPanel';
 
 describe('AfterPanel.shouldDisableCommit', () => {
   const baseEnabled = {
@@ -45,5 +53,59 @@ describe('AfterPanel.shouldDisableCommit', () => {
 
   it('disables Commit when there are no result rows to commit', () => {
     expect(shouldDisableCommit({ ...baseEnabled, hasResult: false })).toBe(true);
+  });
+});
+
+describe('AfterPanel.formatSlotPreviewValue', () => {
+  it('renders comma-separated slot strings as YAML list items', () => {
+    expect(formatSlotPreviewValue('landscape, studio, fashion, commercial')).toEqual({
+      kind: 'list',
+      items: [
+        { kind: 'scalar', text: 'landscape' },
+        { kind: 'scalar', text: 'studio' },
+        { kind: 'scalar', text: 'fashion' },
+        { kind: 'scalar', text: 'commercial' },
+      ],
+    });
+  });
+
+  it('renders array slot values as YAML list items', () => {
+    expect(formatSlotPreviewValue(['cropping power', 'image quality', 'fine textures'])).toEqual({
+      kind: 'list',
+      items: [
+        { kind: 'scalar', text: 'cropping power' },
+        { kind: 'scalar', text: 'image quality' },
+        { kind: 'scalar', text: 'fine textures' },
+      ],
+    });
+  });
+
+  it('keeps plain scalar slot values inline', () => {
+    expect(formatSlotPreviewValue('61 megapixels')).toEqual({
+      kind: 'scalar',
+      text: '61 megapixels',
+    });
+  });
+
+  it('keeps prose strings with commas inline', () => {
+    expect(formatSlotPreviewValue('Better for fast motion, but still has tradeoffs.')).toEqual({
+      kind: 'scalar',
+      text: 'Better for fast motion, but still has tradeoffs.',
+    });
+  });
+});
+
+describe('AfterPanel.SlotPreviewInline', () => {
+  it('renders list slots with YAML bullet markers instead of comma text', () => {
+    render(
+      createElement(SlotPreviewInline, {
+        value: formatSlotPreviewValue('landscape, studio, fashion, commercial'),
+      })
+    );
+
+    expect(screen.getByText('landscape')).not.toBeNull();
+    expect(screen.getByText('studio')).not.toBeNull();
+    expect(screen.queryByText('landscape, studio, fashion, commercial')).toBeNull();
+    expect(screen.getAllByText('-')).toHaveLength(4);
   });
 });

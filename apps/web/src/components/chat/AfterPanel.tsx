@@ -28,10 +28,52 @@ import { cn } from '@/utils/cn';
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
 type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 
-function formatSlotValue(val: unknown): string {
+export type SlotPreviewValue =
+  | { kind: 'scalar'; text: string }
+  | { kind: 'list'; items: SlotPreviewListItem[] }
+  | { kind: 'object'; entries: SlotPreviewObjectEntry[] };
+
+type SlotPreviewListItem =
+  | { kind: 'scalar'; text: string }
+  | { kind: 'object'; entries: SlotPreviewObjectEntry[] };
+
+interface SlotPreviewObjectEntry {
+  key: string;
+  value: SlotPreviewValue;
+}
+
+function splitCommaList(text: string): string[] | null {
+  const parts = text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return null;
+
+  const looksLikeScalarList = parts.every((part) => {
+    const wordCount = part.split(/\s+/).filter(Boolean).length;
+    return wordCount <= 6 && !/[.;:!?]/.test(part);
+  });
+  return looksLikeScalarList ? parts : null;
+}
+
+function formatListItem(val: unknown): SlotPreviewListItem {
+  if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+    return {
+      kind: 'object',
+      entries: Object.entries(val).map(([key, value]) => ({
+        key,
+        value: formatSlotPreviewValue(value),
+      })),
+    };
+  }
+  return { kind: 'scalar', text: formatSlotPreviewText(val) };
+}
+
+function formatSlotPreviewText(val: unknown): string {
   if (val === null || val === undefined) return '';
-  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
     return String(val);
+  }
   if (Array.isArray(val)) {
     return val
       .map((item) => {
@@ -50,6 +92,50 @@ function formatSlotValue(val: unknown): string {
       .join(', ');
   }
   return String(val);
+}
+
+export function formatSlotPreviewValue(val: unknown): SlotPreviewValue {
+  if (typeof val === 'string') {
+    const list = splitCommaList(val);
+    if (list) {
+      return { kind: 'list', items: list.map((text) => ({ kind: 'scalar', text })) };
+    }
+  }
+
+  if (Array.isArray(val)) {
+    return { kind: 'list', items: val.map(formatListItem) };
+  }
+
+  if (typeof val === 'object' && val !== null) {
+    return {
+      kind: 'object',
+      entries: Object.entries(val).map(([key, value]) => ({
+        key,
+        value: formatSlotPreviewValue(value),
+      })),
+    };
+  }
+
+  return { kind: 'scalar', text: formatSlotPreviewText(val) };
+}
+
+function slotPreviewToEditText(value: SlotPreviewValue | null): string {
+  if (!value) return '';
+  if (value.kind === 'scalar') return value.text;
+  if (value.kind === 'list') {
+    return value.items
+      .map((item) =>
+        item.kind === 'scalar'
+          ? item.text
+          : item.entries
+              .map((entry) => `${entry.key}: ${slotPreviewToEditText(entry.value)}`)
+              .join(', ')
+      )
+      .join(', ');
+  }
+  return value.entries
+    .map((entry) => `${entry.key}: ${slotPreviewToEditText(entry.value)}`)
+    .join(', ');
 }
 
 /**
@@ -115,10 +201,10 @@ interface SlotRenderRow extends RenderRowBase {
   kind: 'slot';
   path: string;
   slotKey: string;
-  beforeValue: string | null;
-  afterValue: string | null;
+  beforeValue: SlotPreviewValue | null;
+  afterValue: SlotPreviewValue | null;
   diffType: SlotDiffType;
-  oldValue?: string;
+  oldValue?: SlotPreviewValue;
 }
 
 type RenderRow = NodeRenderRow | SlotRenderRow;
@@ -166,10 +252,10 @@ function buildRenderRows(
   for (const slotKey of orderedSlotKeys) {
     const inBase = slotKey in baseSlots;
     const inResult = slotKey in resultSlots;
-    const beforeValue = inBase ? formatSlotValue(baseSlots[slotKey]) : null;
-    const afterValue = inResult ? formatSlotValue(resultSlots[slotKey]) : null;
+    const beforeValue = inBase ? formatSlotPreviewValue(baseSlots[slotKey]) : null;
+    const afterValue = inResult ? formatSlotPreviewValue(resultSlots[slotKey]) : null;
     let diffType: SlotDiffType = null;
-    let oldValue: string | undefined;
+    let oldValue: SlotPreviewValue | undefined;
 
     if (!inBase && inResult) {
       diffType = 'added';
@@ -181,7 +267,8 @@ function buildRenderRows(
       diffType = 'removed';
     } else if (modifiedByKey.has(slotKey)) {
       diffType = 'modified';
-      oldValue = modifiedByKey.get(slotKey)?.oldValue;
+      const diffEntry = modifiedByKey.get(slotKey);
+      oldValue = diffEntry ? formatSlotPreviewValue(diffEntry.oldValue) : undefined;
     } else if (resultNode && !baseNode) {
       diffType = 'added';
     }
@@ -226,6 +313,45 @@ interface SlotCellProps {
   onEdit?: (newValue: string) => void;
 }
 
+export function SlotPreviewInline({ value }: { value: SlotPreviewValue | null }) {
+  if (!value) return null;
+
+  if (value.kind === 'scalar') {
+    return <span className="truncate text-[var(--text-primary)]">{value.text}</span>;
+  }
+
+  if (value.kind === 'list') {
+    return (
+      <ul className="my-0 flex min-w-0 flex-col gap-0.5 py-1 text-[var(--text-primary)]">
+        {value.items.map((item, index) => (
+          <li
+            // Slot values are display-only here; index keeps duplicate scalars visible.
+            key={`${item.kind}-${index}`}
+            className="flex min-w-0 items-start gap-1.5 leading-4"
+          >
+            <span className="shrink-0 text-[var(--text-tertiary)]">-</span>
+            {item.kind === 'scalar' ? (
+              <span className="min-w-0 break-words">{item.text}</span>
+            ) : (
+              <span className="min-w-0 break-words">
+                {item.entries
+                  .map((entry) => `${entry.key}: ${slotPreviewToEditText(entry.value)}`)
+                  .join(', ')}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <span className="min-w-0 break-words text-[var(--text-primary)]">
+      {slotPreviewToEditText(value)}
+    </span>
+  );
+}
+
 function SlotCell({
   side,
   row,
@@ -239,6 +365,7 @@ function SlotCell({
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const displayValue = side === 'before' ? row.beforeValue : row.afterValue;
+  const displayText = slotPreviewToEditText(displayValue);
   const isInteractive = side === 'after';
   const tag = side === 'after' ? deriveSlotTag({ diffType: row.diffType, parentMessage }) : null;
   const isRemoved = row.diffType === 'removed';
@@ -258,9 +385,9 @@ function SlotCell({
       return;
     }
     const newValue = inputRef.current?.value.trim() ?? '';
-    if (newValue && newValue !== displayValue) onEdit(newValue);
+    if (newValue && newValue !== displayText) onEdit(newValue);
     setEditing(false);
-  }, [displayValue, onEdit]);
+  }, [displayText, onEdit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -298,7 +425,7 @@ function SlotCell({
         <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : gutterColor}`} />
         <div
           className={cn(
-            'group flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            'group flex min-w-0 flex-1 items-start gap-1 px-2 py-1 transition-colors',
             isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source-dim)]'
           )}
@@ -315,7 +442,7 @@ function SlotCell({
           {editing ? (
             <input
               ref={inputRef}
-              defaultValue={displayValue ?? ''}
+              defaultValue={displayText}
               onKeyDown={handleKeyDown}
               onBlur={handleSave}
               className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
@@ -325,13 +452,11 @@ function SlotCell({
             <>
               {side === 'after' && isModified && row.oldValue && (
                 <span className="text-[var(--status-error)] opacity-50 line-through truncate mr-1">
-                  {row.oldValue}
+                  {slotPreviewToEditText(row.oldValue)}
                 </span>
               )}
-              <span
-                className={cn('truncate text-[var(--text-primary)]', isRemoved && 'line-through')}
-              >
-                {displayValue ?? ''}
+              <span className={cn('min-w-0 flex-1', isRemoved && 'line-through')}>
+                <SlotPreviewInline value={displayValue} />
               </span>
             </>
           )}
@@ -870,13 +995,13 @@ export function AfterPanel({
                 >
                   <div
                     className="border-r border-[var(--stroke-default)] border-b border-black/[0.025]"
-                    style={{ height: TREE_ROW_HEIGHT }}
+                    style={{ minHeight: TREE_ROW_HEIGHT }}
                   >
                     {beforeCell}
                   </div>
                   <div
                     className="border-b border-black/[0.025]"
-                    style={{ height: TREE_ROW_HEIGHT }}
+                    style={{ minHeight: TREE_ROW_HEIGHT }}
                   >
                     {afterCell}
                   </div>
@@ -885,7 +1010,7 @@ export function AfterPanel({
                 <div
                   key={row.key}
                   className="w-full border-b border-black/[0.025]"
-                  style={{ height: TREE_ROW_HEIGHT }}
+                  style={{ minHeight: TREE_ROW_HEIGHT }}
                 >
                   {afterCell}
                 </div>
