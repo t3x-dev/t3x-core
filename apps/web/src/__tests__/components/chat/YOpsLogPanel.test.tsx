@@ -314,4 +314,64 @@ describe('YOpsLogPanel', () => {
       expect(container.querySelector('[data-testid="yops-log-op-0-quote-link"]')).toBeNull();
     });
   });
+
+  describe('human edit surface (provenance "where")', () => {
+    function humanOpWithSurface(surface: 'tree' | 'script' | 'inline'): SourcedYOp {
+      return {
+        set: { path: 'trip/destination', value: 'Hangzhou' },
+        source: { type: 'human', author: 'alice', at: new Date().toISOString(), surface },
+      } as SourcedYOp;
+    }
+
+    it('renders "via Tree" suffix for tree edits', () => {
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [humanOpWithSurface('tree')],
+        });
+      });
+      const { container } = render(<YOpsLogPanel />);
+      const surfaceTag = container.querySelector('[data-testid="yops-log-op-0-surface"]');
+      expect(surfaceTag).toBeTruthy();
+      expect(surfaceTag?.textContent).toContain('via Tree');
+    });
+
+    it('renders "via Raw YAML" for script editor edits', () => {
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [humanOpWithSurface('script')],
+        });
+      });
+      const { container } = render(<YOpsLogPanel />);
+      const surfaceTag = container.querySelector('[data-testid="yops-log-op-0-surface"]');
+      expect(surfaceTag?.textContent).toContain('via Raw YAML');
+    });
+
+    it('omits the suffix entirely for legacy human rows without a surface', () => {
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [humanOp()],
+        });
+      });
+      const { container } = render(<YOpsLogPanel />);
+      expect(container.querySelector('[data-testid="yops-log-op-0-surface"]')).toBeNull();
+    });
+
+    it('omits the suffix for LLM ops (surface is human-only)', () => {
+      act(() => {
+        useWorkspaceStore.getState().setDerived({
+          tree: { trees: [], relations: [] },
+          sourceIndex: new Map(),
+          opsLog: [llmOp()],
+        });
+      });
+      const { container } = render(<YOpsLogPanel />);
+      expect(container.querySelector('[data-testid="yops-log-op-0-surface"]')).toBeNull();
+    });
+  });
 });

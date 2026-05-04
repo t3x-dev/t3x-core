@@ -72,6 +72,9 @@ const HumanSourceSchema = z.object({
   type: z.literal('human'),
   author: z.string().min(1),
   at: z.string().min(1),
+  // Optional UI surface that produced the edit. See @t3x-dev/core
+  // HumanEditSurface — forward-only; existing rows without it accept fine.
+  surface: z.enum(['tree', 'script', 'inline']).optional(),
 });
 
 const SourceSchema = z.discriminatedUnion('type', [LLMSourceSchema, HumanSourceSchema]);

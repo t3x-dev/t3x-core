@@ -15,7 +15,7 @@
  * MCP-local code without taking a transitive dependency on apps/web.
  */
 
-import type { Source, SourcedYOp } from '@t3x-dev/core';
+import type { HumanEditSurface, Source, SourcedYOp } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
 import { summarizeOp, verbOf } from './opSummary';
 
@@ -31,6 +31,13 @@ export interface OpCardSource {
    * the author label. `null` when neither is known.
    */
   attribution: string | null;
+  /**
+   * For human ops: the UI surface that produced the edit, when known.
+   * `null` for LLM ops and for legacy human rows that pre-date the
+   * surface field. The card renders this as a "via Tree / via Raw YAML
+   * / via Inline" suffix; absence just renders without a suffix.
+   */
+  surface: HumanEditSurface | null;
 }
 
 export interface OpCardProvenance {
@@ -118,6 +125,7 @@ export function buildOpCardModel(op: SourcedYOp): OpCardModel {
 
   let kind: OpCardSourceKind;
   let attribution: string | null;
+  let surface: HumanEditSurface | null = null;
   let provenance: OpCardProvenance | null;
   if (src.type === 'llm') {
     kind = 'llm';
@@ -137,6 +145,10 @@ export function buildOpCardModel(op: SourcedYOp): OpCardModel {
       typeof (src as { author?: unknown }).author === 'string'
         ? (src as { author: string }).author
         : null;
+    const candidate = (src as { surface?: unknown }).surface;
+    if (candidate === 'tree' || candidate === 'script' || candidate === 'inline') {
+      surface = candidate;
+    }
     provenance = null;
   } else {
     kind = 'unknown';
@@ -151,8 +163,24 @@ export function buildOpCardModel(op: SourcedYOp): OpCardModel {
     verb,
     path,
     summary: summarizeOp(op),
-    source: { kind, at: src.at, attribution },
+    source: { kind, at: src.at, attribution, surface },
     provenance,
     rawYaml,
   };
+}
+
+/**
+ * Map a HumanEditSurface to the user-facing label rendered as a "via X"
+ * suffix. Centralized so card render and any agent surface render the
+ * same string, and so adding a new surface only changes one file.
+ */
+export function humanEditSurfaceLabel(surface: HumanEditSurface): string {
+  switch (surface) {
+    case 'tree':
+      return 'Tree';
+    case 'script':
+      return 'Raw YAML';
+    case 'inline':
+      return 'Inline';
+  }
 }

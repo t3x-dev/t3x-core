@@ -21,6 +21,17 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// useScriptExecution now stamps real session identity (replaces the
+// hardcoded `'script-editor'` author). Provide a deterministic session
+// so the source-build path doesn't throw in tests.
+vi.mock('@/infrastructure/session', () => ({
+  getSessionUser: () => ({
+    id: 'user_1',
+    name: 'Alice',
+    username: 'alice',
+  }),
+}));
+
 const chatStoreState = { activeProjectId: 'proj_abc' as string | null };
 vi.mock('@/store/chatStore', () => ({
   useChatStore: Object.assign(() => undefined, {
@@ -236,7 +247,13 @@ describe('useScriptExecution', () => {
     expect(convId).toBe('conv_xyz');
     expect(Array.isArray(ops)).toBe(true);
     expect(ops).toHaveLength(1);
-    expect((ops[0] as { source?: { type?: string } }).source?.type).toBe('human');
+    const stamped = (ops[0] as { source: { type: string; author: string; surface: string } })
+      .source;
+    expect(stamped.type).toBe('human');
+    // Identity is the real session user — NEVER 'script-editor' (the old
+    // hardcoded surface label). `surface` carries the WHERE.
+    expect(stamped.author).toBe('alice');
+    expect(stamped.surface).toBe('script');
   });
 
   it('execute accepts a top-level array (manual edit without envelope)', async () => {

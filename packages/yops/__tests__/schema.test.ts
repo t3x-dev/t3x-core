@@ -48,6 +48,24 @@ describe('YOpSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts a human source with the optional surface field', () => {
+    for (const surface of ['tree', 'script', 'inline'] as const) {
+      const result = YOpSchema.safeParse({
+        define: { path: 'trip' },
+        source: { type: 'human', author: 'alice', surface },
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('rejects an unknown surface value', () => {
+    const result = YOpSchema.safeParse({
+      define: { path: 'trip' },
+      source: { type: 'human', author: 'alice', surface: 'haxxor' },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts an op without source (optional)', () => {
     const result = YOpSchema.safeParse({ define: { path: 'trip' } });
     expect(result.success).toBe(true);

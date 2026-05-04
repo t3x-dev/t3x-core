@@ -46,6 +46,29 @@ describe('buildHumanSource', () => {
     });
     expect(() => buildHumanSource()).toThrow(SourceValidationError);
   });
+
+  it('omits surface when no surface is requested (legacy callers)', () => {
+    vi.spyOn(session, 'getSessionUser').mockReturnValue({
+      id: 'u1',
+      name: null,
+      username: 'ethan',
+      avatar_url: null,
+    });
+    const src = buildHumanSource();
+    expect('surface' in src).toBe(false);
+  });
+
+  it('stamps the requested surface alongside identity', () => {
+    vi.spyOn(session, 'getSessionUser').mockReturnValue({
+      id: 'u1',
+      name: null,
+      username: 'ethan',
+      avatar_url: null,
+    });
+    expect(buildHumanSource('tree').surface).toBe('tree');
+    expect(buildHumanSource('script').surface).toBe('script');
+    expect(buildHumanSource('inline').surface).toBe('inline');
+  });
 });
 
 describe('sourceGoldEdit', () => {
@@ -61,8 +84,21 @@ describe('sourceGoldEdit', () => {
     const sourced = sourceGoldEdit({ unset: { path: 'x/y' } });
 
     expect(sourced.unset).toEqual({ path: 'x/y' });
-    expect(sourced.source).toEqual(expect.objectContaining({ type: 'human', author: 'ethan' }));
+    expect(sourced.source).toEqual(
+      expect.objectContaining({ type: 'human', author: 'ethan', surface: 'tree' })
+    );
     expect(commitSpy).not.toHaveBeenCalled();
+  });
+
+  it('always stamps surface: tree (the canvas/gold-edit path)', () => {
+    vi.spyOn(session, 'getSessionUser').mockReturnValue({
+      id: 'u1',
+      name: null,
+      username: 'ethan',
+      avatar_url: null,
+    });
+    const sourced = sourceGoldEdit({ unset: { path: 'x' } });
+    expect((sourced.source as { surface?: string }).surface).toBe('tree');
   });
 });
 
