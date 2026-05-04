@@ -284,14 +284,14 @@ describe('POST /v1/extract-yops (v2)', () => {
     });
   });
 
-  describe('active-baseline snapshot derivation', () => {
+  describe('active-apply baseline snapshot derivation', () => {
     /**
-     * Review-first YOps workbench: the snapshot fed to extractAndApply
-     * must match the materialized tree the web client validates against.
-     * That means parent/committed baseline plus active uncommitted
-     * yops_log rows. Otherwise a re-extract after Apply receives a
-     * bootstrap prompt, returns duplicate define/populate ops, and the
-     * web worker rejects them against the already-applied tree.
+     * The snapshot fed to extractAndApply must match the workspace's
+     * active applied tree: committed history plus active uncommitted
+     * rows. These tests assert the boundary at the route layer.
+     * Otherwise a re-extract after Apply can receive a bootstrap prompt,
+     * return duplicate define/populate ops, and get rejected by the web
+     * worker against the already-applied materialized tree.
      */
     async function freshConv(): Promise<string> {
       const conv = await insertConversation(
@@ -311,11 +311,10 @@ describe('POST /v1/extract-yops (v2)', () => {
       },
     });
 
-    it("calls extractAndApply with mode='incremental' when an uncommitted active row exists", async () => {
+    it("calls extractAndApply with mode='incremental' when an active LLM row exists", async () => {
       const convId = await freshConv();
-      // Plant an uncommitted applied row. Re-extract must compute
-      // against this active materialized baseline, not the empty
-      // committed baseline.
+      // Plant an already-applied, uncommitted LLM entry. Re-extract is
+      // append-oriented, so the LLM must see the active applied tree.
       await insertYOpsLogEntry(mockDB, {
         conversationId: convId,
         projectId: testProjectId,
@@ -350,6 +349,49 @@ describe('POST /v1/extract-yops (v2)', () => {
       const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
       expect(callArgs?.mode).toBe('incremental');
       expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('foo');
+    });
+
+    it("calls extractAndApply with mode='incremental' when an active manual row exists", async () => {
+      const convId = await freshConv();
+      await insertYOpsLogEntry(mockDB, {
+        conversationId: convId,
+        projectId: testProjectId,
+        source: 'manual',
+        yops: [
+          {
+            define: { path: 'manual_root' },
+            source: { type: 'human', author: 'tester', surface: 'script' },
+          },
+        ],
+      });
+
+      await upsertProviderCredential(mockDB, {
+        providerId: 'openai',
+        apiKey: 'sk-local-openai',
+      });
+      extractAndApply.mockResolvedValue({
+        ok: true,
+        draft: { schema: 't3x/extraction-draft', version: 1, mode: 'incremental', items: [] },
+        compiled: { ops: [], warnings: [] },
+        snapshot: { trees: [], relations: [] },
+        turnHashByTag: { T1: 'sha256:aabbcc' },
+      });
+
+      const res = await app.request('/v1/extract-yops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: convId,
+          turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'hello' }],
+          provider: 'openai',
+          model: 'gpt-5.4',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+      expect(callArgs?.mode).toBe('incremental');
+      expect(callArgs?.snapshot?.trees?.[0]?.key).toBe('manual_root');
     });
 
     it("calls extractAndApply with mode='incremental' + committed snapshot when a commit references the entry", async () => {

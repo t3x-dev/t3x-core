@@ -228,13 +228,12 @@ extractYopsRoutes.openapi(route, async (c) => {
       );
     }
 
-    // Snapshot must match the materialized tree the WebUI validates and
-    // previews against: inherited/committed baseline plus active
-    // uncommitted yops_log rows. After the review-first append-apply
-    // flip, re-extract after Apply is incremental on top of the applied
-    // baseline; otherwise the LLM receives an empty/committed-only
-    // snapshot, returns duplicate bootstrap ops, and the web worker
-    // rejects them against the already-applied tree.
+    // Snapshot must match the workspace's active applied tree. Apply for
+    // staged Extract drafts is append-oriented, so re-extract should
+    // extend the current active yops_log replay instead of compiling
+    // against only the committed baseline. Otherwise the LLM can return
+    // duplicate bootstrap ops that the web worker rejects against the
+    // already-applied materialized tree.
     const baselineSnapshot = await replayActiveDraftOnBaseline(db, conversation_id);
     const mode = baselineSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
