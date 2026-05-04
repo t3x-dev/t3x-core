@@ -48,8 +48,6 @@ function parseScript(yamlStr: string): ReturnType<typeof parseYOpsYaml> {
 
 function commitOptionsFromPolicy(payload: ApplyPayloadPolicy) {
   switch (payload.kind) {
-    case 'candidate':
-      return { replaceActiveLLMDraft: true };
     case 'replace_active_script':
       return { replaceActiveLLMDraft: false, replaceActiveScript: true };
     case 'repair':
@@ -148,17 +146,25 @@ export function useScriptExecution() {
     // script). Draft ops from Extract already carry an `llm` source, so
     // they pass through unchanged.
     //
-    // Stamp the real session user as `author` and the surface as
-    // `'script'`. `author` is WHO and `surface` is WHERE — never
-    // overwrite identity with a surface label. Build the source once
-    // and share it across every op in this Apply so all rows share an
-    // identical `at` timestamp (matches the gold-edit invariant).
-    let scriptSource: HumanSource;
+    // The HumanSource is built lazily and only once: when every op
+    // already carries source (e.g. an Extract proposal that arrives
+    // pre-sourced) Apply must NOT require a session user, because
+    // none is needed. Building eagerly would block Apply in
+    // auth-disabled / self-hosted contexts where `t3x-user` is absent.
+    // Build on first miss; reuse across every other miss so all manual
+    // rows share an identical `at` (gold-edit invariant).
+    let scriptSource: HumanSource | null = null;
+    let sourced: SourcedYOp[];
     try {
-      scriptSource = buildHumanSource('script');
+      sourced = ops.map((op) => {
+        if ((op as Record<string, unknown>).source) return op;
+        if (!scriptSource) scriptSource = buildHumanSource('script');
+        return { ...op, source: scriptSource };
+      }) as SourcedYOp[];
     } catch (err) {
       // No session user — surface a clear error rather than persisting
-      // a placeholder identity. Same posture as gold-edit.
+      // a placeholder identity. Same posture as gold-edit. Only reached
+      // when at least one op was missing source.
       const msg =
         err instanceof SourceValidationError
           ? 'Cannot apply: no session user available to attribute the edit.'
@@ -169,13 +175,6 @@ export function useScriptExecution() {
       toast.error(msg);
       return;
     }
-    const sourced = ops.map((op) => {
-      if ((op as Record<string, unknown>).source) return op;
-      return {
-        ...op,
-        source: scriptSource,
-      };
-    }) as SourcedYOp[];
 
     const commitOptions = commitOptionsFromPolicy(currentPolicy.payload);
     if (!commitOptions) return;

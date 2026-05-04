@@ -22,14 +22,18 @@ vi.mock('sonner', () => ({
 }));
 
 // useScriptExecution now stamps real session identity (replaces the
-// hardcoded `'script-editor'` author). Provide a deterministic session
-// so the source-build path doesn't throw in tests.
+// hardcoded `'script-editor'` author). Default to a deterministic
+// session so the source-build path doesn't throw; tests that exercise
+// the no-session-user code path overwrite `sessionUserMock` per case.
+const sessionUserMock = {
+  current: { id: 'user_1', name: 'Alice', username: 'alice' } as {
+    id: string;
+    name: string | null;
+    username: string | null;
+  } | null,
+};
 vi.mock('@/infrastructure/session', () => ({
-  getSessionUser: () => ({
-    id: 'user_1',
-    name: 'Alice',
-    username: 'alice',
-  }),
+  getSessionUser: () => sessionUserMock.current,
 }));
 
 const chatStoreState = { activeProjectId: 'proj_abc' as string | null };
@@ -45,6 +49,7 @@ import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/
 describe('useScriptExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionUserMock.current = { id: 'user_1', name: 'Alice', username: 'alice' };
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
       panelExpandedByProject: {},
@@ -268,12 +273,12 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('passes replaceActiveLLMDraft: true to commitOps when applying a staged Extract draft', async () => {
-    // Root-cause fix for the "re-extract piles up duplicate suggestions"
-    // symptom: backend already supports replace_active_llm_draft to
-    // supersede prior active LLM drafts atomically, but web's commitOps
-    // call chain was dropping the flag. Apply on a staged draft must
-    // tell the API to replace the prior LLM suggestion.
+  it('passes replaceActiveLLMDraft: false to commitOps when applying a staged Extract draft', async () => {
+    // Review-first model: a staged-extract Apply appends to the
+    // applied YOps log, it does not supersede prior LLM rows.
+    // Only an explicit Replace (active_dirty) or Repair
+    // (replay_failed) flow may set replaceActiveLLMDraft: true.
+    // Spec: docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md
     useWorkspaceStore.getState().setDraft({
       ops: [
         {
@@ -302,7 +307,7 @@ describe('useScriptExecution', () => {
 
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
     const [, , options] = commitOpsMock.mock.calls[0];
-    expect(options).toEqual({ replaceActiveLLMDraft: true });
+    expect(options).toEqual({ replaceActiveLLMDraft: false });
   });
 
   it('passes replaceActiveLLMDraft: false on a manual-edit Apply (no staged draft)', async () => {
@@ -816,6 +821,77 @@ describe('useScriptExecution', () => {
       expect((ops[0] as { set: { value: unknown } }).set.value).toBe(
         'Released in 2022, with improved thermal management'
       );
+    });
+  });
+
+  describe('Apply does not require a session user when every op already carries source', () => {
+    // Reviewer-flagged P1: Apply must NOT preflight a HumanSource build.
+    // When every parsed op already carries source, no human identity is
+    // needed at all — auth-disabled / self-hosted / no-`t3x-user`
+    // contexts must succeed in that case.
+
+    it('applies pre-sourced ops with no session user (lazy HumanSource build)', async () => {
+      sessionUserMock.current = null;
+
+      // Editor YAML carries an explicit `source` block on every op.
+      // The Apply path parses these into already-sourced ops, so the
+      // missing-source branch never fires and the lazy HumanSource
+      // build is skipped — Apply succeeds even with no session user.
+      // (`serializeOpsToYaml` strips source from the canonical mirror,
+      // so the test feeds source-bearing YAML directly via the editor
+      // override to exercise the all-pre-sourced path.)
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          [
+            'yops:',
+            '  - set:',
+            '      path: trip/dest',
+            '      value: HZ',
+            '    source:',
+            '      type: llm',
+            '      model: gpt-4o-mini',
+            "      at: '2026-04-26T00:00:00Z'",
+            '      turn_ref:',
+            "        turn_hash: 'sha256:t1'",
+            '        quote: HZ',
+            '',
+          ].join('\n')
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      // The committed op kept its LLM source verbatim — no human
+      // identity was synthesized.
+      const [, ops] = commitOpsMock.mock.calls[0];
+      const stamped = (ops[0] as { source: { type: string; model?: string } }).source;
+      expect(stamped.type).toBe('llm');
+      expect(stamped.model).toBe('gpt-4o-mini');
+    });
+
+    it('errors out when an op is missing source AND there is no session user', async () => {
+      sessionUserMock.current = null;
+      // Top-level array with no `source` field — manual-edit path,
+      // genuinely needs a human author. Lazy build fires on the first
+      // missing-source op and surfaces a clear error.
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride('- set:\n    path: trip/dest\n    value: HZ\n');
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(commitOpsMock).not.toHaveBeenCalled();
+      expect(toastErrorMock).toHaveBeenCalled();
+      const errorMsg = String(toastErrorMock.mock.calls[0]?.[0] ?? '');
+      expect(errorMsg.toLowerCase()).toContain('session user');
     });
   });
 });
