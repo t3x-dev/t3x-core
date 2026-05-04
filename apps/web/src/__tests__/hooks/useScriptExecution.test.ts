@@ -377,6 +377,112 @@ describe('useScriptExecution', () => {
     });
   });
 
+  it('preserves source on unchanged active-script ops and marks changed ops as human script edits', async () => {
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'llm',
+            model: 'gpt-test',
+            at: '2026-04-28T00:00:00.000Z',
+            turn_ref: { turn_hash: 'turn_1', quote: 'trip', start_char: 0, end_char: 4 },
+          },
+        },
+        {
+          set: { path: 'trip/destination', value: 'Tokyo' },
+          source: {
+            type: 'llm',
+            model: 'gpt-test',
+            at: '2026-04-28T00:00:00.000Z',
+            turn_ref: { turn_hash: 'turn_1', quote: 'Tokyo', start_char: 10, end_char: 15 },
+          },
+        },
+      ] as never,
+      rowsById: {
+        yl_active: {
+          id: 'yl_active',
+          source: 'pipeline',
+          turnHash: 'turn_1',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 2,
+        },
+      },
+      opOrigins: [
+        { rowId: 'yl_active', opIndexInRow: 0 },
+        { rowId: 'yl_active', opIndexInRow: 1 },
+      ],
+    });
+    useWorkspaceStore.getState().setEditorOverride(`yops:
+  - define:
+      path: trip
+  - set:
+      path: trip/destination
+      value: Kyoto
+`);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    const [, ops, options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({ replaceActiveLLMDraft: false, replaceActiveScript: true });
+    expect(ops[0].source.type).toBe('llm');
+    expect(ops[1].source).toMatchObject({ type: 'human', surface: 'script' });
+  });
+
+  it('preserves source on unchanged source-less active-script ops without a session user', async () => {
+    sessionUserMock.current = null;
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [
+        {
+          define: { path: 'trip' },
+          source: {
+            type: 'llm',
+            model: 'gpt-test',
+            at: '2026-04-28T00:00:00.000Z',
+            turn_ref: { turn_hash: 'turn_1', quote: 'trip', start_char: 0, end_char: 4 },
+          },
+        },
+      ] as never,
+      rowsById: {
+        yl_active: {
+          id: 'yl_active',
+          source: 'pipeline',
+          turnHash: 'turn_1',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          supersededAt: null,
+          isCommitted: false,
+          committedBy: [],
+          opCount: 1,
+        },
+      },
+      opOrigins: [{ rowId: 'yl_active', opIndexInRow: 0 }],
+    });
+    useWorkspaceStore.getState().setEditorOverride(`yops:
+  - define: { path: trip }
+`);
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    const [, ops, options] = commitOpsMock.mock.calls[0];
+    expect(options).toEqual({ replaceActiveLLMDraft: false, replaceActiveScript: true });
+    expect(ops[0].source).toMatchObject({ type: 'llm', model: 'gpt-test' });
+  });
+
   it('uses replaceActiveScript normalization when editing committed baseline rows', async () => {
     useWorkspaceStore.getState().setDerived({
       tree: { trees: [{ key: 'trip', slots: {}, children: [] }], relations: [] },
@@ -831,6 +937,36 @@ describe('useScriptExecution', () => {
     // When every parsed op already carries source, no human identity is
     // needed at all — auth-disabled / self-hosted / no-`t3x-user`
     // contexts must succeed in that case.
+
+    it('applies a clean staged LLM draft with no session user using draftOps sources', async () => {
+      sessionUserMock.current = null;
+      useWorkspaceStore.getState().setDraft({
+        ops: [
+          {
+            set: { path: 'trip/dest', value: 'HZ' },
+            source: {
+              type: 'llm',
+              model: 'gpt-4o-mini',
+              at: '2026-04-26T00:00:00Z',
+              turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+            },
+          },
+        ] as never,
+        tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+      });
+      useWorkspaceStore.getState().clearEditorOverride();
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops, options] = commitOpsMock.mock.calls[0];
+      expect(options).toEqual({ replaceActiveLLMDraft: false });
+      expect(ops[0].source).toMatchObject({ type: 'llm', model: 'gpt-4o-mini' });
+    });
 
     it('applies pre-sourced ops with no session user (lazy HumanSource build)', async () => {
       sessionUserMock.current = null;

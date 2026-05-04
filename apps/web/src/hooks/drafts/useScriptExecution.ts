@@ -11,6 +11,7 @@ import {
   deriveWorkspaceScriptState,
   getApplyPolicyForScriptState,
 } from '@/domain/yops/scriptApplyPolicy';
+import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import {
@@ -58,6 +59,13 @@ function commitOptionsFromPolicy(payload: ApplyPayloadPolicy) {
       return null;
   }
 }
+
+const RECONCILIATION_PROBE_SOURCE: HumanSource = {
+  type: 'human',
+  author: '__reconciliation_probe__',
+  at: '1970-01-01T00:00:00.000Z',
+  surface: 'script',
+};
 
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
@@ -151,16 +159,45 @@ export function useScriptExecution() {
     // pre-sourced) Apply must NOT require a session user, because
     // none is needed. Building eagerly would block Apply in
     // auth-disabled / self-hosted contexts where `t3x-user` is absent.
-    // Build on first miss; reuse across every other miss so all manual
-    // rows share an identical `at` (gold-edit invariant).
+    // Build on first source attribution need; reuse across every other
+    // changed/missing op so all manual rows share an identical `at`
+    // (gold-edit invariant).
     let scriptSource: HumanSource | null = null;
+    const getScriptSource = () => {
+      if (!scriptSource) scriptSource = buildHumanSource('script');
+      return scriptSource;
+    };
+
     let sourced: SourcedYOp[];
     try {
-      sourced = ops.map((op) => {
-        if ((op as Record<string, unknown>).source) return op;
-        if (!scriptSource) scriptSource = buildHumanSource('script');
-        return { ...op, source: scriptSource };
-      }) as SourcedYOp[];
+      if (store.hasDraft && !currentScriptDirty) {
+        sourced = store.draftOps as SourcedYOp[];
+      } else {
+        const allParsedOpsAlreadySourced = ops.every(
+          (op) => (op as Record<string, unknown>).source
+        );
+        const previousOps =
+          store.hasDraft && store.draftOps.length > 0
+            ? (store.draftOps as SourcedYOp[])
+            : store.opsLog;
+        if (currentScriptDirty && previousOps.length > 0 && !allParsedOpsAlreadySourced) {
+          const probed = reconcileScriptSources(
+            previousOps,
+            ops as never,
+            RECONCILIATION_PROBE_SOURCE
+          );
+          if (probed.summary.changed + probed.summary.inserted + probed.summary.ambiguous > 0) {
+            sourced = reconcileScriptSources(previousOps, ops as never, getScriptSource()).ops;
+          } else {
+            sourced = probed.ops;
+          }
+        } else {
+          sourced = ops.map((op) => {
+            if ((op as Record<string, unknown>).source) return op;
+            return { ...op, source: getScriptSource() };
+          }) as SourcedYOp[];
+        }
+      }
     } catch (err) {
       // No session user — surface a clear error rather than persisting
       // a placeholder identity. Same posture as gold-edit. Only reached
