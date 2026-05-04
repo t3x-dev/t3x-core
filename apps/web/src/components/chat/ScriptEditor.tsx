@@ -5,7 +5,7 @@ import { yaml } from '@codemirror/lang-yaml';
 import { Compartment, EditorState } from '@codemirror/state';
 import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { useEffect, useRef } from 'react';
-import { selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
 const PLACEHOLDER = `yops:
@@ -18,6 +18,7 @@ export function ScriptEditor() {
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
   const scriptText = useWorkspaceStore(selectScriptText);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const isExternalUpdate = useRef(false);
   const readOnlyCompartment = useRef(new Compartment());
@@ -110,6 +111,7 @@ export function ScriptEditor() {
   }, [mode]);
 
   const isStreaming = mode === 'streaming';
+  const editorStateLabel = isStreaming ? 'read-only' : scriptDirty ? 'inline changes' : 'clean';
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel-alt)]">
@@ -121,10 +123,13 @@ export function ScriptEditor() {
               isStreaming ? 'bg-red-500 animate-pulse' : 'bg-green-500'
             )}
           />
-          Script
+          YOps
         </span>
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60">
-          {isStreaming ? 'read-only' : 'editable'}
+        <span
+          className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60"
+          aria-live="polite"
+        >
+          {editorStateLabel}
         </span>
       </div>
 

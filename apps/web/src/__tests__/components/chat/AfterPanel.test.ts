@@ -7,6 +7,7 @@ import {
   formatSlotPreviewValue,
   SlotPreviewInline,
   shouldDisableCommit,
+  shouldShowAppliedResultFailure,
 } from '@/components/chat/AfterPanel';
 
 describe('AfterPanel.shouldDisableCommit', () => {
@@ -53,6 +54,42 @@ describe('AfterPanel.shouldDisableCommit', () => {
 
   it('disables Commit when there are no result rows to commit', () => {
     expect(shouldDisableCommit({ ...baseEnabled, hasResult: false })).toBe(true);
+  });
+});
+
+describe('AfterPanel.shouldShowAppliedResultFailure', () => {
+  it('shows the failed re-extract row when the panel is still rendering an applied result', () => {
+    expect(
+      shouldShowAppliedResultFailure({
+        hasDraft: false,
+        hasResult: true,
+        lastError: 'Extraction returned ops that do not form a valid tree update.',
+      })
+    ).toBe(true);
+  });
+
+  it('does not collide with retained-draft, empty, or clean states', () => {
+    expect(
+      shouldShowAppliedResultFailure({
+        hasDraft: true,
+        hasResult: true,
+        lastError: 'failed',
+      })
+    ).toBe(false);
+    expect(
+      shouldShowAppliedResultFailure({
+        hasDraft: false,
+        hasResult: false,
+        lastError: 'failed',
+      })
+    ).toBe(false);
+    expect(
+      shouldShowAppliedResultFailure({
+        hasDraft: false,
+        hasResult: true,
+        lastError: null,
+      })
+    ).toBe(false);
   });
 });
 

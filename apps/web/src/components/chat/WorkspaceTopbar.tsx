@@ -2,22 +2,36 @@
 
 import { Loader2, PanelRightClose, Play, X } from 'lucide-react';
 import { formatApplyTooltipForRetainedFailure } from '@/domain/draft/retainedFailureLabel';
+import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
 import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
-import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  selectIsInheritedBaselineOnly,
+  selectScriptDirty,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
+
+function formatSurfaceSummary(groups: ReturnType<typeof buildMaterializedOpGroups>): string {
+  const parts: string[] = [];
+  const { surfaces } = groups.user;
+  if (surfaces.script > 0) parts.push(`YOps: ${surfaces.script}`);
+  if (surfaces.tree > 0) parts.push(`Tree: ${surfaces.tree}`);
+  if (surfaces.inline > 0) parts.push(`Inline: ${surfaces.inline}`);
+  if (surfaces.unknown > 0) parts.push(`User: ${surfaces.unknown}`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
 
 export function WorkspaceTopbar() {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const mode = useWorkspaceStore((s) => s.mode);
-  // Split the count into committed vs draft so the topbar can't be
-  // misread as "Concise produced 60 ops". The committed count is
-  // opsLog.length (history persisted to yops_log); the draft count is
-  // draftOps.length (un-applied LLM proposal staged via setDraft).
-  // Without this split, an old conversation with prior committed
-  // history shows "60 ops" regardless of what the current Extract
-  // produced — which is exactly what confused us during E2E review.
-  const committedCount = useWorkspaceStore((s) => s.opsLog.length);
-  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
+  const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const draftOps = useWorkspaceStore((s) => s.draftOps);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
+  const groups = buildMaterializedOpGroups({
+    ops: opsLog,
+    pendingDraftOps: draftOps,
+    scriptDirty,
+  });
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
   // Drives the Apply button tooltip wording. When a re-extract failed
@@ -33,6 +47,8 @@ export function WorkspaceTopbar() {
   // it from either side. Disabled while a commit is in flight to avoid
   // racing the apply path.
   const canDiscard = (hasDraft || retainedDraftFailure !== null) && !isCommitting;
+  const dirtyCopy = 'Inline changes · Apply or discard before commit';
+  const pendingCopy = 'Pending extract · Apply or discard before commit';
 
   return (
     <div className="flex h-11 items-center gap-2 px-3 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
@@ -48,19 +64,24 @@ export function WorkspaceTopbar() {
       <div className="ml-auto flex items-center gap-2">
         <span
           className="text-[10px] font-mono text-[var(--text-tertiary)]"
+          aria-live="polite"
           title={
             isInheritedBaselineOnly
               ? 'Inherited from parent commit; no current conversation YOps applied'
-              : hasDraft
-                ? `${committedCount} committed op${committedCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
-                : `${committedCount} applied op${committedCount === 1 ? '' : 's'} in yops_log`
+              : scriptDirty
+                ? dirtyCopy
+                : hasDraft
+                  ? pendingCopy
+                  : `${opsLog.length} materialized op${opsLog.length === 1 ? '' : 's'} in yops_log`
           }
         >
           {isInheritedBaselineOnly ? (
             'Inherited baseline'
           ) : (
             <>
-              {committedCount} applied{hasDraft ? ` · ${draftCount} draft` : ''}
+              Materialized: {opsLog.length} ops
+              {formatSurfaceSummary(groups)}
+              {groups.pending.count > 0 ? ` · Pending: ${groups.pending.count}` : ''}
             </>
           )}
         </span>

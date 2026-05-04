@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAppliedResultFailureRow,
   formatApplyTooltipForRetainedFailure,
   formatRetainedFailureContext,
   formatRetainedFailureRow,
@@ -57,6 +58,21 @@ describe('formatRetainedFailureRow', () => {
     // anchors what the user gets to do next.
     expect(formatRetainedFailureRow({ message: 'LLM call failed.' })).toBe(
       'Last extract failed: LLM call failed. Previous draft retained.'
+    );
+  });
+});
+
+describe('formatAppliedResultFailureRow', () => {
+  it('states that the applied result is unchanged when a re-extract fails without a staged draft', () => {
+    expect(
+      formatAppliedResultFailureRow({
+        message: 'Extraction returned ops that do not form a valid tree update.',
+        provider: 'google',
+        model: 'gemini-3-flash-preview',
+        preset: 'concise',
+      })
+    ).toBe(
+      'Last extract failed (google · gemini-3-flash-preview · Concise): Extraction returned ops that do not form a valid tree update. Applied result unchanged.'
     );
   });
 });

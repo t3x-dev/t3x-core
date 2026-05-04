@@ -20,7 +20,7 @@ import { splitOpsByCommittedness, YOpsLogPanel } from './YOpsLogPanel';
  *   - applied   → yops_log rows not yet referenced by a commit
  *   - committed → yops_log rows referenced by `commits.yops_log_ids`
  *   - archived  → yops_log rows with `superseded_at != null` (read-only audit)
- *   - script    → raw YAML editor (the "Raw YAML" tab; renamed in PR 3)
+ *   - script    → YOps editor
  */
 type TopView = 'draft' | 'applied' | 'committed' | 'archived' | 'script';
 
@@ -35,7 +35,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const [showBefore, setShowBefore] = useState(false);
   // Default to whichever tab has live content: a staged draft, otherwise
   // applied ops, otherwise committed history, falling through to the
-  // raw YAML editor when there's nothing to render.
+  // YOps editor when there's nothing to render.
   const draftCount = useWorkspaceStore((s) => s.draftOps.length);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const conversationId = useWorkspaceStore((s) => s.conversationId);
@@ -58,23 +58,36 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   // on Discard / clearDraft (no auto-switch needed in that direction;
   // the next draft will re-engage the watcher).
   const userPickedTabRef = useRef(false);
+  const prevDraftCountRef = useRef(draftCount);
+  const prevConversationIdRef = useRef(conversationId);
   const setTopView = useCallback((next: TopView) => {
     userPickedTabRef.current = true;
     setTopViewState(next);
   }, []);
   // Auto-switch to the Draft tab when a fresh draft arrives, IFF the
   // user hasn't picked a tab manually yet. Common flow: workspace
-  // mounts on Raw YAML (empty conversation) → user clicks Extract →
+  // mounts on YOps (empty conversation) → user clicks Extract →
   // draftCount > 0 → tab switches to Draft so the proposal is the
   // visible surface, matching the "elevate structured ops" thesis.
   // Once the user clicks a tab manually, the ref locks and store
   // updates stop dragging the view around.
   useEffect(() => {
+    const prevDraftCount = prevDraftCountRef.current;
+    const conversationChanged = prevConversationIdRef.current !== conversationId;
+    const draftCleared = prevDraftCount > 0 && draftCount === 0;
+
+    if (conversationChanged || draftCleared) {
+      userPickedTabRef.current = false;
+    }
+
+    prevDraftCountRef.current = draftCount;
+    prevConversationIdRef.current = conversationId;
+
     if (userPickedTabRef.current) return;
     if (draftCount > 0 && topView !== 'draft') {
       setTopViewState('draft');
     }
-  }, [draftCount, topView]);
+  }, [conversationId, draftCount, topView]);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const prevExpandedRef = useRef(panelExpanded);
@@ -166,11 +179,9 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
               { id: 'applied', label: 'Applied' },
               { id: 'committed', label: 'Committed' },
               { id: 'archived', label: 'Archived' },
-              // 'Raw YAML' visually demotes the editor to an advanced tab
-              // (workbench plan §1: hide raw YAML, elevate structured ops).
               // The id stays 'script' to minimize churn in tests / a11y
               // labels — the visible label is what users see.
-              { id: 'script', label: 'Raw YAML' },
+              { id: 'script', label: 'YOps' },
             ] as const
           ).map((tab) => (
             <button
@@ -196,7 +207,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
           ) : topView === 'archived' ? (
             <ArchivedOpsPanel conversationId={conversationId} />
           ) : (
-            <YOpsLogPanel tab={topView} />
+            <YOpsLogPanel tab={topView} mode={topView === 'applied' ? 'materialized' : 'ledger'} />
           )}
         </div>
       </div>

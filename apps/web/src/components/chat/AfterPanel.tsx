@@ -14,6 +14,7 @@ import {
 import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
 import {
+  formatAppliedResultFailureRow,
   formatRetainedFailureRow,
   getResultPanelHeaderLabel,
 } from '@/domain/draft/retainedFailureLabel';
@@ -165,6 +166,19 @@ export function shouldDisableCommit(input: {
     input.hasDraft ||
     Boolean(input.isInheritedBaselineOnly)
   );
+}
+
+/**
+ * Show a persistent row when Extract failed while an applied result already
+ * exists. This is distinct from the retained-draft path: no replacement
+ * draft was staged, so the visible tree is the unchanged yops_log replay.
+ */
+export function shouldShowAppliedResultFailure(input: {
+  hasDraft: boolean;
+  hasResult: boolean;
+  lastError: string | null;
+}): boolean {
+  return !input.hasDraft && input.hasResult && input.lastError !== null;
 }
 
 function summarizeVisibleDiff(diff: TreeDiffResult | null): {
@@ -674,6 +688,11 @@ export function AfterPanel({
 
   const summary = useMemo(() => summarizeVisibleDiff(diff), [diff]);
   const parentMessage = parent?.message ?? null;
+  const showAppliedResultFailure = shouldShowAppliedResultFailure({
+    hasDraft,
+    hasResult,
+    lastError,
+  });
 
   useEffect(() => {
     if (!showCommitDialog) return;
@@ -888,6 +907,20 @@ export function AfterPanel({
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-warning)] opacity-80" />
             <span className="text-[10px] leading-4 text-[var(--status-warning)]">
               {formatRetainedFailureRow(retainedDraftFailure)}
+            </span>
+          </div>
+        </output>
+      )}
+
+      {showAppliedResultFailure && lastError && (
+        <output
+          data-testid="after-panel-applied-result-failure"
+          className="block shrink-0 border-b border-[var(--status-error)]/25 bg-[var(--status-error)]/[0.045] px-3 py-1.5"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--status-error)] opacity-80" />
+            <span className="text-[10px] leading-4 text-[var(--status-error)]">
+              {formatAppliedResultFailureRow({ message: lastError })}
             </span>
           </div>
         </output>

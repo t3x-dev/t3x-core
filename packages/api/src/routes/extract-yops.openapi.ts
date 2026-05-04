@@ -231,7 +231,9 @@ extractYopsRoutes.openapi(route, async (c) => {
     // Snapshot must match the workspace's active applied tree. Apply for
     // staged Extract drafts is append-oriented, so re-extract should
     // extend the current active yops_log replay instead of compiling
-    // against only the committed baseline.
+    // against only the committed baseline. Otherwise the LLM can return
+    // duplicate bootstrap ops that the web worker rejects against the
+    // already-applied materialized tree.
     const baselineSnapshot = await replayActiveDraftOnBaseline(db, conversation_id);
     const mode = baselineSnapshot.trees.length > 0 ? 'incremental' : 'bootstrap';
 
@@ -311,7 +313,7 @@ extractYopsRoutes.openapi(route, async (c) => {
     }
   } catch (err) {
     // Outer catch: failures from getDB / findConversationById /
-    // replayCommittedBaseline. Genuine infrastructure errors.
+    // replayActiveDraftOnBaseline. Genuine infrastructure errors.
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'INTERNAL_ERROR', message);
   }

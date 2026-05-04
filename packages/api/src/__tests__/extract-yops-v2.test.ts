@@ -289,6 +289,9 @@ describe('POST /v1/extract-yops (v2)', () => {
      * The snapshot fed to extractAndApply must match the workspace's
      * active applied tree: committed history plus active uncommitted
      * rows. These tests assert the boundary at the route layer.
+     * Otherwise a re-extract after Apply can receive a bootstrap prompt,
+     * return duplicate define/populate ops, and get rejected by the web
+     * worker against the already-applied materialized tree.
      */
     async function freshConv(): Promise<string> {
       const conv = await insertConversation(
@@ -399,8 +402,8 @@ describe('POST /v1/extract-yops (v2)', () => {
         source: 'pipeline',
         yops: [llmOp('committed_root')],
       });
-      // Promote the entry into a real commit — this is the boundary
-      // that flips it from "active draft" into "committed baseline".
+      // Promote the entry into a real commit. The active-baseline route
+      // should still include committed rows exactly once.
       await createCommit(mockDB, {
         author: { type: 'human', name: 'test' },
         content: {
