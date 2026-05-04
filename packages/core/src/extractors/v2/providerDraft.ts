@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { tryParseWithRepair } from '../../providers/llm/jsonRepair';
 import { createExtractionFailure, type ExtractionFailure } from './failures';
+import {
+  canonicalizeMultiValueScalar,
+  canonicalizeMultiValueScalarsInRecord,
+} from './normalization';
 import { type ExtractionDraft, ExtractionDraftSchema, ExtractionModeSchema } from './types';
 
 export const PROVIDER_EXTRACTION_DRAFT_SCHEMA = 't3x/provider-extraction-draft' as const;
@@ -310,7 +314,14 @@ function canonicalizeChildShape(value: unknown): unknown {
         out.key = firstStringValue;
       }
     }
-    if (Object.keys(folded).length > 0) out.values = folded;
+    if (Object.keys(folded).length > 0) {
+      // Canonicalize multi-value scalars at the child level too. The compiler
+      // emits child.values straight into `populate.values`, so without this
+      // pass an LLM emitting children_json with comma-string slot values
+      // would slip canonicalization and persist as scalar strings. Mirrors
+      // the parent-candidate gate above; see issue #964.
+      out.values = canonicalizeMultiValueScalarsInRecord(folded);
+    }
     return out;
   });
 }
@@ -369,6 +380,19 @@ export function liftProviderDraftToExtractionDraft(
         liftedValue = liftedValues;
       }
       liftedValues = undefined;
+    }
+
+    // Canonicalize multi-value scalars before the candidate flows into the
+    // canonical extraction draft. The compiler downstream emits set.value
+    // and populate.values[k] verbatim from these slots, so this is the
+    // single point where comma-string scalars become arrays. Non-string
+    // values pass through unchanged. See canonicalizeMultiValueScalar in
+    // normalization.ts for the rule, and issue #964 for context.
+    if (liftedValue !== undefined) {
+      liftedValue = canonicalizeMultiValueScalar(liftedValue);
+    }
+    if (liftedValues && typeof liftedValues === 'object' && !Array.isArray(liftedValues)) {
+      liftedValues = canonicalizeMultiValueScalarsInRecord(liftedValues as Record<string, unknown>);
     }
 
     items.push({

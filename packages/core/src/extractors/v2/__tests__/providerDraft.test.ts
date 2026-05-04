@@ -910,4 +910,152 @@ describe('F12 inner _json repair', () => {
     expect(child?.values).toHaveProperty('values_json');
     expect(child?.values).not.toHaveProperty('resolution');
   });
+
+  describe('canonicalize multi-value scalars (plan: canonicalize-proposed-yops)', () => {
+    it('lifts a comma-separated value_json into a YAML sequence', () => {
+      const lifted = liftProviderDraftToExtractionDraft({
+        schema: 't3x/provider-extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { node_key: null, path: null, existing_node_id: null },
+            candidate: {
+              key: 'primary_use_case',
+              path_hint: 'cameras/sony/full_frame/r_series/primary_use_case',
+              slot: null,
+              // Model emitted a comma-string. Canonical shape is an array.
+              value_json: '"landscape, studio, fashion, commercial"',
+              values_json: null,
+              children_json: null,
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'landscape, studio', role: 'primary' }],
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(lifted.ok).toBe(true);
+      if (!lifted.ok) return;
+      expect(lifted.draft.items[0]?.candidate.value).toEqual([
+        'landscape',
+        'studio',
+        'fashion',
+        'commercial',
+      ]);
+    });
+
+    it('canonicalizes per-key inside values_json', () => {
+      const lifted = liftProviderDraftToExtractionDraft({
+        schema: 't3x/provider-extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { node_key: null, path: null, existing_node_id: null },
+            candidate: {
+              key: 'r_series',
+              path_hint: 'cameras/sony/full_frame/r_series',
+              slot: null,
+              value_json: null,
+              values_json:
+                '{"primary_use_case":"landscape, studio, fashion","resolution":"61 megapixels"}',
+              children_json: null,
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'landscape', role: 'primary' }],
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(lifted.ok).toBe(true);
+      if (!lifted.ok) return;
+      expect(lifted.draft.items[0]?.candidate.values).toEqual({
+        primary_use_case: ['landscape', 'studio', 'fashion'],
+        resolution: '61 megapixels',
+      });
+    });
+
+    it('canonicalizes per-key inside child values from children_json', () => {
+      // Compiler emits child.values straight into `populate.values`, so the
+      // child path needs the same gate as the parent. Without it, an LLM
+      // response that nests slot values inside children would slip the
+      // canonicalization invariant.
+      const lifted = liftProviderDraftToExtractionDraft({
+        schema: 't3x/provider-extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { node_key: null, path: null, existing_node_id: null },
+            candidate: {
+              key: 'cameras',
+              path_hint: 'cameras/sony/full_frame',
+              slot: null,
+              value_json: null,
+              values_json: null,
+              children_json:
+                '[{"key":"r_series","values":{"primary_use_case":"landscape, studio, fashion","resolution":"61 megapixels"}}]',
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'r_series', role: 'primary' }],
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(lifted.ok).toBe(true);
+      if (!lifted.ok) return;
+      const child = lifted.draft.items[0]?.candidate.children?.[0];
+      expect(child?.key).toBe('r_series');
+      expect(child?.values).toEqual({
+        primary_use_case: ['landscape', 'studio', 'fashion'],
+        resolution: '61 megapixels',
+      });
+    });
+
+    it('leaves prose strings with commas as scalar', () => {
+      const lifted = liftProviderDraftToExtractionDraft({
+        schema: 't3x/provider-extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [
+          {
+            id: 'item_1',
+            intent: 'add',
+            confidence: 0.9,
+            reasoning_type: 'direct',
+            target_ref: { node_key: null, path: null, existing_node_id: null },
+            candidate: {
+              key: 'note',
+              path_hint: 'cameras/sony/full_frame/r_series/note',
+              slot: null,
+              value_json: '"Released in 2022, with improved thermal management"',
+              values_json: null,
+              children_json: null,
+            },
+            evidence: [{ turn_tag: 'T1', quote: 'thermal', role: 'primary' }],
+          },
+        ],
+        warnings: [],
+      });
+
+      expect(lifted.ok).toBe(true);
+      if (!lifted.ok) return;
+      expect(lifted.draft.items[0]?.candidate.value).toBe(
+        'Released in 2022, with improved thermal management'
+      );
+    });
+  });
 });

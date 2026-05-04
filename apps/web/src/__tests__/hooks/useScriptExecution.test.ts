@@ -732,4 +732,73 @@ describe('useScriptExecution', () => {
     expect(after.draftTree).toBeNull();
     expect(after.draftsByConversation.conv_xyz).toBeUndefined();
   });
+
+  describe('canonicalize multi-value scalars on manual apply (plan: canonicalize-proposed-yops)', () => {
+    it('rewrites set.value comma-list scalar to a YAML sequence before commitOps', async () => {
+      // User typed a comma-string in the editor. The script-apply path
+      // bypasses the extractor pipeline, so the canonicalization gate
+      // must also run here — otherwise human edits and LLM extractions
+      // diverge in persisted shape.
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          `- set:\n    path: cameras/sony/r5/primary_use_case\n    value: landscape, studio, fashion, commercial\n`
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect(Array.isArray(ops)).toBe(true);
+      expect((ops[0] as { set: { value: unknown } }).set.value).toEqual([
+        'landscape',
+        'studio',
+        'fashion',
+        'commercial',
+      ]);
+    });
+
+    it('rewrites populate.values per-key while leaving non-list scalars alone', async () => {
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          `- populate:\n    path: cameras/sony/r5\n    values:\n      primary_use_case: landscape, studio, fashion\n      resolution: 61 megapixels\n`
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      const populated = (ops[0] as { populate: { values: Record<string, unknown> } }).populate;
+      expect(populated.values.primary_use_case).toEqual(['landscape', 'studio', 'fashion']);
+      expect(populated.values.resolution).toBe('61 megapixels');
+    });
+
+    it('leaves prose-with-comma scalar alone', async () => {
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          `- set:\n    path: cameras/sony/r5/note\n    value: "Released in 2022, with improved thermal management"\n`
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect((ops[0] as { set: { value: unknown } }).set.value).toBe(
+        'Released in 2022, with improved thermal management'
+      );
+    });
+  });
 });
