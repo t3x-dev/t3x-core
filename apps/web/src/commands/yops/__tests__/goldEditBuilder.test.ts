@@ -1,11 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as session from '@/infrastructure/session';
 import { SourceValidationError } from '../errors';
-import { buildHumanSource, commitGoldEdit, sourceGoldEdit } from '../goldEditBuilder';
+import {
+  buildHumanSource,
+  commitGoldEdit,
+  resolveGoldEditSource,
+  sourceGoldEdit,
+} from '../goldEditBuilder';
 import * as yopsService from '../yopsService';
+
+const ORIGINAL_AUTH_DISABLED = process.env.NEXT_PUBLIC_AUTH_DISABLED;
+
+function restoreAuthDisabledEnv() {
+  if (ORIGINAL_AUTH_DISABLED === undefined) {
+    delete process.env.NEXT_PUBLIC_AUTH_DISABLED;
+  } else {
+    process.env.NEXT_PUBLIC_AUTH_DISABLED = ORIGINAL_AUTH_DISABLED;
+  }
+}
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  restoreAuthDisabledEnv();
+});
+
+afterEach(() => {
+  restoreAuthDisabledEnv();
 });
 
 describe('buildHumanSource', () => {
@@ -83,7 +103,7 @@ describe('sourceGoldEdit', () => {
 
     const sourced = sourceGoldEdit({ unset: { path: 'x/y' } });
 
-    expect(sourced.unset).toEqual({ path: 'x/y' });
+    expect(sourced).toMatchObject({ unset: { path: 'x/y' } });
     expect(sourced.source).toEqual(
       expect.objectContaining({ type: 'human', author: 'ethan', surface: 'tree' })
     );
@@ -99,6 +119,25 @@ describe('sourceGoldEdit', () => {
     });
     const sourced = sourceGoldEdit({ unset: { path: 'x' } });
     expect((sourced.source as { surface?: string }).surface).toBe('tree');
+  });
+});
+
+describe('resolveGoldEditSource', () => {
+  it('uses the local workspace author for auth-disabled tree edits', async () => {
+    process.env.NEXT_PUBLIC_AUTH_DISABLED = 'true';
+    vi.spyOn(session, 'getSessionUser').mockReturnValue(null);
+    const commitSpy = vi.spyOn(yopsService, 'commitOps');
+
+    const sourced = await resolveGoldEditSource(
+      { set: { path: 'sports/teams', value: 'Three teams' } },
+      { localAuthor: 'Local Tester' }
+    );
+
+    expect(sourced).toMatchObject({ set: { path: 'sports/teams', value: 'Three teams' } });
+    expect(sourced.source).toEqual(
+      expect.objectContaining({ type: 'human', author: 'Local Tester', surface: 'tree' })
+    );
+    expect(commitSpy).not.toHaveBeenCalled();
   });
 });
 

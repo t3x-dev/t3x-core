@@ -1,15 +1,50 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { createElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  applyEdit: vi.fn(),
+  commitTrees: vi.fn(),
+  discardDraft: vi.fn(),
+  parentCommit: { current: null as null | { trees: unknown[]; message?: string | null } },
+}));
+
+vi.mock('@/hooks/shared/useGoldEdit', () => ({
+  useGoldEdit: () => ({ applyEdit: mocks.applyEdit, enabled: true }),
+}));
+
+vi.mock('@/hooks/commits/useCommitActions', () => ({
+  useCommitActions: () => ({ commit: mocks.commitTrees }),
+}));
+
+vi.mock('@/hooks/commits/useParentCommit', () => ({
+  useParentCommit: () => mocks.parentCommit.current,
+}));
+
+vi.mock('@/hooks/drafts/useDiscardDraft', () => ({
+  useDiscardDraft: () => mocks.discardDraft,
+}));
+
 import {
+  AfterPanel,
   formatSlotPreviewValue,
   humanEditMarkerFromSource,
   SlotPreviewInline,
   shouldDisableCommit,
   shouldShowAppliedResultFailure,
 } from '@/components/chat/AfterPanel';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+
+beforeEach(() => {
+  mocks.applyEdit.mockReset();
+  mocks.applyEdit.mockResolvedValue(undefined);
+  mocks.commitTrees.mockReset();
+  mocks.discardDraft.mockReset();
+  mocks.parentCommit.current = null;
+  useWorkspaceStore.getState().reset();
+});
 
 describe('AfterPanel.shouldDisableCommit', () => {
   const baseEnabled = {
@@ -118,6 +153,63 @@ describe('AfterPanel.humanEditMarkerFromSource', () => {
         turn_ref: { turn_hash: 'sha256:t1', quote: 'q' },
       })
     ).toBeNull();
+  });
+});
+
+describe('AfterPanel tree edit controls', () => {
+  function seedSingleSlot(sourceIndex = new Map()) {
+    useWorkspaceStore.getState().setConversation('conv_123');
+    useWorkspaceStore.getState().setDerived({
+      tree: {
+        trees: [
+          {
+            key: 'sports',
+            slots: { teams: 'Two teams' },
+            children: [],
+          },
+        ],
+        relations: [],
+      },
+      sourceIndex,
+      opsLog: [],
+    });
+  }
+
+  it('shows an explicit edit button and saves slot edits through tree YOps', () => {
+    seedSingleSlot();
+
+    render(createElement(AfterPanel));
+    fireEvent.click(screen.getByTestId('slot-edit'));
+
+    const input = screen.getByDisplayValue('Two teams');
+    fireEvent.change(input, { target: { value: 'Three teams' } });
+    fireEvent.blur(input);
+
+    expect(mocks.applyEdit).toHaveBeenCalledWith({
+      set: { path: 'sports/teams', value: 'Three teams' },
+    });
+  });
+
+  it('marks human tree edits with the human label and blue-highlight marker', () => {
+    seedSingleSlot(
+      new Map([
+        [
+          'sports/teams',
+          {
+            type: 'human',
+            author: 'Local Tester',
+            at: '2026-05-06T00:00:00.000Z',
+            surface: 'tree',
+          },
+        ],
+      ])
+    );
+
+    render(createElement(AfterPanel));
+
+    const label = screen.getByText('Human · Tree');
+    expect(label).not.toBeNull();
+    expect(label.closest('[data-human-edit="true"]')).not.toBeNull();
   });
 });
 

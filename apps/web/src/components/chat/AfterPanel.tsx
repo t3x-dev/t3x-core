@@ -1,7 +1,7 @@
 'use client';
 
 import type { HumanEditSurface, Source, TreeNode } from '@t3x-dev/core';
-import { AlertCircle, Play, Plus, X } from 'lucide-react';
+import { AlertCircle, Pencil, Play, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -554,7 +554,7 @@ function SlotCell({
       return;
     }
     const newValue = inputRef.current?.value.trim() ?? '';
-    if (newValue && newValue !== displayText) onEdit(newValue);
+    if (newValue !== displayText) onEdit(newValue);
     setEditing(false);
   }, [displayText, onEdit]);
 
@@ -571,6 +571,7 @@ function SlotCell({
       <div className="flex h-full w-full items-stretch">
         <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
+          data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'group relative flex min-w-0 flex-1 items-start gap-2 px-2 py-0.5 transition-colors',
             tone.background,
@@ -635,20 +636,36 @@ function SlotCell({
               </div>
             )}
           </div>
-          {side === 'after' && onDelete && (
-            <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                data-testid="slot-delete"
-                title="Delete slot"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
+          {side === 'after' && (onEdit || onDelete) && (
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {onEdit && !editing && (
+                <button
+                  type="button"
+                  data-testid="slot-edit"
+                  title="Edit value"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStartEdit();
+                  }}
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-70 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-info)] hover:opacity-100"
+                >
+                  <Pencil className="h-2.5 w-2.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  data-testid="slot-delete"
+                  title="Delete slot"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-0 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-error)] group-hover:opacity-100"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -701,6 +718,7 @@ function NodeCell({
       <div className="group flex h-full w-full items-stretch">
         <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
+          data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'relative flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
             tone.background,
@@ -855,6 +873,11 @@ export function AfterPanel({
     lastError,
   });
 
+  const handleGoldEditFailure = useCallback((err: unknown) => {
+    const workspaceError = useWorkspaceStore.getState().lastError;
+    toast.error(workspaceError ?? (err instanceof Error ? err.message : 'Edit failed'));
+  }, []);
+
   useEffect(() => {
     if (!showCommitDialog) return;
     commitInputRef.current?.focus();
@@ -895,16 +918,18 @@ export function AfterPanel({
 
   const handleEditSlot = useCallback(
     (nodePath: string, slotKey: string, newValue: string) => {
-      void applyEdit({ set: { path: `${nodePath}/${slotKey}`, value: newValue } });
+      void applyEdit({ set: { path: `${nodePath}/${slotKey}`, value: newValue } }).catch(
+        handleGoldEditFailure
+      );
     },
-    [applyEdit]
+    [applyEdit, handleGoldEditFailure]
   );
 
   const handleDeleteSlot = useCallback(
     (nodePath: string, slotKey: string) => {
-      void applyEdit({ unset: { path: `${nodePath}/${slotKey}` } });
+      void applyEdit({ unset: { path: `${nodePath}/${slotKey}` } }).catch(handleGoldEditFailure);
     },
-    [applyEdit]
+    [applyEdit, handleGoldEditFailure]
   );
 
   const handleAddChild = useCallback(
@@ -912,17 +937,17 @@ export function AfterPanel({
       const childKey = window.prompt('New node name (snake_case):');
       if (!childKey || !childKey.trim()) return;
       const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-      void applyEdit({ define: { path: `${nodePath}/${cleanKey}` } });
+      void applyEdit({ define: { path: `${nodePath}/${cleanKey}` } }).catch(handleGoldEditFailure);
     },
-    [applyEdit]
+    [applyEdit, handleGoldEditFailure]
   );
 
   const handleDeleteNode = useCallback(
     (nodePath: string, nodeKey: string) => {
       if (!window.confirm(`Remove "${nodeKey}" and all its children?`)) return;
-      void applyEdit({ drop: { path: nodePath } });
+      void applyEdit({ drop: { path: nodePath } }).catch(handleGoldEditFailure);
     },
-    [applyEdit]
+    [applyEdit, handleGoldEditFailure]
   );
 
   const getDefaultCommitName = useCallback(() => {
