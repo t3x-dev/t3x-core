@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import {
   formatSlotPreviewValue,
+  humanEditMarkerFromSource,
   SlotPreviewInline,
   shouldDisableCommit,
   shouldShowAppliedResultFailure,
@@ -90,6 +91,33 @@ describe('AfterPanel.shouldShowAppliedResultFailure', () => {
         lastError: null,
       })
     ).toBe(false);
+  });
+});
+
+describe('AfterPanel.humanEditMarkerFromSource', () => {
+  it('labels human script edits for the applied tree', () => {
+    expect(
+      humanEditMarkerFromSource({
+        type: 'human',
+        author: 'alice',
+        at: '2026-05-06T00:00:00.000Z',
+        surface: 'script',
+      })
+    ).toEqual({
+      label: 'Human · YOps',
+      title: 'Human edit via YOps by alice',
+    });
+  });
+
+  it('does not mark LLM sources as human edits', () => {
+    expect(
+      humanEditMarkerFromSource({
+        type: 'llm',
+        model: 'gpt-4o-mini',
+        at: '2026-05-06T00:00:00.000Z',
+        turn_ref: { turn_hash: 'sha256:t1', quote: 'q' },
+      })
+    ).toBeNull();
   });
 });
 

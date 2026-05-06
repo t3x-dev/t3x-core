@@ -1,5 +1,23 @@
-import type { SourcedYOp } from '@t3x-dev/core';
+import type { HumanEditSurface, Source, SourcedYOp } from '@t3x-dev/core';
 import * as yaml from 'js-yaml';
+
+function surfaceLabel(surface: HumanEditSurface | undefined): string {
+  switch (surface) {
+    case 'tree':
+      return 'Tree';
+    case 'script':
+      return 'YOps';
+    case 'inline':
+      return 'Inline';
+    default:
+      return 'Manual';
+  }
+}
+
+function humanCommentForSource(source: Source | undefined): string | null {
+  if (!source || source.type !== 'human') return null;
+  return `Human edit via ${surfaceLabel(source.surface)}: manual change by ${source.author}`;
+}
 
 export function serializeOpsToYaml(ops: readonly SourcedYOp[]): string {
   if (ops.length === 0) return '';
@@ -7,5 +25,19 @@ export function serializeOpsToYaml(ops: readonly SourcedYOp[]): string {
     const { source, ...rest } = op as Record<string, unknown>;
     return rest;
   });
-  return yaml.dump({ yops: stripped }, { lineWidth: -1, noRefs: true });
+  const dumped = yaml.dump({ yops: stripped }, { lineWidth: -1, noRefs: true });
+  const lines = dumped.split('\n');
+  const output: string[] = [];
+  let opIndex = 0;
+
+  for (const line of lines) {
+    if (line.startsWith('  - ')) {
+      const comment = humanCommentForSource((ops[opIndex] as { source?: Source }).source);
+      if (comment) output.push(`  # ${comment}`);
+      opIndex++;
+    }
+    output.push(line);
+  }
+
+  return output.join('\n');
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { TreeNode } from '@t3x-dev/core';
+import type { HumanEditSurface, Source, TreeNode } from '@t3x-dev/core';
 import { AlertCircle, Play, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import {
   formatRetainedFailureRow,
   getResultPanelHeaderLabel,
 } from '@/domain/draft/retainedFailureLabel';
+import { getSlotSource } from '@/domain/source';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
@@ -28,6 +29,33 @@ import { cn } from '@/utils/cn';
 
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
 type SlotDiffType = 'added' | 'modified' | 'removed' | null;
+
+export interface HumanEditMarker {
+  label: string;
+  title: string;
+}
+
+function humanSurfaceLabel(surface: HumanEditSurface | undefined): string {
+  switch (surface) {
+    case 'tree':
+      return 'Tree';
+    case 'script':
+      return 'YOps';
+    case 'inline':
+      return 'Inline';
+    default:
+      return 'Manual';
+  }
+}
+
+export function humanEditMarkerFromSource(source: Source | null): HumanEditMarker | null {
+  if (!source || source.type !== 'human') return null;
+  const surface = humanSurfaceLabel(source.surface);
+  return {
+    label: `Human · ${surface}`,
+    title: `Human edit via ${surface}${source.author ? ` by ${source.author}` : ''}`,
+  };
+}
 
 export type SlotPreviewValue =
   | { kind: 'scalar'; text: string }
@@ -209,6 +237,7 @@ interface NodeRenderRow extends RenderRowBase {
   afterNode: TreeNode | null;
   isAdded: boolean;
   isRemoved: boolean;
+  humanEdit: HumanEditMarker | null;
 }
 
 interface SlotRenderRow extends RenderRowBase {
@@ -219,6 +248,7 @@ interface SlotRenderRow extends RenderRowBase {
   afterValue: SlotPreviewValue | null;
   diffType: SlotDiffType;
   oldValue?: SlotPreviewValue;
+  humanEdit: HumanEditMarker | null;
 }
 
 type RenderRow = NodeRenderRow | SlotRenderRow;
@@ -228,7 +258,8 @@ function buildRenderRows(
   resultNode: TreeNode | null,
   path: string,
   depth: number,
-  diff: TreeDiffResult | null
+  diff: TreeDiffResult | null,
+  sourceIndex: Map<string, Source>
 ): RenderRow[] {
   if (!baseNode && !resultNode) return [];
   const isRemovedNode = !!baseNode && !resultNode;
@@ -244,6 +275,7 @@ function buildRenderRows(
       afterNode: resultNode,
       isAdded: !!resultNode && !baseNode,
       isRemoved: isRemovedNode,
+      humanEdit: humanEditMarkerFromSource(getSlotSource(sourceIndex, path)),
     },
   ];
 
@@ -297,6 +329,7 @@ function buildRenderRows(
       afterValue,
       diffType,
       oldValue,
+      humanEdit: humanEditMarkerFromSource(getSlotSource(sourceIndex, `${path}/${slotKey}`)),
     });
   }
 
@@ -310,7 +343,9 @@ function buildRenderRows(
   for (const childKey of childOrder) {
     const nextBase = baseChildren.get(childKey) ?? null;
     const nextResult = resultChildren.get(childKey) ?? null;
-    rows.push(...buildRenderRows(nextBase, nextResult, `${path}/${childKey}`, depth + 1, diff));
+    rows.push(
+      ...buildRenderRows(nextBase, nextResult, `${path}/${childKey}`, depth + 1, diff, sourceIndex)
+    );
   }
 
   return rows;
@@ -381,6 +416,7 @@ function SlotCell({
   const displayValue = side === 'before' ? row.beforeValue : row.afterValue;
   const displayText = slotPreviewToEditText(displayValue);
   const isInteractive = side === 'after';
+  const humanEdit = side === 'after' ? row.humanEdit : null;
   const tag = side === 'after' ? deriveSlotTag({ diffType: row.diffType, parentMessage }) : null;
   const isRemoved = row.diffType === 'removed';
   const isModified = row.diffType === 'modified';
@@ -413,24 +449,28 @@ function SlotCell({
 
   const rowBg =
     side === 'after'
-      ? isAdded
-        ? 'bg-[var(--status-success)]/[0.04]'
-        : isModified
-          ? 'bg-[var(--status-warning)]/[0.05]'
-          : isRemoved
-            ? 'bg-[var(--status-error)]/[0.035] opacity-50'
-            : ''
+      ? humanEdit
+        ? 'bg-[var(--status-info)]/[0.08]'
+        : isAdded
+          ? 'bg-[var(--status-success)]/[0.04]'
+          : isModified
+            ? 'bg-[var(--status-warning)]/[0.05]'
+            : isRemoved
+              ? 'bg-[var(--status-error)]/[0.035] opacity-50'
+              : ''
       : '';
 
   const gutterColor =
     side === 'after'
-      ? isAdded
-        ? 'bg-[var(--status-success)]'
-        : isModified
-          ? 'bg-[var(--status-warning)]'
-          : isRemoved
-            ? 'bg-[var(--status-error)]'
-            : 'bg-transparent'
+      ? humanEdit
+        ? 'bg-[var(--status-info)]'
+        : isAdded
+          ? 'bg-[var(--status-success)]'
+          : isModified
+            ? 'bg-[var(--status-warning)]'
+            : isRemoved
+              ? 'bg-[var(--status-error)]'
+              : 'bg-transparent'
       : 'bg-transparent';
 
   return (
@@ -474,20 +514,28 @@ function SlotCell({
               </span>
             </>
           )}
-          {side === 'after' && tag && (
+          {side === 'after' && (humanEdit || tag) && (
             <span className="ml-auto shrink-0" style={{ width: TREE_TRAILING_WIDTH }}>
               <span
+                title={humanEdit?.title}
                 className={cn(
                   'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[7px] font-semibold',
-                  tag.kind === 'inherited' && 'text-[var(--text-tertiary)] bg-black/[0.03]',
-                  tag.kind === 'new' &&
+                  humanEdit && 'text-[var(--status-info)] bg-[var(--status-info-muted)]',
+                  !humanEdit &&
+                    tag?.kind === 'inherited' &&
+                    'text-[var(--text-tertiary)] bg-black/[0.03]',
+                  !humanEdit &&
+                    tag?.kind === 'new' &&
                     'text-[var(--status-success)] bg-[var(--status-success)]/10',
-                  tag.kind === 'modified' &&
+                  !humanEdit &&
+                    tag?.kind === 'modified' &&
                     'text-[var(--status-warning)] bg-[var(--status-warning)]/10',
-                  tag.kind === 'removed' && 'text-[var(--status-error)] bg-[var(--status-error)]/10'
+                  !humanEdit &&
+                    tag?.kind === 'removed' &&
+                    'text-[var(--status-error)] bg-[var(--status-error)]/10'
                 )}
               >
-                {tag.label}
+                {humanEdit?.label ?? tag?.label}
               </span>
             </span>
           )}
@@ -534,23 +582,28 @@ function NodeCell({
 }: NodeCellProps) {
   const isRemoved = row.isRemoved && side === 'after';
   const isAdded = row.isAdded && side === 'after';
+  const humanEdit = side === 'after' ? row.humanEdit : null;
   const hasNode = side === 'before' ? !!row.beforeNode : !!row.afterNode || row.isRemoved;
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
   const nodeBg =
     side === 'after'
-      ? isAdded
-        ? 'bg-[var(--status-success)]/[0.04]'
-        : isRemoved
-          ? 'bg-[var(--status-error)]/[0.035] opacity-50'
-          : ''
+      ? humanEdit
+        ? 'bg-[var(--status-info)]/[0.08]'
+        : isAdded
+          ? 'bg-[var(--status-success)]/[0.04]'
+          : isRemoved
+            ? 'bg-[var(--status-error)]/[0.035] opacity-50'
+            : ''
       : '';
   const gutterColor =
     side === 'after'
-      ? isAdded
-        ? 'bg-[var(--status-success)]'
-        : isRemoved
-          ? 'bg-[var(--status-error)]'
-          : 'bg-transparent'
+      ? humanEdit
+        ? 'bg-[var(--status-info)]'
+        : isAdded
+          ? 'bg-[var(--status-success)]'
+          : isRemoved
+            ? 'bg-[var(--status-error)]'
+            : 'bg-transparent'
       : 'bg-transparent';
 
   return (
@@ -579,16 +632,22 @@ function NodeCell({
           {side === 'after' && (
             <>
               <span className="ml-auto shrink-0" style={{ width: TREE_TRAILING_WIDTH }}>
-                {isAdded && (
+                {humanEdit ? (
+                  <span
+                    title={humanEdit.title}
+                    className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-info-muted)] px-1.5 py-px text-[7px] font-semibold text-[var(--status-info)]"
+                  >
+                    {humanEdit.label}
+                  </span>
+                ) : isAdded ? (
                   <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-success)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-success)]">
                     New node
                   </span>
-                )}
-                {isRemoved && (
+                ) : isRemoved ? (
                   <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-error)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-error)]">
                     Removed node
                   </span>
-                )}
+                ) : null}
               </span>
               {row.afterNode && (
                 <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -637,6 +696,7 @@ export function AfterPanel({
   const committedTree = useWorkspaceStore((s) => s.tree);
   const draftTree = useWorkspaceStore((s) => s.draftTree);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   // Render the dry-run preview tree when an Extract has staged a draft;
   // otherwise show the committed tree as before. The preview is computed
   // by `useExtraction` (`applySourcedYOps(currentTree, draftOps)`) and
@@ -721,9 +781,16 @@ export function AfterPanel({
       ...Array.from(baseRoots.keys()).filter((key) => !resultRoots.has(key)),
     ];
     return rootOrder.flatMap((key) =>
-      buildRenderRows(baseRoots.get(key) ?? null, resultRoots.get(key) ?? null, key, 0, diff)
+      buildRenderRows(
+        baseRoots.get(key) ?? null,
+        resultRoots.get(key) ?? null,
+        key,
+        0,
+        diff,
+        sourceIndex
+      )
     );
-  }, [diff, parentTrees, trees]);
+  }, [diff, parentTrees, sourceIndex, trees]);
 
   const handleEditSlot = useCallback(
     (nodePath: string, slotKey: string, newValue: string) => {

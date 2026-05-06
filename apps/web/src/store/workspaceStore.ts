@@ -211,6 +211,12 @@ interface WorkspaceState {
    * nullable field makes drift impossible: there is nothing to keep in sync.
    */
   editorOverride: string | null;
+  /**
+   * Content-line numbers changed by the most recent successful Script-editor
+   * Apply. Memory-only: keeps the just-applied lines highlighted after
+   * hydration without repainting comments or full historical human ops.
+   */
+  recentScriptApplyLineNumbers: number[];
 
   // ── State setters (no business logic) ──
   setConversation: (id: string | null) => void;
@@ -271,6 +277,7 @@ interface WorkspaceState {
   setEditorOverride: (text: string) => void;
   /** Revert to the canonical YAML mirror of `draftOps`. */
   clearEditorOverride: () => void;
+  setRecentScriptApplyLineNumbers: (lineNumbers: number[]) => void;
 
   // ── Draft (uncommitted extraction proposal) ──
   /**
@@ -375,11 +382,15 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
  * (no longer a field). The boundary test enforces no direct write to
  * a `scriptText` field exists in this file.
  */
-export const selectScriptText = (state: WorkspaceState): string => {
-  if (state.editorOverride !== null) return state.editorOverride;
+export const selectCanonicalScriptText = (state: WorkspaceState): string => {
   if (state.draftOps.length > 0) return serializeOpsToYaml(state.draftOps);
   if (state.opsLog.length > 0) return serializeOpsToYaml(state.opsLog);
   return '';
+};
+
+export const selectScriptText = (state: WorkspaceState): string => {
+  if (state.editorOverride !== null) return state.editorOverride;
+  return selectCanonicalScriptText(state);
 };
 
 /**
@@ -444,6 +455,7 @@ function conversationResetState() {
     extractionPreset: 'balanced' as const,
     lastExtractionPinIds: [],
     editorOverride: null as string | null,
+    recentScriptApplyLineNumbers: [] as number[],
     draftOps: [] as SourcedYOp[],
     draftTree: null as SemanticContent | null,
     hasDraft: false,
@@ -793,6 +805,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({ editorOverride: null });
         }
       },
+      setRecentScriptApplyLineNumbers: (recentScriptApplyLineNumbers) =>
+        set({ recentScriptApplyLineNumbers }),
 
       setDraft: ({ ops, tree, variants }) => {
         // A new draft replaces any prior override. The editor renders

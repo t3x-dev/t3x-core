@@ -11,12 +11,15 @@ import {
   deriveWorkspaceScriptState,
   getApplyPolicyForScriptState,
 } from '@/domain/yops/scriptApplyPolicy';
+import { getChangedContentLineNumbers } from '@/domain/yops/scriptDiff';
+import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
   selectActiveUncommittedRowCount,
+  selectCanonicalScriptText,
   selectIsInheritedBaselineOnly,
   selectScriptDirty,
   selectScriptText,
@@ -205,6 +208,9 @@ export function useScriptExecution() {
       return;
     }
 
+    const recentScriptApplyLineNumbers = currentScriptDirty
+      ? getChangedContentLineNumbers(selectCanonicalScriptText(store), serializeOpsToYaml(sourced))
+      : [];
     const commitOptions = commitOptionsFromPolicy(currentPolicy.payload);
     if (!commitOptions) return;
 
@@ -228,6 +234,7 @@ export function useScriptExecution() {
 
     try {
       await hydrateConversationToStore(projectId, convId);
+      useWorkspaceStore.getState().setRecentScriptApplyLineNumbers(recentScriptApplyLineNumbers);
       useWorkspaceStore.getState().setMode('executed');
     } catch (hydrateErr) {
       // Commit landed in yops_log but the post-commit refresh failed
