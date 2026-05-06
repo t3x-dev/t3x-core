@@ -33,7 +33,7 @@ type AuthorCandidate = {
   username?: string | null;
 };
 
-interface ResolveHumanSourceOptions {
+export interface ResolveHumanSourceOptions {
   localAuthor?: string | null;
 }
 
@@ -129,6 +129,20 @@ export async function resolveHumanSource(
 export function sourceGoldEdit(op: YOp): SourcedYOp {
   // Gold edits originate from the canvas / tree surface.
   return { ...op, source: buildHumanSource('tree') } as SourcedYOp;
+}
+
+/**
+ * Attach a HumanSource for interactive tree edits.
+ *
+ * This keeps `sourceGoldEdit` strict for already-hydrated session paths, while
+ * giving UI-originated edits the same lazy /auth/me and local-workspace author
+ * fallback used by Script Apply.
+ */
+export async function resolveGoldEditSource(
+  op: YOp,
+  options: ResolveHumanSourceOptions = {}
+): Promise<SourcedYOp> {
+  return { ...op, source: await resolveHumanSource('tree', options) } as SourcedYOp;
 }
 
 /**
