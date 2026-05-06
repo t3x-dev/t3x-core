@@ -4,7 +4,7 @@ import * as yaml from 'js-yaml';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { SourceValidationError } from '@/commands/yops/errors';
-import { buildHumanSource } from '@/commands/yops/goldEditBuilder';
+import { resolveHumanSource } from '@/commands/yops/goldEditBuilder';
 import { commitOps } from '@/commands/yops/yopsService';
 import {
   type ApplyPayloadPolicy,
@@ -14,6 +14,7 @@ import {
 import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import {
   selectActiveUncommittedRowCount,
   selectIsInheritedBaselineOnly,
@@ -66,6 +67,12 @@ const RECONCILIATION_PROBE_SOURCE: HumanSource = {
   at: '1970-01-01T00:00:00.000Z',
   surface: 'script',
 };
+
+function resolveScriptHumanSource() {
+  return resolveHumanSource('script', {
+    localAuthor: useSettingsStore.getState().localWorkspaceName,
+  });
+}
 
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
@@ -150,24 +157,6 @@ export function useScriptExecution() {
       return;
     }
 
-    // Add HumanSource to ops that lack source metadata (manual edits in
-    // script). Draft ops from Extract already carry an `llm` source, so
-    // they pass through unchanged.
-    //
-    // The HumanSource is built lazily and only once: when every op
-    // already carries source (e.g. an Extract proposal that arrives
-    // pre-sourced) Apply must NOT require a session user, because
-    // none is needed. Building eagerly would block Apply in
-    // auth-disabled / self-hosted contexts where `t3x-user` is absent.
-    // Build on first source attribution need; reuse across every other
-    // changed/missing op so all manual rows share an identical `at`
-    // (gold-edit invariant).
-    let scriptSource: HumanSource | null = null;
-    const getScriptSource = () => {
-      if (!scriptSource) scriptSource = buildHumanSource('script');
-      return scriptSource;
-    };
-
     let sourced: SourcedYOp[];
     try {
       if (store.hasDraft && !currentScriptDirty) {
@@ -187,24 +176,27 @@ export function useScriptExecution() {
             RECONCILIATION_PROBE_SOURCE
           );
           if (probed.summary.changed + probed.summary.inserted + probed.summary.ambiguous > 0) {
-            sourced = reconcileScriptSources(previousOps, ops as never, getScriptSource()).ops;
+            const scriptSource = await resolveScriptHumanSource();
+            sourced = reconcileScriptSources(previousOps, ops as never, scriptSource).ops;
           } else {
             sourced = probed.ops;
           }
         } else {
+          const missingSource = ops.some((op) => !(op as Record<string, unknown>).source);
+          const scriptSource = missingSource ? await resolveScriptHumanSource() : null;
           sourced = ops.map((op) => {
             if ((op as Record<string, unknown>).source) return op;
-            return { ...op, source: getScriptSource() };
+            return { ...op, source: scriptSource };
           }) as SourcedYOp[];
         }
       }
     } catch (err) {
-      // No session user — surface a clear error rather than persisting
-      // a placeholder identity. Same posture as gold-edit. Only reached
-      // when at least one op was missing source.
+      // No attributable user/workspace — surface a clear error rather
+      // than persisting a placeholder identity. Only reached when at
+      // least one op was missing source or changed by the script editor.
       const msg =
         err instanceof SourceValidationError
-          ? 'Cannot apply: no session user available to attribute the edit.'
+          ? 'Cannot apply: no session user or local workspace author available to attribute the edit.'
           : err instanceof Error
             ? err.message
             : 'Cannot apply: source validation failed.';

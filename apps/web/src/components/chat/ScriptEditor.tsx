@@ -111,7 +111,11 @@ export function ScriptEditor() {
   }, [mode]);
 
   const isStreaming = mode === 'streaming';
-  const editorStateLabel = isStreaming ? 'read-only' : scriptDirty ? 'inline changes' : 'clean';
+  const editorStateLabel = isStreaming
+    ? 'read-only'
+    : scriptDirty
+      ? 'script edit pending'
+      : 'clean';
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel-alt)]">
