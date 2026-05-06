@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const commitOpsMock = vi.fn();
 const hydrateMock = vi.fn();
 const toastErrorMock = vi.fn();
+const getAuthMeMock = vi.fn();
 
 vi.mock('@/commands/yops/yopsService', () => ({
   commitOps: (...args: unknown[]) => commitOpsMock(...args),
@@ -32,8 +33,18 @@ const sessionUserMock = {
     username: string | null;
   } | null,
 };
+const setSessionUserMock = vi.fn(
+  (user: { id: string; name: string | null; username: string | null }) => {
+    sessionUserMock.current = user;
+  }
+);
 vi.mock('@/infrastructure/session', () => ({
   getSessionUser: () => sessionUserMock.current,
+  setSessionUser: (...args: unknown[]) => setSessionUserMock(...args),
+}));
+
+vi.mock('@/infrastructure/auth', () => ({
+  getAuthMe: (...args: unknown[]) => getAuthMeMock(...args),
 }));
 
 const chatStoreState = { activeProjectId: 'proj_abc' as string | null };
@@ -44,12 +55,16 @@ vi.mock('@/store/chatStore', () => ({
 }));
 
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
+import { useSettingsStore } from '@/store/settingsStore';
 import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('useScriptExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionUserMock.current = { id: 'user_1', name: 'Alice', username: 'alice' };
+    getAuthMeMock.mockRejectedValue(new Error('unauthenticated'));
+    process.env.NEXT_PUBLIC_AUTH_DISABLED = 'false';
+    useSettingsStore.setState({ localWorkspaceName: 'Local Workspace' });
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
       panelExpandedByProject: {},
@@ -1010,6 +1025,64 @@ describe('useScriptExecution', () => {
       const stamped = (ops[0] as { source: { type: string; model?: string } }).source;
       expect(stamped.type).toBe('llm');
       expect(stamped.model).toBe('gpt-4o-mini');
+    });
+
+    it('restores the script author from /auth/me when cached session user is missing', async () => {
+      sessionUserMock.current = null;
+      getAuthMeMock.mockResolvedValue({
+        id: 'user_2',
+        name: 'Bob Example',
+        username: 'bob',
+        email: null,
+        avatar_url: null,
+      });
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride('- set:\n    path: trip/dest\n    value: HZ\n');
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(setSessionUserMock).toHaveBeenCalledWith({
+        id: 'user_2',
+        name: 'Bob Example',
+        username: 'bob',
+        avatar_url: null,
+      });
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect(ops[0].source).toMatchObject({
+        type: 'human',
+        author: 'bob',
+        surface: 'script',
+      });
+    });
+
+    it('uses the local workspace name as the script author when auth is disabled', async () => {
+      sessionUserMock.current = null;
+      getAuthMeMock.mockRejectedValue(new Error('auth disabled'));
+      process.env.NEXT_PUBLIC_AUTH_DISABLED = 'true';
+      useSettingsStore.setState({ localWorkspaceName: 'Local Tester' });
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride('- set:\n    path: trip/dest\n    value: HZ\n');
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect(ops[0].source).toMatchObject({
+        type: 'human',
+        author: 'Local Tester',
+        surface: 'script',
+      });
     });
 
     it('errors out when an op is missing source AND there is no session user', async () => {

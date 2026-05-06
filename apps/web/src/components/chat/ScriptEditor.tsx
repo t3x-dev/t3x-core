@@ -3,9 +3,21 @@
 import { defaultKeymap } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
 import { Compartment, EditorState } from '@codemirror/state';
-import { placeholder as cmPlaceholder, EditorView, keymap, lineNumbers } from '@codemirror/view';
-import { useEffect, useRef } from 'react';
-import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  placeholder as cmPlaceholder,
+  Decoration,
+  EditorView,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view';
+import { useEffect, useMemo, useRef } from 'react';
+import { getChangedLineNumbers } from '@/domain/yops/scriptDiff';
+import {
+  selectCanonicalScriptText,
+  selectScriptDirty,
+  selectScriptText,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
 const PLACEHOLDER = `yops:
@@ -13,15 +25,45 @@ const PLACEHOLDER = `yops:
       path: node/slot
       value: "new value"`;
 
+function pendingEditLineHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
+  return EditorView.decorations.of((view) => {
+    const ranges = [...lineNumbersToHighlight]
+      .filter((lineNumber) => lineNumber >= 1 && lineNumber <= view.state.doc.lines)
+      .sort((a, b) => a - b)
+      .map((lineNumber) =>
+        Decoration.line({ class: 'cm-yops-pending-edit-line' }).range(
+          view.state.doc.line(lineNumber).from
+        )
+      );
+    return Decoration.set(ranges, true);
+  });
+}
+
 export function ScriptEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
   const scriptText = useWorkspaceStore(selectScriptText);
+  const canonicalScriptText = useWorkspaceStore(selectCanonicalScriptText);
   const scriptDirty = useWorkspaceStore(selectScriptDirty);
+  const recentScriptApplyLineNumbers = useWorkspaceStore((s) => s.recentScriptApplyLineNumbers);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const isExternalUpdate = useRef(false);
   const readOnlyCompartment = useRef(new Compartment());
+  const humanHighlightCompartment = useRef(new Compartment());
+
+  const highlightedLines = useMemo(() => {
+    const lines = new Set<number>();
+    if (!scriptDirty && recentScriptApplyLineNumbers.length > 0) {
+      for (const lineNumber of recentScriptApplyLineNumbers) lines.add(lineNumber);
+      return lines;
+    }
+    if (!scriptDirty) return lines;
+    for (const lineNumber of getChangedLineNumbers(canonicalScriptText, scriptText)) {
+      lines.add(lineNumber);
+    }
+    return lines;
+  }, [canonicalScriptText, recentScriptApplyLineNumbers, scriptDirty, scriptText]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -33,6 +75,7 @@ export function ScriptEditor() {
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
         readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
+        humanHighlightCompartment.current.of(pendingEditLineHighlightExtension(new Set())),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !isExternalUpdate.current) {
             const text = update.state.doc.toString();
@@ -63,6 +106,10 @@ export function ScriptEditor() {
           },
           '.cm-activeLine': {
             backgroundColor: 'var(--hover-bg)',
+          },
+          '.cm-yops-pending-edit-line': {
+            backgroundColor: 'color-mix(in srgb, var(--status-info) 12%, transparent)',
+            boxShadow: 'inset 3px 0 0 var(--status-info)',
           },
           '.cm-cursor': {
             borderLeftColor: 'var(--text-primary)',
@@ -110,8 +157,22 @@ export function ScriptEditor() {
     });
   }, [mode]);
 
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: humanHighlightCompartment.current.reconfigure(
+        pendingEditLineHighlightExtension(highlightedLines)
+      ),
+    });
+  }, [highlightedLines]);
+
   const isStreaming = mode === 'streaming';
-  const editorStateLabel = isStreaming ? 'read-only' : scriptDirty ? 'inline changes' : 'clean';
+  const editorStateLabel = isStreaming
+    ? 'read-only'
+    : scriptDirty
+      ? 'script edit pending'
+      : 'clean';
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel-alt)]">
