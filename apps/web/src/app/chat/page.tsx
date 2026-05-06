@@ -63,6 +63,7 @@ function ChatLanding() {
     selectedProvider,
     selectedModel,
     handleModelChange,
+    availabilityError,
   } = useChatModelSelection({});
 
   const handleSend = useCallback(
@@ -104,7 +105,9 @@ function ChatLanding() {
 
         {!loading && !hasConfiguredGenerationProvider && (
           <div className="mb-4">
-            <ProviderSetupBanner />
+            <ProviderSetupBanner
+              variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
+            />
           </div>
         )}
 

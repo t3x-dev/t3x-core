@@ -81,6 +81,7 @@ describe('useAvailableModels', () => {
     expect(result.current.providers).toEqual([]);
     expect(result.current.defaultProvider).toBeNull();
     expect(result.current.defaultModel).toBeNull();
+    expect(result.current.availabilityError).toBeNull();
 
     const loaded = await result.current.loadModels();
     expect(loaded.providers).toEqual(result.current.providers);
@@ -139,6 +140,7 @@ describe('useAvailableModels', () => {
     expect(result.current.providers.map((provider) => provider.name)).toEqual(['anthropic']);
     expect(result.current.defaultProvider).toBe('anthropic');
     expect(result.current.defaultModel).toBe('claude-sonnet-4-20250514');
+    expect(result.current.availabilityError).toBeNull();
     unmount();
   });
 
@@ -200,6 +202,7 @@ describe('useAvailableModels', () => {
     expect(result.current.providers.map((provider) => provider.name)).toEqual(['openai']);
     expect(result.current.defaultProvider).toBe('openai');
     expect(result.current.defaultModel).toBe('gpt-4o');
+    expect(result.current.availabilityError).toBeNull();
     unmount();
   });
 
@@ -254,10 +257,11 @@ describe('useAvailableModels', () => {
 
     expect(result.current.defaultProvider).toBe('anthropic');
     expect(result.current.defaultModel).toBe('claude-haiku-4-20250514');
+    expect(result.current.availabilityError).toBeNull();
     unmount();
   });
 
-  it('fails closed when the model registry cannot be loaded', async () => {
+  it('reports an API availability error when the model registry cannot be loaded', async () => {
     vi.mocked(fetchLocalProviderStatus).mockResolvedValue({
       provider: 'anthropic',
       configured: false,
@@ -277,6 +281,34 @@ describe('useAvailableModels', () => {
     expect(result.current.hasConfiguredGenerationProvider).toBe(false);
     expect(result.current.defaultProvider).toBeNull();
     expect(result.current.defaultModel).toBeNull();
+    expect(result.current.availabilityError).toBe('api_unavailable');
+    unmount();
+  });
+
+  it('reports an API availability error when provider status cannot be loaded', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockRejectedValue(new Error('connect ECONNREFUSED'));
+    vi.mocked(fetchAvailableModels).mockResolvedValue({
+      generation_provider_order: ['anthropic'],
+      default_provider: 'anthropic',
+      providers: [
+        {
+          name: 'anthropic',
+          label: 'Anthropic',
+          available: true,
+          models: [makeModel('claude-sonnet-4-20250514', 'Claude Sonnet 4')],
+        },
+      ],
+    } as never);
+
+    const { result, unmount } = renderHook(() => useAvailableModels());
+    await waitForHook();
+    await waitForHook();
+
+    expect(fetchAvailableModels).not.toHaveBeenCalled();
+    expect(result.current.providers).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
+    expect(result.current.availabilityError).toBe('api_unavailable');
     unmount();
   });
 });
