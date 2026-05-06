@@ -3,18 +3,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sourceGoldEditMock = vi.fn();
+const resolveGoldEditSourceMock = vi.fn();
 const commitGoldEditMock = vi.fn();
-const replayAppendedMock = vi.fn();
 const replayMock = vi.fn();
 
 vi.mock('@/commands/yops/goldEditBuilder', () => ({
-  sourceGoldEdit: (...args: unknown[]) => sourceGoldEditMock(...args),
+  resolveGoldEditSource: (...args: unknown[]) => resolveGoldEditSourceMock(...args),
   commitGoldEdit: (...args: unknown[]) => commitGoldEditMock(...args),
-}));
-
-vi.mock('@/queries/loadConversation', () => ({
-  replayAppended: (...args: unknown[]) => replayAppendedMock(...args),
 }));
 
 vi.mock('@/domain/replay', () => ({
@@ -22,21 +17,18 @@ vi.mock('@/domain/replay', () => ({
 }));
 
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 describe('useGoldEdit.applyEdit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
+    useSettingsStore.setState({ localWorkspaceName: 'Local Workspace' });
     useWorkspaceStore.getState().setConversation('conv_123');
     useWorkspaceStore
       .getState()
       .setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
-    replayAppendedMock.mockReturnValue({
-      tree: { trees: [], relations: [] },
-      sourceIndex: new Map(),
-      opsLog: [],
-    });
     replayMock.mockReturnValue({ tree: { trees: [], relations: [] }, sourceIndex: new Map() });
     commitGoldEditMock.mockResolvedValue(undefined);
   });
@@ -56,7 +48,22 @@ describe('useGoldEdit.applyEdit', () => {
         surface: 'tree' as const,
       },
     };
-    sourceGoldEditMock.mockReturnValue(sourced);
+    resolveGoldEditSourceMock.mockResolvedValue(sourced);
+    const preTree = {
+      trees: [
+        {
+          key: 'trip',
+          slots: { style: 'slow travel' },
+          children: [{ key: 'budget', slots: { range: '$$' }, children: [] }],
+        },
+      ],
+      relations: [],
+    };
+    useWorkspaceStore.getState().setDerived({
+      tree: preTree,
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
 
     const { result } = renderHook(() => useGoldEdit());
 
@@ -64,12 +71,17 @@ describe('useGoldEdit.applyEdit', () => {
       await result.current.applyEdit({ unset: { path: 'trip/style' } });
     });
 
-    expect(sourceGoldEditMock).toHaveBeenCalledTimes(1);
+    expect(resolveGoldEditSourceMock).toHaveBeenCalledTimes(1);
+    expect(resolveGoldEditSourceMock).toHaveBeenCalledWith(
+      { unset: { path: 'trip/style' } },
+      { localAuthor: 'Local Workspace' }
+    );
 
-    // The op passed to replayAppended carries the *same source instance*
+    // The op passed to optimistic replay carries the *same source instance*
     // as the op passed to commitGoldEdit.
-    const optimisticOps = replayAppendedMock.mock.calls[0][2];
+    const optimisticOps = replayMock.mock.calls[0][0];
     const persistedSourcedOp = commitGoldEditMock.mock.calls[0][1];
+    expect(replayMock.mock.calls[0][2]).toBe(preTree);
     expect(optimisticOps[0].source).toBe(sourced.source);
     expect(persistedSourcedOp.source).toBe(sourced.source);
     expect(optimisticOps[0].source).toMatchObject({ type: 'human', surface: 'tree' });
@@ -82,21 +94,46 @@ describe('useGoldEdit.applyEdit', () => {
       set: { path: 'x', value: 1 },
       source: { type: 'human' as const, author: 'ethan', at: '2026-04-25T12:00:00.000Z' },
     };
-    sourceGoldEditMock.mockReturnValue(sourced);
+    resolveGoldEditSourceMock.mockResolvedValue(sourced);
+    const preTree = {
+      trees: [{ key: 'sports', slots: { teams: 'Two teams' }, children: [] }],
+      relations: [],
+    };
+    const preSourceIndex = new Map([
+      [
+        'sports/teams',
+        { type: 'human' as const, author: 'existing', at: '2026-04-25T00:00:00.000Z' },
+      ],
+    ]);
+    useWorkspaceStore.getState().setDerived({
+      tree: preTree,
+      sourceIndex: preSourceIndex,
+      opsLog: [],
+    });
+    replayMock.mockReturnValueOnce({
+      tree: { trees: [{ key: 'x', slots: { value: 1 }, children: [] }], relations: [] },
+      sourceIndex: new Map([['x', sourced.source]]),
+    });
     commitGoldEditMock.mockRejectedValue(new Error('persist fail'));
 
     const { result } = renderHook(() => useGoldEdit());
 
-    await expect(
-      act(async () => {
+    let caught: unknown;
+    await act(async () => {
+      try {
         await result.current.applyEdit({ set: { path: 'x', value: 1 } });
-      })
-    ).rejects.toThrow('persist fail');
+      } catch (err) {
+        caught = err;
+      }
+    });
 
-    // Replay was invoked on the rollback path with the pre-edit opsLog
-    // (an empty array here since the store was just reset).
-    expect(replayMock).toHaveBeenCalled();
-    expect(useWorkspaceStore.getState().lastError).toMatch(/persist fail/);
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('persist fail');
+    // The optimistic append is rolled back to the exact pre-edit derived state.
+    expect(useWorkspaceStore.getState().lastError).toEqual('persist fail');
+    expect(useWorkspaceStore.getState().tree).toBe(preTree);
+    expect(useWorkspaceStore.getState().sourceIndex).toBe(preSourceIndex);
+    expect(useWorkspaceStore.getState().opsLog).toEqual([]);
   });
 
   it('is a no-op when no conversation is active', async () => {
@@ -107,8 +144,8 @@ describe('useGoldEdit.applyEdit', () => {
       await result.current.applyEdit({ unset: { path: 'x' } });
     });
 
-    expect(sourceGoldEditMock).not.toHaveBeenCalled();
-    expect(replayAppendedMock).not.toHaveBeenCalled();
+    expect(resolveGoldEditSourceMock).not.toHaveBeenCalled();
+    expect(replayMock).not.toHaveBeenCalled();
     expect(commitGoldEditMock).not.toHaveBeenCalled();
   });
 });
