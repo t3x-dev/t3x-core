@@ -9,7 +9,6 @@ import { useCommitStore } from '@/store/commitStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { getFixedPopoverStyle } from '@/utils/popoverPosition';
-import { glass } from '@/utils/theme';
 import { BranchSwitcher } from './BranchSwitcher';
 
 const EXTRACT_MENU_WIDTH = 224;
@@ -111,8 +110,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        'flex h-11 items-center gap-3 border-b border-[var(--stroke-divider)] px-4 shrink-0',
-        glass.panelBase
+        'flex h-11 shrink-0 items-center gap-3 border-b border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
       )}
     >
       {/* Sidebar toggle */}
@@ -152,16 +150,22 @@ export function ChatHeader({
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
             disabled={isExtracting || !isExtractReady}
             title={!isExtractReady ? 'Loading conversation context…' : undefined}
-            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1 rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 px-2.5 py-1 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isExtracting ? (
               <Loader2 className="h-2.5 w-2.5 animate-spin" />
             ) : (
               <Hexagon className="h-2.5 w-2.5" />
             )}
-            {isExtracting ? 'Extracting...' : 'Extract'}
-            {!isExtracting && (
-              <span className="text-[8px] opacity-70">{PRESET_LABELS[extractionPreset].label}</span>
+            {isExtracting ? (
+              'Extracting...'
+            ) : (
+              <span className="inline-flex items-baseline gap-1 leading-none">
+                <span>Extract</span>
+                <span className="text-[8px] leading-none opacity-70">
+                  {PRESET_LABELS[extractionPreset].label}
+                </span>
+              </span>
             )}
           </button>
           <button

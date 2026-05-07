@@ -12,10 +12,10 @@ export function deriveSlotTag(input: {
   parentMessage: string | null;
 }): SlotTag {
   const { diffType, parentMessage } = input;
-  if (diffType === 'added') return { kind: 'new', label: 'New' };
+  if (diffType === 'added') return { kind: 'new', label: 'New field' };
   if (diffType === 'modified') return { kind: 'modified', label: 'Changed' };
   if (diffType === 'removed') return { kind: 'removed', label: 'Removed' };
-  if (!parentMessage) return { kind: 'new', label: 'New' };
+  if (!parentMessage) return { kind: 'new', label: 'New field' };
   const truncated =
     parentMessage.length > MAX_LABEL ? `${parentMessage.slice(0, MAX_LABEL - 1)}…` : parentMessage;
   return { kind: 'inherited', label: `← ${truncated}` };

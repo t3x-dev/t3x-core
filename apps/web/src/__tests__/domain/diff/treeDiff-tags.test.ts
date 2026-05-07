@@ -9,10 +9,10 @@ describe('deriveSlotTag', () => {
     });
   });
 
-  it('returns new for added slot', () => {
+  it('returns new field for added slot', () => {
     expect(deriveSlotTag({ diffType: 'added', parentMessage: 'Init' })).toEqual({
       kind: 'new',
-      label: 'New',
+      label: 'New field',
     });
   });
 
@@ -30,10 +30,10 @@ describe('deriveSlotTag', () => {
     });
   });
 
-  it('returns new when no parent exists', () => {
+  it('returns new field when no parent exists', () => {
     expect(deriveSlotTag({ diffType: null, parentMessage: null })).toEqual({
       kind: 'new',
-      label: 'New',
+      label: 'New field',
     });
   });
 

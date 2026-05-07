@@ -143,6 +143,7 @@ export function useCommitActions() {
   const init = useCallback(async (projectId: string): Promise<void> => {
     try {
       const recentCommits = await fetchCommits(projectId, 'main', 1).catch(() => []);
+      if (useCommitStore.getState().projectId !== projectId) return;
       if (recentCommits.length === 0) return;
 
       const head = recentCommits[0];

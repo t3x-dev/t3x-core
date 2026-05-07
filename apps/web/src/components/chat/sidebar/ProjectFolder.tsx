@@ -51,6 +51,7 @@ export function ProjectFolder({
   const iconColor = PROJECT_ICON_COLORS[colorIdx];
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
+  const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
 
   // Determine icon: emoji from metadata > auto-detect from name > default
   const projectIcon = (() => {
@@ -81,6 +82,7 @@ export function ProjectFolder({
   const folderButton = (
     <button
       type="button"
+      title={`${project.name}\n${projectSummary}`}
       onClick={() => {
         if (collapsed) {
           useChatStore.setState({ sidebarCollapsed: false });
@@ -90,7 +92,7 @@ export function ProjectFolder({
       onContextMenu={onProjectContextMenu}
       aria-current={isActive ? 'true' : undefined}
       className={cn(
-        'flex items-center gap-2 rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+        'flex min-w-0 items-center gap-2 overflow-hidden rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
         'hover:bg-[var(--hover-bg)]',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
         'active:scale-95 cursor-pointer w-full text-left',
@@ -118,9 +120,17 @@ export function ProjectFolder({
         {projectIcon}
       </span>
       {!collapsed && (
-        <div className="flex flex-1 flex-col min-w-0">
-          <span className="text-xs font-semibold truncate">{project.name}</span>
-          <span className="text-[9px] text-[var(--text-tertiary)]">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span
+            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold"
+            title={project.name}
+          >
+            {project.name}
+          </span>
+          <span
+            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[9px] text-[var(--text-tertiary)]"
+            title={projectSummary}
+          >
             {commitCount > 0 && (
               <>
                 <span className="inline-flex items-center gap-0.5">
@@ -158,7 +168,7 @@ export function ProjectFolder({
       )}
 
       {isExpanded && !collapsed && (
-        <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--stroke-divider)] pl-2">
+        <div className="ml-5 mt-0.5 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)] pl-2">
           {/* Conversations */}
           {conversations.map((conv) => {
             const isActive = activeConversationId === conv.conversation_id;
@@ -167,10 +177,11 @@ export function ProjectFolder({
               <button
                 key={conv.conversation_id}
                 type="button"
+                title={title}
                 onClick={() => onConversationClick(conv.conversation_id)}
                 onContextMenu={(e) => onConversationContextMenu(e, conv.conversation_id)}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg h-7 px-2 w-full text-left',
+                  'flex min-w-0 items-center gap-2 overflow-hidden rounded-lg h-7 px-2 w-full text-left',
                   'transition-all duration-[var(--motion-base)] text-[11px]',
                   isActive
                     ? 'text-[var(--text-primary)] font-semibold'
@@ -183,7 +194,9 @@ export function ProjectFolder({
                     isActive ? 'bg-[var(--accent-commit)]' : 'bg-[var(--text-tertiary)] opacity-30'
                   )}
                 />
-                <span className="truncate">{title}</span>
+                <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                  {title}
+                </span>
               </button>
             );
           })}
@@ -202,10 +215,12 @@ export function ProjectFolder({
                 e.stopPropagation();
                 onNewChat(project.project_id);
               }}
-              className="flex items-center gap-1.5 rounded-lg h-7 px-2 w-full text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
+              className="flex min-w-0 items-center gap-1.5 overflow-hidden rounded-lg h-7 px-2 w-full text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
             >
               <span className="text-xs">+</span>
-              <span>New Chat</span>
+              <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                New Chat
+              </span>
             </button>
           )}
         </div>
