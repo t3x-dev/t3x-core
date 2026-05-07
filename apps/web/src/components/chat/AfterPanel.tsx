@@ -2,6 +2,7 @@
 
 import type { HumanEditSurface, Source, TreeNode } from '@t3x-dev/core';
 import { AlertCircle, Pencil, Play, Plus, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -9,7 +10,6 @@ import {
   TREE_FOOTER_HEIGHT,
   TREE_INDENT_STEP,
   TREE_ROW_HEIGHT,
-  TREE_TRAILING_WIDTH,
 } from '@/components/chat/treeRowMetrics';
 import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
@@ -108,6 +108,22 @@ function MetadataBadge({
     >
       {label}
     </span>
+  );
+}
+
+function TreeInlineActions({ children }: { children?: ReactNode }) {
+  if (!children) return null;
+  return (
+    <div className="relative z-[1] flex shrink-0 items-center justify-end gap-1">{children}</div>
+  );
+}
+
+function TreeRowMeta({ badge }: { badge?: ReactNode }) {
+  if (!badge) return null;
+  return (
+    <div className="relative z-[1] col-span-2 flex min-w-0 justify-end pt-0.5 leading-[12px]">
+      <span className="min-w-0 max-w-full overflow-hidden text-right">{badge}</span>
+    </div>
   );
 }
 
@@ -477,7 +493,13 @@ export function SlotPreviewInline({ value }: { value: SlotPreviewValue | null })
   if (!value) return null;
 
   if (value.kind === 'scalar') {
-    return <span className={cn('truncate', YAML_VALUE_CLASS)}>{value.text}</span>;
+    return (
+      <span
+        className={cn('inline-block min-w-0 max-w-full truncate align-bottom', YAML_VALUE_CLASS)}
+      >
+        {value.text}
+      </span>
+    );
   }
 
   if (value.kind === 'list') {
@@ -533,6 +555,14 @@ function SlotCell({
   const isModified = row.diffType === 'modified';
   const isAdded = row.diffType === 'added';
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
+  const metadataBadge =
+    side === 'after' && (humanEdit || tag) ? (
+      <MetadataBadge
+        label={humanEdit?.label ?? tag?.label ?? ''}
+        title={humanEdit?.title}
+        kind={humanEdit ? 'human' : metadataKindForSlotTag(tag)}
+      />
+    ) : undefined;
   const tone = rowTone({
     side,
     humanEdit,
@@ -573,7 +603,7 @@ function SlotCell({
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
-            'group relative flex min-w-0 flex-1 items-start gap-2 px-2 py-0.5 transition-colors',
+            'group relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 px-2 py-0.5 transition-colors',
             tone.background,
             isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source-dim)]'
@@ -584,12 +614,16 @@ function SlotCell({
         >
           <YAMLIndentGuides depth={row.depth} />
           <div
-            className="relative z-[1] flex min-w-0 flex-1 flex-col gap-0.5"
+            className="relative z-[1] flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden"
             style={{ paddingLeft }}
           >
-            <div className="flex min-w-0 items-start gap-1">
+            <div className="flex min-w-0 items-start gap-1 overflow-hidden">
               <span
-                className={cn('shrink-0 font-medium', YAML_KEY_CLASS, isRemoved && 'line-through')}
+                className={cn(
+                  'max-w-[38%] shrink-0 truncate font-medium',
+                  YAML_KEY_CLASS,
+                  isRemoved && 'line-through'
+                )}
               >
                 {row.slotKey}
               </span>
@@ -607,37 +641,32 @@ function SlotCell({
                 !isBlockValue && (
                   <>
                     {side === 'after' && isModified && row.oldValue && (
-                      <span className="mr-1 truncate text-[var(--status-error)] opacity-50 line-through">
+                      <span className="mr-1 min-w-0 max-w-[45%] shrink truncate text-[var(--status-error)] opacity-50 line-through">
                         {slotPreviewToEditText(row.oldValue)}
                       </span>
                     )}
-                    <span className={cn('min-w-0 flex-1', isRemoved && 'line-through')}>
+                    <span
+                      className={cn('min-w-0 flex-1 overflow-hidden', isRemoved && 'line-through')}
+                    >
                       <SlotPreviewInline value={displayValue} />
                     </span>
                   </>
                 )
               )}
-              {side === 'after' && (humanEdit || tag) && (
-                <span
-                  className="ml-auto shrink-0 text-right"
-                  style={{ width: TREE_TRAILING_WIDTH }}
-                >
-                  <MetadataBadge
-                    label={humanEdit?.label ?? tag?.label ?? ''}
-                    title={humanEdit?.title}
-                    kind={humanEdit ? 'human' : metadataKindForSlotTag(tag)}
-                  />
-                </span>
-              )}
             </div>
             {isBlockValue && (
-              <div className={cn('min-w-0 pl-[14px] leading-[18px]', isRemoved && 'line-through')}>
+              <div
+                className={cn(
+                  'min-w-0 overflow-hidden pl-[14px] leading-[18px]',
+                  isRemoved && 'line-through'
+                )}
+              >
                 <SlotPreviewInline value={displayValue} />
               </div>
             )}
           </div>
           {side === 'after' && (onEdit || onDelete) && (
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <TreeInlineActions>
               {onEdit && !editing && (
                 <button
                   type="button"
@@ -666,8 +695,9 @@ function SlotCell({
                   <X className="h-2.5 w-2.5" />
                 </button>
               )}
-            </div>
+            </TreeInlineActions>
           )}
+          <TreeRowMeta badge={metadataBadge} />
         </div>
       </div>
     </div>
@@ -706,6 +736,18 @@ function NodeCell({
       ? deriveSlotTag({ diffType: inlineSlot.diffType, parentMessage })
       : null;
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
+  const metadataBadge =
+    side === 'after' ? (
+      humanEdit ? (
+        <MetadataBadge label={humanEdit.label} title={humanEdit.title} kind="human" />
+      ) : isAdded ? (
+        <MetadataBadge label="New node" kind="new" />
+      ) : isRemoved ? (
+        <MetadataBadge label="Removed node" kind="removed" />
+      ) : inlineTag ? (
+        <MetadataBadge label={inlineTag.label} kind={metadataKindForSlotTag(inlineTag)} />
+      ) : undefined
+    ) : undefined;
   const tone = rowTone({
     side,
     humanEdit,
@@ -720,7 +762,7 @@ function NodeCell({
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
-            'relative flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            'relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 transition-colors',
             tone.background,
             hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source-dim)]'
@@ -729,47 +771,37 @@ function NodeCell({
           onClick={() => (hasNode ? (selected ? onClear() : onSelect()) : undefined)}
         >
           <YAMLIndentGuides depth={row.depth} />
-          <span
-            className={cn(
-              'relative z-[1] font-semibold',
-              YAML_KEY_CLASS,
-              isRemoved && 'line-through'
-            )}
-            style={{ marginLeft: paddingLeft }}
+          <div
+            className="relative z-[1] flex min-w-0 items-center gap-1 overflow-hidden"
+            style={{ paddingLeft }}
           >
-            {row.nodeKey}
-          </span>
-          <span className={cn('relative z-[1]', YAML_PUNCTUATION_CLASS)}>:</span>
-          {inlineValue && (
-            <>
-              {side === 'after' && inlineSlot?.diffType === 'modified' && inlineSlot.oldValue && (
-                <span className="relative z-[1] mr-1 truncate text-[var(--status-error)] opacity-50 line-through">
-                  {slotPreviewToEditText(inlineSlot.oldValue)}
-                </span>
+            <span
+              className={cn(
+                'max-w-[40%] shrink-0 truncate font-semibold',
+                YAML_KEY_CLASS,
+                isRemoved && 'line-through'
               )}
-              <span className={cn('relative z-[1] min-w-0 flex-1', isRemoved && 'line-through')}>
-                <SlotPreviewInline value={inlineValue} />
-              </span>
-            </>
-          )}
+            >
+              {row.nodeKey}
+            </span>
+            <span className={cn('shrink-0', YAML_PUNCTUATION_CLASS)}>:</span>
+            {inlineValue && (
+              <>
+                {side === 'after' && inlineSlot?.diffType === 'modified' && inlineSlot.oldValue && (
+                  <span className="mr-1 min-w-0 max-w-[45%] shrink truncate text-[var(--status-error)] opacity-50 line-through">
+                    {slotPreviewToEditText(inlineSlot.oldValue)}
+                  </span>
+                )}
+                <span className={cn('min-w-0 flex-1 overflow-hidden', isRemoved && 'line-through')}>
+                  <SlotPreviewInline value={inlineValue} />
+                </span>
+              </>
+            )}
+          </div>
           {side === 'after' && (
-            <>
-              <span
-                className="relative z-[1] ml-auto shrink-0 text-right"
-                style={{ width: TREE_TRAILING_WIDTH }}
-              >
-                {humanEdit ? (
-                  <MetadataBadge label={humanEdit.label} title={humanEdit.title} kind="human" />
-                ) : isAdded ? (
-                  <MetadataBadge label="New node" kind="new" />
-                ) : isRemoved ? (
-                  <MetadataBadge label="Removed node" kind="removed" />
-                ) : inlineTag ? (
-                  <MetadataBadge label={inlineTag.label} kind={metadataKindForSlotTag(inlineTag)} />
-                ) : null}
-              </span>
+            <TreeInlineActions>
               {row.afterNode && (
-                <div className="ml-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
                     type="button"
                     data-testid="add-child-button"
@@ -795,8 +827,9 @@ function NodeCell({
                   </button>
                 </div>
               )}
-            </>
+            </TreeInlineActions>
           )}
+          <TreeRowMeta badge={metadataBadge} />
         </div>
       </div>
     </div>
