@@ -12,6 +12,7 @@ import {
   getApplyPolicyForScriptState,
 } from '@/domain/yops/scriptApplyPolicy';
 import { getChangedContentLineNumbers } from '@/domain/yops/scriptDiff';
+import { normalizeEditedScriptOps } from '@/domain/yops/scriptEditNormalization';
 import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
@@ -152,9 +153,10 @@ export function useScriptExecution() {
     // deterministic transform here so both LLM and human paths persist
     // canonical YOps. Mirror of the lift-time gate in providerDraft.ts;
     // see issue #964 for context.
-    const ops = canonicalizeYOps(
+    const normalizedOps = normalizeEditedScriptOps(
       parseResult.ops as ReadonlyArray<Record<string, unknown>>
-    ) as SourcedYOp[];
+    );
+    const ops = canonicalizeYOps(normalizedOps) as SourcedYOp[];
     if (ops.length === 0) {
       store.setError('No ops to execute');
       return;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePinsStore } from '@/store/pinsStore';
@@ -14,6 +14,20 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  textSelection: {
+    current: null as null | {
+      selection: {
+        text: string;
+        turnHash: string;
+        turnRole: string;
+        turnText: string;
+        startChar: number;
+        endChar: number;
+        rect: DOMRect;
+      };
+      clearSelection: () => void;
+    },
+  },
 }));
 
 vi.mock('sonner', () => ({
@@ -87,7 +101,8 @@ vi.mock('@/hooks/shared/useRealtimeSync', () => ({
 }));
 
 vi.mock('@/hooks/shared/useTextSelection', () => ({
-  useTextSelection: () => ({ selection: null, clearSelection: vi.fn() }),
+  useTextSelection: () =>
+    mocks.textSelection.current ?? { selection: null, clearSelection: vi.fn() },
 }));
 
 vi.mock('@/hooks/shared/useUndo', () => ({
@@ -99,11 +114,16 @@ vi.mock('@/components/chat/ChatMessage', () => ({
   ChatMessage: () => null,
 }));
 
+vi.mock('@/components/chat/ChatSpanActions', () => ({
+  ChatSpanActions: () => <div data-testid="chat-span-actions" />,
+}));
+
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
+    mocks.textSelection.current = null;
     useWorkspaceStore.getState().reset();
     usePinsStore.setState({
       pins: [],
@@ -127,5 +147,25 @@ describe('ChatWorkspace', () => {
 
     expect(mocks.handleExtract).not.toHaveBeenCalled();
     expect(mocks.toastMessage.mock.calls[0]?.[0]).toBe('No pinned sources yet');
+  });
+
+  it('shows source text actions for a valid selection even before executed mode', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'understand',
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        turnText: 'hello',
+        startChar: 10,
+        endChar: 20,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+    useWorkspaceStore.getState().setMode('idle');
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
   });
 });

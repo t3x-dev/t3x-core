@@ -40,7 +40,8 @@ const setSessionUserMock = vi.fn(
 );
 vi.mock('@/infrastructure/session', () => ({
   getSessionUser: () => sessionUserMock.current,
-  setSessionUser: (...args: unknown[]) => setSessionUserMock(...args),
+  setSessionUser: (user: { id: string; name: string | null; username: string | null }) =>
+    setSessionUserMock(user),
 }));
 
 vi.mock('@/infrastructure/auth', () => ({
@@ -879,6 +880,66 @@ describe('useScriptExecution', () => {
   });
 
   describe('canonicalize multi-value scalars on manual apply (plan: canonicalize-proposed-yops)', () => {
+    it('normalizes a deleted set.value into an unset op before commitOps', async () => {
+      useWorkspaceStore.getState().setEditorOverride(`- set:\n    path: sports/soccer/scope\n`);
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect(ops[0]).toMatchObject({
+        unset: { path: 'sports/soccer/scope' },
+        source: { type: 'human', surface: 'script' },
+      });
+    });
+
+    it('drops an empty populate left by deleting value fields and still applies remaining ops', async () => {
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          `- populate:\n    path: sports/soccer/generational_tradition\n    values:\n- set:\n    path: sports/soccer/scope\n    value: Includes national teams\n`
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      expect(ops).toHaveLength(1);
+      expect(ops[0]).toMatchObject({
+        set: { path: 'sports/soccer/scope', value: 'Includes national teams' },
+      });
+    });
+
+    it('accepts a field added next to populate.values by moving it into values', async () => {
+      useWorkspaceStore
+        .getState()
+        .setEditorOverride(
+          `- populate:\n    path: sports/soccer/generational_tradition\n    values:\n      description: Fans inherit teams from family\n    ritual: Watching matches together\n`
+        );
+
+      const { result } = renderHook(() => useScriptExecution());
+      await act(async () => {
+        await result.current.execute();
+      });
+
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(commitOpsMock).toHaveBeenCalledTimes(1);
+      const [, ops] = commitOpsMock.mock.calls[0];
+      const populated = (ops[0] as { populate: { values: Record<string, unknown> } }).populate;
+      expect(populated.values).toMatchObject({
+        description: 'Fans inherit teams from family',
+        ritual: 'Watching matches together',
+      });
+    });
+
     it('rewrites set.value comma-list scalar to a YAML sequence before commitOps', async () => {
       // User typed a comma-string in the editor. The script-apply path
       // bypasses the extractor pipeline, so the canonicalization gate

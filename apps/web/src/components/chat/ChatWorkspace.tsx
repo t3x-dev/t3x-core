@@ -58,16 +58,14 @@ export function ChatWorkspace({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   useUndo({ bindKeyboard: true });
-  const wsMode = useWorkspaceStore((s) => s.mode);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
   const pins = usePinsStore((s) => s.pins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
   const { fetch: fetchPins } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
-  const showAddForm = isReviewPhase && selection && selection.text.length > 3;
+  const showAddForm = !isCommitted && selection && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -181,6 +179,7 @@ export function ChatWorkspace({
   // (every LLMSource carries turn_hash + start_char/end_char).
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
+  const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
 
   // Load persistent committed highlights for this conversation
@@ -335,21 +334,25 @@ export function ChatWorkspace({
           </div>
         ) : (
           <div className="divide-y divide-[var(--stroke-divider)]/50">
-            {messages.map((msg, i) => (
-              <ChatMessage
-                key={msg.id}
-                sender={msg.role}
-                content={msg.content}
-                turnHash={msg.id}
-                turnIndex={i + 1}
-                citations={
-                  msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
-                }
-                sourceMap={sourceMapByTurn.get(i + 1)}
-                committedHighlights={committedHighlightsByTurn.get(msg.id)}
-                coverageMode={coverageMode}
-              />
-            ))}
+            {messages.map((msg, i) => {
+              const sourceDraft = sourceTextDrafts[msg.id];
+              return (
+                <ChatMessage
+                  key={msg.id}
+                  sender={msg.role}
+                  content={sourceDraft?.content ?? msg.content}
+                  turnHash={msg.id}
+                  turnIndex={i + 1}
+                  citations={
+                    msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
+                  }
+                  sourceMap={sourceMapByTurn.get(i + 1)}
+                  committedHighlights={committedHighlightsByTurn.get(msg.id)}
+                  inlineEditSpans={sourceDraft?.spans}
+                  coverageMode={coverageMode}
+                />
+              );
+            })}
 
             {/* Search indicator */}
             {searchQuery && (
@@ -436,7 +439,7 @@ export function ChatWorkspace({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Span Add/Remove actions (visible in Review phase when text is selected) */}
+      {/* Inline source-text actions (visible whenever editable chat text is selected) */}
       {showAddForm && selection && (
         <ChatSpanActions selection={selection} onDone={clearSelection} />
       )}

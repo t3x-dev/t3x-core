@@ -9,10 +9,13 @@
 
 import { type RefObject, useCallback, useEffect, useState } from 'react';
 
+const SELECTION_POPOVER_SELECTOR = '[data-selection-popover="true"]';
+
 export interface TextSelectionResult {
   text: string;
   turnHash: string;
   turnRole: string;
+  turnText: string;
   startChar: number;
   endChar: number;
   rect: DOMRect;
@@ -29,7 +32,9 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
   }, []);
 
   useEffect(() => {
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isSelectionPopoverTarget(e.target)) return;
+
       const container = containerRef.current;
       if (!container) return;
 
@@ -68,6 +73,7 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
 
       // Compute character offsets relative to the turn's text content
       const contentEl = turnEl.querySelector('[data-turn-content]') || turnEl;
+      const turnText = contentEl.textContent ?? '';
       const { start, end } = getCharOffsets(contentEl, range);
 
       const rect = range.getBoundingClientRect();
@@ -76,6 +82,7 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
         text,
         turnHash,
         turnRole,
+        turnText,
         startChar: start,
         endChar: end,
         rect,
@@ -84,11 +91,13 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
 
     // Clear selection when clicking outside
     const handleMouseDown = (e: MouseEvent) => {
+      if (isSelectionPopoverTarget(e.target)) return;
+
       const container = containerRef.current;
       if (!container) return;
 
       // If clicking outside the container, clear
-      if (!container.contains(e.target as Node)) {
+      if (!(e.target instanceof Node) || !container.contains(e.target)) {
         setSelection(null);
       }
     };
@@ -103,6 +112,12 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
   }, [containerRef]);
 
   return { selection, clearSelection };
+}
+
+export function isSelectionPopoverTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) return false;
+  const element = target instanceof Element ? target : target.parentElement;
+  return Boolean(element?.closest(SELECTION_POPOVER_SELECTOR));
 }
 
 /**

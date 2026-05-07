@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getChangedContentLineNumbers, getChangedLineNumbers } from '@/domain/yops/scriptDiff';
+import {
+  getChangedContentLineNumbers,
+  getChangedLineNumbers,
+  getHumanCommentContentLineNumbers,
+} from '@/domain/yops/scriptDiff';
 
 describe('scriptDiff', () => {
   it('finds inserted and edited current lines', () => {
@@ -18,5 +22,21 @@ describe('scriptDiff', () => {
     ].join('\n');
 
     expect(getChangedContentLineNumbers(before, after)).toEqual([5]);
+  });
+
+  it('finds content lines under human edit comments', () => {
+    const script = [
+      'yops:',
+      '  - set:',
+      '      path: trip/dest',
+      '      value: HZ',
+      '  # Human edit via Inline: manual change by alice',
+      '  - set:',
+      '      path: trip/dest',
+      '      value: Shanghai',
+      '',
+    ].join('\n');
+
+    expect(getHumanCommentContentLineNumbers(script)).toEqual([7, 8]);
   });
 });
