@@ -53,6 +53,23 @@ describe('useProviderStatus', () => {
     expect(result.current.hasConfiguredGenerationProvider).toBe(true);
     expect(result.current.defaultProvider).toBe('openai');
     expect(result.current.defaultModel).toBe('gpt-4.1');
+    expect(result.current.statusError).toBeNull();
+
+    unmount();
+  });
+
+  it('reports an API availability error when provider status cannot be loaded', async () => {
+    vi.mocked(fetchLocalProviderStatus).mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    const { result, unmount } = renderHook(() => useProviderStatus());
+
+    await waitForHook();
+
+    expect(fetchLocalProviderStatus).toHaveBeenCalledTimes(3);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.configuredProviders).toEqual([]);
+    expect(result.current.hasConfiguredGenerationProvider).toBe(false);
+    expect(result.current.statusError).toBe('api_unavailable');
 
     unmount();
   });

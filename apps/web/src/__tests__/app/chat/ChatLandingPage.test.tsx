@@ -130,6 +130,7 @@ describe('ChatLandingPage', () => {
       hasConfiguredGenerationProvider: true,
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-20250514',
+      availabilityError: null,
       loadModels: vi.fn(),
     });
 
@@ -182,6 +183,7 @@ describe('ChatLandingPage', () => {
       hasConfiguredGenerationProvider: true,
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-20250514',
+      availabilityError: null,
       loadModels: vi.fn(),
     });
 
@@ -212,6 +214,7 @@ describe('ChatLandingPage', () => {
       hasConfiguredGenerationProvider: false,
       defaultProvider: null,
       defaultModel: null,
+      availabilityError: null,
       loadModels: vi.fn(),
     });
 
@@ -227,5 +230,25 @@ describe('ChatLandingPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
     });
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('shows an API unavailable banner instead of provider setup when model loading fails', async () => {
+    vi.mocked(useAvailableModels).mockReturnValue({
+      providers: [],
+      loading: false,
+      hasConfiguredGenerationProvider: false,
+      defaultProvider: null,
+      defaultModel: null,
+      availabilityError: 'api_unavailable',
+      loadModels: vi.fn(),
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(screen.getByText('API server unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('Set up a generation provider')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-disabled')).toHaveTextContent('true');
   });
 });

@@ -18,6 +18,8 @@ import type {
 } from '@/infrastructure/types';
 import { fetchAvailableModels } from '@/queries/llm';
 
+export type GenerationProviderAvailabilityError = 'api_unavailable';
+
 export interface UseAvailableModelsResult {
   providers: LLMProviderInfo[];
   loading: boolean;
@@ -25,6 +27,7 @@ export interface UseAvailableModelsResult {
   hasConfiguredGenerationProvider: boolean;
   defaultProvider: string | null;
   defaultModel: string | null;
+  availabilityError: GenerationProviderAvailabilityError | null;
 }
 
 export interface AvailableModelSelection {
@@ -126,11 +129,14 @@ export function useAvailableModels(): {
   hasConfiguredGenerationProvider: boolean;
   defaultProvider: string | null;
   defaultModel: string | null;
+  availabilityError: GenerationProviderAvailabilityError | null;
 } {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([]);
   const [backendDefaultProvider, setBackendDefaultProvider] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const { loading: providerStatusLoading, statuses } = useProviderStatus();
+  const [availabilityError, setAvailabilityError] =
+    useState<GenerationProviderAvailabilityError | null>(null);
+  const { loading: providerStatusLoading, statuses, statusError } = useProviderStatus();
 
   const loadModels = useCallback(async () => {
     const data = await fetchAvailableModels();
@@ -143,6 +149,14 @@ export function useAvailableModels(): {
       return;
     }
 
+    if (statusError) {
+      setProviders([]);
+      setBackendDefaultProvider(null);
+      setAvailabilityError(statusError);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     setLoading(true);
@@ -151,12 +165,14 @@ export function useAvailableModels(): {
         if (!cancelled) {
           setProviders(getUsableProviders(data, statuses));
           setBackendDefaultProvider(data.default_provider);
+          setAvailabilityError(null);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setProviders([]);
           setBackendDefaultProvider(null);
+          setAvailabilityError('api_unavailable');
         }
       })
       .finally(() => {
@@ -166,7 +182,7 @@ export function useAvailableModels(): {
     return () => {
       cancelled = true;
     };
-  }, [providerStatusLoading, statuses]);
+  }, [providerStatusLoading, statusError, statuses]);
 
   const defaultUsableProvider = useMemo(() => {
     if (providers.length === 0) {
@@ -206,5 +222,6 @@ export function useAvailableModels(): {
     hasConfiguredGenerationProvider: providers.length > 0,
     defaultProvider: defaultUsableProvider,
     defaultModel: defaultUsableModel,
+    availabilityError,
   };
 }

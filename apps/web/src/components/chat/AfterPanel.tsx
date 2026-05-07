@@ -30,6 +30,102 @@ import { cn } from '@/utils/cn';
 const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
 type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 
+const YAML_KEY_CLASS = 'text-[var(--yaml-key,var(--text-secondary))]';
+const YAML_VALUE_CLASS = 'text-[var(--yaml-string,var(--text-primary))]';
+const YAML_PUNCTUATION_CLASS = 'text-[var(--yaml-punctuation,var(--text-tertiary))]';
+
+function rowTone(input: {
+  side: 'before' | 'after';
+  humanEdit?: HumanEditMarker | null;
+  isAdded?: boolean;
+  isModified?: boolean;
+  isRemoved?: boolean;
+}): { background: string; rail: string } {
+  if (input.side !== 'after') return { background: '', rail: 'bg-transparent' };
+  if (input.humanEdit) {
+    return {
+      background: 'bg-[var(--status-info)]/[0.055]',
+      rail: 'bg-[var(--status-info)]',
+    };
+  }
+  if (input.isAdded) {
+    return {
+      background: 'bg-[var(--status-success)]/[0.035]',
+      rail: 'bg-[var(--status-success)]',
+    };
+  }
+  if (input.isModified) {
+    return {
+      background: 'bg-[var(--status-warning)]/[0.045]',
+      rail: 'bg-[var(--status-warning)]',
+    };
+  }
+  if (input.isRemoved) {
+    return {
+      background: 'bg-[var(--status-error)]/[0.035] opacity-50',
+      rail: 'bg-[var(--status-error)]',
+    };
+  }
+  return { background: '', rail: 'bg-transparent' };
+}
+
+function YAMLIndentGuides({ depth }: { depth: number }) {
+  if (depth <= 0) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-y-0 left-2 opacity-70"
+      style={{
+        width: depth * TREE_INDENT_STEP,
+        backgroundImage:
+          'linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--stroke-default) 72%, transparent) calc(100% - 1px))',
+        backgroundSize: `${TREE_INDENT_STEP}px 100%`,
+      }}
+    />
+  );
+}
+
+function MetadataBadge({
+  label,
+  title,
+  kind,
+}: {
+  label: string;
+  title?: string;
+  kind: 'human' | 'new' | 'modified' | 'removed' | 'inherited';
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[8px] font-semibold',
+        kind === 'human' && 'bg-[var(--status-info-muted)] text-[var(--status-info)]',
+        kind === 'new' && 'bg-[var(--status-success)]/10 text-[var(--status-success)]',
+        kind === 'modified' && 'bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
+        kind === 'removed' && 'bg-[var(--status-error)]/10 text-[var(--status-error)]',
+        kind === 'inherited' && 'bg-black/[0.03] text-[var(--text-tertiary)]'
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+function metadataKindForSlotTag(
+  tag: ReturnType<typeof deriveSlotTag> | null
+): 'new' | 'modified' | 'removed' | 'inherited' {
+  switch (tag?.kind) {
+    case 'new':
+      return 'new';
+    case 'modified':
+      return 'modified';
+    case 'removed':
+      return 'removed';
+    default:
+      return 'inherited';
+  }
+}
+
 export interface HumanEditMarker {
   label: string;
   title: string;
@@ -238,6 +334,7 @@ interface NodeRenderRow extends RenderRowBase {
   isAdded: boolean;
   isRemoved: boolean;
   humanEdit: HumanEditMarker | null;
+  inlineSlot?: SlotRenderRow;
 }
 
 interface SlotRenderRow extends RenderRowBase {
@@ -264,23 +361,6 @@ function buildRenderRows(
   if (!baseNode && !resultNode) return [];
   const isRemovedNode = !!baseNode && !resultNode;
   const nodeKey = resultNode?.key ?? baseNode?.key ?? path.split('/').pop() ?? path;
-  const rows: RenderRow[] = [
-    {
-      kind: 'node',
-      key: `node:${path}`,
-      path,
-      nodeKey,
-      depth,
-      beforeNode: baseNode,
-      afterNode: resultNode,
-      isAdded: !!resultNode && !baseNode,
-      isRemoved: isRemovedNode,
-      humanEdit: humanEditMarkerFromSource(getSlotSource(sourceIndex, path)),
-    },
-  ];
-
-  if (isRemovedNode) return rows;
-
   const baseSlots = baseNode?.slots || {};
   const resultSlots = resultNode?.slots || {};
   const resultSlotKeys = Object.keys(resultSlots).filter((key) => !key.startsWith('_'));
@@ -288,6 +368,8 @@ function buildRenderRows(
     (key) => !key.startsWith('_') && !(key in resultSlots)
   );
   const orderedSlotKeys = [...resultSlotKeys, ...baseOnlySlotKeys];
+  const baseChildren = new Map((baseNode?.children ?? []).map((child) => [child.key, child]));
+  const resultChildren = new Map((resultNode?.children ?? []).map((child) => [child.key, child]));
 
   const modifiedByKey = new Map(
     (diff?.modifiedSlots[path] ?? []).map((entry) => [entry.key, entry])
@@ -295,7 +377,7 @@ function buildRenderRows(
   const addedSlotSet = new Set(diff?.addedSlots[path] ?? []);
   const removedSlotSet = new Set(diff?.removedSlots[path] ?? []);
 
-  for (const slotKey of orderedSlotKeys) {
+  function buildSlotRow(slotKey: string): SlotRenderRow {
     const inBase = slotKey in baseSlots;
     const inResult = slotKey in resultSlots;
     const beforeValue = inBase ? formatSlotPreviewValue(baseSlots[slotKey]) : null;
@@ -319,7 +401,7 @@ function buildRenderRows(
       diffType = 'added';
     }
 
-    rows.push({
+    return {
       kind: 'slot',
       key: `slot:${path}:${slotKey}`,
       path,
@@ -330,11 +412,40 @@ function buildRenderRows(
       diffType,
       oldValue,
       humanEdit: humanEditMarkerFromSource(getSlotSource(sourceIndex, `${path}/${slotKey}`)),
-    });
+    };
   }
 
-  const baseChildren = new Map((baseNode?.children ?? []).map((child) => [child.key, child]));
-  const resultChildren = new Map((resultNode?.children ?? []).map((child) => [child.key, child]));
+  const allVisibleSlotKeys = new Set([...resultSlotKeys, ...baseOnlySlotKeys]);
+  const shouldInlineValueSlot =
+    allVisibleSlotKeys.size === 1 &&
+    allVisibleSlotKeys.has('value') &&
+    baseChildren.size === 0 &&
+    resultChildren.size === 0;
+  const inlineSlot = shouldInlineValueSlot ? buildSlotRow('value') : undefined;
+  const rows: RenderRow[] = [
+    {
+      kind: 'node',
+      key: `node:${path}`,
+      path,
+      nodeKey,
+      depth,
+      beforeNode: baseNode,
+      afterNode: resultNode,
+      isAdded: !!resultNode && !baseNode,
+      isRemoved: isRemovedNode,
+      humanEdit:
+        inlineSlot?.humanEdit ?? humanEditMarkerFromSource(getSlotSource(sourceIndex, path)),
+      inlineSlot,
+    },
+  ];
+
+  if (isRemovedNode) return rows;
+
+  for (const slotKey of orderedSlotKeys) {
+    if (inlineSlot && slotKey === inlineSlot.slotKey) continue;
+    rows.push(buildSlotRow(slotKey));
+  }
+
   const childOrder = [
     ...resultChildren.keys(),
     ...Array.from(baseChildren.keys()).filter((key) => !resultChildren.has(key)),
@@ -366,19 +477,19 @@ export function SlotPreviewInline({ value }: { value: SlotPreviewValue | null })
   if (!value) return null;
 
   if (value.kind === 'scalar') {
-    return <span className="truncate text-[var(--text-primary)]">{value.text}</span>;
+    return <span className={cn('truncate', YAML_VALUE_CLASS)}>{value.text}</span>;
   }
 
   if (value.kind === 'list') {
     return (
-      <ul className="my-0 flex min-w-0 flex-col gap-0.5 py-1 text-[var(--text-primary)]">
+      <ul className={cn('my-0 flex min-w-0 flex-col gap-0 py-0', YAML_VALUE_CLASS)}>
         {value.items.map((item, index) => (
           <li
             // Slot values are display-only here; index keeps duplicate scalars visible.
             key={`${item.kind}-${index}`}
-            className="flex min-w-0 items-start gap-1.5 leading-4"
+            className="flex min-w-0 items-start gap-1.5 leading-[18px]"
           >
-            <span className="shrink-0 text-[var(--text-tertiary)]">-</span>
+            <span className={cn('shrink-0', YAML_PUNCTUATION_CLASS)}>-</span>
             {item.kind === 'scalar' ? (
               <span className="min-w-0 break-words">{item.text}</span>
             ) : (
@@ -395,7 +506,7 @@ export function SlotPreviewInline({ value }: { value: SlotPreviewValue | null })
   }
 
   return (
-    <span className="min-w-0 break-words text-[var(--text-primary)]">
+    <span className={cn('min-w-0 break-words', YAML_VALUE_CLASS)}>
       {slotPreviewToEditText(value)}
     </span>
   );
@@ -422,6 +533,14 @@ function SlotCell({
   const isModified = row.diffType === 'modified';
   const isAdded = row.diffType === 'added';
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
+  const tone = rowTone({
+    side,
+    humanEdit,
+    isAdded,
+    isModified,
+    isRemoved,
+  });
+  const isBlockValue = !editing && displayValue !== null && displayValue.kind !== 'scalar';
 
   const handleStartEdit = useCallback(() => {
     if (!isInteractive || !onEdit || isRemoved) return;
@@ -447,75 +566,77 @@ function SlotCell({
     [handleSave]
   );
 
-  const rowBg =
-    side === 'after'
-      ? humanEdit
-        ? 'bg-[var(--status-info)]/[0.08]'
-        : isAdded
-          ? 'bg-[var(--status-success)]/[0.04]'
-          : isModified
-            ? 'bg-[var(--status-warning)]/[0.05]'
-            : isRemoved
-              ? 'bg-[var(--status-error)]/[0.035] opacity-50'
-              : ''
-      : '';
-
-  const gutterColor =
-    side === 'after'
-      ? humanEdit
-        ? 'bg-[var(--status-info)]'
-        : isAdded
-          ? 'bg-[var(--status-success)]'
-          : isModified
-            ? 'bg-[var(--status-warning)]'
-            : isRemoved
-              ? 'bg-[var(--status-error)]'
-              : 'bg-transparent'
-      : 'bg-transparent';
-
   return (
     <div className="h-full w-full">
-      <div className={cn('flex h-full w-full items-stretch', rowBg)}>
-        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : gutterColor}`} />
+      <div className="flex h-full w-full items-stretch">
+        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
-            'group flex min-w-0 flex-1 items-start gap-1 px-2 py-1 transition-colors',
+            'group relative flex min-w-0 flex-1 items-start gap-2 px-2 py-0.5 transition-colors',
+            tone.background,
             isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source-dim)]'
           )}
-          style={{ ...MONO, paddingLeft }}
+          style={MONO}
           onClick={() => (selected ? onClear() : onSelect())}
           onDoubleClick={handleStartEdit}
         >
-          <span
-            className={cn('shrink-0 text-[var(--text-secondary)]', isRemoved && 'line-through')}
+          <YAMLIndentGuides depth={row.depth} />
+          <div
+            className="relative z-[1] flex min-w-0 flex-1 flex-col gap-0.5"
+            style={{ paddingLeft }}
           >
-            {row.slotKey}
-          </span>
-          <span className="shrink-0 text-[var(--text-tertiary)]">:</span>
-          {editing ? (
-            <input
-              ref={inputRef}
-              defaultValue={displayText}
-              onKeyDown={handleKeyDown}
-              onBlur={handleSave}
-              className="flex-1 min-w-0 bg-transparent border-0 border-b-[1.5px] border-b-[var(--status-warning)] outline-none text-[var(--text-primary)]"
-              style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
-            />
-          ) : (
-            <>
-              {side === 'after' && isModified && row.oldValue && (
-                <span className="text-[var(--status-error)] opacity-50 line-through truncate mr-1">
-                  {slotPreviewToEditText(row.oldValue)}
+            <div className="flex min-w-0 items-start gap-1">
+              <span
+                className={cn('shrink-0 font-medium', YAML_KEY_CLASS, isRemoved && 'line-through')}
+              >
+                {row.slotKey}
+              </span>
+              <span className={cn('shrink-0', YAML_PUNCTUATION_CLASS)}>:</span>
+              {editing ? (
+                <input
+                  ref={inputRef}
+                  defaultValue={displayText}
+                  onKeyDown={handleKeyDown}
+                  onBlur={handleSave}
+                  className="min-w-0 flex-1 border-0 border-b-[1.5px] border-b-[var(--status-warning)] bg-transparent text-[var(--text-primary)] outline-none"
+                  style={{ fontFamily: 'inherit', fontSize: 'inherit' }}
+                />
+              ) : (
+                !isBlockValue && (
+                  <>
+                    {side === 'after' && isModified && row.oldValue && (
+                      <span className="mr-1 truncate text-[var(--status-error)] opacity-50 line-through">
+                        {slotPreviewToEditText(row.oldValue)}
+                      </span>
+                    )}
+                    <span className={cn('min-w-0 flex-1', isRemoved && 'line-through')}>
+                      <SlotPreviewInline value={displayValue} />
+                    </span>
+                  </>
+                )
+              )}
+              {side === 'after' && (humanEdit || tag) && (
+                <span
+                  className="ml-auto shrink-0 text-right"
+                  style={{ width: TREE_TRAILING_WIDTH }}
+                >
+                  <MetadataBadge
+                    label={humanEdit?.label ?? tag?.label ?? ''}
+                    title={humanEdit?.title}
+                    kind={humanEdit ? 'human' : metadataKindForSlotTag(tag)}
+                  />
                 </span>
               )}
-              <span className={cn('min-w-0 flex-1', isRemoved && 'line-through')}>
+            </div>
+            {isBlockValue && (
+              <div className={cn('min-w-0 pl-[14px] leading-[18px]', isRemoved && 'line-through')}>
                 <SlotPreviewInline value={displayValue} />
-              </span>
-            </>
-          )}
-          {side === 'after' && (onEdit || onDelete || humanEdit || tag) && (
+              </div>
+            )}
+          </div>
+          {side === 'after' && (onEdit || onDelete) && (
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {onEdit && !editing && (
                 <button
@@ -530,31 +651,6 @@ function SlotCell({
                 >
                   <Pencil className="h-2.5 w-2.5" />
                 </button>
-              )}
-              {(humanEdit || tag) && (
-                <span className="shrink-0 text-right" style={{ width: TREE_TRAILING_WIDTH }}>
-                  <span
-                    title={humanEdit?.title}
-                    className={cn(
-                      'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[7px] font-semibold',
-                      humanEdit && 'text-[var(--status-info)] bg-[var(--status-info-muted)]',
-                      !humanEdit &&
-                        tag?.kind === 'inherited' &&
-                        'text-[var(--text-tertiary)] bg-black/[0.03]',
-                      !humanEdit &&
-                        tag?.kind === 'new' &&
-                        'text-[var(--status-success)] bg-[var(--status-success)]/10',
-                      !humanEdit &&
-                        tag?.kind === 'modified' &&
-                        'text-[var(--status-warning)] bg-[var(--status-warning)]/10',
-                      !humanEdit &&
-                        tag?.kind === 'removed' &&
-                        'text-[var(--status-error)] bg-[var(--status-error)]/10'
-                    )}
-                  >
-                    {humanEdit?.label ?? tag?.label}
-                  </span>
-                </span>
               )}
               {onDelete && (
                 <button
@@ -581,6 +677,7 @@ function SlotCell({
 interface NodeCellProps {
   side: 'before' | 'after';
   row: NodeRenderRow;
+  parentMessage: string | null;
   selected: boolean;
   onSelect: () => void;
   onClear: () => void;
@@ -591,6 +688,7 @@ interface NodeCellProps {
 function NodeCell({
   side,
   row,
+  parentMessage,
   selected,
   onSelect,
   onClear,
@@ -601,70 +699,73 @@ function NodeCell({
   const isAdded = row.isAdded && side === 'after';
   const humanEdit = side === 'after' ? row.humanEdit : null;
   const hasNode = side === 'before' ? !!row.beforeNode : !!row.afterNode || row.isRemoved;
+  const inlineSlot = row.inlineSlot;
+  const inlineValue = side === 'before' ? inlineSlot?.beforeValue : inlineSlot?.afterValue;
+  const inlineTag =
+    side === 'after' && inlineSlot?.diffType
+      ? deriveSlotTag({ diffType: inlineSlot.diffType, parentMessage })
+      : null;
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
-  const nodeBg =
-    side === 'after'
-      ? humanEdit
-        ? 'bg-[var(--status-info)]/[0.08]'
-        : isAdded
-          ? 'bg-[var(--status-success)]/[0.04]'
-          : isRemoved
-            ? 'bg-[var(--status-error)]/[0.035] opacity-50'
-            : ''
-      : '';
-  const gutterColor =
-    side === 'after'
-      ? humanEdit
-        ? 'bg-[var(--status-info)]'
-        : isAdded
-          ? 'bg-[var(--status-success)]'
-          : isRemoved
-            ? 'bg-[var(--status-error)]'
-            : 'bg-transparent'
-      : 'bg-transparent';
+  const tone = rowTone({
+    side,
+    humanEdit,
+    isAdded,
+    isRemoved,
+  });
 
   return (
     <div className="h-full w-full">
-      <div className={cn('group flex h-full w-full items-stretch', nodeBg)}>
-        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : gutterColor}`} />
+      <div className="group flex h-full w-full items-stretch">
+        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            'relative flex min-w-0 flex-1 items-center gap-1 px-2 transition-colors',
+            tone.background,
             hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source-dim)]'
           )}
-          style={{ ...MONO, paddingLeft }}
+          style={MONO}
           onClick={() => (hasNode ? (selected ? onClear() : onSelect()) : undefined)}
         >
-          {hasNode && <span className="text-[8px] text-[var(--text-tertiary)] mr-1">◆</span>}
+          <YAMLIndentGuides depth={row.depth} />
           <span
             className={cn(
-              'text-[var(--text-secondary)] font-semibold',
+              'relative z-[1] font-semibold',
+              YAML_KEY_CLASS,
               isRemoved && 'line-through'
             )}
+            style={{ marginLeft: paddingLeft }}
           >
             {row.nodeKey}
           </span>
-          <span className="text-[var(--text-tertiary)]">:</span>
+          <span className={cn('relative z-[1]', YAML_PUNCTUATION_CLASS)}>:</span>
+          {inlineValue && (
+            <>
+              {side === 'after' && inlineSlot?.diffType === 'modified' && inlineSlot.oldValue && (
+                <span className="relative z-[1] mr-1 truncate text-[var(--status-error)] opacity-50 line-through">
+                  {slotPreviewToEditText(inlineSlot.oldValue)}
+                </span>
+              )}
+              <span className={cn('relative z-[1] min-w-0 flex-1', isRemoved && 'line-through')}>
+                <SlotPreviewInline value={inlineValue} />
+              </span>
+            </>
+          )}
           {side === 'after' && (
             <>
-              <span className="ml-auto shrink-0" style={{ width: TREE_TRAILING_WIDTH }}>
+              <span
+                className="relative z-[1] ml-auto shrink-0 text-right"
+                style={{ width: TREE_TRAILING_WIDTH }}
+              >
                 {humanEdit ? (
-                  <span
-                    title={humanEdit.title}
-                    className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-info-muted)] px-1.5 py-px text-[7px] font-semibold text-[var(--status-info)]"
-                  >
-                    {humanEdit.label}
-                  </span>
+                  <MetadataBadge label={humanEdit.label} title={humanEdit.title} kind="human" />
                 ) : isAdded ? (
-                  <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-success)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-success)]">
-                    New node
-                  </span>
+                  <MetadataBadge label="New node" kind="new" />
                 ) : isRemoved ? (
-                  <span className="inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-[var(--status-error)]/10 px-1.5 py-px text-[7px] font-semibold text-[var(--status-error)]">
-                    Removed node
-                  </span>
+                  <MetadataBadge label="Removed node" kind="removed" />
+                ) : inlineTag ? (
+                  <MetadataBadge label={inlineTag.label} kind={metadataKindForSlotTag(inlineTag)} />
                 ) : null}
               </span>
               {row.afterNode && (
@@ -1048,6 +1149,7 @@ export function AfterPanel({
                     key={`${row.key}:before-node`}
                     side="before"
                     row={row}
+                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('before', { nodePath: row.path })}
                     onClear={clearSelection}
@@ -1078,6 +1180,7 @@ export function AfterPanel({
                     key={`${row.key}:after-node`}
                     side="after"
                     row={row}
+                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path })}
                     onClear={clearSelection}
@@ -1119,24 +1222,15 @@ export function AfterPanel({
                   style={{ minHeight: TREE_ROW_HEIGHT }}
                 >
                   <div
-                    className="border-r border-[var(--stroke-default)] border-b border-black/[0.025]"
+                    className="border-r border-[var(--stroke-default)]"
                     style={{ minHeight: TREE_ROW_HEIGHT }}
                   >
                     {beforeCell}
                   </div>
-                  <div
-                    className="border-b border-black/[0.025]"
-                    style={{ minHeight: TREE_ROW_HEIGHT }}
-                  >
-                    {afterCell}
-                  </div>
+                  <div style={{ minHeight: TREE_ROW_HEIGHT }}>{afterCell}</div>
                 </div>
               ) : (
-                <div
-                  key={row.key}
-                  className="w-full border-b border-black/[0.025]"
-                  style={{ minHeight: TREE_ROW_HEIGHT }}
-                >
+                <div key={row.key} className="w-full" style={{ minHeight: TREE_ROW_HEIGHT }}>
                   {afterCell}
                 </div>
               );

@@ -6,10 +6,23 @@ import { cn } from '@/utils/cn';
 
 interface ProviderSetupBannerProps {
   className?: string;
+  variant?: 'setup' | 'api-unavailable';
 }
 
-export function ProviderSetupBanner({ className }: ProviderSetupBannerProps) {
+const COPY = {
+  setup: {
+    title: 'Set up a generation provider',
+    description: 'Connect a provider in Settings to pick a model and start chatting.',
+  },
+  'api-unavailable': {
+    title: 'API server unavailable',
+    description: 'WebUI cannot reach the T3X API, so model keys from your config file cannot load.',
+  },
+} as const;
+
+export function ProviderSetupBanner({ className, variant = 'setup' }: ProviderSetupBannerProps) {
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
+  const copy = COPY[variant];
 
   return (
     <div
@@ -21,23 +34,21 @@ export function ProviderSetupBanner({ className }: ProviderSetupBannerProps) {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-[var(--text-primary)]">
-            Set up a generation provider
-          </p>
-          <p className="text-sm text-[var(--text-tertiary)]">
-            Connect a provider in Settings to pick a model and start chatting.
-          </p>
+          <p className="text-sm font-medium text-[var(--text-primary)]">{copy.title}</p>
+          <p className="text-sm text-[var(--text-tertiary)]">{copy.description}</p>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={() => openSettingsModal('providers')}
-        >
-          Open provider settings
-        </Button>
+        {variant === 'setup' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => openSettingsModal('providers')}
+          >
+            Open provider settings
+          </Button>
+        )}
       </div>
     </div>
   );

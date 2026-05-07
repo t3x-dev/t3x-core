@@ -6,6 +6,8 @@ import { fetchLocalProviderStatus } from '@/queries/providerStatus';
 
 const SUPPORTED_LOCAL_GENERATION_PROVIDERS: LocalProviderId[] = ['anthropic', 'openai', 'google'];
 
+export type ProviderStatusError = 'api_unavailable';
+
 function createFallbackStatus(provider: LocalProviderId): LocalProviderStatus {
   return {
     provider,
@@ -27,6 +29,7 @@ export interface UseProviderStatusResult {
   hasConfiguredGenerationProvider: boolean;
   defaultProvider: LocalProviderId | null;
   defaultModel: string | null;
+  statusError: ProviderStatusError | null;
 }
 
 /**
@@ -38,6 +41,7 @@ export function useProviderStatus(): UseProviderStatusResult {
     SUPPORTED_LOCAL_GENERATION_PROVIDERS.map(createFallbackStatus)
   );
   const [loading, setLoading] = useState(true);
+  const [statusError, setStatusError] = useState<ProviderStatusError | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +59,9 @@ export function useProviderStatus(): UseProviderStatusResult {
             ? result.value
             : createFallbackStatus(SUPPORTED_LOCAL_GENERATION_PROVIDERS[index])
         )
+      );
+      setStatusError(
+        settled.every((result) => result.status === 'rejected') ? 'api_unavailable' : null
       );
       setLoading(false);
     }
@@ -91,5 +98,6 @@ export function useProviderStatus(): UseProviderStatusResult {
     hasConfiguredGenerationProvider: configuredProviders.length > 0,
     defaultProvider,
     defaultModel,
+    statusError,
   };
 }

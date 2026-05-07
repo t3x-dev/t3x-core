@@ -76,6 +76,7 @@ export function ChatWorkspace({
     selectedModel,
     handleModelChange,
     isSelectionReady,
+    availabilityError,
   } = useChatModelSelection({
     initialProvider,
     initialModel,
@@ -321,7 +322,9 @@ export function ChatWorkspace({
           <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
             {!modelsLoading && !hasConfiguredGenerationProvider && (
               <div className="w-full max-w-3xl px-4 pb-2">
-                <ProviderSetupBanner />
+                <ProviderSetupBanner
+                  variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
+                />
               </div>
             )}
             <MessageSquarePlus size={40} strokeWidth={1} />

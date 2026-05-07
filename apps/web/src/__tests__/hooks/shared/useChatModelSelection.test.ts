@@ -106,6 +106,7 @@ describe('useChatModelSelection', () => {
       hasConfiguredGenerationProvider: true,
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-20250514',
+      availabilityError: null,
       loadModels: vi.fn(),
     });
     useChatModelPreferencesStore.setState({
@@ -144,6 +145,7 @@ describe('useChatModelSelection', () => {
       hasConfiguredGenerationProvider: true,
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-20250514',
+      availabilityError: null,
       loadModels: vi.fn(),
     });
     useChatModelPreferencesStore.setState({
@@ -188,6 +190,7 @@ describe('useChatModelSelection', () => {
       hasConfiguredGenerationProvider: true,
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-20250514',
+      availabilityError: null,
       loadModels: vi.fn(),
     });
     vi.mocked(useSession).mockReturnValue({

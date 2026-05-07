@@ -74,6 +74,7 @@ vi.mock('@/hooks/shared/useChatModelSelection', () => ({
   useChatModelSelection: () => ({
     loading: false,
     hasConfiguredGenerationProvider: true,
+    availabilityError: null,
     selectedProvider: 'anthropic',
     selectedModel: 'claude-sonnet',
     handleModelChange: mocks.handleModelChange,
