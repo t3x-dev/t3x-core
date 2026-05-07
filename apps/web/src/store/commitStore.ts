@@ -13,6 +13,22 @@ import { flattenTrees } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { useWorkspaceStore } from './workspaceStore';
 
+function resetCommitTracking(projectId: string | null): Partial<CommitState> {
+  return {
+    confirmedNodeIds: {},
+    confirmedSlotKeys: {},
+    manualEditedNodeIds: new Set(),
+    lastCommitHash: null,
+    beforeCommitHash: null,
+    committedNodeIds: {},
+    committedNodeSnapshot: {},
+    projectId,
+    conversationTitle: null,
+    isCommitting: false,
+    commitError: null,
+  };
+}
+
 interface CommitState {
   // Confirmation tracking
   confirmedNodeIds: Record<string, boolean>;
@@ -120,7 +136,8 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   },
 
   setCommitBranch: (branch) => set({ commitBranch: branch }),
-  setProjectId: (id) => set({ projectId: id }),
+  setProjectId: (id) =>
+    set((s) => (s.projectId === id ? { projectId: id } : resetCommitTracking(id))),
   setConversationTitle: (title) => set({ conversationTitle: title }),
   clearCommitError: () => set({ commitError: null }),
 

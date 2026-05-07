@@ -39,6 +39,7 @@ function resetStores() {
     confirmedSlotKeys: {},
     manualEditedNodeIds: new Set(),
     lastCommitHash: null,
+    beforeCommitHash: null,
     committedNodeIds: {},
     committedNodeSnapshot: {},
     commitBranch: 'main',
@@ -125,6 +126,7 @@ describe('useCommitActions.commit', () => {
 
 describe('useCommitActions.init', () => {
   it('seeds lastCommitHash + committed maps from HEAD via setInitialCommit', async () => {
+    useCommitStore.getState().setProjectId('proj_1');
     vi.mocked(fetchCommits).mockResolvedValueOnce([
       {
         hash: 'sha256:head',
@@ -142,6 +144,7 @@ describe('useCommitActions.init', () => {
   });
 
   it('is a silent no-op when there are no commits', async () => {
+    useCommitStore.getState().setProjectId('proj_1');
     vi.mocked(fetchCommits).mockResolvedValueOnce([] as never);
 
     const { result } = renderHook(() => useCommitActions());
@@ -150,5 +153,83 @@ describe('useCommitActions.init', () => {
 
     const state = useCommitStore.getState();
     expect(state.lastCommitHash).toBeNull();
+  });
+
+  it('ignores an init response if the active project changed while it was loading', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    vi.mocked(fetchCommits).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }) as never
+    );
+
+    useCommitStore.getState().setProjectId('proj_old');
+    const { result } = renderHook(() => useCommitActions());
+    const initPromise = result.current.init('proj_old');
+
+    useCommitStore.getState().setProjectId('proj_new');
+    resolveFetch([
+      {
+        hash: 'sha256:old_head',
+        content: { trees: [tree('old')] },
+      },
+    ]);
+    await initPromise;
+    await waitForHook();
+
+    const state = useCommitStore.getState();
+    expect(state.projectId).toBe('proj_new');
+    expect(state.lastCommitHash).toBeNull();
+    expect(state.committedNodeIds).toEqual({});
+  });
+});
+
+describe('commitStore.setProjectId', () => {
+  it('clears commit baselines and snapshots when switching projects', () => {
+    useCommitStore.getState().setProjectId('proj_old');
+    useCommitStore.setState({
+      confirmedNodeIds: { old: true },
+      confirmedSlotKeys: { old: { value: true } },
+      manualEditedNodeIds: new Set(['old']),
+      lastCommitHash: 'sha256:old_head',
+      beforeCommitHash: 'sha256:old_parent',
+      committedNodeIds: { old: true },
+      committedNodeSnapshot: { old: tree('old') },
+      conversationTitle: 'Old conversation',
+      isCommitting: true,
+      commitError: 'failed',
+    });
+
+    useCommitStore.getState().setProjectId('proj_new');
+
+    const state = useCommitStore.getState();
+    expect(state.projectId).toBe('proj_new');
+    expect(state.lastCommitHash).toBeNull();
+    expect(state.beforeCommitHash).toBeNull();
+    expect(state.committedNodeIds).toEqual({});
+    expect(state.committedNodeSnapshot).toEqual({});
+    expect(state.confirmedNodeIds).toEqual({});
+    expect(state.confirmedSlotKeys).toEqual({});
+    expect(state.manualEditedNodeIds.size).toBe(0);
+    expect(state.conversationTitle).toBeNull();
+    expect(state.isCommitting).toBe(false);
+    expect(state.commitError).toBeNull();
+  });
+
+  it('keeps commit baselines when setting the same project again', () => {
+    useCommitStore.getState().setProjectId('proj_1');
+    useCommitStore.setState({
+      lastCommitHash: 'sha256:head',
+      beforeCommitHash: 'sha256:parent',
+      committedNodeIds: { a: true },
+      committedNodeSnapshot: { a: tree('a') },
+    });
+
+    useCommitStore.getState().setProjectId('proj_1');
+
+    const state = useCommitStore.getState();
+    expect(state.lastCommitHash).toBe('sha256:head');
+    expect(state.beforeCommitHash).toBe('sha256:parent');
+    expect(state.committedNodeIds.a).toBe(true);
   });
 });
