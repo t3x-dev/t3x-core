@@ -2,6 +2,11 @@ import type { ExtractionFailureCode, SemanticContent, Source, SourcedYOp } from 
 import { applySourcedYOps } from '@t3x-dev/core';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import {
+  applySourceTextDraftsToTurns,
+  type SourceTextDraft,
+  type SourceTextDraftsByTurn,
+} from '@/domain/sourceTextDrafts';
 import { reconcileOpOrigins, type YOpsOpOrigin, type YOpsRowMeta } from '@/domain/yops/rowMeta';
 import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 
@@ -106,6 +111,7 @@ interface WorkspaceState {
   // ── Conversation state ──
   conversationId: string | null;
   turns: WorkspaceTurn[];
+  sourceTextDrafts: SourceTextDraftsByTurn;
   opsLog: SourcedYOp[];
   rowsById: Record<string, YOpsRowMeta>;
   opOrigins: YOpsOpOrigin[];
@@ -222,6 +228,8 @@ interface WorkspaceState {
   setConversation: (id: string | null) => void;
   setActiveProject: (projectId: string | null) => void;
   setTurns: (turns: WorkspaceTurn[]) => void;
+  setSourceTextDraft: (turnHash: string, draft: SourceTextDraft | null) => void;
+  clearSourceTextDrafts: () => void;
   setDerived: (input: {
     tree: SemanticContent;
     sourceIndex: Map<string, Source>;
@@ -401,6 +409,9 @@ export const selectScriptText = (state: WorkspaceState): string => {
  */
 export const selectScriptDirty = (state: WorkspaceState): boolean => state.editorOverride !== null;
 
+export const selectEffectiveTurns = (state: WorkspaceState): WorkspaceTurn[] =>
+  applySourceTextDraftsToTurns(state.turns, state.sourceTextDrafts);
+
 export const selectActiveUncommittedRowCount = (state: WorkspaceState): number => {
   const referencedRowIds = new Set<string>();
   let hasUnknownOrigin = false;
@@ -435,6 +446,7 @@ function conversationResetState() {
   return {
     conversationId: null,
     turns: [],
+    sourceTextDrafts: {},
     opsLog: [],
     rowsById: {},
     opOrigins: [],
@@ -644,6 +656,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ activeProjectId });
       },
       setTurns: (turns) => set({ turns }),
+      setSourceTextDraft: (turnHash, draft) =>
+        set((s) => {
+          const sourceTextDrafts = { ...s.sourceTextDrafts };
+          if (draft) sourceTextDrafts[turnHash] = draft;
+          else delete sourceTextDrafts[turnHash];
+          return { sourceTextDrafts };
+        }),
+      clearSourceTextDrafts: () => set({ sourceTextDrafts: {} }),
       setDerived: ({
         tree,
         sourceIndex,

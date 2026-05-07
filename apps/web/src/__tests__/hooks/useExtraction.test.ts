@@ -54,6 +54,7 @@ vi.mock('@/store/chatStore', () => ({
   ),
 }));
 
+import { applySourceTextDraftEdit } from '@/domain/sourceTextDrafts';
 import { EXTRACTION_TOAST_ID, useExtraction } from '@/hooks/drafts/useExtraction';
 import {
   selectPanelExpanded,
@@ -134,6 +135,63 @@ describe('useExtraction', () => {
     });
   });
 
+  it('extracts from source-text drafts and marks overlapping ops as human inline', async () => {
+    const sourceDraft = applySourceTextDraftEdit({
+      baseContent: 'hello',
+      input: {
+        turnHash: 'sha256:t1',
+        action: 'edit',
+        start: 0,
+        end: 5,
+        selectedText: 'hello',
+        replacementText: 'hello world',
+      },
+      now: '2026-05-07T00:00:00.000Z',
+    });
+    useWorkspaceStore.getState().setSourceTextDraft('sha256:t1', sourceDraft);
+    runExtractionMock.mockResolvedValueOnce({
+      ops: [
+        {
+          set: { path: 'trip/greeting', value: 'hello world' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: {
+              turn_hash: 'sha256:t1',
+              quote: 'hello world',
+              start_char: 0,
+              end_char: 11,
+            },
+          },
+        },
+      ],
+      committed: false,
+    });
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const runArgs = runExtractionMock.mock.calls[0]?.[0] as
+      | { turns?: Array<{ content: string }> }
+      | undefined;
+    expect(runArgs?.turns?.[0]?.content).toBe('hello world');
+    expect(useWorkspaceStore.getState().draftOps[0].source).toMatchObject({
+      type: 'human',
+      surface: 'inline',
+      author: 'Local Workspace',
+    });
+  });
+
   it('forwards the workspace store extractionPreset (concise) to callExtractionLLM', async () => {
     // The dropdown lives in ChatHeader and writes to
     // workspaceStore.extractionPreset. Before this PR, the hook never
@@ -191,7 +249,17 @@ describe('useExtraction', () => {
       useWorkspaceStore.getState().setDerived({
         tree: hydratedTree,
         sourceIndex: new Map(),
-        opsLog: [{ define: { path: 'trip' } }],
+        opsLog: [
+          {
+            define: { path: 'trip' },
+            source: {
+              type: 'human',
+              author: 'test',
+              at: '2026-01-01T00:00:00.000Z',
+              surface: 'tree',
+            },
+          },
+        ],
       });
     });
 
@@ -520,10 +588,10 @@ describe('useExtraction', () => {
       new ExtractionFailedError(
         [
           {
+            op: stagedOps[0],
             opIndex: 0,
-            reason: 'quote_not_found',
-            turnHash: 'sha256:t1',
-            quote: 'not in conversation',
+            reason: 'unverifiable_quote',
+            detail: 'not in conversation',
           },
         ],
         2,

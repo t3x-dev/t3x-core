@@ -11,7 +11,7 @@ import {
   lineNumbers,
 } from '@codemirror/view';
 import { useEffect, useMemo, useRef } from 'react';
-import { getChangedLineNumbers } from '@/domain/yops/scriptDiff';
+import { getChangedLineNumbers, getHumanCommentContentLineNumbers } from '@/domain/yops/scriptDiff';
 import {
   selectCanonicalScriptText,
   selectScriptDirty,
@@ -58,7 +58,12 @@ export function ScriptEditor() {
       for (const lineNumber of recentScriptApplyLineNumbers) lines.add(lineNumber);
       return lines;
     }
-    if (!scriptDirty) return lines;
+    if (!scriptDirty) {
+      for (const lineNumber of getHumanCommentContentLineNumbers(scriptText)) {
+        lines.add(lineNumber);
+      }
+      return lines;
+    }
     for (const lineNumber of getChangedLineNumbers(canonicalScriptText, scriptText)) {
       lines.add(lineNumber);
     }

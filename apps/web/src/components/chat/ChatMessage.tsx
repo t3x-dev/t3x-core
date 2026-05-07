@@ -8,6 +8,7 @@ import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';
 import { traceYamlToChat } from '@/domain/hoverTrace';
 import type { SourceMapping } from '@/domain/sourceMap';
+import type { SourceTextDraftSpan } from '@/domain/sourceTextDrafts';
 import { useSlotActions } from '@/hooks/shared/useSlotActions';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { Citation } from '@/types/api';
@@ -31,6 +32,7 @@ interface ChatMessageProps {
   onEdit?: (newContent: string) => void;
   sourceMap?: SourceMapping[];
   committedHighlights?: CommittedHighlight[];
+  inlineEditSpans?: SourceTextDraftSpan[];
   coverageMode?: boolean;
 }
 
@@ -104,6 +106,64 @@ function HighlightedText({
           </mark>
         ) : (
           <span key={p.key}>{p.text}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function InlineEditedText({ text, spans }: { text: string; spans: SourceTextDraftSpan[] }) {
+  const visibleSpans = spans
+    .filter((span) => span.end > span.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  if (visibleSpans.length === 0) return <>{text}</>;
+
+  const parts: Array<{ key: string; text: string; highlighted: boolean }> = [];
+  let cursor = 0;
+  for (const span of visibleSpans) {
+    const start = Math.max(0, Math.min(text.length, span.start));
+    const end = Math.max(start, Math.min(text.length, span.end));
+    if (start < cursor) continue;
+    if (cursor < start) {
+      parts.push({
+        key: `plain-${cursor}-${start}`,
+        text: text.slice(cursor, start),
+        highlighted: false,
+      });
+    }
+    parts.push({
+      key: `inline-${span.id}`,
+      text: text.slice(start, end),
+      highlighted: true,
+    });
+    cursor = end;
+  }
+  if (cursor < text.length) {
+    parts.push({
+      key: `plain-${cursor}-${text.length}`,
+      text: text.slice(cursor),
+      highlighted: false,
+    });
+  }
+
+  return (
+    <>
+      {parts.map((part) =>
+        part.highlighted ? (
+          <mark
+            key={part.key}
+            className="rounded px-1"
+            title="Human inline edit"
+            style={{
+              background: 'color-mix(in srgb, var(--status-info) 18%, transparent)',
+              borderBottom: '2px solid var(--status-info)',
+              color: 'inherit',
+            }}
+          >
+            {part.text}
+          </mark>
+        ) : (
+          <span key={part.key}>{part.text}</span>
         )
       )}
     </>
@@ -398,6 +458,7 @@ export function ChatMessage({
   onEdit,
   sourceMap,
   committedHighlights,
+  inlineEditSpans,
   coverageMode,
 }: ChatMessageProps) {
   const isUser = sender === 'user';
@@ -459,6 +520,7 @@ export function ChatMessage({
   const hasCharHighlights = highlightRanges.length > 0;
   const hasSourceMappings = (sourceMap?.length ?? 0) > 0;
   const hasCommittedHighlights = (committedHighlights?.length ?? 0) > 0;
+  const hasInlineEditSpans = inlineEditSpans?.some((span) => span.end > span.start) ?? false;
   // Whole-message tint: when this is the source message for hovered YAML
   const isWholeMessageHighlight = isSourceMessage && !hasCharHighlights;
 
@@ -478,15 +540,25 @@ export function ChatMessage({
     }
   }, [isSourceMessage, scrollToCenter]);
 
-  // Rendering priority: YAML highlights > source-mapped spans > committed highlights > markdown
+  // Rendering priority: YAML highlights > inline source edits > source-mapped spans > committed highlights > markdown
   // Source-mapped spans only render when a YAML node is actively selected (click-triggered)
   const useCoverageHighlights = coverageMode && uncoveredRanges.length > 0;
   const useYamlHighlights = hasCharHighlights && !useCoverageHighlights;
+  const useInlineEditHighlights =
+    hasInlineEditSpans && !useYamlHighlights && !useCoverageHighlights;
   const hasActiveSelection = !!hoveredNodeId;
   const useSourceMappedSpans =
-    hasActiveSelection && !useYamlHighlights && !useCoverageHighlights && hasSourceMappings;
+    hasActiveSelection &&
+    !useYamlHighlights &&
+    !useInlineEditHighlights &&
+    !useCoverageHighlights &&
+    hasSourceMappings;
   const useCommittedHighlightSpans =
-    !useYamlHighlights && !useSourceMappedSpans && !useCoverageHighlights && hasCommittedHighlights;
+    !useYamlHighlights &&
+    !useInlineEditHighlights &&
+    !useSourceMappedSpans &&
+    !useCoverageHighlights &&
+    hasCommittedHighlights;
 
   return (
     <div
@@ -570,6 +642,8 @@ export function ChatMessage({
                       <CoverageText text={content} uncoveredRanges={uncoveredRanges} />
                     ) : useYamlHighlights ? (
                       <HighlightedText text={content} ranges={highlightRanges} />
+                    ) : useInlineEditHighlights ? (
+                      <InlineEditedText text={content} spans={inlineEditSpans!} />
                     ) : useSourceMappedSpans ? (
                       <SourceMappedText
                         content={content}
@@ -607,6 +681,10 @@ export function ChatMessage({
                     // YAML→Chat highlights: render as plain text to preserve character offsets
                     <div className="whitespace-pre-wrap">
                       <HighlightedText text={content} ranges={highlightRanges} />
+                    </div>
+                  ) : useInlineEditHighlights ? (
+                    <div className="whitespace-pre-wrap">
+                      <InlineEditedText text={content} spans={inlineEditSpans!} />
                     </div>
                   ) : useSourceMappedSpans ? (
                     // Source-mapped spans: render as plain text with interactive purple highlights

@@ -63,3 +63,35 @@ export function getChangedContentLineNumbers(baseText: string, currentText: stri
     .filter(({ line, lineNumber }) => changed.has(lineNumber) && isContentLine(line))
     .map(({ lineNumber }) => lineNumber);
 }
+
+export function getHumanCommentContentLineNumbers(text: string): number[] {
+  const lineNumbers: number[] = [];
+  const lines = splitLines(text);
+  let inHumanOp = false;
+  let sawHumanOpStart = false;
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('# Human edit via ')) {
+      inHumanOp = true;
+      sawHumanOpStart = false;
+      return;
+    }
+
+    if (line.startsWith('  - ')) {
+      if (inHumanOp && !sawHumanOpStart) {
+        sawHumanOpStart = true;
+      } else {
+        inHumanOp = false;
+        sawHumanOpStart = false;
+      }
+      return;
+    }
+
+    if (inHumanOp && isContentLine(line)) {
+      lineNumbers.push(index + 1);
+    }
+  });
+
+  return lineNumbers;
+}

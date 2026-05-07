@@ -22,16 +22,21 @@
  * in the same render.
  */
 
-import type { SemanticContent } from '@t3x-dev/core';
+import type { HumanSource, SemanticContent, SourcedYOp } from '@t3x-dev/core';
 import { applySourcedYOps } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { ExtractionFailedError } from '@/commands/yops/errors';
 import { runExtraction } from '@/commands/yops/extractionWorker';
 import { callExtractionLLM } from '@/commands/yops/llmAdapter';
+import {
+  markOpsFromSourceTextDrafts,
+  type SourceTextDraftsByTurn,
+} from '@/domain/sourceTextDrafts';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { useChatStore } from '@/store/chatStore';
-import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 
 /**
  * Stable sonner id for every toast emitted from `handleExtract`. Using a
@@ -60,6 +65,30 @@ const DEFAULT_OVERWRITE_PROMPT =
 function defaultConfirmOverwrite(): boolean {
   if (typeof window === 'undefined') return true;
   return window.confirm(DEFAULT_OVERWRITE_PROMPT);
+}
+
+function inlineHumanSource(): HumanSource {
+  const author = useSettingsStore.getState().localWorkspaceName.trim() || 'Local Workspace';
+  return {
+    type: 'human',
+    author,
+    at: new Date().toISOString(),
+    surface: 'inline',
+  };
+}
+
+function markInlineSourceDraftVariants(
+  variants: Partial<Record<'concise' | 'balanced' | 'detailed', SourcedYOp[]>> | undefined,
+  sourceTextDrafts: SourceTextDraftsByTurn,
+  source: HumanSource
+) {
+  if (!variants) return variants;
+  return Object.fromEntries(
+    Object.entries(variants).map(([preset, ops]) => [
+      preset,
+      ops ? markOpsFromSourceTextDrafts(ops, sourceTextDrafts, source) : ops,
+    ])
+  ) as typeof variants;
 }
 
 export function useExtraction({
@@ -162,7 +191,9 @@ export function useExtraction({
       const extractionPreset = useWorkspaceStore.getState().extractionPreset;
 
       try {
-        const turns = useWorkspaceStore.getState().turns;
+        const extractionState = useWorkspaceStore.getState();
+        const turns = selectEffectiveTurns(extractionState);
+        const sourceTextDrafts = extractionState.sourceTextDrafts;
         const result = await runExtraction({
           baseTree: tree,
           conversationId: extractConvId,
@@ -190,7 +221,18 @@ export function useExtraction({
         // (the worker already validated; if it somehow fails here it's a
         // post-validation bug worth surfacing through the existing error
         // path instead of crashing extraction).
-        const previewResult = applySourcedYOps(tree, result.ops);
+        const hasSourceTextDrafts = Object.keys(sourceTextDrafts).length > 0;
+        const inlineSource = hasSourceTextDrafts ? inlineHumanSource() : null;
+        const stagedOps =
+          inlineSource !== null
+            ? markOpsFromSourceTextDrafts(result.ops, sourceTextDrafts, inlineSource)
+            : result.ops;
+        const stagedVariants =
+          inlineSource !== null
+            ? markInlineSourceDraftVariants(result.variants, sourceTextDrafts, inlineSource)
+            : result.variants;
+
+        const previewResult = applySourcedYOps(tree, stagedOps);
         // YOpsResult exposes trees + relations directly. On failure, fall
         // back to the current tree — the worker already validated, so any
         // failure here is a post-validation surprise; the script editor
@@ -217,10 +259,10 @@ export function useExtraction({
         // longer follow up with setScriptText / setScriptDirty: that
         // triplet was the drift surface PR #952's P1 exposed
         // (extractionWorker swapped ops without rewriting scriptText).
-        store.setDraft({ ops: result.ops, tree: previewTree, variants: result.variants });
+        store.setDraft({ ops: stagedOps, tree: previewTree, variants: stagedVariants });
         store.setMode('idle');
         toast.success(
-          `Extracted ${result.ops.length} op${result.ops.length === 1 ? '' : 's'} — review and click Apply`,
+          `Extracted ${stagedOps.length} op${stagedOps.length === 1 ? '' : 's'} — review and click Apply`,
           { id: EXTRACTION_TOAST_ID }
         );
       } catch (err) {
