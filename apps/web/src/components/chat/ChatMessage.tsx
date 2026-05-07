@@ -4,6 +4,7 @@ import { Pencil, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { toast } from 'sonner';
 import type { CommittedHighlight } from '@/domain/commit/committedHighlights';
 import { collectQuotesForTurn, computeUncoveredRanges } from '@/domain/commit/coverageRanges';
 import { traceYamlToChat } from '@/domain/hoverTrace';
@@ -560,6 +561,8 @@ export function ChatMessage({
     !useCoverageHighlights &&
     hasCommittedHighlights;
 
+  const showSourceEditHint = !isUser && !isStreaming && Boolean(turnHash);
+
   return (
     <div
       ref={messageRef}
@@ -662,7 +665,20 @@ export function ChatMessage({
                 )}
               </div>
             ) : (
-              <>
+              <div className="relative">
+                {showSourceEditHint && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toast.message('Select source text to Insert after, Replace, or Delete.')
+                    }
+                    className="absolute right-0 top-0 z-10 inline-flex h-6 w-6 items-center justify-center rounded text-[var(--text-tertiary)] opacity-60 transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] hover:opacity-100"
+                    title="Select text to Insert after, Replace, or Delete"
+                    aria-label="Source text edit hint"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 {thinkingContent && (
                   <ThinkingSection content={thinkingContent} isStreaming={isThinking} />
                 )}
@@ -670,6 +686,7 @@ export function ChatMessage({
                   ref={textRef}
                   className={cn(
                     'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
+                    showSourceEditHint && 'pr-8',
                     isStreaming && 'streaming-text'
                   )}
                 >
@@ -750,7 +767,7 @@ export function ChatMessage({
                     </button>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>

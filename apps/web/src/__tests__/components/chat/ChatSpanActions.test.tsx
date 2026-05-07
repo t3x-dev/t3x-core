@@ -45,7 +45,7 @@ describe('ChatSpanActions', () => {
   it('lets the user edit selected source text before confirming', async () => {
     render(<ChatSpanActions selection={selection()} onDone={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Replace'));
     fireEvent.change(screen.getByDisplayValue('psychology'), {
       target: { value: 'group psychology' },
     });

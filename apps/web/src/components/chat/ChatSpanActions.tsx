@@ -72,10 +72,11 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
         &ldquo;{preview}&rdquo;
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
           onClick={() => selectAction('add')}
+          title="Insert text after the selected source text"
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'add'
@@ -84,11 +85,12 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
           )}
         >
           <Plus className="w-3 h-3" />
-          Add
+          Insert after
         </button>
         <button
           type="button"
           onClick={() => selectAction('edit')}
+          title="Replace the selected source text"
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'edit'
@@ -97,11 +99,12 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
           )}
         >
           <Pencil className="w-3 h-3" />
-          Edit
+          Replace
         </button>
         <button
           type="button"
           onClick={() => selectAction('delete')}
+          title="Delete the selected source text"
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'delete'
@@ -127,6 +130,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
+          placeholder={action === 'add' ? 'Text to insert after selection' : 'Replacement text'}
           className="h-16 w-full resize-none rounded border border-[var(--stroke-default)] bg-transparent px-2 py-1.5 text-[11px] leading-4 text-[var(--text-primary)] outline-none focus:border-[var(--status-info)]"
         />
       )}
