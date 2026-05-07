@@ -1,7 +1,7 @@
 'use client';
 
 import type { HumanEditSurface, Source, TreeNode } from '@t3x-dev/core';
-import { AlertCircle, Pencil, Play, Plus, X } from 'lucide-react';
+import { AlertCircle, ListPlus, Pencil, Play, Plus, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -712,6 +712,7 @@ interface NodeCellProps {
   onSelect: () => void;
   onClear: () => void;
   onAddChild?: () => void;
+  onAddField?: () => void;
   onDeleteNode?: () => void;
 }
 
@@ -723,6 +724,7 @@ function NodeCell({
   onSelect,
   onClear,
   onAddChild,
+  onAddField,
   onDeleteNode,
 }: NodeCellProps) {
   const isRemoved = row.isRemoved && side === 'after';
@@ -801,7 +803,7 @@ function NodeCell({
           {side === 'after' && (
             <TreeInlineActions>
               {row.afterNode && (
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
                   <button
                     type="button"
                     data-testid="add-child-button"
@@ -813,6 +815,18 @@ function NodeCell({
                     className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
                   >
                     <Plus className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="add-field-button"
+                    title="Add field"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddField?.();
+                    }}
+                    className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-info)] hover:bg-[var(--hover-bg)]"
+                  >
+                    <ListPlus className="h-2.5 w-2.5" />
                   </button>
                   <button
                     type="button"
@@ -971,6 +985,28 @@ export function AfterPanel({
       if (!childKey || !childKey.trim()) return;
       const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
       void applyEdit({ define: { path: `${nodePath}/${cleanKey}` } }).catch(handleGoldEditFailure);
+    },
+    [applyEdit, handleGoldEditFailure]
+  );
+
+  const handleAddField = useCallback(
+    (nodePath: string, existingSlots: Record<string, unknown>) => {
+      const fieldKey = window.prompt('New field name (snake_case):');
+      if (!fieldKey || !fieldKey.trim()) return;
+      const cleanKey = fieldKey.trim().toLowerCase().replace(/\s+/g, '_');
+      if (cleanKey.includes('/')) {
+        toast.error('Field name cannot contain "/".');
+        return;
+      }
+      if (Object.hasOwn(existingSlots, cleanKey)) {
+        toast.error(`Field "${cleanKey}" already exists.`);
+        return;
+      }
+      const value = window.prompt(`Value for "${cleanKey}":`);
+      if (value === null) return;
+      void applyEdit({ set: { path: `${nodePath}/${cleanKey}`, value } }).catch(
+        handleGoldEditFailure
+      );
     },
     [applyEdit, handleGoldEditFailure]
   );
@@ -1219,6 +1255,11 @@ export function AfterPanel({
                     onClear={clearSelection}
                     onAddChild={
                       allowInlineEdit && row.afterNode ? () => handleAddChild(row.path) : undefined
+                    }
+                    onAddField={
+                      allowInlineEdit && row.afterNode
+                        ? () => handleAddField(row.path, row.afterNode?.slots ?? {})
+                        : undefined
                     }
                     onDeleteNode={
                       allowInlineEdit && row.afterNode

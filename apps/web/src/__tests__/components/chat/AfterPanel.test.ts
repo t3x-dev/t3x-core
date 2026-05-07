@@ -190,6 +190,35 @@ describe('AfterPanel tree edit controls', () => {
     });
   });
 
+  it('adds child nodes from the node row add button', () => {
+    seedSingleSlot();
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce('soccer facts');
+
+    render(createElement(AfterPanel));
+    fireEvent.click(screen.getByTestId('add-child-button'));
+
+    expect(mocks.applyEdit).toHaveBeenCalledWith({
+      define: { path: 'sports/soccer_facts' },
+    });
+    prompt.mockRestore();
+  });
+
+  it('adds fields by asking for a field name and then the field value', () => {
+    seedSingleSlot();
+    const prompt = vi
+      .spyOn(window, 'prompt')
+      .mockReturnValueOnce('match length')
+      .mockReturnValueOnce('Two 45-minute halves');
+
+    render(createElement(AfterPanel));
+    fireEvent.click(screen.getByTestId('add-field-button'));
+
+    expect(mocks.applyEdit).toHaveBeenCalledWith({
+      set: { path: 'sports/match_length', value: 'Two 45-minute halves' },
+    });
+    prompt.mockRestore();
+  });
+
   it('marks human tree edits with the human label and blue-highlight marker', () => {
     seedSingleSlot(
       new Map([
