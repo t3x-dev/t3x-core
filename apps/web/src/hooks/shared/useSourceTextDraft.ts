@@ -1,7 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { applySourceTextDraftEdit, type SourceTextAction } from '@/domain/sourceTextDrafts';
+import {
+  applySourceTextDraftEdit,
+  type SourceTextAction,
+  type SourceTextTurnRole,
+} from '@/domain/sourceTextDrafts';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export type InlineTextAction = SourceTextAction;
@@ -9,11 +13,24 @@ export type InlineTextAction = SourceTextAction;
 export interface SourceTextEditTarget {
   action: SourceTextAction;
   turnHash: string;
+  turnRole?: string;
   text: string;
   turnText?: string;
   start: number;
   end: number;
   replacementText?: string;
+}
+
+function normalizeTurnRole(role: string | undefined): SourceTextTurnRole {
+  switch (role) {
+    case 'user':
+    case 'assistant':
+    case 'system':
+    case 'tool':
+      return role;
+    default:
+      return 'assistant';
+  }
 }
 
 export function useSourceTextDraft() {
@@ -35,6 +52,7 @@ export function useSourceTextDraft() {
         existingDraft,
         input: {
           turnHash: target.turnHash,
+          turnRole: turn?.role ?? normalizeTurnRole(target.turnRole),
           action: target.action,
           start: target.start,
           end: target.end,

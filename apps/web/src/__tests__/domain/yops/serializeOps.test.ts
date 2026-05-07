@@ -21,7 +21,7 @@ describe('serializeOpsToYaml', () => {
     expect(yaml).not.toContain('source:');
   });
 
-  it('does not add comments for LLM ops', () => {
+  it('renders LLM-source comments while keeping source metadata out of YAML', () => {
     const yaml = serializeOpsToYaml([
       {
         set: { path: 'trip/dest', value: 'HZ' },
@@ -34,6 +34,8 @@ describe('serializeOpsToYaml', () => {
       },
     ] as SourcedYOp[]);
 
-    expect(yaml).not.toContain('Human edit');
+    expect(yaml).toContain('# LLM extract via gpt-4o-mini: extracted from source text');
+    expect(yaml).toContain('path: trip/dest');
+    expect(yaml).not.toContain('source:');
   });
 });

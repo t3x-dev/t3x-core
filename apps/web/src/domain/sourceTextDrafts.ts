@@ -1,6 +1,7 @@
 import type { HumanSource, Source, SourcedYOp } from '@t3x-dev/core';
 
 export type SourceTextAction = 'add' | 'edit' | 'delete';
+export type SourceTextTurnRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export interface SourceTextDraftSpan {
   id: string;
@@ -13,6 +14,7 @@ export interface SourceTextDraftSpan {
 
 export interface SourceTextDraft {
   turnHash: string;
+  turnRole: SourceTextTurnRole;
   baseContent: string;
   content: string;
   spans: SourceTextDraftSpan[];
@@ -21,6 +23,7 @@ export interface SourceTextDraft {
 
 export interface SourceTextDraftInput {
   turnHash: string;
+  turnRole?: SourceTextTurnRole;
   action: SourceTextAction;
   start: number;
   end: number;
@@ -30,7 +33,7 @@ export interface SourceTextDraftInput {
 
 export interface SourceTextTurn {
   turn_hash: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: SourceTextTurnRole;
   content: string;
 }
 
@@ -92,6 +95,7 @@ export function applySourceTextDraftEdit(args: {
 
   return {
     turnHash: args.input.turnHash,
+    turnRole: args.existingDraft?.turnRole ?? args.input.turnRole ?? 'assistant',
     baseContent: args.existingDraft?.baseContent ?? args.baseContent,
     content: nextContent,
     spans: [
@@ -111,10 +115,23 @@ export function applySourceTextDraftsToTurns(
   turns: readonly SourceTextTurn[],
   draftsByTurn: SourceTextDraftsByTurn
 ): SourceTextTurn[] {
-  return turns.map((turn) => {
+  const seenTurnHashes = new Set<string>();
+  const effectiveTurns = turns.map((turn) => {
+    seenTurnHashes.add(turn.turn_hash);
     const draft = draftsByTurn[turn.turn_hash];
     return draft ? { ...turn, content: draft.content } : turn;
   });
+
+  for (const draft of Object.values(draftsByTurn)) {
+    if (seenTurnHashes.has(draft.turnHash)) continue;
+    effectiveTurns.push({
+      turn_hash: draft.turnHash,
+      role: draft.turnRole,
+      content: draft.content,
+    });
+  }
+
+  return effectiveTurns;
 }
 
 function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {

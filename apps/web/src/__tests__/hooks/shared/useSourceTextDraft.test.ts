@@ -24,6 +24,7 @@ describe('useSourceTextDraft', () => {
       await result.current.applySourceTextEdit({
         action: 'edit',
         turnHash: 'turn_1',
+        turnRole: 'assistant',
         text: 'psychology',
         start: 17,
         end: 27,
@@ -56,5 +57,6 @@ describe('useSourceTextDraft', () => {
     expect(useWorkspaceStore.getState().sourceTextDrafts.turn_1.content).toBe(
       'Soccer taps into group identity.'
     );
+    expect(useWorkspaceStore.getState().sourceTextDrafts.turn_1.turnRole).toBe('assistant');
   });
 });

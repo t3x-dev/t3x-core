@@ -32,6 +32,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
       await applySourceTextEdit({
         action,
         turnHash: selection.turnHash,
+        turnRole: selection.turnRole,
         text: selection.text,
         turnText: selection.turnText,
         start: selection.startChar,

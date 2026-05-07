@@ -22,6 +22,7 @@ describe('sourceTextDrafts', () => {
     });
 
     expect(draft.content).toBe('Soccer taps into group identity.');
+    expect(draft.turnRole).toBe('assistant');
     expect(draft.spans[0]).toMatchObject({
       action: 'edit',
       start: 17,
@@ -34,6 +35,30 @@ describe('sourceTextDrafts', () => {
         { turn_1: draft }
       )[0].content
     ).toBe('Soccer taps into group identity.');
+  });
+
+  it('uses a source-text draft as an extraction turn when workspace turns have not hydrated', () => {
+    const draft = applySourceTextDraftEdit({
+      baseContent: 'Soccer taps into psychology.',
+      input: {
+        turnHash: 'turn_1',
+        turnRole: 'assistant',
+        action: 'edit',
+        start: 17,
+        end: 27,
+        selectedText: 'psychology',
+        replacementText: 'group identity',
+      },
+      now: '2026-05-07T00:00:00.000Z',
+    });
+
+    expect(applySourceTextDraftsToTurns([], { turn_1: draft })).toEqual([
+      {
+        turn_hash: 'turn_1',
+        role: 'assistant',
+        content: 'Soccer taps into group identity.',
+      },
+    ]);
   });
 
   it('marks extracted ops whose source overlaps an inline source draft', () => {

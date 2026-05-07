@@ -55,6 +55,7 @@ describe('ChatSpanActions', () => {
       expect(mocks.applySourceTextEdit).toHaveBeenCalledWith({
         action: 'edit',
         turnHash: 'turn_1',
+        turnRole: 'assistant',
         text: 'psychology',
         turnText: 'Soccer taps into psychology.',
         start: 10,

@@ -192,6 +192,48 @@ describe('useExtraction', () => {
     });
   });
 
+  it('extracts from source-text drafts even before workspace turns hydrate', async () => {
+    useWorkspaceStore.getState().setTurns([]);
+    const sourceDraft = applySourceTextDraftEdit({
+      baseContent: 'Soccer taps into psychology.',
+      input: {
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        action: 'edit',
+        start: 17,
+        end: 27,
+        selectedText: 'psychology',
+        replacementText: 'group identity',
+      },
+      now: '2026-05-07T00:00:00.000Z',
+    });
+    useWorkspaceStore.getState().setSourceTextDraft('sha256:t1', sourceDraft);
+    runExtractionMock.mockResolvedValueOnce({ ops: [], committed: false });
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const runArgs = runExtractionMock.mock.calls[0]?.[0] as
+      | { turns?: Array<{ turn_hash: string; role: string; content: string }> }
+      | undefined;
+    expect(runArgs?.turns).toEqual([
+      {
+        turn_hash: 'sha256:t1',
+        role: 'assistant',
+        content: 'Soccer taps into group identity.',
+      },
+    ]);
+  });
+
   it('forwards the workspace store extractionPreset (concise) to callExtractionLLM', async () => {
     // The dropdown lives in ChatHeader and writes to
     // workspaceStore.extractionPreset. Before this PR, the hook never

@@ -19,6 +19,15 @@ function humanCommentForSource(source: Source | undefined): string | null {
   return `Human edit via ${surfaceLabel(source.surface)}: manual change by ${source.author}`;
 }
 
+function llmCommentForSource(source: Source | undefined): string | null {
+  if (!source || source.type !== 'llm') return null;
+  return `LLM extract via ${source.model}: extracted from source text`;
+}
+
+function commentForSource(source: Source | undefined): string | null {
+  return humanCommentForSource(source) ?? llmCommentForSource(source);
+}
+
 export function serializeOpsToYaml(ops: readonly SourcedYOp[]): string {
   if (ops.length === 0) return '';
   const stripped = ops.map((op) => {
@@ -32,7 +41,7 @@ export function serializeOpsToYaml(ops: readonly SourcedYOp[]): string {
 
   for (const line of lines) {
     if (line.startsWith('  - ')) {
-      const comment = humanCommentForSource((ops[opIndex] as { source?: Source }).source);
+      const comment = commentForSource((ops[opIndex] as { source?: Source }).source);
       if (comment) output.push(`  # ${comment}`);
       opIndex++;
     }
