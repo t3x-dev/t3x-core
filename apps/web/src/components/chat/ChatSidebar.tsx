@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjects } from '@/hooks/projects/useProjects';
-import { useChatStore } from '@/store/chatStore';
+import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
@@ -29,6 +29,8 @@ export function ChatSidebar() {
     expandedProjectIds,
     toggleProjectExpanded,
     setActiveConversation,
+    sidebarWidth,
+    setSidebarWidth,
   } = useChatStore();
 
   const {
@@ -50,6 +52,43 @@ export function ChatSidebar() {
   const pendingNavProjectId = useRef<string | null>(null);
 
   const refreshKey = useChatStore((s) => s.refreshKey);
+
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (collapsed) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startWidth = useChatStore.getState().sidebarWidth;
+
+      const handleMove = (ev: MouseEvent) => {
+        setSidebarWidth(startWidth + ev.clientX - startX);
+      };
+
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+    },
+    [collapsed, setSidebarWidth]
+  );
+
+  const handleResizeKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setSidebarWidth(sidebarWidth + (e.key === 'ArrowRight' ? 16 : -16));
+    },
+    [setSidebarWidth, sidebarWidth]
+  );
 
   // Re-fetch projects when refreshKey changes (useProjects does the initial load)
   useEffect(() => {
@@ -173,11 +212,12 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
-          collapsed ? 'w-16 items-center' : 'w-52'
+          collapsed ? 'items-center' : ''
         )}
+        style={{ width: collapsed ? CHAT_SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
       >
         {/* Logo */}
         <div
@@ -229,9 +269,12 @@ export function ChatSidebar() {
         </div>
 
         {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="flex-1 w-full">
+        <ScrollArea className="min-w-0 flex-1 w-full">
           <div
-            className={cn('flex flex-col gap-0.5 py-2', collapsed ? 'items-center px-2' : 'px-3')}
+            className={cn(
+              'flex min-w-0 flex-col gap-0.5 py-2',
+              collapsed ? 'items-center px-2' : 'px-3'
+            )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
@@ -290,7 +333,7 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
+            'mt-auto flex min-w-0 flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
             collapsed ? 'items-center px-2' : 'px-3'
           )}
         >
@@ -298,6 +341,18 @@ export function ChatSidebar() {
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>
+
+      {!collapsed && (
+        <button
+          type="button"
+          aria-label="Resize project sidebar"
+          title="Drag to resize sidebar"
+          onMouseDown={handleResizeMouseDown}
+          onKeyDown={handleResizeKeyDown}
+          className="fixed top-0 z-50 h-screen w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-commit)]/30 active:bg-[var(--accent-commit)]/50 focus-visible:bg-[var(--accent-commit)]/30 focus-visible:outline-none"
+          style={{ left: sidebarWidth - 2 }}
+        />
+      )}
 
       {/* Context menu portal */}
       {menu && <ContextMenuPortal menu={menu} onClose={closeMenu} />}
