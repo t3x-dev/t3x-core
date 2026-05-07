@@ -173,9 +173,8 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
           'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
-          glass.panelBase,
           glass.highlight,
           collapsed ? 'w-16 items-center' : 'w-52'
         )}
@@ -183,7 +182,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-default)]',
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
