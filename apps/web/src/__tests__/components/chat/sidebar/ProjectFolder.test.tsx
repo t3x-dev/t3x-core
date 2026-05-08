@@ -43,6 +43,7 @@ describe('ProjectFolder active state', () => {
     renderFolder({ isActive: true });
 
     const button = screen.getByRole('button', { name: /Test Project/i });
+    expect(button.parentElement?.className).toContain('px-3');
     expect(button).toHaveAttribute('aria-current', 'true');
     // The active style is the source of the visible "selected project"
     // signal — pin the actual classes the production code emits so a

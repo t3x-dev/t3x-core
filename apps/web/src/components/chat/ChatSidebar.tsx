@@ -2,9 +2,18 @@
 
 import { Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
@@ -21,9 +30,14 @@ import { ProjectFolder } from './sidebar/ProjectFolder';
 
 export function ChatSidebar() {
   const router = useRouter();
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectError, setNewProjectError] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const {
     sidebarCollapsed: collapsed,
+    sidebarResizing,
     activeConversationId,
     activeProjectId,
     expandedProjectIds,
@@ -31,6 +45,7 @@ export function ChatSidebar() {
     setActiveConversation,
     sidebarWidth,
     setSidebarWidth,
+    setSidebarResizing,
   } = useChatStore();
 
   const {
@@ -61,6 +76,7 @@ export function ChatSidebar() {
 
       const startX = e.clientX;
       const startWidth = useChatStore.getState().sidebarWidth;
+      setSidebarResizing(true);
 
       const handleMove = (ev: MouseEvent) => {
         setSidebarWidth(startWidth + ev.clientX - startX);
@@ -69,16 +85,19 @@ export function ChatSidebar() {
       const handleUp = () => {
         document.removeEventListener('mousemove', handleMove);
         document.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('blur', handleUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        setSidebarResizing(false);
       };
 
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       document.addEventListener('mousemove', handleMove);
       document.addEventListener('mouseup', handleUp);
+      window.addEventListener('blur', handleUp);
     },
-    [collapsed, setSidebarWidth]
+    [collapsed, setSidebarResizing, setSidebarWidth]
   );
 
   const handleResizeKeyDown = useCallback(
@@ -121,9 +140,34 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
-  async function handleNewProject() {
+  const openNewProjectDialog = useCallback(() => {
+    setNewProjectName('');
+    setNewProjectError(null);
+    setNewProjectDialogOpen(true);
+  }, []);
+
+  const handleNewProjectDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (isCreatingProject) return;
+      setNewProjectDialogOpen(open);
+      if (!open) {
+        setNewProjectName('');
+        setNewProjectError(null);
+      }
+    },
+    [isCreatingProject]
+  );
+
+  async function handleCreateProject(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (isCreatingProject) return;
+
+    const name = newProjectName.trim() || 'Untitled Project';
+    setIsCreatingProject(true);
+    setNewProjectError(null);
+
     try {
-      const project = await createProject('Untitled Project');
+      const project = await createProject(name);
       // Prime the store so ChatWorkspace.useAutoProject reuses this project
       // for the first message instead of creating another one. The query
       // param is the source of truth on refresh (store state is in-memory),
@@ -137,12 +181,13 @@ export function ChatSidebar() {
         store.toggleProjectExpanded(project.project_id);
       }
       store.refreshSidebar();
+      setNewProjectDialogOpen(false);
+      setNewProjectName('');
       router.push(`/chat?projectId=${encodeURIComponent(project.project_id)}`);
     } catch {
-      // Fallback: land on blank chat so users can still type a first message
-      // (which will auto-create a project via useAutoProject).
-      setActiveConversation(null, null);
-      router.push('/chat');
+      setNewProjectError('Failed to create project');
+    } finally {
+      setIsCreatingProject(false);
     }
   }
 
@@ -213,7 +258,8 @@ export function ChatSidebar() {
         aria-label="Chat navigation"
         className={cn(
           'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
-          'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
+          !sidebarResizing &&
+            'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
           collapsed ? 'items-center' : ''
         )}
@@ -241,44 +287,49 @@ export function ChatSidebar() {
           </button>
         </div>
 
-        {/* New Project button */}
-        <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                onClick={handleNewProject}
-                className={cn(
-                  'rounded-xl bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30',
-                  'text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 hover:text-[var(--accent-commit)]',
-                  'transition-all duration-[var(--motion-base)]',
-                  collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
-                )}
-                aria-label="New project"
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Project</span>}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
+        {/* New Project action */}
+        <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2')}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  onClick={openNewProjectDialog}
+                  className={cn(
+                    'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
+                    'hover:border-[var(--stroke-default)] hover:bg-[var(--accent-commit)]/10 hover:text-[var(--accent-commit)]',
+                    'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
+                    'transition-all duration-[var(--motion-base)]',
+                    collapsed ? 'h-10 w-10' : 'h-7 w-7'
+                  )}
+                  aria-label="New project"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
                 New Project
               </TooltipContent>
+            </Tooltip>
+            {!collapsed && (
+              <span className="select-none text-xs font-medium text-[var(--text-secondary)]">
+                New Project
+              </span>
             )}
-          </Tooltip>
+          </div>
         </div>
 
         {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="min-w-0 flex-1 w-full">
+        <ScrollArea className="min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-0.5 py-2',
-              collapsed ? 'items-center px-2' : 'px-3'
+              'flex min-w-0 flex-col gap-0.5 pb-2 pt-1',
+              collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-1 pt-2 pb-1">
+              <div className="px-4 pb-0.5 pt-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
@@ -323,7 +374,7 @@ export function ChatSidebar() {
             ))}
 
             {projects.length === 0 && !collapsed && (
-              <div className="px-3 py-4 text-center">
+              <div className="px-4 py-4 text-center">
                 <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
               </div>
             )}
@@ -349,13 +400,77 @@ export function ChatSidebar() {
           title="Drag to resize sidebar"
           onMouseDown={handleResizeMouseDown}
           onKeyDown={handleResizeKeyDown}
-          className="fixed top-0 z-50 h-screen w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-commit)]/30 active:bg-[var(--accent-commit)]/50 focus-visible:bg-[var(--accent-commit)]/30 focus-visible:outline-none"
-          style={{ left: sidebarWidth - 2 }}
-        />
+          className="group fixed top-0 z-50 flex h-screen w-2 -translate-x-1/2 cursor-col-resize justify-center border-0 bg-transparent p-0 focus-visible:outline-none"
+          style={{ left: sidebarWidth }}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-full w-px transition-colors',
+              sidebarResizing
+                ? 'bg-[var(--accent-commit)]/60'
+                : 'bg-transparent group-hover:bg-[var(--accent-commit)]/45 group-active:bg-[var(--accent-commit)]/60 group-focus-visible:bg-[var(--accent-commit)]/45'
+            )}
+          />
+        </button>
       )}
 
       {/* Context menu portal */}
       {menu && <ContextMenuPortal menu={menu} onClose={closeMenu} />}
+
+      <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
+        <DialogContent className="sm:max-w-[400px]">
+          <form onSubmit={handleCreateProject} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>New Project</DialogTitle>
+              <DialogDescription className="sr-only">
+                Enter a project name or leave it blank to create an untitled project.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="new-project-name"
+                className="text-sm font-medium text-[var(--text-primary)]"
+              >
+                Project name
+              </label>
+              <Input
+                id="new-project-name"
+                autoFocus
+                value={newProjectName}
+                onChange={(event) => {
+                  setNewProjectName(event.target.value);
+                  if (newProjectError) setNewProjectError(null);
+                }}
+                placeholder="Untitled Project"
+                disabled={isCreatingProject}
+                aria-invalid={newProjectError ? 'true' : undefined}
+                aria-describedby={newProjectError ? 'new-project-error' : undefined}
+              />
+              {newProjectError && (
+                <p id="new-project-error" className="text-xs text-[var(--status-error)]">
+                  {newProjectError}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleNewProjectDialogOpenChange(false)}
+                disabled={isCreatingProject}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="commit" disabled={isCreatingProject}>
+                {isCreatingProject ? 'Creating...' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }

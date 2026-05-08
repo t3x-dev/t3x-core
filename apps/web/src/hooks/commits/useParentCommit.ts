@@ -10,11 +10,15 @@ import { useCommitStore } from '@/store/commitStore';
 export function useParentCommit(): ParentCommit | null {
   const beforeCommitHash = useCommitStore((s) => s.beforeCommitHash);
   const projectId = useCommitStore((s) => s.projectId);
-  const [parent, setParent] = useState<ParentCommit | null>(null);
+  const [parentState, setParentState] = useState<{
+    projectId: string;
+    beforeCommitHash: string;
+    parent: ParentCommit | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setParent(null);
+    setParentState(null);
     if (!projectId || !beforeCommitHash) return;
     fetchParentCommit(beforeCommitHash)
       .then((result) => {
@@ -24,16 +28,24 @@ export function useParentCommit(): ParentCommit | null {
           current.projectId === projectId &&
           current.beforeCommitHash === beforeCommitHash
         ) {
-          setParent(result);
+          setParentState({ projectId, beforeCommitHash, parent: result });
         }
       })
       .catch(() => {
-        if (!cancelled) setParent(null);
+        if (!cancelled) setParentState(null);
       });
     return () => {
       cancelled = true;
     };
   }, [beforeCommitHash, projectId]);
 
-  return parent;
+  if (
+    !parentState ||
+    parentState.projectId !== projectId ||
+    parentState.beforeCommitHash !== beforeCommitHash
+  ) {
+    return null;
+  }
+
+  return parentState.parent;
 }

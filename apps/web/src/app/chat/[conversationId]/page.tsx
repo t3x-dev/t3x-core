@@ -116,8 +116,13 @@ export default function ConversationPage() {
       {isExpanded && (
         <div
           onMouseDown={handleMouseDown}
-          className="w-1 cursor-col-resize hover:bg-[var(--accent-commit)]/30 active:bg-[var(--accent-commit)]/50 transition-colors flex-shrink-0"
-        />
+          className="group relative w-px flex-shrink-0 cursor-col-resize bg-[var(--stroke-default)]"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 bg-transparent transition-colors group-hover:bg-[var(--accent-commit)]/25 group-active:bg-[var(--accent-commit)]/40"
+          />
+        </div>
       )}
 
       {/* YOps workspace panel */}

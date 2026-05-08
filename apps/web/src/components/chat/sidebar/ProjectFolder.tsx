@@ -1,5 +1,6 @@
 'use client';
 
+import { Folder } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useChatStore } from '@/store/chatStore';
 import type { Conversation, Project } from '@/types/api';
@@ -44,40 +45,9 @@ export function ProjectFolder({
   onProjectContextMenu,
   onConversationContextMenu,
 }: ProjectFolderProps) {
-  // Deterministic color based on project_id hash
-  const colorIdx =
-    project.project_id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) %
-    PROJECT_ICON_COLORS.length;
-  const iconColor = PROJECT_ICON_COLORS[colorIdx];
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
   const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
-
-  // Determine icon: emoji from metadata > auto-detect from name > default
-  const projectIcon = (() => {
-    try {
-      if (project.metadata) {
-        const meta =
-          typeof project.metadata === 'string' ? JSON.parse(project.metadata) : project.metadata;
-        if (meta?.icon) return meta.icon;
-      }
-    } catch {
-      /* ignore parse errors */
-    }
-    // Auto-detect emoji from project name keywords
-    const name = project.name.toLowerCase();
-    if (name.includes('beijing')) return '🏛️';
-    if (name.includes('hangzhou')) return '🚗';
-    if (name.includes('japan')) return '🗾';
-    if (name.includes('trip') || name.includes('travel')) return '✈️';
-    if (name.includes('meeting')) return '📋';
-    if (name.includes('product') || name.includes('strategy')) return '📊';
-    if (name.includes('writing') || name.includes('write')) return '✏️';
-    if (name.includes('research')) return '🔬';
-    if (name.includes('idea') || name.includes('explore')) return '💡';
-    return '📁';
-  })();
-  const isEmoji = /\p{Emoji_Presentation}/u.test(projectIcon);
 
   const folderButton = (
     <button
@@ -92,11 +62,11 @@ export function ProjectFolder({
       onContextMenu={onProjectContextMenu}
       aria-current={isActive ? 'true' : undefined}
       className={cn(
-        'flex min-w-0 items-center gap-2 overflow-hidden rounded-xl transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-        'hover:bg-[var(--hover-bg)]',
+        'box-border flex min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border border-transparent transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+        'hover:border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
         'active:scale-95 cursor-pointer w-full text-left',
-        collapsed ? 'h-10 w-10 justify-center' : 'min-h-[44px] px-2 py-1.5',
+        collapsed ? 'h-10 w-10 justify-center' : 'min-h-[52px] px-2.5 py-2',
         // Active wins over expanded: a project picked from "+ New Project"
         // (or any nav that prims activeProjectId) gets a tinted bg + ring
         // so the user immediately sees which project they're producing in,
@@ -108,16 +78,13 @@ export function ProjectFolder({
             : 'text-[var(--text-secondary)]'
       )}
     >
-      {/* Project icon — emoji or first letter */}
       <span
         className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-          isEmoji
-            ? 'bg-[var(--hover-bg)] text-base'
-            : cn('text-xs font-bold', iconColor.bg, iconColor.text)
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--hover-bg)] text-[var(--text-tertiary)]',
+          isActive && 'bg-[var(--panel)]/70 text-[var(--accent-commit)]'
         )}
       >
-        {projectIcon}
+        <Folder className="h-4 w-4" />
       </span>
       {!collapsed && (
         <div className="flex min-w-0 flex-1 flex-col">
@@ -155,7 +122,7 @@ export function ProjectFolder({
   );
 
   return (
-    <div>
+    <div className={cn('min-w-0', collapsed ? 'flex w-full flex-col items-center' : 'w-full')}>
       {collapsed ? (
         <Tooltip>
           <TooltipTrigger asChild>{folderButton}</TooltipTrigger>
@@ -164,11 +131,11 @@ export function ProjectFolder({
           </TooltipContent>
         </Tooltip>
       ) : (
-        folderButton
+        <div className="min-w-0 w-full px-3">{folderButton}</div>
       )}
 
       {isExpanded && !collapsed && (
-        <div className="ml-5 mt-0.5 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)] pl-2">
+        <div className="ml-8 mr-3 mt-1 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)] pl-2">
           {/* Conversations */}
           {conversations.map((conv) => {
             const isActive = activeConversationId === conv.conversation_id;
