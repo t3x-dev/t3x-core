@@ -895,9 +895,11 @@ export function AfterPanel({
   const projectId = useCommitStore((s) => s.projectId);
   const { commit: commitTrees } = useCommitActions();
   const commitInputRef = useRef<HTMLInputElement | null>(null);
+  const resultScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
+  const [resultScrollbarGutter, setResultScrollbarGutter] = useState(0);
 
   const trees = tree.trees as TreeNode[];
   const parentTrees = parent?.trees ?? [];
@@ -962,6 +964,32 @@ export function AfterPanel({
       )
     );
   }, [diff, parentTrees, sourceIndex, trees]);
+
+  useEffect(() => {
+    if (!showBefore) {
+      setResultScrollbarGutter(0);
+      return;
+    }
+
+    const el = resultScrollRef.current;
+    if (!el) return;
+
+    const updateGutter = () => {
+      setResultScrollbarGutter(Math.max(0, el.offsetWidth - el.clientWidth));
+    };
+
+    updateGutter();
+    window.addEventListener('resize', updateGutter);
+
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => updateGutter());
+    observer?.observe(el);
+
+    return () => {
+      window.removeEventListener('resize', updateGutter);
+      observer?.disconnect();
+    };
+  }, [showBefore, rows.length]);
 
   const handleEditSlot = useCallback(
     (nodePath: string, slotKey: string, newValue: string) => {
@@ -1084,6 +1112,7 @@ export function AfterPanel({
           'grid shrink-0 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]',
           showBefore ? 'grid-cols-2' : 'grid-cols-1'
         )}
+        style={showBefore ? { paddingRight: resultScrollbarGutter } : undefined}
       >
         {showBefore && (
           <div className="flex items-center justify-between px-3 py-1.5 border-r border-[var(--stroke-default)]">
@@ -1188,7 +1217,7 @@ export function AfterPanel({
         </output>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
+      <div ref={resultScrollRef} className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
         {rows.length === 0 && lastError ? (
           <div className="flex h-full min-h-[160px] items-center justify-center px-6">
             <div className="flex max-w-[280px] flex-col items-center gap-2 text-center">

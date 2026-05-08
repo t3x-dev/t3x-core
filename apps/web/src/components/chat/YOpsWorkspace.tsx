@@ -2,7 +2,6 @@
 
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
@@ -90,22 +89,6 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   }, [conversationId, draftCount, topView]);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
-  const prevExpandedRef = useRef(panelExpanded);
-  const sidebarWasCollapsedRef = useRef(true);
-
-  useEffect(() => {
-    if (panelExpanded === prevExpandedRef.current) return;
-    prevExpandedRef.current = panelExpanded;
-
-    if (panelExpanded) {
-      sidebarWasCollapsedRef.current = useChatStore.getState().sidebarCollapsed;
-      if (!sidebarWasCollapsedRef.current) {
-        useChatStore.setState({ sidebarCollapsed: true });
-      }
-    } else if (!sidebarWasCollapsedRef.current) {
-      useChatStore.setState({ sidebarCollapsed: false });
-    }
-  }, [panelExpanded]);
 
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

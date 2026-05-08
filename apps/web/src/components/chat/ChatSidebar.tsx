@@ -287,44 +287,49 @@ export function ChatSidebar() {
           </button>
         </div>
 
-        {/* New Project button */}
-        <div className={cn('py-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                onClick={openNewProjectDialog}
-                className={cn(
-                  'rounded-xl bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30',
-                  'text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 hover:text-[var(--accent-commit)]',
-                  'transition-all duration-[var(--motion-base)]',
-                  collapsed ? 'h-10 w-10' : 'h-10 w-full justify-start gap-2 px-3'
-                )}
-                aria-label="New project"
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="text-sm font-medium">New Project</span>}
-              </Button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" sideOffset={8}>
+        {/* New Project action */}
+        <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2')}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  onClick={openNewProjectDialog}
+                  className={cn(
+                    'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
+                    'hover:border-[var(--stroke-default)] hover:bg-[var(--accent-commit)]/10 hover:text-[var(--accent-commit)]',
+                    'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
+                    'transition-all duration-[var(--motion-base)]',
+                    collapsed ? 'h-10 w-10' : 'h-7 w-7'
+                  )}
+                  aria-label="New project"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
                 New Project
               </TooltipContent>
+            </Tooltip>
+            {!collapsed && (
+              <span className="select-none text-xs font-medium text-[var(--text-secondary)]">
+                New Project
+              </span>
             )}
-          </Tooltip>
+          </div>
         </div>
 
         {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="min-w-0 flex-1 w-full">
+        <ScrollArea className="min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-0.5 py-2',
+              'flex min-w-0 flex-col gap-0.5 pb-2 pt-1',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-4 pt-2 pb-1">
+              <div className="px-4 pb-0.5 pt-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>

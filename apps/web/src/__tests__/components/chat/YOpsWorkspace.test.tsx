@@ -37,6 +37,7 @@ vi.mock('@/components/chat/ReplayWarningBanner', () => ({
 }));
 
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
+import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 function llmOp(): SourcedYOp {
@@ -59,9 +60,11 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
       activeProjectId: 'proj_a',
       draftsByConversation: {},
     });
+    useChatStore.setState({ sidebarCollapsed: false });
   });
   afterEach(() => {
     useWorkspaceStore.getState().reset();
+    useChatStore.setState({ sidebarCollapsed: false });
   });
 
   it('mounts on YOps when the conversation is empty', () => {
@@ -149,5 +152,21 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
     // The other panels are not rendered while Archived is active.
     expect(container.querySelector('[data-testid^="yops-log-panel-stub-"]')).toBeNull();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
+  });
+
+  it('does not collapse the chat sidebar when expanding the workspace panel', () => {
+    act(() => {
+      useWorkspaceStore.setState({
+        panelExpandedByProject: { proj_a: false },
+        activeProjectId: 'proj_a',
+      });
+      useChatStore.setState({ sidebarCollapsed: false });
+    });
+
+    render(<YOpsWorkspace />);
+    fireEvent.click(screen.getByTestId('yops-panel-collapsed'));
+
+    expect(useWorkspaceStore.getState().panelExpandedByProject.proj_a).toBe(true);
+    expect(useChatStore.getState().sidebarCollapsed).toBe(false);
   });
 });

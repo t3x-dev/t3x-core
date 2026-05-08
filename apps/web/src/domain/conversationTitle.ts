@@ -1,4 +1,4 @@
-const MAX_CONVERSATION_TITLE_LENGTH = 30;
+const MAX_CONVERSATION_TITLE_LENGTH = 25;
 const PLACEHOLDER_TITLES = new Set(['new chat', 'untitled conversation']);
 
 export function deriveConversationTitleFromMessage(message: string): string {
