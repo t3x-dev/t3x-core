@@ -92,4 +92,31 @@ describe('useParentCommit', () => {
 
     expect(result.current).toBeNull();
   });
+
+  it('does not expose the previous parent after the active hash changes', async () => {
+    mocks.fetchParentCommit.mockResolvedValueOnce({
+      hash: 'sha256:old_parent',
+      trees: [node('old')],
+      message: 'old parent',
+    });
+    useCommitStore.getState().setProjectId('proj_1');
+    useCommitStore.getState().setBeforeCommitHash('sha256:old_parent');
+
+    const { result } = renderHook(() => useParentCommit());
+    await waitForHook();
+    expect(result.current?.hash).toBe('sha256:old_parent');
+
+    mocks.fetchParentCommit.mockResolvedValueOnce({
+      hash: 'sha256:new_parent',
+      trees: [node('new')],
+      message: 'new parent',
+    });
+    act(() => {
+      useCommitStore.getState().setBeforeCommitHash('sha256:new_parent');
+    });
+
+    expect(result.current).toBeNull();
+    await waitForHook();
+    expect(result.current?.hash).toBe('sha256:new_parent');
+  });
 });

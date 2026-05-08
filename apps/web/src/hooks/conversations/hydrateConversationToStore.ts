@@ -43,6 +43,14 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
     throw err;
   }
 
+  const activeChat = useChatStore.getState();
+  if (
+    (activeChat.activeConversationId && activeChat.activeConversationId !== convId) ||
+    (activeChat.activeProjectId && activeChat.activeProjectId !== projectId)
+  ) {
+    return;
+  }
+
   const post = useWorkspaceStore.getState();
   useChatStore.getState().setConversationTitle(snapshot.title);
   useCommitStore.getState().setConversationTitle(snapshot.title);

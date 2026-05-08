@@ -18,6 +18,10 @@ const SAMPLE_TREE: SemanticContent = {
   trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }],
   relations: [],
 };
+const FOOTBALL_TREE: SemanticContent = {
+  trees: [{ key: 'football', slots: { team: 'academy' }, children: [] }],
+  relations: [],
+};
 const SAMPLE_OPS: SourcedYOp[] = [
   {
     set: { path: 'trip/dest', value: 'HZ' },
@@ -220,5 +224,32 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
 
     expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
     expect(useWorkspaceStore.getState().hasConversationChanges).toBe(true);
+  });
+
+  it('ignores a stale hydration response after the active conversation changes', async () => {
+    let resolveOldSnapshot: (value: ReturnType<typeof snapshot>) => void = () => {};
+    fetchConversationSnapshotMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOldSnapshot = resolve;
+      })
+    );
+    useChatStore.getState().setActiveConversation('conv_Old', 'proj_Old');
+
+    const oldHydration = hydrateConversationToStore('proj_Old', 'conv_Old');
+
+    useChatStore.getState().setActiveConversation('conv_New', 'proj_New');
+    useWorkspaceStore.getState().setConversation('conv_New');
+    useWorkspaceStore.getState().setDerived({
+      tree: FOOTBALL_TREE,
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+
+    resolveOldSnapshot(snapshot({ ops: SAMPLE_OPS, tree: SAMPLE_TREE }));
+    await oldHydration;
+
+    const workspace = useWorkspaceStore.getState();
+    expect(workspace.conversationId).toBe('conv_New');
+    expect(workspace.tree.trees[0]?.key).toBe('football');
   });
 });
