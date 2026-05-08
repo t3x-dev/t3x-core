@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 export const CHAT_SIDEBAR_COLLAPSED_WIDTH = 64;
-export const CHAT_SIDEBAR_DEFAULT_WIDTH = 256;
-export const CHAT_SIDEBAR_MIN_WIDTH = 208;
-export const CHAT_SIDEBAR_MAX_WIDTH = 360;
+export const CHAT_SIDEBAR_DEFAULT_WIDTH = 276;
+export const CHAT_SIDEBAR_MIN_WIDTH = 240;
+export const CHAT_SIDEBAR_MAX_WIDTH = 420;
 
 export function clampChatSidebarWidth(width: number): number {
   if (!Number.isFinite(width)) return CHAT_SIDEBAR_DEFAULT_WIDTH;
@@ -18,6 +18,7 @@ interface ChatState {
   conversationTitle: string | null;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
+  sidebarResizing: boolean;
   expandedProjectIds: Set<string>;
   /** Incremented to signal sidebar should refresh */
   refreshKey: number;
@@ -27,6 +28,7 @@ interface ChatState {
   setConversationTitle: (title: string | null) => void;
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
+  setSidebarResizing: (resizing: boolean) => void;
   toggleProjectExpanded: (projectId: string) => void;
   refreshSidebar: () => void;
 }
@@ -40,6 +42,7 @@ export const useChatStore = create<ChatState>()(
       conversationTitle: null,
       sidebarCollapsed: false,
       sidebarWidth: CHAT_SIDEBAR_DEFAULT_WIDTH,
+      sidebarResizing: false,
       expandedProjectIds: new Set<string>(),
       refreshKey: 0,
 
@@ -49,6 +52,7 @@ export const useChatStore = create<ChatState>()(
       setConversationTitle: (title) => set({ conversationTitle: title }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarWidth: (width) => set({ sidebarWidth: clampChatSidebarWidth(width) }),
+      setSidebarResizing: (resizing) => set({ sidebarResizing: resizing }),
       toggleProjectExpanded: (projectId) =>
         set((s) => {
           const next = new Set(s.expandedProjectIds);

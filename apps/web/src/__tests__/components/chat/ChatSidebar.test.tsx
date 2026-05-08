@@ -15,7 +15,11 @@ vi.mock('@/store/chatStore', () => ({
   useChatStore: (selector?: (state: Record<string, unknown>) => unknown) => {
     const state = {
       sidebarCollapsed: false,
+      sidebarResizing: false,
+      sidebarWidth: 276,
       toggleSidebar: vi.fn(),
+      setSidebarResizing: vi.fn(),
+      setSidebarWidth: vi.fn(),
       activeConversationId: 'conv_a432e35d',
       expandedProjectIds: new Set<string>(),
       toggleProjectExpanded: vi.fn(),

@@ -2,13 +2,15 @@ import { useCallback, useState } from 'react';
 import { createProject } from '@/infrastructure/projects';
 import { useChatStore } from '@/store/chatStore';
 
+const AUTO_PROJECT_NAME_MAX_LENGTH = 30;
+
 /**
  * Derive a short project name from the user's first message.
  * Strips question marks, filler words, and keeps it concise.
  * "What's a good plan for 2 weeks in Japan on $3000 budget?" → "Japan Trip Plan"
  * "I want to go to Beijing for a visit" → "Beijing Visit"
  */
-function deriveProjectName(message?: string): string {
+export function deriveProjectName(message?: string): string {
   if (!message) return `Project ${new Date().toLocaleDateString()}`;
 
   // Remove question marks, periods, and common filler prefixes
@@ -20,9 +22,9 @@ function deriveProjectName(message?: string): string {
     )
     .trim();
 
-  // Take first ~40 chars, break at word boundary
-  if (clean.length > 40) {
-    clean = clean.slice(0, 40).replace(/\s+\S*$/, '');
+  // Take first ~30 chars, break at word boundary
+  if (clean.length > AUTO_PROJECT_NAME_MAX_LENGTH) {
+    clean = clean.slice(0, AUTO_PROJECT_NAME_MAX_LENGTH).replace(/\s+\S*$/, '');
   }
 
   // Capitalize first letter of each word (title case)

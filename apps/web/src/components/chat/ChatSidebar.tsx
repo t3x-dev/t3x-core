@@ -24,6 +24,7 @@ export function ChatSidebar() {
 
   const {
     sidebarCollapsed: collapsed,
+    sidebarResizing,
     activeConversationId,
     activeProjectId,
     expandedProjectIds,
@@ -31,6 +32,7 @@ export function ChatSidebar() {
     setActiveConversation,
     sidebarWidth,
     setSidebarWidth,
+    setSidebarResizing,
   } = useChatStore();
 
   const {
@@ -61,6 +63,7 @@ export function ChatSidebar() {
 
       const startX = e.clientX;
       const startWidth = useChatStore.getState().sidebarWidth;
+      setSidebarResizing(true);
 
       const handleMove = (ev: MouseEvent) => {
         setSidebarWidth(startWidth + ev.clientX - startX);
@@ -69,16 +72,19 @@ export function ChatSidebar() {
       const handleUp = () => {
         document.removeEventListener('mousemove', handleMove);
         document.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('blur', handleUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        setSidebarResizing(false);
       };
 
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       document.addEventListener('mousemove', handleMove);
       document.addEventListener('mouseup', handleUp);
+      window.addEventListener('blur', handleUp);
     },
-    [collapsed, setSidebarWidth]
+    [collapsed, setSidebarResizing, setSidebarWidth]
   );
 
   const handleResizeKeyDown = useCallback(
@@ -213,7 +219,8 @@ export function ChatSidebar() {
         aria-label="Chat navigation"
         className={cn(
           'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
-          'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
+          !sidebarResizing &&
+            'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
           collapsed ? 'items-center' : ''
         )}
@@ -273,12 +280,12 @@ export function ChatSidebar() {
           <div
             className={cn(
               'flex min-w-0 flex-col gap-0.5 py-2',
-              collapsed ? 'items-center px-2' : 'px-3'
+              collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-1 pt-2 pb-1">
+              <div className="px-4 pt-2 pb-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
@@ -323,7 +330,7 @@ export function ChatSidebar() {
             ))}
 
             {projects.length === 0 && !collapsed && (
-              <div className="px-3 py-4 text-center">
+              <div className="px-4 py-4 text-center">
                 <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
               </div>
             )}
@@ -349,9 +356,19 @@ export function ChatSidebar() {
           title="Drag to resize sidebar"
           onMouseDown={handleResizeMouseDown}
           onKeyDown={handleResizeKeyDown}
-          className="fixed top-0 z-50 h-screen w-1 cursor-col-resize transition-colors hover:bg-[var(--accent-commit)]/30 active:bg-[var(--accent-commit)]/50 focus-visible:bg-[var(--accent-commit)]/30 focus-visible:outline-none"
-          style={{ left: sidebarWidth - 2 }}
-        />
+          className="group fixed top-0 z-50 flex h-screen w-2 -translate-x-1/2 cursor-col-resize justify-center border-0 bg-transparent p-0 focus-visible:outline-none"
+          style={{ left: sidebarWidth }}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-full w-px transition-colors',
+              sidebarResizing
+                ? 'bg-[var(--accent-commit)]/60'
+                : 'bg-transparent group-hover:bg-[var(--accent-commit)]/45 group-active:bg-[var(--accent-commit)]/60 group-focus-visible:bg-[var(--accent-commit)]/45'
+            )}
+          />
+        </button>
       )}
 
       {/* Context menu portal */}
