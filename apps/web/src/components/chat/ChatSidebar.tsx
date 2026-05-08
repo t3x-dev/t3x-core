@@ -2,9 +2,18 @@
 
 import { Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
@@ -21,6 +30,10 @@ import { ProjectFolder } from './sidebar/ProjectFolder';
 
 export function ChatSidebar() {
   const router = useRouter();
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectError, setNewProjectError] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const {
     sidebarCollapsed: collapsed,
@@ -127,9 +140,34 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
-  async function handleNewProject() {
+  const openNewProjectDialog = useCallback(() => {
+    setNewProjectName('');
+    setNewProjectError(null);
+    setNewProjectDialogOpen(true);
+  }, []);
+
+  const handleNewProjectDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (isCreatingProject) return;
+      setNewProjectDialogOpen(open);
+      if (!open) {
+        setNewProjectName('');
+        setNewProjectError(null);
+      }
+    },
+    [isCreatingProject]
+  );
+
+  async function handleCreateProject(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (isCreatingProject) return;
+
+    const name = newProjectName.trim() || 'Untitled Project';
+    setIsCreatingProject(true);
+    setNewProjectError(null);
+
     try {
-      const project = await createProject('Untitled Project');
+      const project = await createProject(name);
       // Prime the store so ChatWorkspace.useAutoProject reuses this project
       // for the first message instead of creating another one. The query
       // param is the source of truth on refresh (store state is in-memory),
@@ -143,12 +181,13 @@ export function ChatSidebar() {
         store.toggleProjectExpanded(project.project_id);
       }
       store.refreshSidebar();
+      setNewProjectDialogOpen(false);
+      setNewProjectName('');
       router.push(`/chat?projectId=${encodeURIComponent(project.project_id)}`);
     } catch {
-      // Fallback: land on blank chat so users can still type a first message
-      // (which will auto-create a project via useAutoProject).
-      setActiveConversation(null, null);
-      router.push('/chat');
+      setNewProjectError('Failed to create project');
+    } finally {
+      setIsCreatingProject(false);
     }
   }
 
@@ -254,7 +293,7 @@ export function ChatSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                onClick={handleNewProject}
+                onClick={openNewProjectDialog}
                 className={cn(
                   'rounded-xl bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30',
                   'text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/20 hover:text-[var(--accent-commit)]',
@@ -373,6 +412,60 @@ export function ChatSidebar() {
 
       {/* Context menu portal */}
       {menu && <ContextMenuPortal menu={menu} onClose={closeMenu} />}
+
+      <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
+        <DialogContent className="sm:max-w-[400px]">
+          <form onSubmit={handleCreateProject} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>New Project</DialogTitle>
+              <DialogDescription className="sr-only">
+                Enter a project name or leave it blank to create an untitled project.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="new-project-name"
+                className="text-sm font-medium text-[var(--text-primary)]"
+              >
+                Project name
+              </label>
+              <Input
+                id="new-project-name"
+                autoFocus
+                value={newProjectName}
+                onChange={(event) => {
+                  setNewProjectName(event.target.value);
+                  if (newProjectError) setNewProjectError(null);
+                }}
+                placeholder="Untitled Project"
+                disabled={isCreatingProject}
+                aria-invalid={newProjectError ? 'true' : undefined}
+                aria-describedby={newProjectError ? 'new-project-error' : undefined}
+              />
+              {newProjectError && (
+                <p id="new-project-error" className="text-xs text-[var(--status-error)]">
+                  {newProjectError}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleNewProjectDialogOpenChange(false)}
+                disabled={isCreatingProject}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="commit" disabled={isCreatingProject}>
+                {isCreatingProject ? 'Creating...' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
