@@ -2,7 +2,8 @@
 
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
+import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
+import { selectPanelExpanded, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ArchivedOpsPanel } from './ArchivedOpsPanel';
@@ -22,6 +23,14 @@ import { splitOpsByCommittedness, YOpsLogPanel } from './YOpsLogPanel';
  *   - script    → YOps editor
  */
 type TopView = 'draft' | 'applied' | 'committed' | 'archived' | 'script';
+type LogView = Exclude<TopView, 'script'>;
+
+const LOG_VIEW_META: Record<LogView, { label: string; desc: string }> = {
+  draft: { label: 'Draft', desc: 'Unapplied proposal' },
+  applied: { label: 'Applied', desc: 'Materialized, not committed' },
+  committed: { label: 'Committed', desc: 'Referenced by commits' },
+  archived: { label: 'Archived', desc: 'Superseded audit trail' },
+};
 
 const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 48;
@@ -32,63 +41,52 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const [splitRatio, setSplitRatio] = useState(DEFAULT_SPLIT_RATIO);
   const [showBefore, setShowBefore] = useState(false);
-  // Default to whichever tab has live content: a staged draft, otherwise
-  // applied ops, otherwise committed history, falling through to the
-  // YOps editor when there's nothing to render.
-  const draftCount = useWorkspaceStore((s) => s.draftOps.length);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const draftOps = useWorkspaceStore((s) => s.draftOps);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const conversationId = useWorkspaceStore((s) => s.conversationId);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
-  const initialTab = useMemo<TopView>(() => {
-    if (draftCount > 0) return 'draft';
-    const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
-    if (applied.length > 0) return 'applied';
-    if (committed.length > 0) return 'committed';
-    return 'script';
-    // Computed once on mount; `topView` becomes user-controlled after,
-    // unless the user hasn't manually picked yet AND a draft arrives
-    // (the auto-switch effect below).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const [topView, setTopViewState] = useState<TopView>(initialTab);
-  // Tracks whether the user has manually picked a tab. Once true, we
-  // stop auto-switching — the user's pick wins. Reset to false only
-  // on Discard / clearDraft (no auto-switch needed in that direction;
-  // the next draft will re-engage the watcher).
-  const userPickedTabRef = useRef(false);
-  const prevDraftCountRef = useRef(draftCount);
-  const prevConversationIdRef = useRef(conversationId);
-  const setTopView = useCallback((next: TopView) => {
-    userPickedTabRef.current = true;
-    setTopViewState(next);
-  }, []);
-  // Auto-switch to the Draft tab when a fresh draft arrives, IFF the
-  // user hasn't picked a tab manually yet. Common flow: workspace
-  // mounts on YOps (empty conversation) → user clicks Extract →
-  // draftCount > 0 → tab switches to Draft so the proposal is the
-  // visible surface, matching the "elevate structured ops" thesis.
-  // Once the user clicks a tab manually, the ref locks and store
-  // updates stop dragging the view around.
-  useEffect(() => {
-    const prevDraftCount = prevDraftCountRef.current;
-    const conversationChanged = prevConversationIdRef.current !== conversationId;
-    const draftCleared = prevDraftCount > 0 && draftCount === 0;
-
-    if (conversationChanged || draftCleared) {
-      userPickedTabRef.current = false;
-    }
-
-    prevDraftCountRef.current = draftCount;
-    prevConversationIdRef.current = conversationId;
-
-    if (userPickedTabRef.current) return;
-    if (draftCount > 0 && topView !== 'draft') {
-      setTopViewState('draft');
-    }
-  }, [conversationId, draftCount, topView]);
+  const [topView, setTopViewState] = useState<TopView>('script');
   const containerRef = useRef<HTMLDivElement>(null);
+  const logsMenuRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+
+  const logCounts = useMemo(() => {
+    const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
+    return {
+      draft: draftOps.length,
+      applied: applied.length,
+      committed: committed.length,
+      archived: null,
+    } satisfies Record<LogView, number | null>;
+  }, [draftOps.length, opOrigins, opsLog, rowsById]);
+
+  const workspaceSummary = useMemo(() => {
+    const groups = buildMaterializedOpGroups({
+      ops: opsLog,
+      pendingDraftOps: draftOps,
+      scriptDirty,
+    });
+    return `${opsLog.length} ops · ${groups.pending.count} pending`;
+  }, [draftOps, opsLog, scriptDirty]);
+
+  const setTopView = useCallback((next: TopView) => {
+    setTopViewState(next);
+    setLogsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!logsOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (logsMenuRef.current?.contains(target)) return;
+      setLogsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [logsOpen]);
 
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -120,6 +118,66 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   }, []);
 
   const width = panelExpanded ? (customWidth ?? DEFAULT_WIDTH) : COLLAPSED_WIDTH;
+  const logsActive = logsOpen || topView !== 'script';
+  const logsMenu = (
+    <div ref={logsMenuRef} className="relative inline-flex h-6 items-center">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={logsOpen}
+        aria-current={topView !== 'script' ? 'page' : undefined}
+        onClick={() => setLogsOpen((open) => !open)}
+        className={cn(
+          'inline-flex h-6 items-center justify-center gap-1.5 rounded border px-2 text-[10px] font-bold leading-none transition-colors',
+          logsActive
+            ? 'border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)]'
+            : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+        )}
+      >
+        Logs
+        <span className="text-[9px] leading-none text-[var(--text-tertiary)]">▾</span>
+      </button>
+      {logsOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] shadow-xl"
+        >
+          <div className="border-b border-[var(--stroke-divider)] px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+            Operation Logs
+          </div>
+          {(Object.keys(LOG_VIEW_META) as LogView[]).map((view) => {
+            const count = logCounts[view];
+            return (
+              <button
+                key={view}
+                type="button"
+                role="menuitem"
+                onClick={() => setTopView(view)}
+                className={cn(
+                  'flex w-full items-center gap-3 border-b border-[var(--stroke-divider)] px-3 py-2 text-left last:border-b-0 hover:bg-[var(--hover-bg)]',
+                  topView === view && 'bg-[var(--source)]/5'
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
+                    {LOG_VIEW_META[view].label}
+                  </span>
+                  <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                    {LOG_VIEW_META[view].desc}
+                  </span>
+                </span>
+                {count !== null && (
+                  <span className="inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-full bg-[var(--status-success)]/10 px-1.5 text-[9px] font-bold text-[var(--status-success)]">
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   if (!panelExpanded) {
     return (
@@ -151,38 +209,37 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         style={{ height: `${splitRatio * 100}%` }}
         className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-default)] flex flex-col"
       >
-        <div
-          role="tablist"
-          aria-label="Workspace top view"
-          className="flex items-center gap-0 border-b border-[var(--stroke-default)] bg-[var(--panel)] px-2"
-        >
-          {(
-            [
-              { id: 'draft', label: 'Draft' },
-              { id: 'applied', label: 'Applied' },
-              { id: 'committed', label: 'Committed' },
-              { id: 'archived', label: 'Archived' },
-              // The id stays 'script' to minimize churn in tests / a11y
-              // labels — the visible label is what users see.
-              { id: 'script', label: 'YOps' },
-            ] as const
-          ).map((tab) => (
+        <div className="flex h-8 items-center gap-2 border-b border-[var(--stroke-default)] bg-[var(--panel)] px-3">
+          {topView === 'script' ? (
+            <span
+              className="min-w-0 max-w-[180px] truncate text-[10px] font-mono text-[var(--text-tertiary)]"
+              title={workspaceSummary}
+            >
+              {workspaceSummary}
+            </span>
+          ) : (
+            <span className="min-w-0 text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+              Logs /{' '}
+              <span className="text-[var(--text-primary)]">{LOG_VIEW_META[topView].label}</span>
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {logsMenu}
             <button
-              key={tab.id}
               type="button"
-              role="tab"
-              aria-selected={topView === tab.id}
-              onClick={() => setTopView(tab.id)}
+              disabled={topView === 'script'}
+              aria-current={topView === 'script' ? 'page' : undefined}
+              onClick={() => setTopView('script')}
               className={cn(
-                'px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors',
-                topView === tab.id
-                  ? 'text-[var(--text-primary)] border-b-2 border-[var(--source)] -mb-px'
-                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
+                'inline-flex h-6 items-center justify-center rounded border px-2 text-[10px] font-bold leading-none transition-colors',
+                topView === 'script'
+                  ? 'cursor-default border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)]'
+                  : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
               )}
             >
-              {tab.label}
+              YOps
             </button>
-          ))}
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           {topView === 'script' ? (

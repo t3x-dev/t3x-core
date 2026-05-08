@@ -52,7 +52,7 @@ function llmOp(): SourcedYOp {
   } as SourcedYOp;
 }
 
-describe('YOpsWorkspace tab default + auto-switch', () => {
+describe('YOpsWorkspace view switcher', () => {
   beforeEach(() => {
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
@@ -69,13 +69,15 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
 
   it('mounts on YOps when the conversation is empty', () => {
     const { container } = render(<YOpsWorkspace />);
-    expect(screen.getByRole('tab', { name: 'YOps' })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: 'Raw YAML' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'YOps' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Logs/ })).toBeInTheDocument();
+    expect(screen.getByText('0 ops · 0 pending')).toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
   });
 
-  it('auto-switches to the Draft tab when the first draft arrives', () => {
+  it('keeps YOps visible when the first draft arrives and exposes Draft through Logs', () => {
     const { container } = render(<YOpsWorkspace />);
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
 
@@ -86,20 +88,23 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
       });
     });
 
-    // Auto-switch fires: Draft tab is now visible, YOps is hidden.
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+    expect(screen.getByText('0 ops · 1 pending')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
+    fireEvent.click(screen.getByText('Draft'));
+
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
   });
 
-  it('a manual tab pick locks the view — subsequent draft arrival does NOT clobber it', () => {
+  it('keeps a selected log view when a draft arrives', () => {
     const { container, getByText } = render(<YOpsWorkspace />);
-    // User manually clicks the Applied tab.
-    const appliedTab = getByText('Applied');
-    fireEvent.click(appliedTab);
+    fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
+    fireEvent.click(getByText('Applied'));
     expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
 
-    // Draft arrives — auto-switch should NOT fire because the user
-    // already picked.
     act(() => {
       useWorkspaceStore.getState().setDraft({
         ops: [llmOp()],
@@ -111,40 +116,37 @@ describe('YOpsWorkspace tab default + auto-switch', () => {
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
   });
 
-  it('re-enables draft auto-switch after the staged draft is cleared', () => {
+  it('can return to YOps after viewing a log', () => {
     act(() => {
       useWorkspaceStore.getState().setDraft({
         ops: [llmOp()],
         tree: { trees: [], relations: [] },
       });
     });
-    const { container, getByText } = render(<YOpsWorkspace />);
+    const { container } = render(<YOpsWorkspace />);
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
+    fireEvent.click(screen.getByText('Draft'));
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
+    const logsButton = screen.getByRole('button', { name: /Logs/ });
+    expect(logsButton).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'YOps' })).toBeEnabled();
 
-    fireEvent.click(getByText('Applied'));
-    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'YOps' }));
 
-    act(() => {
-      useWorkspaceStore.getState().clearDraft();
-    });
-    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
-
-    act(() => {
-      useWorkspaceStore.getState().setDraft({
-        ops: [llmOp()],
-        tree: { trees: [], relations: [] },
-      });
-    });
-
-    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeNull();
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+    expect(logsButton).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'YOps' })).toBeDisabled();
   });
 
-  it('clicking the Archived tab mounts ArchivedOpsPanel with the active conversationId', () => {
+  it('selecting Archived from Logs mounts ArchivedOpsPanel with the active conversationId', () => {
     act(() => {
       useWorkspaceStore.getState().setConversation('conv_xyz');
     });
     const { container, getByText } = render(<YOpsWorkspace />);
+    fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
     fireEvent.click(getByText('Archived'));
     const panel = container.querySelector('[data-testid="archived-ops-panel-stub"]');
     expect(panel).toBeTruthy();
