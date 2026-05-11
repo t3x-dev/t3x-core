@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Hexagon, Loader2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, Loader2, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
@@ -143,26 +143,31 @@ export function ChatHeader({
 
       {/* Extract split button — only visible when YOps panel is expanded */}
       {panelExpanded && !isCommitted && (
-        <div ref={dropdownRef} className="relative flex shrink-0">
+        <div
+          ref={dropdownRef}
+          className="relative flex h-7 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)] shadow-[0_1px_2px_rgba(15,23,42,0.035)]"
+        >
           <button
             type="button"
             data-testid="extract-button"
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
             disabled={isExtracting || !isExtractReady}
             title={!isExtractReady ? 'Loading conversation context…' : undefined}
-            className="flex items-center gap-1 rounded-l border border-r-0 border-[var(--source)]/30 bg-[var(--source)]/10 px-2.5 py-1 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-w-0 items-center gap-1.5 px-2.5 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isExtracting ? (
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
             ) : (
-              <Hexagon className="h-2.5 w-2.5" />
+              <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--source)]/10">
+                <Sparkles className="h-3 w-3" />
+              </span>
             )}
             {isExtracting ? (
               'Extracting...'
             ) : (
-              <span className="inline-flex items-baseline gap-1 leading-none">
+              <span className="inline-flex min-w-0 items-center gap-1.5 leading-none">
                 <span>Extract</span>
-                <span className="text-[8px] leading-none opacity-70">
+                <span className="max-w-[62px] truncate rounded-full bg-[var(--source)]/[0.08] px-1.5 py-0.5 text-[9px] font-medium leading-none opacity-80">
                   {PRESET_LABELS[extractionPreset].label}
                 </span>
               </span>
@@ -173,9 +178,10 @@ export function ChatHeader({
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
             disabled={isExtracting || !isExtractReady}
-            className="flex items-center px-1 py-1 text-[10px] rounded-r border border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Extract options"
+            className="flex w-7 items-center justify-center border-l border-[var(--source)]/[0.12] text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ChevronDown className="h-2.5 w-2.5" />
+            <ChevronDown className="h-3 w-3" />
           </button>
 
           {dropdownOpen &&

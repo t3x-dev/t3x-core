@@ -74,7 +74,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Select model: ${currentLabel}`}
-        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--source-dim)]"
+        className="flex h-8 max-w-[132px] shrink min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--source-dim)]"
         style={{
           background: 'color-mix(in srgb, var(--source-dim) 68%, transparent)',
           color: 'var(--source)',
@@ -82,7 +82,8 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         }}
         title={currentLabel}
       >
-        <Zap className="h-3.5 w-3.5" />
+        <Zap className="h-3.5 w-3.5 shrink-0" />
+        <span className="min-w-0 truncate">{currentLabel}</span>
       </button>
       {open &&
         createPortal(

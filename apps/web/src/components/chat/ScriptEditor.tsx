@@ -221,8 +221,7 @@ export function ScriptEditor() {
             backgroundColor: 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
           },
           '.cm-yops-pending-edit-line': {
-            backgroundColor: 'color-mix(in srgb, var(--status-info) 12%, transparent)',
-            boxShadow: 'inset 3px 0 0 var(--status-info)',
+            backgroundColor: 'color-mix(in srgb, var(--accent-commit) 4.5%, transparent)',
           },
           '.cm-cursor': {
             borderLeftColor: 'var(--text-primary)',

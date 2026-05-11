@@ -200,11 +200,11 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        'rounded-[24px] bg-transparent transition-[background,box-shadow] duration-[var(--motion-base)]',
-        'focus-within:bg-[var(--surface-panel)]/55 focus-within:shadow-[0_10px_26px_rgba(15,23,42,0.045)]',
+        'rounded-[24px] border bg-[var(--surface-panel)]/28 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition-[background,border-color,box-shadow] duration-[var(--motion-base)]',
+        'focus-within:border-[var(--accent-commit)]/20 focus-within:bg-[var(--surface-panel)]/60 focus-within:shadow-[0_10px_26px_rgba(15,23,42,0.045)]',
         isDragging
-          ? 'bg-[var(--accent-commit)]/5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent-commit)_24%,transparent),0_12px_30px_rgba(15,23,42,0.06)]'
-          : 'shadow-none'
+          ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'
+          : 'border-[var(--stroke-divider)]/70'
       )}
     >
       {/* Hidden file input */}
