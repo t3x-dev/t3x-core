@@ -16,6 +16,8 @@ import type { AttachedImage } from '@/types/chat';
 
 export type { ChatMessage } from '@/hooks/conversations/useChatHistory';
 
+const TURN_SAVE_RETRY_DELAY_MS = 250;
+
 interface SendMessageOptions {
   historyOverride?: Array<{ role: string; content: string }>;
   skipMemoryFetch?: boolean;
@@ -62,6 +64,34 @@ function syncConversationTitle(title: string) {
   chatStore.setConversationTitle(title);
   chatStore.refreshSidebar();
   useCommitStore.getState().setConversationTitle(title);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function saveTurnWithRetry(createTurn: () => Promise<api.Turn>, retriesLeft = 1) {
+  try {
+    return await createTurn();
+  } catch (err) {
+    if (retriesLeft <= 0) throw err;
+    await delay(TURN_SAVE_RETRY_DELAY_MS);
+    return saveTurnWithRetry(createTurn, retriesLeft - 1);
+  }
+}
+
+function mirrorSavedTurn(
+  conversationId: string,
+  turn: api.Turn | undefined,
+  role: 'user' | 'assistant',
+  content: string
+) {
+  if (!turn?.turn_hash) return;
+  syncSavedTurnIntoWorkspace(conversationId, {
+    turn_hash: turn.turn_hash,
+    role,
+    content,
+  });
 }
 
 /**
@@ -155,6 +185,20 @@ export function useConversationChat({
       stream.setIsChatStreaming(true);
       stream.setStreamingContent('');
 
+      let stableConversationId: string | null = null;
+      const saveAssistantResponse = async (content: string): Promise<void> => {
+        const conversationForSave = stableConversationId;
+        if (!projectId || !conversationForSave || content.trim().length === 0) return;
+        try {
+          const assistantTurn = await saveTurnWithRetry(() =>
+            api.createTurn(projectId, conversationForSave, 'assistant', content)
+          );
+          mirrorSavedTurn(conversationForSave, assistantTurn, 'assistant', content);
+        } catch {
+          warnings.showWarning('Assistant reply not saved — API may be unavailable');
+        }
+      };
+
       try {
         let convId = conversationIdRef.current;
         if (!convId && projectId) {
@@ -166,10 +210,33 @@ export function useConversationChat({
           onConversationCreated?.(convId);
         }
 
-        let memoryContext = '';
-        if (!options?.skipMemoryFetch && convId) {
+        if (!convId) {
+          throw new Error('Conversation is not ready.');
+        }
+
+        const currentConversationId = convId;
+        stableConversationId = currentConversationId;
+        const userTurn = await saveTurnWithRetry(() =>
+          api.createTurn(projectId, currentConversationId, 'user', userMessage)
+        );
+        mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
+        if (shouldRenamePlaceholder) {
           try {
-            const ctx = await api.getConversationMemory(convId);
+            const updated = await api.updateConversation(currentConversationId, {
+              title: messageTitle,
+            });
+            syncConversationTitle(updated.title || messageTitle);
+          } catch {
+            // Title refresh is cosmetic; keep the saved chat turn.
+          }
+        }
+        setTurnsSavedCounter((c) => c + 1);
+        onTurnsSaved?.();
+
+        let memoryContext = '';
+        if (!options?.skipMemoryFetch) {
+          try {
+            const ctx = await api.getConversationMemory(currentConversationId);
             if (ctx.text) memoryContext = ctx.text;
           } catch {
             // Memory fetch failed — proceed without context.
@@ -263,66 +330,7 @@ export function useConversationChat({
           stream.setStreamingContent('');
         }
 
-        const currentConversationId = conversationIdRef.current;
-        if (projectId && currentConversationId) {
-          const saveTurns = async (retriesLeft: number): Promise<void> => {
-            try {
-              const userTurn = await api.createTurn(
-                projectId,
-                currentConversationId,
-                'user',
-                userMessage
-              );
-              // Mirror persisted turns into workspaceStore.turns so an
-              // immediately-following Extract sends real input instead
-              // of the stale snapshot loaded at conv mount (otherwise
-              // /v1/extract-yops short-circuits on an empty turns array
-              // and silently returns 0 ops).
-              if (userTurn?.turn_hash) {
-                syncSavedTurnIntoWorkspace(currentConversationId, {
-                  turn_hash: userTurn.turn_hash,
-                  role: 'user',
-                  content: userMessage,
-                });
-              }
-              if (shouldRenamePlaceholder) {
-                try {
-                  const updated = await api.updateConversation(currentConversationId, {
-                    title: messageTitle,
-                  });
-                  syncConversationTitle(updated.title || messageTitle);
-                } catch {
-                  // Title refresh is cosmetic; keep the saved chat turn.
-                }
-              }
-              if (fullResponse) {
-                const assistantTurn = await api.createTurn(
-                  projectId,
-                  currentConversationId,
-                  'assistant',
-                  fullResponse
-                );
-                if (assistantTurn?.turn_hash) {
-                  syncSavedTurnIntoWorkspace(currentConversationId, {
-                    turn_hash: assistantTurn.turn_hash,
-                    role: 'assistant',
-                    content: fullResponse,
-                  });
-                }
-              }
-              setTurnsSavedCounter((c) => c + 1);
-              onTurnsSaved?.();
-            } catch (err) {
-              if (retriesLeft > 0) {
-                await new Promise((r) => setTimeout(r, 1000));
-                return saveTurns(retriesLeft - 1);
-              }
-              console.warn('Failed to save turns after retries:', err);
-              warnings.showWarning('Turns not saved — API may be unavailable');
-            }
-          };
-          saveTurns(1);
-        }
+        await saveAssistantResponse(fullResponse);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
@@ -335,6 +343,7 @@ export function useConversationChat({
                 content: partial,
               },
             ]);
+            await saveAssistantResponse(partial);
           }
           stream.setStreamingContent('');
           stream.setIsChatStreaming(false);

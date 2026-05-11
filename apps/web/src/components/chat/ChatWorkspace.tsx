@@ -87,6 +87,11 @@ export function ChatWorkspace({
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
+  const chatInputDraftKey = resolvedConversationId
+    ? `conversation:${resolvedConversationId}`
+    : isNewChat && resolvedProjectId
+      ? `new:${resolvedProjectId}`
+      : null;
   const pendingMessageRef = useRef<string | null>(null);
 
   // Real-time sync — WebSocket connection to receive backend state changes
@@ -454,6 +459,7 @@ export function ChatWorkspace({
               onSend={handleSend}
               onStop={stopGenerating}
               isStreaming={isStreaming}
+              draftKey={chatInputDraftKey}
               disabled={
                 isLoading || isExtracting || modelsLoading || !selectedProvider || !selectedModel
               }

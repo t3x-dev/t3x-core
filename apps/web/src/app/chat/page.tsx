@@ -114,6 +114,7 @@ function ChatLanding() {
         <ChatInput
           onSend={handleSend}
           placeholder="Start a conversation..."
+          draftKey={projectIdParam ? `landing:${projectIdParam}` : 'landing'}
           selectedProvider={selectedProvider ?? ''}
           selectedModel={selectedModel ?? ''}
           disabled={!hasConfiguredGenerationProvider || loading}
