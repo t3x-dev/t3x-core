@@ -116,11 +116,15 @@ export default function ConversationPage() {
       {isExpanded && (
         <div
           onMouseDown={handleMouseDown}
-          className="group relative w-px flex-shrink-0 cursor-col-resize bg-[var(--stroke-default)]"
+          className="group relative w-px flex-shrink-0 cursor-col-resize bg-[var(--stroke-divider)]"
         >
           <span
             aria-hidden="true"
-            className="absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 bg-transparent transition-colors group-hover:bg-[var(--accent-commit)]/25 group-active:bg-[var(--accent-commit)]/40"
+            className="absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 bg-transparent"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--stroke-divider)] transition-colors group-hover:bg-[var(--accent-commit)]/45 group-active:bg-[var(--accent-commit)]/60"
           />
         </div>
       )}

@@ -27,12 +27,18 @@ import { useCommitStore } from '@/store/commitStore';
 import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
-const MONO = { fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 11 } as const;
+const TREE_MONO_FONT = 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const MONO = {
+  fontFamily: TREE_MONO_FONT,
+  fontSize: 12,
+  letterSpacing: 0,
+  lineHeight: '20px',
+} as const;
 type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 
-const YAML_KEY_CLASS = 'text-[var(--yaml-key,var(--text-secondary))]';
-const YAML_VALUE_CLASS = 'text-[var(--yaml-string,var(--text-primary))]';
-const YAML_PUNCTUATION_CLASS = 'text-[var(--yaml-punctuation,var(--text-tertiary))]';
+const YAML_KEY_CLASS = 'text-[color-mix(in_srgb,var(--yaml-key)_88%,var(--text-primary))]';
+const YAML_VALUE_CLASS = 'text-[color-mix(in_srgb,var(--yaml-string)_82%,var(--text-primary))]';
+const YAML_PUNCTUATION_CLASS = 'text-[color-mix(in_srgb,var(--yaml-punctuation)_70%,transparent)]';
 
 function rowTone(input: {
   side: 'before' | 'after';
@@ -44,25 +50,25 @@ function rowTone(input: {
   if (input.side !== 'after') return { background: '', rail: 'bg-transparent' };
   if (input.humanEdit) {
     return {
-      background: 'bg-[var(--status-info)]/[0.055]',
+      background: 'bg-[var(--status-info)]/[0.035]',
       rail: 'bg-[var(--status-info)]',
     };
   }
   if (input.isAdded) {
     return {
-      background: 'bg-[var(--status-success)]/[0.035]',
+      background: 'bg-[var(--status-success)]/[0.02]',
       rail: 'bg-[var(--status-success)]',
     };
   }
   if (input.isModified) {
     return {
-      background: 'bg-[var(--status-warning)]/[0.045]',
+      background: 'bg-[var(--status-warning)]/[0.025]',
       rail: 'bg-[var(--status-warning)]',
     };
   }
   if (input.isRemoved) {
     return {
-      background: 'bg-[var(--status-error)]/[0.035] opacity-50',
+      background: 'bg-[var(--status-error)]/[0.025] opacity-55',
       rail: 'bg-[var(--status-error)]',
     };
   }
@@ -74,11 +80,11 @@ function YAMLIndentGuides({ depth }: { depth: number }) {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 left-2 opacity-70"
+      className="pointer-events-none absolute inset-y-0 left-2 opacity-45"
       style={{
         width: depth * TREE_INDENT_STEP,
         backgroundImage:
-          'linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--stroke-default) 72%, transparent) calc(100% - 1px))',
+          'linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--stroke-default) 45%, transparent) calc(100% - 1px))',
         backgroundSize: `${TREE_INDENT_STEP}px 100%`,
       }}
     />
@@ -89,21 +95,24 @@ function MetadataBadge({
   label,
   title,
   kind,
+  emphasized = false,
 }: {
   label: string;
   title?: string;
   kind: 'human' | 'new' | 'modified' | 'removed' | 'inherited';
+  emphasized?: boolean;
 }) {
   return (
     <span
       title={title}
       className={cn(
-        'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[8px] font-semibold',
-        kind === 'human' && 'bg-[var(--status-info-muted)] text-[var(--status-info)]',
-        kind === 'new' && 'bg-[var(--status-success)]/10 text-[var(--status-success)]',
-        kind === 'modified' && 'bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
-        kind === 'removed' && 'bg-[var(--status-error)]/10 text-[var(--status-error)]',
-        kind === 'inherited' && 'bg-black/[0.03] text-[var(--text-tertiary)]'
+        'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[8px] font-semibold opacity-45 transition-opacity group-hover:opacity-90',
+        emphasized && 'opacity-90',
+        kind === 'human' && 'bg-[var(--status-info)]/[0.08] text-[var(--status-info)]',
+        kind === 'new' && 'bg-[var(--status-success)]/[0.07] text-[var(--status-success)]',
+        kind === 'modified' && 'bg-[var(--status-warning)]/[0.08] text-[var(--status-warning)]',
+        kind === 'removed' && 'bg-[var(--status-error)]/[0.08] text-[var(--status-error)]',
+        kind === 'inherited' && 'bg-black/[0.025] text-[var(--text-tertiary)]'
       )}
     >
       {label}
@@ -561,6 +570,7 @@ function SlotCell({
         label={humanEdit?.label ?? tag?.label ?? ''}
         title={humanEdit?.title}
         kind={humanEdit ? 'human' : metadataKindForSlotTag(tag)}
+        emphasized={selected}
       />
     ) : undefined;
   const tone = rowTone({
@@ -599,14 +609,14 @@ function SlotCell({
   return (
     <div className="h-full w-full" data-yaml-tree-row="true">
       <div className="flex h-full w-full items-stretch">
-        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
+        <div className={`w-px shrink-0 ${selected ? 'bg-[var(--source)]/75' : tone.rail}`} />
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'group relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 px-2 py-0.5 transition-colors',
             tone.background,
             isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
-            selected && 'bg-[var(--source-dim)]'
+            selected && 'bg-[var(--source)]/[0.07]'
           )}
           style={MONO}
           onClick={() => (selected ? onClear() : onSelect())}
@@ -741,13 +751,22 @@ function NodeCell({
   const metadataBadge =
     side === 'after' ? (
       humanEdit ? (
-        <MetadataBadge label={humanEdit.label} title={humanEdit.title} kind="human" />
+        <MetadataBadge
+          label={humanEdit.label}
+          title={humanEdit.title}
+          kind="human"
+          emphasized={selected}
+        />
       ) : isAdded ? (
-        <MetadataBadge label="New node" kind="new" />
+        <MetadataBadge label="New node" kind="new" emphasized={selected} />
       ) : isRemoved ? (
-        <MetadataBadge label="Removed node" kind="removed" />
+        <MetadataBadge label="Removed node" kind="removed" emphasized={selected} />
       ) : inlineTag ? (
-        <MetadataBadge label={inlineTag.label} kind={metadataKindForSlotTag(inlineTag)} />
+        <MetadataBadge
+          label={inlineTag.label}
+          kind={metadataKindForSlotTag(inlineTag)}
+          emphasized={selected}
+        />
       ) : undefined
     ) : undefined;
   const tone = rowTone({
@@ -760,14 +779,15 @@ function NodeCell({
   return (
     <div className="h-full w-full" data-yaml-tree-row="true">
       <div className="group flex h-full w-full items-stretch">
-        <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
+        <div className={`w-px shrink-0 ${selected ? 'bg-[var(--source)]/75' : tone.rail}`} />
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 transition-colors',
+            hasNode && 'bg-[var(--panel-alt)]/45',
             tone.background,
             hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
-            selected && 'bg-[var(--source-dim)]'
+            selected && 'bg-[var(--source)]/[0.07]'
           )}
           style={MONO}
           onClick={() => (hasNode ? (selected ? onClear() : onSelect()) : undefined)}

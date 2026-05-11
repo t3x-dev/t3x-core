@@ -569,7 +569,7 @@ export function ChatMessage({
       data-turn-hash={turnHash}
       data-turn-role={sender}
       className={cn(
-        'group w-full py-4 transition-colors duration-200 relative',
+        'group relative w-full py-5 transition-colors duration-200',
         'animate-in fade-in duration-200'
       )}
       style={{
@@ -581,13 +581,15 @@ export function ChatMessage({
         borderLeft: isSourceMessage ? '3px solid rgb(99, 102, 241)' : undefined,
       }}
     >
-      <div className="mx-auto max-w-3xl px-4">
+      <div className="mx-auto max-w-[620px] px-5">
         <div className={cn(isUser ? 'flex justify-end' : '')}>
           {/* Content */}
           <div
             className={cn(
               'min-w-0',
-              isUser ? 'max-w-[85%] rounded-2xl bg-[var(--hover-bg)] px-4 py-2.5' : 'flex-1'
+              isUser
+                ? 'max-w-[82%] rounded-[14px] bg-[var(--hover-bg)]/80 px-4 py-2.5 ring-1 ring-[var(--stroke-divider)]/60'
+                : 'flex-1'
             )}
           >
             {isUser ? (
@@ -672,7 +674,7 @@ export function ChatMessage({
                     onClick={() =>
                       toast.message('Select source text to Insert after, Replace, or Delete.')
                     }
-                    className="absolute right-0 top-0 z-10 inline-flex h-6 w-6 items-center justify-center rounded text-[var(--text-tertiary)] opacity-60 transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] hover:opacity-100"
+                    className="absolute right-0 top-0 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-tertiary)] opacity-0 transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] hover:opacity-100 group-hover:opacity-55"
                     title="Select text to Insert after, Replace, or Delete"
                     aria-label="Source text edit hint"
                   >
@@ -685,8 +687,8 @@ export function ChatMessage({
                 <div
                   ref={textRef}
                   className={cn(
-                    'prose-chat text-sm leading-relaxed text-[var(--text-primary)]',
-                    showSourceEditHint && 'pr-8',
+                    'prose-chat text-[14px] leading-[1.7] text-[var(--text-primary)]',
+                    showSourceEditHint && 'pr-9',
                     isStreaming && 'streaming-text'
                   )}
                 >

@@ -62,26 +62,36 @@ export function ProjectFolder({
       onContextMenu={onProjectContextMenu}
       aria-current={isActive ? 'true' : undefined}
       className={cn(
-        'box-border flex min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border border-transparent transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
-        'hover:border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]',
+        'group/project relative box-border flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-transparent transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+        'hover:bg-[var(--hover-bg)]',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
-        'active:scale-95 cursor-pointer w-full text-left',
-        collapsed ? 'h-10 w-10 justify-center' : 'min-h-[52px] px-2.5 py-2',
+        'active:scale-[0.99] cursor-pointer w-full text-left',
+        collapsed ? 'h-9 w-9 justify-center' : 'min-h-[44px] px-2 py-1.5',
         // Active wins over expanded: a project picked from "+ New Project"
         // (or any nav that prims activeProjectId) gets a tinted bg + ring
         // so the user immediately sees which project they're producing in,
         // even before the folder is expanded or has any conversations yet.
         isActive
-          ? 'bg-[var(--accent-commit)]/10 ring-1 ring-[var(--accent-commit)]/30 text-[var(--text-primary)]'
+          ? 'bg-[var(--accent-commit)]/[0.07] text-[var(--text-primary)]'
           : isExpanded && !collapsed
-            ? 'bg-[var(--hover-bg-strong)] text-[var(--text-primary)]'
+            ? 'bg-[var(--hover-bg)]/65 text-[var(--text-primary)]'
             : 'text-[var(--text-secondary)]'
       )}
     >
+      {!collapsed && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute inset-y-1 left-0 w-[2px] rounded-full opacity-0 transition-opacity',
+            isActive && 'bg-[var(--accent-commit)] opacity-100'
+          )}
+        />
+      )}
       <span
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--hover-bg)] text-[var(--text-tertiary)]',
-          isActive && 'bg-[var(--panel)]/70 text-[var(--accent-commit)]'
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--hover-bg)]/75 text-[var(--text-tertiary)] transition-colors',
+          isActive && 'bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]',
+          !isActive && 'group-hover/project:text-[var(--text-secondary)]'
         )}
       >
         <Folder className="h-4 w-4" />
@@ -89,13 +99,13 @@ export function ProjectFolder({
       {!collapsed && (
         <div className="flex min-w-0 flex-1 flex-col">
           <span
-            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold"
+            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-4"
             title={project.name}
           >
             {project.name}
           </span>
           <span
-            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[9px] text-[var(--text-tertiary)]"
+            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-3 text-[var(--text-tertiary)]"
             title={projectSummary}
           >
             {commitCount > 0 && (
@@ -114,7 +124,7 @@ export function ProjectFolder({
         </div>
       )}
       {!collapsed && commitCount > 0 && (
-        <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--status-success)]/15 px-1 text-[9px] font-bold text-[var(--status-success)] shrink-0">
+        <span className="flex h-[17px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--status-success)]/[0.08] px-1 text-[9px] font-semibold text-[var(--status-success)]">
           {commitCount}
         </span>
       )}
@@ -131,11 +141,11 @@ export function ProjectFolder({
           </TooltipContent>
         </Tooltip>
       ) : (
-        <div className="min-w-0 w-full px-3">{folderButton}</div>
+        <div className="min-w-0 w-full px-2.5">{folderButton}</div>
       )}
 
       {isExpanded && !collapsed && (
-        <div className="ml-8 mr-3 mt-1 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)] pl-2">
+        <div className="ml-[29px] mr-2.5 mt-1 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)]/80 pl-2">
           {/* Conversations */}
           {conversations.map((conv) => {
             const isActive = activeConversationId === conv.conversation_id;
@@ -148,13 +158,19 @@ export function ProjectFolder({
                 onClick={() => onConversationClick(conv.conversation_id)}
                 onContextMenu={(e) => onConversationContextMenu(e, conv.conversation_id)}
                 className={cn(
-                  'flex min-w-0 items-center gap-2 overflow-hidden rounded-lg h-7 px-2 w-full text-left',
+                  'relative flex h-7 min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 w-full text-left',
                   'transition-all duration-[var(--motion-base)] text-[11px]',
                   isActive
-                    ? 'text-[var(--text-primary)] font-semibold'
+                    ? 'bg-[var(--accent-commit)]/[0.055] font-semibold text-[var(--text-primary)]'
                     : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
                 )}
               >
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-1 left-0 w-[2px] rounded-full bg-[var(--accent-commit)]"
+                  />
+                )}
                 <span
                   className={cn(
                     'w-[5px] h-[5px] rounded-full shrink-0',
@@ -169,7 +185,7 @@ export function ProjectFolder({
           })}
 
           {conversations.length === 0 && (
-            <span className="text-[10px] text-[var(--text-tertiary)] px-2 py-1">
+            <span className="px-2 py-1 text-[10px] text-[var(--text-tertiary)]/80">
               No conversations
             </span>
           )}
@@ -182,7 +198,7 @@ export function ProjectFolder({
                 e.stopPropagation();
                 onNewChat(project.project_id);
               }}
-              className="flex min-w-0 items-center gap-1.5 overflow-hidden rounded-lg h-7 px-2 w-full text-left text-[10px] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)] transition-colors"
+              className="flex h-7 min-w-0 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-[10px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
             >
               <span className="text-xs">+</span>
               <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">

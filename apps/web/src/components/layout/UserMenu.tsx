@@ -148,22 +148,27 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       <button
         type="button"
         className={cn(
-          'flex items-center gap-3 rounded-xl w-full',
-          'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+          'flex w-full items-center rounded-lg',
+          'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
           'transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
-          collapsed ? 'h-10 w-10 justify-center' : 'h-10 px-3'
+          collapsed ? 'h-9 w-9 justify-center' : 'h-8 gap-2 px-1.5'
         )}
         aria-label={displayName}
       >
         <UserAvatar
           name={menuUser.name}
           username={menuUser.username}
+          size="sm"
           avatarColor={
             authDisabled ? getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor) : undefined
           }
         />
-        {!collapsed && <span className="text-sm font-medium truncate">{displayName}</span>}
+        {!collapsed && (
+          <span className="min-w-0 truncate text-[12px] font-medium leading-none">
+            {displayName}
+          </span>
+        )}
       </button>
     </DropdownMenuTrigger>
   );

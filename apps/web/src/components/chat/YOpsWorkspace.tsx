@@ -183,7 +183,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     return (
       <div
         data-testid="yops-panel-collapsed"
-        className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-default)] bg-[var(--panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
+        className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-divider)] bg-[var(--panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
         title="Expand workspace"
@@ -199,7 +199,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   return (
     <div
       ref={containerRef}
-      className="flex flex-col h-full bg-[var(--panel)] border-l border-[var(--stroke-default)]"
+      className="flex h-full flex-col bg-[var(--panel)]"
       style={{ width, minWidth: 400 }}
     >
       <WorkspaceTopbar />
@@ -254,8 +254,13 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
 
       <div
         onMouseDown={handleSplitDrag}
-        className="h-[3px] bg-[var(--stroke-default)] cursor-row-resize hover:bg-[var(--source)] transition-colors flex-shrink-0"
-      />
+        className="group relative h-1.5 flex-shrink-0 cursor-row-resize bg-transparent"
+      >
+        <span
+          aria-hidden="true"
+          className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-[var(--stroke-divider)]/60 transition-colors group-hover:bg-[var(--source)]/35 group-active:bg-[var(--source)]/50"
+        />
+      </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <AfterPanel

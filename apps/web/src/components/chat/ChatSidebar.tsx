@@ -257,7 +257,7 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--panel)] backdrop-blur-[var(--fx-blur-panel)]',
           !sidebarResizing &&
             'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
@@ -268,7 +268,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-default)]',
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
@@ -289,7 +289,7 @@ export function ChatSidebar() {
 
         {/* New Project action */}
         <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2')}>
+          <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -297,39 +297,37 @@ export function ChatSidebar() {
                   onClick={openNewProjectDialog}
                   className={cn(
                     'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
-                    'hover:border-[var(--stroke-default)] hover:bg-[var(--accent-commit)]/10 hover:text-[var(--accent-commit)]',
+                    'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
                     'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
                     'transition-all duration-[var(--motion-base)]',
-                    collapsed ? 'h-10 w-10' : 'h-7 w-7'
+                    collapsed
+                      ? 'h-9 w-9'
+                      : 'h-8 w-full justify-start gap-2 px-2 text-xs font-medium'
                   )}
                   aria-label="New project"
                 >
                   <Plus className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="truncate">New Project</span>}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
                 New Project
               </TooltipContent>
             </Tooltip>
-            {!collapsed && (
-              <span className="select-none text-xs font-medium text-[var(--text-secondary)]">
-                New Project
-              </span>
-            )}
           </div>
         </div>
 
         {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="min-h-0 min-w-0 flex-1 w-full">
+        <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-0.5 pb-2 pt-1',
+              'flex min-w-0 flex-col gap-1 pb-2 pt-1',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-1">
+              <div className="px-4 pb-0.5 pt-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
@@ -384,8 +382,8 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex min-w-0 flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
-            collapsed ? 'items-center px-2' : 'px-3'
+            'mt-auto flex min-w-0 flex-col gap-1 border-t border-[var(--stroke-divider)] bg-[var(--surface-panel)]/40 py-2.5',
+            collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >
           {/* User Menu — Settings lives in this dropdown (Profile / Settings / Sign Out) */}

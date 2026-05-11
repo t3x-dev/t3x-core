@@ -1889,6 +1889,49 @@ h3,
   background: var(--scrollbar-thumb-hover);
 }
 
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.chat-scrollbar:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.chat-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+
+.chat-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.sidebar-scrollarea [data-slot="scroll-area-scrollbar"] {
+  width: 6px;
+}
+
+.sidebar-scrollarea [data-slot="scroll-area-thumb"] {
+  background: transparent;
+}
+
+.sidebar-scrollarea:hover [data-slot="scroll-area-thumb"] {
+  background: var(--scrollbar-thumb);
+}
+
 /* ============================================
    Dark Mode — Noise Texture
    ============================================ */
@@ -1936,12 +1979,13 @@ h3,
 /* ── Chat markdown prose ── */
 
 .prose-chat {
-  line-height: 1.65;
+  line-height: 1.7;
   word-break: break-word;
+  text-wrap: pretty;
 }
 
 .prose-chat p {
-  margin: 0.5em 0;
+  margin: 0.58em 0;
 }
 
 .prose-chat p:first-child {
@@ -1957,15 +2001,18 @@ h3,
 .prose-chat h3,
 .prose-chat h4 {
   font-weight: 600;
-  margin: 1em 0 0.4em;
+  margin: 1.2em 0 0.45em;
   color: var(--text-primary);
+  letter-spacing: 0;
+  line-height: 1.3;
 }
 
 .prose-chat h1 {
-  font-size: 1.25em;
+  font-size: 1.3em;
+  font-weight: 650;
 }
 .prose-chat h2 {
-  font-size: 1.1em;
+  font-size: 1.08em;
 }
 .prose-chat h3 {
   font-size: 1em;
@@ -1973,12 +2020,13 @@ h3,
 
 .prose-chat ul,
 .prose-chat ol {
-  margin: 0.4em 0;
+  margin: 0.45em 0;
   padding-left: 1.5em;
 }
 
 .prose-chat li {
-  margin: 0.2em 0;
+  margin: 0.25em 0;
+  padding-left: 0.1em;
 }
 
 .prose-chat li::marker {
@@ -1986,7 +2034,7 @@ h3,
 }
 
 .prose-chat strong {
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-primary);
 }
 
