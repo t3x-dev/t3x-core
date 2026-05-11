@@ -597,7 +597,7 @@ function SlotCell({
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full" data-yaml-tree-row="true">
       <div className="flex h-full w-full items-stretch">
         <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
@@ -758,7 +758,7 @@ function NodeCell({
   });
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full" data-yaml-tree-row="true">
       <div className="group flex h-full w-full items-stretch">
         <div className={`shrink-0 w-[3px] ${selected ? 'bg-[var(--source)]' : tone.rail}`} />
         <div
@@ -926,6 +926,16 @@ export function AfterPanel({
     const workspaceError = useWorkspaceStore.getState().lastError;
     toast.error(workspaceError ?? (err instanceof Error ? err.message : 'Edit failed'));
   }, []);
+
+  const handlePanelBackgroundClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!(event.target instanceof HTMLElement)) return;
+      if (event.target.closest('[data-yaml-tree-row="true"]')) return;
+      if (event.target.closest('button, input, textarea, select, a, [role="button"]')) return;
+      clearSelection();
+    },
+    [clearSelection]
+  );
 
   useEffect(() => {
     if (!showCommitDialog) return;
@@ -1106,7 +1116,11 @@ export function AfterPanel({
   }, [discardDraft, isCommitting]);
 
   return (
-    <div data-testid="after-panel" className="relative flex h-full min-h-0 w-full flex-1 flex-col">
+    <div
+      data-testid="after-panel"
+      className="relative flex h-full min-h-0 w-full flex-1 flex-col"
+      onClick={handlePanelBackgroundClick}
+    >
       <div
         className={cn(
           'grid shrink-0 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]',
