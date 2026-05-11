@@ -2,6 +2,7 @@
 
 import { defaultKeymap } from '@codemirror/commands';
 import { yaml } from '@codemirror/lang-yaml';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import {
   placeholder as cmPlaceholder,
@@ -10,6 +11,7 @@ import {
   keymap,
   lineNumbers,
 } from '@codemirror/view';
+import { tags as t } from '@lezer/highlight';
 import { useEffect, useMemo, useRef } from 'react';
 import { getChangedLineNumbers, getHumanCommentContentLineNumbers } from '@/domain/yops/scriptDiff';
 import {
@@ -24,6 +26,82 @@ const PLACEHOLDER = `yops:
   - set:
       path: node/slot
       value: "new value"`;
+
+const VSCODE_MONO_FONT = 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+
+const yopsHighlightStyle = HighlightStyle.define([
+  { tag: [t.propertyName, t.definitionKeyword, t.keyword], color: 'var(--yaml-key)' },
+  { tag: t.string, color: 'var(--yaml-string)' },
+  { tag: t.number, color: 'var(--yaml-number)' },
+  { tag: [t.bool, t.null, t.atom], color: 'var(--yaml-ref)' },
+  { tag: t.comment, color: 'var(--yaml-comment)' },
+  { tag: [t.punctuation, t.separator], color: 'var(--yaml-punctuation)' },
+]);
+
+function findInlineCommentStart(text: string, startIndex: number): number {
+  let quote: '"' | "'" | null = null;
+  for (let i = startIndex; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote) {
+      if (char === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (i === 0 || /\s/.test(text[i - 1] ?? ''))) return i;
+  }
+  return text.length;
+}
+
+function findMappingColon(text: string): number {
+  let quote: '"' | "'" | null = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote) {
+      if (char === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '#' && (i === 0 || /\s/.test(text[i - 1] ?? ''))) return -1;
+    if (char === ':') return i;
+  }
+  return -1;
+}
+
+function yopsValueClass(value: string): string {
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return 'cm-yops-number-value';
+  if (/^(?:true|false|null)$/i.test(value)) return 'cm-yops-atom-value';
+  return 'cm-yops-string-value';
+}
+
+function scalarValueHighlightExtension() {
+  return EditorView.decorations.of((view) => {
+    const ranges = [];
+    for (let lineNumber = 1; lineNumber <= view.state.doc.lines; lineNumber += 1) {
+      const line = view.state.doc.line(lineNumber);
+      const text = line.text;
+      const colonIndex = findMappingColon(text);
+      if (colonIndex === -1) continue;
+
+      let start = colonIndex + 1;
+      let end = findInlineCommentStart(text, start);
+      while (start < end && /\s/.test(text[start] ?? '')) start += 1;
+      while (end > start && /\s/.test(text[end - 1] ?? '')) end -= 1;
+      if (start >= end) continue;
+
+      const value = text.slice(start, end);
+      ranges.push(
+        Decoration.mark({ class: yopsValueClass(value) }).range(line.from + start, line.from + end)
+      );
+    }
+    return Decoration.set(ranges, true);
+  });
+}
 
 function pendingEditLineHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
   return EditorView.decorations.of((view) => {
@@ -77,6 +155,8 @@ export function ScriptEditor() {
       extensions: [
         lineNumbers(),
         yaml(),
+        syntaxHighlighting(yopsHighlightStyle),
+        scalarValueHighlightExtension(),
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
         readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
@@ -93,24 +173,52 @@ export function ScriptEditor() {
         EditorView.theme({
           '&': {
             height: '100%',
-            fontSize: '11px',
+            fontSize: '12px',
+            lineHeight: '19px',
             backgroundColor: 'var(--panel-alt)',
             color: 'var(--text-primary)',
           },
+          '.cm-content': {
+            padding: '7px 0',
+            caretColor: 'var(--text-primary)',
+          },
+          '.cm-line': {
+            padding: '0 12px',
+          },
           '.cm-scroller': {
             overflow: 'auto',
-            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+            fontFamily: VSCODE_MONO_FONT,
+            fontWeight: '400',
+            fontVariantLigatures: 'none',
+            letterSpacing: '0',
+            tabSize: '2',
           },
           '.cm-gutters': {
             backgroundColor: 'var(--panel)',
-            color: 'var(--text-tertiary)',
+            color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
             borderRight: '1px solid var(--stroke-default)',
+            fontFamily: VSCODE_MONO_FONT,
+            fontSize: '11px',
+            fontVariantNumeric: 'tabular-nums',
+          },
+          '.cm-lineNumbers .cm-gutterElement': {
+            minWidth: '34px',
+            padding: '0 8px 0 10px',
+          },
+          '.cm-yops-string-value': {
+            color: 'var(--yaml-string)',
+          },
+          '.cm-yops-number-value': {
+            color: 'var(--yaml-number)',
+          },
+          '.cm-yops-atom-value': {
+            color: 'var(--yaml-ref)',
           },
           '.cm-activeLineGutter': {
-            backgroundColor: 'var(--hover-bg)',
+            backgroundColor: 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
           },
           '.cm-activeLine': {
-            backgroundColor: 'var(--hover-bg)',
+            backgroundColor: 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
           },
           '.cm-yops-pending-edit-line': {
             backgroundColor: 'color-mix(in srgb, var(--status-info) 12%, transparent)',
