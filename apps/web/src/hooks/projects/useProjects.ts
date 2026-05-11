@@ -6,7 +6,10 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { createProject as createProjectCommand } from '@/commands/projects';
+import {
+  createProject as createProjectCommand,
+  updateProject as updateProjectCommand,
+} from '@/commands/projects';
 import { deleteProject, listProjects } from '@/infrastructure/projects';
 import type { Project } from '@/infrastructure/types';
 
@@ -16,6 +19,7 @@ export interface UseProjectsResult {
   refresh: () => Promise<void>;
   remove: (projectId: string) => Promise<void>;
   create: (name?: string) => Promise<Project>;
+  rename: (projectId: string, name: string) => Promise<Project>;
 }
 
 export function useProjects(limit = 50): UseProjectsResult {
@@ -48,5 +52,16 @@ export function useProjects(limit = 50): UseProjectsResult {
     return project;
   }, []);
 
-  return { projects, loading, refresh, remove, create };
+  const rename = useCallback(async (projectId: string, rawName: string): Promise<Project> => {
+    const name = rawName.trim();
+    const project = (await updateProjectCommand(projectId, { name })) as Project;
+    setProjects((prev) =>
+      prev.map((item) =>
+        item.project_id === projectId ? { ...item, ...project, name: project.name ?? name } : item
+      )
+    );
+    return project;
+  }, []);
+
+  return { projects, loading, refresh, remove, create, rename };
 }

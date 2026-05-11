@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { updateConversation as updateConversationCommand } from '@/commands/conversations';
 import { deleteConversation, listConversations } from '@/infrastructure/conversations';
 import type { Conversation } from '@/infrastructure/types';
 
@@ -14,6 +15,7 @@ export interface UseProjectConversationsResult {
   conversationsByProject: Record<string, Conversation[]>;
   load: (projectId: string) => Promise<void>;
   remove: (projectId: string, conversationId: string) => Promise<void>;
+  rename: (projectId: string, conversationId: string, title: string) => Promise<Conversation>;
 }
 
 export function useProjectConversations(limit = 50): UseProjectConversationsResult {
@@ -39,5 +41,26 @@ export function useProjectConversations(limit = 50): UseProjectConversationsResu
     });
   }, []);
 
-  return { conversationsByProject: byProject, load, remove };
+  const rename = useCallback(
+    async (projectId: string, conversationId: string, rawTitle: string): Promise<Conversation> => {
+      const title = rawTitle.trim();
+      const conversation = await updateConversationCommand(conversationId, { title });
+      setByProject((prev) => {
+        const list = prev[projectId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [projectId]: list.map((item) =>
+            item.conversation_id === conversationId
+              ? { ...item, ...conversation, title: conversation.title ?? title }
+              : item
+          ),
+        };
+      });
+      return conversation;
+    },
+    []
+  );
+
+  return { conversationsByProject: byProject, load, remove, rename };
 }
