@@ -74,9 +74,37 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
   conversationId?: string | null;
+  draftKey?: string | null;
   selectedProvider?: string;
   selectedModel?: string;
   onModelChange?: (provider: string, model: string) => void;
+}
+
+const CHAT_INPUT_DRAFT_STORAGE_PREFIX = 't3x:chat-input-draft:';
+
+function getDraftStorageKey(draftKey: string | null | undefined): string | null {
+  const trimmed = draftKey?.trim();
+  return trimmed ? `${CHAT_INPUT_DRAFT_STORAGE_PREFIX}${trimmed}` : null;
+}
+
+function readDraft(storageKey: string): string {
+  try {
+    return window.localStorage.getItem(storageKey) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeDraft(storageKey: string, value: string): void {
+  try {
+    if (value.length > 0) {
+      window.localStorage.setItem(storageKey, value);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
+  } catch {
+    // Browser storage can be unavailable or full; draft persistence is best-effort.
+  }
 }
 
 export function ChatInput({
@@ -86,6 +114,7 @@ export function ChatInput({
   disabled = false,
   placeholder = 'Reply...',
   conversationId,
+  draftKey,
   selectedProvider,
   selectedModel,
   onModelChange,
@@ -95,6 +124,8 @@ export function ChatInput({
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const skipNextDraftPersistRef = useRef(false);
+  const draftStorageKey = getDraftStorageKey(draftKey);
 
   const webSearchEnabled = useChatSessionStore((s) => s.webSearchEnabled);
   const thinkingEnabled = useChatSessionStore((s) => s.thinkingEnabled);
@@ -135,6 +166,21 @@ export function ChatInput({
     autoResize();
   }, [value, autoResize]);
 
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    skipNextDraftPersistRef.current = true;
+    setValue(readDraft(draftStorageKey));
+  }, [draftStorageKey]);
+
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
+      return;
+    }
+    writeDraft(draftStorageKey, value);
+  }, [draftStorageKey, value]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'));
     if (files.length === 0) return;
@@ -173,6 +219,7 @@ export function ChatInput({
     const trimmed = value.trim();
     if ((!trimmed && attachedImages.length === 0) || disabled) return;
     onSend(trimmed || '', attachedImages.length > 0 ? attachedImages : undefined);
+    if (draftStorageKey) writeDraft(draftStorageKey, '');
     setValue('');
     for (const img of attachedImages) URL.revokeObjectURL(img.preview);
     setAttachedImages([]);

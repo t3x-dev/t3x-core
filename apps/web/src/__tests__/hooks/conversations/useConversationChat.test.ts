@@ -10,6 +10,11 @@ const createTurnMock = vi.fn();
 const updateConversationMock = vi.fn();
 const setInputMock = vi.fn();
 const setMessagesMock = vi.fn();
+const setIsChatLoadingMock = vi.fn();
+const setIsChatStreamingMock = vi.fn();
+const setErrorMock = vi.fn();
+const setWarningMock = vi.fn();
+const showWarningMock = vi.fn();
 
 vi.mock('@/hooks/conversations/syncSavedTurnIntoWorkspace', () => ({
   syncSavedTurnIntoWorkspace: vi.fn(),
@@ -23,6 +28,7 @@ vi.mock('@/hooks/conversations/useChatHistory', () => ({
     setInput: setInputMock,
     setMessages: setMessagesMock,
     isChatLoading: false,
+    setIsChatLoading: setIsChatLoadingMock,
     hasMore: false,
     isLoadingMore: false,
     loadMore: vi.fn(),
@@ -32,7 +38,7 @@ vi.mock('@/hooks/conversations/useChatHistory', () => ({
 vi.mock('@/hooks/conversations/useChatStreamState', () => ({
   useChatStreamState: () => ({
     isChatStreaming: false,
-    setIsChatStreaming: vi.fn(),
+    setIsChatStreaming: setIsChatStreamingMock,
     streamingContent: '',
     setStreamingContent: vi.fn(),
     setSearchQuery: vi.fn(),
@@ -54,9 +60,9 @@ vi.mock('@/hooks/conversations/useChatWarnings', () => ({
   useChatWarnings: () => ({
     error: null,
     warning: null,
-    setError: vi.fn(),
-    setWarning: vi.fn(),
-    showWarning: vi.fn(),
+    setError: setErrorMock,
+    setWarning: setWarningMock,
+    showWarning: showWarningMock,
   }),
 }));
 
@@ -79,6 +85,21 @@ import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 
 async function* emptyChatStream() {
   yield { type: 'done', content: 'assistant response' };
+}
+
+async function* abortedChatStream() {
+  yield { type: 'token', content: 'partial assistant response' };
+  throw new DOMException('The operation was aborted.', 'AbortError');
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
 }
 
 describe('useConversationChat', () => {
@@ -206,5 +227,135 @@ describe('useConversationChat', () => {
       role: 'assistant',
       content: 'assistant response',
     });
+  });
+
+  it('saves the user turn before starting the assistant stream', async () => {
+    const events: string[] = [];
+    createTurnMock.mockImplementation(async (_projectId, _conversationId, role) => {
+      events.push(`turn:${role}`);
+      return { turn_hash: `sha256:${role}_turn` };
+    });
+    chatStreamMock.mockImplementation(() => {
+      events.push('stream:start');
+      return emptyChatStream();
+    });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(events).toContain('turn:user');
+      expect(events).toContain('stream:start');
+    });
+    expect(events.indexOf('turn:user')).toBeLessThan(events.indexOf('stream:start'));
+  });
+
+  it('does not duplicate the saved user turn when assistant turn persistence fails', async () => {
+    createTurnMock
+      .mockResolvedValueOnce({ turn_hash: 'sha256:user_turn' })
+      .mockRejectedValueOnce(new Error('assistant save failed'))
+      .mockRejectedValueOnce(new Error('assistant save failed again'));
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(showWarningMock).toHaveBeenCalledWith(
+        'Assistant reply not saved — API may be unavailable'
+      );
+    });
+
+    const savedRoles = createTurnMock.mock.calls.map((call) => call[2]);
+    expect(savedRoles).toEqual(['user', 'assistant', 'assistant']);
+    expect(syncSavedTurnIntoWorkspace).toHaveBeenCalledWith('conv_existing', {
+      turn_hash: 'sha256:user_turn',
+      role: 'user',
+      content: 'I want to eat chestnuts.',
+    });
+    expect(syncSavedTurnIntoWorkspace).not.toHaveBeenCalledWith(
+      'conv_existing',
+      expect.objectContaining({ role: 'assistant' })
+    );
+  });
+
+  it('keeps streaming active until the assistant turn is persisted', async () => {
+    const assistantSave = deferred<{ turn_hash: string }>();
+    createTurnMock
+      .mockResolvedValueOnce({ turn_hash: 'sha256:user_turn' })
+      .mockReturnValueOnce(assistantSave.promise);
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(createTurnMock).toHaveBeenCalledWith(
+        'proj_1',
+        'conv_existing',
+        'assistant',
+        'assistant response'
+      );
+    });
+    expect(setIsChatStreamingMock).not.toHaveBeenCalledWith(false);
+
+    assistantSave.resolve({ turn_hash: 'sha256:assistant_turn' });
+
+    await waitFor(() => {
+      expect(setIsChatStreamingMock).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it('persists the visible partial assistant reply when generation is aborted', async () => {
+    chatStreamMock.mockReturnValue(abortedChatStream());
+    createTurnMock
+      .mockResolvedValueOnce({ turn_hash: 'sha256:user_turn' })
+      .mockResolvedValueOnce({ turn_hash: 'sha256:assistant_partial_turn' });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(syncSavedTurnIntoWorkspace).toHaveBeenCalledWith('conv_existing', {
+        turn_hash: 'sha256:assistant_partial_turn',
+        role: 'assistant',
+        content: 'partial assistant response',
+      });
+    });
+    expect(createTurnMock.mock.calls.map((call) => call[2])).toEqual(['user', 'assistant']);
   });
 });
