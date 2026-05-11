@@ -36,7 +36,7 @@ describe('providerSupports', () => {
     expect(providerSupports('claude', 'thinking')).toBe(true);
     expect(providerSupports('claude', 'web_search')).toBe(true);
     expect(providerSupports('openai', 'thinking')).toBe(true);
-    expect(providerSupports('openai', 'web_search')).toBe(false);
+    expect(providerSupports('openai', 'web_search')).toBe(true);
     expect(providerSupports('google', 'thinking')).toBe(true);
     expect(providerSupports('google', 'web_search')).toBe(true);
     expect(providerSupports('google-ai', 'web_search')).toBe(true);
@@ -52,6 +52,6 @@ describe('providerSupports', () => {
 describe('listProvidersSupporting', () => {
   it('lists exactly the providers backing each capability', () => {
     expect(listProvidersSupporting('thinking').sort()).toEqual(['anthropic', 'google', 'openai']);
-    expect(listProvidersSupporting('web_search').sort()).toEqual(['anthropic', 'google']);
+    expect(listProvidersSupporting('web_search').sort()).toEqual(['anthropic', 'google', 'openai']);
   });
 });
