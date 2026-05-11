@@ -43,14 +43,17 @@ describe('ProjectFolder active state', () => {
     renderFolder({ isActive: true });
 
     const button = screen.getByRole('button', { name: /Test Project/i });
-    expect(button.parentElement?.className).toContain('px-3');
+    expect(button.parentElement?.className).toContain('px-2.5');
     expect(button).toHaveAttribute('aria-current', 'true');
     // The active style is the source of the visible "selected project"
     // signal — pin the actual classes the production code emits so a
     // refactor that drops them fails loudly here, not silently in the UI.
-    expect(button.className).toContain('bg-[var(--accent-commit)]/10');
-    expect(button.className).toContain('ring-1');
-    expect(button.className).toContain('ring-[var(--accent-commit)]/30');
+    expect(button.className).toContain('bg-[var(--accent-commit)]/[0.07]');
+    expect(button.className).toContain('text-[var(--text-primary)]');
+
+    const iconWrapper = button.querySelector('span');
+    expect(iconWrapper?.className).toContain('bg-[var(--accent-commit)]/10');
+    expect(iconWrapper?.className).toContain('text-[var(--accent-commit)]');
   });
 
   it('omits the active highlight (and aria-current) when isActive is false', () => {
@@ -58,7 +61,9 @@ describe('ProjectFolder active state', () => {
 
     const button = screen.getByRole('button', { name: /Test Project/i });
     expect(button).not.toHaveAttribute('aria-current');
-    expect(button.className).not.toContain('bg-[var(--accent-commit)]/10');
-    expect(button.className).not.toContain('ring-[var(--accent-commit)]/30');
+    expect(button.className).not.toContain('bg-[var(--accent-commit)]/[0.07]');
+
+    const iconWrapper = button.querySelector('span');
+    expect(iconWrapper?.className).not.toContain('bg-[var(--accent-commit)]/10');
   });
 });
