@@ -78,15 +78,6 @@ export function ProjectFolder({
             : 'text-[var(--text-secondary)]'
       )}
     >
-      {!collapsed && (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'absolute inset-y-1 left-0 w-[2px] rounded-full opacity-0 transition-opacity',
-            isActive && 'bg-[var(--accent-commit)] opacity-100'
-          )}
-        />
-      )}
       <span
         className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--hover-bg)]/75 text-[var(--text-tertiary)] transition-colors',
@@ -165,12 +156,6 @@ export function ProjectFolder({
                     : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
                 )}
               >
-                {isActive && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-y-1 left-0 w-[2px] rounded-full bg-[var(--accent-commit)]"
-                  />
-                )}
                 <span
                   className={cn(
                     'w-[5px] h-[5px] rounded-full shrink-0',

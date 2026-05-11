@@ -83,7 +83,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         title={currentLabel}
       >
         <Zap className="h-3.5 w-3.5 shrink-0" />
-        <span className="min-w-0 truncate">{currentLabel}</span>
+        <span className="min-w-0 truncate pr-1">{currentLabel}</span>
       </button>
       {open &&
         createPortal(
