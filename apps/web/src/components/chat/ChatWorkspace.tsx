@@ -301,11 +301,14 @@ export function ChatWorkspace({
       )}
 
       {/* Message list */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div
+        ref={chatContainerRef}
+        className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--panel)]"
+      >
         {/* Parent conversation banner */}
         {parentConversationId && (
           <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
-            <div className="mx-auto max-w-3xl px-4 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+            <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 text-xs text-[var(--text-secondary)]">
               <GitCommit size={12} className="text-[var(--accent-commit)]" />
               <span>Continuing from previous commit</span>
               <a
@@ -325,7 +328,7 @@ export function ChatWorkspace({
         ) : messages.length === 0 && !isStreaming ? (
           <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
             {!modelsLoading && !hasConfiguredGenerationProvider && (
-              <div className="w-full max-w-3xl px-4 pb-2">
+              <div className="w-full max-w-[620px] px-5 pb-2">
                 <ProviderSetupBanner
                   variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
                 />
@@ -338,7 +341,7 @@ export function ChatWorkspace({
             </span>
           </div>
         ) : (
-          <div className="divide-y divide-[var(--stroke-divider)]/50">
+          <div className="space-y-1 py-2">
             {messages.map((msg, i) => {
               const sourceDraft = sourceTextDrafts[msg.id];
               return (
@@ -361,7 +364,7 @@ export function ChatWorkspace({
 
             {/* Search indicator */}
             {searchQuery && (
-              <div className="mx-auto max-w-3xl px-4 py-2 text-xs text-[var(--text-tertiary)] flex items-center gap-2">
+              <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 py-2 text-xs text-[var(--text-tertiary)]">
                 <span className="animate-spin h-3 w-3 border border-[var(--text-tertiary)] border-t-transparent rounded-full" />
                 Searching: {searchQuery}
               </div>
@@ -381,7 +384,7 @@ export function ChatWorkspace({
             {/* Waiting indicator */}
             {isStreaming && !streamingContent && (
               <div className="w-full py-4">
-                <div className="mx-auto max-w-3xl px-4">
+                <div className="mx-auto max-w-[620px] px-5">
                   <div className="flex gap-3">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5 bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--accent-conversation)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20">
                       T3
@@ -401,7 +404,7 @@ export function ChatWorkspace({
             {/* Error */}
             {error && (
               <div className="w-full py-3">
-                <div className="mx-auto max-w-3xl px-4">
+                <div className="mx-auto max-w-[620px] px-5">
                   <div className="flex items-center gap-2 py-2.5 px-3.5 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-xs">
                     <AlertCircle size={14} />
                     <span>{error}</span>
@@ -413,7 +416,7 @@ export function ChatWorkspace({
             {/* Non-critical warning */}
             {warning && !error && (
               <div className="w-full py-3">
-                <div className="mx-auto max-w-3xl px-4">
+                <div className="mx-auto max-w-[620px] px-5">
                   <div className="flex items-center gap-2 py-2 px-3.5 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/20 rounded-lg text-[var(--status-warning)] text-xs">
                     <AlertCircle size={14} />
                     <span>{warning}</span>
@@ -453,8 +456,8 @@ export function ChatWorkspace({
       {isCommitted ? (
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
-        <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
-          <div className="mx-auto max-w-3xl px-4">
+        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4 shadow-[0_-10px_24px_rgba(15,23,42,0.035)]">
+          <div className="mx-auto max-w-[620px] px-5">
             <ChatInput
               onSend={handleSend}
               onStop={stopGenerating}

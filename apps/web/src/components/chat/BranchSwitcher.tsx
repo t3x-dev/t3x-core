@@ -92,15 +92,20 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Switch branch: ${activeBranch}`}
         className={cn(
-          'flex items-center gap-1 text-xs cursor-pointer',
-          'text-[var(--accent-commit)] bg-[var(--accent-commit)]/10',
-          'px-2 py-0.5 rounded-md',
-          'hover:bg-[var(--accent-commit)]/20 transition-colors'
+          'flex h-7 max-w-[140px] cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium',
+          'border-[var(--accent-commit)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--accent-commit)_7%)] text-[var(--accent-commit)]',
+          'shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--accent-commit)]/[0.08]'
         )}
+        title={activeBranch}
       >
-        <GitBranch className="h-3 w-3 shrink-0" />
-        <span className="truncate max-w-[80px]">{activeBranch}</span>
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)]/10">
+          <GitBranch className="h-3 w-3" />
+        </span>
+        <span className="min-w-0 truncate pr-1.5">{activeBranch}</span>
       </button>
 
       {/* Dropdown — rendered via portal to escape stacking context */}

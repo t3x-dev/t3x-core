@@ -247,12 +247,11 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        'rounded-2xl border bg-[var(--surface-panel)]',
-        'transition-colors duration-[var(--motion-base)]',
-        'focus-within:border-[var(--accent-commit)] focus-within:ring-1 focus-within:ring-[var(--accent-commit)]/30',
+        'rounded-[24px] border bg-[var(--surface-panel)]/28 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition-[background,border-color,box-shadow] duration-[var(--motion-base)]',
+        'focus-within:border-[var(--accent-commit)]/20 focus-within:bg-[var(--surface-panel)]/60 focus-within:shadow-[0_10px_26px_rgba(15,23,42,0.045)]',
         isDragging
-          ? 'border-[var(--accent-commit)] bg-[var(--accent-commit)]/5'
-          : 'border-[var(--stroke-default)]'
+          ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'
+          : 'border-[var(--stroke-divider)]/70'
       )}
     >
       {/* Hidden file input */}
@@ -293,7 +292,7 @@ export function ChatInput({
       )}
 
       {/* Textarea */}
-      <div className="px-4 pt-3 pb-1">
+      <div className="px-3 pb-1 pt-2.5">
         <textarea
           ref={textareaRef}
           value={value}
@@ -303,7 +302,7 @@ export function ChatInput({
           disabled={disabled}
           rows={1}
           className={cn(
-            'w-full resize-none bg-transparent text-sm leading-relaxed text-[var(--text-primary)]',
+            'chat-scrollbar w-full resize-none bg-transparent text-[14px] leading-[1.6] text-[var(--text-primary)]',
             'placeholder:text-[var(--text-tertiary)]',
             'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
             'min-h-[24px] max-h-[200px] overflow-y-auto'
@@ -313,7 +312,7 @@ export function ChatInput({
       </div>
 
       {/* Bottom toolbar: left tools + right model/send */}
-      <div className="flex items-center justify-between px-3 pb-2 pt-1">
+      <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
         {/* Left: attach + search + thinking */}
         <div className="flex items-center gap-0.5">
           <Button
@@ -322,7 +321,7 @@ export function ChatInput({
             size="icon"
             onClick={handleFileClick}
             disabled={disabled}
-            className="h-8 w-8 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+            className="h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 text-[var(--text-tertiary)] shadow-[0_1px_2px_rgba(15,23,42,0.035)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
             aria-label="Attach file"
           >
             <Paperclip className="h-4 w-4" />
@@ -335,10 +334,10 @@ export function ChatInput({
             onClick={toggleWebSearch}
             disabled={disabled || !supportsWebSearch}
             className={cn(
-              'h-8 w-8 rounded-lg transition-colors',
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors',
               webSearchEnabled
-                ? 'text-[var(--accent-commit)] bg-[var(--accent-commit)]/10 hover:bg-[var(--accent-commit)]/20'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
+                ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/16'
+                : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
               !supportsWebSearch && 'opacity-40'
             )}
             aria-label={webSearchEnabled ? 'Disable web search' : 'Enable web search'}
@@ -360,10 +359,10 @@ export function ChatInput({
             onClick={toggleThinking}
             disabled={disabled || !supportsThinking}
             className={cn(
-              'h-8 w-8 rounded-lg transition-colors',
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors',
               thinkingEnabled
-                ? 'text-[var(--source)] bg-[var(--source)]/10 hover:bg-[var(--source)]/20'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]',
+                ? 'border-[var(--source)]/20 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/16'
+                : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
               !supportsThinking && 'opacity-40'
             )}
             aria-label={thinkingEnabled ? 'Disable extended thinking' : 'Enable extended thinking'}
@@ -394,7 +393,7 @@ export function ChatInput({
               type="button"
               size="icon"
               onClick={onStop}
-              className="h-8 w-8 rounded-lg bg-[var(--status-error)]/10 text-[var(--status-error)] hover:bg-[var(--status-error)]/20"
+              className="h-8 w-8 rounded-full border border-[var(--status-error)]/15 bg-[var(--status-error)]/10 text-[var(--status-error)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-[var(--status-error)]/20"
               aria-label="Stop generation"
             >
               <Square className="h-4 w-4" />
@@ -405,7 +404,7 @@ export function ChatInput({
               size="icon"
               onClick={handleSend}
               disabled={isEmpty || disabled}
-              className="h-8 w-8 rounded-lg bg-[var(--accent-commit)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="h-8 w-8 rounded-full bg-[var(--accent-commit)] text-white shadow-[0_5px_14px_rgba(37,99,235,0.26)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Send message"
             >
               <Send className="h-4 w-4" />

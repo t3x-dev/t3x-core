@@ -1,5 +1,6 @@
 'use client';
 
+import { Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
@@ -72,15 +73,17 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="max-w-[132px] truncate text-xs px-2 py-0.5 rounded border cursor-pointer"
+        aria-label={`Select model: ${currentLabel}`}
+        className="flex h-8 max-w-[132px] shrink min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--source-dim)]"
         style={{
-          background: 'var(--source-dim)',
+          background: 'color-mix(in srgb, var(--source-dim) 68%, transparent)',
           color: 'var(--source)',
-          borderColor: 'color-mix(in srgb, var(--source) 30%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--source) 18%, transparent)',
         }}
         title={currentLabel}
       >
-        ⚡ {currentLabel} ▾
+        <Zap className="h-3.5 w-3.5 shrink-0" />
+        <span className="min-w-0 truncate pr-1">{currentLabel}</span>
       </button>
       {open &&
         createPortal(

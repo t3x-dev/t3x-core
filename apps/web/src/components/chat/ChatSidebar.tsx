@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -20,6 +20,7 @@ import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
+import { useCommitStore } from '@/store/commitStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
@@ -28,12 +29,30 @@ import { ProjectFolder } from './sidebar/ProjectFolder';
 
 // ── Main Sidebar ──
 
+type RenameTarget =
+  | {
+      kind: 'project';
+      projectId: string;
+      currentName: string;
+    }
+  | {
+      kind: 'conversation';
+      projectId: string;
+      conversationId: string;
+      currentName: string;
+    };
+
 export function ChatSidebar() {
   const router = useRouter();
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectError, setNewProjectError] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const {
     sidebarCollapsed: collapsed,
@@ -43,21 +62,25 @@ export function ChatSidebar() {
     expandedProjectIds,
     toggleProjectExpanded,
     setActiveConversation,
+    setConversationTitle,
     sidebarWidth,
     setSidebarWidth,
     setSidebarResizing,
   } = useChatStore();
+  const setCommitConversationTitle = useCommitStore((s) => s.setConversationTitle);
 
   const {
     projects,
     refresh: refreshProjects,
     remove: removeProject,
     create: createProject,
+    rename: renameProject,
   } = useProjects();
   const {
     conversationsByProject: projectConversations,
     load: loadConversations,
     remove: removeConversationFn,
+    rename: renameConversation,
   } = useProjectConversations();
   const { start: startNewChat } = useNewProjectChat();
 
@@ -134,6 +157,14 @@ export function ChatSidebar() {
       router.push(`/chat/${convs[0].conversation_id}`);
     }
   }, [projectConversations, router, setActiveConversation]);
+
+  useEffect(() => {
+    if (!renameTarget) return;
+    const frame = requestAnimationFrame(() => {
+      renameInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [renameTarget]);
 
   function handleConversationClick(convId: string, projectId: string) {
     setActiveConversation(convId, projectId);
@@ -230,8 +261,84 @@ export function ChatSidebar() {
     }
   }
 
+  const openRenameDialog = useCallback((target: RenameTarget) => {
+    setRenameTarget(target);
+    setRenameValue(target.currentName);
+    setRenameError(null);
+  }, []);
+
+  const handleRenameDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (isRenaming) return;
+      if (!open) {
+        setRenameTarget(null);
+        setRenameValue('');
+        setRenameError(null);
+      }
+    },
+    [isRenaming]
+  );
+
+  async function handleRenameSubmit(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!renameTarget || isRenaming) return;
+
+    const nextName = renameValue.trim();
+    if (!nextName) {
+      setRenameError('Name is required');
+      return;
+    }
+    if (nextName === renameTarget.currentName.trim()) {
+      handleRenameDialogOpenChange(false);
+      return;
+    }
+
+    setIsRenaming(true);
+    setRenameError(null);
+
+    try {
+      if (renameTarget.kind === 'project') {
+        await renameProject(renameTarget.projectId, nextName);
+      } else {
+        const conversation = await renameConversation(
+          renameTarget.projectId,
+          renameTarget.conversationId,
+          nextName
+        );
+        const title = conversation.title ?? nextName;
+        if (activeConversationId === renameTarget.conversationId) {
+          setConversationTitle(title);
+          setCommitConversationTitle(title);
+        }
+      }
+      setRenameTarget(null);
+      setRenameValue('');
+    } catch {
+      setRenameError(
+        renameTarget.kind === 'project'
+          ? 'Failed to rename project'
+          : 'Failed to rename conversation'
+      );
+    } finally {
+      setIsRenaming(false);
+    }
+  }
+
   function handleProjectContextMenu(e: React.MouseEvent, projectId: string) {
+    const project = projects.find((item) => item.project_id === projectId);
+    const projectName = project?.name?.trim() || 'Untitled Project';
+
     openMenu(e, [
+      {
+        label: 'Rename',
+        icon: <Pencil className="h-3.5 w-3.5" />,
+        onClick: () =>
+          openRenameDialog({
+            kind: 'project',
+            projectId,
+            currentName: projectName,
+          }),
+      },
       {
         label: 'Delete Project',
         icon: <Trash2 className="h-3.5 w-3.5" />,
@@ -242,7 +349,23 @@ export function ChatSidebar() {
   }
 
   function handleConversationContextMenu(e: React.MouseEvent, projectId: string, convId: string) {
+    const conversation = (projectConversations[projectId] ?? []).find(
+      (item) => item.conversation_id === convId
+    );
+    const conversationName = conversation?.title?.trim() || 'Untitled Conversation';
+
     openMenu(e, [
+      {
+        label: 'Rename',
+        icon: <Pencil className="h-3.5 w-3.5" />,
+        onClick: () =>
+          openRenameDialog({
+            kind: 'conversation',
+            projectId,
+            conversationId: convId,
+            currentName: conversationName,
+          }),
+      },
       {
         label: 'Delete Conversation',
         icon: <Trash2 className="h-3.5 w-3.5" />,
@@ -257,7 +380,7 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--surface-panel)] backdrop-blur-[var(--fx-blur-panel)]',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--panel)] backdrop-blur-[var(--fx-blur-panel)]',
           !sidebarResizing &&
             'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
@@ -268,7 +391,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-default)]',
+            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
             collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
@@ -289,7 +412,7 @@ export function ChatSidebar() {
 
         {/* New Project action */}
         <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2')}>
+          <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -297,39 +420,37 @@ export function ChatSidebar() {
                   onClick={openNewProjectDialog}
                   className={cn(
                     'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
-                    'hover:border-[var(--stroke-default)] hover:bg-[var(--accent-commit)]/10 hover:text-[var(--accent-commit)]',
+                    'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
                     'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
                     'transition-all duration-[var(--motion-base)]',
-                    collapsed ? 'h-10 w-10' : 'h-7 w-7'
+                    collapsed
+                      ? 'h-9 w-9'
+                      : 'h-8 w-full justify-start gap-2 px-2 text-xs font-medium'
                   )}
                   aria-label="New project"
                 >
                   <Plus className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="truncate">New Project</span>}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
                 New Project
               </TooltipContent>
             </Tooltip>
-            {!collapsed && (
-              <span className="select-none text-xs font-medium text-[var(--text-secondary)]">
-                New Project
-              </span>
-            )}
           </div>
         </div>
 
         {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="min-h-0 min-w-0 flex-1 w-full">
+        <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-0.5 pb-2 pt-1',
+              'flex min-w-0 flex-col gap-1 pb-2 pt-1',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-1">
+              <div className="px-4 pb-0.5 pt-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
@@ -384,8 +505,8 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex min-w-0 flex-col gap-1 py-3 border-t border-[var(--stroke-divider)]',
-            collapsed ? 'items-center px-2' : 'px-3'
+            'mt-auto flex min-w-0 flex-col gap-1 border-t border-[var(--stroke-divider)] bg-[var(--surface-panel)]/40 py-2.5',
+            collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >
           {/* User Menu — Settings lives in this dropdown (Profile / Settings / Sign Out) */}
@@ -417,6 +538,66 @@ export function ChatSidebar() {
 
       {/* Context menu portal */}
       {menu && <ContextMenuPortal menu={menu} onClose={closeMenu} />}
+
+      <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
+        <DialogContent className="sm:max-w-[400px]">
+          <form onSubmit={handleRenameSubmit} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>
+                Rename {renameTarget?.kind === 'project' ? 'Project' : 'Conversation'}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Update the selected {renameTarget?.kind ?? 'item'} name.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="rename-name"
+                className="text-sm font-medium text-[var(--text-primary)]"
+              >
+                Name
+              </label>
+              <Input
+                id="rename-name"
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={(event) => {
+                  setRenameValue(event.target.value);
+                  if (renameError) setRenameError(null);
+                }}
+                placeholder={
+                  renameTarget?.kind === 'conversation'
+                    ? 'Untitled Conversation'
+                    : 'Untitled Project'
+                }
+                disabled={isRenaming}
+                aria-invalid={renameError ? 'true' : undefined}
+                aria-describedby={renameError ? 'rename-error' : undefined}
+              />
+              {renameError && (
+                <p id="rename-error" className="text-xs text-[var(--status-error)]">
+                  {renameError}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleRenameDialogOpenChange(false)}
+                disabled={isRenaming}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="commit" disabled={isRenaming || !renameValue.trim()}>
+                {isRenaming ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">
