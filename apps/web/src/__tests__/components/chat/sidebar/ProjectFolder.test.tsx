@@ -60,6 +60,7 @@ describe('ProjectFolder active state', () => {
     renderFolder({ isActive: false });
 
     const button = screen.getByRole('button', { name: /Test Project/i });
+
     expect(button).not.toHaveAttribute('aria-current');
     expect(button.className).not.toContain('bg-[var(--accent-commit)]/[0.07]');
 

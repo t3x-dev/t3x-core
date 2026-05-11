@@ -171,7 +171,7 @@ const PROVIDER_CAPABILITY: Record<
   { thinking: boolean; webSearch: boolean }
 > = {
   anthropic: { thinking: true, webSearch: true },
-  openai: { thinking: true, webSearch: false },
+  openai: { thinking: true, webSearch: true },
   'google-ai': { thinking: true, webSearch: true },
 };
 
@@ -346,6 +346,23 @@ function toOpenAIContent(
       image_url: {
         url: `data:${block.source?.media_type ?? 'image/png'};base64,${block.source?.data ?? ''}`,
       },
+    };
+  });
+}
+
+function toOpenAIResponsesInputContent(
+  content: ChatMessage['content']
+):
+  | string
+  | Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> {
+  if (typeof content === 'string') return content;
+  return content.map((block) => {
+    if (block.type === 'text') {
+      return { type: 'input_text', text: block.text ?? '' };
+    }
+    return {
+      type: 'input_image',
+      image_url: `data:${block.source?.media_type ?? 'image/png'};base64,${block.source?.data ?? ''}`,
     };
   });
 }
@@ -781,32 +798,60 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             signal: AbortSignal.timeout(120000),
           })) as unknown as Response;
         } else if (providerId === 'openai') {
-          upstreamResponse = (await proxyFetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              // GPT-5 / o-series support reasoning. Setting reasoning_effort
-              // surfaces extended thinking; ignored by older models that
-              // don't recognise it. medium is a balanced default — small
-              // enough to keep latency reasonable.
-              ...(body.thinking && { reasoning_effort: 'medium' }),
-              // Reasoning models (gpt-5/o-series) reject `temperature`. Skip
-              // it whenever thinking is on so the request validates.
-              ...(body.thinking ? {} : { temperature }),
-              max_completion_tokens: maxTokens,
-              stream: true,
-              stream_options: { include_usage: true },
-              messages: messages.map((message) => ({
-                role: message.role,
-                content: toOpenAIContent(message.content),
-              })),
-            }),
-            signal: AbortSignal.timeout(120000),
-          })) as unknown as Response;
+          if (body.web_search) {
+            upstreamResponse = (await proxyFetch('https://api.openai.com/v1/responses', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                ...(body.thinking && { reasoning: { effort: 'medium' } }),
+                ...(body.thinking ? {} : { temperature }),
+                max_output_tokens: maxTokens,
+                stream: true,
+                tools: [{ type: 'web_search' }],
+                tool_choice: 'auto',
+                ...(systemMessage &&
+                  typeof systemMessage.content === 'string' && {
+                    instructions: systemMessage.content,
+                  }),
+                input: otherMessages.map((message) => ({
+                  role: message.role === 'assistant' ? 'assistant' : 'user',
+                  content: toOpenAIResponsesInputContent(message.content),
+                })),
+              }),
+              signal: AbortSignal.timeout(120000),
+            })) as unknown as Response;
+          } else {
+            upstreamResponse = (await proxyFetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                // GPT-5 / o-series support reasoning. Setting reasoning_effort
+                // surfaces extended thinking; ignored by older models that
+                // don't recognise it. medium is a balanced default — small
+                // enough to keep latency reasonable.
+                ...(body.thinking && { reasoning_effort: 'medium' }),
+                // Reasoning models (gpt-5/o-series) reject `temperature`. Skip
+                // it whenever thinking is on so the request validates.
+                ...(body.thinking ? {} : { temperature }),
+                max_completion_tokens: maxTokens,
+                stream: true,
+                stream_options: { include_usage: true },
+                messages: messages.map((message) => ({
+                  role: message.role,
+                  content: toOpenAIContent(message.content),
+                })),
+              }),
+              signal: AbortSignal.timeout(120000),
+            })) as unknown as Response;
+          }
         } else if (providerId === 'google-ai') {
           // Gemini's streaming SSE endpoint: ?alt=sse on the streamGenerateContent path.
           // Uses x-goog-api-key header instead of bearer auth.
@@ -869,6 +914,23 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
         let receivedMessageStop = false;
         const citations: Array<{ url: string; title: string }> = [];
         let currentBlockType = '';
+        let emittedOpenAIWebSearch = false;
+        let emittedDoneEvent = false;
+        const emitDone = () => {
+          if (emittedDoneEvent) return;
+          emittedDoneEvent = true;
+          controller.enqueue(
+            encodeSseEvent(
+              JSON.stringify({
+                type: 'done',
+                model: resolvedModel,
+                usage,
+                ...(citations.length > 0 && { citations }),
+              })
+            )
+          );
+          controller.enqueue(encodeSseEvent('[DONE]'));
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -899,16 +961,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             if (!dataStr) continue;
             if (providerId === 'openai' && dataStr === '[DONE]') {
               receivedMessageStop = true;
-              controller.enqueue(
-                encodeSseEvent(
-                  JSON.stringify({
-                    type: 'done',
-                    model: resolvedModel,
-                    usage,
-                  })
-                )
-              );
-              controller.enqueue(encodeSseEvent('[DONE]'));
+              emitDone();
               continue;
             }
 
@@ -920,6 +973,78 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
 
             if (providerId === 'openai') {
+              if (body.web_search) {
+                const openAIEventType = typeof parsed.type === 'string' ? parsed.type : eventType;
+
+                if (
+                  openAIEventType === 'response.created' ||
+                  openAIEventType === 'response.in_progress' ||
+                  openAIEventType === 'response.completed'
+                ) {
+                  const response = parsed.response as Record<string, unknown> | undefined;
+                  if (typeof response?.model === 'string') {
+                    resolvedModel = response.model;
+                  }
+                  const usageChunk = response?.usage as Record<string, number> | undefined;
+                  if (usageChunk) {
+                    usage.input_tokens = usageChunk.input_tokens ?? usage.input_tokens;
+                    usage.output_tokens = usageChunk.output_tokens ?? usage.output_tokens;
+                  }
+                }
+
+                if (
+                  openAIEventType === 'response.web_search_call.in_progress' ||
+                  openAIEventType === 'response.web_search_call.searching'
+                ) {
+                  if (!emittedOpenAIWebSearch) {
+                    emittedOpenAIWebSearch = true;
+                    controller.enqueue(
+                      encodeSseEvent(JSON.stringify({ type: 'searching', query: '' }))
+                    );
+                  }
+                  continue;
+                }
+
+                if (
+                  openAIEventType === 'response.output_text.delta' &&
+                  typeof parsed.delta === 'string'
+                ) {
+                  controller.enqueue(
+                    encodeSseEvent(JSON.stringify({ type: 'token', content: parsed.delta }))
+                  );
+                  continue;
+                }
+
+                if (openAIEventType === 'response.output_text.annotation.added') {
+                  const annotation = parsed.annotation as Record<string, unknown> | undefined;
+                  if (annotation?.type === 'url_citation' && typeof annotation.url === 'string') {
+                    citations.push({
+                      url: annotation.url,
+                      title:
+                        typeof annotation.title === 'string' ? annotation.title : annotation.url,
+                    });
+                  }
+                  continue;
+                }
+
+                if (openAIEventType === 'response.failed' || openAIEventType === 'error') {
+                  const error = parsed.error as Record<string, unknown> | undefined;
+                  throw new Error(
+                    typeof error?.message === 'string'
+                      ? error.message
+                      : 'OpenAI Responses stream failed'
+                  );
+                }
+
+                if (openAIEventType === 'response.completed') {
+                  receivedMessageStop = true;
+                  emitDone();
+                  continue;
+                }
+
+                continue;
+              }
+
               if (typeof parsed.model === 'string') {
                 resolvedModel = parsed.model;
               }
@@ -1044,34 +1169,14 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
               }
             } else if (eventType === 'message_stop') {
               receivedMessageStop = true;
-              controller.enqueue(
-                encodeSseEvent(
-                  JSON.stringify({
-                    type: 'done',
-                    model: resolvedModel,
-                    usage,
-                    ...(citations.length > 0 && { citations }),
-                  })
-                )
-              );
-              controller.enqueue(encodeSseEvent('[DONE]'));
+              emitDone();
             }
           }
         }
 
         // If the upstream stream ends without an explicit stop event, emit done anyway.
         if (!receivedMessageStop) {
-          controller.enqueue(
-            encodeSseEvent(
-              JSON.stringify({
-                type: 'done',
-                model: resolvedModel,
-                usage,
-                ...(citations.length > 0 && { citations }),
-              })
-            )
-          );
-          controller.enqueue(encodeSseEvent('[DONE]'));
+          emitDone();
         }
         reader.releaseLock();
       } catch (err) {

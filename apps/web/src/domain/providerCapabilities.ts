@@ -6,7 +6,7 @@
  *   provider     thinking                      web_search
  *   ────────     ────────────────────────      ─────────────────────────────
  *   anthropic    `thinking` block + budget     `web_search` tool (streaming)
- *   openai       `reasoning_effort: 'medium'`  (Responses API — not yet wired)
+ *   openai       `reasoning_effort: 'medium'`  Responses API `web_search`
  *   google       `thinkingConfig.thinkingBudget`  `googleSearch` tool
  *
  * The shape behind each capability differs, but from the user's perspective
@@ -28,7 +28,7 @@ interface ProviderCapabilities {
 
 const PROVIDER_CAPABILITIES: Record<ProviderCapabilityId, ProviderCapabilities> = {
   anthropic: { thinking: true, web_search: true },
-  openai: { thinking: true, web_search: false },
+  openai: { thinking: true, web_search: true },
   google: { thinking: true, web_search: true },
 };
 

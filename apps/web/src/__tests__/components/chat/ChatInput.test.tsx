@@ -4,10 +4,12 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { useChatSessionStore } from '@/store/chatSessionStore';
 
 describe('ChatInput draft persistence', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    useChatSessionStore.setState({ webSearchEnabled: false, thinkingEnabled: false });
   });
 
   it('restores an unsent draft for the same draft key', async () => {
@@ -68,5 +70,17 @@ describe('ChatInput draft persistence', () => {
       expect(screen.getByPlaceholderText('Reply...')).toHaveValue('');
       expect(window.localStorage.getItem('t3x:chat-input-draft:conversation:conv_123')).toBeNull();
     });
+  });
+
+  it('lets OpenAI chats enable web search', () => {
+    render(<ChatInput selectedProvider="openai" onSend={vi.fn()} />);
+
+    const webSearchButton = screen.getByRole('button', { name: 'Enable web search' });
+    expect(webSearchButton).toBeEnabled();
+
+    fireEvent.click(webSearchButton);
+
+    expect(useChatSessionStore.getState().webSearchEnabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Disable web search' })).toBeInTheDocument();
   });
 });

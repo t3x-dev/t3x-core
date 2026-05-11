@@ -39,30 +39,58 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParamsValue,
 }));
 
-vi.mock('@/hooks/shared/useAvailableModels', async () => {
-  const actual = await vi.importActual<typeof import('@/hooks/shared/useAvailableModels')>(
-    '@/hooks/shared/useAvailableModels'
-  );
+const modelSelectionFixture = vi.hoisted(() => ({
+  value: {
+    loading: false,
+    hasConfiguredGenerationProvider: true,
+    selectedProvider: 'anthropic',
+    selectedModel: 'claude-sonnet-4-20250514',
+    availabilityError: null as 'api_unavailable' | null,
+  },
+}));
+
+vi.mock('@/hooks/shared/useChatModelSelection', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
   return {
-    ...actual,
-    useAvailableModels: vi.fn(),
+    useChatModelSelection: vi.fn(() => {
+      const [selection, setSelection] = React.useState({
+        provider: modelSelectionFixture.value.selectedProvider,
+        model: modelSelectionFixture.value.selectedModel,
+      });
+      return {
+        loading: modelSelectionFixture.value.loading,
+        hasConfiguredGenerationProvider:
+          modelSelectionFixture.value.hasConfiguredGenerationProvider,
+        selectedProvider: selection.provider,
+        selectedModel: selection.model,
+        handleModelChange: (provider: string, model: string) => {
+          modelSelectionFixture.value.selectedProvider = provider;
+          modelSelectionFixture.value.selectedModel = model;
+          setSelection({ provider, model });
+        },
+        availabilityError: modelSelectionFixture.value.availabilityError,
+      };
+    }),
   };
 });
 
 vi.mock('@/components/chat/ChatInput', () => ({
   ChatInput: ({
     disabled,
+    placeholder,
     selectedModel,
     onSend,
     onModelChange,
   }: {
     disabled?: boolean;
+    placeholder?: string;
     selectedModel?: string;
     onSend: (message: string) => void;
     onModelChange?: (provider: string, model: string) => void;
   }) => (
     <div>
       <div data-testid="chat-disabled">{String(Boolean(disabled))}</div>
+      <div data-testid="chat-placeholder">{placeholder ?? ''}</div>
       <div data-testid="selected-model">{selectedModel ?? ''}</div>
       <button type="button" onClick={() => onModelChange?.('openai', 'gpt-4.1')}>
         select openai
@@ -75,17 +103,22 @@ vi.mock('@/components/chat/ChatInput', () => ({
 }));
 
 import ChatLandingPage from '@/app/chat/page';
-import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
-import { useChatModelPreferencesStore } from '@/store/chatModelPreferencesStore';
 import { useChatStore } from '@/store/chatStore';
+
+function setModelSelection(overrides: Partial<typeof modelSelectionFixture.value> = {}): void {
+  modelSelectionFixture.value = {
+    loading: false,
+    hasConfiguredGenerationProvider: true,
+    selectedProvider: 'anthropic',
+    selectedModel: 'claude-sonnet-4-20250514',
+    availabilityError: null,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   localStorage.removeItem('t3x-chat-model-preferences');
-  useChatModelPreferencesStore.setState({
-    selectedProvider: null,
-    selectedModel: null,
-    hydrated: true,
-  });
+  setModelSelection();
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   searchParamsValue = new URLSearchParams();
 });
@@ -93,47 +126,30 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   localStorage.removeItem('t3x-chat-model-preferences');
-  useChatModelPreferencesStore.setState({
-    selectedProvider: null,
-    selectedModel: null,
-    hydrated: true,
-  });
+  setModelSelection();
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   searchParamsValue = new URLSearchParams();
 });
 
 describe('ChatLandingPage', () => {
-  it('preserves provider and model in the /chat/new navigation URL', async () => {
-    vi.mocked(useAvailableModels).mockReturnValue({
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [
-            {
-              id: 'claude-sonnet-4-20250514',
-              label: 'Claude Sonnet 4',
-              capabilities: [],
-              max_output_tokens: 4096,
-            },
-          ],
-        },
-        {
-          name: 'openai',
-          label: 'OpenAI',
-          available: true,
-          models: [{ id: 'gpt-4.1', label: 'GPT-4.1', capabilities: [], max_output_tokens: 4096 }],
-        },
-      ],
-      loading: false,
-      hasConfiguredGenerationProvider: true,
-      defaultProvider: 'anthropic',
-      defaultModel: 'claude-sonnet-4-20250514',
-      availabilityError: null,
-      loadModels: vi.fn(),
+  it('renders the guided landing copy and starter actions', async () => {
+    await act(async () => {
+      render(<ChatLandingPage />);
     });
 
+    expect(screen.getByRole('heading', { name: 'What should T3X make sense of?' })).toBeVisible();
+    expect(screen.getByText('Source')).toBeVisible();
+    expect(screen.getByText('Meaning')).toBeVisible();
+    expect(screen.getByText('Commit')).toBeVisible();
+    expect(screen.getByRole('button', { name: /capture source/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /shape meaning/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /create checkpoint/i })).toBeEnabled();
+    expect(screen.getByTestId('chat-placeholder')).toHaveTextContent(
+      'Paste notes, ask a question, or describe what to preserve...'
+    );
+  });
+
+  it('preserves provider and model in the /chat/new navigation URL', async () => {
     await act(async () => {
       render(<ChatLandingPage />);
     });
@@ -163,30 +179,6 @@ describe('ChatLandingPage', () => {
     // would create a second project on first send.
     searchParamsValue = new URLSearchParams({ projectId: 'proj_from_url' });
 
-    vi.mocked(useAvailableModels).mockReturnValue({
-      providers: [
-        {
-          name: 'anthropic',
-          label: 'Anthropic',
-          available: true,
-          models: [
-            {
-              id: 'claude-sonnet-4-20250514',
-              label: 'Claude Sonnet 4',
-              capabilities: [],
-              max_output_tokens: 4096,
-            },
-          ],
-        },
-      ],
-      loading: false,
-      hasConfiguredGenerationProvider: true,
-      defaultProvider: 'anthropic',
-      defaultModel: 'claude-sonnet-4-20250514',
-      availabilityError: null,
-      loadModels: vi.fn(),
-    });
-
     await act(async () => {
       render(<ChatLandingPage />);
     });
@@ -208,14 +200,11 @@ describe('ChatLandingPage', () => {
   });
 
   it('disables the start path when no generation provider is usable', async () => {
-    vi.mocked(useAvailableModels).mockReturnValue({
-      providers: [],
-      loading: false,
+    setModelSelection({
       hasConfiguredGenerationProvider: false,
-      defaultProvider: null,
-      defaultModel: null,
+      selectedProvider: null,
+      selectedModel: null,
       availabilityError: null,
-      loadModels: vi.fn(),
     });
 
     await act(async () => {
@@ -224,7 +213,7 @@ describe('ChatLandingPage', () => {
 
     expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
     expect(screen.getByTestId('chat-disabled')).toHaveTextContent('true');
-    expect(screen.getByRole('button', { name: /capture meeting notes/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /capture source/i })).toBeDisabled();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
@@ -233,14 +222,11 @@ describe('ChatLandingPage', () => {
   });
 
   it('shows an API unavailable banner instead of provider setup when model loading fails', async () => {
-    vi.mocked(useAvailableModels).mockReturnValue({
-      providers: [],
-      loading: false,
+    setModelSelection({
       hasConfiguredGenerationProvider: false,
-      defaultProvider: null,
-      defaultModel: null,
+      selectedProvider: null,
+      selectedModel: null,
       availabilityError: 'api_unavailable',
-      loadModels: vi.fn(),
     });
 
     await act(async () => {

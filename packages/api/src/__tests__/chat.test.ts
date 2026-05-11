@@ -425,7 +425,7 @@ describe('Chat Routes', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('rejects web_search for non-anthropic providers instead of ignoring it', async () => {
+    it('rejects web_search on non-streaming chat instead of ignoring it', async () => {
       await storage.upsertProviderCredential(mockDB, {
         providerId: 'openai',
         apiKey: 'sk-local-openai',
@@ -448,8 +448,8 @@ describe('Chat Routes', () => {
       const data = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('PROVIDER_ERROR');
-      expect(String(data.error.message)).toContain('openai');
       expect(String(data.error.message)).toContain('web_search');
+      expect(String(data.error.message)).toContain('streaming chat');
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -648,6 +648,80 @@ describe('Chat Routes', () => {
       expect(text).toContain('"type":"token","content":"Hel"');
       expect(text).toContain('"type":"token","content":"lo"');
       expect(text).toContain('"type":"done"');
+      fetchMock.mockRestore();
+      delete process.env.OPENAI_API_KEY;
+    });
+
+    it('uses OpenAI Responses API when streaming chat enables web_search', async () => {
+      process.env.OPENAI_API_KEY = 'test-openai-key';
+      const streamBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              [
+                'event: response.created',
+                'data: {"type":"response.created","response":{"model":"gpt-5.4-mini"}}',
+                '',
+                'event: response.web_search_call.searching',
+                'data: {"type":"response.web_search_call.searching","item_id":"ws_123","output_index":0}',
+                '',
+                'event: response.output_text.delta',
+                'data: {"type":"response.output_text.delta","delta":"Fresh result"}',
+                '',
+                'event: response.output_text.annotation.added',
+                'data: {"type":"response.output_text.annotation.added","annotation":{"type":"url_citation","url":"https://example.com","title":"Example"}}',
+                '',
+                'event: response.completed',
+                'data: {"type":"response.completed","response":{"model":"gpt-5.4-mini","usage":{"input_tokens":12,"output_tokens":4}}}',
+                '',
+                'data: [DONE]',
+                '',
+              ].join('\n')
+            )
+          );
+          controller.close();
+        },
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+          expect(String(input)).toBe('https://api.openai.com/v1/responses');
+          expect(init?.headers).toMatchObject({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer test-openai-key',
+          });
+          const payload = JSON.parse(String(init?.body)) as {
+            model: string;
+            stream: boolean;
+            tools: Array<{ type: string }>;
+            input: Array<{ role: string; content: string }>;
+          };
+          expect(payload.model).toBe('gpt-5.4-mini');
+          expect(payload.stream).toBe(true);
+          expect(payload.tools).toEqual([{ type: 'web_search' }]);
+          expect(payload.input).toEqual([{ role: 'user', content: 'Search latest' }]);
+          return new Response(streamBody, { status: 200 });
+        });
+
+      const res = await app.request('/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          web_search: true,
+          messages: [{ role: 'user', content: 'Search latest' }],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).toContain('"type":"searching"');
+      expect(text).toContain('"type":"token","content":"Fresh result"');
+      expect(text).toContain('"type":"done","model":"gpt-5.4-mini"');
+      expect(text.match(/"type":"done"/g)).toHaveLength(1);
+      expect(text).toContain('"url":"https://example.com"');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       fetchMock.mockRestore();
       delete process.env.OPENAI_API_KEY;
     });
