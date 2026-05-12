@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let searchParamsValue: URLSearchParams = new URLSearchParams();
 let storeProjectId: string | null = null;
+let compactViewport = false;
 const workspaceMock = vi.hoisted(() => ({
   expanded: false,
   setActiveProject: vi.fn(),
@@ -28,6 +29,10 @@ vi.mock('@/hooks/conversations/useInheritFromCommit', () => ({
     inheritFromCommitHash: null,
     clearInherit: vi.fn(),
   }),
+}));
+
+vi.mock('@/hooks/shared/useChatCompactViewport', () => ({
+  useChatCompactViewport: () => compactViewport,
 }));
 
 vi.mock('@/store/chatStore', () => ({
@@ -56,6 +61,7 @@ afterEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
   storeProjectId = null;
+  compactViewport = false;
   workspaceMock.expanded = false;
 });
 
@@ -145,5 +151,14 @@ describe('ConversationPage', () => {
     });
 
     rectSpy.mockRestore();
+  });
+
+  it('hides the workspace rail on compact viewports so chat keeps usable width', () => {
+    compactViewport = true;
+    workspaceMock.expanded = true;
+
+    render(<ConversationPage />);
+
+    expect(vi.mocked(YOpsWorkspace)).not.toHaveBeenCalled();
   });
 });

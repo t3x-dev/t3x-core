@@ -74,7 +74,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Select model: ${currentLabel}`}
-        className="flex h-8 max-w-[132px] shrink min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--source-dim)]"
+        className="flex h-8 max-w-[132px] shrink min-w-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--source-dim)]"
         style={{
           background: 'color-mix(in srgb, var(--source-dim) 68%, transparent)',
           color: 'var(--source)',
@@ -89,7 +89,7 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
         createPortal(
           <div
             ref={dropdownRef}
-            className="rounded-lg border shadow-xl bg-white dark:bg-zinc-900"
+            className="rounded-lg border bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-lg)]"
             style={{
               ...getPopoverStyle(),
               borderColor: 'var(--stroke-default)',
@@ -117,8 +117,8 @@ export function ChatModelSelector({ selectedModel, onModelChange }: ChatModelSel
                         onModelChange(provider.name, model.id);
                         setOpen(false);
                       }}
-                      className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      style={{ color: model.id === selectedModel ? 'rgb(167,139,250)' : undefined }}
+                      className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--hover-bg)]"
+                      style={{ color: model.id === selectedModel ? 'var(--source)' : undefined }}
                     >
                       {model.id === selectedModel ? '✓ ' : '  '}
                       {model.label}

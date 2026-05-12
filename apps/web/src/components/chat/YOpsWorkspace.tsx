@@ -140,7 +140,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
       {logsOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] shadow-xl"
+          className="absolute right-0 top-7 z-20 w-56 overflow-hidden rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-lg)]"
         >
           <div className="border-b border-[var(--stroke-divider)] px-3 py-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             Operation Logs

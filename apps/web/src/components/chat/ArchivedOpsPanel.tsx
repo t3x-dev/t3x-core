@@ -66,7 +66,7 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
     <div className="flex flex-col h-full bg-[var(--panel-alt)]" data-testid="archived-ops-panel">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel)]">
         <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[var(--text-quaternary,#4a4a55)] opacity-60" />
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--text-quaternary)] opacity-60" />
           Archived
         </span>
         <span className="text-[9px] font-mono text-[var(--text-tertiary)]">
@@ -83,7 +83,7 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
       {state.status === 'error' ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-[280px] text-[11px] text-[var(--text-tertiary)] leading-relaxed">
-            <div className="font-semibold text-[var(--status-error,#f87171)] mb-1">
+            <div className="font-semibold text-[var(--status-error)] mb-1">
               Couldn&rsquo;t load archived ops
             </div>
             <div>{state.error}</div>
@@ -117,7 +117,7 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
                 <span className="font-mono text-[10px] text-[var(--text-tertiary)] shrink-0 tabular-nums">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--text-quaternary,#4a4a55)] shrink-0">
+                <span className="font-mono text-[10px] uppercase tracking-wide text-[var(--text-quaternary)] shrink-0">
                   {row.source}
                 </span>
                 <span className="flex-1 text-[12px] text-[var(--text-tertiary)] line-through truncate">
@@ -127,7 +127,7 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
                   Archived {formatArchivedAt(row.superseded_at)}
                 </span>
               </div>
-              <div className="pl-7 mt-0.5 text-[10px] font-mono text-[var(--text-quaternary,#4a4a55)] truncate">
+              <div className="pl-7 mt-0.5 text-[10px] font-mono text-[var(--text-quaternary)] truncate">
                 {row.id}
               </div>
             </div>

@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjects } from '@/hooks/projects/useProjects';
+import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { cn } from '@/utils/cn';
@@ -67,6 +68,7 @@ export function ChatSidebar() {
     setSidebarWidth,
     setSidebarResizing,
   } = useChatStore();
+  const compactViewport = useChatCompactViewport();
   const setCommitConversationTitle = useCommitStore((s) => s.setConversationTitle);
 
   const {
@@ -88,12 +90,13 @@ export function ChatSidebar() {
 
   // Track pending auto-navigation when expanding a project for the first time
   const pendingNavProjectId = useRef<string | null>(null);
+  const wasCompactViewportRef = useRef(false);
 
   const refreshKey = useChatStore((s) => s.refreshKey);
 
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (collapsed) return;
+      if (collapsed || compactViewport) return;
       e.preventDefault();
       e.stopPropagation();
 
@@ -120,17 +123,25 @@ export function ChatSidebar() {
       document.addEventListener('mouseup', handleUp);
       window.addEventListener('blur', handleUp);
     },
-    [collapsed, setSidebarResizing, setSidebarWidth]
+    [collapsed, compactViewport, setSidebarResizing, setSidebarWidth]
   );
 
   const handleResizeKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (collapsed || compactViewport) return;
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       setSidebarWidth(sidebarWidth + (e.key === 'ArrowRight' ? 16 : -16));
     },
-    [setSidebarWidth, sidebarWidth]
+    [collapsed, compactViewport, setSidebarWidth, sidebarWidth]
   );
+
+  useEffect(() => {
+    if (compactViewport && !wasCompactViewportRef.current) {
+      useChatStore.setState({ sidebarCollapsed: true });
+    }
+    wasCompactViewportRef.current = compactViewport;
+  }, [compactViewport]);
 
   // Re-fetch projects when refreshKey changes (useProjects does the initial load)
   useEffect(() => {
@@ -386,7 +397,13 @@ export function ChatSidebar() {
           glass.highlight,
           collapsed ? 'items-center' : ''
         )}
-        style={{ width: collapsed ? CHAT_SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
+        style={{
+          width: collapsed
+            ? CHAT_SIDEBAR_COLLAPSED_WIDTH
+            : compactViewport
+              ? `min(${sidebarWidth}px, calc(100vw - ${CHAT_SIDEBAR_COLLAPSED_WIDTH}px))`
+              : sidebarWidth,
+        }}
       >
         {/* Logo */}
         <div
@@ -514,7 +531,7 @@ export function ChatSidebar() {
         </div>
       </aside>
 
-      {!collapsed && (
+      {!collapsed && !compactViewport && (
         <button
           type="button"
           aria-label="Resize project sidebar"

@@ -149,6 +149,27 @@ describe('ChatLandingPage', () => {
     );
   });
 
+  it('uses semantic tone tokens for starter card icons', async () => {
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    const captureIcon = screen
+      .getByRole('button', { name: /capture source/i })
+      .querySelector('span');
+    const meaningIcon = screen
+      .getByRole('button', { name: /shape meaning/i })
+      .querySelector('span');
+    const checkpointIcon = screen
+      .getByRole('button', { name: /create checkpoint/i })
+      .querySelector('span');
+
+    expect(captureIcon).toHaveClass('text-[var(--source)]');
+    expect(meaningIcon).toHaveClass('text-[var(--accent-extract)]');
+    expect(checkpointIcon).toHaveClass('text-[var(--accent-commit)]');
+    expect(checkpointIcon).not.toHaveClass('text-[var(--accent-leaf)]');
+  });
+
   it('preserves provider and model in the /chat/new navigation URL', async () => {
     await act(async () => {
       render(<ChatLandingPage />);

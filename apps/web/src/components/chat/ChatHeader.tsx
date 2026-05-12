@@ -4,6 +4,7 @@ import { ChevronDown, Loader2, PanelLeftClose, PanelLeftOpen, Sparkles } from 'l
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
+import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
@@ -48,6 +49,7 @@ export function ChatHeader({
   const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
+  const compactViewport = useChatCompactViewport();
   // Extract requires both an active project and a resolved conversation in
   // the workspace store. On a direct load of /chat/[convId], `useChatInit`
   // backfills `activeProjectId` from `fetchConversationMeta` asynchronously;
@@ -142,10 +144,10 @@ export function ChatHeader({
       )}
 
       {/* Extract split button — only visible when YOps panel is expanded */}
-      {panelExpanded && !isCommitted && (
+      {panelExpanded && !compactViewport && !isCommitted && (
         <div
           ref={dropdownRef}
-          className="relative flex h-7 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)] shadow-[0_1px_2px_rgba(15,23,42,0.035)]"
+          className="relative flex h-7 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)] shadow-[var(--fx-shadow-sm)]"
         >
           <button
             type="button"
@@ -188,7 +190,7 @@ export function ChatHeader({
             createPortal(
               <div
                 ref={dropdownMenuRef}
-                className="rounded-md border border-[var(--stroke-default)] bg-white dark:bg-zinc-900 shadow-xl"
+                className="rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-lg)]"
                 style={getExtractMenuStyle()}
               >
                 {(['concise', 'balanced', 'detailed'] as const).map((preset) => (

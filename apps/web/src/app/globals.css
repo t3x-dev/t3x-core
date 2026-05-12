@@ -249,6 +249,9 @@
   --accent-pending-soft: rgba(249, 115, 22, 0.1);
   --accent-leaf-soft: rgba(16, 185, 129, 0.1);
   --accent-conversation-soft: rgba(99, 102, 241, 0.1);
+  --on-accent: #ffffff;
+  --on-status: #ffffff;
+  --overlay-scrim: rgba(15, 23, 42, 0.28);
 
   /* ===== Unified Design v2 Aliases (light mode) ===== */
   /* Text hierarchy aliases */
@@ -256,15 +259,21 @@
   --text-2: var(--text-secondary);
   --text-3: var(--text-tertiary);
   --text-dim: #b0b0b5;
+  --text-quaternary: var(--text-dim);
   /* Surface aliases */
   --bg: #fafaf9;
   --surface: #ffffff;
   --surface-hover: rgba(0, 0, 0, 0.02);
   --surface-alt: #f5f5f4;
   --surface-raised: #ffffff;
+  --bg-primary: var(--surface-panel);
+  --bg-secondary: var(--surface-alt);
+  --bg-tertiary: var(--surface-hover);
   /* Border aliases */
   --border-divider: rgba(0, 0, 0, 0.06);
   --border-strong: rgba(0, 0, 0, 0.14);
+  --border-primary: var(--stroke-default);
+  --accent: var(--source);
   /* Glass (light: opaque) */
   --glass-bg: rgba(255, 255, 255, 0.92);
   --glass-blur: 8px;
@@ -280,6 +289,7 @@
   --surface-card: oklch(1 0 0);
   --surface-elevated: oklch(1 0 0);
   --surface-radial: oklch(0.97 0.002 250);
+  --surface-canvas: var(--surface-app);
 
   /* ===== Stroke System — light mode: dark-alpha ===== */
   --stroke-default: oklch(0 0 0 / 10%);
@@ -425,6 +435,7 @@
   --surface-card: oklch(0.2 0.008 260 / 93%);
   --surface-elevated: oklch(0.22 0.008 260 / 95%);
   --surface-radial: oklch(0.15 0.012 260);
+  --surface-canvas: var(--surface-app);
 
   /* ===== Stroke System — WCAG AA: 3:1 for borders ===== */
   --stroke-default: oklch(1 0 0 / 14%);
@@ -486,6 +497,9 @@
   --accent-pending-soft: rgba(229, 160, 48, 0.1);
   --accent-leaf-soft: rgba(52, 211, 153, 0.1);
   --accent-conversation-soft: rgba(129, 140, 248, 0.1);
+  --on-accent: #111827;
+  --on-status: #111827;
+  --overlay-scrim: rgba(0, 0, 0, 0.45);
 
   /* ===== Status Colors (dark overrides) ===== */
   --status-success: #4ade80;

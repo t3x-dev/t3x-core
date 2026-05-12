@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
+import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
@@ -32,6 +33,7 @@ export default function ConversationPage() {
   const resolvedProjectId = projectIdParam ?? activeProjectId;
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const setActiveWorkspaceProject = useWorkspaceStore((s) => s.setActiveProject);
+  const compactViewport = useChatCompactViewport();
 
   // Mirror the resolved project into the workspace store so the per-project
   // expansion preference (`panelExpandedByProject[resolvedProjectId]`) keys
@@ -47,7 +49,8 @@ export default function ConversationPage() {
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasMeasuredPanelWidth = useRef(false);
-  const isExpanded = panelExpanded;
+  const showWorkspace = !compactViewport;
+  const isExpanded = showWorkspace && panelExpanded;
 
   useEffect(() => {
     if (!isExpanded || !containerRef.current) return;
@@ -130,7 +133,7 @@ export default function ConversationPage() {
       )}
 
       {/* YOps workspace panel */}
-      <YOpsWorkspace customWidth={isExpanded ? panelWidth : undefined} />
+      {showWorkspace && <YOpsWorkspace customWidth={isExpanded ? panelWidth : undefined} />}
     </div>
   );
 }
