@@ -386,7 +386,7 @@ export function ChatWorkspace({
               <div className="w-full py-4">
                 <div className="mx-auto max-w-[620px] px-5">
                   <div className="flex gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium mt-0.5 bg-gradient-to-br from-[var(--accent-commit)]/20 to-[var(--accent-conversation)]/20 text-[var(--accent-commit)] ring-1 ring-[var(--accent-commit)]/20">
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-conversation-soft)] text-xs font-medium text-[var(--accent-conversation)] ring-1 ring-[var(--accent-conversation)]/20">
                       T3
                     </div>
                     <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm pt-1">
@@ -456,7 +456,7 @@ export function ChatWorkspace({
       {isCommitted ? (
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
-        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4 shadow-[0_-10px_24px_rgba(15,23,42,0.035)]">
+        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4 shadow-[var(--fx-shadow-sm)]">
           <div className="mx-auto max-w-[620px] px-5">
             <ChatInput
               onSend={handleSend}

@@ -21,7 +21,7 @@ export function CommittedBar({ projectId }: CommittedBarProps) {
         <div className="rounded-2xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-3.5">
           {/* Status row */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--commit)] text-white">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--status-success)] text-[var(--on-status)]">
               <Check className="h-3 w-3" strokeWidth={3} />
             </div>
             <span className="text-[13px] font-semibold text-[var(--text-primary)]">Committed</span>
@@ -59,7 +59,7 @@ export function CommittedBar({ projectId }: CommittedBarProps) {
               <button
                 type="button"
                 onClick={() => router.push(`/project/${projectId}`)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-commit)] px-3.5 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-commit)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--on-accent)] transition-opacity hover:opacity-90"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 View Canvas

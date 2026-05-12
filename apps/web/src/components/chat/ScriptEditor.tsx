@@ -27,7 +27,7 @@ const PLACEHOLDER = `yops:
       path: node/slot
       value: "new value"`;
 
-const VSCODE_MONO_FONT = 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const YOPS_MONO_FONT = 'var(--font-mono)';
 
 const yopsHighlightStyle = HighlightStyle.define([
   { tag: [t.propertyName, t.definitionKeyword, t.keyword], color: 'var(--yaml-key)' },
@@ -187,7 +187,7 @@ export function ScriptEditor() {
           },
           '.cm-scroller': {
             overflow: 'auto',
-            fontFamily: VSCODE_MONO_FONT,
+            fontFamily: YOPS_MONO_FONT,
             fontWeight: '400',
             fontVariantLigatures: 'none',
             letterSpacing: '0',
@@ -197,7 +197,7 @@ export function ScriptEditor() {
             backgroundColor: 'var(--panel)',
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
             borderRight: '1px solid var(--stroke-default)',
-            fontFamily: VSCODE_MONO_FONT,
+            fontFamily: YOPS_MONO_FONT,
             fontSize: '11px',
             fontVariantNumeric: 'tabular-nums',
           },
@@ -293,7 +293,7 @@ export function ScriptEditor() {
           <span
             className={cn(
               'inline-block h-2 w-2 rounded-full',
-              isStreaming ? 'bg-red-500 animate-pulse' : 'bg-green-500'
+              isStreaming ? 'bg-[var(--status-error)] animate-pulse' : 'bg-[var(--status-success)]'
             )}
           />
           YOps

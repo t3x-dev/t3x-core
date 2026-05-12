@@ -247,10 +247,10 @@ export function ChatInput({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        'rounded-[24px] border bg-[var(--surface-panel)]/28 shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition-[background,border-color,box-shadow] duration-[var(--motion-base)]',
-        'focus-within:border-[var(--accent-commit)]/20 focus-within:bg-[var(--surface-panel)]/60 focus-within:shadow-[0_10px_26px_rgba(15,23,42,0.045)]',
+        'rounded-[24px] border bg-[var(--surface-panel)]/28 shadow-[var(--fx-shadow-sm)] transition-[background,border-color,box-shadow] duration-[var(--motion-base)]',
+        'focus-within:border-[var(--accent-commit)]/20 focus-within:bg-[var(--surface-panel)]/60 focus-within:shadow-[var(--fx-shadow-md)]',
         isDragging
-          ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'
+          ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/5 shadow-[var(--fx-shadow-md)]'
           : 'border-[var(--stroke-divider)]/70'
       )}
     >
@@ -282,7 +282,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
-                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[var(--status-error)] text-white text-[10px] flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--status-error)] text-[10px] text-[var(--on-status)] opacity-0 transition-opacity group-hover/img:opacity-100"
               >
                 &times;
               </button>
@@ -321,7 +321,7 @@ export function ChatInput({
             size="icon"
             onClick={handleFileClick}
             disabled={disabled}
-            className="h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 text-[var(--text-tertiary)] shadow-[0_1px_2px_rgba(15,23,42,0.035)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
+            className="h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 text-[var(--text-tertiary)] shadow-[var(--fx-shadow-sm)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]"
             aria-label="Attach file"
           >
             <Paperclip className="h-4 w-4" />
@@ -334,7 +334,7 @@ export function ChatInput({
             onClick={toggleWebSearch}
             disabled={disabled || !supportsWebSearch}
             className={cn(
-              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors',
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[var(--fx-shadow-sm)] transition-colors',
               webSearchEnabled
                 ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/16'
                 : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
@@ -359,7 +359,7 @@ export function ChatInput({
             onClick={toggleThinking}
             disabled={disabled || !supportsThinking}
             className={cn(
-              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors',
+              'h-8 w-8 rounded-full border border-[var(--stroke-divider)]/70 bg-[var(--surface-panel)]/45 shadow-[var(--fx-shadow-sm)] transition-colors',
               thinkingEnabled
                 ? 'border-[var(--source)]/20 bg-[var(--source)]/10 text-[var(--source)] hover:bg-[var(--source)]/16'
                 : 'text-[var(--text-tertiary)] hover:border-[var(--stroke-default)]/80 hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]',
@@ -393,7 +393,7 @@ export function ChatInput({
               type="button"
               size="icon"
               onClick={onStop}
-              className="h-8 w-8 rounded-full border border-[var(--status-error)]/15 bg-[var(--status-error)]/10 text-[var(--status-error)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-[var(--status-error)]/20"
+              className="h-8 w-8 rounded-full border border-[var(--status-error)]/15 bg-[var(--status-error)]/10 text-[var(--status-error)] shadow-[var(--fx-shadow-sm)] hover:bg-[var(--status-error)]/20"
               aria-label="Stop generation"
             >
               <Square className="h-4 w-4" />
@@ -404,7 +404,7 @@ export function ChatInput({
               size="icon"
               onClick={handleSend}
               disabled={isEmpty || disabled}
-              className="h-8 w-8 rounded-full bg-[var(--accent-commit)] text-white shadow-[0_5px_14px_rgba(37,99,235,0.26)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+              className="h-8 w-8 rounded-full bg-[var(--accent-commit)] text-[var(--on-accent)] shadow-[var(--fx-shadow-md)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Send message"
             >
               <Send className="h-4 w-4" />

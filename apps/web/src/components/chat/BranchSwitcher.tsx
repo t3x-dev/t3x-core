@@ -98,7 +98,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
         className={cn(
           'flex h-7 max-w-[140px] cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium',
           'border-[var(--accent-commit)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--accent-commit)_7%)] text-[var(--accent-commit)]',
-          'shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-colors hover:bg-[var(--accent-commit)]/[0.08]'
+          'shadow-[var(--fx-shadow-sm)] transition-colors hover:bg-[var(--accent-commit)]/[0.08]'
         )}
         title={activeBranch}
       >
@@ -116,7 +116,7 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
             className={cn(
               'fixed z-[9999] max-w-[calc(100vw-16px)]',
               'rounded-lg border border-[var(--stroke-divider)]',
-              'bg-[var(--surface-panel)] shadow-lg',
+              'bg-[var(--surface-panel)] shadow-[var(--fx-shadow-lg)]',
               'py-1 text-xs'
             )}
             style={dropdownPos}

@@ -27,7 +27,7 @@ import { useCommitStore } from '@/store/commitStore';
 import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
-const TREE_MONO_FONT = 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const TREE_MONO_FONT = 'var(--font-mono)';
 const MONO = {
   fontFamily: TREE_MONO_FONT,
   fontSize: 12,
@@ -112,7 +112,7 @@ function MetadataBadge({
         kind === 'new' && 'bg-[var(--status-success)]/[0.07] text-[var(--status-success)]',
         kind === 'modified' && 'bg-[var(--status-warning)]/[0.08] text-[var(--status-warning)]',
         kind === 'removed' && 'bg-[var(--status-error)]/[0.08] text-[var(--status-error)]',
-        kind === 'inherited' && 'bg-black/[0.025] text-[var(--text-tertiary)]'
+        kind === 'inherited' && 'bg-[var(--surface-hover)] text-[var(--text-tertiary)]'
       )}
     >
       {label}
@@ -892,7 +892,7 @@ export function AfterPanel({
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
   // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
   // (un-applied LLM proposal). The footer next to Discard / Commit
-  // was the leftover ambiguous count after PR #904 covered the
+  // was the leftover ambiguous count after PR 904 covered the
   // header — kept reading 'N ops' regardless of whether what's
   // visible is committed history or a staged preview.
   const opsCount = useWorkspaceStore((s) => s.opsLog.length);
@@ -1459,7 +1459,7 @@ export function AfterPanel({
                     ? 'Already committed'
                     : undefined
             }
-            className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--commit)] px-3 py-2 text-[11px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--accent-commit)] px-3 py-2 text-[11px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
           >
             {isCommitting ? 'Committing...' : '\u2192 Commit'}
           </button>
@@ -1469,9 +1469,9 @@ export function AfterPanel({
       {showCommitDialog && (
         <div
           data-testid="commit-dialog"
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-b-lg"
+          className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-[var(--overlay-scrim)] backdrop-blur-[var(--fx-blur-panel)]"
         >
-          <div className="bg-[var(--panel)] border border-[var(--stroke-default)] rounded-xl p-4 mx-3 w-full max-w-[280px] shadow-lg">
+          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--panel)] p-4 shadow-[var(--fx-shadow-lg)]">
             <label
               htmlFor="after-panel-commit-message"
               className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"
@@ -1504,7 +1504,7 @@ export function AfterPanel({
                       if (e.key === 'Enter' && !dialogDisabled) handleCommit(commitMessage);
                       if (e.key === 'Escape') setShowCommitDialog(false);
                     }}
-                    className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--commit)] transition-colors"
+                    className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)] transition-colors"
                     placeholder="e.g. Budget & Attractions"
                   />
                   <div className="flex justify-end gap-1.5 mt-3">
@@ -1527,7 +1527,7 @@ export function AfterPanel({
                             ? 'Apply or Discard the staged draft before committing'
                             : undefined
                       }
-                      className="rounded bg-[var(--commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--commit-text)] hover:bg-[var(--commit-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
                     >
                       {isCommitting ? 'Committing...' : 'Commit'}
                     </button>

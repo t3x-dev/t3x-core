@@ -436,7 +436,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
             </span>
             {groups.pending.count > 0 && (
               <span>
-                <span className="text-[var(--status-warning,#facc15)] font-semibold">
+                <span className="text-[var(--status-warning)] font-semibold">
                   {groups.pending.count}
                 </span>{' '}
                 pending
@@ -534,7 +534,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
                 ? 'bg-[var(--source)]'
                 : tab === 'committed'
                   ? 'bg-[var(--status-success)]'
-                  : 'bg-[var(--status-warning,#facc15)]'
+                  : 'bg-[var(--status-warning)]'
             )}
           />
           {tab === 'draft' ? 'Draft' : tab === 'committed' ? 'Committed' : 'Applied'}

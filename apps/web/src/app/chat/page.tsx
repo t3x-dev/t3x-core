@@ -36,9 +36,9 @@ const FLOW_STEPS = ['Source', 'Meaning', 'Commit'] as const;
 
 const ICON_TONE_CLASSES = {
   source: 'border-[var(--source)]/20 bg-[var(--source-dim)] text-[var(--source)]',
-  meaning:
+  meaning: 'border-[var(--accent-extract)]/20 bg-[var(--source-dim)] text-[var(--accent-extract)]',
+  commit:
     'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]',
-  commit: 'border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]',
 } as const;
 
 export default function ChatLandingPage() {
@@ -125,7 +125,7 @@ function ChatLanding() {
               type="button"
               disabled={!hasConfiguredGenerationProvider}
               onClick={() => handleSend(card.prompt)}
-              className="flex min-h-[106px] flex-col items-start gap-2.5 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 py-3.5 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-panel)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.045)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[106px] flex-col items-start gap-2.5 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 py-3.5 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-panel)] hover:shadow-[var(--fx-shadow-sm)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-md border ${ICON_TONE_CLASSES[card.tone]}`}

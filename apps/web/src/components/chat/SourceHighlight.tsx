@@ -67,7 +67,9 @@ export function SourceHighlight({
         <TooltipTrigger asChild>
           <span
             style={{
-              borderBottom: isActive ? '2px solid var(--accent, #8b5cf6)' : '2px solid #4ade80',
+              borderBottom: isActive
+                ? '2px solid var(--source)'
+                : '2px solid var(--status-success)',
               background: isActive
                 ? 'var(--source-dim)'
                 : 'color-mix(in srgb, var(--status-success) 12%, transparent)',
@@ -91,7 +93,7 @@ export function SourceHighlight({
             fontFamily: 'var(--font-mono, ui-monospace, monospace)',
           }}
         >
-          <span style={{ color: 'var(--accent, #8b5cf6)' }}>{yamlPath}</span>
+          <span style={{ color: 'var(--source)' }}>{yamlPath}</span>
           <span style={{ color: 'var(--text-tertiary)', margin: '0 2px' }}>·</span>
           <button
             type="button"
@@ -104,7 +106,7 @@ export function SourceHighlight({
               border: 'none',
               cursor: 'pointer',
               padding: '0 3px',
-              color: 'var(--accent, #8b5cf6)',
+              color: 'var(--source)',
               fontSize: 11,
             }}
             title="Edit value"
@@ -122,7 +124,7 @@ export function SourceHighlight({
               border: 'none',
               cursor: 'pointer',
               padding: '0 3px',
-              color: 'var(--status-error, #f87171)',
+              color: 'var(--status-error)',
               fontSize: 11,
             }}
             title="Delete"

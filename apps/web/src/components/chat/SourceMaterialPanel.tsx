@@ -180,7 +180,7 @@ export function SourceMaterialPanel({ pins, onConfirm, onCancel }: SourceMateria
         <button
           type="button"
           onClick={handleConfirm}
-          className="rounded-md bg-[var(--source)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 transition-opacity"
+          className="rounded-md bg-[var(--source)] px-3 py-1.5 text-xs font-medium text-[var(--on-accent)] transition-opacity hover:opacity-90"
         >
           Extract with {sourceCount} source{sourceCount !== 1 ? 's' : ''}
         </button>

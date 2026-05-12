@@ -81,7 +81,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'add'
-              ? 'bg-[var(--status-success)] text-white'
+              ? 'bg-[var(--status-success)] text-[var(--on-status)]'
               : 'border border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
           )}
         >
@@ -95,7 +95,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'edit'
-              ? 'bg-[var(--status-info)] text-white'
+              ? 'bg-[var(--status-info)] text-[var(--on-status)]'
               : 'border border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
           )}
         >
@@ -109,7 +109,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
           className={cn(
             'inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-semibold',
             action === 'delete'
-              ? 'bg-[var(--status-error)] text-white'
+              ? 'bg-[var(--status-error)] text-[var(--on-status)]'
               : 'border border-[var(--status-error)]/40 text-[var(--status-error)] hover:bg-[var(--status-error)]/10'
           )}
         >
@@ -140,7 +140,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
         type="button"
         onClick={handleConfirm}
         disabled={!canConfirm}
-        className="inline-flex items-center rounded bg-[var(--source)] px-2.5 py-1 text-[10px] font-semibold text-white disabled:opacity-50"
+        className="inline-flex items-center rounded bg-[var(--source)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] disabled:opacity-50"
       >
         {pending ? 'Staging…' : 'Confirm'}
       </button>

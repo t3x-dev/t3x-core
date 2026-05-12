@@ -66,7 +66,7 @@ export function ContextMenuPortal({
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[100] min-w-[140px] rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-1 shadow-lg"
+      className="fixed z-[100] min-w-[140px] rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-1 shadow-[var(--fx-shadow-lg)]"
       style={{ left: menu.x, top: menu.y }}
     >
       {menu.items.map((item) => (

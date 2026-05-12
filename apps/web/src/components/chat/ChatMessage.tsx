@@ -96,8 +96,8 @@ function HighlightedText({
           <mark
             key={p.key}
             style={{
-              background: 'rgba(99, 102, 241, 0.25)',
-              borderBottom: '2px solid rgb(99, 102, 241)',
+              background: 'color-mix(in srgb, var(--source) 25%, transparent)',
+              borderBottom: '2px solid var(--source)',
               borderRadius: 3,
               padding: '2px 4px',
               color: 'inherit',
@@ -574,11 +574,11 @@ export function ChatMessage({
       )}
       style={{
         background: isWholeMessageHighlight
-          ? 'rgba(99, 102, 241, 0.1)'
+          ? 'color-mix(in srgb, var(--source) 10%, transparent)'
           : isSourceMessage && hasCharHighlights
-            ? 'rgba(99, 102, 241, 0.06)'
+            ? 'color-mix(in srgb, var(--source) 6%, transparent)'
             : 'transparent',
-        borderLeft: isSourceMessage ? '3px solid rgb(99, 102, 241)' : undefined,
+        borderLeft: isSourceMessage ? '3px solid var(--source)' : undefined,
       }}
     >
       <div className="mx-auto max-w-[620px] px-5">
@@ -603,7 +603,7 @@ export function ChatMessage({
                         setEditContent(content);
                         setIsEditing(true);
                       }}
-                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-colors"
                       title="Edit message"
                     >
                       <Pencil className="h-3 w-3" />
@@ -615,14 +615,14 @@ export function ChatMessage({
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full p-2 rounded border border-[var(--border-primary)] bg-[var(--bg-primary)] text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
+                      className="w-full p-2 rounded border border-[var(--stroke-default)] bg-[var(--surface-panel)] text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--accent-commit)]"
                       rows={3}
                     />
                     <div className="flex gap-2 justify-end">
                       <button
                         type="button"
                         onClick={() => setIsEditing(false)}
-                        className="px-2 py-1 text-xs rounded text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
+                        className="px-2 py-1 text-xs rounded text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
                       >
                         Cancel
                       </button>
@@ -632,7 +632,7 @@ export function ChatMessage({
                           onEdit?.(editContent);
                           setIsEditing(false);
                         }}
-                        className="px-2 py-1 text-xs rounded bg-[var(--accent-commit)] text-white hover:opacity-90"
+                        className="rounded bg-[var(--accent-commit)] px-2 py-1 text-xs text-[var(--on-accent)] hover:opacity-90"
                       >
                         Save & Resend
                       </button>
@@ -762,7 +762,7 @@ export function ChatMessage({
                     <button
                       type="button"
                       onClick={onRegenerate}
-                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                      className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-colors"
                       title="Regenerate response"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -784,7 +784,7 @@ export function ChatMessage({
             top: 0,
             bottom: 0,
             width: 3,
-            background: 'rgb(96, 165, 250)',
+            background: 'var(--source)',
             borderRadius: '0 2px 2px 0',
           }}
         />

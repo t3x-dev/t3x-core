@@ -113,7 +113,7 @@ export function WorkspaceTopbar() {
               : applyPolicy.tooltip)
           }
           data-testid="workspace-topbar-apply"
-          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
         >
           <Play className="h-2.5 w-2.5" />
           Apply
