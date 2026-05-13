@@ -100,7 +100,12 @@ export function TemplateCard({ template, onPreview, onUse, onDelete }: TemplateC
             <Eye className="h-3 w-3" />
             Preview
           </Button>
-          <Button size="sm" className="h-7 flex-1 gap-1 text-xs" onClick={() => onUse(template)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 flex-1 gap-1 border-[var(--accent-conversation)]/25 bg-[var(--accent-conversation-soft)] text-xs text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/15 hover:text-[var(--accent-conversation)]"
+            onClick={() => onUse(template)}
+          >
             <Play className="h-3 w-3" />
             Use
           </Button>

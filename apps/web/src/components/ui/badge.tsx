@@ -20,35 +20,35 @@ const badgeVariants = cva(
         // T3X Semantic Variants - Node Status Badges
         // =============================================================================
 
-        // Commit badge - Blue gradient (stable/committed)
+        // Commit badge - stable/versioned state
         commit:
-          'border-transparent bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-commit)]/40 dark:text-[var(--accent-commit)] dark:shadow-none',
+          'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)] shadow-none',
 
-        // Pending badge - Orange gradient (work in progress)
+        // Pending badge - work in progress
         pending:
-          'border-transparent bg-gradient-to-r from-orange-400 to-orange-500 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-pending)]/40 dark:text-[var(--accent-pending)] dark:shadow-none',
+          'border-[var(--accent-pending)]/30 bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] shadow-none',
 
-        // Branch badge - Amber (branch indicator)
+        // Branch badge - branch/path indicator
         branch:
-          'border-transparent bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-branch)]/40 dark:text-[var(--accent-branch)] dark:shadow-none',
+          'border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/10 text-[var(--accent-branch)] shadow-none',
 
-        // Main branch badge - Deeper blue
-        main: 'border-transparent bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-commit)]/40 dark:text-[var(--accent-commit)] dark:shadow-none',
+        // Main branch badge
+        main: 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)] shadow-none',
 
-        // Conversation badge - Indigo
+        // Conversation badge
         conversation:
-          'border-transparent bg-gradient-to-r from-indigo-400 to-indigo-500 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-conversation)]/40 dark:text-[var(--accent-conversation)] dark:shadow-none',
+          'border-[var(--accent-conversation)]/30 bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)] shadow-none',
 
-        // Leaf badge - Emerald (output/result)
-        leaf: 'border-transparent bg-gradient-to-r from-emerald-400 to-emerald-500 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-leaf)]/40 dark:text-[var(--accent-leaf)] dark:shadow-none',
+        // Leaf badge - output/result artefact
+        leaf: 'border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)] shadow-none',
 
         // Success badge
         success:
-          'border-transparent bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-leaf)]/40 dark:text-[var(--accent-leaf)] dark:shadow-none',
+          'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)] shadow-none',
 
         // Warning badge
         warning:
-          'border-transparent bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm dark:bg-none dark:bg-transparent dark:border-[var(--accent-pending)]/40 dark:text-[var(--accent-pending)] dark:shadow-none',
+          'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)] shadow-none',
 
         // Subtle variants for inline status
         'commit-subtle':

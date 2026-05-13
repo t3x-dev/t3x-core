@@ -210,7 +210,7 @@ export default function LeafDetailPage() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all',
               !sourcePanelCollapsed
-                ? 'border-[var(--accent-leaf)] text-[var(--accent-leaf)]'
+                ? 'border-[var(--accent-conversation)] text-[var(--accent-conversation)] bg-[var(--accent-conversation-soft)]'
                 : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
             )}
             onClick={() => setSourcePanelCollapsed(!sourcePanelCollapsed)}
@@ -223,7 +223,7 @@ export default function LeafDetailPage() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all',
               !inspectorCollapsed
-                ? 'border-[var(--accent-leaf)] text-[var(--accent-leaf)]'
+                ? 'border-[var(--accent-leaf)] text-[var(--accent-leaf)] bg-[var(--accent-leaf-soft)]'
                 : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
             )}
             onClick={() => setInspectorCollapsed(!inspectorCollapsed)}
@@ -234,7 +234,7 @@ export default function LeafDetailPage() {
 
           {/* Display mode: coverage summary */}
           {mode === 'display' && nodes.length > 0 && (
-            <span className="text-xs font-medium text-[var(--status-success)] ml-2">
+            <span className="ml-2 text-xs font-medium text-[var(--accent-leaf)]">
               {reflectedCount}/{nodes.length} trees reflected
             </span>
           )}

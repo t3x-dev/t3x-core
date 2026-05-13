@@ -99,7 +99,7 @@ export function YAMLTreePanel({
             )}
             <button
               type="button"
-              className="px-1.5 py-0.5 text-[10px] font-medium rounded border border-transparent hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] text-[var(--status-success)] transition-colors"
+              className="rounded border border-transparent px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent-leaf)] transition-colors hover:border-[var(--accent-leaf)]/30 hover:bg-[var(--accent-leaf-soft)]"
               onClick={(e) => {
                 e.stopPropagation();
                 onAddConstraintFromSource('require', nodeValue, treeId);
@@ -185,7 +185,7 @@ export function YAMLTreePanel({
         {commitHash && projectId && (
           <Link
             href={`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`}
-            className="text-xs text-[var(--accent-leaf)] hover:underline flex items-center gap-1"
+            className="flex items-center gap-1 text-xs text-[var(--accent-commit)] hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
             View Commit

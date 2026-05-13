@@ -125,7 +125,7 @@ export function TreeDiffIndex({
   if (removedCount > 0) statParts.push(`${removedCount} removed`);
 
   return (
-    <aside className="hidden w-[160px] shrink-0 overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2 md:flex md:flex-col">
+    <aside className="hidden w-[184px] shrink-0 overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2 md:flex md:flex-col">
       {/* Stats summary */}
       {statParts.length > 0 && (
         <div className="mb-3 px-2 text-[10px] leading-relaxed text-[var(--text-tertiary)]">

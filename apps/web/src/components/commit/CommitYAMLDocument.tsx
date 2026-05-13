@@ -20,6 +20,7 @@ import { type CompatNode, treesToNodes } from '@/domain/tree/treeCompat';
 export interface CommitYAMLDocumentProps {
   content: SemanticContent;
   className?: string;
+  nodeStatuses?: Map<string, DiffStatus>;
   onSlotClick?: (treeId: string, slotKey: string) => void;
 }
 
@@ -113,40 +114,43 @@ interface YAMLLine {
   key: string;
   indent: number;
   elements: React.ReactNode[];
+  status?: DiffStatus;
   treeId?: string;
   slotKey?: string;
 }
+
+type DiffStatus = 'identical' | 'added' | 'modified' | 'removed';
 
 // ============================================================================
 // Rendering helpers
 // ============================================================================
 
 function Comment({ text }: { text: string }) {
-  return <span className="text-[var(--yaml-comment,#6b7280)]">{text}</span>;
+  return <span className="text-[var(--yaml-comment)]">{text}</span>;
 }
 
 function YAMLKey({ text }: { text: string }) {
-  return <span className="text-[var(--yaml-key,#2563eb)]">{text}</span>;
+  return <span className="text-[var(--yaml-key)]">{text}</span>;
 }
 
 function Colon() {
-  return <span className="text-[var(--yaml-punctuation,#6b7280)]">:&nbsp;</span>;
+  return <span className="text-[var(--yaml-punctuation)]">:&nbsp;</span>;
 }
 
 function StringValue({ text }: { text: string }) {
-  return <span className="text-[var(--yaml-string,#16a34a)]">"{text}"</span>;
+  return <span className="text-[var(--yaml-string)]">"{text}"</span>;
 }
 
 function NumberValue({ value }: { value: number }) {
-  return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
+  return <span className="text-[var(--yaml-number)]">{value}</span>;
 }
 
 function RefValue({ ref: refId }: { ref: string }) {
-  return <span className="text-[var(--yaml-ref,#7c3aed)]">*{refId}</span>;
+  return <span className="text-[var(--yaml-ref)]">*{refId}</span>;
 }
 
 function ArrayDash() {
-  return <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>;
+  return <span className="text-[var(--yaml-punctuation)]">- </span>;
 }
 
 // ============================================================================
@@ -238,7 +242,7 @@ function renderSlotValueLines(
     key: lineKeyPrefix,
     indent,
     elements: [
-      <span key="v" className="text-[var(--yaml-punctuation,#6b7280)]">
+      <span key="v" className="text-[var(--yaml-punctuation)]">
         {JSON.stringify(value)}
       </span>,
     ],
@@ -296,7 +300,12 @@ function renderSlotEntry(
 // Tree → lines
 // ============================================================================
 
-function treeToLines(nodes: TreeGraphNode[], baseIndent: number, lines: YAMLLine[]): void {
+function treeToLines(
+  nodes: TreeGraphNode[],
+  baseIndent: number,
+  lines: YAMLLine[],
+  nodeStatuses?: Map<string, DiffStatus>
+): void {
   for (const graphNode of nodes) {
     const { node, displayName, relationType, children } = graphNode;
 
@@ -316,6 +325,7 @@ function treeToLines(nodes: TreeGraphNode[], baseIndent: number, lines: YAMLLine
         <span key="pad" className="flex-1" />,
         <Comment key="comment" text={commentParts.join('')} />,
       ],
+      status: nodeStatuses?.get(node.id),
       treeId: node.id,
     });
 
@@ -335,23 +345,47 @@ function treeToLines(nodes: TreeGraphNode[], baseIndent: number, lines: YAMLLine
 
     // Children (nested nodes)
     if (children.length > 0) {
-      treeToLines(children, baseIndent + 1, lines);
+      treeToLines(children, baseIndent + 1, lines, nodeStatuses);
     }
   }
+}
+
+function NodeStatusTag({ status }: { status?: DiffStatus }) {
+  if (!status || status === 'identical') return null;
+
+  const style =
+    status === 'added'
+      ? 'border-[var(--diff-added-accent)]/35 bg-[var(--diff-added-bg)] text-[var(--diff-added-accent)]'
+      : status === 'modified'
+        ? 'border-[var(--diff-modified-accent)]/35 bg-[var(--diff-modified-bg)] text-[var(--diff-modified-accent)]'
+        : 'border-[var(--diff-removed-accent)]/35 bg-[var(--diff-removed-bg)] text-[var(--diff-removed-accent)]';
+
+  const label = status === 'added' ? 'New node' : status === 'modified' ? 'Modified' : 'Removed';
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${style}`}>
+      {label}
+    </span>
+  );
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYAMLDocumentProps) {
+export function CommitYAMLDocument({
+  content,
+  className,
+  nodeStatuses,
+  onSlotClick,
+}: CommitYAMLDocumentProps) {
   const tree = useMemo(() => buildTreeGraph(content), [content]);
 
   const lines = useMemo(() => {
     const result: YAMLLine[] = [];
-    treeToLines(tree, 0, result);
+    treeToLines(tree, 0, result, nodeStatuses);
     return result;
-  }, [tree]);
+  }, [tree, nodeStatuses]);
 
   const handleClick = useCallback(
     (treeId?: string, slotKey?: string) => {
@@ -372,23 +406,29 @@ export function CommitYAMLDocument({ content, className, onSlotClick }: CommitYA
 
   return (
     <div
-      className={`rounded-lg bg-[var(--surface-panel)] border border-[var(--stroke-divider)] px-6 py-5 font-mono text-[13px] leading-[1.9] text-[var(--text-primary)] ${className ?? ''}`}
+      className={`overflow-hidden rounded-[var(--radius-lg)] border border-[var(--stroke-default)] bg-[var(--surface-card)] font-mono text-[12px] leading-5 text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] ${className ?? ''}`}
     >
       {lines.map((line, i) => {
-        // Add spacing before top-level tree headers (indent 0, not first line)
-        const isNodeHeader = line.indent === 0 && line.key.startsWith('tree-');
-        const needsTopGap = isNodeHeader && i > 0;
-
         return (
           <div
             key={`${line.key}-${i}`}
-            className={`flex items-baseline transition-colors ${
-              line.slotKey ? 'cursor-pointer hover:bg-[var(--hover-bg)] rounded-sm px-2 -mx-2' : ''
-            } ${needsTopGap ? 'mt-3 pt-3 border-t border-[var(--stroke-divider)]' : ''}`}
-            style={{ paddingLeft: `${line.indent * 24}px` }}
+            className={`grid min-h-[26px] grid-cols-[38px_minmax(0,1fr)_auto] border-b border-[var(--stroke-divider)] transition-colors last:border-b-0 ${
+              line.slotKey ? 'cursor-pointer hover:bg-[var(--hover-bg)]' : ''
+            }`}
             onClick={line.slotKey ? () => handleClick(line.treeId, line.slotKey) : undefined}
           >
-            {line.elements}
+            <span className="border-r border-[var(--stroke-divider)] bg-[var(--surface-app)] py-[3px] pr-2 text-right text-[var(--text-tertiary)]">
+              {i + 1}
+            </span>
+            <span
+              className="flex min-w-0 items-baseline px-3 py-[3px]"
+              style={{ paddingLeft: `${12 + line.indent * 24}px` }}
+            >
+              {line.elements}
+            </span>
+            <span className="flex items-center px-2">
+              <NodeStatusTag status={line.status} />
+            </span>
           </div>
         );
       })}

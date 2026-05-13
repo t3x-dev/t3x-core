@@ -83,7 +83,7 @@ export function NodeList() {
       {nodes.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            No nodes yet. Add nodes manually or import from conversations.
+            No frames yet. Add frames manually or import from conversations.
           </p>
           <Button
             variant="outline"
@@ -92,7 +92,7 @@ export function NodeList() {
             onClick={() => setShowAddDialog(true)}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add ContentNode
+            Add Frame
           </Button>
         </div>
       ) : (

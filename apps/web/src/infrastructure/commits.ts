@@ -76,6 +76,7 @@ export interface ApiCommit {
   branch: string;
   sources: Array<{ type: string; id: string; title?: string }> | null;
   provenance: { method: string; model?: string } | null;
+  yops_log_ids?: string[];
   position_x?: number;
   position_y?: number;
 }

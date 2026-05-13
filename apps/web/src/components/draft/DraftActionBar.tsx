@@ -100,7 +100,7 @@ export function DraftActionBar({
             onChange={(e) => setTitleValue(e.target.value)}
             onBlur={handleTitleCommit}
             onKeyDown={handleTitleKeyDown}
-            className="w-full bg-transparent text-sm font-semibold border-b border-primary outline-none px-1 py-0.5"
+            className="w-full bg-transparent text-sm font-semibold border-b border-[var(--accent-pending)] outline-none px-1 py-0.5"
             maxLength={500}
           />
         ) : (

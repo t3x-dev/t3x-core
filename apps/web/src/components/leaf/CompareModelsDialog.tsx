@@ -207,7 +207,7 @@ export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModel
                         onClick={() => handleCopy(r.output!, i)}
                       >
                         {copiedIndex === i ? (
-                          <Check className="h-3 w-3 text-emerald-500" />
+                          <Check className="h-3 w-3 text-[var(--status-success)]" />
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}

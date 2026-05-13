@@ -124,7 +124,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       <SheetContent side="right" className="sm:max-w-md w-full">
         <SheetHeader>
           <div className="flex items-center gap-2">
-            <FileEdit className="h-4 w-4 text-amber-500" />
+            <FileEdit className="h-4 w-4 text-[var(--accent-pending)]" />
             <SheetTitle className="text-base">{draft?.title || t('draft')}</SheetTitle>
           </div>
           <SheetDescription>
@@ -137,9 +137,9 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
 
         {/* Auto-draft banner */}
         {draft?.status === 'auto' && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span className="flex-1 text-amber-800 dark:text-amber-200">
+          <div className="flex items-center gap-2 rounded-lg border border-[var(--status-warning)]/40 bg-[var(--status-warning-muted)] px-3 py-2 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--status-warning)]" />
+            <span className="flex-1 text-[var(--status-warning)]">
               Auto-extracted draft — read-only until promoted.
             </span>
             <Button

@@ -69,7 +69,7 @@ function ConstraintPill({
       className={cn(
         'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs',
         isRequire
-          ? 'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+          ? 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
           : 'border-[var(--status-error)]/25 bg-[var(--status-error-muted)] text-[var(--status-error)]'
       )}
     >
@@ -133,7 +133,7 @@ function AddConstraintInline({
           className={cn(
             'flex-1 rounded px-2 py-1 text-[10px] font-semibold transition-colors',
             type === 'require'
-              ? 'bg-[var(--status-success)] text-white'
+              ? 'bg-[var(--accent-leaf)] text-white'
               : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
           )}
           onClick={() => setType('require')}
@@ -266,7 +266,7 @@ export function LeafInspector({
   return (
     <aside
       className={cn(
-        'w-[240px] min-w-[240px] shrink-0 flex-col overflow-y-auto border-l flex',
+        'w-[280px] min-w-[280px] shrink-0 flex-col overflow-y-auto border-l flex',
         'bg-[color-mix(in_srgb,var(--surface-panel)_88%,transparent)]',
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}

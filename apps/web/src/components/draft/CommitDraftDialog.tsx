@@ -159,9 +159,9 @@ export function CommitDraftDialog({
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25"
+              className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] shadow-[var(--fx-shadow-sm)]"
             >
-              <CheckCircle className="h-7 w-7 text-white" />
+              <CheckCircle className="h-7 w-7 text-[var(--accent-commit)]" />
             </motion.div>
 
             <div className="text-center">

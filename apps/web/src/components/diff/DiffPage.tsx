@@ -298,7 +298,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[var(--accent-commit)] text-white rounded-md hover:opacity-90 text-sm"
+              className="px-4 py-2 bg-[var(--accent-commit)] text-[var(--on-accent)] rounded-md hover:opacity-90 text-sm"
             >
               Retry
             </button>
@@ -318,7 +318,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const diff = diffResponse.diff;
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--surface-app)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)]">
       <style>{PAGE_ANIMATION_STYLES}</style>
 
       {/* ═══════ HEADER ═══════ */}
@@ -375,13 +375,13 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         />
 
         {/* ── Center: Tabbed content ── */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]">
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
           {/* Tab content */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-hidden bg-[var(--surface-panel)]">
             {activeTab === 'diff' && (
-              <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex h-full min-h-0 flex-col overflow-hidden">
                 {/* View mode toggle */}
                 <div className="flex items-center justify-end px-4 py-1.5 border-b border-[var(--stroke-divider)]">
                   <div className="flex rounded-md border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-0.5">
@@ -402,7 +402,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
                   </div>
                 </div>
                 {/* Diff content */}
-                <div className="flex-1 overflow-auto">
+                <div className="min-h-0 flex-1 overflow-hidden">
                   {viewMode === 'split' ? (
                     <DiffYAMLSplitView
                       diff={diff}
@@ -443,7 +443,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         </div>
 
         {/* ── Right sidebar: Metadata ── */}
-        <aside className="hidden w-[240px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block">
+        <aside className="hidden w-[260px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block">
           <div className="space-y-5">
             {/* Base commit info */}
             <CommitInfoBlock
@@ -486,7 +486,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
             <div className="border-t border-[var(--stroke-divider)]" />
             <button
               type="button"
-              className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/8 px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full rounded-md border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-3 py-2 text-[12px] font-medium text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={handleStartMerge}
               disabled={mergeLoading}
             >

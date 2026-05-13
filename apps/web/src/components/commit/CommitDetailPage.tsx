@@ -98,7 +98,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const openSourceViewer = useCommitDetailStore((s) => s.openSourceViewer);
 
   // ── UI state ──────────────────────────────────────
-  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  const [bottomCollapsed, setBottomCollapsed] = useState(true);
   type CommitTab = 'yaml' | 'graph' | 'json' | 'relations';
   const [activeTab, setActiveTab] = useState<CommitTab>('yaml');
 
@@ -170,6 +170,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     return [...enrichedNodes.map((ef) => ef.path), ...removedNodes.map((ef) => ef.path)];
   }, [enrichedNodes, removedNodes]);
 
+  const nodeStatusMap = useMemo(() => {
+    return new Map(enrichedNodes.map((ef) => [ef.path, ef.diffStatus]));
+  }, [enrichedNodes]);
+
   // ── Callbacks ─────────────────────────────────────
   const scrollToNode = useCallback(
     (id: string) => {
@@ -236,7 +240,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--surface-app)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)]">
       {/* Shared animation styles */}
       <style>{PAGE_ANIMATION_STYLES}</style>
 
@@ -298,181 +302,6 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         </div>
       </header>
 
-      {/* ═══════ COMPACT HERO + STATS ═══════ */}
-      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-2.5">
-        <div className="mx-auto max-w-6xl flex items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[15px] font-semibold leading-tight text-[var(--text-primary)] tracking-[-0.01em] truncate">
-              {commit.message || 'No message'}
-            </h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
-              <span className="inline-flex items-center gap-1">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]">
-                  {commit.author?.type === 'agent' ? (
-                    <Sparkles size={9} />
-                  ) : (
-                    <span className="text-[8px] font-bold">
-                      {(commit.author?.name || 'U')[0].toUpperCase()}
-                    </span>
-                  )}
-                </span>
-                <span className="font-medium">
-                  {commit.author?.name || commit.author?.type || 'unknown'}
-                </span>
-              </span>
-              <span className="text-[var(--text-tertiary)]">&middot;</span>
-              <span
-                className="text-[var(--text-tertiary)]"
-                title={new Date(commit.committed_at).toLocaleString()}
-              >
-                {relativeTime(commit.committed_at)}
-              </span>
-              {commit.branch && (
-                <>
-                  <span className="text-[var(--text-tertiary)]">&middot;</span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/8 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-branch)]">
-                    <GitBranch size={9} />
-                    {commit.branch}
-                  </span>
-                </>
-              )}
-              <span className="text-[var(--text-tertiary)]">&middot;</span>
-              <span className="inline-flex items-center gap-0.5 font-mono text-[11px] text-[var(--text-tertiary)]">
-                {commitHash.replace('sha256:', '').slice(0, 12)}...
-                <CopyButton text={commitHash} size={10} />
-              </span>
-            </div>
-          </div>
-
-          {/* Stats bar with count-up */}
-          <div className="flex items-center gap-2 shrink-0">
-            {[
-              {
-                label: 'identical',
-                count: countIdentical,
-                symbol: '=',
-                style: 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
-              },
-              {
-                label: 'modified',
-                count: countModified,
-                symbol: '~',
-                style:
-                  'border-[var(--diff-modified-accent)]/40 text-[var(--diff-modified-accent)] bg-[var(--diff-modified-bg)]',
-              },
-              {
-                label: 'added',
-                count: countAdded,
-                symbol: '+',
-                style:
-                  'border-[var(--diff-added-accent)]/40 text-[var(--diff-added-accent)] bg-[var(--diff-added-bg)]',
-              },
-              {
-                label: 'removed',
-                count: countRemoved,
-                symbol: '-',
-                style:
-                  'border-[var(--diff-removed-accent)]/40 text-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)]',
-              },
-            ].map((stat) => (
-              <span
-                key={stat.label}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums ${stat.style}`}
-              >
-                <span className="font-mono">{stat.symbol}</span>
-                {stat.count}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════ LINEAGE BAR ═══════ */}
-      <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-[var(--space-page)] py-2">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 text-[11px]">
-          {/* Parent */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <GitCommit size={11} className="text-[var(--accent-commit)]" />
-            <span>
-              {commit.parents.length === 0
-                ? 'Root commit'
-                : commit.parents.length === 1
-                  ? 'Parent:'
-                  : 'Parents:'}
-            </span>
-            {commit.parents.map((parentHash) => (
-              <Link
-                key={parentHash}
-                href={`/project/${projectId}/commit/${encodeURIComponent(parentHash)}`}
-                className="font-mono text-[var(--accent-commit)] hover:underline"
-              >
-                {shortHash(parentHash)}
-              </Link>
-            ))}
-          </div>
-
-          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
-
-          {/* Tree count */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <Tag size={10} />
-            <span className="font-medium text-[var(--text-secondary)]">
-              {commit.content.trees.length} tree{commit.content.trees.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
-
-          {/* Relation count */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <GitBranch size={10} />
-            <span className="font-medium text-[var(--text-secondary)]">
-              {commit.content.relations.length} relation
-              {commit.content.relations.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
-
-          {/* Leaves count */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <LeafIcon size={10} className="text-[var(--accent-leaf)]" />
-            <span className="font-medium text-[var(--text-secondary)]">
-              {leaves.length} lea{leaves.length !== 1 ? 'ves' : 'f'}
-            </span>
-          </div>
-
-          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
-
-          {/* Sources count */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <Pin size={10} className="text-[var(--accent-conversation)]" />
-            <span className="font-medium text-[var(--text-secondary)]">
-              {sourceConversations.length + sourceLeafRefs.length} source
-              {sourceConversations.length + sourceLeafRefs.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          <span className="h-3 w-px bg-[var(--stroke-divider)]" />
-
-          {/* Schema */}
-          <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
-            <Tag size={10} />
-            <span className="font-mono text-[10px]">{commit.schema}</span>
-          </div>
-
-          {/* Keyboard shortcuts (right-aligned) */}
-          <div className="ml-auto">
-            <KeyboardHintBar
-              hints={[
-                { key: 'j k', label: 'navigate' },
-                { key: 'esc', label: 'deselect' },
-              ]}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* ═══════ MAIN CONTENT: 3-Panel Layout ═══════ */}
       <div className="relative flex flex-1 overflow-hidden">
         {/* LEFT: TreeNode Index */}
@@ -480,6 +309,170 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
         {/* CENTER: Tabbed Panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Commit identity */}
+          <div className="flex min-h-[70px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)]">
+                {commit.message || 'No message'}
+              </h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                <span className="inline-flex items-center gap-1">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]">
+                    {commit.author?.type === 'agent' ? (
+                      <Sparkles size={9} />
+                    ) : (
+                      <span className="text-[8px] font-bold">
+                        {(commit.author?.name || 'U')[0].toUpperCase()}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-medium">
+                    {commit.author?.name || commit.author?.type || 'unknown'}
+                  </span>
+                </span>
+                <span className="text-[var(--text-tertiary)]">&middot;</span>
+                <span
+                  className="text-[var(--text-tertiary)]"
+                  title={new Date(commit.committed_at).toLocaleString()}
+                >
+                  {relativeTime(commit.committed_at)}
+                </span>
+                {commit.branch && (
+                  <>
+                    <span className="text-[var(--text-tertiary)]">&middot;</span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/8 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-branch)]">
+                      <GitBranch size={9} />
+                      {commit.branch}
+                    </span>
+                  </>
+                )}
+                <span className="text-[var(--text-tertiary)]">&middot;</span>
+                <span className="inline-flex items-center gap-0.5 font-mono text-[11px] text-[var(--text-tertiary)]">
+                  {commitHash.replace('sha256:', '').slice(0, 12)}...
+                  <CopyButton text={commitHash} size={10} />
+                </span>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {[
+                {
+                  label: 'identical',
+                  count: countIdentical,
+                  symbol: '=',
+                  style:
+                    'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
+                },
+                {
+                  label: 'modified',
+                  count: countModified,
+                  symbol: '~',
+                  style:
+                    'border-[var(--diff-modified-accent)]/40 text-[var(--diff-modified-accent)] bg-[var(--diff-modified-bg)]',
+                },
+                {
+                  label: 'added',
+                  count: countAdded,
+                  symbol: '+',
+                  style:
+                    'border-[var(--diff-added-accent)]/40 text-[var(--diff-added-accent)] bg-[var(--diff-added-bg)]',
+                },
+                {
+                  label: 'removed',
+                  count: countRemoved,
+                  symbol: '-',
+                  style:
+                    'border-[var(--diff-removed-accent)]/40 text-[var(--diff-removed-accent)] bg-[var(--diff-removed-bg)]',
+                },
+              ].map((stat) => (
+                <span
+                  key={stat.label}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums ${stat.style}`}
+                >
+                  <span className="font-mono">{stat.symbol}</span>
+                  {stat.count}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Lineage summary */}
+          <div className="flex min-h-[38px] shrink-0 items-center gap-4 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-[var(--space-page)] text-[11px]">
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <GitCommit size={11} className="text-[var(--accent-commit)]" />
+              <span>
+                {commit.parents.length === 0
+                  ? 'Root commit'
+                  : commit.parents.length === 1
+                    ? 'Parent:'
+                    : 'Parents:'}
+              </span>
+              {commit.parents.map((parentHash) => (
+                <Link
+                  key={parentHash}
+                  href={`/project/${projectId}/commit/${encodeURIComponent(parentHash)}`}
+                  className="font-mono text-[var(--accent-commit)] hover:underline"
+                >
+                  {shortHash(parentHash)}
+                </Link>
+              ))}
+            </div>
+
+            <span className="h-3 w-px shrink-0 bg-[var(--stroke-divider)]" />
+
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <Tag size={10} />
+              <span className="font-medium text-[var(--text-secondary)]">
+                {commit.content.trees.length} tree{commit.content.trees.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <span className="h-3 w-px shrink-0 bg-[var(--stroke-divider)]" />
+
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <GitBranch size={10} />
+              <span className="font-medium text-[var(--text-secondary)]">
+                {commit.content.relations.length} relation
+                {commit.content.relations.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <span className="h-3 w-px shrink-0 bg-[var(--stroke-divider)]" />
+
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <LeafIcon size={10} className="text-[var(--accent-leaf)]" />
+              <span className="font-medium text-[var(--text-secondary)]">
+                {leaves.length} lea{leaves.length !== 1 ? 'ves' : 'f'}
+              </span>
+            </div>
+
+            <span className="h-3 w-px shrink-0 bg-[var(--stroke-divider)]" />
+
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <Pin size={10} className="text-[var(--accent-conversation)]" />
+              <span className="font-medium text-[var(--text-secondary)]">
+                {sourceConversations.length + sourceLeafRefs.length} source
+                {sourceConversations.length + sourceLeafRefs.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <span className="h-3 w-px shrink-0 bg-[var(--stroke-divider)]" />
+
+            <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
+              <Tag size={10} />
+              <span className="font-mono text-[10px]">{commit.schema}</span>
+            </div>
+
+            <div className="ml-auto hidden shrink-0 2xl:block">
+              <KeyboardHintBar
+                hints={[
+                  { key: 'j k', label: 'navigate' },
+                  { key: 'esc', label: 'deselect' },
+                ]}
+              />
+            </div>
+          </div>
+
           {/* Tab Bar */}
           <div className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0">
             {(['yaml', 'graph', 'json', 'relations'] as const).map((tab) => (
@@ -502,9 +495,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
             {/* YAML Tab — Nested YAML document */}
             {activeTab === 'yaml' && (
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto w-full max-w-[760px]">
                 <CommitYAMLDocument
                   content={commit.content}
+                  nodeStatuses={nodeStatusMap}
                   onSlotClick={(treeId, slotKey) => {
                     setActiveNode(treeId);
                     openSourceViewer(slotKey);
@@ -515,7 +509,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
             {/* GRAPH Tab */}
             {activeTab === 'graph' && (
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto w-full max-w-[980px]">
                 <div className="h-[500px]">
                   <TreeGraphView content={commit.content} className="h-full w-full" />
                 </div>
@@ -524,8 +518,8 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
             {/* JSON Tab */}
             {activeTab === 'json' && (
-              <div className="mx-auto max-w-3xl">
-                <pre className="p-4 bg-[var(--surface-code,#0d1117)] text-[12px] font-mono text-[var(--text-secondary)] overflow-auto rounded-lg">
+              <div className="mx-auto w-full max-w-[760px]">
+                <pre className="overflow-auto rounded-[var(--radius-lg)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-4 font-mono text-[12px] text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)]">
                   {JSON.stringify(commit, null, 2)}
                 </pre>
               </div>
@@ -533,7 +527,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
             {/* RELATIONS Tab */}
             {activeTab === 'relations' && (
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto w-full max-w-[760px]">
                 {commit.content.relations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <p className="text-sm text-[var(--text-tertiary)] italic">
@@ -541,7 +535,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] divide-y divide-[var(--stroke-divider)]">
+                  <div className="divide-y divide-[var(--stroke-divider)] rounded-[var(--radius-lg)] border border-[var(--stroke-default)] bg-[var(--surface-card)] shadow-[var(--fx-shadow-sm)]">
                     {commit.content.relations.map((rel, i) => (
                       <div
                         key={`${rel.from}-${rel.to}-${i}`}
@@ -565,12 +559,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         {sourceViewer.isOpen && <SourceSlideIn projectId={projectId} />}
 
         {/* RIGHT: Operations Sidebar (always visible) */}
-        <CommitOperationsSidebar
-          projectId={projectId}
-          commitHash={commitHash}
-          leaves={leaves}
-          onLeavesChange={setLeaves}
-        />
+        <CommitOperationsSidebar projectId={projectId} commit={commit} />
       </div>
 
       {/* ═══════ BOTTOM: Provenance Graph ═══════ */}

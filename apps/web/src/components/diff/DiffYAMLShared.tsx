@@ -9,7 +9,7 @@ import type { AlignedNode } from './DiffYAMLUtils';
 // Light mode values (default); dark mode overridden via .dark class in globals.css
 
 export const DY_CSS_VARS_LIGHT: React.CSSProperties = {
-  '--dy-surface': '#ffffff',
+  '--dy-surface': 'var(--surface-panel)',
   '--dy-added-bg': 'var(--diff-added-bg)',
   '--dy-added-accent': 'var(--diff-added-accent)',
   '--dy-added-word': 'var(--diff-added-word-bg)',
@@ -18,13 +18,13 @@ export const DY_CSS_VARS_LIGHT: React.CSSProperties = {
   '--dy-removed-word': 'var(--diff-removed-word-bg)',
   '--dy-modified-bg': 'var(--diff-modified-bg)',
   '--dy-modified-accent': 'var(--diff-modified-accent)',
-  '--dy-text-primary': '#1a1a2e',
-  '--dy-text-secondary': '#4a4a6a',
-  '--dy-text-tertiary': '#7a7a9a',
+  '--dy-text-primary': 'var(--text-primary)',
+  '--dy-text-secondary': 'var(--text-secondary)',
+  '--dy-text-tertiary': 'var(--text-tertiary)',
 } as React.CSSProperties;
 
 export const DY_CSS_VARS_DARK: React.CSSProperties = {
-  '--dy-surface': '#0e0e10',
+  '--dy-surface': 'var(--surface-panel)',
   '--dy-added-bg': 'var(--diff-added-bg)',
   '--dy-added-accent': 'var(--diff-added-accent)',
   '--dy-added-word': 'var(--diff-added-word-bg)',
@@ -33,9 +33,9 @@ export const DY_CSS_VARS_DARK: React.CSSProperties = {
   '--dy-removed-word': 'var(--diff-removed-word-bg)',
   '--dy-modified-bg': 'var(--diff-modified-bg)',
   '--dy-modified-accent': 'var(--diff-modified-accent)',
-  '--dy-text-primary': '#ECECEF',
-  '--dy-text-secondary': '#9D9DA5',
-  '--dy-text-tertiary': '#6B6B75',
+  '--dy-text-primary': 'var(--text-primary)',
+  '--dy-text-secondary': 'var(--text-secondary)',
+  '--dy-text-tertiary': 'var(--text-tertiary)',
 } as React.CSSProperties;
 
 /** Hook: returns the correct CSS vars based on dark/light mode */
@@ -54,16 +54,16 @@ export function useDYTheme(): React.CSSProperties {
 // ── Relation color map ──
 
 export const REL_COLORS: Record<string, string> = {
-  causes: '#FF9E64',
-  conditions: '#E5A030',
-  contrasts: '#F87171',
-  elaborates: '#7AA2F7',
-  follows: '#6B6B75',
-  depends: '#BB9AF7',
+  causes: 'var(--status-warning)',
+  conditions: 'var(--diff-modified-accent)',
+  contrasts: 'var(--diff-removed-accent)',
+  elaborates: 'var(--accent-commit)',
+  follows: 'var(--text-tertiary)',
+  depends: 'var(--accent-extract)',
 };
 
 export function relColor(type: string): string {
-  return REL_COLORS[type] ?? '#7d8590';
+  return REL_COLORS[type] ?? 'var(--text-tertiary)';
 }
 
 // ── Relation helpers ──
@@ -183,19 +183,19 @@ export function TreeSeparator({
     <div
       id={`diff-tree-${aligned.treeId}`}
       className={cn(
-        'flex items-center gap-[5px] text-[9px] font-medium uppercase tracking-[0.6px] select-none cursor-pointer',
-        'pt-[5px] pb-[2px] opacity-60 hover:opacity-100',
-        'text-[var(--text-tertiary)]',
-        isActive && 'opacity-100 bg-[var(--hover-bg)]'
+        'flex min-w-0 items-center gap-[5px] text-[10px] font-semibold uppercase select-none cursor-pointer',
+        'pt-[6px] pb-[3px] hover:bg-[var(--hover-bg)]',
+        'text-[var(--text-secondary)]',
+        isActive && 'bg-[var(--hover-bg)] text-[var(--text-primary)]'
       )}
       style={{ paddingLeft }}
       onClick={onClick}
     >
-      <span className={cn('text-[8px] font-semibold tracking-[0.3px]', statusClass)}>
-        {statusLabel}
+      <span className={cn('text-[8px] font-semibold', statusClass)}>{statusLabel}</span>
+      <span className="shrink-0">{treeType}</span>
+      <span className="min-w-0 truncate font-mono text-[8px] text-[var(--text-tertiary)]">
+        {aligned.treeId}
       </span>
-      <span>{treeType}</span>
-      <span className="font-mono opacity-40 text-[8px]">{aligned.treeId}</span>
       {/* Divider line */}
       <span className="flex-1 h-px bg-[var(--stroke-divider)] opacity-50" />
     </div>
@@ -217,7 +217,7 @@ export function IdenticalCollapseBar({
   const names = nodes.map((f) => (f.leftNode ?? f.rightNode)?.key ?? f.treeId).join(', ');
   return (
     <div
-      className="flex items-center gap-[5px] font-mono text-[10px] text-[var(--text-tertiary)] cursor-pointer select-none opacity-50 hover:opacity-80 hover:bg-[var(--hover-bg)]"
+      className="flex min-w-0 items-center gap-[5px] font-mono text-[10px] text-[var(--text-secondary)] cursor-pointer select-none hover:bg-[var(--hover-bg)]"
       style={{ padding: `3px 10px 3px ${paddingLeft}` }}
       onClick={onClick}
     >
@@ -225,7 +225,7 @@ export function IdenticalCollapseBar({
       <span>
         {nodes.length} identical tree{nodes.length > 1 ? 's' : ''}
       </span>
-      <span className="opacity-50">({names})</span>
+      <span className="min-w-0 truncate text-[var(--text-tertiary)]">({names})</span>
     </div>
   );
 }

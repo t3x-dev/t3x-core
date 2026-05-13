@@ -299,36 +299,50 @@ export function DiffYAMLSplitView({
   const heightsMap = computeNodeHeightsMap(aligned, diff);
 
   return (
-    <div className="flex flex-1 overflow-hidden" style={dyTheme}>
-      {/* Left pane (base) */}
-      <div
-        ref={leftRef}
-        className="flex-1 overflow-y-auto"
-        style={{ borderRight: '2px solid var(--stroke-pane-border, rgba(255,255,255,0.08))' }}
-        onScroll={() => handleScroll('left')}
-      >
-        <PaneContent
-          aligned={aligned}
-          side="left"
-          diff={diff}
-          activeNodeId={activeNodeId}
-          onSelectNode={onSelectNode}
-          showIdentical={showIdentical}
-          heightsMap={heightsMap}
-        />
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--dy-surface)]"
+      style={dyTheme}
+    >
+      <div className="grid h-8 shrink-0 grid-cols-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] font-mono text-[10px] font-semibold uppercase text-[var(--text-tertiary)]">
+        <div className="flex items-center border-r border-[var(--stroke-divider)] px-3">Base</div>
+        <div className="flex items-center px-3">Target</div>
       </div>
 
-      {/* Right pane (target) */}
-      <div ref={rightRef} className="flex-1 overflow-y-auto" onScroll={() => handleScroll('right')}>
-        <PaneContent
-          aligned={aligned}
-          side="right"
-          diff={diff}
-          activeNodeId={activeNodeId}
-          onSelectNode={onSelectNode}
-          showIdentical={showIdentical}
-          heightsMap={heightsMap}
-        />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left pane (base) */}
+        <div
+          ref={leftRef}
+          className="min-w-0 flex-1 overflow-y-auto"
+          style={{ borderRight: '1px solid var(--stroke-divider)' }}
+          onScroll={() => handleScroll('left')}
+        >
+          <PaneContent
+            aligned={aligned}
+            side="left"
+            diff={diff}
+            activeNodeId={activeNodeId}
+            onSelectNode={onSelectNode}
+            showIdentical={showIdentical}
+            heightsMap={heightsMap}
+          />
+        </div>
+
+        {/* Right pane (target) */}
+        <div
+          ref={rightRef}
+          className="min-w-0 flex-1 overflow-y-auto"
+          onScroll={() => handleScroll('right')}
+        >
+          <PaneContent
+            aligned={aligned}
+            side="right"
+            diff={diff}
+            activeNodeId={activeNodeId}
+            onSelectNode={onSelectNode}
+            showIdentical={showIdentical}
+            heightsMap={heightsMap}
+          />
+        </div>
       </div>
     </div>
   );

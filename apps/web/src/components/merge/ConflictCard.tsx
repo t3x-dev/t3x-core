@@ -50,10 +50,10 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
     return <span style={{ color: 'var(--text-tertiary)' }}>(none)</span>;
   }
   if (typeof value === 'string') {
-    return <span className="text-[var(--yaml-string,#16a34a)]">&quot;{value}&quot;</span>;
+    return <span className="text-[var(--yaml-string)]">&quot;{value}&quot;</span>;
   }
   if (typeof value === 'number') {
-    return <span className="text-[var(--yaml-number,#d97706)]">{value}</span>;
+    return <span className="text-[var(--yaml-number)]">{value}</span>;
   }
   if (Array.isArray(value)) {
     let itemOffset = 0;
@@ -64,7 +64,7 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
           itemOffset += 1;
           return (
             <span key={itemKey} className="block pl-4 leading-relaxed">
-              <span className="text-[var(--yaml-punctuation,#6b7280)]">- </span>
+              <span className="text-[var(--yaml-punctuation)]">- </span>
               {renderSlotValue(item)}
             </span>
           );
@@ -75,19 +75,17 @@ function renderSlotValue(value: SlotValue | undefined): React.ReactNode {
   if (value !== null && typeof value === 'object') {
     if ('ref' in value && typeof (value as { ref: string }).ref === 'string') {
       return (
-        <span className="text-[var(--yaml-ref,#7c3aed)]">
+        <span className="text-[var(--yaml-ref)]">
           {'{ '}ref: {(value as { ref: string }).ref}
           {' }'}
         </span>
       );
     }
     if ('type' in value && 'slots' in value) {
-      return (
-        <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>
-      );
+      return <span className="text-[var(--yaml-punctuation)]">{JSON.stringify(value)}</span>;
     }
   }
-  return <span className="text-[var(--yaml-punctuation,#6b7280)]">{JSON.stringify(value)}</span>;
+  return <span className="text-[var(--yaml-punctuation)]">{JSON.stringify(value)}</span>;
 }
 
 // ============================================================================
@@ -137,8 +135,8 @@ function YamlPreview({ node, otherNode, conflictKeys, label, labelColor }: YamlP
                   : { paddingLeft: '8px' }
               }
             >
-              <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
-              <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
+              <span className="text-[var(--yaml-key)]">{key}</span>
+              <span className="text-[var(--yaml-punctuation)]">:</span>
               {renderSlotValue(value)}
             </div>
           );
@@ -180,8 +178,8 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
           className={cn(
             'flex items-start gap-1.5 rounded border p-2 cursor-pointer transition-colors text-xs',
             choice === 'source'
-              ? 'border-[var(--merge-source-accent)]/60 bg-[var(--merge-source-accent)]/10 ring-1 ring-[var(--merge-source-accent)]/40'
-              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-source-accent)]/40'
+              ? 'border-[var(--merge-src-accent)]/60 bg-[var(--merge-src-bg)] ring-1 ring-[var(--merge-src-accent)]/40'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-src-accent)]/40'
           )}
         >
           <input
@@ -192,7 +190,7 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-[var(--merge-source-accent)] mb-0.5">
+            <div className="text-[10px] font-medium text-[var(--merge-src-accent)] mb-0.5">
               Source
             </div>
             <div className="font-mono break-words">{renderSlotValue(conflict.sourceValue)}</div>
@@ -204,8 +202,8 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
           className={cn(
             'flex items-start gap-1.5 rounded border p-2 cursor-pointer transition-colors text-xs',
             choice === 'target'
-              ? 'border-[var(--merge-target-accent)]/60 bg-[var(--merge-target-accent)]/10 ring-1 ring-[var(--merge-target-accent)]/40'
-              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-target-accent)]/40'
+              ? 'border-[var(--merge-tgt-accent)]/60 bg-[var(--merge-tgt-bg)] ring-1 ring-[var(--merge-tgt-accent)]/40'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--merge-tgt-accent)]/40'
           )}
         >
           <input
@@ -216,7 +214,7 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
             className="mt-0.5 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-[var(--merge-target-accent)] mb-0.5">
+            <div className="text-[10px] font-medium text-[var(--merge-tgt-accent)] mb-0.5">
               Target
             </div>
             <div className="font-mono break-words">{renderSlotValue(conflict.targetValue)}</div>
@@ -233,10 +231,10 @@ function PerSlotRow({ conflict, choice, treeId, onChoose }: PerSlotRowProps) {
 
 function AutoResolvedSlotRow({ slotKey, value }: { slotKey: string; value: SlotValue }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-1 font-mono text-[11px] leading-relaxed px-2 py-0.5 opacity-50">
+    <div className="flex flex-wrap items-baseline gap-x-1 font-mono text-[11px] leading-relaxed px-2 py-0.5 text-[var(--text-secondary)]">
       <Check className="h-2.5 w-2.5 text-[var(--diff-added-accent)] shrink-0 mt-0.5" />
-      <span className="text-[var(--yaml-key,#2563eb)]">{slotKey}</span>
-      <span className="text-[var(--yaml-punctuation,#6b7280)]">:</span>
+      <span className="text-[var(--yaml-key)]">{slotKey}</span>
+      <span className="text-[var(--yaml-punctuation)]">:</span>
       {renderSlotValue(value)}
       <span className="text-[9px] text-[var(--text-tertiary)] font-sans normal-case tracking-normal">
         auto
@@ -383,14 +381,14 @@ export function ConflictCard({
                 otherNode={targetNode}
                 conflictKeys={conflictKeys}
                 label="Source"
-                labelColor="var(--diff-added-accent)"
+                labelColor="var(--merge-src-accent)"
               />
               <YamlPreview
                 node={targetNode}
                 otherNode={sourceNode}
                 conflictKeys={conflictKeys}
                 label="Target"
-                labelColor="var(--accent-pending, #e0af68)"
+                labelColor="var(--merge-tgt-accent)"
               />
             </div>
 
@@ -402,8 +400,8 @@ export function ConflictCard({
                 className={cn(
                   'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
                   resolution?.type === 'source'
-                    ? 'bg-[var(--merge-source-accent)]/20 border-[var(--merge-source-accent)]/60 text-[var(--merge-source-accent)] ring-1 ring-[var(--merge-source-accent)]/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-source-accent)]/60 hover:text-[var(--merge-source-accent)]'
+                    ? 'bg-[var(--merge-src-bg)] border-[var(--merge-src-accent)]/60 text-[var(--merge-src-accent)] ring-1 ring-[var(--merge-src-accent)]/40'
+                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-src-accent)]/60 hover:text-[var(--merge-src-accent)]'
                 )}
               >
                 Accept Source
@@ -417,8 +415,8 @@ export function ConflictCard({
                 className={cn(
                   'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
                   resolution?.type === 'target'
-                    ? 'bg-[var(--merge-target-accent)]/20 border-[var(--merge-target-accent)]/60 text-[var(--merge-target-accent)] ring-1 ring-[var(--merge-target-accent)]/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-target-accent)]/60 hover:text-[var(--merge-target-accent)]'
+                    ? 'bg-[var(--merge-tgt-bg)] border-[var(--merge-tgt-accent)]/60 text-[var(--merge-tgt-accent)] ring-1 ring-[var(--merge-tgt-accent)]/40'
+                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-tgt-accent)]/60 hover:text-[var(--merge-tgt-accent)]'
                 )}
               >
                 Accept Target

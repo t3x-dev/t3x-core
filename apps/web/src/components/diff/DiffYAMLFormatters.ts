@@ -27,11 +27,11 @@ export function formatRelation(r: Relation): string {
 
 /** YAML syntax color tokens — reused across all YAML diff views */
 export const YAML_COLORS = {
-  key: 'var(--yaml-key, #2563eb)',
-  string: 'var(--yaml-string, #16a34a)',
-  number: 'var(--yaml-number, #d97706)',
-  ref: 'var(--yaml-ref, #7c3aed)',
-  bracket: 'var(--yaml-punctuation, #6b7280)',
-  type: 'var(--yaml-key, #2563eb)',
-  comment: 'var(--yaml-comment, #9ca3af)',
+  key: 'var(--yaml-key)',
+  string: 'var(--yaml-string)',
+  number: 'var(--yaml-number)',
+  ref: 'var(--yaml-ref)',
+  bracket: 'var(--yaml-punctuation)',
+  type: 'var(--yaml-key)',
+  comment: 'var(--yaml-comment)',
 } as const;

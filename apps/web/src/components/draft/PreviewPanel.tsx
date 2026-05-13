@@ -190,7 +190,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
             >
               {previewOutput}
             </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-[var(--status-warning)]">
               {previewIncludedCount != null && includedCount !== previewIncludedCount
                 ? `${Math.abs(includedCount - previewIncludedCount)} tree${Math.abs(includedCount - previewIncludedCount) !== 1 ? 's' : ''} ${includedCount > previewIncludedCount ? 'added' : 'removed'} since last preview. `
                 : 'Frames changed since last preview. '}
