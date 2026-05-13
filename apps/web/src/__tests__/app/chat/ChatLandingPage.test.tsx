@@ -81,17 +81,20 @@ vi.mock('@/components/chat/ChatInput', () => ({
     selectedModel,
     onSend,
     onModelChange,
+    prefillText,
   }: {
     disabled?: boolean;
     placeholder?: string;
     selectedModel?: string;
     onSend: (message: string) => void;
     onModelChange?: (provider: string, model: string) => void;
+    prefillText?: string | null;
   }) => (
     <div>
       <div data-testid="chat-disabled">{String(Boolean(disabled))}</div>
       <div data-testid="chat-placeholder">{placeholder ?? ''}</div>
       <div data-testid="selected-model">{selectedModel ?? ''}</div>
+      <div data-testid="chat-prefill">{prefillText ?? ''}</div>
       <button type="button" onClick={() => onModelChange?.('openai', 'gpt-4.1')}>
         select openai
       </button>
@@ -168,6 +171,36 @@ describe('ChatLandingPage', () => {
     expect(meaningIcon).toHaveClass('text-[var(--accent-extract)]');
     expect(checkpointIcon).toHaveClass('text-[var(--accent-commit)]');
     expect(checkpointIcon).not.toHaveClass('text-[var(--accent-leaf)]');
+  });
+
+  it('prefills the composer from each starter card without sending', async () => {
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    const starters = [
+      {
+        name: /capture source/i,
+        prefill: 'I want T3X to make sense of this source material:',
+      },
+      {
+        name: /shape meaning/i,
+        prefill: 'Help me shape the meaning in this context:',
+      },
+      {
+        name: /create checkpoint/i,
+        prefill: 'Create a semantic checkpoint from this work:',
+      },
+    ];
+
+    for (const starter of starters) {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: starter.name }));
+      });
+
+      expect(push).not.toHaveBeenCalled();
+      expect(screen.getByTestId('chat-prefill')).toHaveTextContent(starter.prefill);
+    }
   });
 
   it('preserves provider and model in the /chat/new navigation URL', async () => {

@@ -287,9 +287,9 @@ export function buildYAMLLines(nodes: CompatNode[]): YAMLLine[] {
 // ── Change type border colors ─────────────────────────────────────────────────
 
 const changeTypeBorder: Record<string, string> = {
-  add: '2px solid #4ade80',
-  update: '2px solid #facc15',
-  remove: '2px solid #f87171',
+  add: '2px solid var(--diff-added-accent)',
+  update: '2px solid var(--diff-modified-accent)',
+  remove: '2px solid var(--diff-removed-accent)',
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export function YAMLRenderer({
           fontFamily: 'var(--font-mono, ui-monospace, monospace)',
           background: 'var(--surface-panel)',
           border: '1px solid var(--stroke-default)',
-          borderRadius: 4,
+          borderRadius: 'var(--radius-md)',
           padding: '8px',
           color: 'var(--text-tertiary)',
           fontSize: 11,
@@ -336,7 +336,7 @@ export function YAMLRenderer({
         fontFamily: 'var(--font-mono, ui-monospace, monospace)',
         background: 'var(--surface-panel)',
         border: '1px solid var(--stroke-default)',
-        borderRadius: 4,
+        borderRadius: 'var(--radius-md)',
         overflow: 'auto',
       }}
     >

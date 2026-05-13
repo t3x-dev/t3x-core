@@ -54,7 +54,7 @@ export function LeafSemanticPointsPanel({
                 disabled={saving}
                 onChange={(event) => onTogglePoint(point.id, event.currentTarget.checked)}
               />
-              <span className="leading-relaxed">{point.label}</span>
+              <span className="min-w-0 flex-1 break-words leading-relaxed">{point.label}</span>
             </label>
           ))}
         </div>

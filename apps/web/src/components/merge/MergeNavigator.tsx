@@ -55,12 +55,14 @@ function SectionHeader({
 }: {
   label: string;
   count: number;
-  color: 'red' | 'green' | 'blue' | 'default';
+  color: 'red' | 'green' | 'blue' | 'source' | 'target' | 'default';
 }) {
   const colorClass = {
     red: 'text-[var(--diff-removed-accent)]',
     green: 'text-[var(--diff-added-accent)]',
     blue: 'text-[var(--accent-commit)]',
+    source: 'text-[var(--merge-src-accent)]',
+    target: 'text-[var(--merge-tgt-accent)]',
     default: 'text-[var(--text-tertiary)]',
   }[color];
 
@@ -183,12 +185,14 @@ export function MergeNavigator({
           {mergeResult.autoKept.map((path) => (
             <div
               key={path}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-tertiary)] opacity-60"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-secondary)]"
             >
               <Check size={8} className="shrink-0 rounded-full text-[var(--diff-added-accent)]" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-medium">{formatPath(path)}</div>
-                <div className="truncate font-mono text-[10px]">{path}</div>
+                <div className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+                  {path}
+                </div>
               </div>
             </div>
           ))}
@@ -201,7 +205,7 @@ export function MergeNavigator({
           <SectionHeader
             label="Added in source"
             count={mergeResult.onlyInSource.length}
-            color="blue"
+            color="source"
           />
           {mergeResult.onlyInSource.map((path) => {
             const isKept = keepSource.has(path);
@@ -211,10 +215,10 @@ export function MergeNavigator({
                   type="checkbox"
                   checked={isKept}
                   onChange={() => onToggleKeepSource(path)}
-                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
+                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--merge-src-accent)]"
                   title={isKept ? 'Discard from source' : 'Keep from source'}
                 />
-                <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
+                <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-60'}`}>
                   <div className="truncate text-[11px] font-medium text-[var(--text-secondary)]">
                     {formatPath(path)}
                   </div>
@@ -234,7 +238,7 @@ export function MergeNavigator({
           <SectionHeader
             label="Added in target"
             count={mergeResult.onlyInTarget.length}
-            color="blue"
+            color="target"
           />
           {mergeResult.onlyInTarget.map((path) => {
             const isKept = keepTarget.has(path);
@@ -244,10 +248,10 @@ export function MergeNavigator({
                   type="checkbox"
                   checked={isKept}
                   onChange={() => onToggleKeepTarget(path)}
-                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--accent-commit)]"
+                  className="h-3 w-3 shrink-0 cursor-pointer accent-[var(--merge-tgt-accent)]"
                   title={isKept ? 'Discard from target' : 'Keep from target'}
                 />
-                <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-40'}`}>
+                <div className={`min-w-0 flex-1 ${isKept ? '' : 'opacity-60'}`}>
                   <div className="truncate text-[11px] font-medium text-[var(--text-secondary)]">
                     {formatPath(path)}
                   </div>

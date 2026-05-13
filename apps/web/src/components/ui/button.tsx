@@ -10,7 +10,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default:
+          'bg-[var(--color-brand)] text-primary-foreground shadow-sm hover:bg-[var(--color-brand-hover)]',
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
@@ -25,23 +26,23 @@ const buttonVariants = cva(
 
         // Commit action - Blue (stable/committed state)
         commit:
-          'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm hover:from-blue-600 hover:to-blue-700 hover:shadow-md focus-visible:ring-blue-500/30 active:from-blue-700 active:to-blue-800',
+          'bg-[var(--accent-commit)] text-[var(--on-accent)] shadow-sm hover:bg-[var(--accent-commit)]/90 focus-visible:ring-[var(--accent-commit)]/30 active:bg-[var(--accent-commit)]/95',
 
         // Pending/Draft action - Orange (work in progress)
         pending:
-          'bg-gradient-to-r from-orange-400 to-orange-500 text-white shadow-sm hover:from-orange-500 hover:to-orange-600 hover:shadow-md focus-visible:ring-orange-500/30 active:from-orange-600 active:to-orange-700',
+          'bg-[var(--accent-pending)] text-[var(--on-accent)] shadow-sm hover:bg-[var(--accent-pending)]/90 focus-visible:ring-[var(--accent-pending)]/30 active:bg-[var(--accent-pending)]/95',
 
         // Branch action - Amber
         branch:
-          'bg-gradient-to-r from-amber-400 to-amber-500 text-amber-950 shadow-sm hover:from-amber-500 hover:to-amber-600 hover:shadow-md focus-visible:ring-amber-500/30 active:from-amber-600 active:to-amber-700',
+          'bg-[var(--accent-branch)] text-[var(--on-accent)] shadow-sm hover:bg-[var(--accent-branch)]/90 focus-visible:ring-[var(--accent-branch)]/30 active:bg-[var(--accent-branch)]/95',
 
         // Canvas ghost - Subtle for toolbar actions
         'canvas-ghost':
-          'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-[var(--text-secondary)] dark:hover:bg-[var(--hover-bg-strong)] dark:hover:text-[var(--text-primary)] active:bg-slate-200 dark:active:bg-[var(--active-bg)]',
+          'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] active:bg-[var(--active-bg)]',
 
         // Canvas outline - For secondary canvas actions
         'canvas-outline':
-          'border border-slate-200 bg-white/80 text-slate-700 shadow-sm backdrop-blur-sm hover:bg-slate-50 hover:border-slate-300 dark:border-[var(--stroke-strong)] dark:bg-[var(--surface-card)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--hover-bg-strong)] dark:hover:border-[var(--stroke-strong)]',
+          'border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-sm hover:bg-[var(--hover-bg)] hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)]',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
@@ -146,9 +147,9 @@ function PulseButton({
         shouldPulse
           ? {
               boxShadow: [
-                '0 0 0 0 rgba(59, 130, 246, 0)',
-                '0 0 0 8px rgba(59, 130, 246, 0.1)',
-                '0 0 0 0 rgba(59, 130, 246, 0)',
+                '0 0 0 0 color-mix(in srgb, var(--color-brand) 0%, transparent)',
+                '0 0 0 8px color-mix(in srgb, var(--color-brand) 10%, transparent)',
+                '0 0 0 0 color-mix(in srgb, var(--color-brand) 0%, transparent)',
               ],
             }
           : undefined

@@ -62,6 +62,34 @@ function formatNodeType(type: string): string {
     .join(' ');
 }
 
+function TreeStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    identical: 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
+    same: 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] bg-transparent',
+    added:
+      'border-[var(--diff-added-accent)]/35 bg-[var(--diff-added-bg)] text-[var(--diff-added-accent)]',
+    modified:
+      'border-[var(--diff-modified-accent)]/35 bg-[var(--diff-modified-bg)] text-[var(--diff-modified-accent)]',
+    removed:
+      'border-[var(--diff-removed-accent)]/35 bg-[var(--diff-removed-bg)] text-[var(--diff-removed-accent)]',
+  };
+  const labels: Record<string, string> = {
+    identical: '=',
+    same: '=',
+    added: '+',
+    modified: '~',
+    removed: '-',
+  };
+
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${styles[status] ?? styles.identical}`}
+    >
+      {labels[status] ?? '='}
+    </span>
+  );
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -134,10 +162,13 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
   // ── Render ────────────────────────────────────────
 
   return (
-    <aside className="hidden w-[200px] shrink-0 overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-2 md:block">
+    <aside className="hidden w-[230px] shrink-0 overflow-y-auto border-r border-[var(--stroke-divider)] bg-[var(--surface-panel)] md:block">
       {/* Tree Index header */}
-      <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
-        Tree Index
+      <div className="flex min-h-[38px] items-center justify-between border-b border-[var(--stroke-divider)] px-3 text-[12px] font-semibold text-[var(--text-primary)]">
+        <span>Tree Index</span>
+        <span className="rounded-full border border-[var(--accent-commit)]/25 bg-[var(--accent-commit)]/8 px-2 py-0.5 font-mono text-[10px] text-[var(--accent-commit)]">
+          {enrichedNodes.length}
+        </span>
       </div>
 
       {/* Active trees */}
@@ -146,9 +177,9 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
           key={ef.path}
           type="button"
           onClick={() => handleNodeClick(ef.path)}
-          className={`group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-200 ${
+          className={`group flex min-h-[38px] w-full items-center gap-2 border-b border-[var(--stroke-divider)] px-3 text-left transition-colors ${
             activeNodeId === ef.path
-              ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)] ring-1 ring-[var(--accent-commit)]/20'
+              ? 'bg-[var(--accent-commit)]/8 text-[var(--text-primary)]'
               : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
           }`}
         >
@@ -159,19 +190,20 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
               {ef.path}
             </div>
           </div>
+          <TreeStatusBadge status={ef.diffStatus} />
         </button>
       ))}
 
       {/* Removed trees */}
       {removedNodes.length > 0 && (
         <>
-          <div className="mt-3 mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--diff-removed-accent)]">
+          <div className="mt-3 mb-2 px-3 text-[10px] font-semibold uppercase text-[var(--diff-removed-accent)]">
             Removed ({removedNodes.length})
           </div>
           {removedNodes.map((ef) => (
             <div
               key={ef.path}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[var(--text-tertiary)] opacity-60"
+              className="flex min-h-[38px] w-full items-center gap-2 border-b border-[var(--stroke-divider)] px-3 text-[var(--text-tertiary)] opacity-60"
             >
               <DotIndicator status="removed" />
               <div className="min-w-0 flex-1">
@@ -186,7 +218,7 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
       )}
 
       {/* Leaves + Sources */}
-      <div className="mt-4 border-t border-[var(--stroke-divider)] pt-3 px-2">
+      <div className="border-t border-[var(--stroke-divider)] px-3 pt-3">
         {/* Leaves header + Add button */}
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
@@ -210,7 +242,7 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
                   onKeyDown={() => {}}
                   role="presentation"
                 />
-                <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-1 shadow-lg">
+                <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-[var(--radius-lg)] border border-[var(--stroke-default)] bg-[var(--surface-panel)] py-1 shadow-[var(--fx-shadow-md)]">
                   {LEAF_TYPE_OPTIONS.map((opt) => (
                     <button
                       key={opt.type}

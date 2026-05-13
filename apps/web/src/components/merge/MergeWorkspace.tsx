@@ -415,7 +415,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                       return (
                         <div
                           key={path}
-                          className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 opacity-50"
+                          className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
                         >
                           <div className="flex items-center gap-2 mb-1">
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
@@ -426,12 +426,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             </span>
                           </div>
                           {node && (
-                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-secondary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
-                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
-                                  <span className="text-[var(--yaml-string,#16a34a)]">
+                                  <span className="text-[var(--yaml-key)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation)]">: </span>
+                                  <span className="text-[var(--yaml-string)]">
                                     {typeof value === 'string'
                                       ? `"${value}"`
                                       : JSON.stringify(value)}
@@ -450,7 +450,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               {/* Source-only nodes */}
               {treeMergeResult.onlyInSource.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--merge-src-accent)]">
                     Source only ({treeMergeResult.onlyInSource.length})
                   </h3>
                   <div className="space-y-2">
@@ -462,8 +462,10 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                       return (
                         <div
                           key={path}
-                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
-                            isKept ? '' : 'opacity-40'
+                          className={`rounded-lg border bg-[var(--surface-card)] p-3 transition-opacity ${
+                            isKept
+                              ? 'border-[var(--merge-src-accent)]/25'
+                              : 'border-[var(--stroke-divider)] opacity-60'
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
@@ -471,7 +473,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                               type="checkbox"
                               checked={isKept}
                               onChange={() => toggleKeepSourceNode(path)}
-                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--merge-src-accent)]"
                             />
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
                               {node?.key ?? path}
@@ -481,12 +483,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             </span>
                           </div>
                           {node && (
-                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-secondary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
-                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
-                                  <span className="text-[var(--yaml-string,#16a34a)]">
+                                  <span className="text-[var(--yaml-key)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation)]">: </span>
+                                  <span className="text-[var(--yaml-string)]">
                                     {typeof value === 'string'
                                       ? `"${value}"`
                                       : JSON.stringify(value)}
@@ -505,7 +507,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               {/* Target-only nodes */}
               {treeMergeResult.onlyInTarget.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--accent-commit)]">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--merge-tgt-accent)]">
                     Target only ({treeMergeResult.onlyInTarget.length})
                   </h3>
                   <div className="space-y-2">
@@ -517,8 +519,10 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                       return (
                         <div
                           key={path}
-                          className={`rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 transition-opacity ${
-                            isKept ? '' : 'opacity-40'
+                          className={`rounded-lg border bg-[var(--surface-card)] p-3 transition-opacity ${
+                            isKept
+                              ? 'border-[var(--merge-tgt-accent)]/25'
+                              : 'border-[var(--stroke-divider)] opacity-60'
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
@@ -526,7 +530,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                               type="checkbox"
                               checked={isKept}
                               onChange={() => toggleKeepTargetNode(path)}
-                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--accent-commit)]"
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--merge-tgt-accent)]"
                             />
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
                               {node?.key ?? path}
@@ -536,12 +540,12 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             </span>
                           </div>
                           {node && (
-                            <div className="px-2 font-mono text-[11px] text-[var(--text-tertiary)]">
+                            <div className="px-2 font-mono text-[11px] text-[var(--text-secondary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
                                 <div key={key} className="leading-relaxed">
-                                  <span className="text-[var(--yaml-key,#2563eb)]">{key}</span>
-                                  <span className="text-[var(--yaml-punctuation,#6b7280)]">: </span>
-                                  <span className="text-[var(--yaml-string,#16a34a)]">
+                                  <span className="text-[var(--yaml-key)]">{key}</span>
+                                  <span className="text-[var(--yaml-punctuation)]">: </span>
+                                  <span className="text-[var(--yaml-string)]">
                                     {typeof value === 'string'
                                       ? `"${value}"`
                                       : JSON.stringify(value)}

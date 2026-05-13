@@ -29,6 +29,7 @@ import {
   updateCommitPosition,
 } from '@t3x-dev/storage';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
+import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
@@ -182,18 +183,22 @@ commitRoutes.openapi(createCommitRoute, async (c) => {
       inheritedParentHash = sourceConversation.parentCommitHash ?? undefined;
       yopsLogIds ??= await findUncommittedYOpsIds(ctx.db, sourceConversationId, body.project_id);
     }
+    const targetBranch = body.branch ?? 'main';
     const parents =
-      body.parents && body.parents.length > 0
+      body.parents !== undefined
         ? body.parents
-        : inheritedParentHash
-          ? [inheritedParentHash]
-          : body.parents;
+        : await resolveDefaultCommitParents(
+            ctx.db,
+            body.project_id,
+            targetBranch,
+            inheritedParentHash
+          );
 
     const commitInput = {
       project_id: body.project_id,
       // biome-ignore lint/suspicious/noExplicitAny: content schema validated by Zod
       content: body.content as any,
-      branch: body.branch,
+      branch: targetBranch,
       parents,
       message: body.message,
       author: body.author,

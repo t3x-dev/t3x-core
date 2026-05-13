@@ -97,20 +97,21 @@ export function AutoSuggestPanel() {
   return (
     <section className="rounded-lg border border-border bg-[var(--surface-card)]">
       {/* Header */}
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
-        onClick={() => setCollapsed(!collapsed)}
-        aria-expanded={!collapsed}
-      >
-        <Lightbulb className="h-4 w-4 text-amber-500" />
-        <span className="text-sm font-medium">Suggestions</span>
-        {activeSuggestions.length > 0 && (
-          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-            {activeSuggestions.length}
-          </span>
-        )}
-        <div className="flex-1" />
+      <div className="flex w-full items-center gap-2 px-4 py-2.5">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          onClick={() => setCollapsed(!collapsed)}
+          aria-expanded={!collapsed}
+        >
+          <Lightbulb className="h-4 w-4 shrink-0 text-[var(--status-warning)]" />
+          <span className="text-sm font-medium">Suggestions</span>
+          {activeSuggestions.length > 0 && (
+            <span className="rounded-full border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-1.5 py-0.5 text-xs font-medium text-[var(--status-warning)]">
+              {activeSuggestions.length}
+            </span>
+          )}
+        </button>
         {!collapsed && (
           <Button
             variant="ghost"
@@ -130,7 +131,7 @@ export function AutoSuggestPanel() {
             Refresh
           </Button>
         )}
-      </button>
+      </div>
 
       {/* Content */}
       {!collapsed && (
@@ -170,7 +171,7 @@ export function AutoSuggestPanel() {
                     'hover:border-border hover:bg-muted/30 transition-colors'
                   )}
                 >
-                  <span className="shrink-0 mt-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-mono text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  <span className="mt-0.5 shrink-0 rounded border border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] px-1 py-0.5 font-mono text-[10px] text-[var(--status-warning)]">
                     {Math.round(s.similarity * 100)}%
                   </span>
                   <p className="flex-1 text-sm text-foreground leading-snug line-clamp-2">

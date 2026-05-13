@@ -125,7 +125,7 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
       <div
         className={cn(
           'flex items-center justify-center h-[6px] cursor-row-resize',
-          'hover:bg-primary/10 active:bg-primary/20 transition-colors',
+          'hover:bg-[var(--accent-pending-soft)] active:bg-[var(--accent-pending-soft)] transition-colors',
           'relative group'
         )}
         onMouseDown={handleMouseDown}

@@ -66,7 +66,7 @@ export function NodeCard({
           : node.included
             ? 'border-border bg-[var(--surface-card)]'
             : 'border-border/50 bg-muted/30 opacity-60'
-      } ${isDragOver ? 'border-primary border-t-2' : ''}`}
+      } ${isDragOver ? 'border-[var(--accent-pending)] border-t-2' : ''}`}
     >
       {/* Drag handle or Lock */}
       {locked ? (

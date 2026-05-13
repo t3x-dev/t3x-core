@@ -23,6 +23,7 @@ import {
   updateDraftPreview,
 } from '@t3x-dev/storage';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
+import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { getEmbedder } from '../lib/embedder';
@@ -460,8 +461,15 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       });
     }
 
+    const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
+
     // 4. Set parents
-    const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
+    const parents = await resolveDefaultCommitParents(
+      db,
+      draft.project_id,
+      targetBranch,
+      draft.parent_commit_hash
+    );
 
     // 5. Create commit (convert nodes to frames)
     const commitFrames = nodes.map((s, i) => ({
@@ -489,7 +497,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       },
       project_id: draft.project_id,
       message: body?.message ?? `Draft: ${draft.title}`,
-      branch: body?.branch ?? draft.target_branch ?? 'main',
+      branch: targetBranch,
       provenance: { method: 'human_curation' },
       yops_log_ids: yopsLogIds,
       enforceBranchLinearity: true,

@@ -96,7 +96,7 @@ export function SuggestConstraintsDialog({
       <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-500" />
+            <Sparkles className="h-4 w-4 text-[var(--status-warning)]" />
             Suggest Constraints
           </DialogTitle>
           <DialogDescription>

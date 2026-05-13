@@ -311,7 +311,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
       {/* Slide-in Panel */}
       <aside
         ref={panelRef}
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[480px] flex-col bg-[var(--surface-panel)] shadow-2xl border-l border-[var(--stroke-divider)] animate-in slide-in-from-right duration-300"
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[480px] flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-lg)] animate-in slide-in-from-right duration-300"
         aria-label="Source context viewer"
       >
         {/* ── Header ── */}

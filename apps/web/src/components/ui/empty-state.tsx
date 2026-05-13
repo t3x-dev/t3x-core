@@ -72,12 +72,10 @@ export function EmptyState({
         <div className="mb-[var(--space-group)]">{customIcon}</div>
       ) : (
         <div className="relative mb-[var(--space-group)]">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 blur-xl" />
           <div
             className={cn(
               'relative flex h-16 w-16 items-center justify-center rounded-2xl',
-              'bg-gradient-to-br from-muted to-muted/50',
-              'ring-1 ring-border/50'
+              'border border-[var(--stroke-default)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-sm)]'
             )}
           >
             <Icon className="h-8 w-8 text-muted-foreground" />

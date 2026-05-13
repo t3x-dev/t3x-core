@@ -12,12 +12,13 @@ export interface AlignedNode {
 }
 
 /**
- * Look up a TreeNode from SemanticContent.trees by path (dot-separated key path).
- * Returns undefined if not found.
+ * Look up a TreeNode from SemanticContent.trees by path.
+ * Runtime diff responses use slash paths, while treeCompat exposes dot paths.
  */
 function findNodeByPath(trees: CoreTreeNode[], path: string): CoreTreeNode | undefined {
   const nodes = treesToNodes(trees);
-  const f = nodes.find((fr) => fr.id === path);
+  const dotPath = path.replaceAll('/', '.');
+  const f = nodes.find((fr) => fr.id === path || fr.id === dotPath);
   if (!f) return undefined;
   // Return a TreeNode shape (cast via unknown to allow runtime-enriched fields)
   return {
@@ -242,9 +243,14 @@ export function buildDiffStatusMap(
   diff: TreeDiff
 ): Map<string, 'modified' | 'added' | 'removed' | 'identical'> {
   const map = new Map<string, 'modified' | 'added' | 'removed' | 'identical'>();
-  for (const m of diff.modified) map.set(m.path, 'modified');
-  for (const path of diff.onlyInSource) map.set(path, 'removed');
-  for (const path of diff.onlyInTarget) map.set(path, 'added');
-  for (const path of diff.identical) map.set(path, 'identical');
+  const setPath = (path: string, status: 'modified' | 'added' | 'removed' | 'identical') => {
+    map.set(path, status);
+    map.set(path.replaceAll('/', '.'), status);
+  };
+
+  for (const m of diff.modified) setPath(m.path, 'modified');
+  for (const path of diff.onlyInSource) setPath(path, 'removed');
+  for (const path of diff.onlyInTarget) setPath(path, 'added');
+  for (const path of diff.identical) setPath(path, 'identical');
   return map;
 }

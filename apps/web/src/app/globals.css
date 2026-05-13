@@ -48,7 +48,7 @@
 
   /* Colors - Primary (T3X Blue - refined) */
   /* NOTE: --color-primary is defined in @theme inline to work with Tailwind v4 */
-  --color-primary-hover: #2563eb;
+  --color-primary-hover: #4338ca;
   --color-primary-light: #dbeafe;
 
   /* Colors - Accent (Orange for branches - warmer) */
@@ -241,13 +241,13 @@
   --accent-commit: #2563eb;
   --accent-extract: #7c3aed;
   --accent-pending: #f97316;
-  --accent-leaf: #10b981;
+  --accent-leaf: #0d9488;
   --accent-branch: #f59e0b;
   --accent-conversation: #6366f1;
   /* Soft accent backgrounds */
   --accent-commit-soft: rgba(37, 99, 235, 0.1);
   --accent-pending-soft: rgba(249, 115, 22, 0.1);
-  --accent-leaf-soft: rgba(16, 185, 129, 0.1);
+  --accent-leaf-soft: rgba(13, 148, 136, 0.1);
   --accent-conversation-soft: rgba(99, 102, 241, 0.1);
   --on-accent: #ffffff;
   --on-status: #ffffff;
@@ -374,7 +374,7 @@
   --card-foreground: oklch(0.13 0.02 260);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.13 0.02 260);
-  --primary: oklch(0.55 0.22 260);
+  --primary: var(--color-brand);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.96 0.005 260);
   --secondary-foreground: oklch(0.25 0.02 260);
@@ -385,7 +385,7 @@
   --destructive: oklch(0.55 0.22 25);
   --border: oklch(0.91 0.005 260);
   --input: oklch(0.91 0.005 260);
-  --ring: oklch(0.55 0.22 260);
+  --ring: var(--accent-conversation);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -393,12 +393,12 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.99 0.002 250);
   --sidebar-foreground: oklch(0.13 0.02 260);
-  --sidebar-primary: oklch(0.55 0.22 260);
+  --sidebar-primary: var(--color-brand);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.96 0.01 260);
   --sidebar-accent-foreground: oklch(0.25 0.02 260);
   --sidebar-border: oklch(0.93 0.005 260);
-  --sidebar-ring: oklch(0.55 0.22 260);
+  --sidebar-ring: var(--accent-conversation);
 
   color: var(--color-text);
   background-color: var(--color-bg);
@@ -489,13 +489,13 @@
   --accent-commit: #6b8aff;
   --accent-extract: #8b5cf6;
   --accent-pending: #e5a030;
-  --accent-leaf: #34d399;
+  --accent-leaf: #2dd4bf;
   --accent-branch: #e5a030;
   --accent-conversation: #818cf8;
   /* Soft accent backgrounds */
   --accent-commit-soft: rgba(107, 138, 255, 0.1);
   --accent-pending-soft: rgba(229, 160, 48, 0.1);
-  --accent-leaf-soft: rgba(52, 211, 153, 0.1);
+  --accent-leaf-soft: rgba(45, 212, 191, 0.12);
   --accent-conversation-soft: rgba(129, 140, 248, 0.1);
   --on-accent: #111827;
   --on-status: #111827;
@@ -615,7 +615,7 @@
   --card-foreground: oklch(0.95 0.005 260);
   --popover: oklch(0.21 0.008 260); /* = surface-elevated */
   --popover-foreground: oklch(0.95 0.005 260);
-  --primary: oklch(0.65 0.2 260);
+  --primary: var(--color-brand-muted);
   --primary-foreground: oklch(0.98 0 0);
   --secondary: oklch(0.14 0.008 260); /* = surface-panel */
   --secondary-foreground: oklch(0.95 0.005 260);
@@ -626,7 +626,7 @@
   --destructive: oklch(0.6 0.2 25);
   --border: oklch(1 0 0 / 12%); /* = stroke-default */
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.65 0.15 260); /* = accent-commit */
+  --ring: var(--accent-conversation); /* = focus ring */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -634,12 +634,12 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.14 0.008 260); /* = surface-panel */
   --sidebar-foreground: oklch(0.94 0.005 260);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: var(--color-brand-muted);
   --sidebar-primary-foreground: oklch(0.94 0.005 260);
   --sidebar-accent: oklch(0.17 0.008 260);
   --sidebar-accent-foreground: oklch(0.94 0.005 260);
   --sidebar-border: oklch(1 0 0 / 12%); /* = stroke-default */
-  --sidebar-ring: oklch(0.65 0.15 260); /* = accent-commit */
+  --sidebar-ring: var(--accent-conversation); /* = focus ring */
 
   /* Canvas Edge Colors (dark) */
   --edge-color: #475569;

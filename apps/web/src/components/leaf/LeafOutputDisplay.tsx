@@ -312,9 +312,9 @@ export function LeafOutputDisplay({
       <div
         className={cn(
           'whitespace-pre-wrap rounded-xl border border-[var(--stroke-strong)] p-6 text-sm leading-[1.8] text-[var(--text-secondary)]',
-          'bg-[var(--glass-bg-reading)] backdrop-blur-[var(--glass-blur-reading)] shadow-[var(--shadow-reading)]',
+          'bg-[var(--surface-card)] shadow-[var(--fx-shadow-sm)]',
           'min-h-[200px] transition-all duration-300',
-          allPassed && 'ring-2 ring-[var(--status-success)]/30'
+          allPassed && 'ring-1 ring-[var(--status-success)]/20'
         )}
       >
         {highlightedSegments

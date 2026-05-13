@@ -14,6 +14,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { commitDraft, createCommit, findDraftById } from '@t3x-dev/storage';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
+import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
@@ -127,7 +128,12 @@ commitFromDraftRoutes.openapi(postCommitFromDraftRoute, async (c) => {
     }
 
     // Step 4: Resolve parent commit (from draft or branch HEAD)
-    const parents = draft.parent_commit_hash ? [draft.parent_commit_hash] : [];
+    const parents = await resolveDefaultCommitParents(
+      db,
+      project_id,
+      targetBranch,
+      draft.parent_commit_hash
+    );
 
     // Step 5: Convert draft nodes to commit trees
     const commitTrees = draftNodes.map((node, i) => ({

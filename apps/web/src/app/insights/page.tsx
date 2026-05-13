@@ -18,9 +18,11 @@ import type { SemanticEntry } from '@/types/semantic';
 import { cn } from '@/utils/cn';
 
 const stageColors = {
-  commit: 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/20',
-  draft: 'bg-amber-500/10 text-[var(--status-warning)] border-amber-500/20',
-  turn: 'bg-emerald-500/10 text-[var(--status-success)] border-emerald-500/20',
+  commit:
+    'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)] border-[var(--accent-commit)]/25',
+  draft:
+    'bg-[var(--accent-pending-soft)] text-[var(--accent-pending)] border-[var(--accent-pending)]/25',
+  turn: 'bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)] border-[var(--accent-conversation)]/25',
 } as const;
 
 function formatTimeAgo(dateStr: string): string {
