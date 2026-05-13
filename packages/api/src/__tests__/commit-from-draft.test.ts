@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
+import { getCommit, insertDraft, insertProject, updateDraft } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -140,6 +140,41 @@ describe('Commit-from-Draft Routes', () => {
         }),
         testProjectId
       );
+    });
+
+    it('uses the current branch head as parent when draft has no parent', async () => {
+      const firstDraftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_parent', slots: { text: 'Parent node.' }, children: [] },
+      ]);
+      const firstRes = await app.request('/v1/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          draft_id: firstDraftId,
+          branch: 'feature/parent-fallback',
+        }),
+      });
+      expect(firstRes.status).toBe(201);
+      const firstData: ApiResponse = await firstRes.json();
+
+      const secondDraftId = await createDraftWithTrees(testProjectId, [
+        { key: 's_child', slots: { text: 'Child node.' }, children: [] },
+      ]);
+      const secondRes = await app.request('/v1/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: testProjectId,
+          draft_id: secondDraftId,
+          branch: 'feature/parent-fallback',
+        }),
+      });
+
+      expect(secondRes.status).toBe(201);
+      const secondData: ApiResponse = await secondRes.json();
+      const secondCommit = await getCommit(mockDB, secondData.data.commit_hash);
+      expect(secondCommit?.parents).toEqual([firstData.data.commit_hash]);
     });
 
     it('uses specified branch (defaults to main)', async () => {
