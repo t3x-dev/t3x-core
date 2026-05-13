@@ -2,7 +2,7 @@
 
 import { FileText, GitCommitHorizontal, Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { ProviderSetupBanner } from '@/components/chat/ProviderSetupBanner';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
@@ -61,6 +61,7 @@ function ChatLanding() {
   // sync for the sidebar; propagating the param to /chat/new survives
   // refresh and avoids relying solely on in-memory state.
   const projectIdParam = searchParams.get('projectId');
+  const [starterDraft, setStarterDraft] = useState<{ text: string; revision: number } | null>(null);
   useEffect(() => {
     if (!projectIdParam) return;
     const store = useChatStore.getState();
@@ -124,7 +125,12 @@ function ChatLanding() {
               key={card.title}
               type="button"
               disabled={!hasConfiguredGenerationProvider}
-              onClick={() => handleSend(card.prompt)}
+              onClick={() =>
+                setStarterDraft((current) => ({
+                  text: card.prompt,
+                  revision: (current?.revision ?? 0) + 1,
+                }))
+              }
               className="flex min-h-[106px] flex-col items-start gap-2.5 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 py-3.5 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-panel)] hover:shadow-[var(--fx-shadow-sm)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span
@@ -156,6 +162,8 @@ function ChatLanding() {
           selectedModel={selectedModel ?? ''}
           disabled={!hasConfiguredGenerationProvider || loading}
           onModelChange={handleModelChange}
+          prefillText={starterDraft?.text ?? null}
+          prefillRevision={starterDraft?.revision}
         />
       </div>
     </div>

@@ -78,6 +78,8 @@ interface ChatInputProps {
   selectedProvider?: string;
   selectedModel?: string;
   onModelChange?: (provider: string, model: string) => void;
+  prefillText?: string | null;
+  prefillRevision?: number;
 }
 
 const CHAT_INPUT_DRAFT_STORAGE_PREFIX = 't3x:chat-input-draft:';
@@ -118,6 +120,8 @@ export function ChatInput({
   selectedProvider,
   selectedModel,
   onModelChange,
+  prefillText,
+  prefillRevision,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
@@ -180,6 +184,15 @@ export function ChatInput({
     }
     writeDraft(draftStorageKey, value);
   }, [draftStorageKey, value]);
+
+  useEffect(() => {
+    if (!prefillText || prefillRevision == null) return;
+    setValue(prefillText);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      autoResize();
+    });
+  }, [prefillText, prefillRevision, autoResize]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'));
