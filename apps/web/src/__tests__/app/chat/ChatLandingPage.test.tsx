@@ -144,11 +144,11 @@ describe('ChatLandingPage', () => {
     expect(screen.getByText('Source')).toBeVisible();
     expect(screen.getByText('Meaning')).toBeVisible();
     expect(screen.getByText('Commit')).toBeVisible();
-    expect(screen.getByRole('button', { name: /capture source/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /shape meaning/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /create checkpoint/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /compare prompt versions/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /extract decisions from notes/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /create reusable output/i })).toBeEnabled();
     expect(screen.getByTestId('chat-placeholder')).toHaveTextContent(
-      'Paste notes, ask a question, or describe what to preserve...'
+      'Paste a prompt, transcript, release note, or design discussion...'
     );
   });
 
@@ -158,19 +158,19 @@ describe('ChatLandingPage', () => {
     });
 
     const captureIcon = screen
-      .getByRole('button', { name: /capture source/i })
+      .getByRole('button', { name: /compare prompt versions/i })
       .querySelector('span');
     const meaningIcon = screen
-      .getByRole('button', { name: /shape meaning/i })
+      .getByRole('button', { name: /extract decisions from notes/i })
       .querySelector('span');
     const checkpointIcon = screen
-      .getByRole('button', { name: /create checkpoint/i })
+      .getByRole('button', { name: /create reusable output/i })
       .querySelector('span');
 
     expect(captureIcon).toHaveClass('text-[var(--source)]');
     expect(meaningIcon).toHaveClass('text-[var(--accent-extract)]');
-    expect(checkpointIcon).toHaveClass('text-[var(--accent-commit)]');
-    expect(checkpointIcon).not.toHaveClass('text-[var(--accent-leaf)]');
+    expect(checkpointIcon).toHaveClass('text-[var(--accent-leaf)]');
+    expect(checkpointIcon).not.toHaveClass('text-[var(--accent-commit)]');
   });
 
   it('prefills the composer from each starter card without sending', async () => {
@@ -180,16 +180,16 @@ describe('ChatLandingPage', () => {
 
     const starters = [
       {
-        name: /capture source/i,
-        prefill: 'I want T3X to make sense of this source material:',
+        name: /compare prompt versions/i,
+        prefill: 'Compare these prompt versions and extract the meaningful changes:',
       },
       {
-        name: /shape meaning/i,
-        prefill: 'Help me shape the meaning in this context:',
+        name: /extract decisions from notes/i,
+        prefill: 'Extract the decisions, facts, risks, and tensions from these notes:',
       },
       {
-        name: /create checkpoint/i,
-        prefill: 'Create a semantic checkpoint from this work:',
+        name: /create reusable output/i,
+        prefill: 'Create a reusable output from this committed knowledge:',
       },
     ];
 
@@ -267,7 +267,7 @@ describe('ChatLandingPage', () => {
 
     expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
     expect(screen.getByTestId('chat-disabled')).toHaveTextContent('true');
-    expect(screen.getByRole('button', { name: /capture source/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /compare prompt versions/i })).toBeDisabled();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));

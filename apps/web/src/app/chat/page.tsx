@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, GitCommitHorizontal, Sparkles } from 'lucide-react';
+import { FileText, Leaf as LeafIcon, Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -11,24 +11,24 @@ import { useChatStore } from '@/store/chatStore';
 const STARTER_CARDS = [
   {
     icon: FileText,
-    title: 'Capture source',
-    description: 'Paste notes, files, links, or raw context.',
-    prompt: 'I want T3X to make sense of this source material:\n\n',
+    title: 'Compare prompt versions',
+    description: 'Paste variants and preserve what changed.',
+    prompt: 'Compare these prompt versions and extract the meaningful changes:\n\n',
     tone: 'source',
   },
   {
     icon: Sparkles,
-    title: 'Shape meaning',
+    title: 'Extract decisions from notes',
     description: 'Find decisions, facts, risks, and tensions.',
-    prompt: 'Help me shape the meaning in this context:\n\n',
+    prompt: 'Extract the decisions, facts, risks, and tensions from these notes:\n\n',
     tone: 'meaning',
   },
   {
-    icon: GitCommitHorizontal,
-    title: 'Create checkpoint',
-    description: 'Save durable meaning as a versioned commit.',
-    prompt: 'Create a semantic checkpoint from this work:\n\n',
-    tone: 'commit',
+    icon: LeafIcon,
+    title: 'Create reusable output',
+    description: 'Turn committed meaning into an artifact.',
+    prompt: 'Create a reusable output from this committed knowledge:\n\n',
+    tone: 'leaf',
   },
 ] as const;
 
@@ -37,8 +37,7 @@ const FLOW_STEPS = ['Source', 'Meaning', 'Commit'] as const;
 const ICON_TONE_CLASSES = {
   source: 'border-[var(--source)]/20 bg-[var(--source-dim)] text-[var(--source)]',
   meaning: 'border-[var(--accent-extract)]/20 bg-[var(--source-dim)] text-[var(--accent-extract)]',
-  commit:
-    'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]',
+  leaf: 'border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]',
 } as const;
 
 export default function ChatLandingPage() {
@@ -100,8 +99,8 @@ function ChatLanding() {
             What should T3X make sense of?
           </h1>
           <p className="mx-auto mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
-            Start with rough context. T3X keeps the source, extracts meaning, and turns useful work
-            into commits.
+            Paste a prompt, chat transcript, release note, or design discussion. T3X keeps the
+            source, extracts meaning, and turns useful work into commits.
           </p>
           <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)]">
             {FLOW_STEPS.map((step, index) => (
@@ -156,7 +155,7 @@ function ChatLanding() {
 
         <ChatInput
           onSend={handleSend}
-          placeholder="Paste notes, ask a question, or describe what to preserve..."
+          placeholder="Paste a prompt, transcript, release note, or design discussion..."
           draftKey={projectIdParam ? `landing:${projectIdParam}` : 'landing'}
           selectedProvider={selectedProvider ?? ''}
           selectedModel={selectedModel ?? ''}

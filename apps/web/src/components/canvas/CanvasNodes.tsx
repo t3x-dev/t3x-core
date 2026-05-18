@@ -49,25 +49,27 @@ type Props = NodeProps<CanvasNode>;
 
 // Handle styles - uses CSS variables for theming
 const targetHandleStyle = {
-  width: 22,
-  height: 14,
-  borderRadius: 8,
+  width: 18,
+  height: 12,
+  borderRadius: 7,
   background: 'var(--surface-card)',
-  border: '3px solid var(--text-tertiary)',
+  border: '2px solid var(--stroke-strong)',
+  opacity: 0.72,
   top: '50%',
   transform: 'translateY(-50%)',
-  left: -6,
+  left: -5,
 };
 
 const sourceHandleStyle = {
-  width: 18,
-  height: 18,
+  width: 14,
+  height: 14,
   borderRadius: 999,
   background: 'var(--surface-card)',
-  border: '3px solid var(--text-tertiary)',
+  border: '2px solid var(--stroke-strong)',
+  opacity: 0.76,
   top: '50%',
   transform: 'translateY(-50%)',
-  right: -9,
+  right: -7,
 };
 
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves

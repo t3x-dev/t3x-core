@@ -27,6 +27,7 @@ import { MergeActionBar } from './MergeActionBar';
 import { MergeContextPanel } from './MergeContextPanel';
 import { MergeNavigator } from './MergeNavigator';
 import { MergePreview } from './MergePreview';
+import { MergeReadyStrip } from './MergeReadyStrip';
 import { MergeReviewDialog } from './MergeReviewDialog';
 import { buildMergedContent, findNode, findNodeByPath } from './mergeWorkspaceHelpers';
 import { useMergeKeyboard } from './useMergeKeyboard';
@@ -303,6 +304,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       : fullScreenEnter;
 
     const framePreviewPaths = getPreviewPaths();
+    const structureReady = treeMergeResult.conflicts.length === 0;
 
     return (
       <motion.div
@@ -359,6 +361,15 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
 
             {/* Center: Conflict cards + auto-kept */}
             <div ref={scrollContainerRef} className="flex-1 overflow-auto p-[var(--space-page)]">
+              {structureReady && (
+                <MergeReadyStrip
+                  autoKeptCount={treeMergeResult.autoKept.length}
+                  conflictCount={treeMergeResult.conflicts.length}
+                  previewTotal={framePreviewPaths.length}
+                  message={message}
+                />
+              )}
+
               {treeError && (
                 <div className="mb-4 rounded-lg border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] p-3 text-sm text-[var(--status-error)]">
                   {treeError}

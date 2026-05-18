@@ -10,6 +10,7 @@ import {
   selectScriptDirty,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
+import { cn } from '@/utils/cn';
 
 function formatSurfaceSummary(groups: ReturnType<typeof buildMaterializedOpGroups>): string {
   const parts: string[] = [];
@@ -49,6 +50,8 @@ export function WorkspaceTopbar() {
   const canDiscard = (hasDraft || retainedDraftFailure !== null) && !isCommitting;
   const dirtyCopy = 'Inline changes · Apply or discard before commit';
   const pendingCopy = 'Pending extract · Apply or discard before commit';
+  const surfaceSummary = formatSurfaceSummary(groups);
+  const pendingCount = groups.pending.count;
 
   return (
     <div className="flex h-11 items-center gap-2 px-3 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]">
@@ -62,8 +65,8 @@ export function WorkspaceTopbar() {
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <span
-          className="text-[10px] font-mono text-[var(--text-tertiary)]"
+        <div
+          className="flex min-w-0 items-center gap-1.5 font-mono text-[10px]"
           aria-live="polite"
           title={
             isInheritedBaselineOnly
@@ -71,20 +74,37 @@ export function WorkspaceTopbar() {
               : scriptDirty
                 ? dirtyCopy
                 : hasDraft
-                  ? pendingCopy
-                  : `${opsLog.length} materialized op${opsLog.length === 1 ? '' : 's'} in yops_log`
+                ? pendingCopy
+                : `${opsLog.length} materialized op${opsLog.length === 1 ? '' : 's'} in yops_log`
           }
         >
           {isInheritedBaselineOnly ? (
-            'Inherited baseline'
+            <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-0.5 text-[var(--text-tertiary)]">
+              Inherited baseline
+            </span>
           ) : (
             <>
-              Materialized: {opsLog.length} ops
-              {formatSurfaceSummary(groups)}
-              {groups.pending.count > 0 ? ` · Pending: ${groups.pending.count}` : ''}
+              <span className="inline-flex h-5 items-center rounded-full border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] px-2 text-[var(--accent-commit)]">
+                Materialized {opsLog.length}
+              </span>
+              {surfaceSummary && (
+                <span className="hidden max-w-[190px] truncate text-[var(--text-tertiary)] xl:inline">
+                  {surfaceSummary.replace(/^ · /, '')}
+                </span>
+              )}
+              <span
+                className={cn(
+                  'inline-flex h-5 items-center rounded-full border px-2',
+                  pendingCount > 0
+                    ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending-soft)] text-[var(--accent-pending)]'
+                    : 'border-[var(--stroke-divider)] bg-[var(--surface-panel)] text-[var(--text-tertiary)]'
+                )}
+              >
+                Pending {pendingCount}
+              </span>
             </>
           )}
-        </span>
+        </div>
 
         <button
           type="button"

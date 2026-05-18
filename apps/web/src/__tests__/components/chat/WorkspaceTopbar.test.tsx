@@ -86,10 +86,10 @@ describe('WorkspaceTopbar', () => {
 
     render(<WorkspaceTopbar />);
 
-    expect(screen.getByText(/Materialized: 3 ops/)).not.toBeNull();
+    expect(screen.getByText(/Materialized 3/)).not.toBeNull();
     expect(screen.getByText(/YOps: 1/)).not.toBeNull();
     expect(screen.getByText(/Tree: 1/)).not.toBeNull();
     expect(screen.queryByText(/Manual:/)).toBeNull();
-    expect(screen.getByText(/Pending: 1/)).not.toBeNull();
+    expect(screen.getByText(/Pending 1/)).not.toBeNull();
   });
 });

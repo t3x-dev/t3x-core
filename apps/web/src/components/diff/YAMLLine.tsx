@@ -79,7 +79,7 @@ export function YAMLLine({ lineNumber, status, children }: YAMLLineProps) {
             : undefined
         }
       >
-        {isEmpty ? null : children}
+        {children}
       </div>
     </div>
   );

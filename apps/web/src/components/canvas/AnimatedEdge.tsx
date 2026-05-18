@@ -9,22 +9,22 @@ const edgeColors: Record<
   { base: string; hover: string; selected: string; glow: string }
 > = {
   evolve: {
-    base: 'oklch(0.55 0.08 250 / 50%)',
-    hover: 'oklch(0.65 0.12 250)',
-    selected: 'oklch(0.75 0.15 250)',
-    glow: 'oklch(0.6 0.2 250)',
+    base: 'var(--edge-evolve-base)',
+    hover: 'var(--edge-evolve-hover)',
+    selected: 'var(--edge-evolve-selected)',
+    glow: 'var(--edge-evolve-glow)',
   },
   merge: {
-    base: 'oklch(0.55 0.12 300 / 55%)',
-    hover: 'oklch(0.65 0.16 300)',
-    selected: 'oklch(0.75 0.18 300)',
-    glow: 'oklch(0.6 0.22 300)',
+    base: 'var(--edge-merge-base)',
+    hover: 'var(--edge-merge-hover)',
+    selected: 'var(--edge-merge-selected)',
+    glow: 'var(--edge-merge-glow)',
   },
   draft: {
-    base: 'oklch(0.55 0.02 250 / 45%)',
-    hover: 'oklch(0.65 0.08 250)',
-    selected: 'oklch(0.75 0.15 250)',
-    glow: 'oklch(0.6 0.2 250)',
+    base: 'var(--edge-draft-base)',
+    hover: 'var(--edge-draft-hover)',
+    selected: 'var(--edge-draft-selected)',
+    glow: 'var(--edge-draft-glow)',
   },
 };
 
@@ -77,9 +77,9 @@ export function AnimatedEdge({
   });
 
   const getStrokeWidth = () => {
-    if (selected) return 2.5;
-    if (isHovered) return 2;
-    return 1.5;
+    if (selected) return 3;
+    if (isHovered) return 2.5;
+    return edgeType === 'draft' ? 1.6 : 2;
   };
 
   const getStrokeColor = () => {

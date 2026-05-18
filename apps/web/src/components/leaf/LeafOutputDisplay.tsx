@@ -242,7 +242,7 @@ export function LeafOutputDisplay({
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-[960px]">
       {/* Output header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -311,7 +311,7 @@ export function LeafOutputDisplay({
       {/* Output text card */}
       <div
         className={cn(
-          'whitespace-pre-wrap rounded-xl border border-[var(--stroke-strong)] p-6 text-sm leading-[1.8] text-[var(--text-secondary)]',
+          'whitespace-pre-wrap rounded-lg border border-[var(--stroke-strong)] p-6 text-[15px] leading-8 text-[var(--text-primary)] md:p-7',
           'bg-[var(--surface-card)] shadow-[var(--fx-shadow-sm)]',
           'min-h-[200px] transition-all duration-300',
           allPassed && 'ring-1 ring-[var(--status-success)]/20'
