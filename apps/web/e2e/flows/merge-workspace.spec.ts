@@ -2,9 +2,11 @@ import {
   API_BASE,
   cleanupProject,
   createTestCommit,
+  createTestCommitFromTrees,
   createTestMergeDraft,
   createTestProject,
 } from '../fixtures/api-helpers';
+import { MERGE_SEMANTIC_CHANGES_DEMO } from '../fixtures/open-source-demo-datasets';
 import { MergePage } from '../fixtures/page-objects/merge-page';
 import { expect, test } from '../fixtures/test';
 
@@ -33,42 +35,27 @@ test.describe('Merge Workspace', () => {
   let mergeId: string;
 
   test.beforeAll(async ({ request }) => {
-    const prefix = uid();
     const { projectId: id } = await createTestProject(request, `Merge E2E ${Date.now()}`);
     projectId = id;
 
-    const baseHash = await createTestCommit(
+    const baseHash = await createTestCommitFromTrees(
       request,
       projectId,
-      [
-        { id: `s_${prefix}_1`, text: 'User prefers dark mode' },
-        { id: `s_${prefix}_2`, text: 'User speaks English' },
-        { id: `s_${prefix}_3`, text: 'User timezone is UTC+8' },
-      ],
+      MERGE_SEMANTIC_CHANGES_DEMO.base,
       { branch: 'main', message: 'Base commit' }
     );
 
-    sourceHash = await createTestCommit(
+    sourceHash = await createTestCommitFromTrees(
       request,
       projectId,
-      [
-        { id: `s_${prefix}_1`, text: 'User prefers dark mode' },
-        { id: `s_${prefix}_2`, text: 'User speaks English fluently' },
-        { id: `s_${prefix}_3`, text: 'User timezone is UTC+8' },
-        { id: `s_${prefix}_4`, text: 'Coding experience with Python and TypeScript' },
-      ],
+      MERGE_SEMANTIC_CHANGES_DEMO.source,
       { branch: 'feature', message: 'Feature commit', parents: [baseHash] }
     );
 
-    targetHash = await createTestCommit(
+    targetHash = await createTestCommitFromTrees(
       request,
       projectId,
-      [
-        { id: `s_${prefix}_1`, text: 'User prefers dark mode' },
-        { id: `s_${prefix}_2`, text: 'User speaks British English' },
-        { id: `s_${prefix}_3`, text: 'User timezone is UTC+8' },
-        { id: `s_${prefix}_5`, text: 'Enjoys hiking in the mountains on weekends' },
-      ],
+      MERGE_SEMANTIC_CHANGES_DEMO.target,
       { branch: 'main', message: 'Main commit', parents: [baseHash] }
     );
 
@@ -88,9 +75,10 @@ test.describe('Merge Workspace', () => {
     const hasIdentical = await merge.hasIdenticalSection();
     const hasConflicts = await merge.hasConflictsSection();
 
-    // Merge workspace should show at least one section (identical or conflicts)
-    // Frame-based commits may classify differently than node-based
+    // Fixed open-source demo data must exercise both review paths.
     expect(hasIdentical || hasConflicts).toBe(true);
+    expect(hasConflicts).toBe(true);
+    await expect(page.getByText(`Conflicts (${MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts.length})`)).toBeVisible();
 
     // Commit should be disabled initially (no message, unresolved conflicts)
     const commitEnabled = await merge.isCommitEnabled();
@@ -105,9 +93,10 @@ test.describe('Merge Workspace', () => {
     await merge.waitForLoad();
 
     const hasConflicts = await merge.hasConflictsSection();
-    test.skip(!hasConflicts, 'No conflicts section — merge data had no similar pairs');
+    expect(hasConflicts).toBe(true);
 
     const initialCount = await merge.getUnresolvedCount();
+    expect(initialCount).toBe(MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts.length);
 
     // #5: Click and wait for UI state change, not fixed timeout
     // UI shows "Accept Source" (frame mode) or "Keep A" (legacy node mode)
@@ -133,9 +122,10 @@ test.describe('Merge Workspace', () => {
     await merge.waitForLoad();
 
     const hasConflicts = await merge.hasConflictsSection();
-    test.skip(!hasConflicts, 'No conflicts section — merge data had no similar pairs');
+    expect(hasConflicts).toBe(true);
 
     const initialCount = await merge.getUnresolvedCount();
+    expect(initialCount).toBe(MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts.length);
 
     // UI shows "Accept Target" (frame mode) or "Keep B" (legacy node mode)
     const keepBButton = page
