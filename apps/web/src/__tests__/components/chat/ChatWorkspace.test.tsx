@@ -124,7 +124,11 @@ describe('ChatWorkspace', () => {
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
     mocks.textSelection.current = null;
-    useWorkspaceStore.getState().reset();
+    const workspace = useWorkspaceStore.getState();
+    workspace.reset();
+    workspace.setActiveProject('proj_123');
+    workspace.setConversation('conv_123');
+    workspace.setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
     usePinsStore.setState({
       pins: [],
       loading: false,
@@ -167,5 +171,24 @@ describe('ChatWorkspace', () => {
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
     expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
+  });
+
+  it('does not show source text actions for a user question selection', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'question text',
+        turnHash: 'sha256:t1',
+        turnRole: 'user',
+        turnText: 'question text',
+        startChar: 0,
+        endChar: 12,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
   });
 });

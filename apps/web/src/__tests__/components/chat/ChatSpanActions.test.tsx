@@ -21,6 +21,8 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    message: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -39,7 +41,11 @@ function selection(): TextSelectionResult {
 describe('ChatSpanActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.applySourceTextEdit.mockResolvedValue(undefined);
+    mocks.applySourceTextEdit.mockResolvedValue({
+      revisionId: 'str_test',
+      opCount: 1,
+      status: 'patched',
+    });
   });
 
   it('lets the user edit selected source text before confirming', async () => {
@@ -49,7 +55,7 @@ describe('ChatSpanActions', () => {
     fireEvent.change(screen.getByDisplayValue('psychology'), {
       target: { value: 'group psychology' },
     });
-    fireEvent.click(screen.getByText('Confirm'));
+    fireEvent.click(screen.getByText('Save & Generate YOps'));
 
     await waitFor(() => {
       expect(mocks.applySourceTextEdit).toHaveBeenCalledWith({
@@ -69,7 +75,7 @@ describe('ChatSpanActions', () => {
     render(<ChatSpanActions selection={selection()} onDone={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Delete'));
-    fireEvent.click(screen.getByText('Confirm'));
+    fireEvent.click(screen.getByText('Save & Generate YOps'));
 
     await waitFor(() => {
       expect(mocks.applySourceTextEdit).toHaveBeenCalledWith(

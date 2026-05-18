@@ -3,6 +3,7 @@
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
@@ -65,7 +66,8 @@ export function ChatWorkspace({
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
-  const showAddForm = !isCommitted && selection && selection.text.length > 3;
+  const showAddForm =
+    !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -185,6 +187,11 @@ export function ChatWorkspace({
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
   const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
+  const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
+  const workspaceLastError = useWorkspaceStore((s) => s.lastError);
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
 
   // Load persistent committed highlights for this conversation
@@ -197,6 +204,26 @@ export function ChatWorkspace({
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      const disabledReason = getExtractDisabledReason({
+        activeProjectId: activeProjectId || resolvedProjectId,
+        workspaceConversationId,
+        routeConversationId: resolvedConversationId,
+        turnCount: turns.length,
+        workspaceMode,
+        isCommitted,
+        hasDraft,
+        isChatLoading: isLoading,
+        isChatStreaming: isStreaming,
+        modelsLoading,
+        selectedProvider,
+        selectedModel,
+        lastError: workspaceLastError,
+      });
+      if (disabledReason) {
+        toast.message(disabledReason);
+        return;
+      }
+
       if (detail?.sourcePinIds) {
         // Came from source panel confirm — extract with selected pins
         handleExtract(detail.sourcePinIds);
@@ -220,7 +247,24 @@ export function ChatWorkspace({
     };
     window.addEventListener('t3x:extract-requested', handler);
     return () => window.removeEventListener('t3x:extract-requested', handler);
-  }, [handleExtract, pins.length]);
+  }, [
+    activeProjectId,
+    handleExtract,
+    hasDraft,
+    isCommitted,
+    isLoading,
+    isStreaming,
+    modelsLoading,
+    pins.length,
+    resolvedConversationId,
+    resolvedProjectId,
+    selectedModel,
+    selectedProvider,
+    turns.length,
+    workspaceConversationId,
+    workspaceLastError,
+    workspaceMode,
+  ]);
 
   // Hide source panel when extraction starts
   useEffect(() => {
@@ -280,8 +324,12 @@ export function ChatWorkspace({
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}
+        selectedProvider={selectedProvider}
         selectedModel={selectedModel ?? ''}
         onModelChange={handleModelChange}
+        isChatLoading={isLoading}
+        isChatStreaming={isStreaming}
+        modelsLoading={modelsLoading}
       />
 
       {/* Coverage toggle — visible after extraction */}
@@ -349,6 +397,8 @@ export function ChatWorkspace({
                   key={msg.id}
                   sender={msg.role}
                   content={sourceDraft?.content ?? msg.content}
+                  projectId={msg.projectId}
+                  conversationId={msg.conversationId}
                   turnHash={msg.id}
                   turnIndex={i + 1}
                   citations={

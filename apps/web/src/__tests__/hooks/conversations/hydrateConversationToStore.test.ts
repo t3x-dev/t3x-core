@@ -4,8 +4,12 @@ import type { SemanticContent, Source, SourcedYOp } from '@t3x-dev/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchConversationSnapshotMock = vi.fn();
+const listSourceTextRevisionsMock = vi.fn();
 vi.mock('@/queries/loadConversation', () => ({
   fetchConversationSnapshot: (...args: unknown[]) => fetchConversationSnapshotMock(...args),
+}));
+vi.mock('@/infrastructure/sourceTextRevisions', () => ({
+  listSourceTextRevisions: (...args: unknown[]) => listSourceTextRevisionsMock(...args),
 }));
 
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
@@ -70,6 +74,7 @@ function snapshot(opts: {
 describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listSourceTextRevisionsMock.mockResolvedValue([]);
     useWorkspaceStore.getState().reset();
     useCommitStore.setState({
       confirmedNodeIds: {},
@@ -224,6 +229,24 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
 
     expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
     expect(useWorkspaceStore.getState().hasConversationChanges).toBe(true);
+  });
+
+  it('keeps the workspace hydrated when source revision hydration fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    listSourceTextRevisionsMock.mockRejectedValueOnce(
+      new Error('column "turn_hash" does not exist')
+    );
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({ ops: SAMPLE_OPS, tree: SAMPLE_TREE })
+    );
+
+    await hydrateConversationToStore('proj_X', 'conv_X');
+
+    const workspace = useWorkspaceStore.getState();
+    expect(workspace.tree).toEqual(SAMPLE_TREE);
+    expect(workspace.opsLog).toEqual(SAMPLE_OPS);
+    expect(workspace.mode).toBe('idle');
+    warn.mockRestore();
   });
 
   it('ignores a stale hydration response after the active conversation changes', async () => {

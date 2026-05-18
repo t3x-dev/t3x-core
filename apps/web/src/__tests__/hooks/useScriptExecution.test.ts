@@ -7,6 +7,7 @@ const commitOpsMock = vi.fn();
 const hydrateMock = vi.fn();
 const toastErrorMock = vi.fn();
 const getAuthMeMock = vi.fn();
+const updateSourceTextRevisionMock = vi.fn();
 
 vi.mock('@/commands/yops/yopsService', () => ({
   commitOps: (...args: unknown[]) => commitOpsMock(...args),
@@ -14,6 +15,10 @@ vi.mock('@/commands/yops/yopsService', () => ({
 
 vi.mock('@/hooks/conversations/hydrateConversationToStore', () => ({
   hydrateConversationToStore: (...args: unknown[]) => hydrateMock(...args),
+}));
+
+vi.mock('@/infrastructure/sourceTextRevisions', () => ({
+  updateSourceTextRevision: (...args: unknown[]) => updateSourceTextRevisionMock(...args),
 }));
 
 vi.mock('sonner', () => ({
@@ -75,6 +80,7 @@ describe('useScriptExecution', () => {
     useWorkspaceStore.getState().setConversation('conv_xyz');
     chatStoreState.activeProjectId = 'proj_abc';
     commitOpsMock.mockResolvedValue({ id: 'yl_1' });
+    updateSourceTextRevisionMock.mockResolvedValue({});
     hydrateMock.mockResolvedValue(undefined);
   });
 

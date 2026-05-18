@@ -12,6 +12,8 @@ import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 
 export interface WorkspaceTurn {
   turn_hash: string;
+  project_id?: string;
+  conversation_id?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
 }
@@ -368,8 +370,7 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
     state.baselineCommitHash &&
       !state.isCommitted &&
       !state.hasConversationChanges &&
-      !state.hasDraft &&
-      (state.tree.trees.length > 0 || state.tree.relations.length > 0)
+      !state.hasDraft
   );
 
 /**

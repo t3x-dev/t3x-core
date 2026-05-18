@@ -13,6 +13,9 @@ export interface SourceTextDraftSpan {
 }
 
 export interface SourceTextDraft {
+  revisionId?: string;
+  status?: 'saved' | 'patched' | 'no_patch' | 'patch_failed' | 'synced' | 'discarded';
+  baseContentHash?: string;
   turnHash: string;
   turnRole: SourceTextTurnRole;
   baseContent: string;
@@ -94,6 +97,9 @@ export function applySourceTextDraftEdit(args: {
   };
 
   return {
+    revisionId: args.existingDraft?.revisionId,
+    status: args.existingDraft?.status,
+    baseContentHash: args.existingDraft?.baseContentHash,
     turnHash: args.input.turnHash,
     turnRole: args.existingDraft?.turnRole ?? args.input.turnRole ?? 'assistant',
     baseContent: args.existingDraft?.baseContent ?? args.baseContent,
@@ -109,6 +115,13 @@ export function applySourceTextDraftEdit(args: {
     ].sort((a, b) => a.start - b.start || a.end - b.end),
     updatedAt,
   };
+}
+
+export function getSourceTextPatchText(draft: SourceTextDraft): string {
+  return draft.spans
+    .map((span) => span.text)
+    .join('\n')
+    .trim();
 }
 
 export function applySourceTextDraftsToTurns(

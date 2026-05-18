@@ -156,6 +156,61 @@ export const turns = pgTable(
 );
 
 /**
+ * Source Text Revisions - Human edits to immutable turn source text
+ *
+ * Turns remain append-only. A source text revision records a user's
+ * controlled edit over a turn and lets clients derive the effective source
+ * text used for later incremental YOps generation.
+ */
+export const sourceTextRevisions = pgTable(
+  'source_text_revisions',
+  {
+    revisionId: text('revision_id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.conversationId, { onDelete: 'cascade' }),
+    turnHash: text('turn_hash')
+      .notNull()
+      .references(() => turns.turnHash, { onDelete: 'cascade' }),
+    turnRole: text('turn_role').notNull(),
+    action: text('action').notNull(),
+    startChar: integer('start_char').notNull(),
+    endChar: integer('end_char').notNull(),
+    selectedText: text('selected_text').notNull(),
+    replacementText: text('replacement_text').notNull(),
+    baseContent: text('base_content').notNull(),
+    content: text('content').notNull(),
+    spans: jsonb('spans')
+      .$type<
+        Array<{
+          id: string;
+          action: 'add' | 'edit' | 'delete';
+          start: number;
+          end: number;
+          text: string;
+          originalText: string;
+        }>
+      >()
+      .notNull()
+      .default([]),
+    baseContentHash: text('base_content_hash').notNull(),
+    status: text('status').notNull().default('saved'),
+    patchOps: jsonb('patch_ops').$type<unknown[]>(),
+    patchError: text('patch_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('idx_source_text_revisions_conversation').on(table.conversationId, table.updatedAt),
+    index('idx_source_text_revisions_turn').on(table.turnHash, table.updatedAt),
+    index('idx_source_text_revisions_project').on(table.projectId),
+  ]
+);
+
+/**
  * Branches - Git-like branches for versioning
  */
 export const branches = pgTable(
@@ -409,6 +464,9 @@ export type NewConversation = typeof conversations.$inferInsert;
 
 export type Turn = typeof turns.$inferSelect;
 export type NewTurn = typeof turns.$inferInsert;
+
+export type SourceTextRevision = typeof sourceTextRevisions.$inferSelect;
+export type NewSourceTextRevision = typeof sourceTextRevisions.$inferInsert;
 
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;

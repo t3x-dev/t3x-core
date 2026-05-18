@@ -167,6 +167,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_project_alias
 CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_turns_project ON turns(project_id);
 CREATE INDEX IF NOT EXISTS idx_turns_parent ON turns(parent_turn_hash);
+
+-- Source Text Revisions
+CREATE TABLE IF NOT EXISTS source_text_revisions (
+  revision_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+  turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
+  turn_role TEXT NOT NULL,
+  action TEXT NOT NULL,
+  start_char INTEGER NOT NULL,
+  end_char INTEGER NOT NULL,
+  selected_text TEXT NOT NULL,
+  replacement_text TEXT NOT NULL,
+  base_content TEXT NOT NULL,
+  content TEXT NOT NULL,
+  spans JSONB NOT NULL DEFAULT '[]'::jsonb,
+  base_content_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'saved',
+  patch_ops JSONB,
+  patch_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_source_text_revisions_conversation
+  ON source_text_revisions(conversation_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_source_text_revisions_turn
+  ON source_text_revisions(turn_hash, updated_at);
+CREATE INDEX IF NOT EXISTS idx_source_text_revisions_project ON source_text_revisions(project_id);
 CREATE INDEX IF NOT EXISTS idx_branches_project ON branches(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_project ON agent_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_agent_drafts_base_commit ON agent_drafts(base_commit_hash);

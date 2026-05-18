@@ -3,6 +3,7 @@
 import { ChevronDown, Loader2, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
@@ -25,14 +26,23 @@ interface ChatHeaderProps {
   conversationTitle?: string;
   projectName?: string;
   conversationId?: string | null;
+  selectedProvider?: string | null;
   selectedModel?: string;
   onModelChange?: (provider: string, model: string) => void;
+  isChatLoading?: boolean;
+  isChatStreaming?: boolean;
+  modelsLoading?: boolean;
 }
 
 export function ChatHeader({
   conversationTitle,
   projectName: _projectName,
-  conversationId: _conversationId,
+  conversationId,
+  selectedProvider,
+  selectedModel,
+  isChatLoading = false,
+  isChatStreaming = false,
+  modelsLoading = false,
 }: ChatHeaderProps) {
   const {
     activeProjectId,
@@ -46,9 +56,13 @@ export function ChatHeader({
   const { init: initCommitState } = useCommitActions();
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const isExtracting = useWorkspaceStore((s) => s.mode === 'streaming');
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const isExtracting = workspaceMode === 'streaming';
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
+  const turnCount = useWorkspaceStore((s) => s.turns.length);
+  const lastError = useWorkspaceStore((s) => s.lastError);
   const compactViewport = useChatCompactViewport();
   // Extract requires both an active project and a resolved conversation in
   // the workspace store. On a direct load of /chat/[convId], `useChatInit`
@@ -59,7 +73,22 @@ export function ChatHeader({
   // fetch lands. Disable the button while the precondition isn't met so
   // the failure mode is visible, not invisible.
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
-  const isExtractReady = Boolean(activeProjectId && workspaceConversationId);
+  const extractDisabledReason = getExtractDisabledReason({
+    activeProjectId,
+    workspaceConversationId,
+    routeConversationId: conversationId,
+    turnCount,
+    workspaceMode,
+    isCommitted,
+    hasDraft,
+    isChatLoading,
+    isChatStreaming,
+    modelsLoading,
+    selectedProvider,
+    selectedModel,
+    lastError,
+  });
+  const isExtractReady = extractDisabledReason === null;
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -144,7 +173,7 @@ export function ChatHeader({
       )}
 
       {/* Extract split button — only visible when YOps panel is expanded */}
-      {panelExpanded && !compactViewport && !isCommitted && (
+      {panelExpanded && !compactViewport && (
         <div
           ref={dropdownRef}
           className="relative flex h-7 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)] shadow-[var(--fx-shadow-sm)]"
@@ -154,8 +183,8 @@ export function ChatHeader({
             data-testid="extract-button"
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
             disabled={isExtracting || !isExtractReady}
-            title={!isExtractReady ? 'Loading conversation context…' : undefined}
-            className="flex min-w-0 items-center gap-1.5 px-2.5 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+            title={extractDisabledReason ?? undefined}
+            className="flex min-w-0 items-center gap-1.5 px-2.5 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
           >
             {isExtracting ? (
               <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
@@ -181,7 +210,8 @@ export function ChatHeader({
             onClick={() => setDropdownOpen(!dropdownOpen)}
             disabled={isExtracting || !isExtractReady}
             aria-label="Extract options"
-            className="flex w-7 items-center justify-center border-l border-[var(--source)]/[0.12] text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+            title={extractDisabledReason ?? undefined}
+            className="flex w-7 items-center justify-center border-l border-[var(--source)]/[0.12] text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronDown className="h-3 w-3" />
           </button>
