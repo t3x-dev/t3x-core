@@ -124,7 +124,11 @@ describe('ChatWorkspace', () => {
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
     mocks.textSelection.current = null;
-    useWorkspaceStore.getState().reset();
+    const workspace = useWorkspaceStore.getState();
+    workspace.reset();
+    workspace.setActiveProject('proj_123');
+    workspace.setConversation('conv_123');
+    workspace.setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
     usePinsStore.setState({
       pins: [],
       loading: false,
