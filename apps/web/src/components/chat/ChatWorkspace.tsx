@@ -350,8 +350,8 @@ export function ChatWorkspace({
                   key={msg.id}
                   sender={msg.role}
                   content={sourceDraft?.content ?? msg.content}
-                  projectId={resolvedProjectId}
-                  conversationId={resolvedConversationId}
+                  projectId={msg.projectId}
+                  conversationId={msg.conversationId}
                   turnHash={msg.id}
                   turnIndex={i + 1}
                   citations={

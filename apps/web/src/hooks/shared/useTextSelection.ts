@@ -70,7 +70,7 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
       const projectId = turnEl.getAttribute('data-project-id') || undefined;
       const conversationId = turnEl.getAttribute('data-conversation-id') || undefined;
       const turnRole = turnEl.getAttribute('data-turn-role') || 'unknown';
-      if (!turnHash || turnRole === 'user') {
+      if (!turnHash || !projectId || !conversationId || turnRole === 'user') {
         setSelection(null);
         return;
       }

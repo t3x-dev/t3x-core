@@ -16,6 +16,8 @@ const CHAT_PAGE_SIZE = 100;
 
 export interface ChatMessage {
   id: string;
+  projectId?: string;
+  conversationId?: string;
   role: 'user' | 'assistant';
   content: string;
 }
@@ -82,6 +84,8 @@ export function useChatHistory(
           .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
           .map((turn) => ({
             id: turn.turn_hash,
+            projectId: turn.project_id,
+            conversationId: turn.conversation_id,
             role: turn.role as 'user' | 'assistant',
             content: turn.content,
           }))
@@ -131,6 +135,8 @@ export function useChatHistory(
         .filter((turn) => turn.role === 'user' || turn.role === 'assistant')
         .map((turn) => ({
           id: turn.turn_hash,
+          projectId: turn.project_id,
+          conversationId: turn.conversation_id,
           role: turn.role as 'user' | 'assistant',
           content: turn.content,
         }))
