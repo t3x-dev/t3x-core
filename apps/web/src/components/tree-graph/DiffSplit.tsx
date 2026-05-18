@@ -62,7 +62,7 @@ export function DiffSplit({ source, target, className }: DiffSplitProps) {
     <div className={cn('flex h-full w-full', className)}>
       {/* Left panel — Source */}
       <div className="relative flex-1 min-w-0">
-        <div className="absolute top-2 left-2 z-10 rounded bg-zinc-800/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
+        <div className="absolute top-2 left-2 z-10 rounded bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-secondary)] backdrop-blur-sm">
           Source
         </div>
         <TreeGraphView
@@ -74,11 +74,11 @@ export function DiffSplit({ source, target, className }: DiffSplitProps) {
       </div>
 
       {/* Divider */}
-      <div className="w-px shrink-0 bg-zinc-300 dark:bg-zinc-600" />
+      <div className="w-px shrink-0 bg-[var(--stroke-strong)]" />
 
       {/* Right panel — Target */}
       <div className="relative flex-1 min-w-0">
-        <div className="absolute top-2 left-2 z-10 rounded bg-zinc-800/80 px-2 py-0.5 text-[10px] font-medium text-zinc-300 backdrop-blur-sm">
+        <div className="absolute top-2 left-2 z-10 rounded bg-[var(--surface-elevated)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-secondary)] backdrop-blur-sm">
           Target
         </div>
         <TreeGraphView

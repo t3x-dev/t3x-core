@@ -13,7 +13,7 @@ const buttonVariants = cva(
         default:
           'bg-[var(--color-brand)] text-primary-foreground shadow-sm hover:bg-[var(--color-brand-hover)]',
         destructive:
-          'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+          'bg-destructive text-[var(--on-status)] hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/40 dark:border-input dark:hover:bg-input/60',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
@@ -35,6 +35,9 @@ const buttonVariants = cva(
         // Branch action - Amber
         branch:
           'bg-[var(--accent-branch)] text-[var(--on-accent)] shadow-sm hover:bg-[var(--accent-branch)]/90 focus-visible:ring-[var(--accent-branch)]/30 active:bg-[var(--accent-branch)]/95',
+
+        // Leaf/output action - Teal (constraint-backed deliverables)
+        leaf: 'bg-[var(--accent-leaf)] text-[var(--on-accent)] shadow-sm hover:bg-[var(--accent-leaf)]/90 focus-visible:ring-[var(--accent-leaf)]/30 active:bg-[var(--accent-leaf)]/95',
 
         // Canvas ghost - Subtle for toolbar actions
         'canvas-ghost':

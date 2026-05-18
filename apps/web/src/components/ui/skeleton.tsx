@@ -26,8 +26,7 @@ function SkeletonShimmer({ className, ...props }: React.HTMLAttributes<HTMLDivEl
         'before:absolute before:inset-0',
         'before:-translate-x-full',
         'before:animate-[shimmer_2s_infinite]',
-        'before:bg-gradient-to-r',
-        'before:from-transparent before:via-white/10 before:to-transparent',
+        'before:bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--surface-elevated)_55%,transparent),transparent)]',
         className
       )}
       {...props}

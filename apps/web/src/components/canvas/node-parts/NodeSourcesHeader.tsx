@@ -55,7 +55,7 @@ export function NodeSourcesHeader({
                 {sourceIsPinned && (
                   <Pin
                     size={10}
-                    className="text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400"
+                    className="text-[var(--status-warning)] fill-[var(--status-warning)]"
                   />
                 )}
                 <Tooltip>

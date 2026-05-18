@@ -105,7 +105,7 @@ export function LearnFromEditsPanel({
           return (
             <div
               key={`${s.dimension}-${s.type}-${s.value.slice(0, 30)}-${i}`}
-              className="text-xs space-y-1 p-2 rounded bg-white/50 dark:bg-black/20"
+              className="text-xs space-y-1 p-2 rounded bg-[var(--surface-card)]"
             >
               <div className="flex items-center gap-1.5 justify-between">
                 <div className="flex items-center gap-1">

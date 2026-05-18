@@ -119,7 +119,7 @@ function ChatLanding() {
           </div>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {STARTER_CARDS.map((card) => (
             <button
               key={card.title}
@@ -131,7 +131,7 @@ function ChatLanding() {
                   revision: (current?.revision ?? 0) + 1,
                 }))
               }
-              className="flex min-h-[106px] flex-col items-start gap-2.5 rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 py-3.5 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-panel)] hover:shadow-[var(--fx-shadow-sm)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[76px] flex-col items-start gap-2 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2.5 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-md border ${ICON_TONE_CLASSES[card.tone]}`}

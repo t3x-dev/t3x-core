@@ -64,9 +64,9 @@ function CustomTooltip({
 
 // Get color based on score value
 function getScoreColor(value: number): string {
-  if (value >= 70) return '#22c55e'; // green-500
-  if (value >= 40) return '#eab308'; // yellow-500
-  return '#ef4444'; // red-500
+  if (value >= 70) return 'var(--status-success)';
+  if (value >= 40) return 'var(--status-warning)';
+  return 'var(--status-error)';
 }
 
 export function RadarChart({ scores, className }: RadarChartProps) {
@@ -76,16 +76,16 @@ export function RadarChart({ scores, className }: RadarChartProps) {
     <div className={className}>
       <ResponsiveContainer width="100%" height={240}>
         <RechartsRadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-          <PolarGrid stroke="#e5e7eb" strokeDasharray="3 3" />
+          <PolarGrid stroke="var(--stroke-divider)" strokeDasharray="3 3" />
           <PolarAngleAxis
             dataKey="dimension"
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
             tickLine={false}
           />
           <PolarRadiusAxis
             angle={90}
             domain={[0, 100]}
-            tick={{ fontSize: 10, fill: '#9ca3af' }}
+            tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
             tickCount={5}
             axisLine={false}
           />
@@ -93,18 +93,18 @@ export function RadarChart({ scores, className }: RadarChartProps) {
           <Radar
             name="Score"
             dataKey="value"
-            stroke="#6366f1"
-            fill="#6366f1"
+            stroke="var(--accent-conversation)"
+            fill="var(--accent-conversation)"
             fillOpacity={0.3}
             strokeWidth={2}
             dot={{
               r: 4,
-              fill: '#6366f1',
+              fill: 'var(--accent-conversation)',
               strokeWidth: 0,
             }}
             activeDot={{
               r: 6,
-              fill: '#6366f1',
+              fill: 'var(--accent-conversation)',
               stroke: '#fff',
               strokeWidth: 2,
             }}

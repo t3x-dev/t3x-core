@@ -51,7 +51,7 @@ export function RelationsList({ relations, nodes }: RelationsListProps) {
               <span
                 className={cn(
                   'shrink-0 px-2 py-0.5 rounded-full text-xs font-medium',
-                  typeColors[rel.type] ?? 'bg-gray-100 text-gray-700'
+                  typeColors[rel.type] ?? 'bg-[var(--surface-app)] text-[var(--text-secondary)]'
                 )}
               >
                 {rel.type.replace('_', ' ')}

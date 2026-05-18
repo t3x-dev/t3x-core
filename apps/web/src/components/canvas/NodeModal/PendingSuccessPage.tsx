@@ -34,7 +34,7 @@ export function PendingSuccessPage({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -57,8 +57,8 @@ export function PendingSuccessPage({
           <X size={20} />
         </button>
         <div className="flex flex-col items-center gap-5 px-8 py-10">
-          {/* Success icon — blue gradient badge + checkmark draw animation */}
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+          {/* Commit badge + checkmark draw animation */}
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--accent-commit)] text-[var(--on-accent)] shadow-[var(--fx-shadow-md)]">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <path
                 d="M9 16.5L14 21.5L23 11"
@@ -106,8 +106,9 @@ export function PendingSuccessPage({
               <span>View {t('commit')} Details</span>
             </Button>
             <Button
+              variant="leaf"
               onClick={onCreateOutput}
-              className="w-full gap-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700"
+              className="w-full gap-2"
             >
               <span>Create Output</span>
               <ArrowRight size={16} />

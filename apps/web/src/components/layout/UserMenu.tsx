@@ -37,14 +37,14 @@ function getAvatarColor(str: string): string {
     hash = (hash * 31 + str.charCodeAt(i)) | 0;
   }
   const colors = [
-    'bg-blue-600',
-    'bg-emerald-600',
-    'bg-violet-600',
-    'bg-amber-600',
-    'bg-rose-600',
-    'bg-cyan-600',
-    'bg-indigo-600',
-    'bg-teal-600',
+    'bg-[var(--accent-commit)]',
+    'bg-[var(--status-success)]',
+    'bg-[var(--accent-extract)]',
+    'bg-[var(--accent-branch)]',
+    'bg-[var(--status-error)]',
+    'bg-[var(--accent-leaf)]',
+    'bg-[var(--accent-conversation)]',
+    'bg-[var(--accent-leaf)]',
   ];
   return colors[Math.abs(hash) % colors.length];
 }
@@ -76,7 +76,7 @@ function UserAvatar({
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-medium text-white',
+        'flex shrink-0 items-center justify-center rounded-full font-medium text-[var(--on-accent)]',
         colorClass,
         sizeClass
       )}

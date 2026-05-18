@@ -18,7 +18,7 @@ export function RelationSideSection({
 
   return (
     <div className="space-y-1.5">
-      <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{title}</div>
+      <div className="text-xs font-medium text-[var(--text-tertiary)]">{title}</div>
       <div className="space-y-0.5 pl-2">
         {relations.map((r) => {
           const key = `${r.from}-${r.type}-${r.to}`;
@@ -31,7 +31,8 @@ export function RelationSideSection({
             >
               <Checkbox checked={included.has(key)} tabIndex={-1} />
               <span>
-                {r.from} <span className="text-zinc-400">--{r.type}--&gt;</span> {r.to}
+                {r.from} <span className="text-[var(--text-tertiary)]">--{r.type}--&gt;</span>{' '}
+                {r.to}
               </span>
             </button>
           );

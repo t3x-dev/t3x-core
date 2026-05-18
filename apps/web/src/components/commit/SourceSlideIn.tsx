@@ -132,7 +132,7 @@ function TabToggle({
         onClick={() => onTabChange('previous')}
         className={`px-2.5 py-1 transition-colors ${
           activeTab === 'previous'
-            ? 'bg-[var(--accent-commit)] text-white font-medium'
+            ? 'bg-[var(--accent-commit)] text-[var(--on-accent)] font-medium'
             : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
         }`}
       >
@@ -143,7 +143,7 @@ function TabToggle({
         onClick={() => onTabChange('current')}
         className={`px-2.5 py-1 transition-colors ${
           activeTab === 'current'
-            ? 'bg-[var(--accent-commit)] text-white font-medium'
+            ? 'bg-[var(--accent-commit)] text-[var(--on-accent)] font-medium'
             : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
         }`}
       >
@@ -303,7 +303,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="fixed inset-0 z-40 bg-[var(--overlay-scrim)] dark:bg-[var(--overlay-scrim)]"
         onClick={closeSourceViewer}
         aria-hidden="true"
       />

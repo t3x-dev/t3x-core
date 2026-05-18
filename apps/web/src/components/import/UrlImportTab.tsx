@@ -116,7 +116,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
       </div>
 
       {preview?.duplicate_warning && (
-        <p className="text-xs text-amber-500">{preview.duplicate_warning}</p>
+        <p className="text-xs text-[var(--status-warning)]">{preview.duplicate_warning}</p>
       )}
 
       {preview && (

@@ -42,8 +42,8 @@ const roleLabels: Record<string, string> = {
 const highlightColors: Record<HighlightColor, string> = {
   yellow: 'bg-[var(--status-warning-muted)]',
   green: 'bg-[var(--status-success-muted)]',
-  deepGreen: 'bg-[var(--status-success)] text-white',
-  deepRed: 'bg-[var(--status-error)] text-white',
+  deepGreen: 'bg-[var(--status-success)] text-[var(--on-status)]',
+  deepRed: 'bg-[var(--status-error)] text-[var(--on-status)]',
   amber: 'bg-[var(--status-warning-muted)] border border-dashed border-[var(--status-warning)]/40',
   blue: 'bg-[var(--status-info)]/10 border border-dotted border-[var(--status-info)]/40',
 };

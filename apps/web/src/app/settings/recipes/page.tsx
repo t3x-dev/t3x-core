@@ -357,7 +357,7 @@ function RecipeCard({ recipe, onEdit, onDelete, onToggle, toggling }: RecipeCard
         <div className="flex items-center gap-2">
           <span
             className={`h-2 w-2 rounded-full shrink-0 ${
-              recipe.enabled ? 'bg-green-500' : 'bg-[var(--text-tertiary)]'
+              recipe.enabled ? 'bg-[var(--status-success)]' : 'bg-[var(--text-tertiary)]'
             }`}
           />
           <span className="text-sm font-medium text-[var(--text-primary)] truncate">

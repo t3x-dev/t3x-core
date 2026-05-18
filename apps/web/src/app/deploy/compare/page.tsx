@@ -439,7 +439,7 @@ function ComparePageContent() {
             </Badge>
             {label}
             {showWinner && (
-              <Badge className="ml-auto bg-green-500/10 text-[var(--status-success)] border-green-500/30">
+              <Badge className="ml-auto bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30">
                 <Trophy className="h-3 w-3 mr-1" />
                 Winner
               </Badge>
@@ -692,13 +692,13 @@ function ComparePageContent() {
                 slot="a"
                 selectedConfig={controlConfig}
                 label="Control (Baseline)"
-                badgeColor="bg-blue-500/10 text-[var(--status-info)] border-blue-500/30"
+                badgeColor="bg-[var(--status-info-muted)] text-[var(--status-info)] border-[var(--status-info)]/30"
               />
               <ConfigSelector
                 slot="b"
                 selectedConfig={treatmentConfig}
                 label="Treatment (Variant)"
-                badgeColor="bg-green-500/10 text-[var(--status-success)] border-green-500/30"
+                badgeColor="bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30"
               />
             </div>
           )}
@@ -713,7 +713,7 @@ function ComparePageContent() {
 
           {/* Error State */}
           {error && (
-            <Card className="border-red-500/30 bg-red-500/5">
+            <Card className="border-[var(--status-error)]/30 bg-[var(--status-error-muted)]">
               <CardContent className="py-6 text-center text-[var(--status-error)]">
                 {error}
               </CardContent>
@@ -729,7 +729,7 @@ function ComparePageContent() {
                   <CardTitle className="flex items-center justify-between text-base">
                     <span>Statistical Comparison</span>
                     {isWinner && (
-                      <Badge className="bg-green-500/10 text-[var(--status-success)] border-green-500/30">
+                      <Badge className="bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30">
                         <Trophy className="h-3 w-3 mr-1" />
                         Treatment (B) wins
                       </Badge>
@@ -744,13 +744,13 @@ function ComparePageContent() {
                           <th className="pb-3 font-medium">Metric</th>
                           <th className="pb-3 font-medium text-center">
                             <span className="inline-flex items-center gap-1">
-                              <span className="h-2 w-2 rounded-full bg-blue-500" />
+                              <span className="h-2 w-2 rounded-full bg-[var(--status-info)]" />
                               Control (A)
                             </span>
                           </th>
                           <th className="pb-3 font-medium text-center">
                             <span className="inline-flex items-center gap-1">
-                              <span className="h-2 w-2 rounded-full bg-green-500" />
+                              <span className="h-2 w-2 rounded-full bg-[var(--status-success)]" />
                               Treatment (B)
                             </span>
                           </th>
@@ -935,7 +935,7 @@ function ComparePageContent() {
                   {/* Sample size warning */}
                   {(!comparisonResult.comparison.pass_rate.sampleSizeAdequate ||
                     !comparisonResult.comparison.avg_score.sampleSizeAdequate) && (
-                    <div className="mt-4 flex items-start gap-2 rounded-md bg-yellow-500/10 p-3 text-sm text-[var(--status-warning)]">
+                    <div className="mt-4 flex items-start gap-2 rounded-md bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--status-warning)]">
                       <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                       <span>
                         Sample size may be insufficient for reliable significance detection
@@ -977,7 +977,7 @@ function ComparePageContent() {
                         )}
                         onClick={() => setRunFilter('a')}
                       >
-                        <span className="h-2 w-2 rounded-full bg-blue-400 mr-1" />A
+                        <span className="h-2 w-2 rounded-full bg-[var(--status-info)] mr-1" />A
                       </Button>
                       <Button
                         variant={runFilter === 'b' ? 'default' : 'outline'}
@@ -989,7 +989,7 @@ function ComparePageContent() {
                         )}
                         onClick={() => setRunFilter('b')}
                       >
-                        <span className="h-2 w-2 rounded-full bg-green-400 mr-1" />B
+                        <span className="h-2 w-2 rounded-full bg-[var(--status-success)] mr-1" />B
                       </Button>
                     </div>
                   </CardTitle>
@@ -1064,8 +1064,8 @@ function ComparePageContent() {
                                       className={cn(
                                         'text-xs',
                                         run.group === 'a'
-                                          ? 'bg-blue-500/10 text-[var(--status-info)] border-blue-500/30'
-                                          : 'bg-green-500/10 text-[var(--status-success)] border-green-500/30'
+                                          ? 'bg-[var(--status-info-muted)] text-[var(--status-info)] border-[var(--status-info)]/30'
+                                          : 'bg-[var(--status-success-muted)] text-[var(--status-success)] border-[var(--status-success)]/30'
                                       )}
                                     >
                                       {run.group.toUpperCase()}
@@ -1080,8 +1080,8 @@ function ComparePageContent() {
                                         variant="outline"
                                         className={cn(
                                           metrics.passed
-                                            ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
-                                            : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+                                            ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                                            : 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
                                         )}
                                       >
                                         {metrics.passed ? 'passed' : 'failed'}

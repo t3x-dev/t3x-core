@@ -157,7 +157,7 @@ export function MergeReviewDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-sm">
       <motion.div
         initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
         animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
@@ -178,16 +178,13 @@ export function MergeReviewDialog({
               animate={{ opacity: 1 }}
               className="flex flex-col items-center gap-4 py-6"
             >
-              {/* Animated checkmark with gradient ring */}
+              {/* Animated checkmark with commit ring */}
               <div className="relative flex h-20 w-20 items-center justify-center">
                 {/* Pulsing glow ring */}
                 {!prefersReducedMotion && (
                   <motion.div
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      background: 'conic-gradient(from 0deg, #f97316, #3b82f6, #f97316)',
-                      opacity: 0.15,
-                    }}
+                    className="absolute inset-0 rounded-full bg-[var(--accent-commit-soft)]"
+                    style={{ opacity: 0.15 }}
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: [1, 1.3, 1.15], opacity: [0, 0.2, 0.1] }}
                     transition={{ duration: 1.2, ease: 'easeOut' }}
@@ -203,16 +200,10 @@ export function MergeReviewDialog({
                 {/* SVG animated checkmark */}
                 <svg width="40" height="40" viewBox="0 0 72 72" className="relative z-10">
                   <title>Merge completed checkmark</title>
-                  <defs>
-                    <linearGradient id="check-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#f97316" />
-                      <stop offset="100%" stopColor="#3b82f6" />
-                    </linearGradient>
-                  </defs>
                   <motion.path
                     d="M16 38 L30 52 L56 22"
                     fill="none"
-                    stroke="url(#check-gradient)"
+                    stroke="var(--accent-commit)"
                     strokeWidth="6"
                     strokeLinecap="round"
                     strokeLinejoin="round"

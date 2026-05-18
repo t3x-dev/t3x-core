@@ -119,7 +119,7 @@ export function RelationEdge({
       {isHovered && (
         <EdgeLabelRenderer>
           <div
-            className="pointer-events-none absolute rounded-md border border-white/10 bg-zinc-900/90 px-2 py-0.5 text-xs font-medium shadow-lg backdrop-blur-sm"
+            className="pointer-events-none absolute rounded-md border border-[var(--stroke-highlight-top)] bg-[var(--surface-elevated)] px-2 py-0.5 text-xs font-medium shadow-lg backdrop-blur-sm"
             style={{
               color: relStyle.color,
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,

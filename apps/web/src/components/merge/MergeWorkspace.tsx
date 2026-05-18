@@ -409,26 +409,26 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                   <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--diff-added-accent)]">
                     Auto-kept ({treeMergeResult.autoKept.length})
                   </h3>
-                  <div className="space-y-2">
+                  <div className="overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)]">
                     {treeMergeResult.autoKept.map((path) => {
                       const node = findNode(semanticData.source, semanticData.target, path);
                       return (
                         <div
                           key={path}
-                          className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
+                          className="grid grid-cols-[minmax(140px,220px)_1fr] gap-3 border-b border-[var(--stroke-divider)] px-3 py-2 last:border-b-0"
                         >
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex min-w-0 items-center gap-2">
                             <span className="rounded bg-[var(--surface-app)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--text-secondary)] border border-[var(--stroke-divider)]">
                               {node?.key ?? path}
                             </span>
-                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                            <span className="truncate font-mono text-[10px] text-[var(--text-tertiary)]">
                               {path}
                             </span>
                           </div>
                           {node && (
-                            <div className="px-2 font-mono text-[11px] text-[var(--text-secondary)]">
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-[var(--text-secondary)]">
                               {Object.entries(node.slots).map(([key, value]) => (
-                                <div key={key} className="leading-relaxed">
+                                <div key={key} className="min-w-0 truncate leading-relaxed">
                                   <span className="text-[var(--yaml-key)]">{key}</span>
                                   <span className="text-[var(--yaml-punctuation)]">: </span>
                                   <span className="text-[var(--yaml-string)]">

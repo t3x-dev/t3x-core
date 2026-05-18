@@ -136,17 +136,17 @@ export function getTokenClasses(state: TokenState, isDragging: boolean, isSepara
     state === 'selected' && 'bg-[var(--status-success-muted)] hover:bg-[var(--status-success)]/20',
     state === 'excluded' && 'bg-[var(--status-error-muted)] hover:bg-[var(--status-error)]/15',
     state === 'keyword-must' &&
-      'bg-[var(--status-success)] text-white font-medium hover:bg-[var(--status-success)]',
+      'bg-[var(--status-success)] text-[var(--on-status)] font-medium hover:bg-[var(--status-success)]',
     state === 'keyword-mustnt' &&
-      'bg-[var(--status-error)] text-white font-medium hover:bg-[var(--status-error)]',
+      'bg-[var(--status-error)] text-[var(--on-status)] font-medium hover:bg-[var(--status-error)]',
     // Anchor candidate: dotted underline (unconfirmed)
     state === 'anchor-candidate' &&
-      'underline decoration-dotted decoration-amber-500 underline-offset-2 hover:bg-amber-50 dark:hover:bg-amber-800',
+      'underline decoration-dotted decoration-[var(--status-warning)] underline-offset-2 hover:bg-[var(--status-warning-muted)]',
     // Confirmed anchors: solid background with appropriate color
     state === 'anchor-must' &&
-      'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 font-medium underline decoration-emerald-500 underline-offset-2 hover:bg-emerald-200 dark:hover:bg-emerald-700',
+      'bg-[var(--status-success-muted)] text-[var(--status-success)] font-medium underline decoration-[var(--status-success)] underline-offset-2 hover:bg-[var(--status-success-muted)]',
     state === 'anchor-mustnt' &&
-      'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 font-medium underline decoration-rose-500 underline-offset-2 hover:bg-rose-200 dark:hover:bg-rose-700',
+      'bg-[var(--status-error-muted)] text-[var(--status-error)] font-medium underline decoration-[var(--status-error)] underline-offset-2 hover:bg-[var(--status-error-muted)]',
     state === 'anchor-preferred' &&
       'bg-[var(--status-info-muted)] text-[var(--status-info)] font-medium underline decoration-[var(--status-info)] underline-offset-2 hover:bg-[var(--status-info)]/20',
     isDragging && state === 'normal' && 'bg-[var(--status-info-muted)]'

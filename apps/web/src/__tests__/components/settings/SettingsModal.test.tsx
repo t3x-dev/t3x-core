@@ -303,7 +303,7 @@ describe('SettingsModal', () => {
     const tablist = screen.getByRole('tablist');
 
     expect(shell.className).toContain('rounded-[34px]');
-    expect(panel.className).toContain('bg-white');
+    expect(panel.className).toContain('bg-[var(--surface-card)]');
     expect(rail.className).toContain('border-r');
     expect(tablist.className).toContain('w-full');
     expect(tablist.className).not.toContain('w-56');
@@ -328,7 +328,7 @@ describe('SettingsModal', () => {
     expect(dialog.className).toContain('sm:max-w-[1760px]');
     expect(shell.className).toContain('rounded-[34px]');
     expect(rail.className).toContain('bg-[color-mix(in_srgb,var(--surface-app)_92%,white_8%)]');
-    expect(panel.className).toContain('bg-white');
+    expect(panel.className).toContain('bg-[var(--surface-card)]');
     expect(canvas.className).toContain('px-10');
   });
 });

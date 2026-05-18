@@ -4,14 +4,14 @@ export const LOCAL_WORKSPACE_AVATAR_OPTIONS: Array<{
   value: LocalWorkspaceAvatarColor;
   className: string;
 }> = [
-  { value: 'blue', className: 'bg-blue-600' },
-  { value: 'emerald', className: 'bg-emerald-600' },
-  { value: 'violet', className: 'bg-violet-600' },
-  { value: 'amber', className: 'bg-amber-600' },
-  { value: 'rose', className: 'bg-rose-600' },
-  { value: 'cyan', className: 'bg-cyan-600' },
-  { value: 'indigo', className: 'bg-indigo-600' },
-  { value: 'teal', className: 'bg-teal-600' },
+  { value: 'blue', className: 'bg-[var(--accent-commit)]' },
+  { value: 'emerald', className: 'bg-[var(--status-success)]' },
+  { value: 'violet', className: 'bg-[var(--accent-extract)]' },
+  { value: 'amber', className: 'bg-[var(--accent-branch)]' },
+  { value: 'rose', className: 'bg-[var(--status-error)]' },
+  { value: 'cyan', className: 'bg-[var(--accent-leaf)]' },
+  { value: 'indigo', className: 'bg-[var(--accent-conversation)]' },
+  { value: 'teal', className: 'bg-[var(--accent-leaf)]' },
 ];
 
 export function getLocalWorkspaceAvatarClass(color: LocalWorkspaceAvatarColor): string {

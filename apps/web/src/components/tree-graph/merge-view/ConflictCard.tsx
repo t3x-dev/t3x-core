@@ -116,14 +116,14 @@ export function ConflictCard({
       >
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <span className="font-mono text-[var(--status-error)]">{path}</span>
-        <span className="text-zinc-500 dark:text-zinc-400">{toTitleCase(displayType)}</span>
-        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-[var(--text-tertiary)]">{toTitleCase(displayType)}</span>
+        <span className="ml-auto text-xs text-[var(--text-tertiary)]">
           {resolvedCount}/{slotConflicts.length} resolved
         </span>
       </button>
 
       {expanded && (
-        <div className="p-3 space-y-2 bg-white dark:bg-zinc-900">
+        <div className="p-3 space-y-2 bg-[var(--surface-card)]">
           {/* Agreed slots */}
           {agreedSlots.length > 0 && (
             <div className="space-y-0.5">
@@ -145,14 +145,14 @@ export function ConflictCard({
 
           {/* AI Suggestion */}
           {mergeId && (
-            <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-700">
+            <div className="mt-2 pt-2 border-t border-[var(--stroke-divider)]">
               {!suggestion && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleSuggest}
                   disabled={suggestLoading}
-                  className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 >
                   {suggestLoading ? (
                     <Loader2 size={12} className="animate-spin mr-1" />
@@ -182,7 +182,7 @@ export function ConflictCard({
                           key={sc.key}
                           className="flex items-start gap-1.5 font-mono text-foreground"
                         >
-                          <span className="text-zinc-500 dark:text-zinc-400 shrink-0">
+                          <span className="text-[var(--text-tertiary)] shrink-0">
                             {sc.key}:
                           </span>
                           <span>{formatSlotValue(value as SlotValue)}</span>
@@ -206,7 +206,7 @@ export function ConflictCard({
                     })}
                   </div>
                   {suggestion.reasoning && (
-                    <div className="text-zinc-500 dark:text-zinc-400 italic">
+                    <div className="text-[var(--text-tertiary)] italic">
                       {suggestion.reasoning}
                     </div>
                   )}

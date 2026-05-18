@@ -133,7 +133,7 @@ function AddConstraintInline({
           className={cn(
             'flex-1 rounded px-2 py-1 text-[10px] font-semibold transition-colors',
             type === 'require'
-              ? 'bg-[var(--accent-leaf)] text-white'
+              ? 'bg-[var(--accent-leaf)] text-[var(--on-accent)]'
               : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
           )}
           onClick={() => setType('require')}
@@ -145,7 +145,7 @@ function AddConstraintInline({
           className={cn(
             'flex-1 rounded px-2 py-1 text-[10px] font-semibold transition-colors',
             type === 'exclude'
-              ? 'bg-[var(--status-error)] text-white'
+              ? 'bg-[var(--status-error)] text-[var(--on-status)]'
               : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
           )}
           onClick={() => setType('exclude')}

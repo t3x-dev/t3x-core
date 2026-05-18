@@ -132,11 +132,11 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
       )}
 
       {preview?.duplicate_warning && (
-        <p className="text-xs text-amber-500">{preview.duplicate_warning}</p>
+        <p className="text-xs text-[var(--status-warning)]">{preview.duplicate_warning}</p>
       )}
 
       {preview?.metadata.extraction_quality && preview.metadata.extraction_quality !== 'good' && (
-        <Badge variant="outline" className="text-amber-500 border-amber-500/30">
+        <Badge variant="outline" className="text-[var(--status-warning)] border-[var(--status-warning)]/30">
           {preview.metadata.extraction_quality === 'partial'
             ? 'Partial extraction — some content may be missing'
             : 'Poor extraction — this may be a scanned document'}

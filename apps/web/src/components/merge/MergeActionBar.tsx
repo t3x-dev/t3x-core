@@ -124,7 +124,13 @@ export function MergeActionBar({
         <Button variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onCommit} disabled={!canCommit} className="gap-1">
+        <Button
+          variant="commit"
+          size="sm"
+          onClick={onCommit}
+          disabled={!canCommit}
+          className="gap-1"
+        >
           <GitMerge className="h-3 w-3" />
           {t('mergeConfirm')}
         </Button>

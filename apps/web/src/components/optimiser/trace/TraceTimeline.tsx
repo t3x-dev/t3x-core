@@ -104,7 +104,7 @@ function getSpanBadgeClass(spanKind: SpanKind | undefined): string {
     case 'workflow':
       return 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30';
     default:
-      return 'bg-gray-500/10 text-[var(--color-text-secondary)] border-gray-500/30';
+      return 'bg-[var(--surface-app)] text-[var(--color-text-secondary)] border-[var(--stroke-strong)]';
   }
 }
 

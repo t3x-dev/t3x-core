@@ -56,17 +56,17 @@ export function SideOnlySection({
                   'flex items-center gap-2 rounded border px-2 py-1.5 text-xs cursor-pointer transition-colors w-full text-left',
                   included.has(path)
                     ? `${colorClass} border-current/20`
-                    : 'border-zinc-200 dark:border-zinc-700 opacity-50'
+                    : 'border-[var(--stroke-divider)] opacity-50'
                 )}
               >
                 <Checkbox checked={included.has(path)} tabIndex={-1} />
-                <span className="font-mono text-zinc-600 dark:text-zinc-300">{path}</span>
+                <span className="font-mono text-[var(--text-secondary)]">{path}</span>
                 {node && (
                   <>
-                    <span className="text-zinc-500 dark:text-zinc-400">
+                    <span className="text-[var(--text-tertiary)]">
                       {toTitleCase(node.type)}
                     </span>
-                    <span className="ml-auto text-zinc-400">
+                    <span className="ml-auto text-[var(--text-tertiary)]">
                       {Object.keys(node.slots).length} slot
                       {Object.keys(node.slots).length !== 1 ? 's' : ''}
                     </span>

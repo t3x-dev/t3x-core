@@ -18,7 +18,7 @@ export function MergeIllustration({ className }: { className?: string }) {
       {/* Source branch top */}
       <path
         d="M30 30 Q60 30 80 50"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="1.5"
         strokeDasharray="5 3"
         strokeOpacity="0.5"
@@ -26,7 +26,7 @@ export function MergeIllustration({ className }: { className?: string }) {
       {/* Source branch bottom */}
       <path
         d="M30 70 Q60 70 80 50"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.5"
         strokeDasharray="5 3"
         strokeOpacity="0.5"
@@ -47,10 +47,10 @@ export function MergeIllustration({ className }: { className?: string }) {
         r="8"
         fill="var(--surface-card)"
         fillOpacity="0.6"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="1.2"
       />
-      <text x="30" y="33" textAnchor="middle" fontSize="9" fill="#3b82f6" fontWeight="600">
+      <text x="30" y="33" textAnchor="middle" fontSize="9" fill="var(--accent-commit)" fontWeight="600">
         A
       </text>
 
@@ -61,10 +61,10 @@ export function MergeIllustration({ className }: { className?: string }) {
         r="8"
         fill="var(--surface-card)"
         fillOpacity="0.6"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.2"
       />
-      <text x="30" y="73" textAnchor="middle" fontSize="9" fill="#f97316" fontWeight="600">
+      <text x="30" y="73" textAnchor="middle" fontSize="9" fill="var(--accent-pending)" fontWeight="600">
         B
       </text>
 
@@ -74,7 +74,7 @@ export function MergeIllustration({ className }: { className?: string }) {
         cy="50"
         r="18"
         fill="none"
-        stroke="#8b5cf6"
+        stroke="var(--accent-extract)"
         strokeWidth="3"
         strokeOpacity="0.1"
       />
@@ -86,14 +86,14 @@ export function MergeIllustration({ className }: { className?: string }) {
         rx="4"
         fill="var(--surface-card)"
         fillOpacity="0.7"
-        stroke="#8b5cf6"
+        stroke="var(--accent-extract)"
         strokeWidth="1.5"
         transform="rotate(45 80 50)"
       />
       {/* Merge icon inside diamond */}
       <path
         d="M76 47 L80 53 L84 47"
-        stroke="#8b5cf6"
+        stroke="var(--accent-extract)"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"

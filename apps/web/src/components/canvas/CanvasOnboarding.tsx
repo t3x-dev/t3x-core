@@ -56,7 +56,7 @@ export function CanvasOnboarding({ onAddNode, onDismiss, isAdding }: CanvasOnboa
         <div className="flex flex-col gap-5">
           {steps.map((step, i) => (
             <div key={step.title} className="flex items-start gap-4 text-left">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)] text-white text-sm font-bold">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)] text-[var(--on-accent)] text-sm font-bold">
                 {i + 1}
               </div>
               <div className="flex items-start gap-3">

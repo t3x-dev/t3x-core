@@ -83,7 +83,7 @@ export function SealAnimation({
         <motion.path
           d={path}
           fill="none"
-          stroke="#3b82f6"
+          stroke="var(--accent-commit)"
           strokeWidth={2}
           strokeLinecap="round"
           strokeDasharray={perimeter}

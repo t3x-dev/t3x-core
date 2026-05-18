@@ -333,9 +333,9 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             </div>
                             <p className="text-sm text-[var(--text-secondary)]">{a.details}</p>
                             {a.lesson && (
-                              <div className="mt-1.5 flex items-start gap-1.5 rounded bg-amber-500/10 p-1.5 text-xs">
-                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
-                                <span className="text-amber-900 dark:text-amber-300">
+                              <div className="mt-1.5 flex items-start gap-1.5 rounded bg-[var(--status-warning-muted)] p-1.5 text-xs">
+                                <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[var(--status-warning)]" />
+                                <span className="text-[var(--status-warning)]">
                                   {a.lesson}
                                 </span>
                               </div>
@@ -476,7 +476,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                               disabled={isToggling}
                               className={cn(
                                 pinned &&
-                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-white'
+                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-[var(--on-status)]'
                               )}
                             />
                           </div>
@@ -542,7 +542,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                               disabled={isToggling}
                               className={cn(
                                 pinned &&
-                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-white'
+                                  'border-[var(--status-warning)] bg-[var(--status-warning)] text-[var(--on-status)]'
                               )}
                             />
                           </div>

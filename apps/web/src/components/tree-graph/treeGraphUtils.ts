@@ -35,11 +35,11 @@ export const RELATION_STYLES: Record<
   string,
   { color: string; label: string; strokeDasharray?: string }
 > = {
-  causes: { color: '#f97316', label: 'causes' },
-  conditions: { color: '#eab308', strokeDasharray: '8 4', label: 'conditions' },
-  contrasts: { color: '#ef4444', label: 'contrasts' },
-  follows: { color: '#9ca3af', label: 'follows' },
-  depends: { color: '#a855f7', strokeDasharray: '4 4', label: 'depends' },
+  causes: { color: 'var(--accent-pending)', label: 'causes' },
+  conditions: { color: 'var(--status-warning)', strokeDasharray: '8 4', label: 'conditions' },
+  contrasts: { color: 'var(--status-error)', label: 'contrasts' },
+  follows: { color: 'var(--text-tertiary)', label: 'follows' },
+  depends: { color: 'var(--source)', strokeDasharray: '4 4', label: 'depends' },
 };
 
 // ── Helper: flatten trees into node entries with IDs ──

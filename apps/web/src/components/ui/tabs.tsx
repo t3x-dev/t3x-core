@@ -60,7 +60,7 @@ const tabsTriggerVariants = cva(
         pill: cn(
           'h-full flex-1 rounded-full px-5 text-xs font-semibold leading-none',
           'text-muted-foreground hover:text-foreground',
-          'data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md',
+          'data-[state=active]:bg-primary data-[state=active]:text-[var(--on-accent)] data-[state=active]:shadow-md',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
           'transition-colors duration-[var(--duration-normal)]'
         ),

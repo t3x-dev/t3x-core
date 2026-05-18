@@ -64,7 +64,7 @@ export function WordDiffSpan({
           return (
             <span
               key={segmentKey}
-              className="bg-[var(--dy-added-word)] text-white rounded-sm px-[2px] font-medium"
+              className="bg-[var(--dy-added-word)] text-[var(--diff-added-text)] rounded-sm px-[2px] font-medium"
             >
               {seg.text}
             </span>
@@ -74,7 +74,7 @@ export function WordDiffSpan({
           return (
             <span
               key={segmentKey}
-              className="bg-[var(--dy-removed-word)] text-white rounded-sm px-[2px] line-through"
+              className="bg-[var(--dy-removed-word)] text-[var(--diff-removed-text)] rounded-sm px-[2px] line-through"
               style={{ textDecorationColor: 'var(--text-tertiary)' }}
             >
               {seg.text}

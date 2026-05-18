@@ -93,7 +93,7 @@ function SortableProviderCard({
           <div className="w-4" />
         )}
         {provider.configured ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 text-[var(--status-success)] shrink-0" />
         ) : (
           <Circle className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
         )}
@@ -159,7 +159,7 @@ function SortableRoleGroup({
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           {ROLE_LABELS[role]}
           {isOverridden && (
-            <span className="ml-2 text-xs font-normal text-amber-500">Overridden</span>
+            <span className="ml-2 text-xs font-normal text-[var(--status-warning)]">Overridden</span>
           )}
         </h2>
         {configured.length > 1 && (

@@ -463,7 +463,7 @@ function CanvasWorkspaceInner({
             variant={BackgroundVariant.Dots}
             gap={32}
             size={1}
-            color={colorMode === 'dark' ? 'var(--stroke-grid)' : '#cbd5e1'}
+            color={colorMode === 'dark' ? 'var(--stroke-grid)' : 'var(--stroke-grid)'}
           />
         </ReactFlow>
 
