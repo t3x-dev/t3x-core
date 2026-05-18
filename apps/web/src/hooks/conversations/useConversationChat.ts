@@ -89,6 +89,8 @@ function mirrorSavedTurn(
   if (!turn?.turn_hash) return;
   syncSavedTurnIntoWorkspace(conversationId, {
     turn_hash: turn.turn_hash,
+    ...(turn.project_id ? { project_id: turn.project_id } : {}),
+    ...(turn.conversation_id ? { conversation_id: turn.conversation_id } : {}),
     role,
     content,
   });

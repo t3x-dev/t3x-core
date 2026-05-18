@@ -20,6 +20,32 @@ export interface SpanMatch {
   isNode: boolean;
 }
 
+interface TurnTextLike {
+  turn_hash: string;
+  content: string;
+}
+
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function quoteOverlapsSpan(
+  turnContent: string,
+  quote: string,
+  start: number,
+  end: number
+): boolean {
+  if (!quote) return false;
+  let cursor = 0;
+  while (cursor <= turnContent.length) {
+    const found = turnContent.indexOf(quote, cursor);
+    if (found === -1) return false;
+    if (rangesOverlap(found, found + quote.length, start, end)) return true;
+    cursor = found + Math.max(quote.length, 1);
+  }
+  return false;
+}
+
 /**
  * Find every path in `sourceIndex` whose LLMSource turn matches `turnHash`
  * and whose [start_char, end_char) quote range overlaps [start, end).
@@ -29,17 +55,22 @@ export function findPathsOverlappingSpan(
   sourceIndex: Map<string, Source>,
   turnHash: string,
   start: number,
-  end: number
+  end: number,
+  turns: readonly TurnTextLike[] = []
 ): SpanMatch[] {
   const matches: SpanMatch[] = [];
+  const turnContent = turns.find((turn) => turn.turn_hash === turnHash)?.content;
   for (const [path, src] of sourceIndex) {
     if (!isLLMSource(src)) continue;
     const ref = src.turn_ref;
     if (ref.turn_hash !== turnHash) continue;
-    if (ref.start_char == null || ref.end_char == null) continue;
-    // Half-open interval overlap: [a,b) ∩ [c,d) ≠ ∅ iff a < d && c < b.
-    if (ref.start_char >= end) continue;
-    if (ref.end_char <= start) continue;
+
+    const overlaps =
+      ref.start_char != null && ref.end_char != null
+        ? rangesOverlap(ref.start_char, ref.end_char, start, end)
+        : turnContent != null && quoteOverlapsSpan(turnContent, ref.quote, start, end);
+
+    if (!overlaps) continue;
     matches.push({ path, isNode: !path.includes('/') });
   }
   return matches;

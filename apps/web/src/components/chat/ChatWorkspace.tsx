@@ -65,7 +65,8 @@ export function ChatWorkspace({
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
-  const showAddForm = !isCommitted && selection && selection.text.length > 3;
+  const showAddForm =
+    !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -349,6 +350,8 @@ export function ChatWorkspace({
                   key={msg.id}
                   sender={msg.role}
                   content={sourceDraft?.content ?? msg.content}
+                  projectId={msg.projectId}
+                  conversationId={msg.conversationId}
                   turnHash={msg.id}
                   turnIndex={i + 1}
                   citations={

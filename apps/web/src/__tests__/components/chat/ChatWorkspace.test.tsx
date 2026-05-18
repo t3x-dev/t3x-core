@@ -168,4 +168,23 @@ describe('ChatWorkspace', () => {
 
     expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
   });
+
+  it('does not show source text actions for a user question selection', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'question text',
+        turnHash: 'sha256:t1',
+        turnRole: 'user',
+        turnText: 'question text',
+        startChar: 0,
+        endChar: 12,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
+  });
 });

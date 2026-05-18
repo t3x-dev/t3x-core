@@ -11,6 +11,15 @@ function llmSource(turnHash: string, start: number, end: number, quote: string):
   };
 }
 
+function quoteOnlySource(turnHash: string, quote: string): Source {
+  return {
+    type: 'llm',
+    model: 'test-model',
+    at: '2026-04-23T00:00:00Z',
+    turn_ref: { turn_hash: turnHash, quote },
+  };
+}
+
 const HUMAN_SOURCE: Source = {
   type: 'human',
   author: 'test-user',
@@ -62,6 +71,20 @@ describe('findPathsOverlappingSpan', () => {
     const slot = matches.find((m) => m.path === 'trip/destination');
     expect(node?.isNode).toBe(true);
     expect(slot?.isNode).toBe(false);
+  });
+
+  it('falls back to quote lookup when legacy source refs lack char offsets', () => {
+    const idx = new Map<string, Source>([
+      ['finance/value', quoteOnlySource('t1', 'providing value people will pay for')],
+      ['finance/outside', quoteOnlySource('t1', 'outside quote')],
+    ]);
+    const content = 'You make money by providing value people will pay for.';
+    const start = content.indexOf('value');
+    const end = start + 'value'.length;
+
+    const matches = findPathsOverlappingSpan(idx, 't1', start, end, [{ turn_hash: 't1', content }]);
+
+    expect(matches.map((m) => m.path)).toEqual(['finance/value']);
   });
 });
 

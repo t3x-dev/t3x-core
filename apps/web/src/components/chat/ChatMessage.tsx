@@ -23,6 +23,8 @@ import { ThinkingSection } from './ThinkingSection';
 interface ChatMessageProps {
   sender: 'user' | 'assistant';
   content: string;
+  projectId?: string;
+  conversationId?: string;
   turnHash?: string;
   turnIndex?: number;
   isStreaming?: boolean;
@@ -449,6 +451,8 @@ function CoverageText({
 export function ChatMessage({
   sender,
   content,
+  projectId,
+  conversationId,
   turnHash,
   turnIndex,
   isStreaming,
@@ -566,6 +570,8 @@ export function ChatMessage({
   return (
     <div
       ref={messageRef}
+      data-project-id={projectId}
+      data-conversation-id={conversationId}
       data-turn-hash={turnHash}
       data-turn-role={sender}
       className={cn(
