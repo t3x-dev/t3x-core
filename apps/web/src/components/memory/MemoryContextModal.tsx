@@ -335,9 +335,7 @@ export function MemoryContextModal({ open, onClose, projectId }: MemoryContextMo
                             {a.lesson && (
                               <div className="mt-1.5 flex items-start gap-1.5 rounded bg-[var(--status-warning-muted)] p-1.5 text-xs">
                                 <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[var(--status-warning)]" />
-                                <span className="text-[var(--status-warning)]">
-                                  {a.lesson}
-                                </span>
+                                <span className="text-[var(--status-warning)]">{a.lesson}</span>
                               </div>
                             )}
                           </div>

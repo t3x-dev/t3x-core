@@ -41,12 +41,13 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
 
 function PlaceholderBlock({ count, label }: { count: number; label: string }) {
   const lineCount = Math.max(1, count);
+  const lineNumbers = Array.from({ length: lineCount }, (_, lineNumber) => lineNumber + 1);
 
   return (
     <>
-      {Array.from({ length: lineCount }, (_, index) => (
-        <YAMLLine key={`placeholder-${index}`} status="empty">
-          {index === 0 ? (
+      {lineNumbers.map((lineNumber) => (
+        <YAMLLine key={`placeholder-line-${lineNumber}`} status="empty">
+          {lineNumber === 1 ? (
             <span className="inline-flex rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-app)] px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--text-tertiary)]">
               {label}
             </span>

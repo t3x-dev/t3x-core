@@ -50,7 +50,14 @@ export function MergeIllustration({ className }: { className?: string }) {
         stroke="var(--accent-commit)"
         strokeWidth="1.2"
       />
-      <text x="30" y="33" textAnchor="middle" fontSize="9" fill="var(--accent-commit)" fontWeight="600">
+      <text
+        x="30"
+        y="33"
+        textAnchor="middle"
+        fontSize="9"
+        fill="var(--accent-commit)"
+        fontWeight="600"
+      >
         A
       </text>
 
@@ -64,7 +71,14 @@ export function MergeIllustration({ className }: { className?: string }) {
         stroke="var(--accent-pending)"
         strokeWidth="1.2"
       />
-      <text x="30" y="73" textAnchor="middle" fontSize="9" fill="var(--accent-pending)" fontWeight="600">
+      <text
+        x="30"
+        y="73"
+        textAnchor="middle"
+        fontSize="9"
+        fill="var(--accent-pending)"
+        fontWeight="600"
+      >
         B
       </text>
 

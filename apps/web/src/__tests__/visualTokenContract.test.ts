@@ -60,7 +60,9 @@ describe('visual token contract', () => {
         ]) {
           pattern.lastIndex = 0;
           for (const match of content.matchAll(pattern)) {
-            violations.push(`${relative}:${lineNumberForOffset(content, match.index ?? 0)} ${match[0]}`);
+            violations.push(
+              `${relative}:${lineNumberForOffset(content, match.index ?? 0)} ${match[0]}`
+            );
           }
         }
       }

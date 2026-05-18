@@ -159,7 +159,9 @@ function SortableRoleGroup({
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           {ROLE_LABELS[role]}
           {isOverridden && (
-            <span className="ml-2 text-xs font-normal text-[var(--status-warning)]">Overridden</span>
+            <span className="ml-2 text-xs font-normal text-[var(--status-warning)]">
+              Overridden
+            </span>
           )}
         </h2>
         {configured.length > 1 && (

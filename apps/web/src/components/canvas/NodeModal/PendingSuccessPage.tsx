@@ -105,11 +105,7 @@ export function PendingSuccessPage({
               <GitCompare size={16} />
               <span>View {t('commit')} Details</span>
             </Button>
-            <Button
-              variant="leaf"
-              onClick={onCreateOutput}
-              className="w-full gap-2"
-            >
+            <Button variant="leaf" onClick={onCreateOutput} className="w-full gap-2">
               <span>Create Output</span>
               <ArrowRight size={16} />
             </Button>

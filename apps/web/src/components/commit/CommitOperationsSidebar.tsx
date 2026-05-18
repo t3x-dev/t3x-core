@@ -154,9 +154,7 @@ export function CommitOperationsSidebar({ projectId, commit }: CommitOperationsS
         <AuditCard title="Hash Chain">
           <div className="space-y-1.5">
             {commit.parents.length > 0 ? (
-              commit.parents.map((parent) => (
-                <HashPill key={parent} label="parent" hash={parent} />
-              ))
+              commit.parents.map((parent) => <HashPill key={parent} label="parent" hash={parent} />)
             ) : (
               <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-app)] px-2 py-1 font-mono text-[11px] text-[var(--text-tertiary)]">
                 parent: root

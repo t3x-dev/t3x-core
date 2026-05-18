@@ -884,7 +884,9 @@ export default function RunDetailPage() {
                                     <div className="mt-2 flex items-start gap-1.5 rounded bg-[var(--status-warning-muted)] p-2 text-xs">
                                       <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[var(--status-warning)]" />
                                       <div>
-                                        <span className="font-medium text-[var(--status-warning)]">Lesson: </span>
+                                        <span className="font-medium text-[var(--status-warning)]">
+                                          Lesson:{' '}
+                                        </span>
                                         <span className="text-[var(--status-warning)]">
                                           {assertion.patch_suggestion}
                                         </span>

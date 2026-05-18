@@ -74,8 +74,8 @@ export function WorkspaceTopbar() {
               : scriptDirty
                 ? dirtyCopy
                 : hasDraft
-                ? pendingCopy
-                : `${opsLog.length} materialized op${opsLog.length === 1 ? '' : 's'} in yops_log`
+                  ? pendingCopy
+                  : `${opsLog.length} materialized op${opsLog.length === 1 ? '' : 's'} in yops_log`
           }
         >
           {isInheritedBaselineOnly ? (

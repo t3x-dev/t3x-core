@@ -63,9 +63,7 @@ export function SideOnlySection({
                 <span className="font-mono text-[var(--text-secondary)]">{path}</span>
                 {node && (
                   <>
-                    <span className="text-[var(--text-tertiary)]">
-                      {toTitleCase(node.type)}
-                    </span>
+                    <span className="text-[var(--text-tertiary)]">{toTitleCase(node.type)}</span>
                     <span className="ml-auto text-[var(--text-tertiary)]">
                       {Object.keys(node.slots).length} slot
                       {Object.keys(node.slots).length !== 1 ? 's' : ''}

@@ -182,9 +182,7 @@ export function ConflictCard({
                           key={sc.key}
                           className="flex items-start gap-1.5 font-mono text-foreground"
                         >
-                          <span className="text-[var(--text-tertiary)] shrink-0">
-                            {sc.key}:
-                          </span>
+                          <span className="text-[var(--text-tertiary)] shrink-0">{sc.key}:</span>
                           <span>{formatSlotValue(value as SlotValue)}</span>
                           {matchesSource && (
                             <span className="text-[10px] text-[var(--status-info)] font-sans">
@@ -206,9 +204,7 @@ export function ConflictCard({
                     })}
                   </div>
                   {suggestion.reasoning && (
-                    <div className="text-[var(--text-tertiary)] italic">
-                      {suggestion.reasoning}
-                    </div>
+                    <div className="text-[var(--text-tertiary)] italic">{suggestion.reasoning}</div>
                   )}
                   <Button
                     variant="outline"
