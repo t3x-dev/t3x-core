@@ -69,6 +69,7 @@ import {
   runsRoutes,
   searchRoutes,
   shareRoutes,
+  sourceTextRevisionRoutes,
   statusRoutes,
   templatesRoutes,
   topicsRoutes,
@@ -180,6 +181,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', pinsRoutes);
   api.route('/', apiKeysRoutes);
   api.route('/', shareRoutes);
+  api.route('/', sourceTextRevisionRoutes);
   api.route('/', comparisonsRoutes);
   api.route('/', templatesRoutes);
   api.route('/', webhooksRoutes);

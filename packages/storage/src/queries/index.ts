@@ -361,6 +361,21 @@ export {
   findShareTokensByEntity,
   revokeShareToken,
 } from './share-tokens';
+// Source Text Revisions
+export {
+  findLatestSourceTextRevisionByTurn,
+  findSourceTextRevisionById,
+  hashSourceText,
+  type InsertSourceTextRevisionInput,
+  insertSourceTextRevision,
+  listSourceTextRevisionsByConversation,
+  type SourceTextRevisionAction,
+  type SourceTextRevisionSpan,
+  type SourceTextRevisionStatus,
+  type SourceTextRevisionTurnRole,
+  type UpdateSourceTextRevisionInput,
+  updateSourceTextRevision,
+} from './source-text-revisions';
 // Templates (reusable prompt templates)
 export {
   type CreateTemplateInput,

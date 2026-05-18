@@ -13,6 +13,8 @@ const SELECTION_POPOVER_SELECTOR = '[data-selection-popover="true"]';
 
 export interface TextSelectionResult {
   text: string;
+  projectId?: string;
+  conversationId?: string;
   turnHash: string;
   turnRole: string;
   turnText: string;
@@ -65,8 +67,10 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
       }
 
       const turnHash = turnEl.getAttribute('data-turn-hash');
+      const projectId = turnEl.getAttribute('data-project-id') || undefined;
+      const conversationId = turnEl.getAttribute('data-conversation-id') || undefined;
       const turnRole = turnEl.getAttribute('data-turn-role') || 'unknown';
-      if (!turnHash) {
+      if (!turnHash || turnRole === 'user') {
         setSelection(null);
         return;
       }
@@ -80,6 +84,8 @@ export function useTextSelection(containerRef: RefObject<HTMLElement | null>): {
 
       setSelection({
         text,
+        projectId,
+        conversationId,
         turnHash,
         turnRole,
         turnText,

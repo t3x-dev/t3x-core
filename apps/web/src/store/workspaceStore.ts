@@ -12,6 +12,8 @@ import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 
 export interface WorkspaceTurn {
   turn_hash: string;
+  project_id?: string;
+  conversation_id?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
 }

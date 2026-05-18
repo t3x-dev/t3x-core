@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 45;
+const SCHEMA_VERSION = 46;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -99,6 +99,10 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   const rows = await sql.unsafe<{ version: number }[]>(
     `SELECT version FROM _schema_version WHERE singleton = TRUE`
   );
+
+  if (rows.length > 0) {
+    await ensureSourceTextRevisionsSchema(sql);
+  }
 
   if (rows.length > 0 && rows[0].version >= SCHEMA_VERSION) {
     return;
@@ -706,6 +710,95 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_yops_log_active
       ON yops_log (conversation_id) WHERE superseded_at IS NULL;
 
+    -- Source Text Revisions: controlled human edits over immutable turns.
+    -- The original turns.content stays unchanged; clients hydrate these rows
+    -- to derive the effective source text used for incremental YOps patches.
+    CREATE TABLE IF NOT EXISTS source_text_revisions (
+      revision_id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      turn_hash TEXT NOT NULL REFERENCES turns(turn_hash) ON DELETE CASCADE,
+      turn_role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      start_char INTEGER NOT NULL,
+      end_char INTEGER NOT NULL,
+      selected_text TEXT NOT NULL,
+      replacement_text TEXT NOT NULL,
+      base_content TEXT NOT NULL,
+      content TEXT NOT NULL,
+      spans JSONB NOT NULL DEFAULT '[]'::jsonb,
+      base_content_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'saved',
+      patch_ops JSONB,
+      patch_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Idempotent upgrade path for local databases that created an earlier
+    -- source_text_revisions table before the full lifecycle fields landed.
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS revision_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS project_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS turn_hash TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS turn_role TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS action TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS start_char INTEGER;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS end_char INTEGER;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS selected_text TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS replacement_text TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS base_content TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS content TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS spans JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS base_content_hash TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'saved';
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS patch_ops JSONB;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS patch_error TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+    UPDATE source_text_revisions
+    SET
+      revision_id = COALESCE(
+        revision_id,
+        'str_' || substr(md5(random()::text || clock_timestamp()::text), 1, 12)
+      ),
+      turn_role = COALESCE(turn_role, 'assistant'),
+      action = COALESCE(action, 'edit'),
+      start_char = COALESCE(start_char, 0),
+      end_char = COALESCE(end_char, 0),
+      selected_text = COALESCE(selected_text, ''),
+      replacement_text = COALESCE(replacement_text, ''),
+      base_content = COALESCE(base_content, content, ''),
+      content = COALESCE(content, base_content, ''),
+      spans = COALESCE(spans, '[]'::jsonb),
+      base_content_hash = COALESCE(base_content_hash, 'sha256:legacy'),
+      status = COALESCE(status, 'saved'),
+      created_at = COALESCE(created_at, NOW()),
+      updated_at = COALESCE(updated_at, NOW());
+
+    ALTER TABLE source_text_revisions ALTER COLUMN revision_id SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN turn_role SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN action SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN start_char SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN end_char SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN selected_text SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN replacement_text SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN base_content SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN content SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN spans SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN base_content_hash SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN status SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN created_at SET NOT NULL;
+    ALTER TABLE source_text_revisions ALTER COLUMN updated_at SET NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_conversation
+      ON source_text_revisions(conversation_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_turn
+      ON source_text_revisions(turn_hash, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_project
+      ON source_text_revisions(project_id);
+
     -- Migration: per-op source provenance (was migrations/2026-04-12_yops-source-required.sql).
     -- The engine + replay require every op to carry source.type ∈ {'llm','human'}.
     -- Rows from before that contract was introduced are backfilled here from the
@@ -1255,10 +1348,97 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;
   `);
 
+  await ensureSourceTextRevisionsSchema(sql);
+
   // Record schema version so subsequent startups skip the init SQL.
   await sql.unsafe(`
     INSERT INTO _schema_version (singleton, version, applied_at)
     VALUES (TRUE, ${SCHEMA_VERSION}, NOW())
     ON CONFLICT (singleton) DO UPDATE SET version = ${SCHEMA_VERSION}, applied_at = NOW()
+  `);
+}
+
+async function ensureSourceTextRevisionsSchema(sql: postgres.Sql): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS source_text_revisions (
+      revision_id TEXT PRIMARY KEY,
+      project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+      conversation_id TEXT REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+      turn_hash TEXT REFERENCES turns(turn_hash) ON DELETE CASCADE,
+      turn_role TEXT NOT NULL DEFAULT 'assistant',
+      action TEXT NOT NULL DEFAULT 'edit',
+      start_char INTEGER NOT NULL DEFAULT 0,
+      end_char INTEGER NOT NULL DEFAULT 0,
+      selected_text TEXT NOT NULL DEFAULT '',
+      replacement_text TEXT NOT NULL DEFAULT '',
+      base_content TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      spans JSONB NOT NULL DEFAULT '[]'::jsonb,
+      base_content_hash TEXT NOT NULL DEFAULT 'sha256:legacy',
+      status TEXT NOT NULL DEFAULT 'saved',
+      patch_ops JSONB,
+      patch_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS revision_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS project_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS turn_hash TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS turn_role TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS action TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS start_char INTEGER;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS end_char INTEGER;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS selected_text TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS replacement_text TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS base_content TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS content TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS spans JSONB DEFAULT '[]'::jsonb;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS base_content_hash TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'saved';
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS patch_ops JSONB;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS patch_error TEXT;
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE source_text_revisions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'source_text_revisions' AND column_name = 'base_turn_hash'
+      ) THEN
+        ALTER TABLE source_text_revisions ALTER COLUMN base_turn_hash DROP NOT NULL;
+        UPDATE source_text_revisions
+        SET turn_hash = COALESCE(turn_hash, base_turn_hash)
+        WHERE turn_hash IS NULL;
+      END IF;
+    END $$;
+
+    UPDATE source_text_revisions
+    SET
+      revision_id = COALESCE(
+        revision_id,
+        'str_' || substr(md5(random()::text || clock_timestamp()::text), 1, 12)
+      ),
+      turn_role = COALESCE(turn_role, 'assistant'),
+      action = COALESCE(action, 'edit'),
+      start_char = COALESCE(start_char, 0),
+      end_char = COALESCE(end_char, 0),
+      selected_text = COALESCE(selected_text, ''),
+      replacement_text = COALESCE(replacement_text, ''),
+      base_content = COALESCE(base_content, content, ''),
+      content = COALESCE(content, base_content, ''),
+      spans = COALESCE(spans, '[]'::jsonb),
+      base_content_hash = COALESCE(base_content_hash, 'sha256:legacy'),
+      status = COALESCE(status, 'saved'),
+      created_at = COALESCE(created_at, NOW()),
+      updated_at = COALESCE(updated_at, NOW());
+
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_conversation
+      ON source_text_revisions(conversation_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_turn
+      ON source_text_revisions(turn_hash, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_source_text_revisions_project
+      ON source_text_revisions(project_id);
   `);
 }

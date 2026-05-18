@@ -21,11 +21,49 @@
  * hooks/ may import queries/ + store/ + infrastructure/ — fine.
  */
 
+import { listSourceTextRevisions } from '@/infrastructure/sourceTextRevisions';
 import { fetchConversationSnapshot } from '@/queries/loadConversation';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatWorkspaceError } from './formatWorkspaceError';
+
+async function hydrateSourceTextRevisionsBestEffort(
+  projectId: string,
+  convId: string
+): Promise<void> {
+  const store = useWorkspaceStore.getState();
+  store.clearSourceTextDrafts();
+
+  try {
+    const sourceTextRevisions = await listSourceTextRevisions(projectId, convId);
+    const latestSourceTextRevisions = new Map(
+      sourceTextRevisions
+        .filter(
+          (revision) =>
+            revision.turn_hash &&
+            revision.content.trim().length > 0 &&
+            revision.base_content_hash !== 'sha256:legacy'
+        )
+        .map((revision) => [revision.turn_hash, revision])
+    );
+    for (const revision of latestSourceTextRevisions.values()) {
+      store.setSourceTextDraft(revision.turn_hash, {
+        revisionId: revision.revision_id,
+        status: revision.status,
+        baseContentHash: revision.base_content_hash,
+        turnHash: revision.turn_hash,
+        turnRole: revision.turn_role,
+        baseContent: revision.base_content,
+        content: revision.content,
+        spans: revision.spans,
+        updatedAt: revision.updated_at,
+      });
+    }
+  } catch (err) {
+    console.warn('[source-text-revisions] hydrate skipped', err);
+  }
+}
 
 export async function hydrateConversationToStore(projectId: string, convId: string): Promise<void> {
   const pre = useWorkspaceStore.getState();
@@ -115,5 +153,6 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
     hydrated.setProjectPanelExpansion(projectId, true);
   }
 
+  await hydrateSourceTextRevisionsBestEffort(projectId, convId);
   post.setMode('idle');
 }

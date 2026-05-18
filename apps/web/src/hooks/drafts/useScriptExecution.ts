@@ -16,6 +16,7 @@ import { normalizeEditedScriptOps } from '@/domain/yops/scriptEditNormalization'
 import { serializeOpsToYaml } from '@/domain/yops/serializeOps';
 import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
+import { updateSourceTextRevision } from '@/infrastructure/sourceTextRevisions';
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
@@ -215,6 +216,9 @@ export function useScriptExecution() {
       : [];
     const commitOptions = commitOptionsFromPolicy(currentPolicy.payload);
     if (!commitOptions) return;
+    const stagedSourceRevisionIds = Object.values(store.sourceTextDrafts)
+      .filter((draft) => draft.revisionId && draft.status === 'patched')
+      .map((draft) => draft.revisionId as string);
 
     try {
       store.setMode('committing');
@@ -229,6 +233,14 @@ export function useScriptExecution() {
       toast.error(msg);
       return;
     }
+    await Promise.all(
+      stagedSourceRevisionIds.map((revisionId) =>
+        updateSourceTextRevision(revisionId, {
+          status: 'synced',
+          patchError: null,
+        }).catch(() => undefined)
+      )
+    );
     // clearDraft routes through writeDraftProposal which nulls the
     // editor override, so selectScriptDirty automatically returns false
     // after this call — no separate dirty-flag clear needed.

@@ -44,6 +44,7 @@ export { runnerRoutes } from './runner.openapi';
 export { runsRoutes } from './runs.openapi';
 export { searchRoutes } from './search.openapi';
 export { shareRoutes } from './share.openapi';
+export { sourceTextRevisionRoutes } from './source-text-revisions.openapi';
 export { statusRoutes } from './status.openapi';
 export { templatesRoutes } from './templates.openapi';
 export { topicsRoutes } from './topics.openapi';

@@ -29,8 +29,10 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
   async function handleConfirm() {
     if (!canConfirm) return;
     try {
-      await applySourceTextEdit({
+      const result = await applySourceTextEdit({
         action,
+        projectId: selection.projectId,
+        conversationId: selection.conversationId,
         turnHash: selection.turnHash,
         turnRole: selection.turnRole,
         text: selection.text,
@@ -39,7 +41,17 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
         end: selection.endChar,
         replacementText: text,
       });
-      toast.success('Source text updated — re-extract to refresh YOps');
+      if (result.status === 'patched') {
+        toast.success(
+          `Source edit saved — generated ${result.opCount} YOps op${result.opCount === 1 ? '' : 's'}`
+        );
+      } else if (result.status === 'no_patch') {
+        toast.message('Source edit saved — no incremental YOps generated');
+      } else {
+        toast.warning('Source edit saved — incremental YOps generation failed', {
+          description: result.error,
+        });
+      }
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Source edit failed');
@@ -140,9 +152,10 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
         type="button"
         onClick={handleConfirm}
         disabled={!canConfirm}
+        title="Generate incremental YOps from this source edit only."
         className="inline-flex items-center rounded bg-[var(--source)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] disabled:opacity-50"
       >
-        {pending ? 'Staging…' : 'Confirm'}
+        {pending ? 'Saving…' : 'Save & Generate YOps'}
       </button>
     </div>
   );
