@@ -96,21 +96,25 @@ export function ProjectFolder({
             {project.name}
           </span>
           <span
-            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-3 text-[var(--text-tertiary)]"
+            className="flex max-w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-none text-[var(--text-tertiary)]"
             title={projectSummary}
           >
             {commitCount > 0 && (
               <>
-                <span className="inline-flex items-center gap-0.5">
+                <span className="inline-flex h-3 items-center gap-0.5 leading-none">
                   <span className="h-1 w-1 rounded-full bg-[var(--status-success)]" />
                   main
                 </span>
-                {' · '}
+                <span className="inline-flex h-3 items-center leading-none">·</span>
               </>
             )}
-            {commitCount} {commitCount === 1 ? 'commit' : 'commits'}
-            {' · '}
-            {convCount} {convCount === 1 ? 'source' : 'sources'}
+            <span className="inline-flex h-3 items-center leading-none">
+              {commitCount} {commitCount === 1 ? 'commit' : 'commits'}
+            </span>
+            <span className="inline-flex h-3 items-center leading-none">·</span>
+            <span className="inline-flex h-3 items-center leading-none">
+              {convCount} {convCount === 1 ? 'source' : 'sources'}
+            </span>
           </span>
         </div>
       )}

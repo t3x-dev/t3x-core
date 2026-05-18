@@ -370,8 +370,7 @@ export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
     state.baselineCommitHash &&
       !state.isCommitted &&
       !state.hasConversationChanges &&
-      !state.hasDraft &&
-      (state.tree.trees.length > 0 || state.tree.relations.length > 0)
+      !state.hasDraft
   );
 
 /**

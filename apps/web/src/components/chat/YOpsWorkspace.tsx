@@ -254,7 +254,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
 
       <div
         onMouseDown={handleSplitDrag}
-        className="group relative h-1.5 flex-shrink-0 cursor-row-resize bg-transparent"
+        className="group relative z-10 -my-[3px] h-1.5 flex-shrink-0 cursor-row-resize bg-transparent"
       >
         <span
           aria-hidden="true"

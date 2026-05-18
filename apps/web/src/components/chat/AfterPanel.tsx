@@ -21,7 +21,6 @@ import {
 import { getSlotSource } from '@/domain/source';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
-import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useCommitStore } from '@/store/commitStore';
 import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
@@ -883,13 +882,18 @@ export function AfterPanel({
   const draftTree = useWorkspaceStore((s) => s.draftTree);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
-  // Render the dry-run preview tree when an Extract has staged a draft;
-  // otherwise show the committed tree as before. The preview is computed
-  // by `useExtraction` (`applySourcedYOps(currentTree, draftOps)`) and
-  // cleared on Apply or Discard.
-  const tree = hasDraft && draftTree ? draftTree : committedTree;
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
+  const parent = useParentCommit();
+  const inheritedBaselineTree =
+    isInheritedBaselineOnly && parent
+      ? { trees: parent.trees, relations: committedTree.relations }
+      : null;
+  // Render the dry-run preview tree when an Extract has staged a draft.
+  // For a new child conversation with no applied YOps yet, render the
+  // inherited parent commit tree; otherwise an empty local replay would diff
+  // against the parent as if every inherited node had been removed.
+  const tree = hasDraft && draftTree ? draftTree : (inheritedBaselineTree ?? committedTree);
   // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
   // (un-applied LLM proposal). The footer next to Discard / Commit
   // was the leftover ambiguous count after PR 904 covered the
@@ -909,10 +913,8 @@ export function AfterPanel({
   const select = useWorkspaceStore((s) => s.select);
   const clearSelection = useWorkspaceStore((s) => s.clearSelection);
   const { applyEdit } = useGoldEdit();
-  const parent = useParentCommit();
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
-  const projectId = useCommitStore((s) => s.projectId);
   const { commit: commitTrees } = useCommitActions();
   const commitInputRef = useRef<HTMLInputElement | null>(null);
   const resultScrollRef = useRef<HTMLDivElement | null>(null);
@@ -928,6 +930,13 @@ export function AfterPanel({
   const showBefore = !!beforeVisible && hasParent;
   const showBeforeControl =
     !!showBeforeToggle && !!onToggleBefore && hasParent && !isInheritedBaselineOnly;
+  const splitGridStyle = showBefore ? { paddingRight: resultScrollbarGutter } : undefined;
+  const splitDividerStyle = showBefore
+    ? {
+        left: `calc((100% - ${resultScrollbarGutter}px) / 2)`,
+        bottom: TREE_FOOTER_HEIGHT,
+      }
+    : undefined;
 
   const diff = useMemo<TreeDiffResult | null>(() => {
     if (!parent) return null;
@@ -1124,32 +1133,28 @@ export function AfterPanel({
     [commitTrees]
   );
 
-  // Discard semantics live in `useDiscardDraft` (introduced for the
-  // workbench header in this PR). AfterPanel and the topbar share the
-  // exact same path so there's only one discard implementation —
-  // earlier the panel had its own copy with stale setScriptText /
-  // setScriptDirty calls that PR 1 retired.
-  const discardDraft = useDiscardDraft();
-  const handleDiscard = useCallback(async () => {
-    if (isCommitting) return;
-    await discardDraft();
-  }, [discardDraft, isCommitting]);
-
   return (
     <div
       data-testid="after-panel"
       className="relative flex h-full min-h-0 w-full flex-1 flex-col"
       onClick={handlePanelBackgroundClick}
     >
+      {showBefore && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 z-10 w-px bg-[var(--stroke-default)]"
+          style={splitDividerStyle}
+        />
+      )}
       <div
         className={cn(
           'grid shrink-0 border-b border-[var(--stroke-default)] bg-[var(--panel-alt)]',
           showBefore ? 'grid-cols-2' : 'grid-cols-1'
         )}
-        style={showBefore ? { paddingRight: resultScrollbarGutter } : undefined}
+        style={splitGridStyle}
       >
         {showBefore && (
-          <div className="flex items-center justify-between px-3 py-1.5 border-r border-[var(--stroke-default)]">
+          <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
               Before <span className="opacity-80">🔒</span>
             </span>
@@ -1358,10 +1363,7 @@ export function AfterPanel({
                   className="grid w-full grid-cols-2"
                   style={{ minHeight: TREE_ROW_HEIGHT }}
                 >
-                  <div
-                    className="border-r border-[var(--stroke-default)]"
-                    style={{ minHeight: TREE_ROW_HEIGHT }}
-                  >
+                  <div className="min-w-0" style={{ minHeight: TREE_ROW_HEIGHT }}>
                     {beforeCell}
                   </div>
                   <div style={{ minHeight: TREE_ROW_HEIGHT }}>{afterCell}</div>
@@ -1373,7 +1375,7 @@ export function AfterPanel({
               );
             })}
             {showBefore && rows.length === 0 && (
-              <div className="border-r border-[var(--stroke-default)] flex items-center justify-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic">
+              <div className="flex items-center justify-center text-[10px] text-[var(--text-tertiary)] opacity-40 italic">
                 {parent ? 'Parent commit is empty' : 'No prior commits'}
               </div>
             )}
@@ -1418,16 +1420,6 @@ export function AfterPanel({
           )}
         </span>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => void handleDiscard()}
-            disabled={
-              !projectId || !hasResult || isCommitting || isCommitted || isInheritedBaselineOnly
-            }
-            className="flex min-w-[88px] items-center justify-center rounded border border-[var(--stroke-default)] bg-transparent px-3 py-2 text-[11px] font-semibold text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            Discard
-          </button>
           <button
             type="button"
             data-testid="commit-button"
