@@ -14,6 +14,7 @@ import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
+import { useCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useContextMenu } from '@/hooks/shared/useContextMenu';
 import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
 import { usePathHighlight } from '@/hooks/shared/usePathHighlight';
@@ -95,6 +96,8 @@ function CanvasWorkspaceInner({
   const router = useRouter();
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
+  const compactViewport = useCompactViewport();
+  const canvasMinZoom = compactViewport ? 0.55 : 0.25;
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -341,7 +344,9 @@ function CanvasWorkspaceInner({
     <div className="relative flex min-h-0 flex-1 flex-col">
       <CanvasToolbar
         projectName={projectName}
-        onFitView={() => fitView({ padding: 0.3, maxZoom: 1, duration: 300 })}
+        onFitView={() =>
+          fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 })
+        }
       />
 
       <div
@@ -435,10 +440,10 @@ function CanvasWorkspaceInner({
           snapGrid={[GRID_SIZE, GRID_SIZE]}
           proOptions={{ hideAttribution: true }}
           fitView={!initialViewport}
-          fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
+          fitViewOptions={{ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1 }}
           defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
           onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
-          minZoom={0.25}
+          minZoom={canvasMinZoom}
           maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
           selectNodesOnDrag={false}
@@ -448,17 +453,21 @@ function CanvasWorkspaceInner({
             style: { strokeWidth: 2 },
           }}
         >
-          <MiniMap
-            nodeStrokeWidth={3}
-            pannable
-            zoomable
-            className={cn('!rounded-xl', glass.cardBase, glass.highlight)}
-            style={{
-              backgroundColor: 'transparent',
-            }}
-            maskColor={colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'}
-          />
-          <ZoomSlider position="bottom-left" />
+          {!compactViewport && (
+            <MiniMap
+              nodeStrokeWidth={3}
+              pannable
+              zoomable
+              className={cn('!rounded-xl', glass.cardBase, glass.highlight)}
+              style={{
+                backgroundColor: 'transparent',
+              }}
+              maskColor={
+                colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
+              }
+            />
+          )}
+          <ZoomSlider compact={compactViewport} position="bottom-left" />
           <Background
             variant={BackgroundVariant.Dots}
             gap={32}

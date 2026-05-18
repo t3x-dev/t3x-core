@@ -266,7 +266,7 @@ export function LeafInspector({
   return (
     <aside
       className={cn(
-        'w-[280px] min-w-[280px] shrink-0 flex-col overflow-y-auto border-l flex',
+        'hidden w-[280px] min-w-[280px] shrink-0 flex-col overflow-y-auto border-l md:flex',
         'bg-[color-mix(in_srgb,var(--surface-panel)_88%,transparent)]',
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}
