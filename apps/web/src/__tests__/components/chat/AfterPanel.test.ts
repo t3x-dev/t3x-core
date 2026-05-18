@@ -240,6 +240,34 @@ describe('AfterPanel tree edit controls', () => {
     expect(label).not.toBeNull();
     expect(label.closest('[data-human-edit="true"]')).not.toBeNull();
   });
+
+  it('renders the parent commit tree for an inherited child before Apply', () => {
+    mocks.parentCommit.current = {
+      message: 'Parent commit',
+      trees: [
+        {
+          key: 'concepts',
+          slots: { definition: 'A parent baseline concept' },
+          children: [],
+        },
+      ],
+    };
+    useWorkspaceStore.getState().setConversation('conv_child');
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+      baselineCommitHash: 'sha256:parent_commit',
+      hasConversationChanges: false,
+    });
+
+    render(createElement(AfterPanel));
+
+    expect(screen.getByText('Inherited baseline')).not.toBeNull();
+    expect(screen.getByText('concepts')).not.toBeNull();
+    expect(screen.getByText('A parent baseline concept')).not.toBeNull();
+    expect(screen.queryByText('Removed node')).toBeNull();
+  });
 });
 
 describe('AfterPanel.formatSlotPreviewValue', () => {
