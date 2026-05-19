@@ -14,12 +14,14 @@ import {
   getBusinessRules,
   insertProject,
   permanentDeleteProject,
+  projects,
   putBusinessRules,
   restoreProject,
+  seedDemoWorkspace,
   updateProject,
   verifyHashChain,
 } from '@t3x-dev/storage';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {
   assertProjectAccess,
@@ -117,6 +119,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
   try {
     const db = await getDB();
     const userId = getUserId(c);
+    await seedDemoWorkspaceIfEmpty(db, userId);
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -147,6 +150,24 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     return c.json({ success: false as const, error: { code: 'LIST_FAILED', message } }, 500);
   }
 });
+
+async function seedDemoWorkspaceIfEmpty(
+  db: Awaited<ReturnType<typeof getDB>>,
+  userId: string | undefined
+): Promise<void> {
+  const conditions = [isNull(projects.deletedAt)];
+  conditions.push(userId ? eq(projects.ownerId, userId) : isNull(projects.ownerId));
+
+  const existing = await db
+    .select({ projectId: projects.projectId })
+    .from(projects)
+    .where(and(...conditions))
+    .limit(1);
+
+  if (existing.length === 0) {
+    await seedDemoWorkspace(db, { ownerId: userId ?? null });
+  }
+}
 
 // Create project route
 const createProjectRoute = createRoute({
