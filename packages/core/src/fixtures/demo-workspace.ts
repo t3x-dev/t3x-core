@@ -490,3 +490,5 @@ export const DEMO_WORKSPACE_FIXTURE: DemoWorkspaceFixture = {
     ],
   },
 };
+
+export const DEMO_WORKSPACE_REPLAY_GOAL = `fixture:${DEMO_WORKSPACE_FIXTURE.id}`;

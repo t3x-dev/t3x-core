@@ -135,6 +135,7 @@ export { collectLessonsFromAssertions, generateLesson } from './feedback';
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   DEMO_WORKSPACE_FIXTURE,
+  DEMO_WORKSPACE_REPLAY_GOAL,
   type DemoFlatNode,
   type DemoSlotValue,
   type DemoTreeNode,

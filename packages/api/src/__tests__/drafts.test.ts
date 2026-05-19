@@ -4,6 +4,7 @@
  * Integration tests for Draft CRUD + preview + commit + fork endpoints.
  */
 
+import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -353,6 +354,46 @@ describe('Drafts Routes', () => {
     return draftId;
   }
 
+  async function createFixtureReplayDraft() {
+    const createRes = await app.request('/v1/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: testProjectId,
+        title: 'Fixture replay: Prompt Review',
+        goal: DEMO_WORKSPACE_REPLAY_GOAL,
+        preview_type: DEMO_WORKSPACE_FIXTURE.leaf.type,
+      }),
+    });
+    const created: ApiResponse = await createRes.json();
+    const draftId = created.data.id;
+
+    await app.request(`/v1/drafts/${draftId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nodes: DEMO_WORKSPACE_FIXTURE.replay.draft_nodes.map((node, position) => ({
+          id: node.id,
+          text: node.text,
+          origin: { type: 'manual' },
+          position,
+          included: true,
+        })),
+        constraints: DEMO_WORKSPACE_FIXTURE.leaf.constraints.map((constraint) => ({
+          id: constraint.id.replace(/^cst_/, 'dc_'),
+          type: constraint.type,
+          match_mode: constraint.match_mode,
+          value: constraint.value,
+          reason: 'reason' in constraint ? constraint.reason : constraint.description,
+        })),
+        instructions: DEMO_WORKSPACE_FIXTURE.replay.label,
+        if_revision: 1,
+      }),
+    });
+
+    return draftId;
+  }
+
   // ============================================================
   // Preview Tests
   // ============================================================
@@ -428,6 +469,27 @@ describe('Drafts Routes', () => {
       expect(data.data.model_used).toBe('claude-haiku-4-5-20251001');
       expect(data.data.token_count).toBeGreaterThan(0);
       expect(data.data.cached).toBe(false);
+    });
+
+    it('returns fixture replay output without calling a model provider', async () => {
+      const draftId = await createFixtureReplayDraft();
+
+      mockIsGenerationConfigured.mockReturnValue(false);
+      mockGenerateLeafOutput.mockClear();
+
+      const res = await app.request(`/v1/drafts/${draftId}/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.output).toBe(DEMO_WORKSPACE_FIXTURE.leaf.output);
+      expect(data.data.model_used).toBe('fixture-replay');
+      expect(data.data.cached).toBe(false);
+      expect(mockGenerateLeafOutput).not.toHaveBeenCalled();
     });
 
     it('returns cached preview on identical content', async () => {
@@ -611,6 +673,26 @@ describe('Drafts Routes', () => {
       const getRes = await app.request(`/v1/drafts/${draftId}`);
       const getDraft: ApiResponse = await getRes.json();
       expect(getDraft.data.committed_leaf_id).toBe(data.data.leaf.id);
+    });
+
+    it('commits fixture replay as the canonical fixture tree without provider generation', async () => {
+      const draftId = await createFixtureReplayDraft();
+      mockGenerateLeafOutput.mockClear();
+
+      const res = await app.request(`/v1/drafts/${draftId}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(201);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.commit.provenance.method).toBe('fixture_replay');
+      expect(data.data.commit.content.trees).toEqual(DEMO_WORKSPACE_FIXTURE.replay.trees);
+      expect(data.data.leaf.output).toBe(DEMO_WORKSPACE_FIXTURE.leaf.output);
+      expect(data.data.leaf.assertions).toEqual(DEMO_WORKSPACE_FIXTURE.leaf.assertions);
+      expect(mockGenerateLeafOutput).not.toHaveBeenCalled();
     });
 
     it('returns 400 if draft is already committed', async () => {
