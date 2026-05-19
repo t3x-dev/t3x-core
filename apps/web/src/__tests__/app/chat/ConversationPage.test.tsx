@@ -20,6 +20,10 @@ vi.mock('@/components/chat/ChatWorkspace', () => ({
   ChatWorkspace: vi.fn(() => null),
 }));
 
+vi.mock('@/components/chat/MobileWorkspaceSheet', () => ({
+  MobileWorkspaceSheet: vi.fn(() => null),
+}));
+
 vi.mock('@/components/chat/YOpsWorkspace', () => ({
   YOpsWorkspace: vi.fn(() => null),
 }));
@@ -55,6 +59,7 @@ vi.mock('@/store/workspaceStore', () => {
 
 import ConversationPage from '@/app/chat/[conversationId]/page';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { MobileWorkspaceSheet } from '@/components/chat/MobileWorkspaceSheet';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 
 afterEach(() => {
@@ -160,5 +165,7 @@ describe('ConversationPage', () => {
     render(<ConversationPage />);
 
     expect(vi.mocked(YOpsWorkspace)).not.toHaveBeenCalled();
+    expect(vi.mocked(MobileWorkspaceSheet)).toHaveBeenCalled();
+    expect(vi.mocked(ChatWorkspace).mock.calls[0][0].reserveMobileWorkspaceSwitcher).toBe(true);
   });
 });

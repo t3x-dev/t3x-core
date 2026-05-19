@@ -36,6 +36,7 @@ interface ChatWorkspaceProps {
   initialProvider?: string;
   initialModel?: string;
   className?: string;
+  reserveMobileWorkspaceSwitcher?: boolean;
   /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
   onConversationCreated?: (conversationId: string) => void;
   /** Parent commit hash — if set, hydrate extraction panel with parent's trees */
@@ -51,6 +52,7 @@ export function ChatWorkspace({
   initialProvider,
   initialModel,
   className,
+  reserveMobileWorkspaceSwitcher = false,
   onConversationCreated: onConversationCreatedProp,
   inheritFromCommitHash,
   onInheritComplete,
@@ -351,7 +353,10 @@ export function ChatWorkspace({
       {/* Message list */}
       <div
         ref={chatContainerRef}
-        className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--panel)]"
+        className={cn(
+          'chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--panel)]',
+          reserveMobileWorkspaceSwitcher && 'pt-14'
+        )}
       >
         {/* Parent conversation banner */}
         {parentConversationId && (
