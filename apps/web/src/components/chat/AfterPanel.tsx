@@ -19,12 +19,21 @@ import {
   getResultPanelHeaderLabel,
 } from '@/domain/draft/retainedFailureLabel';
 import { getSlotSource } from '@/domain/source';
+import { deriveWorkspaceActionBarState } from '@/domain/workspace/actionBarState';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
+import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
+import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
+import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
-import { selectIsInheritedBaselineOnly, useWorkspaceStore } from '@/store/workspaceStore';
+import {
+  selectIsInheritedBaselineOnly,
+  selectScriptDirty,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
+import { WorkspaceActionBar } from './WorkspaceActionBar';
 
 const TREE_MONO_FONT = 'var(--font-mono)';
 const MONO = {
@@ -306,12 +315,14 @@ export function shouldDisableCommit(input: {
   isCommitted: boolean;
   hasDraft: boolean;
   isInheritedBaselineOnly?: boolean;
+  scriptDirty?: boolean;
 }): boolean {
   return (
     !input.hasResult ||
     input.isCommitting ||
     input.isCommitted ||
     input.hasDraft ||
+    Boolean(input.scriptDirty) ||
     Boolean(input.isInheritedBaselineOnly)
   );
 }
@@ -873,10 +884,12 @@ export function AfterPanel({
   showBeforeToggle,
   onToggleBefore,
   beforeVisible,
+  onContinueEditing,
 }: {
   showBeforeToggle?: boolean;
   onToggleBefore?: () => void;
   beforeVisible?: boolean;
+  onContinueEditing?: () => void;
 }) {
   const committedTree = useWorkspaceStore((s) => s.tree);
   const draftTree = useWorkspaceStore((s) => s.draftTree);
@@ -884,6 +897,9 @@ export function AfterPanel({
   const sourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
+  const workspaceMode = useWorkspaceStore((s) => s.mode);
+  const activeBranch = useChatStore((s) => s.activeBranch);
   const parent = useParentCommit();
   const inheritedBaselineTree =
     isInheritedBaselineOnly && parent
@@ -916,6 +932,12 @@ export function AfterPanel({
 
   const isCommitting = useCommitStore((s) => s.isCommitting);
   const { commit: commitTrees } = useCommitActions();
+  const discardDraft = useDiscardDraft();
+  const {
+    execute: executeScript,
+    canRun: canRunScript,
+    disabledReason: scriptDisabledReason,
+  } = useScriptExecution();
   const commitInputRef = useRef<HTMLInputElement | null>(null);
   const resultScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -950,6 +972,32 @@ export function AfterPanel({
     hasResult,
     lastError,
   });
+  const actionBarState = useMemo(
+    () =>
+      deriveWorkspaceActionBarState({
+        scriptDirty,
+        hasDraft,
+        hasResult,
+        isCommitted,
+        mode: isCommitting ? 'committing' : workspaceMode,
+        isInheritedBaselineOnly,
+        canApply: canRunScript,
+        applyDisabledReason: scriptDisabledReason,
+        branch: activeBranch,
+      }),
+    [
+      activeBranch,
+      canRunScript,
+      hasDraft,
+      hasResult,
+      isCommitted,
+      isCommitting,
+      isInheritedBaselineOnly,
+      scriptDirty,
+      scriptDisabledReason,
+      workspaceMode,
+    ]
+  );
 
   const handleGoldEditFailure = useCallback((err: unknown) => {
     const workspaceError = useWorkspaceStore.getState().lastError;
@@ -1094,6 +1142,32 @@ export function AfterPanel({
       .join(' & ');
   }, [trees]);
 
+  const openCommitDialog = useCallback(() => {
+    setCommitMessage(getDefaultCommitName());
+    setShowCommitDialog(true);
+  }, [getDefaultCommitName]);
+
+  const handleDiscardChanges = useCallback(() => {
+    if (hasDraft || retainedDraftFailure) {
+      void discardDraft();
+      return;
+    }
+    const store = useWorkspaceStore.getState();
+    if (selectScriptDirty(store)) {
+      store.clearEditorOverride();
+      store.setError(null);
+      toast.success('Script changes discarded');
+    }
+  }, [discardDraft, hasDraft, retainedDraftFailure]);
+
+  const handleRunOrApply = useCallback(() => {
+    void executeScript();
+  }, [executeScript]);
+
+  const handleContinueEditingAction = useCallback(() => {
+    onContinueEditing?.();
+  }, [onContinueEditing]);
+
   const handleCommit = useCallback(
     async (message: string) => {
       // Defense in depth: the main Commit button and the dialog confirm
@@ -1104,6 +1178,11 @@ export function AfterPanel({
       const workspaceState = useWorkspaceStore.getState();
       if (workspaceState.hasDraft) {
         toast.error('Apply or Discard the staged draft before committing.');
+        setShowCommitDialog(false);
+        return;
+      }
+      if (selectScriptDirty(workspaceState)) {
+        toast.error('Run or discard script changes before committing.');
         setShowCommitDialog(false);
         return;
       }
@@ -1419,43 +1498,14 @@ export function AfterPanel({
             </>
           )}
         </span>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            data-testid="commit-button"
-            onClick={() => {
-              setCommitMessage(getDefaultCommitName());
-              setShowCommitDialog(true);
-            }}
-            // Commit reads workspaceStore.tree (committed state), but the
-            // panel renders draftTree when hasDraft. Allowing Commit in
-            // that window would freeze the *pre-draft* tree under the
-            // user's eyes while the staged YOps still sit un-applied \u2014
-            // they'd see preview, click Commit, and end up with a
-            // commit that doesn't match anything on screen.
-            // The user must Apply (or Discard) the draft first; this
-            // button reactivates once hasDraft flips back to false.
-            disabled={shouldDisableCommit({
-              hasResult,
-              isCommitting,
-              isCommitted,
-              hasDraft,
-              isInheritedBaselineOnly,
-            })}
-            title={
-              isInheritedBaselineOnly
-                ? 'Extract, edit, or Apply new YOps before committing this conversation'
-                : hasDraft
-                  ? 'Apply or Discard the staged draft before committing'
-                  : isCommitted
-                    ? 'Already committed'
-                    : undefined
-            }
-            className="flex min-w-[96px] items-center justify-center gap-1 rounded bg-[var(--accent-commit)] px-3 py-2 text-[11px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
-          >
-            {isCommitting ? 'Committing...' : '\u2192 Commit'}
-          </button>
-        </div>
+        <WorkspaceActionBar
+          state={actionBarState}
+          onRunScript={handleRunOrApply}
+          onApplyChanges={handleRunOrApply}
+          onDiscardChanges={handleDiscardChanges}
+          onCommit={openCommitDialog}
+          onContinueEditing={handleContinueEditingAction}
+        />
       </div>
 
       {showCommitDialog && (
@@ -1483,6 +1533,7 @@ export function AfterPanel({
                 isCommitted,
                 hasDraft,
                 isInheritedBaselineOnly,
+                scriptDirty,
               });
               return (
                 <>
@@ -1517,7 +1568,9 @@ export function AfterPanel({
                           ? 'Extract, edit, or Apply new YOps before committing this conversation'
                           : hasDraft
                             ? 'Apply or Discard the staged draft before committing'
-                            : undefined
+                            : scriptDirty
+                              ? 'Run or discard script changes before committing'
+                              : undefined
                       }
                       className="rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
                     >

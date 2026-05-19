@@ -101,16 +101,32 @@ describe('YOpsWorkspace view switcher', () => {
     expect(screen.getByText('0 ops · 1 pending')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
-    fireEvent.click(screen.getByText('Draft'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Draft/ }));
+
+    expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
+  });
+
+  it('routes the status strip Pending segment to the draft log view', () => {
+    act(() => {
+      useWorkspaceStore.getState().setDraft({
+        ops: [llmOp()],
+        tree: { trees: [], relations: [] },
+      });
+    });
+
+    const { container } = render(<YOpsWorkspace />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Pending 1/i }));
 
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
   });
 
   it('keeps a selected log view when a draft arrives', () => {
-    const { container, getByText } = render(<YOpsWorkspace />);
+    const { container } = render(<YOpsWorkspace />);
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
-    fireEvent.click(getByText('Applied'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Applied/ }));
     expect(container.querySelector('[data-testid="yops-log-panel-stub-applied"]')).toBeTruthy();
 
     act(() => {
@@ -135,7 +151,7 @@ describe('YOpsWorkspace view switcher', () => {
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
-    fireEvent.click(screen.getByText('Draft'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Draft/ }));
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
     const logsButton = screen.getByRole('button', { name: /Logs/ });
     expect(logsButton).toHaveAttribute('aria-current', 'page');
@@ -153,9 +169,9 @@ describe('YOpsWorkspace view switcher', () => {
     act(() => {
       useWorkspaceStore.getState().setConversation('conv_xyz');
     });
-    const { container, getByText } = render(<YOpsWorkspace />);
+    const { container } = render(<YOpsWorkspace />);
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
-    fireEvent.click(getByText('Archived'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Archived/ }));
     const panel = container.querySelector('[data-testid="archived-ops-panel-stub"]');
     expect(panel).toBeTruthy();
     expect(panel?.textContent).toContain('archived: conv_xyz');

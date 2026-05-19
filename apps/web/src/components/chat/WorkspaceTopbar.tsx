@@ -1,10 +1,7 @@
 'use client';
 
-import { Loader2, PanelRightClose, Play, X } from 'lucide-react';
-import { formatApplyTooltipForRetainedFailure } from '@/domain/draft/retainedFailureLabel';
+import { Loader2, PanelRightClose } from 'lucide-react';
 import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
-import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
-import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
 import {
   selectIsInheritedBaselineOnly,
   selectScriptDirty,
@@ -35,19 +32,6 @@ export function WorkspaceTopbar() {
   });
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
-  // Drives the Apply button tooltip wording. When a re-extract failed
-  // on top of a previously-staged draft, Apply still works — but it
-  // applies the PREVIOUS draft, not the latest (failed) attempt. The
-  // generic "Apply the script to the tree" tooltip would mislead.
-  const retainedDraftFailure = useWorkspaceStore((s) => s.retainedDraftFailure);
-  const isCommitting = mode === 'committing';
-  const { execute, canRun, disabledReason, applyPolicy } = useScriptExecution();
-  const discardDraft = useDiscardDraft();
-  // Discard is offered when a draft (or retained-failure marker) is
-  // staged. Mirrors the AfterPanel discard surface so users can reach
-  // it from either side. Disabled while a commit is in flight to avoid
-  // racing the apply path.
-  const canDiscard = (hasDraft || retainedDraftFailure !== null) && !isCommitting;
   const dirtyCopy = 'Inline changes · Apply or discard before commit';
   const pendingCopy = 'Pending extract · Apply or discard before commit';
   const surfaceSummary = formatSurfaceSummary(groups);
@@ -105,39 +89,6 @@ export function WorkspaceTopbar() {
             </>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => void discardDraft()}
-          disabled={!canDiscard}
-          title={
-            canDiscard
-              ? 'Discard the staged draft and revert to the last applied state'
-              : 'No draft to discard'
-          }
-          data-testid="workspace-topbar-discard"
-          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded border border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <X className="h-2.5 w-2.5" />
-          Discard
-        </button>
-
-        <button
-          type="button"
-          onClick={execute}
-          disabled={!canRun}
-          title={
-            disabledReason ??
-            (retainedDraftFailure
-              ? formatApplyTooltipForRetainedFailure(retainedDraftFailure)
-              : applyPolicy.tooltip)
-          }
-          data-testid="workspace-topbar-apply"
-          className="flex items-center gap-1 rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
-        >
-          <Play className="h-2.5 w-2.5" />
-          Apply
-        </button>
 
         <button
           type="button"
