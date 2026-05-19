@@ -1,4 +1,9 @@
-import { cleanupProject, createTestCommit, createTestProject } from '../fixtures/api-helpers';
+import {
+  cleanupProject,
+  createTestBranch,
+  createTestCommit,
+  createTestProject,
+} from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 import { generateNodes, isExpectedConsoleError } from '../fixtures/test-data-factory';
 
@@ -164,5 +169,38 @@ test.describe('Insights Page', () => {
       // No pagination — all commits visible already
       expect(countBefore).toBeGreaterThan(0);
     }
+  });
+
+  test('IN-06: Ledger groups commits by project, branch, and time bucket', async ({
+    page,
+    request,
+  }) => {
+    const projectName = `Insights Ledger ${Date.now()}`;
+    const { projectId } = await createTestProject(request, projectName);
+    projectIdsToCleanup.push(projectId);
+    const branchName = `insights-ledger-${Date.now()}`;
+
+    await createTestBranch(request, projectId, 'main').catch(() => {});
+    const parentHash = await createTestCommit(request, projectId, generateNodes(2), {
+      branch: 'main',
+      message: 'Ledger main checkpoint',
+    });
+    await createTestBranch(request, projectId, branchName, { parentBranch: 'main' });
+    await createTestCommit(request, projectId, generateNodes(2), {
+      branch: branchName,
+      message: 'Ledger branch checkpoint',
+      parents: [parentHash],
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/insights');
+
+    const ledger = page.getByRole('region', { name: 'Semantic commit ledger' });
+    await expect(ledger).toBeVisible({ timeout: 15000 });
+    await expect(ledger.getByRole('heading', { name: projectName })).toBeVisible();
+    await expect(ledger.getByRole('region', { name: `Branch ${branchName}` })).toBeVisible();
+    await expect(ledger.getByText('Today').first()).toBeVisible();
+    await expect(ledger.getByRole('button', { name: /Ledger main checkpoint/ })).toBeVisible();
+    await expect(ledger.getByRole('button', { name: /Ledger branch checkpoint/ })).toBeVisible();
   });
 });

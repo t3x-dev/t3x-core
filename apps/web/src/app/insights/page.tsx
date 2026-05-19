@@ -4,11 +4,17 @@ import { Clock3, GitCommit, Lightbulb, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FeedbackTab } from '@/components/feedback/FeedbackTab';
 import { GraphIllustration } from '@/components/illustrations/GraphIllustration';
-import { SemanticCard } from '@/components/SemanticCard';
+import { CommitLedger } from '@/components/insights/CommitLedger';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  buildInsightsLedger,
+  commitEntryId,
+  type InsightsLedger,
+  shortCommitHash,
+} from '@/domain/insights/groupByBranch';
 import { useCountUp } from '@/hooks/shared/useCountUp';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ApiCommit, Project } from '@/infrastructure';
@@ -45,9 +51,11 @@ function commitToSemanticEntry(
 ): SemanticEntry {
   const nodes = getSemanticContent(commit).trees;
   const summaryText = treeSummaryText(commit);
+  const displayHash = shortCommitHash(commit.hash);
+
   return {
-    id: commit.hash.slice(7, 19),
-    title: commit.message || `${commitLabel} ${commit.hash.slice(7, 15)}`,
+    id: commitEntryId(commit.hash),
+    title: commit.message || `${commitLabel} ${displayHash}`,
     summary: summaryText,
     author: commit.author?.name || commit.author?.type || 'unknown',
     stage: 'commit',
@@ -67,14 +75,18 @@ function commitToSemanticEntry(
 
 const INSIGHTS_PROJECT_LIMIT = 10;
 const INSIGHTS_COMMITS_PER_PROJECT = 5;
-const LEDGER_PAGE_SIZE = 50;
+const EMPTY_LEDGER: InsightsLedger = {
+  projects: [],
+  totals: { branches: 0, commits: 0, projects: 0 },
+};
 
 export default function InsightsPage() {
   const { t } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [entries, setEntries] = useState<SemanticEntry[]>([]);
-  const [ledgerVisible, setLedgerVisible] = useState(LEDGER_PAGE_SIZE);
+  const [ledger, setLedger] = useState<InsightsLedger>(EMPTY_LEDGER);
+  const [selectedEntry, setSelectedEntry] = useState<SemanticEntry | null>(null);
   const [timeline, setTimeline] = useState<
     { id: string; label: string; detail: string; time: string; stage: string }[]
   >([]);
@@ -87,6 +99,10 @@ export default function InsightsPage() {
         const projects = projectData.projects;
 
         if (projects.length === 0) {
+          setEntries([]);
+          setLedger(EMPTY_LEDGER);
+          setSelectedEntry(null);
+          setTimeline([]);
           setLoading(false);
           return;
         }
@@ -122,10 +138,20 @@ export default function InsightsPage() {
           commitToSemanticEntry(commit, projectName, commitLabel)
         );
         setEntries(semanticEntries);
+        setSelectedEntry(semanticEntries[0] ?? null);
+        setLedger(
+          buildInsightsLedger(
+            allCommits.map(({ commit, projectName }, index) => ({
+              commit,
+              entry: semanticEntries[index],
+              projectName,
+            }))
+          )
+        );
 
         // Build timeline from recent commits
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
-          id: commit.hash.slice(7, 19),
+          id: commitEntryId(commit.hash),
           label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
           detail: `${getSemanticContent(commit).trees.length} trees in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),
@@ -194,24 +220,11 @@ export default function InsightsPage() {
               customIcon={<GraphIllustration />}
             />
           ) : (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {entries.slice(0, ledgerVisible).map((entry) => (
-                  <SemanticCard key={entry.id} entry={entry} />
-                ))}
-              </div>
-              {entries.length > ledgerVisible && (
-                <div className="flex justify-center pt-2">
-                  <button
-                    type="button"
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setLedgerVisible((v) => v + LEDGER_PAGE_SIZE)}
-                  >
-                    Load more ({entries.length - ledgerVisible} remaining)
-                  </button>
-                </div>
-              )}
-            </>
+            <CommitLedger
+              ledger={ledger}
+              onSelectEntry={setSelectedEntry}
+              selectedEntry={selectedEntry}
+            />
           )}
         </TabsContent>
 
