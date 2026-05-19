@@ -69,4 +69,25 @@ describe('ProjectFolder active state', () => {
     const iconWrapper = button.querySelector('span');
     expect(iconWrapper?.className).not.toContain('bg-[var(--accent-commit)]/10');
   });
+
+  it('marks demo workspaces with a Demo badge from project metadata', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, metadata: { is_demo: true } }}
+        conversations={[]}
+        isExpanded={false}
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onCanvasClick={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Demo')).toBeInTheDocument();
+  });
 });

@@ -12,8 +12,9 @@
  * - Diff preview section (Changes from Parent)
  */
 
+import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Sparkles } from 'lucide-react';
+import { AlertTriangle, FileCode2, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
@@ -154,6 +155,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   }, [draftId, loadDraft]);
 
   const isLLMMode = isLLMExtractionDraft(draft);
+  const isFixtureReplay = draft?.goal === DEMO_WORKSPACE_REPLAY_GOAL;
   const readyCount = isLLMMode ? countReadySemanticPoints(draft.semantic_points) : 0;
   const reviewCount = isLLMMode ? countReviewSemanticPoints(draft.semantic_points) : 0;
   const effectiveIncludedCount = isLLMMode ? readyCount : getIncludedCount();
@@ -219,6 +221,18 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
 
       {/* Conflict Banner */}
       {conflictError && <ConflictBanner onRefresh={handleRefreshDraft} />}
+
+      {/* Fixture replay banner */}
+      {isFixtureReplay && (
+        <div className="flex items-center gap-2 border-b border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] px-6 py-2.5 text-sm text-[var(--accent-commit)]">
+          <FileCode2 className="h-4 w-4 shrink-0" />
+          <span className="font-medium">{DEMO_WORKSPACE_FIXTURE.replay.label}</span>
+          <span className="text-[var(--accent-commit)]/55">&middot;</span>
+          <span className="text-[var(--text-secondary)]">
+            Recorded fixture preview and commit path; no provider call is made.
+          </span>
+        </div>
+      )}
 
       {/* Auto-draft promotion banner */}
       {draft.status === 'auto' && (

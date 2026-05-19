@@ -47,6 +47,7 @@ export function ProjectFolder({
 }: ProjectFolderProps) {
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
+  const isDemoProject = project.metadata?.is_demo === true;
   const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
 
   const folderButton = (
@@ -89,11 +90,18 @@ export function ProjectFolder({
       </span>
       {!collapsed && (
         <div className="flex min-w-0 flex-1 flex-col">
-          <span
-            className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-4"
-            title={project.name}
-          >
-            {project.name}
+          <span className="flex min-w-0 max-w-full items-center gap-1.5">
+            <span
+              className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-4"
+              title={project.name}
+            >
+              {project.name}
+            </span>
+            {isDemoProject && (
+              <span className="inline-flex h-[15px] shrink-0 items-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-1 text-[9px] font-semibold uppercase leading-none text-[var(--text-tertiary)]">
+                Demo
+              </span>
+            )}
           </span>
           <span
             className="flex max-w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-none text-[var(--text-tertiary)]"

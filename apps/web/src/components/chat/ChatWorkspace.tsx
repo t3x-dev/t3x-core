@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
@@ -37,6 +38,7 @@ interface ChatWorkspaceProps {
   initialModel?: string;
   className?: string;
   reserveMobileWorkspaceSwitcher?: boolean;
+  style?: CSSProperties;
   /** Called when a new conversation is created (e.g. from /chat/new). Overrides default URL update. */
   onConversationCreated?: (conversationId: string) => void;
   /** Parent commit hash — if set, hydrate extraction panel with parent's trees */
@@ -53,6 +55,7 @@ export function ChatWorkspace({
   initialModel,
   className,
   reserveMobileWorkspaceSwitcher = false,
+  style,
   onConversationCreated: onConversationCreatedProp,
   inheritFromCommitHash,
   onInheritComplete,
@@ -322,7 +325,7 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0 relative', className)}>
+    <div className={cn('flex flex-col h-full min-h-0 relative', className)} style={style}>
       {/* Header */}
       <ChatHeader
         conversationId={resolvedConversationId ?? null}

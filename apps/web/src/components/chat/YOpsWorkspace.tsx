@@ -11,6 +11,10 @@ import {
   selectScriptDirty,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
+import {
+  WORKSPACE_PANEL_FALLBACK_WIDTH,
+  WORKSPACE_PANEL_MIN_WIDTH,
+} from '@/utils/chatWorkspaceLayout';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ArchivedOpsPanel } from './ArchivedOpsPanel';
@@ -40,7 +44,6 @@ const LOG_VIEW_META: Record<LogView, { label: string; desc: string }> = {
   archived: { label: 'Archived', desc: 'Superseded audit trail' },
 };
 
-const DEFAULT_WIDTH = 700;
 const COLLAPSED_WIDTH = 48;
 const DEFAULT_SPLIT_RATIO = 0.5;
 
@@ -190,7 +193,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     document.addEventListener('mouseup', handleUp);
   }, []);
 
-  const width = panelExpanded ? (customWidth ?? DEFAULT_WIDTH) : COLLAPSED_WIDTH;
+  const width = panelExpanded ? (customWidth ?? WORKSPACE_PANEL_FALLBACK_WIDTH) : COLLAPSED_WIDTH;
   const logsActive = logsOpen || topView !== 'script';
   const logsMenu = (
     <div ref={logsMenuRef} className="relative inline-flex h-6 items-center">
@@ -273,7 +276,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     <div
       ref={containerRef}
       className="flex h-full flex-col bg-[var(--panel)]"
-      style={{ width, minWidth: 400 }}
+      style={{ width, minWidth: WORKSPACE_PANEL_MIN_WIDTH }}
     >
       <WorkspaceTopbar />
       <WorkspaceStatusStrip

@@ -39,6 +39,7 @@ vi.mock('@/components/chat/ReplayWarningBanner', () => ({
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import { WORKSPACE_PANEL_MIN_WIDTH } from '@/utils/chatWorkspaceLayout';
 
 function llmOp(): SourcedYOp {
   return {
@@ -75,6 +76,13 @@ describe('YOpsWorkspace view switcher', () => {
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
+  });
+
+  it('uses the shared workspace minimum width when expanded', () => {
+    const { container } = render(<YOpsWorkspace />);
+    expect(container.firstElementChild).toHaveStyle({
+      minWidth: `${WORKSPACE_PANEL_MIN_WIDTH}px`,
+    });
   });
 
   it('keeps YOps visible when the first draft arrives and exposes Draft through Logs', () => {

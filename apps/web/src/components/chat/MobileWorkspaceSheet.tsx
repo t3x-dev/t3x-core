@@ -85,7 +85,7 @@ export function MobileWorkspaceSheet() {
               className={cn(
                 'inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold transition',
                 selected
-                  ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
+                  ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
               )}
             >

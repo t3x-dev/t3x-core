@@ -239,7 +239,7 @@ function CanvasWorkspaceInner({
         }
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            fitView({ padding: 0.2, duration: 300 });
+            fitView({ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1, duration: 300 });
           });
         });
       } catch {
