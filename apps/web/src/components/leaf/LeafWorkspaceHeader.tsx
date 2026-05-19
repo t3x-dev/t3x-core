@@ -42,33 +42,39 @@ export function LeafWorkspaceHeader({
   return (
     <header
       className={cn(
-        'flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4',
+        'flex h-[var(--h-header)] shrink-0 items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 md:px-4',
         'bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]',
         'backdrop-blur-[6px]',
         className
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 shrink-0"
           onClick={() => router.push(`/project/${projectId}`)}
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <Breadcrumb
-          segments={[
-            { label: 'Home', href: '/' },
-            { label: projectName || 'Project', href: `/project/${projectId}` },
-            {
-              label: `${t('commit')} ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
-              href: `/project/${projectId}?focus=${leaf.commit_hash}`,
-            },
-            { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },
-          ]}
-        />
-        <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <Breadcrumb
+            className="hidden min-w-0 md:flex"
+            segments={[
+              { label: 'Home', href: '/' },
+              { label: projectName || 'Project', href: `/project/${projectId}` },
+              {
+                label: `${t('commit')} ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
+                href: `/project/${projectId}?focus=${leaf.commit_hash}`,
+              },
+              { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },
+            ]}
+          />
+          <div className="truncate text-sm font-semibold text-foreground md:hidden">
+            {leaf.title || `Leaf: ${leaf.id.slice(0, 8)}`}
+          </div>
+        </div>
+        <div className="hidden items-center gap-2 md:flex">
           <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {leaf.type}
           </span>
@@ -79,7 +85,7 @@ export function LeafWorkspaceHeader({
       <div className="flex items-center gap-1.5">
         {/* Mode toggle */}
         {mode && onModeChange && (
-          <div className="inline-flex rounded-md border border-[var(--stroke-default)] overflow-hidden mr-2">
+          <div className="mr-1 hidden overflow-hidden rounded-md border border-[var(--stroke-default)] sm:inline-flex md:mr-2">
             <button
               type="button"
               className={cn(
@@ -115,7 +121,7 @@ export function LeafWorkspaceHeader({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
               <Download className="h-3 w-3" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

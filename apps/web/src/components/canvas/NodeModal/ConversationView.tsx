@@ -68,7 +68,7 @@ export function ConversationView({
   // ========== Render ==========
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-[8px]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="node-modal-title"
@@ -93,7 +93,7 @@ export function ConversationView({
             {isStagingUnit && (
               <Badge
                 variant="outline"
-                className="text-[0.65rem] text-[var(--color-text-muted)] uppercase tracking-wider border-dashed border-slate-400/40 dark:border-slate-500/40 bg-slate-500/15"
+                className="text-[0.65rem] text-[var(--color-text-muted)] uppercase tracking-wider border-dashed border-[var(--accent-pending)]/40 bg-[var(--accent-pending-soft)]"
               >
                 staging
               </Badge>

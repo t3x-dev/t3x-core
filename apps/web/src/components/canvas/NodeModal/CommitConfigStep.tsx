@@ -102,7 +102,7 @@ export function CommitConfigStep({
               className={cn(
                 'w-2 h-2 rounded-full',
                 !configLocked && !isMergeDraft
-                  ? 'bg-emerald-500 dark:bg-emerald-400'
+                  ? 'bg-[var(--status-success)]'
                   : 'bg-[var(--text-tertiary)]'
               )}
             />
@@ -236,7 +236,7 @@ export function CommitConfigStep({
                 onClick={handleProceed}
                 disabled={!hasSourceConversation || !!branchLinearityError}
                 title="Lock configuration and start LLM extraction"
-                className="flex-1 gap-1.5 bg-emerald-500 dark:bg-emerald-600 hover:bg-emerald-600 dark:hover:bg-emerald-500"
+                className="flex-1 gap-1.5 bg-[var(--status-success)] hover:bg-[var(--status-success)]/90"
               >
                 <Check size={16} />
                 <span>Proceed</span>
@@ -298,7 +298,7 @@ export function CommitConfigStep({
             <span
               className={cn(
                 'w-2 h-2 rounded-full',
-                configLocked ? 'bg-emerald-500' : 'bg-[var(--stroke-divider)]'
+                configLocked ? 'bg-[var(--status-success)]' : 'bg-[var(--stroke-divider)]'
               )}
             />
             Extract & Review
@@ -336,7 +336,7 @@ export function CommitConfigStep({
 
             {!extractionLoading && !extractionError && semanticPointsCount > 0 && (
               <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)]">
-                <Check size={14} className="text-emerald-500" />
+                <Check size={14} className="text-[var(--status-success)]" />
                 <span>{semanticPointsCount} semantic points extracted</span>
               </div>
             )}

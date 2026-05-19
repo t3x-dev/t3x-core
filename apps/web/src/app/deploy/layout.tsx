@@ -42,7 +42,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
           {loading ? (
             <Badge
               variant="outline"
-              className="border-gray-500/30 bg-gray-500/10 text-[var(--color-text-secondary)]"
+              className="border-[var(--stroke-strong)] bg-[var(--surface-app)] text-[var(--color-text-secondary)]"
             >
               <Loader2 className="h-3 w-3 animate-spin" />
               Connecting...
@@ -50,7 +50,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
           ) : runnerHealthy ? (
             <Badge
               variant="outline"
-              className="border-green-500/30 bg-green-500/10 text-[var(--status-success)]"
+              className="border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]"
             >
               <CheckCircle className="h-3 w-3" />
               Runner Connected
@@ -58,7 +58,7 @@ export default function DeployLayout({ children }: DeployLayoutProps) {
           ) : (
             <Badge
               variant="outline"
-              className="border-red-500/30 bg-red-500/10 text-[var(--status-error)]"
+              className="border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]"
             >
               <AlertCircle className="h-3 w-3" />
               Runner Offline

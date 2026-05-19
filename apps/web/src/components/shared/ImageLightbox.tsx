@@ -13,7 +13,7 @@ export function ImageLightbox({ url, open, onClose }: ImageLightboxProps) {
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent
         className="max-w-[90vw] max-h-[90vh] p-0 border-none bg-transparent shadow-none"
-        overlayClassName="bg-black/80 backdrop-blur"
+        overlayClassName="bg-[var(--overlay-scrim)] backdrop-blur"
         showCloseButton
       >
         <DialogTitle className="sr-only">Image preview</DialogTitle>

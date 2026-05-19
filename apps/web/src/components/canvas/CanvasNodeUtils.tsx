@@ -105,10 +105,10 @@ const DETAIL_ENTER = 1.2;
 const DETAIL_EXIT = 1.0;
 
 export const constellationColors: Record<string, string> = {
-  committed: '#3b82f6',
-  staging: '#f97316',
-  conversation: '#818cf8',
-  leaf: '#10b981',
+  committed: 'var(--accent-commit)',
+  staging: 'var(--accent-pending)',
+  conversation: 'var(--accent-conversation)',
+  leaf: 'var(--accent-leaf)',
 };
 
 export function useSemanticZoom(): ZoomTier {

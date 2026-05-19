@@ -19,7 +19,9 @@ export function CanvasToolbar({ projectName, onFitView }: CanvasToolbarProps) {
         glass.highlight
       )}
     >
-      <h2 className="text-base font-semibold tracking-tight text-foreground">{projectName}</h2>
+      <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-foreground">
+        {projectName}
+      </h2>
       <Button
         variant="ghost"
         size="icon"

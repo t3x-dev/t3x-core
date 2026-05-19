@@ -276,8 +276,8 @@ function SharedRunView({ run }: { run: RunData }) {
           className={cn(
             'rounded-md px-2 py-0.5 text-xs font-medium',
             passed
-              ? 'bg-green-500/10 text-[var(--status-success)]'
-              : 'bg-red-500/10 text-[var(--status-error)]'
+              ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
+              : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
           )}
         >
           {passed ? 'Passed' : 'Failed'}
@@ -423,7 +423,7 @@ function SharedComparisonView({ comparison }: { comparison: ComparisonData }) {
           {comparison.title || 'Shared Comparison'}
         </h1>
         {winner && winner !== 'tie' && (
-          <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-xs font-medium text-[var(--status-success)]">
+          <span className="rounded-md bg-[var(--status-success-muted)] px-2 py-0.5 text-xs font-medium text-[var(--status-success)]">
             <Trophy className="inline h-3 w-3 mr-1" />
             {winner === 'control' ? 'Control wins' : 'Treatment wins'}
           </span>
@@ -541,7 +541,7 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
           {commit.message || 'Shared Commit'}
         </h1>
         {commit.branch && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-branch,#8b5cf6)]/30 bg-[var(--accent-branch,#8b5cf6)]/8 px-2 py-0.5 text-xs font-medium text-[var(--accent-branch,#8b5cf6)]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/8 px-2 py-0.5 text-xs font-medium text-[var(--accent-branch)]">
             <GitBranch size={11} />
             {commit.branch}
           </span>
@@ -584,7 +584,7 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
                   className={cn('rounded-lg px-4 py-3', glass.cardBase)}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-xs text-[var(--accent-commit,#f59e0b)]">
+                    <span className="font-mono text-xs text-[var(--accent-commit)]">
                       {node.key || node.type}
                     </span>
                   </div>
@@ -620,9 +620,9 @@ function SharedCommitView({ commit }: { commit: CommitData }) {
                   key={`${rel.from}-${rel.to}-${i}`}
                   className="flex items-center gap-2 px-4 py-2 text-xs"
                 >
-                  <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.from}</span>
+                  <span className="font-mono text-[var(--accent-commit)]">{rel.from}</span>
                   <span className="text-[var(--text-tertiary)]">{rel.type}</span>
-                  <span className="font-mono text-[var(--accent-commit,#f59e0b)]">{rel.to}</span>
+                  <span className="font-mono text-[var(--accent-commit)]">{rel.to}</span>
                 </div>
               ))}
             </div>

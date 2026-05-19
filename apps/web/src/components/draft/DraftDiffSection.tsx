@@ -175,11 +175,11 @@ function DraftDiffContent({ diff }: { diff: CommitDiff }) {
       {identical.map((s) => (
         <div
           key={`id-${s.id}`}
-          className="rounded-md border-l-4 border-gray-400 bg-gray-50 dark:bg-gray-900/20 px-3 py-2 text-sm"
+          className="rounded-md border-l-4 border-[var(--stroke-strong)] bg-[var(--surface-app)] px-3 py-2 text-sm"
         >
           <Badge
             variant="outline"
-            className="text-[10px] px-1 py-0 mb-1 text-gray-500 dark:text-gray-400"
+            className="text-[10px] px-1 py-0 mb-1 text-[var(--text-tertiary)]"
           >
             Identical
           </Badge>

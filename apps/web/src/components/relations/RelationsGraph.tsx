@@ -15,11 +15,11 @@ interface RelationsGraphProps {
 }
 
 const edgeColors: Record<string, string> = {
-  causes: '#3b82f6',
-  conditions: '#f97316',
-  contrasts: '#ef4444',
-  follows: '#a855f7',
-  depends: '#06b6d4',
+  causes: 'var(--accent-commit)',
+  conditions: 'var(--accent-pending)',
+  contrasts: 'var(--status-error)',
+  follows: 'var(--source)',
+  depends: 'var(--accent-leaf)',
 };
 
 export function RelationsGraph({ relations, nodes }: RelationsGraphProps) {
@@ -62,7 +62,7 @@ export function RelationsGraph({ relations, nodes }: RelationsGraphProps) {
         source: rel.from,
         target: rel.to,
         label: rel.type.replace('_', ' '),
-        style: { stroke: edgeColors[rel.type] ?? '#6b7280', strokeWidth: 2 },
+        style: { stroke: edgeColors[rel.type] ?? 'var(--text-secondary)', strokeWidth: 2 },
         labelStyle: { fontSize: 10, fill: 'var(--text-tertiary)' },
         animated: false,
       })),

@@ -103,7 +103,7 @@ export function PinDropdownSelector({ projectId, branch }: PinDropdownSelectorPr
             >
               Select all
             </button>
-            <span className="text-gray-300">|</span>
+            <span className="text-[var(--stroke-strong)]">|</span>
             <button
               type="button"
               className="text-[0.65rem] text-[var(--status-info)] hover:underline"

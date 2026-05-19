@@ -26,9 +26,9 @@ export interface ProjectFolderProps {
 export const PROJECT_ICON_COLORS = [
   { bg: 'bg-[var(--accent-commit)]/15', text: 'text-[var(--accent-commit)]' },
   { bg: 'bg-[var(--source)]/15', text: 'text-[var(--source)]' },
-  { bg: 'bg-[var(--status-success)]/15', text: 'text-[var(--status-success)]' },
+  { bg: 'bg-[var(--accent-leaf)]/15', text: 'text-[var(--accent-leaf)]' },
   { bg: 'bg-[var(--accent-pending)]/15', text: 'text-[var(--accent-pending)]' },
-  { bg: 'bg-[var(--status-error)]/15', text: 'text-[var(--status-error)]' },
+  { bg: 'bg-[var(--accent-conversation)]/15', text: 'text-[var(--accent-conversation)]' },
 ];
 
 export function ProjectFolder({
@@ -72,7 +72,7 @@ export function ProjectFolder({
         // so the user immediately sees which project they're producing in,
         // even before the folder is expanded or has any conversations yet.
         isActive
-          ? 'bg-[var(--accent-commit)]/[0.07] text-[var(--text-primary)]'
+          ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit)]/[0.075] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
           : isExpanded && !collapsed
             ? 'bg-[var(--hover-bg)]/65 text-[var(--text-primary)]'
             : 'text-[var(--text-secondary)]'
@@ -102,7 +102,7 @@ export function ProjectFolder({
             {commitCount > 0 && (
               <>
                 <span className="inline-flex h-3 items-center gap-0.5 leading-none">
-                  <span className="h-1 w-1 rounded-full bg-[var(--status-success)]" />
+                  <span className="h-1 w-1 rounded-full bg-[var(--accent-commit)]" />
                   main
                 </span>
                 <span className="inline-flex h-3 items-center leading-none">·</span>
@@ -119,7 +119,7 @@ export function ProjectFolder({
         </div>
       )}
       {!collapsed && commitCount > 0 && (
-        <span className="flex h-[17px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--status-success)]/[0.08] px-1 text-[9px] font-semibold text-[var(--status-success)]">
+        <span className="flex h-[17px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit-soft)] px-1 text-[9px] font-semibold text-[var(--accent-commit)]">
           {commitCount}
         </span>
       )}
@@ -156,14 +156,16 @@ export function ProjectFolder({
                   'relative flex h-7 min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 w-full text-left',
                   'transition-all duration-[var(--motion-base)] text-[11px]',
                   isActive
-                    ? 'bg-[var(--accent-commit)]/[0.055] font-semibold text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent-conversation-soft)] font-semibold text-[var(--text-primary)]'
                     : 'text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-secondary)]'
                 )}
               >
                 <span
                   className={cn(
                     'w-[5px] h-[5px] rounded-full shrink-0',
-                    isActive ? 'bg-[var(--accent-commit)]' : 'bg-[var(--text-tertiary)] opacity-30'
+                    isActive
+                      ? 'bg-[var(--accent-conversation)]'
+                      : 'bg-[var(--text-tertiary)] opacity-30'
                   )}
                 />
                 <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">

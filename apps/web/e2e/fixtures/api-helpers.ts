@@ -1,6 +1,13 @@
 import type { APIRequestContext } from '@playwright/test';
+import type { DemoTreeNode } from './open-source-demo-datasets';
 
 export const API_BASE = 'http://localhost:8000/api/v1';
+
+interface ApiTreeNode {
+  key: string;
+  slots: DemoTreeNode['slots'];
+  children: ApiTreeNode[];
+}
 
 /**
  * Create a test project via API
@@ -79,6 +86,38 @@ export async function createTestCommit(
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create commit: ${data.error?.message}`);
+  return data.data.commit.hash;
+}
+
+function normalizeDemoTree(tree: DemoTreeNode): ApiTreeNode {
+  return {
+    key: tree.key,
+    slots: tree.slots,
+    children: (tree.children ?? []).map(normalizeDemoTree),
+  };
+}
+
+/**
+ * Create a tree-primary commit for visual and merge regression data.
+ */
+export async function createTestCommitFromTrees(
+  request: APIRequestContext,
+  projectId: string,
+  trees: DemoTreeNode[],
+  options?: { branch?: string; message?: string; parents?: string[] }
+): Promise<string> {
+  const response = await request.post(`${API_BASE}/commits`, {
+    data: {
+      project_id: projectId,
+      content: { trees: trees.map(normalizeDemoTree), relations: [] },
+      author: { type: 'human', name: 'E2E Tester' },
+      branch: options?.branch || 'main',
+      message: options?.message || 'E2E tree commit',
+      parents: options?.parents,
+    },
+  });
+  const data = await response.json();
+  if (!data.success) throw new Error(`Failed to create tree commit: ${data.error?.message}`);
   return data.data.commit.hash;
 }
 

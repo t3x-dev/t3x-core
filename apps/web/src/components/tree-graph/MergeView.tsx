@@ -247,7 +247,7 @@ export function MergeView({
           <GitMerge className="h-5 w-5 text-[var(--source)]" />
           <h3 className="text-base font-semibold">Tree Merge</h3>
         </div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
           {mergeResult.autoKept.length > 0 && (
             <Badge variant="secondary">{mergeResult.autoKept.length} auto-resolved</Badge>
           )}
@@ -306,8 +306,8 @@ export function MergeView({
       {/* Relations */}
       {(mergeResult.relationsOnlyInSource.length > 0 ||
         mergeResult.relationsOnlyInTarget.length > 0) && (
-        <div className="space-y-2 border-t border-zinc-200 dark:border-zinc-700 pt-3">
-          <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Relations</h4>
+        <div className="space-y-2 border-t border-[var(--stroke-divider)] pt-3">
+          <h4 className="text-sm font-medium text-[var(--text-secondary)]">Relations</h4>
           <RelationSideSection
             title="Only in Source"
             relations={mergeResult.relationsOnlyInSource}
@@ -325,8 +325,8 @@ export function MergeView({
 
       {/* Auto-kept summary */}
       {mergeResult.autoKept.length > 0 && (
-        <div className="rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2">
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="rounded border border-[var(--stroke-divider)] bg-[var(--surface-app)] px-3 py-2">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
             <Check className="h-3.5 w-3.5 text-[var(--status-success)]" />
             <span>
               {mergeResult.autoKept.length} tree{mergeResult.autoKept.length !== 1 ? 's' : ''}{' '}
@@ -340,13 +340,13 @@ export function MergeView({
       {mergeResult.conflicts.length === 0 &&
         mergeResult.onlyInSource.length === 0 &&
         mergeResult.onlyInTarget.length === 0 && (
-          <div className="text-center py-6 text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="text-center py-6 text-sm text-[var(--text-tertiary)]">
             No conflicts detected. All trees are identical.
           </div>
         )}
 
       {/* Apply button */}
-      <div className="flex justify-end pt-2 border-t border-zinc-200 dark:border-zinc-700">
+      <div className="flex justify-end pt-2 border-t border-[var(--stroke-divider)]">
         <Button onClick={handleApply} disabled={!allConflictsResolved} className="gap-1.5">
           <GitMerge className="h-4 w-4" />
           {allConflictsResolved

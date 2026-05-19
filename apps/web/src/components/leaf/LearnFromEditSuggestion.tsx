@@ -94,7 +94,7 @@ export function LearnFromEditSuggestion({ leafId, onAddConstraint }: LearnFromEd
       {result.suggestions.map((s) => (
         <div
           key={`${s.type}-${s.value.slice(0, 20)}`}
-          className="text-xs space-y-1 p-2 rounded bg-white/50 dark:bg-black/20"
+          className="text-xs space-y-1 p-2 rounded bg-[var(--surface-card)]"
         >
           <div className="flex items-center justify-between">
             <span

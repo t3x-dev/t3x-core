@@ -39,6 +39,25 @@ function EmptyPlaceholderLines({ count }: { count: number }) {
   );
 }
 
+function PlaceholderBlock({ count, label }: { count: number; label: string }) {
+  const lineCount = Math.max(1, count);
+  const lineNumbers = Array.from({ length: lineCount }, (_, lineNumber) => lineNumber + 1);
+
+  return (
+    <>
+      {lineNumbers.map((lineNumber) => (
+        <YAMLLine key={`placeholder-line-${lineNumber}`} status="empty">
+          {lineNumber === 1 ? (
+            <span className="inline-flex rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-app)] px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.04em] text-[var(--text-tertiary)]">
+              {label}
+            </span>
+          ) : null}
+        </YAMLLine>
+      ))}
+    </>
+  );
+}
+
 // ── Pane content renderer ──
 
 /** Compute how many content lines a tree node takes on a given side */
@@ -138,7 +157,12 @@ function PaneContent({
     // Content rendering
     let content: React.ReactNode;
     if (isPlaceholder) {
-      content = <EmptyPlaceholderLines count={placeholderCount} />;
+      content = (
+        <PlaceholderBlock
+          count={placeholderCount}
+          label={side === 'left' ? 'Not present in base' : 'Not present in target'}
+        />
+      );
     } else if (af.type === 'modified' && af.leftNode && af.rightNode) {
       // ── Modified tree: aligned slot-by-slot rendering ──
       const slotDiffMap = new Map((af.slotDiffs ?? []).map((sd) => [sd.key, sd]));

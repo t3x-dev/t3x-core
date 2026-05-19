@@ -49,25 +49,27 @@ type Props = NodeProps<CanvasNode>;
 
 // Handle styles - uses CSS variables for theming
 const targetHandleStyle = {
-  width: 22,
-  height: 14,
-  borderRadius: 8,
-  background: 'var(--color-bg-white, #fff)',
-  border: '3px solid var(--color-text-muted, #94a3b8)',
+  width: 18,
+  height: 12,
+  borderRadius: 7,
+  background: 'var(--surface-card)',
+  border: '2px solid var(--stroke-strong)',
+  opacity: 0.72,
   top: '50%',
   transform: 'translateY(-50%)',
-  left: -6,
+  left: -5,
 };
 
 const sourceHandleStyle = {
-  width: 18,
-  height: 18,
+  width: 14,
+  height: 14,
   borderRadius: 999,
-  background: 'var(--color-bg-white, #fff)',
-  border: '3px solid var(--color-text-muted, #94a3b8)',
+  background: 'var(--surface-card)',
+  border: '2px solid var(--stroke-strong)',
+  opacity: 0.76,
   top: '50%',
   transform: 'translateY(-50%)',
-  right: -9,
+  right: -7,
 };
 
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
@@ -251,6 +253,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
       openLeafPanel,
     },
   });
+  const nextStepToneClass = isCommitted
+    ? 'bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)] hover:bg-[var(--accent-leaf)]/15'
+    : isStaging && data.conversationId
+      ? 'bg-[var(--accent-commit-soft)] text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15'
+      : isStaging
+        ? 'bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)] hover:bg-[var(--accent-conversation)]/15'
+        : 'bg-[var(--accent-pending-soft)] text-[var(--accent-pending)] hover:bg-[var(--accent-pending)]/15';
 
   // B-8: Compute stats for collapsed view
   const nodeCount = isDraft
@@ -283,7 +292,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             height: 16,
             borderRadius: '50%',
             backgroundColor: color,
-            boxShadow: `0 0 8px ${color}40, 0 0 2px ${color}80`,
+            boxShadow: `0 0 8px color-mix(in srgb, ${color} 28%, transparent), 0 0 2px color-mix(in srgb, ${color} 55%, transparent)`,
             transition: 'box-shadow 0.3s ease',
           }}
           role="treeitem"
@@ -330,7 +339,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           glass.cardNode,
           glass.highlight,
           // Draft: dashed amber border
-          isDraft && 'border-dashed border-2 border-amber-500/70',
+          isDraft && 'border-dashed border-2 border-[var(--accent-pending)]/70',
           // Left accent line (non-draft)
           !isDraft && 'border-l-2',
           isStaging && !isDraft && 'border-t-transparent border-r-transparent border-b-transparent',
@@ -435,7 +444,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
               </div>
             )}
             {isDraft ? (
-              <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 inline-flex items-center gap-0.5">
+              <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--accent-pending)]/50 text-[var(--accent-pending)] bg-[var(--accent-pending-soft)] inline-flex items-center gap-0.5">
                 <PenSquare size={10} aria-hidden="true" />
                 DRAFT
                 <span className="sr-only">Status: draft</span>
@@ -519,7 +528,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
             <button
               type="button"
               data-action="next-step"
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-[var(--space-item)] rounded-md text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors nodrag"
+              className={cn(
+                'w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-[var(--space-item)] rounded-md text-xs font-medium transition-colors nodrag',
+                nextStepToneClass
+              )}
               onClick={(e) => {
                 e.stopPropagation();
                 nextStep.action();

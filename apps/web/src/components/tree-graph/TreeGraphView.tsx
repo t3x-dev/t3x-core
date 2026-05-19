@@ -76,10 +76,10 @@ function RelationTypeSelector({
   return (
     <div
       ref={ref}
-      className="absolute z-50 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg py-1 min-w-[140px]"
+      className="absolute z-50 bg-[var(--surface-card)] border border-[var(--stroke-divider)] rounded-lg shadow-lg py-1 min-w-[140px]"
       style={{ left: position.x, top: position.y }}
     >
-      <div className="px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+      <div className="px-3 py-1 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
         Relation Type
       </div>
       {RELATION_TYPES.map((type) => {
@@ -89,7 +89,7 @@ function RelationTypeSelector({
             key={type}
             type="button"
             onClick={() => onSelect(type)}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--hover-bg)] flex items-center gap-2"
           >
             <span
               className="inline-block w-3 h-0.5 rounded"

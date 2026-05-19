@@ -52,9 +52,9 @@ function transformScores(scores: DimensionScores) {
 
 // Get color based on score value
 function getScoreColor(value: number): string {
-  if (value >= 70) return '#22c55e'; // green-500
-  if (value >= 40) return '#eab308'; // yellow-500
-  return '#ef4444'; // red-500
+  if (value >= 70) return 'var(--status-success)';
+  if (value >= 40) return 'var(--status-warning)';
+  return 'var(--status-error)';
 }
 
 // Custom tooltip component
@@ -113,19 +113,19 @@ export function BarChart({ scores, className }: BarChartProps) {
           <XAxis
             type="number"
             domain={[0, 100]}
-            tick={{ fontSize: 10, fill: '#9ca3af' }}
+            tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
             tickLine={false}
-            axisLine={{ stroke: '#e5e7eb' }}
+            axisLine={{ stroke: 'var(--stroke-divider)' }}
           />
           <YAxis
             type="category"
             dataKey="dimension"
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
             tickLine={false}
             axisLine={false}
             width={65}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--surface-app)' }} />
           <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
             {data.map((entry) => (
               <Cell key={`cell-${entry.dimension}`} fill={getScoreColor(entry.value)} />

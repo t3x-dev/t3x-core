@@ -82,7 +82,7 @@ export function ProfileSettingsPanel() {
           <div className="flex items-start gap-4">
             <div
               className={cn(
-                'flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white',
+                'flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-[var(--on-accent)]',
                 getLocalWorkspaceAvatarClass(localWorkspaceAvatarColor)
               )}
             >
@@ -125,10 +125,12 @@ export function ProfileSettingsPanel() {
                           option.className,
                           isActive
                             ? 'ring-2 ring-[var(--text-primary)] ring-offset-[var(--surface-primary)]'
-                            : 'ring-1 ring-black/10'
+                            : 'ring-1 ring-[var(--stroke-default)]'
                         )}
                       >
-                        {isActive && <span className="h-2 w-2 rounded-full bg-white" />}
+                        {isActive && (
+                          <span className="h-2 w-2 rounded-full bg-[var(--surface-card)]" />
+                        )}
                       </button>
                     );
                   })}

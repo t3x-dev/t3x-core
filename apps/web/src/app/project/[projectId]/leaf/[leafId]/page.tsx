@@ -204,7 +204,7 @@ export default function LeafDetailPage() {
       {/* ── Toolbar ── */}
       <div className="flex h-[44px] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4 bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]">
         {/* Left: toggle badges */}
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex">
           <button
             type="button"
             className={cn(
@@ -240,8 +240,47 @@ export default function LeafDetailPage() {
           )}
         </div>
 
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 md:hidden">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent-conversation)] bg-[var(--accent-conversation-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-conversation)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-conversation)]" />
+              Frames {nodes.length}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent-leaf)] bg-[var(--accent-leaf-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-leaf)]" />
+              Constraints {leaf.constraints.length}
+            </span>
+          </div>
+          <div className="inline-flex shrink-0 overflow-hidden rounded-md border border-[var(--stroke-default)]">
+            <button
+              type="button"
+              className={cn(
+                'px-2 py-1 text-[10px] font-medium transition-all',
+                mode === 'generate'
+                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
+              )}
+              onClick={() => setMode('generate')}
+            >
+              Generate
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'px-2 py-1 text-[10px] font-medium transition-all',
+                mode === 'display'
+                  ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
+              )}
+              onClick={() => setMode('display')}
+            >
+              Display
+            </button>
+          </div>
+        </div>
+
         {/* Right: keyboard hints + status */}
-        <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-3 md:flex">
           {saving && <span className="text-[10px] text-[var(--text-tertiary)]">Saving...</span>}
           <KeyboardHintBar
             hints={[

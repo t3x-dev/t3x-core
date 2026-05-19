@@ -104,7 +104,7 @@ function InlineEdit({
         onBlur={commitEdit}
         onKeyDown={handleKeyDown}
         className={cn(
-          'bg-white dark:bg-zinc-800 border border-[var(--status-info)] rounded px-1 py-0 text-xs outline-none w-full min-w-[60px]',
+          'bg-[var(--surface-card)] border border-[var(--status-info)] rounded px-1 py-0 text-xs outline-none w-full min-w-[60px]',
           inputClassName
         )}
         // Prevent ReactFlow from capturing key events
@@ -243,9 +243,9 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
   // State-based container classes
   const stateClasses = cn(
     // Base
-    'relative overflow-visible rounded-lg border bg-white dark:bg-zinc-900 shadow-sm min-w-[200px] max-w-[320px]',
+    'relative overflow-visible rounded-lg border bg-[var(--surface-card)] shadow-sm min-w-[200px] max-w-[320px]',
     // Normal border
-    !state && !selected && 'border-zinc-200 dark:border-zinc-700',
+    !state && !selected && 'border-[var(--stroke-divider)]',
     // Selected
     selected && 'border-[var(--status-info)] bg-[var(--status-info-muted)]',
     // State markers
@@ -290,26 +290,26 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-zinc-400 dark:!bg-zinc-500"
+        className="!w-2 !h-2 !bg-[var(--text-tertiary)]"
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-zinc-400 dark:!bg-zinc-500"
+        className="!w-2 !h-2 !bg-[var(--text-tertiary)]"
       />
 
       {/* Title bar */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 rounded-t-lg border-b border-zinc-200 dark:border-zinc-700">
-        <Box className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
+      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-app)] rounded-t-lg border-b border-[var(--stroke-divider)]">
+        <Box className="h-3.5 w-3.5 text-[var(--text-tertiary)] shrink-0" />
         {onTypeEdit ? (
           <InlineEdit
             value={toTitleCase(treeType)}
             onCommit={handleTypeCommit}
-            className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate"
+            className="text-sm font-medium text-[var(--text-primary)] truncate"
             inputClassName="text-sm font-medium"
           />
         ) : (
-          <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
             {toTitleCase(treeType)}
           </span>
         )}
@@ -317,7 +317,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
 
       {/* Slots area */}
       {Object.keys(slots).length > 0 && (
-        <div className="px-3 py-2 space-y-1 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="px-3 py-2 space-y-1 border-b border-[var(--stroke-divider)]">
           {Object.entries(slots).map(([key, value]) => (
             <div
               key={key}
@@ -326,7 +326,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
                 updatedSet.has(key) && 'bg-[var(--status-warning-muted)] -mx-1 px-1 rounded'
               )}
             >
-              <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{key}:</span>
+              <span className="text-[var(--text-tertiary)] shrink-0">{key}:</span>
               <div className="flex-1 min-w-0">
                 <EditableSlotValue
                   treeId={id}
@@ -357,7 +357,7 @@ function TreeNodeComponent({ data, selected, id }: TreeNodeProps) {
 
       {/* Footer */}
       {source && (
-        <div className="flex items-center justify-between px-3 py-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+        <div className="flex items-center justify-between px-3 py-1 text-[10px] text-[var(--text-tertiary)]">
           <span className="inline-flex items-center gap-0.5">
             <Paperclip className="h-2.5 w-2.5" />
             <span>{source}</span>

@@ -21,21 +21,21 @@ export function GraphIllustration({ className }: { className?: string }) {
       {/* Dashed connections */}
       <path
         d="M38 50 L70 50"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         strokeOpacity="0.5"
       />
       <path
         d="M98 50 L125 35"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         strokeOpacity="0.5"
       />
       <path
         d="M98 50 L125 65"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.2"
         strokeDasharray="4 3"
         strokeOpacity="0.5"
@@ -88,7 +88,7 @@ export function GraphIllustration({ className }: { className?: string }) {
         r="16"
         fill="var(--surface-card)"
         fillOpacity="0.5"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="1.5"
       />
       <circle
@@ -96,14 +96,14 @@ export function GraphIllustration({ className }: { className?: string }) {
         cy="50"
         r="16"
         fill="none"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="4"
         strokeOpacity="0.08"
       />
       {/* Checkmark in commit */}
       <path
         d="M78 50 L82 54 L90 46"
-        stroke="#3b82f6"
+        stroke="var(--accent-commit)"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -119,16 +119,16 @@ export function GraphIllustration({ className }: { className?: string }) {
         rx="4"
         fill="var(--surface-card)"
         fillOpacity="0.6"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.2"
       />
       <circle
         cx="128"
         cy="33"
         r="3"
-        fill="#f97316"
+        fill="var(--accent-pending)"
         fillOpacity="0.2"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="0.8"
       />
 
@@ -141,16 +141,16 @@ export function GraphIllustration({ className }: { className?: string }) {
         rx="4"
         fill="var(--surface-card)"
         fillOpacity="0.6"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="1.2"
       />
       <circle
         cx="128"
         cy="63"
         r="3"
-        fill="#f97316"
+        fill="var(--accent-pending)"
         fillOpacity="0.2"
-        stroke="#f97316"
+        stroke="var(--accent-pending)"
         strokeWidth="0.8"
       />
 

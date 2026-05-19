@@ -105,7 +105,7 @@ function ProviderCard({
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           {configured ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--status-success)]" />
           ) : (
             <Circle className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />
           )}

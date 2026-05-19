@@ -467,7 +467,7 @@ export default function RunDetailPage() {
       <div className="flex h-full flex-col gap-[var(--space-section)] p-[var(--space-page)]">
         <Card className="mx-auto max-w-md">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <XCircle className="mb-[var(--space-group)] h-12 w-12 text-red-500" />
+            <XCircle className="mb-[var(--space-group)] h-12 w-12 text-[var(--status-error)]" />
             <h2 className="text-lg font-semibold">Run not found</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               The run ID "<code className="rounded bg-muted px-1">{runId}</code>" could not be
@@ -628,8 +628,8 @@ export default function RunDetailPage() {
                   className={cn(
                     'px-3 py-1 text-sm',
                     passed
-                      ? 'border-green-500/30 bg-green-500/10 text-[var(--status-success)]'
-                      : 'border-red-500/30 bg-red-500/10 text-[var(--status-error)]'
+                      ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                      : 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
                   )}
                 >
                   {passed ? (
@@ -642,7 +642,7 @@ export default function RunDetailPage() {
               ) : (
                 <Badge
                   variant="outline"
-                  className="border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm text-[var(--status-info)]"
+                  className="border-[var(--status-info)]/30 bg-[var(--status-info-muted)] px-3 py-1 text-sm text-[var(--status-info)]"
                 >
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   {run.status}
@@ -836,10 +836,10 @@ export default function RunDetailPage() {
                               className={cn(
                                 'rounded-lg border p-3 transition-shadow',
                                 isFailed
-                                  ? 'border-red-500/30 bg-red-500/5'
+                                  ? 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)]'
                                   : isWarning
-                                    ? 'border-yellow-500/30 bg-yellow-500/5'
-                                    : 'border-green-500/30 bg-green-500/5',
+                                    ? 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)]'
+                                    : 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)]',
                                 activeAssertionId === assertion.id &&
                                   'ring-2 ring-[var(--accent-primary)]'
                               )}
@@ -851,11 +851,11 @@ export default function RunDetailPage() {
                                   className="mt-0.5"
                                 />
                                 {isFailed ? (
-                                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-error)]" />
                                 ) : isWarning ? (
-                                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-warning)]" />
                                 ) : (
-                                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--status-success)]" />
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
@@ -867,10 +867,10 @@ export default function RunDetailPage() {
                                       className={cn(
                                         'text-xs',
                                         isFailed
-                                          ? 'border-red-500/30 text-[var(--status-error)]'
+                                          ? 'border-[var(--status-error)]/30 text-[var(--status-error)]'
                                           : isWarning
-                                            ? 'border-yellow-500/30 text-[var(--status-warning)]'
-                                            : 'border-green-500/30 text-[var(--status-success)]'
+                                            ? 'border-[var(--status-warning)]/30 text-[var(--status-warning)]'
+                                            : 'border-[var(--status-success)]/30 text-[var(--status-success)]'
                                       )}
                                     >
                                       {isPassed ? 'passed' : isFailed ? 'failed' : 'warning'}
@@ -881,11 +881,13 @@ export default function RunDetailPage() {
                                   </div>
                                   <p className="mt-1 text-sm">{assertion.message}</p>
                                   {assertion.patch_suggestion && (
-                                    <div className="mt-2 flex items-start gap-1.5 rounded bg-amber-500/10 p-2 text-xs">
-                                      <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
+                                    <div className="mt-2 flex items-start gap-1.5 rounded bg-[var(--status-warning-muted)] p-2 text-xs">
+                                      <BookOpen className="mt-0.5 h-3 w-3 shrink-0 text-[var(--status-warning)]" />
                                       <div>
-                                        <span className="font-medium text-amber-700">Lesson: </span>
-                                        <span className="text-amber-900">
+                                        <span className="font-medium text-[var(--status-warning)]">
+                                          Lesson:{' '}
+                                        </span>
+                                        <span className="text-[var(--status-warning)]">
                                           {assertion.patch_suggestion}
                                         </span>
                                       </div>
@@ -943,7 +945,7 @@ export default function RunDetailPage() {
                           Re-tune
                         </Button>
                         {pinSuccess && (
-                          <span className="text-xs text-green-600">
+                          <span className="text-xs text-[var(--status-success)]">
                             Pinned — lessons will be available in future conversations.
                           </span>
                         )}

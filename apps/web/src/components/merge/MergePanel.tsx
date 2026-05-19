@@ -259,7 +259,7 @@ export function MergePanel() {
             disabled={!canExecute || mergeLoading}
             className={`flex-1 py-2 px-4 rounded font-medium transition-colors ${
               canExecute && !mergeLoading
-                ? 'bg-[var(--status-info)] text-white hover:bg-[var(--status-info)]/90'
+                ? 'bg-[var(--status-info)] text-[var(--on-status)] hover:bg-[var(--status-info)]/90'
                 : 'bg-muted text-muted-foreground cursor-not-allowed'
             }`}
             type="button"

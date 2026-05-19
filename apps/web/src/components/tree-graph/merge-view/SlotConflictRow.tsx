@@ -30,10 +30,10 @@ export function SlotConflictRow({
             'text-left rounded border p-2 text-xs transition-colors cursor-pointer',
             choice === 'source'
               ? 'border-[var(--status-info)] bg-[var(--status-info-muted)] ring-1 ring-[var(--status-info)]'
-              : 'border-zinc-200 dark:border-zinc-700 hover:border-[var(--status-info)]/50'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--status-info)]/50'
           )}
         >
-          <div className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">
+          <div className="text-[10px] font-medium text-[var(--text-tertiary)] mb-0.5">
             Branch A (Source)
           </div>
           <div className="font-mono text-foreground">{formatSlotValue(conflict.sourceValue)}</div>
@@ -47,10 +47,10 @@ export function SlotConflictRow({
             'text-left rounded border p-2 text-xs transition-colors cursor-pointer',
             choice === 'target'
               ? 'border-[var(--status-info)] bg-[var(--status-info-muted)] ring-1 ring-[var(--status-info)]'
-              : 'border-zinc-200 dark:border-zinc-700 hover:border-[var(--status-info)]/50'
+              : 'border-[var(--stroke-divider)] hover:border-[var(--status-info)]/50'
           )}
         >
-          <div className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 mb-0.5">
+          <div className="text-[10px] font-medium text-[var(--text-tertiary)] mb-0.5">
             Branch B (Target)
           </div>
           <div className="font-mono text-foreground">{formatSlotValue(conflict.targetValue)}</div>
@@ -64,7 +64,7 @@ export function AgreedSlotRow({ slotKey, value }: { slotKey: string; value: Slot
   return (
     <div className="flex items-start gap-1.5 text-xs font-mono px-1">
       <Check className="h-3 w-3 text-[var(--status-success)] mt-0.5 shrink-0" />
-      <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{slotKey}:</span>
+      <span className="text-[var(--text-tertiary)] shrink-0">{slotKey}:</span>
       <span className="text-foreground">{formatSlotValue(value)}</span>
     </div>
   );
