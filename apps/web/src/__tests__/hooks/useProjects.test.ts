@@ -35,7 +35,7 @@ describe('useProjects.create', () => {
   it('invokes the createProject command and returns the new project', async () => {
     const fake = {
       project_id: 'proj_test123',
-      name: 'Untitled Project',
+      name: 'Untitled workspace',
       created_at: '2026-04-15T00:00:00Z',
     };
     (createProjectCommand as ReturnType<typeof vi.fn>).mockResolvedValue(fake);
@@ -48,15 +48,15 @@ describe('useProjects.create', () => {
       created = await result.current.create();
     });
 
-    expect(createProjectCommand).toHaveBeenCalledWith('Untitled Project');
+    expect(createProjectCommand).toHaveBeenCalledWith('Untitled workspace');
     expect(created).toEqual(fake);
     expect(result.current.projects[0]).toEqual(fake);
   });
 
-  it('trims whitespace and falls back to "Untitled Project" when name is blank', async () => {
+  it('trims whitespace and falls back to "Untitled workspace" when name is blank', async () => {
     const fake = {
       project_id: 'proj_blank',
-      name: 'Untitled Project',
+      name: 'Untitled workspace',
       created_at: '2026-04-15T00:00:00Z',
     };
     (createProjectCommand as ReturnType<typeof vi.fn>).mockResolvedValue(fake);
@@ -68,7 +68,7 @@ describe('useProjects.create', () => {
       await result.current.create('   ');
     });
 
-    expect(createProjectCommand).toHaveBeenCalledWith('Untitled Project');
+    expect(createProjectCommand).toHaveBeenCalledWith('Untitled workspace');
   });
 
   it('propagates errors from the command layer', async () => {

@@ -313,7 +313,7 @@ const styles: Record<string, React.CSSProperties> = {
   error: {
     padding: 12,
     marginBottom: 16,
-    backgroundColor: 'rgba(248, 81, 73, 0.1)',
+    backgroundColor: 'var(--status-error-muted)',
     border: '1px solid var(--status-error)',
     borderRadius: 6,
     color: 'var(--status-error)',

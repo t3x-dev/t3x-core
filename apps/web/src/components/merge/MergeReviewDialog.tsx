@@ -167,7 +167,7 @@ export function MergeReviewDialog({
           'w-full max-w-md rounded-2xl p-6',
           glass.cardBase,
           glass.highlight,
-          'shadow-xl'
+          'shadow-[var(--fx-shadow-lg)]'
         )}
       >
         <AnimatePresence mode="wait">

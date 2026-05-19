@@ -107,10 +107,10 @@ describe('ChatSidebar', () => {
     expect(mocks.routerPush).toHaveBeenCalledWith('/chat?projectId=proj_custom');
   });
 
-  it('uses Untitled Project when the project name dialog is submitted blank', async () => {
+  it('uses Untitled workspace when the project name dialog is submitted blank', async () => {
     mocks.createProject.mockResolvedValue({
       project_id: 'proj_untitled',
-      name: 'Untitled Project',
+      name: 'Untitled workspace',
       created_at: '2026-05-08T00:00:00Z',
     });
 
@@ -120,7 +120,7 @@ describe('ChatSidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => {
-      expect(mocks.createProject).toHaveBeenCalledWith('Untitled Project');
+      expect(mocks.createProject).toHaveBeenCalledWith('Untitled workspace');
     });
     expect(mocks.routerPush).toHaveBeenCalledWith('/chat?projectId=proj_untitled');
   });
