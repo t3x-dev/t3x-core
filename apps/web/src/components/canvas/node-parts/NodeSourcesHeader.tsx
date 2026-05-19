@@ -3,6 +3,7 @@ import { FileText, Pin } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { SourceType } from '@/types/nodes';
 import { SOURCE_ICONS } from '../CanvasNodeUtils';
+import { NodeKindIcon } from './NodeKindIcon';
 
 export interface SourceItem {
   id: string;
@@ -33,9 +34,8 @@ export function NodeSourcesHeader({
       }}
     >
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)]">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-          SOURCES
-        </span>
+        <NodeKindIcon kind="source" label="Source" />
+        <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{sources.length}</span>
         {/* Context indicator */}
         {contextLabel && (
           <>
