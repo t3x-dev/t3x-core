@@ -146,14 +146,7 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
     };
   }, [nodes, edges, highlight]);
 
-  // Semantic highlight colors - Blue for main/node (committed), Orange for branch (pending)
-  const highlightColor = !highlight
-    ? undefined
-    : highlight.mode === 'main' || highlight.mode === 'node'
-      ? '#2563eb'
-      : highlight.mode === 'branch'
-        ? '#f97316'
-        : undefined;
+  const highlightTone = highlight?.mode === 'branch' ? 'branch' : 'commit';
 
   const nodesForRender = useMemo(() => {
     if (!highlight) {
@@ -190,7 +183,7 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
   }, [nodes, highlight, highlightSets.nodes]);
 
   const edgesForRender = useMemo(() => {
-    if (!highlight || !highlightColor) {
+    if (!highlight) {
       return edges;
     }
     const hasHighlightedEdges = highlightSets.edges.size > 0;
@@ -198,10 +191,10 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
       if (highlightSets.edges.has(edge.id)) {
         return {
           ...edge,
-          style: {
-            ...edge.style,
-            stroke: highlightColor,
-            strokeWidth: 4.5,
+          data: {
+            ...edge.data,
+            edgePathTone: highlightTone,
+            edgeRhythm: 'selected',
           },
         };
       }
@@ -209,15 +202,16 @@ export function usePathHighlight({ nodes, edges }: UsePathHighlightOptions) {
       if (hasHighlightedEdges) {
         return {
           ...edge,
-          style: {
-            ...edge.style,
-            opacity: 0.2,
+          data: {
+            ...edge.data,
+            edgePathTone: highlightTone,
+            edgeRhythm: 'dimmed',
           },
         };
       }
       return edge;
     });
-  }, [edges, highlight, highlightSets.edges, highlightColor]);
+  }, [edges, highlight, highlightSets.edges, highlightTone]);
 
   const toggleHighlight = (mode: PathHighlight) => {
     setHighlight((current) => {
