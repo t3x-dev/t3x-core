@@ -398,6 +398,13 @@ function CanvasWorkspaceInner({
             }
 
             // Committed nodes: single click = action panel, double click = detail page
+            if (!compactViewport) {
+              if (data.branchType === 'branch') {
+                setHighlight({ branch: data.branchName, mode: 'branch' });
+              } else {
+                setHighlight({ mode: 'node', nodeId: node.id });
+              }
+            }
             if (clickTimerRef.current) {
               // Double click detected
               clearTimeout(clickTimerRef.current);

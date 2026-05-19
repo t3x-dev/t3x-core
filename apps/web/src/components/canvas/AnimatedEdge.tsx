@@ -2,6 +2,8 @@ import { BaseEdge, type EdgeProps, getSmoothStepPath, useStore } from '@xyflow/r
 import { useState } from 'react';
 
 export type SemanticEdgeType = 'evolve' | 'merge' | 'draft';
+export type EdgeRhythm = 'default' | 'selected' | 'dimmed';
+export type EdgePathTone = 'commit' | 'branch';
 
 // Color palettes per semantic edge type
 const edgeColors: Record<
@@ -25,6 +27,17 @@ const edgeColors: Record<
     hover: 'var(--edge-draft-hover)',
     selected: 'var(--edge-draft-selected)',
     glow: 'var(--edge-draft-glow)',
+  },
+};
+
+const pathToneColors: Record<EdgePathTone, { selected: string; glow: string }> = {
+  commit: {
+    selected: 'var(--edge-commit-selected)',
+    glow: 'var(--edge-commit-glow)',
+  },
+  branch: {
+    selected: 'var(--edge-branch-selected)',
+    glow: 'var(--edge-branch-glow)',
   },
 };
 
@@ -57,7 +70,11 @@ export function AnimatedEdge({
   const [isHovered, setIsHovered] = useState(false);
 
   const edgeType: SemanticEdgeType = (data?.edgeType as SemanticEdgeType) || 'evolve';
+  const edgeRhythm: EdgeRhythm = (data?.edgeRhythm as EdgeRhythm | undefined) ?? 'default';
+  const edgePathTone: EdgePathTone = (data?.edgePathTone as EdgePathTone | undefined) ?? 'commit';
+  const isRhythmSelected = selected || edgeRhythm === 'selected';
   const colors = edgeColors[edgeType];
+  const pathColors = pathToneColors[edgePathTone];
 
   // Detect if connected node is being dragged
   const isDragging = useStore((s) => {
@@ -77,15 +94,23 @@ export function AnimatedEdge({
   });
 
   const getStrokeWidth = () => {
-    if (selected) return 3;
-    if (isHovered) return 2.5;
-    return edgeType === 'draft' ? 1.6 : 2;
+    if (isRhythmSelected) return 2.75;
+    if (isHovered) return 2.25;
+    if (edgeRhythm === 'dimmed') return 1.25;
+    return edgeType === 'draft' ? 1.35 : 1.5;
   };
 
   const getStrokeColor = () => {
-    if (selected) return colors.selected;
+    if (isRhythmSelected) return edgeRhythm === 'selected' ? pathColors.selected : colors.selected;
     if (isHovered) return colors.hover;
     return colors.base;
+  };
+
+  const getStrokeOpacity = () => {
+    if (isRhythmSelected) return 'var(--edge-selected-opacity)';
+    if (isHovered) return 'var(--edge-hover-opacity)';
+    if (edgeRhythm === 'dimmed') return 'var(--edge-dim-opacity)';
+    return 'var(--edge-default-opacity)';
   };
 
   // Merge edges use dashed stroke; draft edges keep their own dashed style from edge.style
@@ -93,17 +118,20 @@ export function AnimatedEdge({
 
   return (
     <g
+      data-edge-path-tone={edgePathTone}
+      data-edge-rhythm={edgeRhythm}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ cursor: 'pointer' }}
     >
       {/* Selection glow ring */}
-      {selected && (
+      {isRhythmSelected && (
         <path
+          data-testid={`edge-glow-${id}`}
           d={edgePath}
           fill="none"
           strokeWidth={14}
-          stroke={colors.glow}
+          stroke={edgeRhythm === 'selected' ? pathColors.glow : colors.glow}
           strokeLinecap="round"
           style={{ opacity: 0.12, filter: 'blur(5px)' }}
         />
@@ -129,9 +157,10 @@ export function AnimatedEdge({
           ...style,
           strokeWidth: getStrokeWidth(),
           stroke: getStrokeColor(),
+          opacity: getStrokeOpacity(),
           ...(dashOverride ? { strokeDasharray: dashOverride } : {}),
           transition:
-            'stroke-width var(--duration-normal) ease, stroke var(--duration-normal) ease',
+            'stroke-width var(--duration-normal) ease, stroke var(--duration-normal) ease, opacity var(--duration-normal) ease',
         }}
       />
     </g>
