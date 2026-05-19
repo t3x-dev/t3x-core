@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   applyEdit: vi.fn(),
   commitTrees: vi.fn(),
   discardDraft: vi.fn(),
+  executeScript: vi.fn(),
+  scriptCanRun: false,
+  scriptDisabledReason: 'No runnable script' as string | null,
   parentCommit: { current: null as null | { trees: unknown[]; message?: string | null } },
 }));
 
@@ -27,6 +30,14 @@ vi.mock('@/hooks/drafts/useDiscardDraft', () => ({
   useDiscardDraft: () => mocks.discardDraft,
 }));
 
+vi.mock('@/hooks/drafts/useScriptExecution', () => ({
+  useScriptExecution: () => ({
+    execute: mocks.executeScript,
+    canRun: mocks.scriptCanRun,
+    disabledReason: mocks.scriptDisabledReason,
+  }),
+}));
+
 import {
   AfterPanel,
   formatSlotPreviewValue,
@@ -42,6 +53,9 @@ beforeEach(() => {
   mocks.applyEdit.mockResolvedValue(undefined);
   mocks.commitTrees.mockReset();
   mocks.discardDraft.mockReset();
+  mocks.executeScript.mockReset();
+  mocks.scriptCanRun = false;
+  mocks.scriptDisabledReason = 'No runnable script';
   mocks.parentCommit.current = null;
   useWorkspaceStore.getState().reset();
 });
@@ -81,6 +95,10 @@ describe('AfterPanel.shouldDisableCommit', () => {
     // and handleCommit re-checks hasDraft directly off the store
     // before commitTrees runs (in-flight keypress race).
     expect(shouldDisableCommit({ ...baseEnabled, hasDraft: true })).toBe(true);
+  });
+
+  it('disables Commit while the YOps script has unapplied local edits', () => {
+    expect(shouldDisableCommit({ ...baseEnabled, scriptDirty: true })).toBe(true);
   });
 
   it('disables Commit during in-flight commits and post-commit confirmation', () => {
@@ -267,6 +285,47 @@ describe('AfterPanel tree edit controls', () => {
     expect(screen.getByText('concepts')).not.toBeNull();
     expect(screen.getByText('A parent baseline concept')).not.toBeNull();
     expect(screen.queryByText('Removed node')).toBeNull();
+  });
+
+  it('renders draft apply and discard through the unified action bar', () => {
+    mocks.scriptCanRun = true;
+    mocks.scriptDisabledReason = null;
+    useWorkspaceStore.getState().setConversation('conv_123');
+    useWorkspaceStore.getState().setDerived({
+      tree: {
+        trees: [{ key: 'current', slots: { value: 'old' }, children: [] }],
+        relations: [],
+      },
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'current/value', value: 'new' },
+          source: {
+            type: 'llm',
+            model: 'm',
+            at: '2026-05-19T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'new' },
+          },
+        },
+      ],
+      tree: {
+        trees: [{ key: 'current', slots: { value: 'new' }, children: [] }],
+        relations: [],
+      },
+    });
+
+    render(createElement(AfterPanel));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+
+    expect(screen.getByTestId('workspace-action-bar')).not.toBeNull();
+    expect(mocks.executeScript).toHaveBeenCalledTimes(1);
+    expect(mocks.discardDraft).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('commit-button')).toBeNull();
   });
 });
 

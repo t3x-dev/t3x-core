@@ -2,13 +2,21 @@
 
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { deriveWorkspaceStatusStripState } from '@/domain/workspace/actionBarState';
 import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
-import { selectPanelExpanded, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
+import { useChatStore } from '@/store/chatStore';
+import {
+  selectIsInheritedBaselineOnly,
+  selectPanelExpanded,
+  selectScriptDirty,
+  useWorkspaceStore,
+} from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ArchivedOpsPanel } from './ArchivedOpsPanel';
 import { ReplayWarningBanner } from './ReplayWarningBanner';
 import { ScriptEditor } from './ScriptEditor';
+import { WorkspaceStatusStrip } from './WorkspaceStatusStrip';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 import { splitOpsByCommittedness, YOpsLogPanel } from './YOpsLogPanel';
 
@@ -48,29 +56,83 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const conversationId = useWorkspaceStore((s) => s.conversationId);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
+  const turns = useWorkspaceStore((s) => s.turns);
+  const tree = useWorkspaceStore((s) => s.tree);
+  const draftTree = useWorkspaceStore((s) => s.draftTree);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const mode = useWorkspaceStore((s) => s.mode);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
+  const activeBranch = useChatStore((s) => s.activeBranch);
   const [topView, setTopViewState] = useState<TopView>('script');
   const containerRef = useRef<HTMLDivElement>(null);
   const logsMenuRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
-  const logCounts = useMemo(() => {
+  const materializedLogs = useMemo(() => {
     const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
     return {
+      applied,
+      committed,
+    };
+  }, [opOrigins, opsLog, rowsById]);
+
+  const logCounts = useMemo(() => {
+    return {
       draft: draftOps.length,
-      applied: applied.length,
-      committed: committed.length,
+      applied: materializedLogs.applied.length,
+      committed: materializedLogs.committed.length,
       archived: null,
     } satisfies Record<LogView, number | null>;
-  }, [draftOps.length, opOrigins, opsLog, rowsById]);
+  }, [draftOps.length, materializedLogs.applied.length, materializedLogs.committed.length]);
+
+  const opGroups = useMemo(
+    () =>
+      buildMaterializedOpGroups({
+        ops: opsLog,
+        pendingDraftOps: draftOps,
+        scriptDirty,
+      }),
+    [draftOps, opsLog, scriptDirty]
+  );
 
   const workspaceSummary = useMemo(() => {
-    const groups = buildMaterializedOpGroups({
-      ops: opsLog,
-      pendingDraftOps: draftOps,
+    return `${opsLog.length} ops · ${opGroups.pending.count} pending`;
+  }, [opGroups.pending.count, opsLog.length]);
+
+  const statusSegments = useMemo(() => {
+    const visibleTree = hasDraft && draftTree ? draftTree : tree;
+    return deriveWorkspaceStatusStripState({
+      sourceCount: turns.length,
+      materializedOpCount: opsLog.length,
+      draftOpCount: draftOps.length,
+      appliedOpCount: materializedLogs.applied.length,
+      pendingCount: opGroups.pending.count,
       scriptDirty,
+      hasDraft,
+      hasResult: visibleTree.trees.length > 0,
+      isCommitted,
+      mode,
+      isInheritedBaselineOnly,
+      canApply: false,
+      applyDisabledReason: null,
+      branch: activeBranch,
     });
-    return `${opsLog.length} ops · ${groups.pending.count} pending`;
-  }, [draftOps, opsLog, scriptDirty]);
+  }, [
+    activeBranch,
+    draftOps.length,
+    draftTree,
+    hasDraft,
+    isCommitted,
+    isInheritedBaselineOnly,
+    materializedLogs.applied.length,
+    mode,
+    opGroups.pending.count,
+    opsLog.length,
+    scriptDirty,
+    tree,
+    turns.length,
+  ]);
 
   const setTopView = useCallback((next: TopView) => {
     setTopViewState(next);
@@ -87,6 +149,17 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [logsOpen]);
+
+  const handleStatusSelect = useCallback(
+    (next: TopView) => {
+      setTopView(next);
+    },
+    [setTopView]
+  );
+
+  const handleContinueEditing = useCallback(() => {
+    setTopView('script');
+  }, [setTopView]);
 
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -203,6 +276,11 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
       style={{ width, minWidth: 400 }}
     >
       <WorkspaceTopbar />
+      <WorkspaceStatusStrip
+        activeView={topView}
+        segments={statusSegments}
+        onSelectView={handleStatusSelect}
+      />
       <ReplayWarningBanner />
 
       <div
@@ -267,6 +345,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
           showBeforeToggle
           onToggleBefore={() => setShowBefore((p) => !p)}
           beforeVisible={showBefore}
+          onContinueEditing={handleContinueEditing}
         />
       </div>
     </div>
