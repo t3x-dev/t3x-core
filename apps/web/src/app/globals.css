@@ -182,6 +182,14 @@
   --edge-draft-hover: var(--accent-pending);
   --edge-draft-selected: var(--accent-pending);
   --edge-draft-glow: color-mix(in srgb, var(--accent-pending) 28%, transparent);
+  --edge-commit-selected: var(--accent-commit);
+  --edge-commit-glow: color-mix(in srgb, var(--accent-commit) 34%, transparent);
+  --edge-branch-selected: var(--accent-branch);
+  --edge-branch-glow: color-mix(in srgb, var(--accent-branch) 34%, transparent);
+  --edge-default-opacity: 0.42;
+  --edge-hover-opacity: 0.78;
+  --edge-selected-opacity: 0.96;
+  --edge-dim-opacity: 0.18;
 
   /* ===== Diff Token System (§1.1) ===== */
   /* Added/Removed/Modified/Identical — used by all diff & merge views */
@@ -657,6 +665,11 @@
   --edge-color: #475569;
   --edge-active-color: #818cf8;
   --edge-selected-color: #6366f1;
+  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 50%, transparent);
+  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 52%, transparent);
+  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 40%, transparent);
+  --edge-default-opacity: 0.46;
+  --edge-dim-opacity: 0.2;
 }
 
 *,

@@ -398,6 +398,13 @@ function CanvasWorkspaceInner({
             }
 
             // Committed nodes: single click = action panel, double click = detail page
+            if (!compactViewport) {
+              if (data.branchType === 'branch') {
+                setHighlight({ branch: data.branchName, mode: 'branch' });
+              } else {
+                setHighlight({ mode: 'node', nodeId: node.id });
+              }
+            }
             if (clickTimerRef.current) {
               // Double click detected
               clearTimeout(clickTimerRef.current);
@@ -427,8 +434,8 @@ function CanvasWorkspaceInner({
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
           onPaneClick={() => {
-            // Clear node highlight and close context menu when clicking empty canvas
-            if (highlight?.mode === 'node') {
+            // Clear active path highlight and close transient canvas overlays.
+            if (highlight) {
               setHighlight(null);
             }
             closeContextMenu();
