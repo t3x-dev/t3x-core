@@ -82,6 +82,23 @@ Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you
 
 <br/>
 
+## WebUI preview
+
+<p align="center">
+  <img src="apps/web/public/screenshots/chat-light.png" alt="T3X WebUI chat first-commit preview" width="760" />
+</p>
+
+The fresh `/chat` view shows a provider-independent `source -> YOps -> commit`
+preview before the first extraction run. Regenerate the committed screenshots
+from a running WebUI dev server:
+
+```bash
+pnpm dev:webui
+pnpm screenshots:demo
+```
+
+<br/>
+
 ## How it works
 
 T3X turns unstructured text into versioned, structured knowledge through five stages:
