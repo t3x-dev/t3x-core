@@ -140,6 +140,8 @@ export {
   type DemoSlotValue,
   type DemoTreeNode,
   type DemoWorkspaceFixture,
+  LANDING_DEMO_CASES,
+  type LandingDemoCase,
   MEETING_NOTES_EXTRACTION_DEMO,
   MERGE_SEMANTIC_CHANGES_DEMO,
   PROMPT_DIFF_DEMO,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEMO_WORKSPACE_FIXTURE,
+  LANDING_DEMO_CASES,
   MEETING_NOTES_EXTRACTION_DEMO,
   MERGE_SEMANTIC_CHANGES_DEMO,
   PROMPT_DIFF_DEMO,
@@ -35,5 +36,18 @@ describe('demo workspace fixture', () => {
     expect(PROMPT_DIFF_DEMO.name).toBe('Prompt version comparison');
     expect(MEETING_NOTES_EXTRACTION_DEMO.expectedTrees[0]?.key).toBe('release_readiness');
     expect(MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts).toContain('trip_plan');
+  });
+
+  it('exports landing demo cases for the first-commit preview', () => {
+    expect(LANDING_DEMO_CASES.map((demo) => demo.id)).toEqual([
+      'prompt_review',
+      'meeting_notes',
+      'prompt_diff',
+    ]);
+    expect(LANDING_DEMO_CASES[0]?.source.text).toBe(DEMO_WORKSPACE_FIXTURE.source.text);
+    expect(LANDING_DEMO_CASES[0]?.yops.length).toBeGreaterThan(2);
+    expect(LANDING_DEMO_CASES[0]?.commit.message).toBe(DEMO_WORKSPACE_FIXTURE.commit.message);
+    expect(LANDING_DEMO_CASES[1]?.source.text).toBe(MEETING_NOTES_EXTRACTION_DEMO.sourceText);
+    expect(JSON.stringify(LANDING_DEMO_CASES[1]?.yops)).toContain('release_readiness');
   });
 });

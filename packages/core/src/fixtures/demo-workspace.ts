@@ -52,6 +52,21 @@ export interface DemoWorkspaceFixture {
   };
 }
 
+export interface LandingDemoCase {
+  id: 'prompt_review' | 'meeting_notes' | 'prompt_diff';
+  title: string;
+  description: string;
+  source: {
+    title: string;
+    text: string;
+  };
+  yops: YOp[];
+  commit: {
+    message: string;
+    branch: 'main';
+  };
+}
+
 function demoTrees(trees: TreeNode[]): TreeNode[] {
   return trees;
 }
@@ -492,3 +507,98 @@ export const DEMO_WORKSPACE_FIXTURE: DemoWorkspaceFixture = {
 };
 
 export const DEMO_WORKSPACE_REPLAY_GOAL = `fixture:${DEMO_WORKSPACE_FIXTURE.id}`;
+
+const MEETING_NOTES_LANDING_YOPS: YOp[] = [
+  { define: { path: 'release_readiness' } },
+  {
+    populate: {
+      path: 'release_readiness',
+      values: {
+        decision: 'ship the WebUI polish pass before the open-source announcement',
+        owner: 'frontend',
+        deadline: 'Friday',
+      },
+    },
+  },
+  { define: { path: 'release_readiness/risks' } },
+  {
+    populate: {
+      path: 'release_readiness/risks',
+      values: {
+        items: ['dark mode parity', 'complex merge screenshots'],
+        mitigation: 'regression coverage',
+      },
+    },
+  },
+];
+
+const PROMPT_DIFF_SOURCE_TEXT =
+  'Prompt version A:\n' +
+  'Role: customer support agent. Tone: concise. Escalation rule: send refunds to manual review.\n\n' +
+  'Prompt version B:\n' +
+  'Role: customer support agent. Tone: calm and precise. Escalation rule: send refunds over $100 to manual review. Add a good reply example.';
+
+const PROMPT_DIFF_LANDING_YOPS: YOp[] = [
+  { define: { path: 'assistant_prompt' } },
+  {
+    populate: {
+      path: 'assistant_prompt',
+      values: {
+        role: 'customer support agent',
+        tone: 'calm and precise',
+        escalation_rule: 'send refunds over $100 to manual review',
+      },
+    },
+  },
+  { define: { path: 'assistant_prompt/examples' } },
+  {
+    populate: {
+      path: 'assistant_prompt/examples',
+      values: {
+        good_reply: 'I can help, but first I need the order id and policy reference.',
+      },
+    },
+  },
+];
+
+export const LANDING_DEMO_CASES: LandingDemoCase[] = [
+  {
+    id: 'prompt_review',
+    title: 'Prompt Review',
+    description: 'Policy source becomes reviewable YOps and a durable commit.',
+    source: DEMO_WORKSPACE_FIXTURE.source,
+    yops: DEMO_WORKSPACE_FIXTURE.replay.yops,
+    commit: {
+      message: DEMO_WORKSPACE_FIXTURE.commit.message,
+      branch: 'main',
+    },
+  },
+  {
+    id: 'meeting_notes',
+    title: 'Meeting Notes',
+    description: 'Messy release notes collapse into decisions, owners, and risks.',
+    source: {
+      title: MEETING_NOTES_EXTRACTION_DEMO.name,
+      text: MEETING_NOTES_EXTRACTION_DEMO.sourceText,
+    },
+    yops: MEETING_NOTES_LANDING_YOPS,
+    commit: {
+      message: 'Commit release readiness decisions',
+      branch: 'main',
+    },
+  },
+  {
+    id: 'prompt_diff',
+    title: 'Prompt Diff',
+    description: 'Prompt variants become auditable semantic changes.',
+    source: {
+      title: PROMPT_DIFF_DEMO.name,
+      text: PROMPT_DIFF_SOURCE_TEXT,
+    },
+    yops: PROMPT_DIFF_LANDING_YOPS,
+    commit: {
+      message: 'Commit prompt version delta',
+      branch: 'main',
+    },
+  },
+];
