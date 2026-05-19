@@ -44,7 +44,6 @@ export {
 // Common utilities
 // ═══════════════════════════════════════════════════════════════════════════
 export { canonText, hashText, sha256 } from './common';
-// ═══════════════════════════════════════════════════════════════════════════
 // Context Builder
 // @see docs/specification/memory-pin-system-design.md
 // ═══════════════════════════════════════════════════════════════════════════
@@ -131,6 +130,20 @@ export type { Lesson, LessonSource } from './feedback';
 // Feedback Module (Lesson generation + collection)
 // ═══════════════════════════════════════════════════════════════════════════
 export { collectLessonsFromAssertions, generateLesson } from './feedback';
+// ═══════════════════════════════════════════════════════════════════════════
+// Demo fixtures (no-key replay + e2e datasets)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  DEMO_WORKSPACE_FIXTURE,
+  DEMO_WORKSPACE_REPLAY_GOAL,
+  type DemoFlatNode,
+  type DemoSlotValue,
+  type DemoTreeNode,
+  type DemoWorkspaceFixture,
+  MEETING_NOTES_EXTRACTION_DEMO,
+  MERGE_SEMANTIC_CHANGES_DEMO,
+  PROMPT_DIFF_DEMO,
+} from './fixtures/demo-workspace';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
 // ═══════════════════════════════════════════════════════════════════════════

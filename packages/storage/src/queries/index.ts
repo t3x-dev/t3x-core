@@ -335,6 +335,14 @@ export {
   type UpdateRunInput,
   updateRun,
 } from './runs';
+// Demo workspace seed (fresh-install no-key replay)
+export {
+  type DemoWorkspaceSeedMarker,
+  getDemoWorkspaceSeedKey,
+  type SeedDemoWorkspaceOptions,
+  type SeedDemoWorkspaceResult,
+  seedDemoWorkspace,
+} from './seed-demo-workspace';
 // Segment Embeddings
 export {
   bufferToFloat32Array,

@@ -13,7 +13,13 @@
 
 import { createHash } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { generateLeafOutput, generateNodeId, isGenerationConfigured } from '@t3x-dev/core';
+import {
+  DEMO_WORKSPACE_FIXTURE,
+  DEMO_WORKSPACE_REPLAY_GOAL,
+  generateLeafOutput,
+  generateNodeId,
+  isGenerationConfigured,
+} from '@t3x-dev/core';
 import {
   commitDraft,
   createCommit,
@@ -21,6 +27,7 @@ import {
   findDraftById,
   forkDraft,
   updateDraftPreview,
+  updateLeafAtomic,
 } from '@t3x-dev/storage';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { resolveDefaultCommitParents } from '../lib/commit-parents';
@@ -225,6 +232,22 @@ draftsWorkflowRoutes.openapi(previewDraftRoute, async (c) => {
       return errorResponse(c, 'INVALID_REQUEST', 'Draft has no included nodes');
     }
 
+    if (draft.goal === DEMO_WORKSPACE_REPLAY_GOAL) {
+      await updateDraftPreview(db, id, DEMO_WORKSPACE_FIXTURE.leaf.output);
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+            model_used: DEMO_WORKSPACE_FIXTURE.leaf.config.model,
+            token_count: Math.ceil(DEMO_WORKSPACE_FIXTURE.leaf.output.length / 4),
+            cached: false,
+          },
+        },
+        200
+      );
+    }
+
     // 3. Check generation configured
     if (!isGenerationConfigured()) {
       return errorResponse(c, 'GENERATION_NOT_CONFIGURED', 'ANTHROPIC_API_KEY not set');
@@ -375,6 +398,86 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         c,
         'INVALID_REQUEST',
         `Draft status is '${draft.status}', must be 'editing'`
+      );
+    }
+
+    if (draft.goal === DEMO_WORKSPACE_REPLAY_GOAL) {
+      const targetBranch = body?.branch ?? draft.target_branch ?? 'main';
+      const parents = await resolveDefaultCommitParents(
+        db,
+        draft.project_id,
+        targetBranch,
+        draft.parent_commit_hash
+      );
+
+      const commit = await createCommit(db, {
+        parents,
+        author: DEMO_WORKSPACE_FIXTURE.commit.author,
+        content: {
+          trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
+          relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
+        },
+        project_id: draft.project_id,
+        message: body?.message ?? DEMO_WORKSPACE_FIXTURE.commit.message,
+        branch: targetBranch,
+        provenance: DEMO_WORKSPACE_FIXTURE.commit.provenance,
+        yops_log_ids: [],
+        enforceBranchLinearity: true,
+      });
+
+      const createdLeaf = await createLeaf(db, {
+        commit_hash: commit.hash,
+        type: DEMO_WORKSPACE_FIXTURE.leaf.type,
+        title: DEMO_WORKSPACE_FIXTURE.leaf.title,
+        constraints: DEMO_WORKSPACE_FIXTURE.leaf.constraints,
+        config: DEMO_WORKSPACE_FIXTURE.leaf.config,
+        project_id: draft.project_id,
+        created_by: 'fixture-replay',
+      });
+      const leaf =
+        (await updateLeafAtomic(db, createdLeaf.id, {
+          output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+          assertions: DEMO_WORKSPACE_FIXTURE.leaf.assertions,
+        })) ?? createdLeaf;
+
+      await commitDraft(db, id, commit.hash, leaf.id);
+
+      const commitResponse = {
+        hash: commit.hash,
+        schema: commit.schema,
+        parents: commit.parents,
+        author: commit.author,
+        committed_at: commit.committed_at,
+        content: commit.content,
+        project_id: commit.project_id ?? null,
+        message: commit.message ?? null,
+        branch: commit.branch ?? null,
+        provenance: commit.provenance ?? null,
+      };
+
+      return c.json(
+        {
+          success: true as const,
+          data: {
+            commit: commitResponse,
+            leaf: {
+              id: leaf.id,
+              commit_hash: leaf.commit_hash,
+              type: leaf.type,
+              title: leaf.title ?? null,
+              constraints: leaf.constraints ?? [],
+              config: leaf.config ?? {},
+              output: leaf.output ?? null,
+              generated_at: leaf.generated_at ?? null,
+              assertions: leaf.assertions ?? null,
+              project_id: leaf.project_id,
+              created_at: leaf.created_at,
+              created_by: leaf.created_by ?? null,
+            },
+            draft_status: 'committed' as const,
+          },
+        },
+        201
       );
     }
 

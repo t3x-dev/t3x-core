@@ -88,7 +88,13 @@ export const commits = pgTable(
 
     /** Provenance: how this commit was created */
     provenance: jsonb('provenance').$type<{
-      method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash';
+      method:
+        | 'llm_extraction'
+        | 'human_curation'
+        | 'import'
+        | 'merge'
+        | 'squash'
+        | 'fixture_replay';
       model?: string;
       extracted_at?: string;
       source_commits?: string[];

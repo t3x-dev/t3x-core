@@ -4,8 +4,16 @@
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use broad casts for compact mock assertions */
 
+import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, deleteProject, findProjects, insertProject } from '@t3x-dev/storage';
+import {
+  createCommit,
+  deleteGlobalSetting,
+  deleteProject,
+  findProjects,
+  getDemoWorkspaceSeedKey,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -44,16 +52,32 @@ describe('Projects Routes', () => {
     for (const project of existingProjects) {
       await deleteProject(mockDB, project.projectId);
     }
+    await deleteGlobalSetting(mockDB, getDemoWorkspaceSeedKey(null));
   });
 
   describe('GET /v1/projects', () => {
-    it('returns empty list when no projects exist', async () => {
+    it('seeds the professional demo project when no projects exist', async () => {
       const res = await app.request('/v1/projects');
       expect(res.status).toBe(200);
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.projects).toEqual([]);
+      expect(data.data.projects).toHaveLength(1);
+      expect(data.data.projects[0].name).toBe(DEMO_WORKSPACE_FIXTURE.project.name);
+      expect(data.data.projects[0].metadata.is_demo).toBe(true);
+    });
+
+    it('does not silently recreate the demo project after deletion', async () => {
+      const first = await app.request('/v1/projects');
+      const firstData: ApiResponse = await first.json();
+      await deleteProject(mockDB, firstData.data.projects[0].project_id);
+
+      const second = await app.request('/v1/projects');
+      expect(second.status).toBe(200);
+
+      const secondData: ApiResponse = await second.json();
+      expect(secondData.success).toBe(true);
+      expect(secondData.data.projects).toEqual([]);
     });
 
     it('returns list of projects', async () => {

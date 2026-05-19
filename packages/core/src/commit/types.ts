@@ -26,7 +26,7 @@ export interface Author {
 }
 
 export interface Provenance {
-  method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash';
+  method: 'llm_extraction' | 'human_curation' | 'import' | 'merge' | 'squash' | 'fixture_replay';
   model?: string;
   extracted_at?: string;
   /** For squash/rebase: the original commit hashes that were replaced */
