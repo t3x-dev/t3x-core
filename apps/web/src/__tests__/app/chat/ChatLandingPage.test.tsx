@@ -135,67 +135,54 @@ afterEach(() => {
 });
 
 describe('ChatLandingPage', () => {
-  it('renders the guided landing copy and starter actions', async () => {
+  it('renders the guided landing copy and first-commit preview', async () => {
     await act(async () => {
       render(<ChatLandingPage />);
     });
 
     expect(screen.getByRole('heading', { name: 'What should T3X make sense of?' })).toBeVisible();
-    expect(screen.getByText('Source')).toBeVisible();
-    expect(screen.getByText('Meaning')).toBeVisible();
-    expect(screen.getByText('Commit')).toBeVisible();
-    expect(screen.getByRole('button', { name: /compare prompt versions/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /extract decisions from notes/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /create reusable output/i })).toBeEnabled();
+    expect(screen.getByText('source -> YOps -> commit')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Prompt Review' })).toBeEnabled();
+    expect(screen.getByRole('tab', { name: 'Meeting Notes' })).toBeEnabled();
+    expect(screen.getByRole('tab', { name: 'Prompt Diff' })).toBeEnabled();
     expect(screen.getByTestId('chat-placeholder')).toHaveTextContent(
       'Paste a prompt, transcript, release note, or design discussion...'
     );
   });
 
-  it('uses semantic tone tokens for starter card icons', async () => {
+  it('renders the preview with semantic product tokens', async () => {
     await act(async () => {
       render(<ChatLandingPage />);
     });
 
-    const captureIcon = screen
-      .getByRole('button', { name: /compare prompt versions/i })
-      .querySelector('span');
-    const meaningIcon = screen
-      .getByRole('button', { name: /extract decisions from notes/i })
-      .querySelector('span');
-    const checkpointIcon = screen
-      .getByRole('button', { name: /create reusable output/i })
-      .querySelector('span');
-
-    expect(captureIcon).toHaveClass('text-[var(--source)]');
-    expect(meaningIcon).toHaveClass('text-[var(--accent-extract)]');
-    expect(checkpointIcon).toHaveClass('text-[var(--accent-leaf)]');
-    expect(checkpointIcon).not.toHaveClass('text-[var(--accent-commit)]');
+    expect(screen.getByText('Source')).toHaveClass('text-[var(--source)]');
+    expect(screen.getByText('YOps')).toHaveClass('text-[var(--accent-extract)]');
+    expect(screen.getByText('Commit')).toHaveClass('text-[var(--accent-commit)]');
   });
 
-  it('prefills the composer from each starter card without sending', async () => {
+  it('prefills the composer from each demo case without sending', async () => {
     await act(async () => {
       render(<ChatLandingPage />);
     });
 
     const starters = [
       {
-        name: /compare prompt versions/i,
-        prefill: 'Compare these prompt versions and extract the meaningful changes:',
+        name: 'Prompt Review',
+        prefill: 'Support escalation review',
       },
       {
-        name: /extract decisions from notes/i,
-        prefill: 'Extract the decisions, facts, risks, and tensions from these notes:',
+        name: 'Meeting Notes',
+        prefill: 'Decision: ship',
       },
       {
-        name: /create reusable output/i,
-        prefill: 'Create a reusable output from this committed knowledge:',
+        name: 'Prompt Diff',
+        prefill: 'Prompt version A',
       },
     ];
 
     for (const starter of starters) {
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: starter.name }));
+        fireEvent.click(screen.getByRole('tab', { name: starter.name }));
       });
 
       expect(push).not.toHaveBeenCalled();
@@ -267,7 +254,7 @@ describe('ChatLandingPage', () => {
 
     expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
     expect(screen.getByTestId('chat-disabled')).toHaveTextContent('true');
-    expect(screen.getByRole('button', { name: /compare prompt versions/i })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Prompt Review' })).toBeEnabled();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));

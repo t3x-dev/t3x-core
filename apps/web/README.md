@@ -89,6 +89,22 @@ pnpm dev:api     # Terminal 1 - API (port 8000)
 pnpm dev:webui   # Terminal 2 - WebUI (port 3000)
 ```
 
+## Demo Screenshots
+
+The `/chat` first-commit preview screenshots are committed under
+`public/screenshots/` so README imagery can be checked against the product.
+
+```bash
+# From the repo root, with pnpm dev:webui already running
+pnpm screenshots:demo
+```
+
+Outputs:
+
+- `apps/web/public/screenshots/chat-light.png`
+- `apps/web/public/screenshots/chat-dark.png`
+- `apps/web/public/screenshots/chat-mobile.png`
+
 ## Testing
 
 ```bash
