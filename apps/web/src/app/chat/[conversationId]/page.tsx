@@ -9,6 +9,7 @@ import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
+  CHAT_COLUMN_MIN_WIDTH,
   clampWorkspacePanelWidth,
   getPreferredWorkspacePanelWidth,
   WORKSPACE_PANEL_FALLBACK_WIDTH,
@@ -111,6 +112,7 @@ export default function ConversationPage() {
         initialProvider={initialProvider ?? undefined}
         initialModel={initialModel ?? undefined}
         className="flex-1 min-w-0"
+        style={showWorkspace ? { minWidth: CHAT_COLUMN_MIN_WIDTH } : undefined}
         inheritFromCommitHash={resolvedInheritFromCommitHash ?? undefined}
         onInheritComplete={clearInherit}
       />
