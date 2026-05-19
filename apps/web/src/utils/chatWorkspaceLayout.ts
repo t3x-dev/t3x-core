@@ -1,7 +1,7 @@
-export const CHAT_COLUMN_MIN_WIDTH = 360;
-export const WORKSPACE_PANEL_MIN_WIDTH = 400;
+export const CHAT_COLUMN_MIN_WIDTH = 520;
+export const WORKSPACE_PANEL_MIN_WIDTH = 480;
 export const WORKSPACE_PANEL_FALLBACK_WIDTH = 700;
-export const WORKSPACE_PANEL_DEFAULT_RATIO = 2 / 3;
+export const WORKSPACE_PANEL_DEFAULT_RATIO = 1 / 2;
 export const WORKSPACE_DRAG_HANDLE_WIDTH = 4;
 
 export function getPreferredWorkspacePanelWidth(containerWidth: number) {

@@ -173,20 +173,35 @@ export function ScriptEditor() {
         EditorView.theme({
           '&': {
             height: '100%',
+            position: 'relative',
             fontSize: '12px',
             lineHeight: '19px',
             backgroundColor: 'var(--panel-alt)',
             color: 'var(--text-primary)',
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: '0',
+            right: '0',
+            bottom: '0',
+            zIndex: '4',
+            width: '24px',
+            pointerEvents: 'none',
+            background:
+              'linear-gradient(90deg, color-mix(in srgb, var(--panel-alt) 0%, transparent), var(--panel-alt))',
           },
           '.cm-content': {
             padding: '7px 0',
             caretColor: 'var(--text-primary)',
           },
           '.cm-line': {
-            padding: '0 12px',
+            padding: '0 24px 0 6px',
           },
           '.cm-scroller': {
             overflow: 'auto',
+            paddingRight: '16px',
+            scrollPaddingRight: '16px',
             fontFamily: YOPS_MONO_FONT,
             fontWeight: '400',
             fontVariantLigatures: 'none',
