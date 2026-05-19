@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjects } from '@/hooks/projects/useProjects';
@@ -204,7 +205,7 @@ export function ChatSidebar() {
     event?.preventDefault();
     if (isCreatingProject) return;
 
-    const name = newProjectName.trim() || 'Untitled Project';
+    const name = newProjectName.trim() || DEFAULT_PROJECT_NAME;
     setIsCreatingProject(true);
     setNewProjectError(null);
 
@@ -337,7 +338,7 @@ export function ChatSidebar() {
 
   function handleProjectContextMenu(e: React.MouseEvent, projectId: string) {
     const project = projects.find((item) => item.project_id === projectId);
-    const projectName = project?.name?.trim() || 'Untitled Project';
+    const projectName = project?.name?.trim() || DEFAULT_PROJECT_NAME;
 
     openMenu(e, [
       {
@@ -586,7 +587,7 @@ export function ChatSidebar() {
                 placeholder={
                   renameTarget?.kind === 'conversation'
                     ? 'Untitled Conversation'
-                    : 'Untitled Project'
+                    : DEFAULT_PROJECT_NAME
                 }
                 disabled={isRenaming}
                 aria-invalid={renameError ? 'true' : undefined}
@@ -622,7 +623,7 @@ export function ChatSidebar() {
             <DialogHeader>
               <DialogTitle>New Project</DialogTitle>
               <DialogDescription className="sr-only">
-                Enter a project name or leave it blank to create an untitled project.
+                Enter a project name or leave it blank to create an untitled workspace.
               </DialogDescription>
             </DialogHeader>
 
@@ -641,7 +642,7 @@ export function ChatSidebar() {
                   setNewProjectName(event.target.value);
                   if (newProjectError) setNewProjectError(null);
                 }}
-                placeholder="Untitled Project"
+                placeholder={DEFAULT_PROJECT_NAME}
                 disabled={isCreatingProject}
                 aria-invalid={newProjectError ? 'true' : undefined}
                 aria-describedby={newProjectError ? 'new-project-error' : undefined}
