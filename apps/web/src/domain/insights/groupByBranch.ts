@@ -63,14 +63,35 @@ export interface InsightsLedger {
   };
 }
 
+const EARLIER_BUCKET: LedgerTimeBucket = { id: 'earlier', label: 'Earlier', order: 3 };
+
+export function shortCommitHash(hash: string) {
+  return hash.startsWith('sha256:') ? hash.slice(7, 15) : hash.slice(0, 8);
+}
+
+export function commitEntryId(hash: string) {
+  return hash.startsWith('sha256:') ? hash.slice(7, 19) : hash.slice(0, 12);
+}
+
 function dayIndex(date: Date) {
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+
   return Math.floor(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86_400_000
   );
 }
 
 export function getLedgerTimeBucket(value: string, now = new Date()): LedgerTimeBucket {
-  const diffDays = Math.max(0, dayIndex(now) - dayIndex(new Date(value)));
+  const nowDay = dayIndex(now);
+  const valueDay = dayIndex(new Date(value));
+
+  if (nowDay === null || valueDay === null) {
+    return EARLIER_BUCKET;
+  }
+
+  const diffDays = Math.max(0, nowDay - valueDay);
   if (diffDays === 0) {
     return { id: 'today', label: 'Today', order: 0 };
   }
@@ -80,11 +101,16 @@ export function getLedgerTimeBucket(value: string, now = new Date()): LedgerTime
   if (diffDays <= 7) {
     return { id: 'previous-7-days', label: 'Previous 7 days', order: 2 };
   }
-  return { id: 'earlier', label: 'Earlier', order: 3 };
+  return EARLIER_BUCKET;
+}
+
+function timeValue(value: string) {
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function compareNewest(a: { latestAt: string }, b: { latestAt: string }) {
-  return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime();
+  return timeValue(b.latestAt) - timeValue(a.latestAt);
 }
 
 function commitToLedgerCommit({ commit, entry }: InsightsLedgerInput): LedgerCommit {
@@ -128,7 +154,7 @@ export function buildInsightsLedger(
         ([branch, commits]) => {
           const buckets = new Map<LedgerTimeBucket['id'], LedgerBucket & { order: number }>();
           const sortedCommits = [...commits].sort(
-            (a, b) => new Date(b.committed_at).getTime() - new Date(a.committed_at).getTime()
+            (a, b) => timeValue(b.committed_at) - timeValue(a.committed_at)
           );
           for (const commit of sortedCommits) {
             const bucketMeta = getLedgerTimeBucket(commit.committed_at, now);
@@ -161,7 +187,7 @@ export function buildInsightsLedger(
 
       const latestAt = project.commits
         .map((commit) => commit.committed_at)
-        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+        .sort((a, b) => timeValue(b) - timeValue(a))[0];
 
       return {
         branchCount: branchGroups.length,

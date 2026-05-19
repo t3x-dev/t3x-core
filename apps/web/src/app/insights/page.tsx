@@ -9,7 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { buildInsightsLedger, type InsightsLedger } from '@/domain/insights/groupByBranch';
+import {
+  buildInsightsLedger,
+  commitEntryId,
+  type InsightsLedger,
+  shortCommitHash,
+} from '@/domain/insights/groupByBranch';
 import { useCountUp } from '@/hooks/shared/useCountUp';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ApiCommit, Project } from '@/infrastructure';
@@ -46,9 +51,11 @@ function commitToSemanticEntry(
 ): SemanticEntry {
   const nodes = getSemanticContent(commit).trees;
   const summaryText = treeSummaryText(commit);
+  const displayHash = shortCommitHash(commit.hash);
+
   return {
-    id: commit.hash.slice(7, 19),
-    title: commit.message || `${commitLabel} ${commit.hash.slice(7, 15)}`,
+    id: commitEntryId(commit.hash),
+    title: commit.message || `${commitLabel} ${displayHash}`,
     summary: summaryText,
     author: commit.author?.name || commit.author?.type || 'unknown',
     stage: 'commit',
@@ -92,6 +99,10 @@ export default function InsightsPage() {
         const projects = projectData.projects;
 
         if (projects.length === 0) {
+          setEntries([]);
+          setLedger(EMPTY_LEDGER);
+          setSelectedEntry(null);
+          setTimeline([]);
           setLoading(false);
           return;
         }
@@ -140,7 +151,7 @@ export default function InsightsPage() {
 
         // Build timeline from recent commits
         const timelineItems = allCommits.slice(0, 10).map(({ commit, projectName }) => ({
-          id: commit.hash.slice(7, 19),
+          id: commitEntryId(commit.hash),
           label: commit.message || `${commitLabel} on ${commit.branch || 'main'}`,
           detail: `${getSemanticContent(commit).trees.length} trees in ${projectName}`,
           time: formatTimeAgo(commit.committed_at),

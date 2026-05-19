@@ -1,7 +1,11 @@
 import { GitBranch, GitCommit, GitFork, Layers3 } from 'lucide-react';
 import { SemanticCard } from '@/components/SemanticCard';
 import { Badge } from '@/components/ui/badge';
-import type { InsightsLedger, LedgerCommit } from '@/domain/insights/groupByBranch';
+import {
+  type InsightsLedger,
+  type LedgerCommit,
+  shortCommitHash,
+} from '@/domain/insights/groupByBranch';
 import type { SemanticEntry } from '@/types/semantic';
 import { cn } from '@/utils/cn';
 
@@ -9,10 +13,6 @@ interface CommitLedgerProps {
   ledger: InsightsLedger;
   onSelectEntry: (entry: SemanticEntry) => void;
   selectedEntry: SemanticEntry | null;
-}
-
-function shortHash(hash: string) {
-  return hash.startsWith('sha256:') ? hash.slice(7, 15) : hash.slice(0, 8);
 }
 
 function CommitRow({
@@ -24,20 +24,22 @@ function CommitRow({
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const displayHash = shortCommitHash(commit.hash);
+
   return (
     <button
-      aria-label={`Select commit ${commit.message}`}
+      aria-label={`Select commit ${commit.message} on ${commit.branch} ${displayHash}`}
+      aria-pressed={isSelected}
       className={cn(
-        'grid w-full grid-cols-[96px_minmax(0,1fr)_92px_72px] items-center gap-3 border-t border-[var(--stroke-divider)] px-3 py-2 text-left transition-colors',
+        'grid w-full grid-cols-[80px_minmax(160px,1fr)_76px_64px] items-center gap-3 border-t border-l-2 border-l-transparent border-t-[var(--stroke-divider)] px-3 py-2 text-left transition-colors',
+        'sm:grid-cols-[88px_minmax(180px,1fr)_84px_68px] lg:grid-cols-[96px_minmax(220px,1fr)_92px_72px]',
         'hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40',
-        isSelected && 'bg-[var(--accent-commit-soft)]'
+        isSelected && 'border-l-[var(--accent-commit)] bg-[var(--accent-commit-soft)]'
       )}
       onClick={onSelect}
       type="button"
     >
-      <code className="font-mono text-[11px] text-[var(--text-tertiary)]">
-        {shortHash(commit.hash)}
-      </code>
+      <code className="font-mono text-[11px] text-[var(--text-tertiary)]">{displayHash}</code>
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium text-[var(--text-primary)]">
           {commit.message}
@@ -58,7 +60,7 @@ function CommitRow({
 
 export function CommitLedger({ ledger, onSelectEntry, selectedEntry }: CommitLedgerProps) {
   return (
-    <div className="grid min-h-0 gap-[var(--space-section)] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid min-h-0 gap-[var(--space-section)] 2xl:grid-cols-[minmax(680px,1fr)_360px]">
       <section
         aria-label="Semantic commit ledger"
         className="min-w-0 overflow-hidden rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
