@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [swc.vite()],
   resolve: {
     alias: {
+      '@t3x-dev/core': path.resolve(__dirname, '../core/src/index.ts'),
+      '@t3x-dev/storage': path.resolve(__dirname, '../storage/src/index.ts'),
       '@hono/zod-validator': path.resolve(
         __dirname,
         '../../node_modules/.pnpm/@hono+zod-validator@0.7.6_hono@4.11.1_zod@4.2.1/node_modules/@hono/zod-validator'

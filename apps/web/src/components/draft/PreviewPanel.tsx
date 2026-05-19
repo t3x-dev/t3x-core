@@ -7,6 +7,7 @@
  * V2 additions: auto preview toggle, model selector, node-aware rendering for scroll sync
  */
 
+import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { forwardRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -71,9 +72,11 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
   const setAutoPreview = useDraftWorkspaceStore((s) => s.setAutoPreview);
   const previewModel = useDraftWorkspaceStore((s) => s.previewModel);
   const setPreviewModel = useDraftWorkspaceStore((s) => s.setPreviewModel);
+  const isFixtureReplay = draft?.goal === DEMO_WORKSPACE_REPLAY_GOAL;
 
   const includedCount = draft?.nodes.filter((s) => s.included).length ?? 0;
   const hasNodes = includedCount > 0;
+  const fixtureOutput = DEMO_WORKSPACE_FIXTURE.leaf.output;
 
   // Build node IDs for scroll sync (depend only on nodes, not full draft)
   const nodes = draft?.nodes;
@@ -87,61 +90,85 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
       {/* Header bar */}
       <div className="flex items-center gap-2 border-t border-border px-4 py-2 bg-[var(--surface-card)]">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Preview
+          {isFixtureReplay ? 'Fixture Preview' : 'Preview'}
         </span>
-        <PreviewTypeSelector />
+        {isFixtureReplay ? (
+          <span className="rounded-md border border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] px-2 py-1 text-xs font-medium text-[var(--accent-commit)]">
+            no provider
+          </span>
+        ) : (
+          <PreviewTypeSelector />
+        )}
 
         {/* Model selector */}
-        <Select
-          value={previewModel ?? 'default'}
-          onValueChange={(v) => setPreviewModel(v === 'default' ? null : v)}
-        >
-          <SelectTrigger className="h-7 w-[100px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Haiku</SelectItem>
-            <SelectItem value="sonnet">Sonnet</SelectItem>
-            <SelectItem value="opus">Opus</SelectItem>
-          </SelectContent>
-        </Select>
+        {!isFixtureReplay && (
+          <Select
+            value={previewModel ?? 'default'}
+            onValueChange={(v) => setPreviewModel(v === 'default' ? null : v)}
+          >
+            <SelectTrigger className="h-7 w-[100px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Haiku</SelectItem>
+              <SelectItem value="sonnet">Sonnet</SelectItem>
+              <SelectItem value="opus">Opus</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         <div className="flex-1" />
 
-        {/* Auto preview toggle */}
-        {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is a Radix primitive, label wraps it */}
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-          <Switch checked={autoPreview} onCheckedChange={setAutoPreview} className="scale-75" />
-          Auto
-        </label>
+        {!isFixtureReplay && (
+          <>
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch is a Radix primitive, label wraps it */}
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Switch checked={autoPreview} onCheckedChange={setAutoPreview} className="scale-75" />
+              Auto
+            </label>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          onClick={generatePreview}
-          disabled={previewStatus === 'loading' || !hasNodes}
-        >
-          {previewStatus === 'loading' ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3" />
-          )}
-          {previewStatus === 'stale' ? 'Regenerate' : 'Generate Preview'}
-        </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={generatePreview}
+              disabled={previewStatus === 'loading' || !hasNodes}
+            >
+              {previewStatus === 'loading' ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {previewStatus === 'stale' ? 'Regenerate' : 'Generate Preview'}
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Content area */}
       <div ref={ref} className="flex-1 overflow-y-auto px-4 py-3">
+        {isFixtureReplay && (
+          <div className="space-y-2">
+            <PreviewContent output={fixtureOutput} nodeIds={nodeIds} />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{fixtureOutput.length} chars</span>
+              <span className="text-muted-foreground/50">&middot;</span>
+              <span>fixture-replay</span>
+              <span className="text-muted-foreground/50">&middot;</span>
+              <span>no LLM call</span>
+            </div>
+          </div>
+        )}
+
         {/* idle */}
-        {previewStatus === 'idle' && (
+        {!isFixtureReplay && previewStatus === 'idle' && (
           <p className="text-sm text-muted-foreground italic">
             Add nodes and click Generate Preview to see output
           </p>
         )}
 
         {/* loading */}
-        {previewStatus === 'loading' && (
+        {!isFixtureReplay && previewStatus === 'loading' && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -152,7 +179,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         )}
 
         {/* ready */}
-        {previewStatus === 'ready' && previewOutput && (
+        {!isFixtureReplay && previewStatus === 'ready' && previewOutput && (
           <div className="space-y-2">
             <PreviewContent output={previewOutput} nodeIds={nodeIds} />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -180,7 +207,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         )}
 
         {/* stale */}
-        {previewStatus === 'stale' && previewOutput && (
+        {!isFixtureReplay && previewStatus === 'stale' && previewOutput && (
           <div className="space-y-2">
             <div
               className={cn(
@@ -206,7 +233,7 @@ export const PreviewPanel = forwardRef<HTMLDivElement>(function PreviewPanel(_pr
         )}
 
         {/* error */}
-        {previewStatus === 'error' && (
+        {!isFixtureReplay && previewStatus === 'error' && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-[var(--status-error)]">
               <AlertCircle className="h-4 w-4" />

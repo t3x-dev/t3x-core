@@ -40,7 +40,7 @@ const MONO = {
   fontFamily: TREE_MONO_FONT,
   fontSize: 12,
   letterSpacing: 0,
-  lineHeight: '20px',
+  lineHeight: '18px',
 } as const;
 type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 
@@ -623,7 +623,7 @@ function SlotCell({
         <div
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
-            'group relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 px-2 py-0.5 transition-colors',
+            'group relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-1 px-2 transition-colors',
             tone.background,
             isInteractive && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source)]/[0.07]'
@@ -634,7 +634,7 @@ function SlotCell({
         >
           <YAMLIndentGuides depth={row.depth} />
           <div
-            className="relative z-[1] flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden"
+            className="relative z-[1] flex min-w-0 flex-1 flex-col gap-0 overflow-hidden"
             style={{ paddingLeft }}
           >
             <div className="flex min-w-0 items-start gap-1 overflow-hidden">

@@ -86,7 +86,7 @@ export function KeyboardShortcutsDialog() {
           >
             <div
               className={cn(
-                'rounded-xl overflow-hidden shadow-2xl',
+                'overflow-hidden rounded-xl shadow-[var(--fx-shadow-lg)]',
                 glass.elevatedBase,
                 glass.highlight
               )}

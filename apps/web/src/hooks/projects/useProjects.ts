@@ -10,6 +10,7 @@ import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
+import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { deleteProject, listProjects } from '@/infrastructure/projects';
 import type { Project } from '@/infrastructure/types';
 
@@ -46,7 +47,7 @@ export function useProjects(limit = 50): UseProjectsResult {
   }, []);
 
   const create = useCallback(async (rawName?: string): Promise<Project> => {
-    const name = (rawName ?? '').trim() || 'Untitled Project';
+    const name = (rawName ?? '').trim() || DEFAULT_PROJECT_NAME;
     const project = (await createProjectCommand(name)) as Project;
     setProjects((prev) => [project, ...prev]);
     return project;

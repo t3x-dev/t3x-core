@@ -68,8 +68,8 @@ function ChatLanding() {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col justify-center px-4 py-6">
-        <div className="mb-5 text-center">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col justify-start px-3 py-4 sm:justify-center sm:px-4 sm:py-6">
+        <div className="mb-3 text-center sm:mb-5">
           <h1 className="text-2xl font-bold tracking-[0] text-[var(--text-primary)]">
             What should T3X make sense of?
           </h1>
@@ -79,7 +79,7 @@ function ChatLanding() {
           </p>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-3 sm:mb-4">
           <LandingDemoPreview onSelectSource={handleDemoSelect} />
         </div>
 
@@ -91,7 +91,7 @@ function ChatLanding() {
           </div>
         )}
 
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto w-full max-w-2xl">
           <ChatInput
             onSend={handleSend}
             placeholder="Paste a prompt, transcript, release note, or design discussion..."

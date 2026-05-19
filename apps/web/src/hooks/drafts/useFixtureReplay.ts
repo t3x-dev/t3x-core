@@ -1,4 +1,4 @@
-import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
+import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import { useCallback, useState } from 'react';
 import { createWorkbenchDraft, updateWorkbenchDraft } from '@/commands/drafts';
 import { fetchProjects } from '@/queries/projects';
@@ -71,13 +71,13 @@ export function useFixtureReplay() {
       const draft = await createWorkbenchDraft({
         project_id: project.project_id,
         title,
-        goal: DEMO_WORKSPACE_FIXTURE.replay.label,
+        goal: DEMO_WORKSPACE_REPLAY_GOAL,
         preview_type: DEMO_WORKSPACE_FIXTURE.leaf.type,
       });
 
       const updated = await updateWorkbenchDraft(draft.id, {
         title,
-        goal: DEMO_WORKSPACE_FIXTURE.replay.label,
+        goal: DEMO_WORKSPACE_REPLAY_GOAL,
         nodes: buildDraftNodes(),
         constraints: buildDraftConstraints(),
         instructions: [
