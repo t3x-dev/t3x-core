@@ -37,7 +37,14 @@ import { glass, toneAccent, toneGlow } from '@/utils/theme';
 
 import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
 import { NodeLeavesSection } from './NodeLeavesSection';
-import { getNextStep, NodeDetailsSection, NodeSourcesHeader, NodeToolbar } from './node-parts';
+import {
+  getNextStep,
+  NodeDetailsSection,
+  NodeKindIcon,
+  type NodeSemanticKind,
+  NodeSourcesHeader,
+  NodeToolbar,
+} from './node-parts';
 
 // Re-export LEAF_TYPES for backward compatibility
 export { LEAF_TYPES } from './CanvasNodeUtils';
@@ -132,6 +139,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const isStaging = data.commitStatus === 'staging';
   const isCommitted = data.commitStatus === 'committed';
   const isDraft = data.commitStatus === 'draft';
+  const semanticKind: NodeSemanticKind = isCommitted ? 'committed' : 'pending';
 
   const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN';
 
@@ -367,6 +375,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
         aria-label={`${data.title} — ${isDraft ? t('draft') : isStaging ? t('draft') : t('committed')} on ${branchLabel}${nodeCount > 0 ? `, ${nodeCount} trees` : ''}`}
         aria-selected={selected}
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
+        data-node-semantic-kind={semanticKind}
         tabIndex={0}
       >
         {/* Staging border — static dashed outline */}
@@ -423,6 +432,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
               />
             ) : (
               <div className="flex items-center gap-1 flex-1 min-w-0 group/title">
+                <NodeKindIcon kind={semanticKind} />
                 <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
                   {data.title}
                 </h4>

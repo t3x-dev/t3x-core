@@ -1,5 +1,7 @@
 export type { NodeDetailsSectionProps } from './NodeDetailsSection';
 export { NodeDetailsSection } from './NodeDetailsSection';
+export type { NodeSemanticKind } from './NodeKindIcon';
+export { NodeKindIcon } from './NodeKindIcon';
 export type { NodeSourcesHeaderProps, SourceItem } from './NodeSourcesHeader';
 export { NodeSourcesHeader } from './NodeSourcesHeader';
 export type { NodeToolbarProps } from './NodeToolbar';

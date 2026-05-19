@@ -5,6 +5,7 @@ import { memo } from 'react';
 import type { EmbeddedLeaf } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { getLeafIcon } from './CanvasNodeUtils';
+import { NodeKindIcon } from './node-parts/NodeKindIcon';
 
 /**
  * NodeLeavesSection - Renders the expandable leaves list for a commit node.
@@ -54,13 +55,14 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
         }}
         type="button"
       >
-        <span className="text-[10px] font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-          Leaves ({leaves.length})
+        <span className="flex min-w-0 items-center gap-1.5">
+          <NodeKindIcon kind="leaf" label="Leaf" />
+          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{leaves.length}</span>
           {totalAssertions > 0 && (
-            <span className="ml-1.5 normal-case font-normal">
+            <span className="text-[10px] font-normal text-[var(--text-tertiary)]">
               <span className="text-[var(--status-success)]">{totalPassed}</span>
               <span className="text-[var(--text-tertiary)]/50">/</span>
-              <span className="text-[var(--text-tertiary)]">{totalAssertions}</span>
+              <span>{totalAssertions}</span>
             </span>
           )}
         </span>
@@ -87,8 +89,11 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
                 const leafHref = getLeafHref(leaf);
                 const leafContent = (
                   <>
-                    <div className="w-5 h-5 rounded flex items-center justify-center bg-[var(--accent-conversation)]/10 text-[var(--accent-conversation)]">
-                      <LeafIcon size={12} />
+                    <div
+                      aria-hidden="true"
+                      className="flex h-5 w-5 rotate-45 items-center justify-center rounded-[5px] border border-[var(--accent-leaf)]/35 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]"
+                    >
+                      <LeafIcon size={12} className="-rotate-45" />
                     </div>
                     <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">
                       {leaf.title}
