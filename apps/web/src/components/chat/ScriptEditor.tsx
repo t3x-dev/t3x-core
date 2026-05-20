@@ -191,7 +191,7 @@ export function ScriptEditor() {
               'linear-gradient(90deg, color-mix(in srgb, var(--editor-bg) 0%, transparent), var(--editor-bg))',
           },
           '.cm-content': {
-            padding: '7px 0',
+            padding: '3px 0 7px',
             caretColor: 'var(--text-primary)',
           },
           '.cm-line': {
