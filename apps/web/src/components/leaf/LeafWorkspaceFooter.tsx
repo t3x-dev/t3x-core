@@ -13,6 +13,7 @@ interface LeafWorkspaceFooterProps {
 
 export function LeafWorkspaceFooter({ leaf, projectId, className }: LeafWorkspaceFooterProps) {
   const shortHash = leaf.commit_hash.replace('sha256:', '').slice(0, 8);
+  const createdDate = leaf.created_at.slice(0, 10);
 
   return (
     <footer
@@ -62,7 +63,7 @@ export function LeafWorkspaceFooter({ leaf, projectId, className }: LeafWorkspac
       <span className="text-[var(--stroke-default)]">&middot;</span>
 
       {/* Created date */}
-      <span>Created {new Date(leaf.created_at).toLocaleDateString()}</span>
+      <span>Created {createdDate}</span>
 
       <span className="flex-1" />
 

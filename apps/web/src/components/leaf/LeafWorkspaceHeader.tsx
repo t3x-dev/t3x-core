@@ -1,7 +1,6 @@
 'use client';
 
-import { ArrowLeft, ClipboardPaste, Copy, Download, FileJson, FileText } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ClipboardPaste, Copy, Download, FileJson, FileText } from 'lucide-react';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { PinButton } from '@/components/ui/PinButton';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ExportFormat, Leaf } from '@/types/api';
@@ -30,55 +28,47 @@ interface LeafWorkspaceHeaderProps {
 export function LeafWorkspaceHeader({
   leaf,
   projectId,
-  projectName,
   onExport,
   mode,
   onModeChange,
   className,
 }: LeafWorkspaceHeaderProps) {
-  const router = useRouter();
   const { t } = useTerminology();
+  const shortHash = leaf.commit_hash.replace('sha256:', '').slice(0, 7);
+  const generatedTime = leaf.generated_at ? formatDisplayTime(leaf.generated_at) : null;
 
   return (
     <header
       className={cn(
-        'flex h-[var(--h-header)] shrink-0 items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3 md:px-4',
+        'flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4 py-2',
         'bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]',
         'backdrop-blur-[6px]',
         className
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => router.push(`/project/${projectId}`)}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="min-w-0">
           <Breadcrumb
-            className="hidden min-w-0 md:flex"
+            className="hidden min-w-0 text-[11px] md:flex"
             segments={[
               { label: 'Home', href: '/' },
-              { label: projectName || 'Project', href: `/project/${projectId}` },
+              { label: 'Project', href: `/project/${projectId}` },
               {
-                label: `${t('commit')} ${leaf.commit_hash.replace('sha256:', '').slice(0, 7)}`,
+                label: `${t('commit')} ${shortHash}`,
                 href: `/project/${projectId}?focus=${leaf.commit_hash}`,
               },
-              { label: leaf.title || `Leaf: ${leaf.id.slice(0, 12)}...` },
+              { label: 'Leaf' },
             ]}
           />
-          <div className="truncate text-sm font-semibold text-foreground md:hidden">
-            {leaf.title || `Leaf: ${leaf.id.slice(0, 8)}`}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="truncate text-[15px] font-semibold leading-5 text-[var(--text-primary)]">
+              {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
+            </h1>
+            <span className="hidden shrink-0 font-mono text-[11px] text-[var(--text-tertiary)] sm:inline">
+              {leaf.id.slice(0, 9)} · sha:{shortHash}
+              {generatedTime ? ` · generated ${generatedTime}` : ''}
+            </span>
           </div>
-        </div>
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {leaf.type}
-          </span>
-          {/* Created date removed — available in footer */}
         </div>
       </div>
 
@@ -113,8 +103,7 @@ export function LeafWorkspaceHeader({
           </div>
         )}
 
-        <PinButton projectId={projectId} type="leaf" refId={leaf.id} />
-        <ShareLinkButton entityType="leaf" entityId={leaf.id} />
+        <ShareLinkButton entityType="leaf" entityId={leaf.id} className="h-8 rounded-lg text-xs" />
 
         {/* Export dropdown */}
         <DropdownMenu>
@@ -149,4 +138,11 @@ export function LeafWorkspaceHeader({
       </div>
     </header>
   );
+}
+
+function formatDisplayTime(value: string): string {
+  const date = new Date(value);
+  const hours = String((date.getUTCHours() + 8) % 24).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
