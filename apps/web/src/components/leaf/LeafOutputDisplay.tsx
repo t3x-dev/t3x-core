@@ -1,9 +1,8 @@
 'use client';
 
-import { Check, CheckCircle, CheckCircle2, Loader2, Play, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Play } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { NodeCoverageEntry, WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import type { Assertion, Constraint } from '@/types/api';
 import type { NodeWithSource } from '@/types/sourceContext';
@@ -171,6 +170,102 @@ function buildHighlightedSegments(
   return segments;
 }
 
+type OutputBlockKind = 'heading1' | 'heading2' | 'heading3' | 'paragraph' | 'divider';
+
+interface OutputBlock {
+  kind: OutputBlockKind;
+  segments: OutputSegment[];
+  markerNumber: number | null;
+}
+
+function splitSegmentsIntoBlocks(segments: OutputSegment[]): OutputSegment[][] {
+  const blocks: OutputSegment[][] = [];
+  let current: OutputSegment[] = [];
+
+  const flush = () => {
+    if (current.some((segment) => segment.text.trim().length > 0)) {
+      blocks.push(current);
+    }
+    current = [];
+  };
+
+  for (const segment of segments) {
+    const parts = segment.text.split(/(\n{2,})/);
+    for (const part of parts) {
+      if (part.length === 0) continue;
+      if (/^\n{2,}$/.test(part)) {
+        flush();
+        continue;
+      }
+      current.push({ ...segment, text: part });
+    }
+  }
+
+  flush();
+  return blocks;
+}
+
+function getBlockText(block: OutputSegment[]): string {
+  return block.map((segment) => segment.text).join('');
+}
+
+function stripLeadingCharacters(block: OutputSegment[], count: number): OutputSegment[] {
+  let remaining = count;
+  const stripped: OutputSegment[] = [];
+
+  for (const segment of block) {
+    if (remaining >= segment.text.length) {
+      remaining -= segment.text.length;
+      continue;
+    }
+    stripped.push({
+      ...segment,
+      text: remaining > 0 ? segment.text.slice(remaining) : segment.text,
+    });
+    remaining = 0;
+  }
+
+  return stripped;
+}
+
+function classifyBlock(block: OutputSegment[]): Omit<OutputBlock, 'markerNumber'> | null {
+  const rawText = getBlockText(block);
+  const trimmedStart = rawText.trimStart();
+  if (!trimmedStart.trim()) return null;
+  if (/^-{3,}$/.test(trimmedStart.trim())) {
+    return { kind: 'divider', segments: [] };
+  }
+
+  const boldHeading = /^\*\*([^*]+)\*\*$/.exec(trimmedStart.trim());
+  if (boldHeading) {
+    const leadingWhitespace = rawText.length - trimmedStart.length;
+    const prefixLength = leadingWhitespace + 2;
+    return {
+      kind: 'heading2',
+      segments: stripLeadingCharacters(block, prefixLength).map((segment, index, segments) => {
+        if (index !== segments.length - 1) return segment;
+        return { ...segment, text: segment.text.replace(/\*\*$/, '') };
+      }),
+    };
+  }
+
+  const heading = /^(#{1,3})\s+/.exec(trimmedStart);
+  if (!heading) {
+    return { kind: 'paragraph', segments: block };
+  }
+
+  const leadingWhitespace = rawText.length - trimmedStart.length;
+  const prefixLength = leadingWhitespace + heading[0].length;
+  const headingLevel = heading[1].length;
+  const kind: OutputBlockKind =
+    headingLevel === 1 ? 'heading1' : headingLevel === 2 ? 'heading2' : 'heading3';
+
+  return {
+    kind,
+    segments: stripLeadingCharacters(block, prefixLength),
+  };
+}
+
 export function LeafOutputDisplay({
   output,
   generatedAt,
@@ -206,11 +301,85 @@ export function LeafOutputDisplay({
     return buildHighlightedSegments(output, hasNodeCoverage ? nodeCoverage! : null, markers);
   }, [mode, output, nodeCoverage, markers]);
 
+  const outputBlocks = useMemo((): OutputBlock[] => {
+    if (!output) return [];
+    const sourceSegments = highlightedSegments ?? [{ text: output }];
+    const classified = splitSegmentsIntoBlocks(sourceSegments)
+      .map(classifyBlock)
+      .filter((block): block is Omit<OutputBlock, 'markerNumber'> => block !== null);
+    const hasHeadings = classified.some((block) => block.kind !== 'paragraph');
+    let markerNumber = 1;
+
+    return classified.map((block, index) => {
+      const shouldMark = hasHeadings
+        ? block.kind !== 'paragraph' && block.kind !== 'divider'
+        : index < 6;
+      return {
+        ...block,
+        markerNumber: shouldMark ? markerNumber++ : null,
+      };
+    });
+  }, [highlightedSegments, output]);
+
   const handleSegmentHover = useCallback(
     (nodeId: string | null) => {
       onHoverNode?.(nodeId);
     },
     [onHoverNode]
+  );
+
+  const renderOutputSegments = useCallback(
+    (segments: OutputSegment[], blockIndex: number) =>
+      segments.map((seg, i) => {
+        const segmentKey = `${blockIndex}-${seg.nodeId ?? 'plain'}-${seg.constraintType ?? 'none'}-${seg.text}-${i}`;
+        let inlineOffset = 0;
+        const inlineContent = seg.text.split(/(\*\*[^*]+?\*\*)/g).map((part) => {
+          const strong = /^\*\*([^*]+)\*\*$/.exec(part);
+          const partKey = `${segmentKey}-${inlineOffset}-${part}`;
+          inlineOffset += part.length;
+          return strong ? (
+            <strong key={partKey} className="font-bold">
+              {strong[1]}
+            </strong>
+          ) : (
+            part
+          );
+        });
+        if (seg.constraintType) {
+          return (
+            <span
+              key={segmentKey}
+              className={cn(
+                '-mx-0.5 rounded border-b px-0.5 transition-colors',
+                seg.constraintType === 'require'
+                  ? 'border-[var(--status-success)]/40 bg-[var(--status-success-muted)] text-[var(--text-primary)]'
+                  : 'border-[var(--status-error)]/40 bg-[var(--status-error-muted)] text-[var(--text-primary)]'
+              )}
+            >
+              {inlineContent}
+            </span>
+          );
+        }
+
+        if (seg.nodeId) {
+          return (
+            <span
+              key={segmentKey}
+              className={cn(
+                'cursor-pointer rounded-sm underline decoration-[var(--source)] decoration-2 underline-offset-[3px] transition-colors',
+                hoveredNodeId === seg.nodeId && 'bg-[var(--source-dim)]'
+              )}
+              onMouseEnter={() => handleSegmentHover(seg.nodeId!)}
+              onMouseLeave={() => handleSegmentHover(null)}
+            >
+              {inlineContent}
+            </span>
+          );
+        }
+
+        return <span key={segmentKey}>{inlineContent}</span>;
+      }),
+    [handleSegmentHover, hoveredNodeId]
   );
 
   if (!output) {
@@ -242,30 +411,16 @@ export function LeafOutputDisplay({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[960px]">
+    <div className="mx-auto w-full max-w-[780px]">
       {/* Output header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-base font-bold text-[var(--text-primary)]">Output</h2>
-          {totalCount > 0 && (
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold',
-                allPassed
-                  ? 'bg-[var(--status-success-muted)] text-[var(--status-success)]'
-                  : 'bg-[var(--status-error-muted)] text-[var(--status-error)]'
-              )}
-            >
-              {allPassed ? <CheckCircle className="h-3 w-3" /> : <X className="h-3 w-3" />}
-              {passedCount}/{totalCount} passed
-            </span>
-          )}
+          <h2 className="text-[15px] font-bold text-[var(--text-primary)]">Output</h2>
         </div>
-        {generatedAt && (
-          <span className="text-[11px] text-[var(--text-tertiary)]">
-            {new Date(generatedAt).toLocaleString()}
-          </span>
-        )}
+        <span className="text-[11px] text-[var(--text-tertiary)]">
+          Reading surface · source-backed paragraphs
+          {generatedAt ? ` · generated ${formatDisplayTime(generatedAt)}` : ''}
+        </span>
       </div>
 
       {/* Success banner */}
@@ -276,80 +431,53 @@ export function LeafOutputDisplay({
         </div>
       )}
 
-      {/* Constraint hit markers */}
-      {markers.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {markers.map(({ constraint, passed, details }) => (
-            <Tooltip key={constraint.id}>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium cursor-default border',
-                    passed
-                      ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
-                      : 'border-[var(--status-error)]/30 bg-[var(--status-error-muted)] text-[var(--status-error)]'
-                  )}
-                >
-                  {passed ? <Check className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
-                  <span className="max-w-[100px] truncate">{constraint.value}</span>
-                  <span className="text-[9px] opacity-70 uppercase">
-                    {constraint.type === 'require' ? 'req' : 'exc'}
-                  </span>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs text-xs">
-                <p className="font-medium">
-                  {constraint.type === 'require' ? 'Require' : 'Exclude'}: {constraint.value}
-                </p>
-                <p className="text-muted-foreground mt-0.5">{details}</p>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-      )}
-
       {/* Output text card */}
       <div
         className={cn(
-          'whitespace-pre-wrap rounded-lg border border-[var(--stroke-strong)] p-6 text-[15px] leading-8 text-[var(--text-primary)] md:p-7',
-          'bg-[var(--surface-card)] shadow-[var(--fx-shadow-sm)]',
-          'min-h-[200px] transition-all duration-300',
+          'relative min-h-[200px] rounded-2xl border border-[var(--stroke-strong)] bg-[var(--surface-card)] px-6 py-7 text-[15px] leading-8 text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)] md:px-8',
+          'transition-all duration-300',
           allPassed && 'ring-1 ring-[var(--status-success)]/20'
         )}
       >
-        {highlightedSegments
-          ? highlightedSegments.map((seg, i) => {
-              const segmentKey = `${seg.nodeId ?? 'plain'}-${seg.constraintType ?? 'none'}-${seg.text}-${i}`;
-              return seg.constraintType ? (
-                <span
-                  key={segmentKey}
-                  className={cn(
-                    'rounded px-0.5 -mx-0.5 transition-colors border-b',
-                    seg.constraintType === 'require'
-                      ? 'bg-[var(--status-success-muted)] border-[var(--status-success)]/40 text-[var(--text-primary)]'
-                      : 'bg-[var(--status-error-muted)] border-[var(--status-error)]/40 text-[var(--text-primary)]'
-                  )}
-                >
-                  {seg.text}
+        <div className="absolute bottom-7 left-8 top-7 w-px bg-[var(--stroke-divider)]" />
+        <div className="space-y-5">
+          {outputBlocks.map((block, blockIndex) => (
+            <section key={`${block.kind}-${blockIndex}`} className="relative pl-9">
+              {block.markerNumber !== null && (
+                <span className="absolute left-[-4px] top-[0.35rem] flex h-4 w-4 items-center justify-center rounded-full bg-[var(--source)] text-[9px] font-bold leading-none text-[var(--on-accent)]">
+                  {block.markerNumber}
                 </span>
-              ) : seg.nodeId ? (
-                <span
-                  key={segmentKey}
-                  className={cn(
-                    'underline decoration-[var(--status-success)] decoration-2 underline-offset-[3px] cursor-pointer transition-colors',
-                    hoveredNodeId === seg.nodeId && 'bg-[var(--status-success-muted)] rounded-sm'
-                  )}
-                  onMouseEnter={() => handleSegmentHover(seg.nodeId!)}
-                  onMouseLeave={() => handleSegmentHover(null)}
-                >
-                  {seg.text}
-                </span>
+              )}
+              {block.kind === 'divider' ? (
+                <div className="my-1 h-px w-full bg-[var(--stroke-divider)]" />
+              ) : block.kind === 'heading1' ? (
+                <h1 className="text-[22px] font-bold leading-8 text-[var(--text-primary)]">
+                  {renderOutputSegments(block.segments, blockIndex)}
+                </h1>
+              ) : block.kind === 'heading2' ? (
+                <h2 className="text-[16px] font-bold leading-7 text-[var(--text-primary)]">
+                  {renderOutputSegments(block.segments, blockIndex)}
+                </h2>
+              ) : block.kind === 'heading3' ? (
+                <h3 className="text-[14px] font-bold leading-7 text-[var(--text-primary)]">
+                  {renderOutputSegments(block.segments, blockIndex)}
+                </h3>
               ) : (
-                <span key={segmentKey}>{seg.text}</span>
-              );
-            })
-          : output}
+                <p className="whitespace-pre-wrap leading-8 text-[var(--text-primary)]">
+                  {renderOutputSegments(block.segments, blockIndex)}
+                </p>
+              )}
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );
+}
+
+function formatDisplayTime(value: string): string {
+  const date = new Date(value);
+  const hours = String((date.getUTCHours() + 8) % 24).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }

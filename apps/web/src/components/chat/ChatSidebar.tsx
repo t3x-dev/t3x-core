@@ -62,7 +62,6 @@ export function ChatSidebar() {
     activeConversationId,
     activeProjectId,
     expandedProjectIds,
-    toggleProjectExpanded,
     setActiveConversation,
     setConversationTitle,
     sidebarWidth,
@@ -89,8 +88,6 @@ export function ChatSidebar() {
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
-  // Track pending auto-navigation when expanding a project for the first time
-  const pendingNavProjectId = useRef<string | null>(null);
   const wasCompactViewportRef = useRef(false);
 
   const refreshKey = useChatStore((s) => s.refreshKey);
@@ -157,19 +154,6 @@ export function ChatSidebar() {
     }
   }, [expandedProjectIds, refreshKey, loadConversations]);
 
-  // Auto-navigate to latest conversation after expanding a project (data may load async)
-  useEffect(() => {
-    const pid = pendingNavProjectId.current;
-    if (!pid) return;
-    const convs = projectConversations[pid];
-    if (!convs) return; // Data not yet loaded
-    pendingNavProjectId.current = null;
-    if (convs.length > 0) {
-      setActiveConversation(convs[0].conversation_id, pid);
-      router.push(`/chat/${convs[0].conversation_id}`);
-    }
-  }, [projectConversations, router, setActiveConversation]);
-
   useEffect(() => {
     if (!renameTarget) return;
     const frame = requestAnimationFrame(() => {
@@ -181,6 +165,25 @@ export function ChatSidebar() {
   function handleConversationClick(convId: string, projectId: string) {
     setActiveConversation(convId, projectId);
     router.push(`/chat/${convId}`);
+  }
+
+  async function handleProjectClick(projectId: string) {
+    const store = useChatStore.getState();
+    if (!store.expandedProjectIds.has(projectId)) {
+      store.toggleProjectExpanded(projectId);
+    }
+
+    const cachedConversations = projectConversations[projectId];
+    if (cachedConversations?.length) {
+      handleConversationClick(cachedConversations[0].conversation_id, projectId);
+      return;
+    }
+
+    setActiveConversation(null, projectId);
+    const loadedConversations = await loadConversations(projectId);
+    if (loadedConversations.length > 0) {
+      handleConversationClick(loadedConversations[0].conversation_id, projectId);
+    }
   }
 
   const openNewProjectDialog = useCallback(() => {
@@ -485,21 +488,7 @@ export function ChatSidebar() {
                 isActive={activeProjectId === project.project_id}
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
-                onToggleExpand={() => {
-                  const wasExpanded = expandedProjectIds.has(project.project_id);
-                  toggleProjectExpanded(project.project_id);
-                  // Auto-navigate to latest conversation when expanding (not collapsing)
-                  if (!wasExpanded) {
-                    const convs = projectConversations[project.project_id] ?? [];
-                    if (convs.length > 0) {
-                      // Data already loaded (re-expanding) — navigate immediately
-                      handleConversationClick(convs[0].conversation_id, project.project_id);
-                    } else {
-                      // First expand — data loading async, navigate when ready
-                      pendingNavProjectId.current = project.project_id;
-                    }
-                  }
-                }}
+                onToggleExpand={() => void handleProjectClick(project.project_id)}
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }

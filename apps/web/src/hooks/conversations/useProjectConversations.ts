@@ -13,7 +13,7 @@ import type { Conversation } from '@/infrastructure/types';
 
 export interface UseProjectConversationsResult {
   conversationsByProject: Record<string, Conversation[]>;
-  load: (projectId: string) => Promise<void>;
+  load: (projectId: string) => Promise<Conversation[]>;
   remove: (projectId: string, conversationId: string) => Promise<void>;
   rename: (projectId: string, conversationId: string, title: string) => Promise<Conversation>;
 }
@@ -24,7 +24,9 @@ export function useProjectConversations(limit = 50): UseProjectConversationsResu
   const load = useCallback(
     async (projectId: string) => {
       const data = await listConversations(projectId, limit, 0);
-      setByProject((prev) => ({ ...prev, [projectId]: data.conversations ?? [] }));
+      const conversations = data.conversations ?? [];
+      setByProject((prev) => ({ ...prev, [projectId]: conversations }));
+      return conversations;
     },
     [limit]
   );

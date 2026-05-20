@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
 import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
@@ -16,6 +16,7 @@ import { SuggestConstraintsDialog } from '@/components/leaf/SuggestConstraintsDi
 import { YAMLTreePanel } from '@/components/leaf/YAMLTreePanel';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import {
+  buildLeafSemanticPointSummary,
   buildLeafSemanticPointSummaryByNode,
   deriveLeafSemanticPointItems,
 } from '@/domain/leaf/semanticPoints';
@@ -98,9 +99,16 @@ export default function LeafDetailPage() {
   } = useLeafPageData(projectId, leafId);
 
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(false);
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [modeTouched, setModeTouched] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  const handleModeChange = useCallback(
+    (nextMode: typeof mode) => {
+      setModeTouched(true);
+      setMode(nextMode);
+    },
+    [setMode]
+  );
 
   // Re-tune with navigation
   const onRetune = useCallback(async () => {
@@ -137,6 +145,26 @@ export default function LeafDetailPage() {
     () => buildLeafSemanticPointSummaryByNode(semanticPointItems),
     [semanticPointItems]
   );
+  const semanticPointSummary = useMemo(
+    () => buildLeafSemanticPointSummary(semanticPointItems),
+    [semanticPointItems]
+  );
+  const coverageIncluded =
+    semanticPointSummary.total > 0 ? semanticPointSummary.included : reflectedCount;
+  const coverageTotal = semanticPointSummary.total > 0 ? semanticPointSummary.total : nodes.length;
+  const assertionCount = leaf?.assertions?.length ?? 0;
+  const assertionPassedCount =
+    leaf?.assertions?.filter((assertion) => assertion.passed).length ?? 0;
+  const assertionStatus =
+    assertionCount === 0
+      ? 'assertions not run'
+      : `${assertionPassedCount} / ${assertionCount} assertions`;
+
+  useEffect(() => {
+    if (!modeTouched && leaf?.output && mode !== 'display') {
+      setMode('display');
+    }
+  }, [leaf?.output, mode, modeTouched, setMode]);
 
   // Keyboard navigation for nodes
   const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
@@ -198,57 +226,40 @@ export default function LeafDetailPage() {
         projectName={projectName}
         onExport={handleExport}
         mode={mode}
-        onModeChange={setMode}
+        onModeChange={handleModeChange}
       />
 
       {/* ── Toolbar ── */}
-      <div className="flex h-[44px] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4 bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]">
-        {/* Left: toggle badges */}
+      <div className="flex h-[40px] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-4">
         <div className="hidden items-center gap-2 md:flex">
-          <button
-            type="button"
+          <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
+            {leaf.type} artifact
+          </span>
+          <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
+            {coverageIncluded} / {coverageTotal} semantic points
+          </span>
+          <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-commit)]">
+            {semanticContent ? 'commit verified' : 'commit loading'}
+          </span>
+          <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all',
-              !sourcePanelCollapsed
-                ? 'border-[var(--accent-conversation)] text-[var(--accent-conversation)] bg-[var(--accent-conversation-soft)]'
-                : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
+              'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium',
+              assertionCount > 0 && assertionPassedCount === assertionCount
+                ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                : 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
             )}
-            onClick={() => setSourcePanelCollapsed(!sourcePanelCollapsed)}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-conversation)]" />
-            Frames {nodes.length}
-          </button>
-          <button
-            type="button"
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all',
-              !inspectorCollapsed
-                ? 'border-[var(--accent-leaf)] text-[var(--accent-leaf)] bg-[var(--accent-leaf-soft)]'
-                : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:border-[var(--stroke-strong)]'
-            )}
-            onClick={() => setInspectorCollapsed(!inspectorCollapsed)}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-leaf)]" />
-            Constraints {leaf.constraints.length}
-          </button>
-
-          {/* Display mode: coverage summary */}
-          {mode === 'display' && nodes.length > 0 && (
-            <span className="ml-2 text-xs font-medium text-[var(--accent-leaf)]">
-              {reflectedCount}/{nodes.length} trees reflected
-            </span>
-          )}
+            {assertionStatus}
+          </span>
         </div>
 
         <div className="flex min-w-0 flex-1 items-center justify-between gap-2 md:hidden">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent-conversation)] bg-[var(--accent-conversation-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-conversation)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-conversation)]" />
-              Frames {nodes.length}
+            <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)]">
+              {coverageIncluded}/{coverageTotal} points
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--accent-leaf)] bg-[var(--accent-leaf-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-leaf)]" />
-              Constraints {leaf.constraints.length}
+            <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-1 text-[10px] font-medium text-[var(--accent-commit)]">
+              verified
             </span>
           </div>
           <div className="inline-flex shrink-0 overflow-hidden rounded-md border border-[var(--stroke-default)]">
@@ -260,7 +271,7 @@ export default function LeafDetailPage() {
                   ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
-              onClick={() => setMode('generate')}
+              onClick={() => handleModeChange('generate')}
             >
               Generate
             </button>
@@ -272,15 +283,17 @@ export default function LeafDetailPage() {
                   ? 'bg-[var(--accent-leaf)]/10 text-[var(--accent-leaf)]'
                   : 'text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
               )}
-              onClick={() => setMode('display')}
+              onClick={() => handleModeChange('display')}
             >
               Display
             </button>
           </div>
         </div>
 
-        {/* Right: keyboard hints + status */}
         <div className="hidden items-center gap-3 md:flex">
+          <span className="text-[11px] text-[var(--text-tertiary)]">
+            Quality first, then source review, then publish
+          </span>
           {saving && <span className="text-[10px] text-[var(--text-tertiary)]">Saving...</span>}
           <KeyboardHintBar
             hints={[
@@ -340,28 +353,25 @@ export default function LeafDetailPage() {
       )}
 
       {/* ── Body: Dual-Mode Layout ── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: YAML Tree (always visible in both modes) */}
-        {!sourcePanelCollapsed && (
-          <YAMLTreePanel
-            content={semanticContent ?? { trees: [], relations: [] }}
-            mode={mode}
-            constraints={leaf.constraints}
-            assertions={leaf.assertions ?? undefined}
-            saving={saving}
-            commitHash={leaf.commit_hash}
-            projectId={projectId}
-            onAddConstraintFromSource={handleAddConstraintFromSource}
-            semanticPointSummaryByNode={semanticPointSummaryByNode}
-            highlightedConstraintId={hoveredNodeId}
-            onHoverNode={setHoveredNodeId}
-          />
-        )}
+      <div className="flex flex-1 overflow-hidden bg-[var(--surface-app)]">
+        <YAMLTreePanel
+          content={semanticContent ?? { trees: [], relations: [] }}
+          mode={mode}
+          constraints={leaf.constraints}
+          assertions={leaf.assertions ?? undefined}
+          saving={saving}
+          commitHash={leaf.commit_hash}
+          projectId={projectId}
+          onAddConstraintFromSource={handleAddConstraintFromSource}
+          semanticPointSummaryByNode={semanticPointSummaryByNode}
+          highlightedConstraintId={hoveredNodeId}
+          onHoverNode={setHoveredNodeId}
+        />
 
         {/* Center: Main Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Output scroll area */}
-          <div className="flex flex-1 flex-col overflow-y-auto p-6">
+          <div className="flex flex-1 flex-col overflow-y-auto bg-[color-mix(in_srgb,var(--surface-app)_94%,var(--surface-panel))] p-6">
             <LeafOutputDisplay
               output={leaf.output}
               generatedAt={leaf.generated_at}
@@ -440,7 +450,7 @@ export default function LeafDetailPage() {
             mode={mode}
             saving={saving}
             savingSemanticPoints={savingSemanticPoints}
-            collapsed={inspectorCollapsed}
+            collapsed={false}
             onRemoveConstraint={handleRemoveConstraint}
             onAddConstraint={handleAddConstraint}
             onExport={handleExport}
@@ -455,6 +465,9 @@ export default function LeafDetailPage() {
             assertions={leaf.assertions ?? []}
             constraints={leaf.constraints}
             generatedAt={leaf.generated_at ?? undefined}
+            semanticPoints={semanticPointItems}
+            coverageIncluded={coverageIncluded}
+            coverageTotal={coverageTotal}
             onHighlightConstraint={setHoveredNodeId}
             onExport={handleExport}
           />

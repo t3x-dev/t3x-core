@@ -97,12 +97,15 @@ interface UserMenuProps {
 export function UserMenu({ collapsed }: UserMenuProps) {
   const [user, setUser] = useState<{ name: string | null; username: string | null } | null>(null);
   const [authEnabled, setAuthEnabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { loadAuthMe } = useAuthMe();
   const { clear, getKey, getUser, setUser: persistUser } = useSession();
   const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
   const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (authDisabled) return;
@@ -137,6 +140,12 @@ export function UserMenu({ collapsed }: UserMenuProps) {
 
   const menuUser = authDisabled ? { name: localWorkspaceName, username: null } : user;
   const showSignOut = !authDisabled;
+
+  if (!mounted) {
+    return (
+      <div aria-hidden="true" className={cn('rounded-lg', collapsed ? 'h-9 w-9' : 'h-8 w-full')} />
+    );
+  }
 
   if ((!authEnabled || !user) && !authDisabled) return null;
   if (!menuUser) return null;
