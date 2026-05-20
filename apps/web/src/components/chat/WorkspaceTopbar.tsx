@@ -81,7 +81,7 @@ export function WorkspaceTopbar() {
                   'inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border px-2',
                   pendingCount > 0
                     ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending-soft)] text-[var(--accent-pending)]'
-                    : 'border-[var(--stroke-divider)] bg-[var(--surface-panel)] text-[var(--text-tertiary)]'
+                    : 'border-[var(--stroke-divider)] bg-[var(--workspace-bg)] text-[var(--text-tertiary)]'
                 )}
               >
                 Pending {pendingCount}
