@@ -141,7 +141,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        'flex h-11 shrink-0 items-center gap-3 bg-[var(--surface-panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
+        'flex h-11 shrink-0 items-center gap-3 bg-[var(--panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
       )}
     >
       {/* Sidebar toggle */}
