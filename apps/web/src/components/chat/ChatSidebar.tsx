@@ -412,8 +412,8 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
-            collapsed ? 'justify-center px-2' : 'px-3'
+            'flex h-16 shrink-0 items-center',
+            collapsed ? 'justify-center px-2' : 'px-5'
           )}
         >
           <button
@@ -422,11 +422,13 @@ export function ChatSidebar() {
               setActiveConversation(null, null);
               router.push('/chat');
             }}
-            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <LogoIcon />
             {!collapsed && (
-              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">T3X</span>
+              <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                T3X - Git for Meaning
+              </span>
             )}
           </button>
         </div>
