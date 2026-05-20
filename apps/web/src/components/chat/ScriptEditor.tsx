@@ -176,7 +176,7 @@ export function ScriptEditor() {
             position: 'relative',
             fontSize: '12px',
             lineHeight: '19px',
-            backgroundColor: 'var(--panel-alt)',
+            backgroundColor: 'var(--editor-bg)',
             color: 'var(--text-primary)',
           },
           '&::after': {
@@ -189,7 +189,7 @@ export function ScriptEditor() {
             width: '24px',
             pointerEvents: 'none',
             background:
-              'linear-gradient(90deg, color-mix(in srgb, var(--panel-alt) 0%, transparent), var(--panel-alt))',
+              'linear-gradient(90deg, color-mix(in srgb, var(--editor-bg) 0%, transparent), var(--editor-bg))',
           },
           '.cm-content': {
             padding: '7px 0',
@@ -209,7 +209,7 @@ export function ScriptEditor() {
             tabSize: '2',
           },
           '.cm-gutters': {
-            backgroundColor: 'var(--panel)',
+            backgroundColor: 'var(--editor-gutter)',
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
             borderRight: '1px solid var(--stroke-default)',
             fontFamily: YOPS_MONO_FONT,
