@@ -251,7 +251,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
                         </div>
                         <div className="h-1.5 bg-[var(--surface-app)] rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-[var(--accent-blue)]"
+                            className="h-full rounded-full bg-[var(--status-info)]"
                             style={{ width: `${Math.round((count / threshold) * 100)}%` }}
                           />
                         </div>

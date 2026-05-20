@@ -180,14 +180,14 @@ export function ReportHeader({
             onBlur={handleTitleBlur}
             onKeyDown={(e) => e.key === 'Enter' && titleRef.current?.blur()}
             maxLength={200}
-            className="flex-1 border-b border-border bg-transparent text-lg font-semibold outline-none focus:border-[var(--accent-primary)]"
+            className="flex-1 border-b border-border bg-transparent text-lg font-semibold outline-none focus:border-[var(--ring)]"
             placeholder="Untitled Report"
           />
         ) : (
           <h1
             onClick={() => setEditingTitle(true)}
             className={cn(
-              'flex-1 cursor-pointer text-lg font-semibold hover:text-[var(--accent-primary)] transition-colors',
+              'flex-1 cursor-pointer text-lg font-semibold hover:text-[var(--ring)] transition-colors',
               !title && 'text-muted-foreground'
             )}
           >
@@ -227,14 +227,14 @@ export function ReportHeader({
           onBlur={handleDescBlur}
           maxLength={2000}
           rows={2}
-          className="w-full resize-none border-b border-border bg-transparent text-sm outline-none focus:border-[var(--accent-primary)]"
+          className="w-full resize-none border-b border-border bg-transparent text-sm outline-none focus:border-[var(--ring)]"
           placeholder="Add a description..."
         />
       ) : (
         <p
           onClick={() => setEditingDesc(true)}
           className={cn(
-            'cursor-pointer text-sm hover:text-[var(--accent-primary)] transition-colors',
+            'cursor-pointer text-sm hover:text-[var(--ring)] transition-colors',
             !description && 'text-muted-foreground italic'
           )}
         >

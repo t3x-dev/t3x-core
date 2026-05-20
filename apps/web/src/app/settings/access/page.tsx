@@ -8,7 +8,7 @@ export default function AccessPage() {
         Configure the standalone API host&apos;s local API URL and key. In a one-machine setup,
         WebUI, CLI, and MCP can share the same file.
       </p>
-      <div className="mb-8 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+      <div className="mb-8 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
         Environment variables override the shared file, so this page shows the effective state
         before you save.
       </div>

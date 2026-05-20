@@ -26,14 +26,20 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
   }, []);
 
   return (
-    <div className="flex h-full">
+    <div data-testid="settings-layout" className="flex min-h-full flex-col md:h-full md:flex-row">
       {/* Sidebar */}
-      <aside className="w-48 shrink-0 border-r border-[var(--stroke-divider)] py-6 px-3 flex flex-col">
-        <div className="flex items-center gap-2 px-3 mb-6">
+      <aside
+        data-testid="settings-layout-sidebar"
+        className="flex w-full shrink-0 flex-col border-b border-[var(--stroke-divider)] px-3 py-4 md:w-48 md:border-r md:border-b-0 md:py-6"
+      >
+        <div className="mb-3 flex items-center gap-2 px-3 md:mb-6">
           <Settings className="h-5 w-5 text-[var(--text-primary)]" />
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h2>
         </div>
-        <nav className="flex flex-col gap-1">
+        <nav
+          aria-label="Settings sections"
+          className="flex w-full flex-row flex-wrap gap-1 md:flex-col md:flex-nowrap"
+        >
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -71,7 +77,9 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main data-testid="settings-layout-content" className="min-w-0 flex-1 overflow-auto">
+        {children}
+      </main>
     </div>
   );
 }

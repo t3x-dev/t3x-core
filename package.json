@@ -29,6 +29,7 @@
     "test:runner": "turbo run test --filter=@t3x-dev/runner",
     "test:yops": "turbo run test --filter=@t3x-dev/yops",
     "screenshots:demo": "node tools/screenshot-demo.mjs",
+    "release:check": "node tools/release-readiness.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",

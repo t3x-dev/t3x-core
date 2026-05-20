@@ -43,7 +43,7 @@ const SOURCE_LABEL: Record<LocalProviderKeySource, string> = {
 const SOURCE_CHIP_CLASS: Record<LocalProviderKeySource, string> = {
   env: 'bg-[var(--accent-pending)]/10 text-[var(--accent-pending)] border-[var(--accent-pending)]/30',
   file: 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/30',
-  none: 'bg-[var(--surface-secondary)] text-[var(--text-tertiary)] border-[var(--stroke-divider)]',
+  none: 'bg-[var(--surface-elevated)] text-[var(--text-tertiary)] border-[var(--stroke-divider)]',
 };
 
 function displayName(provider: ProviderInfo): string {
@@ -99,7 +99,7 @@ function ProviderCard({
     <div
       className={cn(
         'rounded-lg border border-[var(--stroke-divider)]',
-        configured ? 'bg-[var(--surface-primary)]' : 'bg-[var(--surface-secondary)] opacity-80'
+        configured ? 'bg-[var(--surface-card)]' : 'bg-[var(--surface-elevated)] opacity-80'
       )}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3">

@@ -134,7 +134,7 @@ export function ProviderCredentialDialog({
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleSave}>
-          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-secondary)] px-4 py-3">
+          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-4 py-3">
             <div className="text-sm font-medium text-[var(--text-primary)]">
               {getStatusLabel(status)}
             </div>

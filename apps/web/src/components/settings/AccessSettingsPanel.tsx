@@ -124,7 +124,7 @@ export function AccessSettingsPanel() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
         <p className="font-medium text-[var(--text-primary)]">CLI fallback</p>
         <p className="mt-1">
           You can set the same shared values from the terminal with{' '}
@@ -138,12 +138,12 @@ export function AccessSettingsPanel() {
       </div>
 
       {isLoading ? (
-        <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+        <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
           Loading shared access...
         </div>
       ) : (
         <form
-          className="space-y-4 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-5"
+          className="space-y-4 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5"
           onSubmit={(event) => void handleSave(event)}
         >
           <div className="grid gap-4">
@@ -192,13 +192,13 @@ export function AccessSettingsPanel() {
           </div>
 
           {config?.api_key_source === 'env' || config?.api_url_source === 'env' ? (
-            <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <div className="rounded-xl bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
               Environment variables currently override part of this local config. File changes stay
               saved, but they will not take effect until the override is removed.
             </div>
           ) : null}
 
-          <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+          <div className="rounded-xl bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
             Config path:{' '}
             <span className="font-mono text-[var(--text-primary)]">{config?.config_path}</span>
           </div>
@@ -229,7 +229,7 @@ export function AccessSettingsPanel() {
           </div>
 
           {accessCheck ? (
-            <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <div className="rounded-xl bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
               <p className="font-medium text-[var(--text-primary)]">
                 Access check: {accessCheck.code}
               </p>

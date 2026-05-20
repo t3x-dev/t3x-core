@@ -114,7 +114,7 @@ export function PreferencesSettingsPanel() {
         </div>
 
         {mounted && (
-          <div className="inline-flex items-center gap-1 rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-secondary)] p-1">
+          <div className="inline-flex items-center gap-1 rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-1">
             {APPEARANCE_OPTIONS.map((option) => {
               const isActive = (theme ?? 'system') === option.value;
               const Icon = option.icon;
@@ -128,7 +128,7 @@ export function PreferencesSettingsPanel() {
                   className={cn(
                     'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
                     isActive
-                      ? 'bg-[var(--surface-primary)] text-[var(--text-primary)] shadow-sm'
+                      ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   )}
                 >
@@ -151,27 +151,27 @@ export function PreferencesSettingsPanel() {
         </div>
 
         {authDisabled ? (
-          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
             User-level defaults are unavailable while auth is disabled. Chat and generation will
             fall back to conversation, project, and global provider settings.
           </div>
         ) : !hasSession ? (
-          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
             Sign in to save account-level provider/model defaults.
           </div>
         ) : loadingDefaults ? (
-          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+          <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 text-sm text-[var(--text-secondary)]">
             Loading account defaults...
           </div>
         ) : (
-          <div className="space-y-4 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-4">
+          <div className="space-y-4 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
             <ModelSelector
               initialProvider={draftDefaults.provider}
               initialModel={draftDefaults.model}
               onChange={(provider, model) => setDraftDefaults({ provider, model })}
             />
 
-            <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <div className="rounded-xl bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
               Resolution order: conversation override, project default, account default, global
               provider order.
             </div>

@@ -149,7 +149,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
               disabled={loadingProjects || isCreating}
-              className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-3 text-sm text-[var(--text-primary)]"
+              className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
             >
               <option value="">Select a project...</option>
               {projects.map((p) => (
@@ -179,7 +179,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
                 value={selectedCommitHash}
                 onChange={(e) => setSelectedCommitHash(e.target.value)}
                 disabled={isCreating}
-                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-3 text-sm text-[var(--text-primary)]"
+                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
               >
                 {commits.map((c) => (
                   <option key={c.hash} value={c.hash}>

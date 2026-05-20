@@ -74,9 +74,9 @@ function SortableProviderCard({
         'flex items-center justify-between rounded-lg border px-4 py-3',
         'border-[var(--stroke-divider)]',
         provider.configured
-          ? 'bg-[var(--surface-primary)]'
-          : 'bg-[var(--surface-secondary)] opacity-60',
-        isDragging && 'opacity-50 shadow-lg ring-2 ring-[var(--accent-blue)]'
+          ? 'bg-[var(--surface-card)]'
+          : 'bg-[var(--surface-elevated)] opacity-60',
+        isDragging && 'opacity-50 shadow-lg ring-2 ring-[var(--ring)]'
       )}
     >
       <div className="flex items-center gap-3">

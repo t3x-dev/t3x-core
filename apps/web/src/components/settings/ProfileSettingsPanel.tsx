@@ -78,7 +78,7 @@ export function ProfileSettingsPanel() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-5">
+        <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
           <div className="flex items-start gap-4">
             <div
               className={cn(
@@ -124,7 +124,7 @@ export function ProfileSettingsPanel() {
                           'flex h-8 w-8 items-center justify-center rounded-full ring-offset-2 transition-transform hover:scale-105',
                           option.className,
                           isActive
-                            ? 'ring-2 ring-[var(--text-primary)] ring-offset-[var(--surface-primary)]'
+                            ? 'ring-2 ring-[var(--text-primary)] ring-offset-[var(--surface-card)]'
                             : 'ring-1 ring-[var(--stroke-default)]'
                         )}
                       >
@@ -137,7 +137,7 @@ export function ProfileSettingsPanel() {
                 </div>
               </div>
 
-              <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+              <div className="rounded-xl bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
                 Settings stay local to this browser. Manage model providers from the Providers tab
                 when you need API-backed features.
               </div>
@@ -159,7 +159,7 @@ export function ProfileSettingsPanel() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] p-5">
+      <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
         <div className="space-y-1">
           <p className="text-sm font-medium text-[var(--text-primary)]">{displayName}</p>
           {profile?.username && (

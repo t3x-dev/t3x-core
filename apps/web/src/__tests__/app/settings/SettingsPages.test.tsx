@@ -4,8 +4,18 @@ import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AccessPage from '@/app/settings/access/page';
+import SettingsLayout from '@/app/settings/layout';
 import PreferencesPage from '@/app/settings/preferences/page';
 import ProvidersPage from '@/app/settings/providers/page';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/preferences',
+}));
+
+vi.mock('@/infrastructure/session', () => ({
+  clearSession: vi.fn(),
+  getSessionKey: () => null,
+}));
 
 vi.mock('@/components/settings/AccessSettingsPanel', () => ({
   AccessSettingsPanel: () => <div>Mock Access Settings Panel</div>,
@@ -50,5 +60,27 @@ describe('settings pages', () => {
       screen.getByText('Configure LLM, embedding, and NLP providers for T3X features.')
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Providers Settings Panel')).toBeInTheDocument();
+  });
+
+  it('stacks settings navigation above content on compact viewports', () => {
+    render(
+      <SettingsLayout>
+        <div>Settings child</div>
+      </SettingsLayout>
+    );
+
+    const shell = screen.getByTestId('settings-layout');
+    const navigation = screen.getByRole('navigation', { name: 'Settings sections' });
+    const sidebar = screen.getByTestId('settings-layout-sidebar');
+    const content = screen.getByTestId('settings-layout-content');
+
+    expect(shell.className).toContain('flex-col');
+    expect(shell.className).toContain('md:flex-row');
+    expect(sidebar.className).toContain('w-full');
+    expect(sidebar.className).toContain('md:w-48');
+    expect(navigation.className).toContain('flex-wrap');
+    expect(navigation.className).toContain('md:flex-col');
+    expect(navigation.className).toContain('md:flex-nowrap');
+    expect(content.className).toContain('min-w-0');
   });
 });

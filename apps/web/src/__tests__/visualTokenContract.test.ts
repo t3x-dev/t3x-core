@@ -11,6 +11,13 @@ const FORBIDDEN_ABSOLUTE_TAILWIND_COLOR =
   /(?<![\w-])(?:bg|text|border|ring|from|via|to|decoration|fill|stroke|shadow)-(?:black|white)(?:\/\d{1,3})?\b/g;
 const FORBIDDEN_TAILWIND_GRADIENT = /\bbg-gradient-to-[a-z]+\b/g;
 const FORBIDDEN_LITERAL_HEX = /#[0-9a-fA-F]{6,8}\b/g;
+const RETIRED_THEME_TOKENS = [
+  '--surface-primary',
+  '--surface-secondary',
+  '--surface-base',
+  '--accent-blue',
+  '--accent-primary',
+] as const;
 
 const ALLOWED_FILES = new Set([
   // Logo glyphs are brand assets, not page or component color roles.
@@ -64,6 +71,25 @@ describe('visual token contract', () => {
               `${relative}:${lineNumberForOffset(content, match.index ?? 0)} ${match[0]}`
             );
           }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('does not use retired surface or accent token aliases', () => {
+    const violations: string[] = [];
+
+    for (const scanDir of SCAN_DIRS) {
+      for (const file of collectFiles(path.join(ROOT, scanDir))) {
+        const relative = path.relative(ROOT, file);
+        const content = readFileSync(file, 'utf8');
+
+        for (const token of RETIRED_THEME_TOKENS) {
+          const tokenOffset = content.indexOf(token);
+          if (tokenOffset === -1) continue;
+          violations.push(`${relative}:${lineNumberForOffset(content, tokenOffset)} ${token}`);
         }
       }
     }

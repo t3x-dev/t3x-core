@@ -113,12 +113,12 @@ export function TemplatePreviewDialog({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="system" className="flex-1 overflow-auto mt-2">
-            <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-base)] p-4">
+            <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
               <HighlightedPrompt text={template.system_prompt} />
             </div>
           </TabsContent>
           <TabsContent value="user" className="flex-1 overflow-auto mt-2">
-            <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-base)] p-4">
+            <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4">
               <HighlightedPrompt text={template.user_prompt} />
             </div>
           </TabsContent>
@@ -132,7 +132,7 @@ export function TemplatePreviewDialog({
                 template.variables.map((v) => (
                   <div
                     key={v.name}
-                    className="flex items-start gap-3 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-base)] p-3"
+                    className="flex items-start gap-3 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
                   >
                     <code className="rounded bg-[var(--status-info)]/10 px-1.5 py-0.5 text-xs text-[var(--status-info)] shrink-0">
                       {`{{${v.name}}}`}

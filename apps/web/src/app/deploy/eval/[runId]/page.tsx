@@ -840,8 +840,7 @@ export default function RunDetailPage() {
                                   : isWarning
                                     ? 'border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)]'
                                     : 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)]',
-                                activeAssertionId === assertion.id &&
-                                  'ring-2 ring-[var(--accent-primary)]'
+                                activeAssertionId === assertion.id && 'ring-2 ring-[var(--ring)]'
                               )}
                             >
                               <div className="flex items-start gap-3">

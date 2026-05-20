@@ -201,7 +201,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
                   updateForm({ category: e.target.value as CreateTemplateInput['category'] })
                 }
                 disabled={isCreating}
-                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-3 text-sm"
+                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -216,7 +216,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
                 value={form.leaf_type}
                 onChange={(e) => updateForm({ leaf_type: e.target.value })}
                 disabled={isCreating}
-                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-3 text-sm"
+                className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm"
               >
                 {LEAF_TYPES.map((t) => (
                   <option key={t} value={t}>

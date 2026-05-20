@@ -270,7 +270,7 @@ export function RunsTable({
               className={cn(
                 'cursor-pointer hover:bg-muted/50',
                 isSelected && 'bg-primary/5 hover:bg-primary/10',
-                activeRunId === run.run_id && 'ring-2 ring-[var(--accent-primary)] ring-inset'
+                activeRunId === run.run_id && 'ring-2 ring-[var(--ring)] ring-inset'
               )}
               onClick={() => handleRowClick(run)}
             >

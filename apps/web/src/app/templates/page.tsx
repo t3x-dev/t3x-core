@@ -141,7 +141,7 @@ export default function TemplatesPage() {
           <select
             value={leafType ?? ''}
             onChange={(e) => setLeafType(e.target.value || null)}
-            className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-2 text-xs text-[var(--text-primary)]"
+            className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 text-xs text-[var(--text-primary)]"
           >
             {LEAF_TYPES.map((t) => (
               <option key={t.value ?? 'all'} value={t.value ?? ''}>

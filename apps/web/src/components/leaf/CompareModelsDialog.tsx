@@ -133,7 +133,7 @@ export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModel
                         className={cn(
                           'flex items-center gap-3 rounded-lg border px-3 py-2 cursor-pointer transition-colors w-full text-left',
                           selectedModels.has(opt.model)
-                            ? 'border-[var(--accent-blue)] bg-[var(--accent-blue)]/5'
+                            ? 'border-[var(--status-info)] bg-[var(--status-info-muted)]'
                             : 'border-[var(--stroke-divider)] hover:bg-muted/50',
                           isDisabled && 'opacity-50 cursor-not-allowed'
                         )}
