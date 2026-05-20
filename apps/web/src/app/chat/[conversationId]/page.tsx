@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
@@ -16,6 +16,16 @@ import {
 } from '@/utils/chatWorkspaceLayout';
 
 export default function ConversationPage() {
+  // Match /chat landing: useSearchParams forces a CSR bailout in Next 16,
+  // so keep the route shell responsive by containing it in Suspense.
+  return (
+    <Suspense fallback={null}>
+      <ConversationRoute />
+    </Suspense>
+  );
+}
+
+function ConversationRoute() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useSettingsModalStore } from '@/store/settingsModalStore';
@@ -70,7 +70,7 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
 
     expect(await screen.findByText('Profile')).toBeTruthy();
     expect(screen.getByText('Settings')).toBeTruthy();
@@ -78,7 +78,7 @@ describe('UserMenu', () => {
     expect(loadAuthMe).not.toHaveBeenCalled();
   });
 
-  it('reflects the edited local workspace name in the menu trigger', () => {
+  it('reflects the edited local workspace name in the menu trigger', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
     act(() => {
       useSettingsStore.getState().setLocalWorkspaceName('Meaning Studio');
@@ -86,7 +86,7 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    expect(screen.getByRole('button', { name: 'Meaning Studio' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Meaning Studio' })).toBeInTheDocument();
   });
 
   it('opens the profile tab from the local workspace menu', async () => {
@@ -94,7 +94,7 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
     fireEvent.click(await screen.findByText('Profile'));
 
     expect(useSettingsModalStore.getState().isOpen).toBe(true);
@@ -106,7 +106,7 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
     fireEvent.click(await screen.findByText('Settings'));
 
     expect(useSettingsModalStore.getState().isOpen).toBe(true);
@@ -118,18 +118,18 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
 
     const menu = await screen.findByRole('menu');
     expect(menu.dataset.side).toBe('top');
     expect(menu.dataset.align).toBe('start');
   });
 
-  it('stays hidden when auth is enabled and no session exists', () => {
+  it('stays hidden when auth is enabled and no session exists', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'false');
 
     const { container } = render(<UserMenu collapsed={false} />);
 
-    expect(container.firstChild).toBeNull();
+    await waitFor(() => expect(container.firstChild).toBeNull());
   });
 });
