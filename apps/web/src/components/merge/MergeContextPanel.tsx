@@ -1,4 +1,6 @@
 import type { MergeResult } from '@t3x-dev/core';
+import type { MergeVoiceSection } from '@/domain/merge/voices';
+import { VoiceCard } from './VoiceCard';
 
 interface MergeContextPanelProps {
   sourceBranch: string | null;
@@ -9,6 +11,7 @@ interface MergeContextPanelProps {
   unresolvedCount: number;
   message: string;
   previewTotalCount: number;
+  voices?: MergeVoiceSection[];
 }
 
 /**
@@ -24,6 +27,7 @@ export function MergeContextPanel({
   unresolvedCount,
   message,
   previewTotalCount,
+  voices,
 }: MergeContextPanelProps) {
   return (
     <div className="hidden lg:flex w-[280px] shrink-0 flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 overflow-y-auto">
@@ -111,6 +115,19 @@ export function MergeContextPanel({
           </div>
         </div>
       </div>
+
+      {voices && voices.length > 0 && (
+        <div className="mb-4" data-testid="merge-voices-panel">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-2">
+            Voices
+          </h4>
+          <div className="space-y-2">
+            {voices.map((voice) => (
+              <VoiceCard key={voice.kind} voice={voice} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

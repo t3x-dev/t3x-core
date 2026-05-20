@@ -157,7 +157,10 @@ export function MergeReviewDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] backdrop-blur-sm"
+      data-testid="merge-review-dialog"
+    >
       <motion.div
         initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
         animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
@@ -386,6 +389,7 @@ export function MergeReviewDialog({
                   onClick={handleConfirm}
                   disabled={!allChecksPassed || state === 'committing'}
                   className="gap-1.5"
+                  data-testid="merge-review-confirm"
                 >
                   {state === 'committing' ? (
                     <>

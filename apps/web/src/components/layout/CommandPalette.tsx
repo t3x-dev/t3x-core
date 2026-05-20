@@ -3,20 +3,22 @@
 import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  BarChart3,
   FileText,
-  GitBranch,
   Home,
   Keyboard,
   LayoutGrid,
   MessageSquarePlus,
   Search,
   Settings,
-  Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import {
+  type CommandIconName,
+  type CommandRegistryCommand,
+  useCommandRegistry,
+} from '@/hooks/shared/useCommandRegistry';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
-import { useTerminology } from '@/hooks/shared/useTerminology';
 import { cn } from '@/utils/cn';
 import { reducedMotion, scaleIn } from '@/utils/motion';
 import { glass } from '@/utils/theme';
@@ -30,10 +32,9 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ projectId, onCreateConversation }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   const prefersReducedMotion = useReducedMotion();
-  const { t } = useTerminology();
   const dialogVariants = prefersReducedMotion ? reducedMotion.scaleIn : scaleIn;
+  const commandGroups = useCommandRegistry({ projectId, onCreateConversation });
 
   // Toggle command palette with Cmd+K / Ctrl+K
   useEffect(() => {
@@ -108,77 +109,21 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">T3X — Git for Meaning</p>
                 </Command.Empty>
 
-                {/* Navigation Group */}
-                <Command.Group heading="Navigation" className="text-[var(--text-tertiary)]">
-                  <CommandItem
-                    icon={<Home size={16} />}
-                    shortcut="⌘H"
-                    onSelect={() => handleSelect(() => router.push('/'))}
+                {commandGroups.map((group) => (
+                  <Command.Group
+                    key={group.id}
+                    heading={group.title}
+                    className="text-[var(--text-tertiary)]"
                   >
-                    Go to Home
-                  </CommandItem>
-                  {projectId && (
-                    <CommandItem
-                      icon={<FileText size={16} />}
-                      shortcut="⌘P"
-                      onSelect={() => handleSelect(() => router.push(`/project/${projectId}`))}
-                    >
-                      Go to Project Canvas
-                    </CommandItem>
-                  )}
-                  <CommandItem
-                    icon={<LayoutGrid size={16} />}
-                    onSelect={() => handleSelect(() => router.push('/templates'))}
-                  >
-                    Browse Templates
-                  </CommandItem>
-                  <CommandItem
-                    icon={<Settings size={16} />}
-                    onSelect={() => handleSelect(() => router.push('/insights'))}
-                  >
-                    View Insights
-                  </CommandItem>
-                </Command.Group>
-
-                {/* Actions Group */}
-                <Command.Group heading="Actions" className="text-[var(--text-tertiary)]">
-                  <CommandItem
-                    icon={<MessageSquarePlus size={16} />}
-                    shortcut="⌘N"
-                    onSelect={() => handleSelect(() => onCreateConversation?.())}
-                  >
-                    New Conversation
-                  </CommandItem>
-                  <CommandItem
-                    icon={<GitBranch size={16} />}
-                    onSelect={() => handleSelect(() => {})}
-                  >
-                    {t('create_branch')}
-                  </CommandItem>
-                  <CommandItem
-                    icon={<Sparkles size={16} />}
-                    onSelect={() => handleSelect(() => {})}
-                  >
-                    Generate Summary
-                  </CommandItem>
-                  <CommandItem
-                    icon={<Keyboard size={16} />}
-                    shortcut="⌘/"
-                    onSelect={() =>
-                      handleSelect(() => {
-                        document.dispatchEvent(
-                          new KeyboardEvent('keydown', {
-                            key: '/',
-                            metaKey: true,
-                            bubbles: true,
-                          })
-                        );
-                      })
-                    }
-                  >
-                    Keyboard Shortcuts
-                  </CommandItem>
-                </Command.Group>
+                    {group.commands.map((command) => (
+                      <CommandItem
+                        key={command.id}
+                        command={command}
+                        onSelect={() => handleSelect(command.run)}
+                      />
+                    ))}
+                  </Command.Group>
+                ))}
               </Command.List>
 
               <div className="flex items-center justify-between border-t border-[var(--stroke-divider)] px-4 py-2">
@@ -202,16 +147,27 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
   );
 }
 
-interface CommandItemProps {
-  children: React.ReactNode;
-  icon?: React.ReactNode;
-  shortcut?: string;
-  onSelect?: () => void;
-}
+const COMMAND_ICONS: Record<CommandIconName, React.ComponentType<{ size?: number }>> = {
+  'bar-chart': BarChart3,
+  'file-text': FileText,
+  home: Home,
+  keyboard: Keyboard,
+  'layout-grid': LayoutGrid,
+  'message-plus': MessageSquarePlus,
+  settings: Settings,
+};
 
-function CommandItem({ children, icon, shortcut, onSelect }: CommandItemProps) {
+function CommandItem({
+  command,
+  onSelect,
+}: {
+  command: CommandRegistryCommand;
+  onSelect?: () => void;
+}) {
+  const Icon = COMMAND_ICONS[command.icon];
   return (
     <Command.Item
+      value={command.title}
       onSelect={onSelect}
       className={cn(
         'flex cursor-pointer select-none items-center gap-3 rounded-lg px-3 py-2.5',
@@ -220,15 +176,13 @@ function CommandItem({ children, icon, shortcut, onSelect }: CommandItemProps) {
         'transition-colors'
       )}
     >
-      {icon && (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--text-secondary)]">
-          {icon}
-        </span>
-      )}
-      <span className="flex-1">{children}</span>
-      {shortcut && (
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--surface-card)] text-[var(--text-secondary)]">
+        <Icon size={16} />
+      </span>
+      <span className="flex-1">{command.title}</span>
+      {command.shortcut && (
         <kbd className="ml-auto rounded border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
-          {shortcut}
+          {command.shortcut}
         </kbd>
       )}
     </Command.Item>

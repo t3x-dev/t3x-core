@@ -15,6 +15,7 @@
 import type { SlotConflict, SlotValue, TreeNode } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
+import { buildMergeDecisionLabels, type MergeDecisionLabels } from '@/domain/merge/voices';
 import { cn } from '@/utils/cn';
 
 // ============================================================================
@@ -39,6 +40,7 @@ export interface ConflictCardProps {
   onResolve: (resolution: TreeResolution) => void;
   isActive: boolean;
   onSelect: () => void;
+  decisionLabels?: MergeDecisionLabels;
 }
 
 // ============================================================================
@@ -268,6 +270,7 @@ export function ConflictCard({
   onResolve,
   isActive,
   onSelect,
+  decisionLabels = buildMergeDecisionLabels({}),
 }: ConflictCardProps) {
   const [mode, setMode] = useState<'per-tree' | 'per-slot'>('per-tree');
   const { treeId, sourceNode, targetNode, slotConflicts } = conflict;
@@ -404,10 +407,7 @@ export function ConflictCard({
                     : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-src-accent)]/60 hover:text-[var(--merge-src-accent)]'
                 )}
               >
-                Accept Source
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
-                  A
-                </kbd>
+                {decisionLabels.source}
               </button>
               <button
                 type="button"
@@ -419,10 +419,7 @@ export function ConflictCard({
                     : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-tgt-accent)]/60 hover:text-[var(--merge-tgt-accent)]'
                 )}
               >
-                Accept Target
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
-                  B
-                </kbd>
+                {decisionLabels.target}
               </button>
               <button
                 type="button"
@@ -434,10 +431,7 @@ export function ConflictCard({
                     : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-conflict-accent)]/60 hover:text-[var(--merge-conflict-accent)]'
                 )}
               >
-                Accept Both
-                <kbd className="ml-1 text-[0.65rem] font-mono bg-[var(--hover-bg)] px-1 rounded opacity-60">
-                  X
-                </kbd>
+                {decisionLabels.both}
               </button>
 
               {/* Mode toggle */}
@@ -446,7 +440,7 @@ export function ConflictCard({
                 onClick={() => setMode('per-slot')}
                 className="ml-auto text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
               >
-                Resolve per slot →
+                {decisionLabels.edit} →
               </button>
             </div>
           </>
