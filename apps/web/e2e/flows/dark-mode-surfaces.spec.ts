@@ -145,7 +145,7 @@ test.describe('desktop dark-mode release surfaces', () => {
         path: '/templates',
         ready: async (p) => {
           await expect(p.getByRole('heading', { name: 'Template Gallery' })).toBeVisible();
-          await expect(p.getByRole('button', { name: 'Create Template' })).toBeVisible();
+          await expect(p.getByRole('button', { name: 'Create Template' }).first()).toBeVisible();
         },
       },
       {
