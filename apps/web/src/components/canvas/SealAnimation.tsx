@@ -72,7 +72,11 @@ export function SealAnimation({
   ].join(' ');
 
   return (
-    <div className="pointer-events-none absolute inset-0" style={{ zIndex: 10 }}>
+    <div
+      data-testid="commit-seal-animation"
+      className="pointer-events-none absolute inset-0"
+      style={{ zIndex: 10 }}
+    >
       <svg
         width={width}
         height={height}

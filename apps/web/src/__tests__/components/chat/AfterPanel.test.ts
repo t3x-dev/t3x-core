@@ -327,6 +327,29 @@ describe('AfterPanel tree edit controls', () => {
     expect(mocks.discardDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('commit-button')).toBeNull();
   });
+
+  it('shows the lightweight commit ceremony after the commit API returns a hash', async () => {
+    mocks.commitTrees.mockResolvedValueOnce({
+      hash: 'sha256:1234567890abcdef1234567890abcdef',
+    });
+    useWorkspaceStore.getState().setConversation('conv_123');
+    useWorkspaceStore.getState().setDerived({
+      tree: {
+        trees: [{ key: 'current', slots: { value: 'ready' }, children: [] }],
+        relations: [],
+      },
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+
+    render(createElement(AfterPanel));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit · main' }));
+    fireEvent.click(screen.getByTestId('commit-dialog-confirm'));
+
+    expect(await screen.findByRole('status', { name: 'Commit sealed' })).not.toBeNull();
+    expect(screen.getByTitle('sha256:1234567890abcdef1234567890abcdef')).not.toBeNull();
+  });
 });
 
 describe('AfterPanel.formatSlotPreviewValue', () => {
