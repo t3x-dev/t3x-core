@@ -1,5 +1,3 @@
-export type WorkspaceWorkbenchView = 'script' | 'draft' | 'applied' | 'committed' | 'archived';
-
 export type WorkspaceActionMode = 'idle' | 'streaming' | 'executed' | 'committing' | 'error';
 
 export type WorkspaceActionId =
@@ -48,25 +46,6 @@ export interface WorkspaceActionBarState {
     ready: boolean;
     reason: string | null;
   };
-}
-
-export type WorkspaceStatusSegmentTone = 'neutral' | 'source' | 'pending' | 'commit' | 'warning';
-
-export interface WorkspaceStatusStripFacts extends WorkspaceActionBarFacts {
-  sourceCount: number;
-  materializedOpCount: number;
-  draftOpCount: number;
-  appliedOpCount: number;
-  pendingCount: number;
-}
-
-export interface WorkspaceStatusSegment {
-  id: 'sources' | 'ops' | 'pending' | 'applied' | 'commit';
-  label: string;
-  value: string;
-  detail: string | null;
-  tone: WorkspaceStatusSegmentTone;
-  targetView: WorkspaceWorkbenchView | null;
 }
 
 function action(input: WorkspaceActionState): WorkspaceActionState {
@@ -212,55 +191,4 @@ export function deriveWorkspaceActionBarState(
     secondary: [],
     commitReadiness,
   };
-}
-
-export function deriveWorkspaceStatusStripState(
-  facts: WorkspaceStatusStripFacts
-): WorkspaceStatusSegment[] {
-  const actionState = deriveWorkspaceActionBarState(facts);
-  const pendingTarget: WorkspaceWorkbenchView | null =
-    facts.pendingCount > 0 ? (facts.draftOpCount > 0 ? 'draft' : 'script') : null;
-
-  return [
-    {
-      id: 'sources',
-      label: 'Sources',
-      value: String(facts.sourceCount),
-      detail: facts.sourceCount === 1 ? '1 turn source' : `${facts.sourceCount} turn sources`,
-      tone: 'source',
-      targetView: null,
-    },
-    {
-      id: 'ops',
-      label: 'Ops',
-      value: String(facts.materializedOpCount),
-      detail: 'YOps script',
-      tone: 'neutral',
-      targetView: 'script',
-    },
-    {
-      id: 'pending',
-      label: 'Pending',
-      value: String(facts.pendingCount),
-      detail: facts.pendingCount > 0 ? 'Review before commit' : 'No pending changes',
-      tone: facts.pendingCount > 0 ? 'pending' : 'neutral',
-      targetView: pendingTarget,
-    },
-    {
-      id: 'applied',
-      label: 'Applied',
-      value: String(facts.appliedOpCount),
-      detail: 'Materialized in yops_log',
-      tone: 'neutral',
-      targetView: 'applied',
-    },
-    {
-      id: 'commit',
-      label: 'Commit',
-      value: actionState.commitReadiness.ready ? 'Ready' : 'Blocked',
-      detail: actionState.commitReadiness.reason,
-      tone: actionState.commitReadiness.ready ? 'commit' : 'warning',
-      targetView: null,
-    },
-  ];
 }

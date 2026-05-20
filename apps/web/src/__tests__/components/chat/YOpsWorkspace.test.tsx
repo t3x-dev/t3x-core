@@ -70,6 +70,7 @@ describe('YOpsWorkspace view switcher', () => {
 
   it('mounts on YOps when the conversation is empty', () => {
     const { container } = render(<YOpsWorkspace />);
+    expect(screen.queryByRole('group', { name: 'Workspace status' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'YOps' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Logs/ })).toBeInTheDocument();
     expect(screen.getByText('0 ops · 0 pending')).toBeInTheDocument();
@@ -107,7 +108,7 @@ describe('YOpsWorkspace view switcher', () => {
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
   });
 
-  it('routes the status strip Pending segment to the draft log view', () => {
+  it('routes pending drafts through the Logs menu', () => {
     act(() => {
       useWorkspaceStore.getState().setDraft({
         ops: [llmOp()],
@@ -117,7 +118,8 @@ describe('YOpsWorkspace view switcher', () => {
 
     const { container } = render(<YOpsWorkspace />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Pending 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Draft/ }));
 
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeNull();
