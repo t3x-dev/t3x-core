@@ -153,7 +153,8 @@ export default function LeafDetailPage() {
     semanticPointSummary.total > 0 ? semanticPointSummary.included : reflectedCount;
   const coverageTotal = semanticPointSummary.total > 0 ? semanticPointSummary.total : nodes.length;
   const assertionCount = leaf?.assertions?.length ?? 0;
-  const assertionPassedCount = leaf?.assertions?.filter((assertion) => assertion.passed).length ?? 0;
+  const assertionPassedCount =
+    leaf?.assertions?.filter((assertion) => assertion.passed).length ?? 0;
   const assertionStatus =
     assertionCount === 0
       ? 'assertions not run'

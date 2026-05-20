@@ -311,8 +311,9 @@ export function LeafOutputDisplay({
     let markerNumber = 1;
 
     return classified.map((block, index) => {
-      const shouldMark =
-        hasHeadings ? block.kind !== 'paragraph' && block.kind !== 'divider' : index < 6;
+      const shouldMark = hasHeadings
+        ? block.kind !== 'paragraph' && block.kind !== 'divider'
+        : index < 6;
       return {
         ...block,
         markerNumber: shouldMark ? markerNumber++ : null,

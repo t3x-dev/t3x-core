@@ -143,10 +143,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
 
   if (!mounted) {
     return (
-      <div
-        aria-hidden="true"
-        className={cn('rounded-lg', collapsed ? 'h-9 w-9' : 'h-8 w-full')}
-      />
+      <div aria-hidden="true" className={cn('rounded-lg', collapsed ? 'h-9 w-9' : 'h-8 w-full')} />
     );
   }
 

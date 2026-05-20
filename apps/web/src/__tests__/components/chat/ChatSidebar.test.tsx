@@ -33,10 +33,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     createProject: vi.fn(),
-    conversationsByProject: {} as Record<
-      string,
-      Array<{ conversation_id: string; title: string }>
-    >,
+    conversationsByProject: {} as Record<string, Array<{ conversation_id: string; title: string }>>,
     loadConversations: vi.fn(),
     projects: [] as Array<{
       project_id: string;
