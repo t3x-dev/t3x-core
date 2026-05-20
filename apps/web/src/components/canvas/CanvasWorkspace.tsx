@@ -434,8 +434,8 @@ function CanvasWorkspaceInner({
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
           onPaneClick={() => {
-            // Clear node highlight and close context menu when clicking empty canvas
-            if (highlight?.mode === 'node') {
+            // Clear active path highlight and close transient canvas overlays.
+            if (highlight) {
               setHighlight(null);
             }
             closeContextMenu();

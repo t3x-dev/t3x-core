@@ -3,13 +3,13 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { MobileWorkspaceSheet } from '@/components/chat/MobileWorkspaceSheet';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
+  CHAT_COLUMN_MIN_WIDTH,
   clampWorkspacePanelWidth,
   getPreferredWorkspacePanelWidth,
   WORKSPACE_PANEL_FALLBACK_WIDTH,
@@ -102,7 +102,7 @@ export default function ConversationPage() {
   }, []);
 
   return (
-    <div ref={containerRef} className="relative flex h-full overflow-hidden">
+    <div ref={containerRef} className="flex h-full overflow-hidden">
       {/* Chat area takes remaining space — key forces full re-mount on conversation switch */}
       <ChatWorkspace
         key={conversationId}
@@ -112,7 +112,7 @@ export default function ConversationPage() {
         initialProvider={initialProvider ?? undefined}
         initialModel={initialModel ?? undefined}
         className="flex-1 min-w-0"
-        reserveMobileWorkspaceSwitcher={compactViewport}
+        style={showWorkspace ? { minWidth: CHAT_COLUMN_MIN_WIDTH } : undefined}
         inheritFromCommitHash={resolvedInheritFromCommitHash ?? undefined}
         onInheritComplete={clearInherit}
       />
@@ -136,7 +136,6 @@ export default function ConversationPage() {
 
       {/* YOps workspace panel */}
       {showWorkspace && <YOpsWorkspace customWidth={isExpanded ? panelWidth : undefined} />}
-      {compactViewport && <MobileWorkspaceSheet />}
     </div>
   );
 }

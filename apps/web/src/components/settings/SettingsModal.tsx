@@ -30,7 +30,7 @@ export function SettingsModal() {
       <DialogContent className="h-[94vh] w-[96vw] max-w-[1760px] sm:max-w-[1760px] overflow-hidden border-0 bg-transparent p-0 shadow-none">
         <div
           data-testid="settings-modal-shell"
-          className="flex h-full overflow-hidden rounded-[34px] border border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_96%,white_4%)] shadow-[0_20px_60px_rgba(0,0,0,0.14)]"
+          className="flex h-full overflow-hidden rounded-[34px] border border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_96%,white_4%)] shadow-[var(--fx-shadow-lg)]"
         >
           <Tabs
             value={activeTab}

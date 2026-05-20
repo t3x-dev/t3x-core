@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildInsightsLedger, getLedgerTimeBucket } from '@/domain/insights/groupByBranch';
+import {
+  buildInsightsLedger,
+  commitEntryId,
+  getLedgerTimeBucket,
+  shortCommitHash,
+} from '@/domain/insights/groupByBranch';
 import type { ApiCommit } from '@/infrastructure/commits';
 
 function commit(overrides: Partial<ApiCommit> & { hash: string; project_id: string }): ApiCommit {
@@ -116,5 +121,20 @@ describe('buildInsightsLedger', () => {
     expect(
       getLedgerTimeBucket('2026-05-15T00:00:00Z', new Date('2026-05-19T12:00:00Z')).label
     ).toBe('Previous 7 days');
+  });
+
+  it('falls back to Earlier for invalid dates', () => {
+    expect(getLedgerTimeBucket('not-a-date', new Date('2026-05-19T12:00:00Z'))).toEqual({
+      id: 'earlier',
+      label: 'Earlier',
+      order: 3,
+    });
+  });
+
+  it('formats sha256 and plain commit hashes consistently', () => {
+    expect(shortCommitHash('sha256:abcdef1234567890')).toBe('abcdef12');
+    expect(shortCommitHash('abcdef1234567890')).toBe('abcdef12');
+    expect(commitEntryId('sha256:abcdef1234567890')).toBe('abcdef123456');
+    expect(commitEntryId('abcdef1234567890')).toBe('abcdef123456');
   });
 });

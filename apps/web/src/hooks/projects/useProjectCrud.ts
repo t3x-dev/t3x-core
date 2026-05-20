@@ -16,6 +16,7 @@ import {
   ProjectPersistenceError,
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
+import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { fetchProjects } from '@/queries/projects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
@@ -39,9 +40,9 @@ export function useProjectCrud() {
     }
   }, []);
 
-  const add = useCallback(async (rawName = 'Untitled Project'): Promise<ProjectSummary> => {
+  const add = useCallback(async (rawName = DEFAULT_PROJECT_NAME): Promise<ProjectSummary> => {
     const store = useProjectStore.getState();
-    const name = rawName.trim() || 'Untitled Project';
+    const name = rawName.trim() || DEFAULT_PROJECT_NAME;
     const notify = store.notifyCallback;
 
     try {

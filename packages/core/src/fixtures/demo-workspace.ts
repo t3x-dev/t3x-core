@@ -506,6 +506,8 @@ export const DEMO_WORKSPACE_FIXTURE: DemoWorkspaceFixture = {
   },
 };
 
+export const DEMO_WORKSPACE_REPLAY_GOAL = `fixture:${DEMO_WORKSPACE_FIXTURE.id}`;
+
 const MEETING_NOTES_LANDING_YOPS: YOp[] = [
   { define: { path: 'release_readiness' } },
   {

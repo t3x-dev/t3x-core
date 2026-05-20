@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommitLedger } from '@/components/insights/CommitLedger';
 import type { InsightsLedger } from '@/domain/insights/groupByBranch';
@@ -116,5 +116,32 @@ describe('CommitLedger', () => {
       'Main checkpoint'
     );
     expect(screen.getByText('Launch knowledge')).toBeInTheDocument();
+  });
+
+  it('uses branch and hash in row names and exposes selected state', () => {
+    const onSelectEntry = vi.fn();
+    render(
+      <CommitLedger
+        ledger={ledger}
+        onSelectEntry={onSelectEntry}
+        selectedEntry={ledger.projects[0].branches[0].buckets[0].commits[0].entry}
+      />
+    );
+
+    const mainCommit = screen.getByRole('button', {
+      name: 'Select commit Main checkpoint on main main123',
+    });
+    const featureCommit = screen.getByRole('button', {
+      name: 'Select commit Feature checkpoint on feature feature1',
+    });
+
+    expect(mainCommit).toHaveAttribute('aria-pressed', 'true');
+    expect(featureCommit).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(featureCommit);
+
+    expect(onSelectEntry).toHaveBeenCalledWith(
+      ledger.projects[0].branches[1].buckets[0].commits[0].entry
+    );
   });
 });

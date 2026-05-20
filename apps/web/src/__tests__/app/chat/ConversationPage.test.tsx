@@ -61,6 +61,7 @@ import ConversationPage from '@/app/chat/[conversationId]/page';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { MobileWorkspaceSheet } from '@/components/chat/MobileWorkspaceSheet';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
+import { CHAT_COLUMN_MIN_WIDTH } from '@/utils/chatWorkspaceLayout';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -152,7 +153,10 @@ describe('ConversationPage', () => {
     render(<ConversationPage />);
 
     await waitFor(() => {
-      expect(vi.mocked(YOpsWorkspace).mock.calls.at(-1)?.[0].customWidth).toBe(708);
+      expect(vi.mocked(YOpsWorkspace).mock.calls.at(-1)?.[0].customWidth).toBe(536);
+    });
+    expect(vi.mocked(ChatWorkspace).mock.calls.at(-1)?.[0].style).toEqual({
+      minWidth: CHAT_COLUMN_MIN_WIDTH,
     });
 
     rectSpy.mockRestore();
