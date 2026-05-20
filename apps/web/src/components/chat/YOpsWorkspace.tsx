@@ -228,7 +228,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         style={{ height: `${splitRatio * 100}%` }}
         className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-divider)] flex flex-col"
       >
-        <div className="flex h-8 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--panel)] px-3">
+        <div className="flex h-9 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--panel)] px-3">
           {topView === 'script' ? (
             <span
               className="min-w-0 max-w-[180px] truncate text-[10px] font-mono text-[var(--text-tertiary)]"

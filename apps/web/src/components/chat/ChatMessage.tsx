@@ -593,7 +593,7 @@ export function ChatMessage({
             className={cn(
               'min-w-0',
               isUser
-                ? 'max-w-[82%] rounded-[14px] bg-[var(--hover-bg)]/80 px-4 py-2.5 ring-1 ring-[var(--stroke-divider)]/60'
+                ? 'max-w-[82%] rounded-xl bg-[var(--hover-bg)]/80 px-3 py-1 ring-1 ring-[var(--stroke-divider)]/60'
                 : 'flex-1'
             )}
           >
