@@ -412,7 +412,7 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-16 shrink-0 items-center',
+            'flex h-14 shrink-0 items-center',
             collapsed ? 'justify-center px-2' : 'px-5'
           )}
         >
@@ -434,7 +434,7 @@ export function ChatSidebar() {
         </div>
 
         {/* New Project action */}
-        <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+        <div className={cn('py-1', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -467,13 +467,13 @@ export function ChatSidebar() {
         <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-1 pb-2 pt-1',
+              'flex min-w-0 flex-col gap-1 pb-2 pt-0',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-2">
+              <div className="px-4 pb-0.5 pt-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
