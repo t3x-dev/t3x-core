@@ -64,22 +64,6 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel)]" data-testid="archived-ops-panel">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
-        <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span className="inline-block h-2 w-2 rounded-full bg-[var(--text-quaternary)] opacity-60" />
-          Archived
-        </span>
-        <span className="text-[9px] font-mono text-[var(--text-tertiary)]">
-          {state.status === 'loading'
-            ? 'loading…'
-            : state.status === 'ready'
-              ? `${state.rows.length} entries`
-              : state.status === 'error'
-                ? 'error'
-                : ''}
-        </span>
-      </div>
-
       {state.status === 'error' ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-[280px] text-[11px] text-[var(--text-tertiary)] leading-relaxed">

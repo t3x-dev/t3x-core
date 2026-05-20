@@ -20,7 +20,6 @@ import {
   selectScriptText,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
-import { cn } from '@/utils/cn';
 
 const PLACEHOLDER = `yops:
   - set:
@@ -196,6 +195,7 @@ export function ScriptEditor() {
             caretColor: 'var(--text-primary)',
           },
           '.cm-line': {
+            lineHeight: '19px',
             padding: '0 24px 0 6px',
           },
           '.cm-scroller': {
@@ -213,11 +213,16 @@ export function ScriptEditor() {
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
             borderRight: '1px solid var(--stroke-divider)',
             fontFamily: YOPS_MONO_FONT,
-            fontSize: '11px',
+            fontSize: '12px',
+            lineHeight: '19px',
             fontVariantNumeric: 'tabular-nums',
+          },
+          '.cm-gutterElement': {
+            lineHeight: '19px',
           },
           '.cm-lineNumbers .cm-gutterElement': {
             boxSizing: 'border-box',
+            lineHeight: '19px',
             minWidth: '28px',
             width: '28px',
             padding: '0 8px 0 4px',
@@ -297,33 +302,8 @@ export function ScriptEditor() {
     });
   }, [highlightedLines]);
 
-  const isStreaming = mode === 'streaming';
-  const editorStateLabel = isStreaming
-    ? 'read-only'
-    : scriptDirty
-      ? 'script edit pending'
-      : 'clean';
-
   return (
     <div className="flex flex-col h-full bg-[var(--panel)]">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
-        <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span
-            className={cn(
-              'inline-block h-2 w-2 rounded-full',
-              isStreaming ? 'bg-[var(--status-error)] animate-pulse' : 'bg-[var(--status-success)]'
-            )}
-          />
-          YOps
-        </span>
-        <span
-          className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60"
-          aria-live="polite"
-        >
-          {editorStateLabel}
-        </span>
-      </div>
-
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
 
       {lastError && (

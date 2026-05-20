@@ -19,6 +19,7 @@ describe('serializeOpsToYaml', () => {
     expect(yaml).toContain('# Human edit via YOps: manual change by alice');
     expect(yaml).toContain('path: trip/dest');
     expect(yaml).not.toContain('source:');
+    expect(yaml).not.toMatch(/\n$/);
   });
 
   it('renders LLM-source comments while keeping source metadata out of YAML', () => {
@@ -37,5 +38,6 @@ describe('serializeOpsToYaml', () => {
     expect(yaml).toContain('# LLM extract via gpt-4o-mini: extracted from source text');
     expect(yaml).toContain('path: trip/dest');
     expect(yaml).not.toContain('source:');
+    expect(yaml).not.toMatch(/\n$/);
   });
 });

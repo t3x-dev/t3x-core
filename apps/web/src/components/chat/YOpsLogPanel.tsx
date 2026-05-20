@@ -14,7 +14,7 @@
  * state machine surfaces it.
  */
 
-import type { Source, SourcedYOp } from '@t3x-dev/core';
+import type { SourcedYOp } from '@t3x-dev/core';
 import { ChevronDown, ChevronRight, Sparkles, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
@@ -389,17 +389,6 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
     return tab === 'committed' ? committed : applied;
   }, [tab, opsLog, opOrigins, rowsById, draftOps]);
 
-  const stats = useMemo(() => {
-    let human = 0;
-    let llm = 0;
-    for (const op of visibleOps) {
-      const src = (op as unknown as { source: Source }).source;
-      if (src.type === 'human') human++;
-      else llm++;
-    }
-    return { total: visibleOps.length, human, llm };
-  }, [visibleOps]);
-
   const empty = EMPTY_STATE_BY_TAB[tab];
 
   if (mode === 'materialized') {
@@ -408,43 +397,12 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
       pendingDraftOps: draftOps,
       scriptDirty,
     });
-    const materializedTotal = groups.ai.count + groups.user.count;
 
     return (
       <div
         className="flex flex-col h-full bg-[var(--panel)]"
         data-testid="yops-log-panel-materialized"
       >
-        <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
-          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-            <span className="inline-block h-2 w-2 rounded-full bg-[var(--source)]" />
-            Materialized
-          </span>
-          <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
-            <span>
-              <span className="text-[var(--text-primary)] font-semibold">{materializedTotal}</span>{' '}
-              ops
-            </span>
-            <span>
-              <span className="text-[var(--source)] font-semibold">{groups.ai.count}</span> llm
-            </span>
-            <span>
-              <span className="text-[var(--status-success)] font-semibold">
-                {groups.user.count}
-              </span>{' '}
-              you
-            </span>
-            {groups.pending.count > 0 && (
-              <span>
-                <span className="text-[var(--status-warning)] font-semibold">
-                  {groups.pending.count}
-                </span>{' '}
-                pending
-              </span>
-            )}
-          </span>
-        </div>
-
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-3">
           <Group
             title="AI proposal"
@@ -522,37 +480,6 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel)]" data-testid={`yops-log-panel-${tab}`}>
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
-        <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span
-            className={cn(
-              'inline-block h-2 w-2 rounded-full',
-              tab === 'draft'
-                ? 'bg-[var(--source)]'
-                : tab === 'committed'
-                  ? 'bg-[var(--status-success)]'
-                  : 'bg-[var(--status-warning)]'
-            )}
-          />
-          {tab === 'draft' ? 'Draft' : tab === 'committed' ? 'Committed' : 'Applied'}
-        </span>
-        <span className="flex items-center gap-3 text-[9px] font-mono text-[var(--text-tertiary)]">
-          <span>
-            <span className="text-[var(--text-primary)] font-semibold">{stats.total}</span> ops
-          </span>
-          {stats.human > 0 && (
-            <span>
-              <span className="text-[var(--status-success)] font-semibold">{stats.human}</span> you
-            </span>
-          )}
-          {stats.llm > 0 && (
-            <span>
-              <span className="text-[var(--source)] font-semibold">{stats.llm}</span> llm
-            </span>
-          )}
-        </span>
-      </div>
-
       {visibleOps.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-[280px]">

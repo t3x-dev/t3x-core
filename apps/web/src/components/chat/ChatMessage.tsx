@@ -159,7 +159,6 @@ function InlineEditedText({ text, spans }: { text: string; spans: SourceTextDraf
             title="Human inline edit"
             style={{
               background: 'color-mix(in srgb, var(--status-info) 18%, transparent)',
-              borderBottom: '2px solid var(--status-info)',
               color: 'inherit',
             }}
           >

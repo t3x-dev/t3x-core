@@ -116,12 +116,14 @@ describe('YOpsLogPanel', () => {
       useWorkspaceStore.getState().setEditorOverride('yops:\n  - define:\n      path: changed\n');
     });
 
-    const { container } = render(<YOpsLogPanel />);
-    const header = container.querySelector('[data-testid="yops-log-panel-materialized"]')
-      ?.firstElementChild?.textContent;
-    expect(header).toMatch(/1\s*ops/i);
-    expect(header).toMatch(/3\s*pending/i);
-    expect(header).not.toMatch(/4\s*ops/i);
+    render(<YOpsLogPanel />);
+    const aiGroup = screen.getByText('AI proposal').closest('section');
+    expect(aiGroup).toBeInTheDocument();
+    expect(within(aiGroup as HTMLElement).getByText('1')).toBeInTheDocument();
+
+    const pendingGroup = screen.getByText('Pending').closest('section');
+    expect(pendingGroup).toBeInTheDocument();
+    expect(within(pendingGroup as HTMLElement).getByText('3')).toBeInTheDocument();
   });
 
   it('renders one row per op in the log with verb and summary', () => {
@@ -150,7 +152,7 @@ describe('YOpsLogPanel', () => {
     expect(second.toLowerCase()).toContain('llm');
   });
 
-  it('renders counts in the header for human vs llm sources', () => {
+  it('renders one ledger row per op after removing the summary header', () => {
     act(() => {
       useWorkspaceStore.getState().setDerived({
         tree: { trees: [], relations: [] },
@@ -159,10 +161,11 @@ describe('YOpsLogPanel', () => {
       });
     });
     const { container } = render(<YOpsLogPanel mode="ledger" />);
-    const header = container.textContent ?? '';
-    expect(header).toMatch(/3\s*ops/i);
-    expect(header).toMatch(/2\s*you/i);
-    expect(header).toMatch(/1\s*llm/i);
+    expect(
+      container.querySelectorAll('[data-testid^="yops-log-op-"]:not([data-testid*="-link"])').length
+    ).toBe(3);
+    expect(container.textContent).toContain('you');
+    expect(container.textContent).toContain('llm');
   });
 
   describe('tab data sources (workbench plan §8)', () => {

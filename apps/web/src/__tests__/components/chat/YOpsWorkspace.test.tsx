@@ -73,7 +73,6 @@ describe('YOpsWorkspace view switcher', () => {
     expect(screen.queryByRole('group', { name: 'Workspace status' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'YOps' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Logs/ })).toBeInTheDocument();
-    expect(screen.getByText('0 ops · 0 pending')).toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
@@ -99,7 +98,6 @@ describe('YOpsWorkspace view switcher', () => {
 
     expect(container.querySelector('[data-testid="script-editor-stub"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
-    expect(screen.getByText('0 ops · 1 pending')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Draft/ }));
