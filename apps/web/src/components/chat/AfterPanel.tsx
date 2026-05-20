@@ -1234,7 +1234,7 @@ export function AfterPanel({
       )}
       <div
         className={cn(
-          'grid shrink-0 bg-[var(--panel-alt)]',
+          'grid shrink-0 bg-[var(--panel)]',
           showBefore ? 'grid-cols-2' : 'grid-cols-1'
         )}
         style={splitGridStyle}
@@ -1470,7 +1470,7 @@ export function AfterPanel({
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--stroke-divider)] bg-[var(--panel-alt)] px-3"
+        className="flex shrink-0 items-center justify-between gap-3 bg-[var(--panel)] px-3"
         style={{ height: TREE_FOOTER_HEIGHT }}
       >
         <span

@@ -211,14 +211,17 @@ export function ScriptEditor() {
           '.cm-gutters': {
             backgroundColor: 'var(--editor-gutter)',
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
-            borderRight: '1px solid var(--stroke-default)',
+            borderRight: '1px solid var(--stroke-divider)',
             fontFamily: YOPS_MONO_FONT,
             fontSize: '11px',
             fontVariantNumeric: 'tabular-nums',
           },
           '.cm-lineNumbers .cm-gutterElement': {
-            minWidth: '34px',
-            padding: '0 8px 0 10px',
+            boxSizing: 'border-box',
+            minWidth: '28px',
+            width: '28px',
+            padding: '0 8px 0 4px',
+            textAlign: 'right',
           },
           '.cm-yops-string-value': {
             color: 'var(--yaml-string)',
@@ -302,7 +305,7 @@ export function ScriptEditor() {
       : 'clean';
 
   return (
-    <div className="flex flex-col h-full bg-[var(--panel-alt)]">
+    <div className="flex flex-col h-full bg-[var(--panel)]">
       <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
         <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           <span

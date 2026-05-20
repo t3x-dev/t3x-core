@@ -412,7 +412,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
 
     return (
       <div
-        className="flex flex-col h-full bg-[var(--panel-alt)]"
+        className="flex flex-col h-full bg-[var(--panel)]"
         data-testid="yops-log-panel-materialized"
       >
         <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
@@ -521,10 +521,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
   }
 
   return (
-    <div
-      className="flex flex-col h-full bg-[var(--panel-alt)]"
-      data-testid={`yops-log-panel-${tab}`}
-    >
+    <div className="flex flex-col h-full bg-[var(--panel)]" data-testid={`yops-log-panel-${tab}`}>
       <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--panel)]">
         <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
           <span
