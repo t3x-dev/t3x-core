@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const commitOpsMock = vi.fn();
 const hydrateMock = vi.fn();
 const toastErrorMock = vi.fn();
+const toastDismissMock = vi.fn();
 const getAuthMeMock = vi.fn();
 const updateSourceTextRevisionMock = vi.fn();
 
@@ -24,6 +25,7 @@ vi.mock('@/infrastructure/sourceTextRevisions', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastErrorMock(...args),
+    dismiss: (...args: unknown[]) => toastDismissMock(...args),
   },
 }));
 
@@ -60,6 +62,7 @@ vi.mock('@/store/chatStore', () => ({
   }),
 }));
 
+import { EXTRACTION_TOAST_ID } from '@/hooks/drafts/useExtraction';
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
 import { useSettingsStore } from '@/store/settingsStore';
 import { selectScriptDirty, selectScriptText, useWorkspaceStore } from '@/store/workspaceStore';
@@ -330,6 +333,31 @@ describe('useScriptExecution', () => {
     expect(commitOpsMock).toHaveBeenCalledTimes(1);
     const [, , options] = commitOpsMock.mock.calls[0];
     expect(options).toEqual({ replaceActiveLLMDraft: false });
+  });
+
+  it('dismisses the extraction toast after a staged Extract draft is applied', async () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [
+        {
+          set: { path: 'trip/dest', value: 'HZ' },
+          source: {
+            type: 'llm',
+            model: 'gpt-4o-mini',
+            at: '2026-04-26T00:00:00Z',
+            turn_ref: { turn_hash: 'sha256:t1', quote: 'HZ' },
+          },
+        },
+      ] as never,
+      tree: { trees: [{ key: 'trip', slots: { dest: 'HZ' }, children: [] }], relations: [] },
+    });
+    useWorkspaceStore.getState().clearEditorOverride();
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(toastDismissMock).toHaveBeenCalledWith(EXTRACTION_TOAST_ID);
   });
 
   it('passes replaceActiveLLMDraft: false on a manual-edit Apply (no staged draft)', async () => {

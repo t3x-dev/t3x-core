@@ -59,7 +59,10 @@ test.describe('Merge Workspace', () => {
       { branch: 'main', message: 'Main commit', parents: [baseHash] }
     );
 
-    mergeId = await createTestMergeDraft(request, projectId, sourceHash, targetHash);
+    mergeId = await createTestMergeDraft(request, projectId, sourceHash, targetHash, {
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+    });
   });
 
   test.afterAll(async ({ request }) => {
@@ -85,7 +88,7 @@ test.describe('Merge Workspace', () => {
     expect(commitEnabled).toBe(false);
   });
 
-  // MW-02: Resolve a conflict by choosing source (Keep A)
+  // MW-02: Resolve a conflict by choosing source
   // #2: Use test.skip() instead of silent return
   test('MW-02: Resolve conflict with Keep A', async ({ page }) => {
     const merge = new MergePage(page);
@@ -99,9 +102,9 @@ test.describe('Merge Workspace', () => {
     expect(initialCount).toBe(MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts.length);
 
     // #5: Click and wait for UI state change, not fixed timeout
-    // UI shows "Accept Source" (frame mode) or "Keep A" (legacy node mode)
     const keepAButton = page
-      .locator('button:has-text("Accept Source")')
+      .locator('button:has-text("Use feature")')
+      .or(page.locator('button:has-text("Accept Source")'))
       .or(page.locator('button:has-text("Keep A")'))
       .first();
     await expect(keepAButton).toBeVisible({ timeout: 5000 });
@@ -115,7 +118,7 @@ test.describe('Merge Workspace', () => {
     }).toPass({ timeout: 5000 });
   });
 
-  // MW-03: Resolve a conflict by choosing target (Keep B)
+  // MW-03: Resolve a conflict by choosing target
   test('MW-03: Resolve conflict with Keep B', async ({ page }) => {
     const merge = new MergePage(page);
     await merge.goto(projectId, mergeId);
@@ -127,9 +130,9 @@ test.describe('Merge Workspace', () => {
     const initialCount = await merge.getUnresolvedCount();
     expect(initialCount).toBe(MERGE_SEMANTIC_CHANGES_DEMO.expected.conflicts.length);
 
-    // UI shows "Accept Target" (frame mode) or "Keep B" (legacy node mode)
     const keepBButton = page
-      .locator('button:has-text("Accept Target")')
+      .locator('button:has-text("Use main")')
+      .or(page.locator('button:has-text("Accept Target")'))
       .or(page.locator('button:has-text("Keep B")'))
       .first();
     await expect(keepBButton).toBeVisible({ timeout: 5000 });
@@ -143,7 +146,7 @@ test.describe('Merge Workspace', () => {
   });
 
   // MW-04: Merge workspace sections and summary
-  test('MW-04: Merge workspace sections and summary', async ({ page }) => {
+  test('MW-04: Merge workspace sections, voices, and summary', async ({ page }, testInfo) => {
     const merge = new MergePage(page);
     await merge.goto(projectId, mergeId);
     await merge.waitForLoad();
@@ -162,6 +165,27 @@ test.describe('Merge Workspace', () => {
       const hasSummary = await summaryLabel.isVisible().catch(() => false);
       expect(hasSidebar || hasHeading || hasSummary).toBe(true);
     }).toPass({ timeout: 10000 });
+
+    const voicesPanel = page.getByTestId('merge-voices-panel');
+    await expect(voicesPanel).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('merge-voice-agreements')).toContainText('Agreements');
+    await expect(page.getByTestId('merge-voice-unique_to_source')).toContainText(
+      'Unique to feature'
+    );
+    await expect(page.getByTestId('merge-voice-unique_to_target')).toContainText('Unique to main');
+    await expect(page.getByTestId('merge-voice-tension')).toContainText(
+      'Tension requiring judgment'
+    );
+    await expect(page.getByTestId('merge-voice-tension')).toContainText('Sydney and Hawaii');
+    await expect(page.getByTestId('merge-voice-tension')).toContainText('Sydney and Tasmania');
+    await expect(page.getByRole('button', { name: 'Use feature' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use main' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Keep both voices' }).first()).toBeVisible();
+
+    await testInfo.attach('merge-voices-desktop', {
+      body: await page.screenshot({ fullPage: false }),
+      contentType: 'image/png',
+    });
   });
 
   // MW-05: Commit merge (resolve all + fill message + commit)
@@ -169,19 +193,24 @@ test.describe('Merge Workspace', () => {
   test('MW-05: Commit merge', async ({ request, page }) => {
     // #8: Delete any existing pending draft before creating a fresh one
     await request.delete(`${API_BASE}/merge/drafts/${mergeId}`).catch(() => {});
-    const freshMergeId = await createTestMergeDraft(request, projectId, sourceHash, targetHash);
+    const freshMergeId = await createTestMergeDraft(request, projectId, sourceHash, targetHash, {
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+    });
 
     const merge = new MergePage(page);
     await merge.goto(projectId, freshMergeId);
     await merge.waitForLoad();
 
-    // Resolve all conflicts by clicking Accept Source (frame mode) or Keep A (legacy)
+    // Resolve all conflicts by choosing the source voice.
     // Buttons remain in DOM after resolution (just change style), so nth(i) is safe.
     // Use separate locators to avoid .or() count issues.
-    let acceptButtons = page.locator('button:has-text("Accept Source")');
+    let acceptButtons = page.locator('button:has-text("Use feature")');
     let count = await acceptButtons.count();
     if (count === 0) {
-      acceptButtons = page.locator('button:has-text("Keep A")');
+      acceptButtons = page
+        .locator('button:has-text("Accept Source")')
+        .or(page.locator('button:has-text("Keep A")'));
       count = await acceptButtons.count();
     }
     for (let i = 0; i < count; i++) {
@@ -208,8 +237,9 @@ test.describe('Merge Workspace', () => {
 
     // Commit the merge
     await merge.commit();
+    await merge.waitForCommitCeremony();
 
-    // Should redirect back to project canvas
+    // Should redirect back to project canvas after the ceremony completes.
     await merge.waitForRedirect(/\/project\//, 15000);
     expect(page.url()).toContain(`/project/${projectId}`);
   });
@@ -246,7 +276,8 @@ test.describe('Merge Workspace', () => {
       request,
       projectId,
       cancelSource,
-      cancelTarget
+      cancelTarget,
+      { sourceBranch: 'cancel-feature', targetBranch: 'main' }
     );
     expect(cancelMergeId).toBeTruthy();
 

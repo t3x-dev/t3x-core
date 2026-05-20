@@ -37,6 +37,7 @@ import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
+import { EXTRACTION_TOAST_ID } from './extractionToast';
 
 /**
  * Stable sonner id for every toast emitted from `handleExtract`. Using a
@@ -44,7 +45,7 @@ import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/st
  * instead of stacking, and a leading `toast.dismiss(EXTRACTION_TOAST_ID)`
  * clears any prior slot before a new attempt starts.
  */
-export const EXTRACTION_TOAST_ID = 't3x-extraction';
+export { EXTRACTION_TOAST_ID } from './extractionToast';
 
 interface UseExtractionParams {
   resolvedConversationId: string | undefined;

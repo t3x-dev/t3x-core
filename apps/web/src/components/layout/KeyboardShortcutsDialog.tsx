@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { OPEN_KEYBOARD_SHORTCUTS_EVENT } from '@/hooks/shared/useCommandRegistry';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { cn } from '@/utils/cn';
 import { reducedMotion, scaleIn } from '@/utils/motion';
@@ -51,6 +52,7 @@ export function KeyboardShortcutsDialog() {
   const dialogVariants = prefersReducedMotion ? reducedMotion.scaleIn : scaleIn;
 
   useEffect(() => {
+    const openFromRegistry = () => setOpen(true);
     const handler = (e: KeyboardEvent) => {
       if (e.key === '/' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -60,8 +62,12 @@ export function KeyboardShortcutsDialog() {
         setOpen(false);
       }
     };
+    document.addEventListener(OPEN_KEYBOARD_SHORTCUTS_EVENT, openFromRegistry);
     document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    return () => {
+      document.removeEventListener(OPEN_KEYBOARD_SHORTCUTS_EVENT, openFromRegistry);
+      document.removeEventListener('keydown', handler);
+    };
   }, [open]);
 
   return (

@@ -23,6 +23,8 @@ export function useReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
     const mediaQuery = window.matchMedia(QUERY);
 
     // Set initial value
@@ -46,5 +48,6 @@ export function useReducedMotion(): boolean {
  */
 export function getReducedMotionPreference(): boolean {
   if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia !== 'function') return false;
   return window.matchMedia(QUERY).matches;
 }

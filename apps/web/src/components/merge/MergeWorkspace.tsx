@@ -11,8 +11,10 @@ import { prepareMerge } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
 import { GitMerge, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CommitCeremony } from '@/components/commit/CommitCeremony';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
+import { buildMergeDecisionLabels, buildMergeVoices } from '@/domain/merge/voices';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCreateMergeCommit } from '@/hooks/commits/useCreateMergeCommit';
@@ -84,6 +86,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
   const [treeError, setTreeError] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [_commitMergeLoading, setCommitMergeLoading] = useState(false);
+  const [mergeCeremonyHash, setMergeCeremonyHash] = useState<string | null>(null);
 
   // Semantic data for tree merge
   const [semanticData, setSemanticData] = useState<{
@@ -242,13 +245,16 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
       void loadCanvas(projectId);
 
       // Navigate to the new merge commit detail page
-      if (onMergeCommitted && result?.commit?.hash) {
-        onMergeCommitted(result.commit.hash);
+      if (result?.commit?.hash) {
+        setShowReviewDialog(false);
+        setMergeCeremonyHash(result.commit.hash);
       } else {
         onClose();
       }
     } catch (err) {
-      setTreeError(err instanceof Error ? err.message : 'Failed to commit tree merge');
+      const message = err instanceof Error ? err.message : 'Failed to commit tree merge';
+      setTreeError(message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setCommitMergeLoading(false);
     }
@@ -267,6 +273,16 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
     semanticData,
     loadCanvas,
   ]);
+
+  const handleMergeCeremonyComplete = useCallback(() => {
+    const hash = mergeCeremonyHash;
+    setMergeCeremonyHash(null);
+    if (hash && onMergeCommitted) {
+      onMergeCommitted(hash);
+      return;
+    }
+    onClose();
+  }, [mergeCeremonyHash, onClose, onMergeCommitted]);
 
   // Tree merge can-commit check
   const treeCanCommit =
@@ -305,6 +321,17 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
 
     const framePreviewPaths = getPreviewPaths();
     const structureReady = treeMergeResult.conflicts.length === 0;
+    const decisionLabels = buildMergeDecisionLabels({
+      sourceBranch: sourceBranch || 'feature',
+      targetBranch: targetBranch || 'main',
+    });
+    const voiceSections = buildMergeVoices({
+      mergeResult: treeMergeResult,
+      sourceContent: semanticData.source,
+      targetContent: semanticData.target,
+      sourceBranch: sourceBranch || 'feature',
+      targetBranch: targetBranch || 'main',
+    });
 
     return (
       <motion.div
@@ -326,6 +353,11 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           summary={null}
           serverChecksLoading={false}
           onBackToCanvas={handleCloseOrNavigate}
+        />
+        <CommitCeremony
+          hash={mergeCeremonyHash}
+          open={mergeCeremonyHash !== null}
+          onComplete={handleMergeCeremonyComplete}
         />
 
         {/* Action Bar */}
@@ -406,6 +438,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
                             onResolve={(res) => resolveTreeConflict(conflict.path, res)}
                             isActive={activeNodeId === conflict.path}
                             onSelect={() => setActiveNodeId(conflict.path)}
+                            decisionLabels={decisionLabels}
                           />
                         </div>
                       );
@@ -596,6 +629,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
               unresolvedCount={frameUnresolvedCount}
               message={message}
               previewTotalCount={framePreviewPaths.length}
+              voices={voiceSections}
             />
           </div>
 

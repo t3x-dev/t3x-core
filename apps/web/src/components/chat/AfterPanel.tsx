@@ -11,6 +11,7 @@ import {
   TREE_INDENT_STEP,
   TREE_ROW_HEIGHT,
 } from '@/components/chat/treeRowMetrics';
+import { CommitCeremony } from '@/components/commit/CommitCeremony';
 import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
 import {
@@ -943,6 +944,7 @@ export function AfterPanel({
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
+  const [ceremonyHash, setCeremonyHash] = useState<string | null>(null);
   const [resultScrollbarGutter, setResultScrollbarGutter] = useState(0);
 
   const trees = tree.trees as TreeNode[];
@@ -1168,6 +1170,10 @@ export function AfterPanel({
     onContinueEditing?.();
   }, [onContinueEditing]);
 
+  const handleCommitCeremonyComplete = useCallback(() => {
+    setCeremonyHash(null);
+  }, []);
+
   const handleCommit = useCallback(
     async (message: string) => {
       // Defense in depth: the main Commit button and the dialog confirm
@@ -1193,10 +1199,11 @@ export function AfterPanel({
       }
       try {
         workspaceState.setMode('committing');
-        await commitTrees(message || 'Knowledge Extract');
+        const result = await commitTrees(message || 'Knowledge Extract');
         useWorkspaceStore.getState().setMode('idle');
         useWorkspaceStore.getState().setCommitted(true);
         useWorkspaceStore.getState().clearDraft();
+        setCeremonyHash(result.hash);
         setShowCommitDialog(false);
         toast.success('Committed successfully');
         try {
@@ -1583,6 +1590,11 @@ export function AfterPanel({
           </div>
         </div>
       )}
+      <CommitCeremony
+        hash={ceremonyHash}
+        open={ceremonyHash !== null}
+        onComplete={handleCommitCeremonyComplete}
+      />
     </div>
   );
 }

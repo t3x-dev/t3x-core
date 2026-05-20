@@ -27,6 +27,7 @@ import {
   selectScriptText,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
+import { EXTRACTION_TOAST_ID } from './extractionToast';
 
 /**
  * The script editor's canonical wire format wraps ops in a `yops:` envelope
@@ -245,6 +246,7 @@ export function useScriptExecution() {
     // editor override, so selectScriptDirty automatically returns false
     // after this call — no separate dirty-flag clear needed.
     useWorkspaceStore.getState().clearDraft();
+    toast.dismiss(EXTRACTION_TOAST_ID);
 
     try {
       await hydrateConversationToStore(projectId, convId);

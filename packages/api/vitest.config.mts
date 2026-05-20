@@ -7,6 +7,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@t3x-dev/core': path.resolve(__dirname, '../core/src/index.ts'),
+      '@t3x-dev/storage/backup': path.resolve(__dirname, '../storage/src/backup/index.ts'),
+      '@t3x-dev/storage/embedded': path.resolve(__dirname, '../storage/src/embedded.ts'),
+      '@t3x-dev/storage/postgres': path.resolve(__dirname, '../storage/src/postgres.ts'),
+      '@t3x-dev/storage/seed/templates': path.resolve(
+        __dirname,
+        '../storage/src/seed/templates.ts'
+      ),
+      '@t3x-dev/storage/supabase': path.resolve(__dirname, '../storage/src/supabase.ts'),
       '@t3x-dev/storage': path.resolve(__dirname, '../storage/src/index.ts'),
       '@hono/zod-validator': path.resolve(
         __dirname,

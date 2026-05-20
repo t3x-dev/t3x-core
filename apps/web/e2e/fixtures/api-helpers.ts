@@ -168,10 +168,17 @@ export async function createTestMergeDraft(
   request: APIRequestContext,
   projectId: string,
   sourceHash: string,
-  targetHash: string
+  targetHash: string,
+  options?: { sourceBranch?: string; targetBranch?: string }
 ): Promise<string> {
   const response = await request.post(`${API_BASE}/merge/drafts`, {
-    data: { project_id: projectId, source_hash: sourceHash, target_hash: targetHash },
+    data: {
+      project_id: projectId,
+      source_hash: sourceHash,
+      target_hash: targetHash,
+      source_branch: options?.sourceBranch,
+      target_branch: options?.targetBranch,
+    },
   });
   const data = await response.json();
   if (!data.success) throw new Error(`Failed to create merge draft: ${data.error?.message}`);

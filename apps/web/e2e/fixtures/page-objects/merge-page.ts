@@ -93,7 +93,15 @@ export class MergePage {
    */
   async resolveConflict(
     index: number,
-    pick: 'Keep A' | 'Keep B' | 'Keep Both' | 'Edit'
+    pick:
+      | 'Use feature'
+      | 'Use main'
+      | 'Keep both voices'
+      | 'Edit voice'
+      | 'Keep A'
+      | 'Keep B'
+      | 'Keep Both'
+      | 'Edit'
   ): Promise<void> {
     const conflictCards = this.page.locator('text=/Conflict \\d+/');
     const card = conflictCards.nth(index);
@@ -126,6 +134,15 @@ export class MergePage {
 
   async commit(): Promise<void> {
     await this.commitButton.click();
+    const reviewConfirmButton = this.page.getByTestId('merge-review-confirm');
+    await expect(reviewConfirmButton).toBeVisible({ timeout: 5000 });
+    await reviewConfirmButton.click();
+  }
+
+  async waitForCommitCeremony(timeout = 5000): Promise<void> {
+    await expect(this.page.getByRole('status', { name: 'Commit sealed' })).toBeVisible({
+      timeout,
+    });
   }
 
   async cancel(): Promise<void> {

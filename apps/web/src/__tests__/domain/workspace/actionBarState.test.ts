@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  deriveWorkspaceActionBarState,
-  deriveWorkspaceStatusStripState,
-} from '@/domain/workspace/actionBarState';
+import { deriveWorkspaceActionBarState } from '@/domain/workspace/actionBarState';
 
 const baseFacts = {
   sourceCount: 2,
@@ -84,50 +81,6 @@ describe('deriveWorkspaceActionBarState', () => {
       label: 'Cancel',
       enabled: false,
       reason: 'Current extraction cannot be canceled from this surface yet',
-    });
-  });
-});
-
-describe('deriveWorkspaceStatusStripState', () => {
-  it('summarizes source, ops, pending, applied, and commit readiness', () => {
-    const strip = deriveWorkspaceStatusStripState({
-      ...baseFacts,
-      hasDraft: true,
-      draftOpCount: 2,
-      pendingCount: 2,
-    });
-
-    expect(strip.map((segment) => segment.id)).toEqual([
-      'sources',
-      'ops',
-      'pending',
-      'applied',
-      'commit',
-    ]);
-    expect(strip[0]).toMatchObject({ label: 'Sources', value: '2' });
-    expect(strip[1]).toMatchObject({ label: 'Ops', value: '4', targetView: 'script' });
-    expect(strip[2]).toMatchObject({
-      label: 'Pending',
-      value: '2',
-      targetView: 'draft',
-      tone: 'pending',
-    });
-    expect(strip[4]).toMatchObject({
-      label: 'Commit',
-      value: 'Blocked',
-      tone: 'warning',
-      detail: 'Apply or discard pending YOps before commit',
-    });
-  });
-
-  it('does not route the pending segment when there is nothing pending', () => {
-    const strip = deriveWorkspaceStatusStripState(baseFacts);
-
-    expect(strip[2]).toMatchObject({
-      label: 'Pending',
-      value: '0',
-      targetView: null,
-      tone: 'neutral',
     });
   });
 });
