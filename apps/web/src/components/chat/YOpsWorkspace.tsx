@@ -226,9 +226,9 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
 
       <div
         style={{ height: `${splitRatio * 100}%` }}
-        className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-default)] flex flex-col"
+        className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-divider)] flex flex-col"
       >
-        <div className="flex h-8 items-center gap-2 border-b border-[var(--stroke-default)] bg-[var(--panel)] px-3">
+        <div className="flex h-9 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--panel)] px-3">
           {topView === 'script' ? (
             <span
               className="min-w-0 max-w-[180px] truncate text-[10px] font-mono text-[var(--text-tertiary)]"
@@ -242,7 +242,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
               <span className="text-[var(--text-primary)]">{LOG_VIEW_META[topView].label}</span>
             </span>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto mr-2 flex items-center gap-2">
             {logsMenu}
             <button
               type="button"

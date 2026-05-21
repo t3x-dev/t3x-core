@@ -34,7 +34,7 @@ export function serializeOpsToYaml(ops: readonly SourcedYOp[]): string {
     const { source, ...rest } = op as Record<string, unknown>;
     return rest;
   });
-  const dumped = yaml.dump({ yops: stripped }, { lineWidth: -1, noRefs: true });
+  const dumped = yaml.dump({ yops: stripped }, { lineWidth: -1, noRefs: true }).replace(/\n$/, '');
   const lines = dumped.split('\n');
   const output: string[] = [];
   let opIndex = 0;
