@@ -167,13 +167,29 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
-  async function handleProjectClick(projectId: string) {
+  async function handleProjectClick(projectId: string, knownConversationCount?: number) {
     const store = useChatStore.getState();
-    if (!store.expandedProjectIds.has(projectId)) {
+    const wasExpanded = store.expandedProjectIds.has(projectId);
+    const cachedConversations = projectConversations[projectId];
+    const conversationCount = knownConversationCount ?? cachedConversations?.length;
+
+    if (conversationCount === 0) {
+      if (wasExpanded && store.activeProjectId === projectId) {
+        store.toggleProjectExpanded(projectId);
+        return;
+      }
+      if (!wasExpanded) {
+        store.toggleProjectExpanded(projectId);
+      }
+      setActiveConversation(null, projectId);
+      router.push(`/chat?projectId=${encodeURIComponent(projectId)}`);
+      return;
+    }
+
+    if (!wasExpanded) {
       store.toggleProjectExpanded(projectId);
     }
 
-    const cachedConversations = projectConversations[projectId];
     if (cachedConversations?.length) {
       handleConversationClick(cachedConversations[0].conversation_id, projectId);
       return;
@@ -412,8 +428,8 @@ export function ChatSidebar() {
         {/* Logo */}
         <div
           className={cn(
-            'flex h-11 shrink-0 items-center border-b border-[var(--stroke-divider)]',
-            collapsed ? 'justify-center px-2' : 'px-3'
+            'flex h-14 shrink-0 items-center',
+            collapsed ? 'justify-center px-2' : 'px-5'
           )}
         >
           <button
@@ -422,17 +438,19 @@ export function ChatSidebar() {
               setActiveConversation(null, null);
               router.push('/chat');
             }}
-            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <LogoIcon />
             {!collapsed && (
-              <span className="text-sm font-semibold text-[var(--text-primary)] truncate">T3X</span>
+              <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                T3X - Git for Meaning
+              </span>
             )}
           </button>
         </div>
 
         {/* New Project action */}
-        <div className={cn('pb-2 pt-3', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+        <div className={cn('py-1', collapsed ? 'flex justify-center px-2' : 'px-3')}>
           <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -465,13 +483,13 @@ export function ChatSidebar() {
         <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
           <div
             className={cn(
-              'flex min-w-0 flex-col gap-1 pb-2 pt-1',
+              'flex min-w-0 flex-col gap-1 pb-2 pt-0',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
           >
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-2">
+              <div className="px-4 pb-0.5 pt-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                   Projects
                 </span>
@@ -488,7 +506,9 @@ export function ChatSidebar() {
                 isActive={activeProjectId === project.project_id}
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
-                onToggleExpand={() => void handleProjectClick(project.project_id)}
+                onToggleExpand={() =>
+                  void handleProjectClick(project.project_id, project.conversations_count)
+                }
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }

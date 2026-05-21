@@ -20,7 +20,6 @@ import {
   selectScriptText,
   useWorkspaceStore,
 } from '@/store/workspaceStore';
-import { cn } from '@/utils/cn';
 
 const PLACEHOLDER = `yops:
   - set:
@@ -176,7 +175,7 @@ export function ScriptEditor() {
             position: 'relative',
             fontSize: '12px',
             lineHeight: '19px',
-            backgroundColor: 'var(--panel-alt)',
+            backgroundColor: 'var(--editor-bg)',
             color: 'var(--text-primary)',
           },
           '&::after': {
@@ -189,13 +188,14 @@ export function ScriptEditor() {
             width: '24px',
             pointerEvents: 'none',
             background:
-              'linear-gradient(90deg, color-mix(in srgb, var(--panel-alt) 0%, transparent), var(--panel-alt))',
+              'linear-gradient(90deg, color-mix(in srgb, var(--editor-bg) 0%, transparent), var(--editor-bg))',
           },
           '.cm-content': {
-            padding: '7px 0',
+            padding: '3px 0 7px',
             caretColor: 'var(--text-primary)',
           },
           '.cm-line': {
+            lineHeight: '19px',
             padding: '0 24px 0 6px',
           },
           '.cm-scroller': {
@@ -209,16 +209,24 @@ export function ScriptEditor() {
             tabSize: '2',
           },
           '.cm-gutters': {
-            backgroundColor: 'var(--panel)',
+            backgroundColor: 'var(--editor-gutter)',
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
-            borderRight: '1px solid var(--stroke-default)',
+            borderRight: '1px solid var(--stroke-divider)',
             fontFamily: YOPS_MONO_FONT,
-            fontSize: '11px',
+            fontSize: '12px',
+            lineHeight: '19px',
             fontVariantNumeric: 'tabular-nums',
           },
+          '.cm-gutterElement': {
+            lineHeight: '19px',
+          },
           '.cm-lineNumbers .cm-gutterElement': {
-            minWidth: '34px',
-            padding: '0 8px 0 10px',
+            boxSizing: 'border-box',
+            lineHeight: '19px',
+            minWidth: '28px',
+            width: '28px',
+            padding: '0 8px 0 4px',
+            textAlign: 'right',
           },
           '.cm-yops-string-value': {
             color: 'var(--yaml-string)',
@@ -294,33 +302,8 @@ export function ScriptEditor() {
     });
   }, [highlightedLines]);
 
-  const isStreaming = mode === 'streaming';
-  const editorStateLabel = isStreaming
-    ? 'read-only'
-    : scriptDirty
-      ? 'script edit pending'
-      : 'clean';
-
   return (
-    <div className="flex flex-col h-full bg-[var(--panel-alt)]">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--stroke-default)] bg-[var(--panel)]">
-        <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          <span
-            className={cn(
-              'inline-block h-2 w-2 rounded-full',
-              isStreaming ? 'bg-[var(--status-error)] animate-pulse' : 'bg-[var(--status-success)]'
-            )}
-          />
-          YOps
-        </span>
-        <span
-          className="text-[9px] font-mono text-[var(--text-tertiary)] opacity-60"
-          aria-live="polite"
-        >
-          {editorStateLabel}
-        </span>
-      </div>
-
+    <div className="flex flex-col h-full bg-[var(--panel)]">
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
 
       {lastError && (

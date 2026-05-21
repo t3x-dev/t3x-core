@@ -305,9 +305,9 @@
   --shadow-md-unified: 0 4px 12px rgba(0, 0, 0, 0.08);
 
   /* ===== Surface System — light mode: opaque, no glass ===== */
-  --surface-app: oklch(0.98 0.002 250);
-  --surface-panel: oklch(1 0 0);
-  --surface-card: oklch(1 0 0);
+  --surface-app: oklch(0.975 0.002 250);
+  --surface-panel: oklch(0.985 0.001 250);
+  --surface-card: oklch(0.995 0.001 250);
   --surface-elevated: oklch(1 0 0);
   --surface-radial: oklch(0.97 0.002 250);
   --surface-canvas: var(--surface-app);
@@ -330,10 +330,10 @@
   --fx-highlight-inset: inset 0 1px 0 oklch(1 0 0 / 60%), inset 0 -1px 0 oklch(0 0 0 / 5%);
 
   /* ===== YOps IDE — workspace panels & editor (light mode) ===== */
-  --panel: #f5f7fa;
-  --panel-alt: #edf0f5;
-  --editor-bg: #ffffff;
-  --editor-gutter: #f5f7fa;
+  --panel: var(--surface-app);
+  --panel-alt: var(--surface-panel);
+  --editor-bg: var(--surface-panel);
+  --editor-gutter: var(--surface-app);
   --slot: #0ea5e9;
   --slot-dim: rgba(14, 165, 233, 0.08);
   --source: #7c3aed;

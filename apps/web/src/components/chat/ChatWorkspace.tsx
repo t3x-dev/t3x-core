@@ -509,7 +509,7 @@ export function ChatWorkspace({
       {isCommitted ? (
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
-        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4 shadow-[var(--fx-shadow-sm)]">
+        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4">
           <div className="mx-auto max-w-[620px] px-5">
             <ChatInput
               onSend={handleSend}

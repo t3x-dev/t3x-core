@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => {
     toggleSidebar: vi.fn(),
     setSidebarResizing: vi.fn(),
     setSidebarWidth: vi.fn(),
-    activeConversationId: 'conv_a432e35d',
+    activeConversationId: 'conv_a432e35d' as string | null,
     activeProjectId: null as string | null,
     expandedProjectIds: new Set<string>(),
     toggleProjectExpanded: vi.fn(),
@@ -114,6 +114,7 @@ afterEach(() => {
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
   mocks.chatState.expandedProjectIds = new Set<string>();
+  mocks.chatState.refreshKey = 0;
 });
 
 describe('ChatSidebar', () => {
@@ -153,6 +154,49 @@ describe('ChatSidebar', () => {
       expect(mocks.createProject).toHaveBeenCalledWith('Untitled workspace');
     });
     expect(mocks.routerPush).toHaveBeenCalledWith('/chat?projectId=proj_untitled');
+  });
+
+  it('routes an empty project back to the new chat surface when clicked', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_empty',
+        name: 'Empty Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 0,
+        commits_count: 0,
+      },
+    ];
+    mocks.conversationsByProject = { proj_empty: [] };
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Empty Project/i }));
+
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat?projectId=proj_empty');
+  });
+
+  it('collapses an active empty project when clicked again', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_empty',
+        name: 'Empty Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 0,
+        commits_count: 0,
+      },
+    ];
+    mocks.conversationsByProject = { proj_empty: [] };
+    mocks.chatState.activeProjectId = 'proj_empty';
+    mocks.chatState.activeConversationId = null;
+    mocks.chatState.expandedProjectIds = new Set(['proj_empty']);
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Empty Project/i }));
+
+    expect(mocks.chatState.toggleProjectExpanded).toHaveBeenCalledWith('proj_empty');
+    expect(mocks.chatState.setActiveConversation).not.toHaveBeenCalled();
+    expect(mocks.routerPush).not.toHaveBeenCalled();
   });
 
   it('delegates Settings entry to the UserMenu dropdown instead of a top-level link', () => {

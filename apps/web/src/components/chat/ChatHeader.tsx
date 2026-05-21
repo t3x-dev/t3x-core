@@ -141,7 +141,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        'flex h-11 shrink-0 items-center gap-3 border-b border-[var(--stroke-default)] bg-[var(--surface-panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
+        'flex h-11 shrink-0 items-center gap-3 bg-[var(--panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
       )}
     >
       {/* Sidebar toggle */}
@@ -176,7 +176,7 @@ export function ChatHeader({
       {panelExpanded && !compactViewport && (
         <div
           ref={dropdownRef}
-          className="relative flex h-7 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)] shadow-[var(--fx-shadow-sm)]"
+          className="relative flex h-6 shrink-0 overflow-hidden rounded-full border border-[var(--source)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--source)_7%)]"
         >
           <button
             type="button"
@@ -184,21 +184,21 @@ export function ChatHeader({
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
             disabled={isExtracting || !isExtractReady}
             title={extractDisabledReason ?? undefined}
-            className="flex min-w-0 items-center gap-1.5 px-2.5 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex min-w-0 items-center gap-1 px-2 text-[10px] font-semibold leading-none text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
           >
             {isExtracting ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
             ) : (
-              <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--source)]/10">
-                <Sparkles className="h-3 w-3" />
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--source)]/10">
+                <Sparkles className="h-2.5 w-2.5" />
               </span>
             )}
             {isExtracting ? (
               'Extracting...'
             ) : (
-              <span className="inline-flex min-w-0 items-center gap-1.5 leading-none">
+              <span className="inline-flex min-w-0 items-center gap-1 leading-none">
                 <span>Extract</span>
-                <span className="max-w-[62px] truncate rounded-full bg-[var(--source)]/[0.08] px-1.5 py-0.5 text-[9px] font-medium leading-none opacity-80">
+                <span className="max-w-[56px] truncate rounded-full bg-[var(--source)]/[0.08] px-1 py-0.5 text-[9px] font-medium leading-none opacity-80">
                   {PRESET_LABELS[extractionPreset].label}
                 </span>
               </span>
@@ -211,9 +211,9 @@ export function ChatHeader({
             disabled={isExtracting || !isExtractReady}
             aria-label="Extract options"
             title={extractDisabledReason ?? undefined}
-            className="flex w-7 items-center justify-center border-l border-[var(--source)]/[0.12] text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex w-6 items-center justify-center border-l border-[var(--source)]/[0.12] text-[var(--source)] transition-colors hover:bg-[var(--source)]/[0.08] disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <ChevronDown className="h-3 w-3" />
+            <ChevronDown className="h-2.5 w-2.5" />
           </button>
 
           {dropdownOpen &&
