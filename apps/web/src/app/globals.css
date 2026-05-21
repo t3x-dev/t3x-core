@@ -311,6 +311,9 @@
   --surface-elevated: oklch(1 0 0);
   --surface-radial: oklch(0.97 0.002 250);
   --surface-canvas: var(--surface-app);
+  --sidebar-panel: oklch(0.948 0.002 250);
+  --chat-panel: oklch(0.97 0.0015 250);
+  --workspace-panel: oklch(0.99 0.001 250);
 
   /* ===== Stroke System — light mode: dark-alpha ===== */
   --stroke-default: oklch(0 0 0 / 10%);
@@ -457,6 +460,9 @@
   --surface-elevated: #1b2432;
   --surface-radial: #121923;
   --surface-canvas: #121923;
+  --sidebar-panel: var(--panel);
+  --chat-panel: var(--panel);
+  --workspace-panel: var(--panel-alt);
 
   /* ===== Stroke System — quiet but still scannable on dense workbench surfaces ===== */
   --stroke-default: rgba(226, 234, 248, 0.095);

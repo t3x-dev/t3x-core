@@ -89,6 +89,16 @@ describe('UserMenu', () => {
     expect(await screen.findByRole('button', { name: 'Meaning Studio' })).toBeInTheDocument();
   });
 
+  it('uses the deeper sidebar surface for the default local workspace trigger', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+
+    render(<UserMenu collapsed={false} />);
+
+    expect(await screen.findByRole('button', { name: 'Local Workspace' })).toHaveClass(
+      'bg-[var(--sidebar-panel)]'
+    );
+  });
+
   it('opens the profile tab from the local workspace menu', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 

@@ -79,9 +79,9 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
       onMouseDown={stopSelectionDismissal}
       onMouseUp={stopSelectionDismissal}
       onClick={stopSelectionDismissal}
-      className="mx-3 my-2 p-2.5 bg-[var(--surface-panel)] border border-[var(--status-info)]/30 rounded-lg space-y-2"
+      className="mx-3 my-2 p-2.5 bg-[var(--chat-panel)] border border-[var(--status-info)]/30 rounded-lg space-y-2"
     >
-      <div className="text-[10px] text-[var(--text-tertiary)] font-mono bg-[var(--surface-panel-alt)] rounded px-1.5 py-1 truncate">
+      <div className="text-[10px] text-[var(--text-tertiary)] font-mono bg-[var(--chat-panel)] rounded px-1.5 py-1 truncate">
         &ldquo;{preview}&rdquo;
       </div>
 

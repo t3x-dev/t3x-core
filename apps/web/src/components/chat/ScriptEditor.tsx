@@ -102,16 +102,23 @@ function scalarValueHighlightExtension() {
   });
 }
 
-function pendingEditLineHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
+function pendingEditTextHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
   return EditorView.decorations.of((view) => {
     const ranges = [...lineNumbersToHighlight]
       .filter((lineNumber) => lineNumber >= 1 && lineNumber <= view.state.doc.lines)
       .sort((a, b) => a - b)
-      .map((lineNumber) =>
-        Decoration.line({ class: 'cm-yops-pending-edit-line' }).range(
-          view.state.doc.line(lineNumber).from
-        )
-      );
+      .flatMap((lineNumber) => {
+        const line = view.state.doc.line(lineNumber);
+        const textStart = line.text.search(/\S/);
+        if (textStart === -1) return [];
+        const textEnd = line.text.search(/\s*$/);
+        return [
+          Decoration.mark({ class: 'cm-yops-pending-edit-text' }).range(
+            line.from + textStart,
+            line.from + textEnd
+          ),
+        ];
+      });
     return Decoration.set(ranges, true);
   });
 }
@@ -159,7 +166,7 @@ export function ScriptEditor() {
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
         readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
-        humanHighlightCompartment.current.of(pendingEditLineHighlightExtension(new Set())),
+        humanHighlightCompartment.current.of(pendingEditTextHighlightExtension(new Set())),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !isExternalUpdate.current) {
             const text = update.state.doc.toString();
@@ -175,20 +182,8 @@ export function ScriptEditor() {
             position: 'relative',
             fontSize: '12px',
             lineHeight: '19px',
-            backgroundColor: 'var(--editor-bg)',
+            backgroundColor: 'var(--workspace-panel)',
             color: 'var(--text-primary)',
-          },
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            top: '0',
-            right: '0',
-            bottom: '0',
-            zIndex: '4',
-            width: '24px',
-            pointerEvents: 'none',
-            background:
-              'linear-gradient(90deg, color-mix(in srgb, var(--editor-bg) 0%, transparent), var(--editor-bg))',
           },
           '.cm-content': {
             padding: '3px 0 7px',
@@ -209,7 +204,7 @@ export function ScriptEditor() {
             tabSize: '2',
           },
           '.cm-gutters': {
-            backgroundColor: 'var(--editor-gutter)',
+            backgroundColor: 'var(--workspace-panel)',
             color: 'color-mix(in srgb, var(--text-tertiary) 70%, transparent)',
             borderRight: '1px solid var(--stroke-divider)',
             fontFamily: YOPS_MONO_FONT,
@@ -243,8 +238,9 @@ export function ScriptEditor() {
           '.cm-activeLine': {
             backgroundColor: 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
           },
-          '.cm-yops-pending-edit-line': {
-            backgroundColor: 'color-mix(in srgb, var(--accent-commit) 4.5%, transparent)',
+          '.cm-yops-pending-edit-text': {
+            backgroundColor: 'color-mix(in srgb, var(--accent-commit) 8%, transparent)',
+            borderRadius: '3px',
           },
           '.cm-cursor': {
             borderLeftColor: 'var(--text-primary)',
@@ -297,13 +293,13 @@ export function ScriptEditor() {
     if (!view) return;
     view.dispatch({
       effects: humanHighlightCompartment.current.reconfigure(
-        pendingEditLineHighlightExtension(highlightedLines)
+        pendingEditTextHighlightExtension(highlightedLines)
       ),
     });
   }, [highlightedLines]);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--panel)]">
+    <div className="flex flex-col h-full bg-[var(--workspace-panel)]">
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
 
       {lastError && (

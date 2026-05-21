@@ -416,7 +416,7 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--panel)] backdrop-blur-[var(--fx-blur-panel)]',
+          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--sidebar-panel)] backdrop-blur-[var(--fx-blur-panel)]',
           !sidebarResizing &&
             'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
@@ -537,7 +537,7 @@ export function ChatSidebar() {
         {/* Bottom section */}
         <div
           className={cn(
-            'mt-auto flex min-w-0 flex-col gap-1 border-t border-[var(--stroke-divider)] bg-[var(--surface-panel)]/40 py-2.5',
+            'mt-auto flex min-w-0 flex-col gap-1 py-2.5',
             collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >

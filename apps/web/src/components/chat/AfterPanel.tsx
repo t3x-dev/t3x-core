@@ -12,7 +12,6 @@ import {
   TREE_ROW_HEIGHT,
 } from '@/components/chat/treeRowMetrics';
 import { CommitCeremony } from '@/components/commit/CommitCeremony';
-import { deriveSlotTag } from '@/domain/diff/deriveSlotTag';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
 import {
   formatAppliedResultFailureRow,
@@ -48,6 +47,7 @@ type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 const YAML_KEY_CLASS = 'text-[color-mix(in_srgb,var(--yaml-key)_88%,var(--text-primary))]';
 const YAML_VALUE_CLASS = 'text-[color-mix(in_srgb,var(--yaml-string)_82%,var(--text-primary))]';
 const YAML_PUNCTUATION_CLASS = 'text-[color-mix(in_srgb,var(--yaml-punctuation)_70%,transparent)]';
+type TreeStatusKind = 'human' | 'new' | 'modified' | 'removed' | 'inherited';
 
 function rowTone(input: {
   side: 'before' | 'after';
@@ -100,64 +100,50 @@ function YAMLIndentGuides({ depth }: { depth: number }) {
   );
 }
 
-function MetadataBadge({
-  label,
-  title,
-  kind,
-  emphasized = false,
-}: {
-  label: string;
-  title?: string;
-  kind: 'human' | 'new' | 'modified' | 'removed' | 'inherited';
-  emphasized?: boolean;
-}) {
+function TreeStatusLegendItem({ label, kind }: { label: string; kind: TreeStatusKind }) {
   return (
-    <span
-      title={title}
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <span
+        aria-hidden="true"
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          kind === 'human' && 'bg-[var(--status-info)]',
+          kind === 'new' && 'bg-[var(--status-success)]',
+          kind === 'modified' && 'bg-[var(--status-warning)]',
+          kind === 'removed' && 'bg-[var(--status-error)]',
+          kind === 'inherited' && 'bg-[var(--text-quaternary)]'
+        )}
+      />
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function TreeStatusLegend() {
+  return (
+    <div
+      title="Row status colors"
       className={cn(
-        'inline-flex max-w-full items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap rounded-full px-1.5 py-px text-[8px] font-semibold opacity-45 transition-opacity group-hover:opacity-90',
-        emphasized && 'opacity-90',
-        kind === 'human' && 'bg-[var(--status-info)]/[0.08] text-[var(--status-info)]',
-        kind === 'new' && 'bg-[var(--status-success)]/[0.07] text-[var(--status-success)]',
-        kind === 'modified' && 'bg-[var(--status-warning)]/[0.08] text-[var(--status-warning)]',
-        kind === 'removed' && 'bg-[var(--status-error)]/[0.08] text-[var(--status-error)]',
-        kind === 'inherited' && 'bg-[var(--surface-hover)] text-[var(--text-tertiary)]'
+        'flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-0.5',
+        'text-[8px] font-semibold uppercase leading-none tracking-wider text-[var(--text-quaternary)]'
       )}
     >
-      {label}
-    </span>
+      <TreeStatusLegendItem label="Human" kind="human" />
+      <TreeStatusLegendItem label="New" kind="new" />
+      <TreeStatusLegendItem label="Changed" kind="modified" />
+      <TreeStatusLegendItem label="Removed" kind="removed" />
+      <TreeStatusLegendItem label="Inherited" kind="inherited" />
+    </div>
   );
 }
 
 function TreeInlineActions({ children }: { children?: ReactNode }) {
   if (!children) return null;
   return (
-    <div className="relative z-[1] flex shrink-0 items-center justify-end gap-1">{children}</div>
-  );
-}
-
-function TreeRowMeta({ badge }: { badge?: ReactNode }) {
-  if (!badge) return null;
-  return (
-    <div className="relative z-[1] col-span-2 flex min-w-0 justify-end pt-0.5 leading-[12px]">
-      <span className="min-w-0 max-w-full overflow-hidden text-right">{badge}</span>
+    <div className="pointer-events-none relative z-[1] flex shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+      {children}
     </div>
   );
-}
-
-function metadataKindForSlotTag(
-  tag: ReturnType<typeof deriveSlotTag> | null
-): 'new' | 'modified' | 'removed' | 'inherited' {
-  switch (tag?.kind) {
-    case 'new':
-      return 'new';
-    case 'modified':
-      return 'modified';
-    case 'removed':
-      return 'removed';
-    default:
-      return 'inherited';
-  }
 }
 
 export interface HumanEditMarker {
@@ -501,7 +487,6 @@ function buildRenderRows(
 interface SlotCellProps {
   side: 'before' | 'after';
   row: SlotRenderRow;
-  parentMessage: string | null;
   selected: boolean;
   onSelect: () => void;
   onClear: () => void;
@@ -554,36 +539,17 @@ export function SlotPreviewInline({ value }: { value: SlotPreviewValue | null })
   );
 }
 
-function SlotCell({
-  side,
-  row,
-  parentMessage,
-  selected,
-  onSelect,
-  onClear,
-  onDelete,
-  onEdit,
-}: SlotCellProps) {
+function SlotCell({ side, row, selected, onSelect, onClear, onDelete, onEdit }: SlotCellProps) {
   const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const displayValue = side === 'before' ? row.beforeValue : row.afterValue;
   const displayText = slotPreviewToEditText(displayValue);
   const isInteractive = side === 'after';
   const humanEdit = side === 'after' ? row.humanEdit : null;
-  const tag = side === 'after' ? deriveSlotTag({ diffType: row.diffType, parentMessage }) : null;
   const isRemoved = row.diffType === 'removed';
   const isModified = row.diffType === 'modified';
   const isAdded = row.diffType === 'added';
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
-  const metadataBadge =
-    side === 'after' && (humanEdit || tag) ? (
-      <MetadataBadge
-        label={humanEdit?.label ?? tag?.label ?? ''}
-        title={humanEdit?.title}
-        kind={humanEdit ? 'human' : metadataKindForSlotTag(tag)}
-        emphasized={selected}
-      />
-    ) : undefined;
   const tone = rowTone({
     side,
     humanEdit,
@@ -697,7 +663,7 @@ function SlotCell({
                     e.stopPropagation();
                     handleStartEdit();
                   }}
-                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-70 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-info)] hover:opacity-100"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-info)] hover:opacity-100"
                 >
                   <Pencil className="h-2.5 w-2.5" />
                 </button>
@@ -711,14 +677,13 @@ function SlotCell({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-0 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-error)] group-hover:opacity-100"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-error)] hover:opacity-100"
                 >
                   <X className="h-2.5 w-2.5" />
                 </button>
               )}
             </TreeInlineActions>
           )}
-          <TreeRowMeta badge={metadataBadge} />
         </div>
       </div>
     </div>
@@ -728,7 +693,6 @@ function SlotCell({
 interface NodeCellProps {
   side: 'before' | 'after';
   row: NodeRenderRow;
-  parentMessage: string | null;
   selected: boolean;
   onSelect: () => void;
   onClear: () => void;
@@ -740,7 +704,6 @@ interface NodeCellProps {
 function NodeCell({
   side,
   row,
-  parentMessage,
   selected,
   onSelect,
   onClear,
@@ -754,37 +717,16 @@ function NodeCell({
   const hasNode = side === 'before' ? !!row.beforeNode : !!row.afterNode || row.isRemoved;
   const inlineSlot = row.inlineSlot;
   const inlineValue = side === 'before' ? inlineSlot?.beforeValue : inlineSlot?.afterValue;
-  const inlineTag =
-    side === 'after' && inlineSlot?.diffType
-      ? deriveSlotTag({ diffType: inlineSlot.diffType, parentMessage })
-      : null;
+  const isInlineAdded = side === 'after' && inlineSlot?.diffType === 'added';
+  const isInlineModified = side === 'after' && inlineSlot?.diffType === 'modified';
+  const isInlineRemoved = side === 'after' && inlineSlot?.diffType === 'removed';
   const paddingLeft = TREE_BASE_PADDING + row.depth * TREE_INDENT_STEP;
-  const metadataBadge =
-    side === 'after' ? (
-      humanEdit ? (
-        <MetadataBadge
-          label={humanEdit.label}
-          title={humanEdit.title}
-          kind="human"
-          emphasized={selected}
-        />
-      ) : isAdded ? (
-        <MetadataBadge label="New node" kind="new" emphasized={selected} />
-      ) : isRemoved ? (
-        <MetadataBadge label="Removed node" kind="removed" emphasized={selected} />
-      ) : inlineTag ? (
-        <MetadataBadge
-          label={inlineTag.label}
-          kind={metadataKindForSlotTag(inlineTag)}
-          emphasized={selected}
-        />
-      ) : undefined
-    ) : undefined;
   const tone = rowTone({
     side,
     humanEdit,
-    isAdded,
-    isRemoved,
+    isAdded: isAdded || isInlineAdded,
+    isModified: isInlineModified,
+    isRemoved: isRemoved || isInlineRemoved,
   });
 
   return (
@@ -795,7 +737,7 @@ function NodeCell({
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 transition-colors',
-            hasNode && 'bg-[var(--panel-alt)]/45',
+            hasNode && 'bg-[var(--workspace-panel)]',
             tone.background,
             hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source)]/[0.07]'
@@ -834,7 +776,7 @@ function NodeCell({
           {side === 'after' && (
             <TreeInlineActions>
               {row.afterNode && (
-                <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     data-testid="add-child-button"
@@ -874,7 +816,6 @@ function NodeCell({
               )}
             </TreeInlineActions>
           )}
-          <TreeRowMeta badge={metadataBadge} />
         </div>
       </div>
     </div>
@@ -1234,7 +1175,7 @@ export function AfterPanel({
       )}
       <div
         className={cn(
-          'grid shrink-0 bg-[var(--panel)]',
+          'grid shrink-0 bg-[var(--workspace-panel)]',
           showBefore ? 'grid-cols-2' : 'grid-cols-1'
         )}
         style={splitGridStyle}
@@ -1250,7 +1191,7 @@ export function AfterPanel({
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between px-3 py-1.5 min-w-0">
+        <div className="flex items-center justify-between gap-3 px-3 py-1.5 min-w-0">
           {/*
             The header now states whether the rendered tree is the
             applied result (the live yops_log replay), an inherited
@@ -1269,7 +1210,7 @@ export function AfterPanel({
             the prior successful proposal, NOT the new (failed) attempt
             the user just clicked Extract on.
           */}
-          <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="flex min-w-0 items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             {getResultPanelHeaderLabel({
               hasDraft,
               hasRetainedFailure,
@@ -1298,19 +1239,22 @@ export function AfterPanel({
               </span>
             ) : null}
           </span>
-          {showBeforeControl && (
-            <button
-              type="button"
-              onClick={() => onToggleBefore?.()}
-              className={`text-[9px] font-medium px-1.5 py-0.5 rounded transition-colors ${
-                showBefore
-                  ? 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-                  : 'bg-[var(--source)]/10 text-[var(--source)]'
-              }`}
-            >
-              {showBefore ? 'Hide Previous' : 'Show Previous'}
-            </button>
-          )}
+          <div className="flex min-w-0 shrink items-center justify-end gap-2">
+            <TreeStatusLegend />
+            {showBeforeControl && (
+              <button
+                type="button"
+                onClick={() => onToggleBefore?.()}
+                className={`text-[9px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+                  showBefore
+                    ? 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                    : 'bg-[var(--source)]/10 text-[var(--source)]'
+                }`}
+              >
+                {showBefore ? 'Hide Previous' : 'Show Previous'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1342,7 +1286,10 @@ export function AfterPanel({
         </output>
       )}
 
-      <div ref={resultScrollRef} className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
+      <div
+        ref={resultScrollRef}
+        className="flex-1 min-h-0 overflow-auto bg-[var(--workspace-panel)]"
+      >
         {rows.length === 0 && lastError ? (
           <div className="flex h-full min-h-[160px] items-center justify-center px-6">
             <div className="flex max-w-[280px] flex-col items-center gap-2 text-center">
@@ -1372,7 +1319,6 @@ export function AfterPanel({
                     key={`${row.key}:before-node`}
                     side="before"
                     row={row}
-                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('before', { nodePath: row.path })}
                     onClear={clearSelection}
@@ -1382,7 +1328,6 @@ export function AfterPanel({
                     key={`${row.key}:before-slot`}
                     side="before"
                     row={row}
-                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('before', { nodePath: row.path, slotKey: row.slotKey })}
                     onClear={clearSelection}
@@ -1403,7 +1348,6 @@ export function AfterPanel({
                     key={`${row.key}:after-node`}
                     side="after"
                     row={row}
-                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path })}
                     onClear={clearSelection}
@@ -1426,7 +1370,6 @@ export function AfterPanel({
                     key={`${row.key}:after-slot`}
                     side="after"
                     row={row}
-                    parentMessage={parentMessage}
                     selected={rowSelected}
                     onSelect={() => select('after', { nodePath: row.path, slotKey: row.slotKey })}
                     onClear={clearSelection}
@@ -1470,7 +1413,7 @@ export function AfterPanel({
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-3 bg-[var(--panel)] px-3"
+        className="flex shrink-0 items-center justify-between gap-3 bg-[var(--workspace-panel)] px-3"
         style={{ height: TREE_FOOTER_HEIGHT }}
       >
         <span
@@ -1520,7 +1463,7 @@ export function AfterPanel({
           data-testid="commit-dialog"
           className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-[var(--overlay-scrim)] backdrop-blur-[var(--fx-blur-panel)]"
         >
-          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--panel)] p-4 shadow-[var(--fx-shadow-lg)]">
+          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]">
             <label
               htmlFor="after-panel-commit-message"
               className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"

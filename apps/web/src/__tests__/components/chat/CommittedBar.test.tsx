@@ -30,4 +30,10 @@ describe('CommittedBar', () => {
       '/chat/new?inheritFrom=sha256%3Aparent_commit&projectId=proj_1'
     );
   });
+
+  it('uses the chat panel surface for the committed card', () => {
+    const { container } = render(<CommittedBar projectId="proj_1" />);
+
+    expect(container.querySelector('.bg-\\[var\\(--chat-panel\\)\\]')).not.toBeNull();
+  });
 });
