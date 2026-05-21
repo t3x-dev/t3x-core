@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import AccessPage from '@/app/settings/access/page';
+import SettingsPage from '@/app/settings/page';
 import PreferencesPage from '@/app/settings/preferences/page';
 import ProvidersPage from '@/app/settings/providers/page';
 
@@ -20,6 +21,32 @@ vi.mock('@/components/settings/ProvidersSettingsPanel', () => ({
 }));
 
 describe('settings pages', () => {
+  it('renders the overview as an entry map without unverified runtime claims', () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByRole('heading', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /AI Providers Configure/i })).toHaveAttribute(
+      'href',
+      '/settings/providers'
+    );
+    expect(screen.getByRole('link', { name: /API Access Configure/i })).toHaveAttribute(
+      'href',
+      '/settings/access'
+    );
+    expect(screen.getByRole('link', { name: /Workspace Defaults Open/i })).toHaveAttribute(
+      'href',
+      '/settings/preferences'
+    );
+    expect(screen.getByText('Automation')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Runtime-dependent checks are shown inside the pages that can verify them\./)
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Requires backend runtime')).toHaveLength(2);
+    expect(screen.queryByText('AI readiness')).not.toBeInTheDocument();
+    expect(screen.queryByText('Access readiness')).not.toBeInTheDocument();
+    expect(screen.queryByText('Providers configured')).not.toBeInTheDocument();
+  });
+
   it('renders the access page shell around the shared panel', () => {
     render(<AccessPage />);
 

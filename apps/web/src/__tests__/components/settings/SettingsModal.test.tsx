@@ -17,6 +17,18 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('next-themes', () => ({
   ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -231,7 +243,7 @@ describe('SettingsModal', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders the active tab from store state and closes through the modal shell', async () => {
+  it('renders a quick settings surface and closes through the modal shell', async () => {
     act(() => {
       useSettingsModalStore.getState().openSettingsModal('providers');
     });
@@ -239,20 +251,17 @@ describe('SettingsModal', () => {
     render(<SettingsModal />);
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getByText('Mock Providers Panel')).toBeInTheDocument();
-    expect(screen.queryByText('Mock Preferences Panel')).not.toBeInTheDocument();
-
-    act(() => {
-      useSettingsModalStore.getState().setActiveTab('preferences');
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('Mock Preferences Panel')).toBeInTheDocument();
-    });
-
-    expect(useSettingsModalStore.getState().activeTab).toBe('preferences');
+    expect(screen.getByRole('heading', { name: 'Quick Settings' })).toBeInTheDocument();
+    expect(screen.getByText('Fast local changes and readiness shortcuts.')).toBeInTheDocument();
+    expect(screen.getByText('Local Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    expect(screen.getByText('Provider readiness')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open full settings' })).toHaveAttribute(
+      'href',
+      '/settings'
+    );
+    expect(screen.queryByText('Mock Providers Panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
 
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -274,61 +283,35 @@ describe('SettingsModal', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getAllByRole('heading', { name: 'Settings' })).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { name: 'Quick Settings' })).toHaveLength(1);
   });
 
-  it('shows the settings sections in a dedicated left navigation rail', async () => {
+  it('keeps complex settings out of the quick modal', async () => {
     act(() => {
       useSettingsModalStore.getState().openSettingsModal('profile');
     });
 
     render(<SettingsModal />);
 
-    const tablist = await screen.findByRole('tablist');
-    expect(tablist).toHaveTextContent('Profile');
-    expect(tablist).toHaveTextContent('Preferences');
-    expect(tablist).toHaveTextContent('Providers');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByText('API Access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Webhooks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recipes')).not.toBeInTheDocument();
   });
 
-  it('uses a distinct modal shell with a thin left rail and separate content panel', async () => {
+  it('uses a compact quick-settings shell rather than a full settings center', async () => {
     act(() => {
       useSettingsModalStore.getState().openSettingsModal('preferences');
     });
 
     render(<SettingsModal />);
 
-    const shell = await screen.findByTestId('settings-modal-shell');
-    const rail = screen.getByTestId('settings-modal-rail');
-    const panel = screen.getByTestId('settings-modal-panel');
-    const tablist = screen.getByRole('tablist');
-
-    expect(shell.className).toContain('rounded-[34px]');
-    expect(panel.className).toContain('bg-[var(--surface-card)]');
-    expect(rail.className).toContain('border-r');
-    expect(tablist.className).toContain('w-full');
-    expect(tablist.className).not.toContain('w-56');
-  });
-
-  it('renders as a large settings sheet with a sidebar surface and roomy content canvas', async () => {
-    act(() => {
-      useSettingsModalStore.getState().openSettingsModal('profile');
-    });
-
-    render(<SettingsModal />);
-
     const dialog = await screen.findByRole('dialog');
     const shell = screen.getByTestId('settings-modal-shell');
-    const rail = screen.getByTestId('settings-modal-rail');
-    const panel = screen.getByTestId('settings-modal-panel');
-    const canvas = screen.getByTestId('settings-modal-canvas');
 
-    expect(dialog.className).toContain('w-[96vw]');
-    expect(dialog.className).toContain('h-[94vh]');
-    expect(dialog.className).toContain('max-w-[1760px]');
-    expect(dialog.className).toContain('sm:max-w-[1760px]');
-    expect(shell.className).toContain('rounded-[34px]');
-    expect(rail.className).toContain('bg-[color-mix(in_srgb,var(--surface-app)_92%,white_8%)]');
-    expect(panel.className).toContain('bg-[var(--surface-card)]');
-    expect(canvas.className).toContain('px-10');
+    expect(dialog.className).toContain('w-[min(520px,calc(100vw-24px))]');
+    expect(dialog.className).not.toContain('h-[94vh]');
+    expect(dialog.className).not.toContain('max-w-[1760px]');
+    expect(shell.className).toContain('rounded-2xl');
   });
 });

@@ -428,150 +428,150 @@
   background-color: var(--color-bg);
 }
 
-/* Dark mode - refined with better contrast */
+/* Dark mode - calm semantic workbench */
 .dark {
-  --color-text: #ececef;
-  --color-text-secondary: #9d9da5;
-  --color-text-muted: #6b6b75;
-  --color-bg: #0e0e10;
-  --color-bg-white: #1a1a1e;
-  --color-bg-subtle: #16161a;
-  --color-border: rgba(255, 255, 255, 0.07);
-  --color-border-light: rgba(255, 255, 255, 0.05);
+  --color-text: #f0f4fa;
+  --color-text-secondary: #b5becd;
+  --color-text-muted: #8490a3;
+  --color-bg: #111620;
+  --color-bg-white: #171e29;
+  --color-bg-subtle: #121823;
+  --color-border: rgba(226, 234, 248, 0.095);
+  --color-border-light: rgba(226, 234, 248, 0.06);
 
   /* Shadows for dark mode - subtle glow effect */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 0 1px rgba(99, 102, 241, 0.2), 0 4px 16px rgba(99, 102, 241, 0.15);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.26);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.34), 0 1px 2px rgba(0, 0, 0, 0.26);
+  --shadow-md: 0 10px 22px -9px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(226, 234, 248, 0.04);
+  --shadow-lg: 0 18px 52px -20px rgba(0, 0, 0, 0.52), 0 0 0 1px rgba(226, 234, 248, 0.045);
+  --shadow-glow: 0 0 0 1px rgba(130, 153, 220, 0.22), 0 8px 26px rgba(130, 153, 220, 0.12);
 
   /* Elevation for dark mode */
-  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --elevation-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --elevation-3: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --elevation-4: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.35);
-  --elevation-5: 0 16px 48px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --elevation-1: 0 2px 4px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(226, 234, 248, 0.035);
+  --elevation-2: 0 8px 18px rgba(0, 0, 0, 0.34), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --elevation-3: 0 16px 34px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(226, 234, 248, 0.04);
+  --elevation-4: 0 22px 52px rgba(0, 0, 0, 0.44), 0 0 0 1px rgba(226, 234, 248, 0.045);
+  --elevation-5: 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(226, 234, 248, 0.05);
 
   /* ===== Surface System — four semantic layers ===== */
-  --surface-app: oklch(0.11 0.005 260);
-  --surface-panel: oklch(0.15 0.008 260 / 84%);
-  --surface-card: oklch(0.2 0.008 260 / 93%);
-  --surface-elevated: oklch(0.22 0.008 260 / 95%);
-  --surface-radial: oklch(0.15 0.012 260);
-  --surface-canvas: var(--surface-app);
+  --surface-app: #111620;
+  --surface-panel: #121823;
+  --surface-card: #171e29;
+  --surface-elevated: #1b2432;
+  --surface-radial: #121923;
+  --surface-canvas: #121923;
   --sidebar-panel: var(--panel);
   --chat-panel: var(--panel);
   --workspace-panel: var(--panel-alt);
 
-  /* ===== Stroke System — WCAG AA: 3:1 for borders ===== */
-  --stroke-default: oklch(1 0 0 / 14%);
-  --stroke-strong: oklch(1 0 0 / 22%);
-  --stroke-divider: oklch(1 0 0 / 10%);
-  --stroke-highlight-top: oklch(1 0 0 / 10%);
-  --stroke-shadow-bottom: oklch(0 0 0 / 25%);
-  --stroke-grid: oklch(1 0 0 / 5%);
+  /* ===== Stroke System — quiet but still scannable on dense workbench surfaces ===== */
+  --stroke-default: rgba(226, 234, 248, 0.095);
+  --stroke-strong: rgba(226, 234, 248, 0.16);
+  --stroke-divider: rgba(226, 234, 248, 0.07);
+  --stroke-highlight-top: rgba(226, 234, 248, 0.08);
+  --stroke-shadow-bottom: rgba(0, 0, 0, 0.24);
+  --stroke-grid: rgba(226, 234, 248, 0.026);
 
   /* ===== FX System ===== */
-  --fx-blur-panel: 8px;
-  --fx-blur-card: 4px;
-  --fx-shadow-sm: 0 1px 2px oklch(0 0 0 / 20%), 0 0 0 1px oklch(1 0 0 / 5%);
-  --fx-shadow-md: 0 4px 12px oklch(0 0 0 / 30%), 0 0 0 1px oklch(1 0 0 / 5%);
-  --fx-shadow-lg: 0 8px 24px oklch(0 0 0 / 40%), 0 0 0 1px oklch(1 0 0 / 5%);
-  --fx-shadow-hover: 0 6px 16px oklch(0 0 0 / 35%), 0 0 0 1px oklch(1 0 0 / 8%);
+  --fx-blur-panel: 0px;
+  --fx-blur-card: 0px;
+  --fx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(226, 234, 248, 0.035);
+  --fx-shadow-md: 0 10px 24px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(226, 234, 248, 0.04);
+  --fx-shadow-lg: 0 18px 52px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(226, 234, 248, 0.045);
+  --fx-shadow-hover: 0 16px 38px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(226, 234, 248, 0.075);
   --fx-highlight-inset:
     inset 0 1px 0 var(--stroke-highlight-top), inset 0 -1px 0 var(--stroke-shadow-bottom);
 
   /* ===== YOps IDE — workspace panels & editor (dark mode) ===== */
-  --panel: #1a1d28;
-  --panel-alt: #1e2130;
-  --editor-bg: #13151e;
-  --editor-gutter: #191c27;
-  --slot: #60a5fa;
-  --slot-dim: rgba(96, 165, 250, 0.08);
-  --source: #8b5cf6;
-  --source-dim: rgba(139, 92, 246, 0.08);
-  --action: #fb923c;
-  --action-hover: #f59e0b;
-  --commit: #4ade80;
-  --commit-hover: #22c55e;
-  --commit-text: #111111;
-  --syn-key: #c084fc;
-  --syn-string: #86efac;
-  --syn-op: #f0abfc;
-  --syn-path: #93c5fd;
-  --syn-tag: #6ee7b7;
-  --syn-comment: #4a4d5e;
+  --panel: var(--surface-card);
+  --panel-alt: var(--surface-elevated);
+  --editor-bg: #121923;
+  --editor-gutter: #151d28;
+  --slot: #8299dc;
+  --slot-dim: rgba(130, 153, 220, 0.1);
+  --source: #9b8fd8;
+  --source-dim: rgba(155, 143, 216, 0.1);
+  --action: #8299dc;
+  --action-hover: #91a7e5;
+  --commit: #8299dc;
+  --commit-hover: #91a7e5;
+  --commit-text: #07101d;
+  --syn-key: #9b8fd8;
+  --syn-string: #7bc99f;
+  --syn-op: #c89b54;
+  --syn-path: #8299dc;
+  --syn-tag: #55b7ad;
+  --syn-comment: #637087;
 
   /* ===== Interaction ===== */
-  --hover-bg: oklch(1 0 0 / 8%);
-  --hover-bg-strong: oklch(1 0 0 / 12%);
-  --active-bg: oklch(1 0 0 / 14%);
+  --hover-bg: rgba(226, 234, 248, 0.055);
+  --hover-bg-strong: rgba(226, 234, 248, 0.085);
+  --active-bg: rgba(226, 234, 248, 0.12);
   --motion-fast: 120ms;
   --motion-base: 150ms;
   --motion-slow: 200ms;
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ===== Accent — Unified Design v2 (dark only) ===== */
-  --accent-commit: #6b8aff;
-  --accent-extract: #8b5cf6;
-  --accent-pending: #e5a030;
-  --accent-leaf: #2dd4bf;
-  --accent-branch: #e5a030;
-  --accent-conversation: #818cf8;
+  --accent-commit: #8299dc;
+  --accent-extract: #9b8fd8;
+  --accent-pending: #bd7c45;
+  --accent-leaf: #55b7ad;
+  --accent-branch: #c89b54;
+  --accent-conversation: #8c90e8;
   /* Soft accent backgrounds */
-  --accent-commit-soft: rgba(107, 138, 255, 0.1);
-  --accent-pending-soft: rgba(229, 160, 48, 0.1);
-  --accent-leaf-soft: rgba(45, 212, 191, 0.12);
-  --accent-branch-soft: rgba(229, 160, 48, 0.1);
-  --accent-conversation-soft: rgba(129, 140, 248, 0.1);
-  --on-accent: #111827;
-  --on-status: #111827;
+  --accent-commit-soft: rgba(130, 153, 220, 0.16);
+  --accent-pending-soft: rgba(189, 124, 69, 0.13);
+  --accent-leaf-soft: rgba(85, 183, 173, 0.15);
+  --accent-branch-soft: rgba(200, 155, 84, 0.13);
+  --accent-conversation-soft: rgba(140, 144, 232, 0.12);
+  --on-accent: #07101d;
+  --on-status: #07101d;
   --overlay-scrim: rgba(0, 0, 0, 0.45);
 
   /* ===== Status Colors (dark overrides) ===== */
-  --status-success: #4ade80;
-  --status-success-muted: rgba(5, 46, 22, 0.3);
-  --status-error: #f87171;
-  --status-error-muted: rgba(69, 10, 10, 0.3);
-  --status-warning: #fbbf24;
-  --status-warning-muted: rgba(69, 26, 3, 0.3);
-  --status-info: #60a5fa;
-  --status-info-muted: rgba(30, 58, 138, 0.3);
+  --status-success: #7bc99f;
+  --status-success-muted: rgba(123, 201, 159, 0.12);
+  --status-error: #df8585;
+  --status-error-muted: rgba(223, 133, 133, 0.12);
+  --status-warning: #c89b54;
+  --status-warning-muted: rgba(200, 155, 84, 0.12);
+  --status-info: #8299dc;
+  --status-info-muted: rgba(130, 153, 220, 0.12);
 
-  /* ===== Text Hierarchy — Unified Design v2 (warm off-white) ===== */
-  --text-primary: #ececef;
-  --text-secondary: #9d9da5;
-  --text-tertiary: #6b6b75;
+  /* ===== Text Hierarchy — cool workbench contrast ===== */
+  --text-primary: #f0f4fa;
+  --text-secondary: #b5becd;
+  --text-tertiary: #8490a3;
   /* Aliases */
   --text-1: var(--text-primary);
   --text-2: var(--text-secondary);
   --text-3: var(--text-tertiary);
-  --text-dim: #4a4a55;
+  --text-dim: #637087;
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
-  --scrollbar-thumb: oklch(1 0 0 / 15%);
-  --scrollbar-thumb-hover: oklch(1 0 0 / 25%);
+  --scrollbar-thumb: rgba(226, 234, 248, 0.15);
+  --scrollbar-thumb-hover: rgba(226, 234, 248, 0.24);
 
   /* ===== Diff Token System — Unified Design v2 dark overrides ===== */
-  --diff-added-bg: rgba(52, 211, 153, 0.07);
-  --diff-added-border: #15803d;
-  --diff-added-text: #86efac;
-  --diff-added-accent: #34d399;
-  --diff-removed-bg: rgba(248, 113, 113, 0.07);
-  --diff-removed-border: #b91c1c;
-  --diff-removed-text: #fca5a5;
-  --diff-removed-accent: #f87171;
-  --diff-modified-bg: rgba(229, 160, 48, 0.06);
-  --diff-modified-border: #b45309;
-  --diff-modified-text: #fcd34d;
-  --diff-modified-accent: #e5a030;
-  --diff-identical-bg: rgba(2, 6, 23, 0.3);
-  --diff-identical-border: #334155;
-  --diff-identical-text: #94a3b8;
-  --diff-added-word-bg: rgba(52, 211, 153, 0.35);
-  --diff-removed-word-bg: rgba(248, 113, 113, 0.3);
+  --diff-added-bg: rgba(123, 201, 159, 0.11);
+  --diff-added-border: rgba(123, 201, 159, 0.3);
+  --diff-added-text: #bee5d0;
+  --diff-added-accent: #7bc99f;
+  --diff-removed-bg: rgba(223, 133, 133, 0.11);
+  --diff-removed-border: rgba(223, 133, 133, 0.3);
+  --diff-removed-text: #f0b6b6;
+  --diff-removed-accent: #df8585;
+  --diff-modified-bg: rgba(200, 155, 84, 0.11);
+  --diff-modified-border: rgba(200, 155, 84, 0.3);
+  --diff-modified-text: #e2c38e;
+  --diff-modified-accent: #c89b54;
+  --diff-identical-bg: rgba(226, 234, 248, 0.045);
+  --diff-identical-border: rgba(226, 234, 248, 0.09);
+  --diff-identical-text: #a9b2c2;
+  --diff-added-word-bg: rgba(123, 201, 159, 0.28);
+  --diff-removed-word-bg: rgba(223, 133, 133, 0.26);
   /* Unified aliases */
   --diff-add-bg: var(--diff-added-bg);
   --diff-add-accent: var(--diff-added-accent);
@@ -582,12 +582,12 @@
   --diff-mod-bg: var(--diff-modified-bg);
   --diff-mod-accent: var(--diff-modified-accent);
   /* Merge colors — dark mode (source=blue, target=green) */
-  --merge-src-bg: rgba(107, 138, 255, 0.07);
-  --merge-src-accent: #6b8aff;
-  --merge-src-word: rgba(107, 138, 255, 0.35);
-  --merge-tgt-bg: rgba(52, 211, 153, 0.07);
-  --merge-tgt-accent: #34d399;
-  --merge-tgt-word: rgba(52, 211, 153, 0.35);
+  --merge-src-bg: rgba(130, 153, 220, 0.11);
+  --merge-src-accent: #8299dc;
+  --merge-src-word: rgba(130, 153, 220, 0.3);
+  --merge-tgt-bg: rgba(123, 201, 159, 0.11);
+  --merge-tgt-accent: #7bc99f;
+  --merge-tgt-word: rgba(123, 201, 159, 0.28);
 
   /* ===== YAML Syntax Tokens — Tokyo Night (slightly desaturated) ===== */
   --yaml-key: #7aa2f7;
@@ -602,10 +602,10 @@
   --yaml-num: var(--yaml-number);
 
   /* ===== Leaf Correspondence Tokens — dark overrides ===== */
-  --leaf-match-bg: rgba(74, 222, 128, 0.15);
-  --leaf-match-border: rgba(74, 222, 128, 0.35);
-  --leaf-fail-bg: rgba(248, 113, 113, 0.15);
-  --leaf-fail-border: rgba(248, 113, 113, 0.35);
+  --leaf-match-bg: rgba(123, 201, 159, 0.14);
+  --leaf-match-border: rgba(123, 201, 159, 0.34);
+  --leaf-fail-bg: rgba(223, 133, 133, 0.14);
+  --leaf-fail-border: rgba(223, 133, 133, 0.34);
 
   /* ===== Highlight Token System (§1.1) — dark overrides ===== */
   --highlight-yellow-bg: rgba(133, 77, 14, 0.5);
@@ -613,70 +613,70 @@
 
   /* ===== Reading Surfaces — readability first ===== */
   /* Used for: Diff columns, Output blocks, long text panels */
-  --glass-bg-reading: oklch(0.19 0.01 260 / 94%);
-  --glass-bg-reading-soft: oklch(0.18 0.01 260 / 90%);
+  --glass-bg-reading: #171e29;
+  --glass-bg-reading-soft: #1b2432;
   --glass-blur-reading: 0px;
-  --shadow-reading: 0 10px 28px oklch(0 0 0 / 38%), 0 0 0 1px oklch(1 0 0 / 7%);
+  --shadow-reading: 0 10px 28px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(226, 234, 248, 0.055);
 
   /* ===== Noise ===== */
-  --noise-opacity: 0.015;
+  --noise-opacity: 0;
 
   /* ===== Unified Design v2 Aliases (dark mode) ===== */
-  --bg: #0e0e10;
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-hover: rgba(255, 255, 255, 0.05);
-  --surface-alt: rgba(255, 255, 255, 0.02);
-  --surface-raised: rgba(255, 255, 255, 0.045);
-  --surface-panel-unified: rgba(20, 20, 24, 0.88);
-  --border-unified: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --border-divider: rgba(255, 255, 255, 0.05);
-  --glass-bg: rgba(20, 20, 24, 0.9);
-  --glass-blur: 8px;
-  --shadow-sm-unified: 0 1px 3px rgba(0, 0, 0, 0.12);
-  --shadow-md-unified: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --bg: var(--surface-app);
+  --surface: var(--surface-card);
+  --surface-hover: rgba(226, 234, 248, 0.055);
+  --surface-alt: var(--surface-panel);
+  --surface-raised: var(--surface-elevated);
+  --surface-panel-unified: var(--surface-panel);
+  --border-unified: var(--stroke-default);
+  --border-strong: var(--stroke-strong);
+  --border-divider: var(--stroke-divider);
+  --glass-bg: var(--surface-panel);
+  --glass-blur: 0px;
+  --shadow-sm-unified: var(--shadow-sm);
+  --shadow-md-unified: var(--shadow-md);
 
   /* shadcn tokens — aligned with four-layer surface system */
-  --background: oklch(0.11 0.005 260); /* = surface-app */
-  --foreground: oklch(0.95 0.005 260); /* = text-primary */
-  --card: oklch(0.19 0.008 260); /* = surface-card */
-  --card-foreground: oklch(0.95 0.005 260);
-  --popover: oklch(0.21 0.008 260); /* = surface-elevated */
-  --popover-foreground: oklch(0.95 0.005 260);
-  --primary: var(--color-brand-muted);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.14 0.008 260); /* = surface-panel */
-  --secondary-foreground: oklch(0.95 0.005 260);
-  --muted: oklch(0.14 0.008 260);
-  --muted-foreground: oklch(0.65 0.01 260); /* = text-tertiary */
-  --accent: oklch(0.19 0.008 260);
-  --accent-foreground: oklch(0.95 0.005 260);
-  --destructive: oklch(0.6 0.2 25);
-  --border: oklch(1 0 0 / 12%); /* = stroke-default */
-  --input: oklch(1 0 0 / 15%);
+  --background: var(--surface-app);
+  --foreground: var(--text-primary);
+  --card: var(--surface-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-commit);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--surface-panel);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-panel);
+  --muted-foreground: var(--text-tertiary);
+  --accent: var(--surface-card);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--status-error);
+  --border: var(--stroke-default);
+  --input: rgba(226, 234, 248, 0.11);
   --ring: var(--accent-conversation); /* = focus ring */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.14 0.008 260); /* = surface-panel */
-  --sidebar-foreground: oklch(0.94 0.005 260);
-  --sidebar-primary: var(--color-brand-muted);
-  --sidebar-primary-foreground: oklch(0.94 0.005 260);
-  --sidebar-accent: oklch(0.17 0.008 260);
-  --sidebar-accent-foreground: oklch(0.94 0.005 260);
-  --sidebar-border: oklch(1 0 0 / 12%); /* = stroke-default */
+  --sidebar: var(--surface-panel);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent-commit);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--surface-elevated);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--stroke-default);
   --sidebar-ring: var(--accent-conversation); /* = focus ring */
 
   /* Canvas Edge Colors (dark) */
-  --edge-color: #475569;
-  --edge-active-color: #818cf8;
-  --edge-selected-color: #6366f1;
-  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 66%, transparent);
-  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 68%, transparent);
-  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 40%, transparent);
-  --edge-default-opacity: 0.46;
+  --edge-color: #637087;
+  --edge-active-color: var(--accent-commit);
+  --edge-selected-color: var(--accent-commit);
+  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 52%, transparent);
+  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 52%, transparent);
+  --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
+  --edge-default-opacity: 0.5;
   --edge-dim-opacity: 0.2;
 }
 
@@ -1998,7 +1998,7 @@ h3,
    Dark Mode — ReactFlow Grid Override
    ============================================ */
 .dark .react-flow__background {
-  --xy-background-color-default: var(--surface-app);
+  --xy-background-color-default: var(--surface-canvas);
 }
 
 /* ============================================
