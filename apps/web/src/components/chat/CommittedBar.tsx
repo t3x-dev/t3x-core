@@ -16,9 +16,9 @@ export function CommittedBar({ projectId }: CommittedBarProps) {
   const shortHash = lastCommitHash ? lastCommitHash.replace('sha256:', '').slice(0, 8) : '';
 
   return (
-    <div className="border-t border-[var(--stroke-divider)] shrink-0 py-3">
+    <div className="shrink-0 border-t border-[var(--stroke-divider)] bg-[var(--chat-panel)] py-3">
       <div className="mx-auto max-w-3xl px-4">
-        <div className="rounded-2xl border border-[var(--stroke-default)] bg-[var(--surface-panel)] p-3.5">
+        <div className="rounded-2xl border border-[var(--stroke-default)] bg-[var(--chat-panel)] p-3.5">
           {/* Status row */}
           <div className="flex items-center gap-2 mb-3">
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--status-success)] text-[var(--on-status)]">
