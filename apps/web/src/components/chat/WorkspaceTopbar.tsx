@@ -38,7 +38,7 @@ export function WorkspaceTopbar() {
   const pendingCount = groups.pending.count;
 
   return (
-    <div className="flex h-11 items-center gap-2 overflow-hidden border-b border-[var(--stroke-divider)] bg-[var(--panel)] px-3">
+    <div className="flex h-11 items-center gap-2 overflow-hidden border-b border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3">
       <span className="shrink-0 text-xs font-semibold">Workspace</span>
 
       {mode === 'streaming' && (
@@ -63,7 +63,7 @@ export function WorkspaceTopbar() {
           }
         >
           {isInheritedBaselineOnly ? (
-            <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-0.5 text-[var(--text-tertiary)]">
+            <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 py-0.5 text-[var(--text-tertiary)]">
               Inherited baseline
             </span>
           ) : (
@@ -81,7 +81,7 @@ export function WorkspaceTopbar() {
                   'inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border px-2',
                   pendingCount > 0
                     ? 'border-[var(--accent-pending)]/30 bg-[var(--accent-pending-soft)] text-[var(--accent-pending)]'
-                    : 'border-[var(--stroke-divider)] bg-[var(--workspace-bg)] text-[var(--text-tertiary)]'
+                    : 'border-[var(--stroke-divider)] bg-[var(--workspace-panel)] text-[var(--text-tertiary)]'
                 )}
               >
                 Pending {pendingCount}

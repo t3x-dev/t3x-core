@@ -795,7 +795,7 @@ function NodeCell({
           data-human-edit={humanEdit ? 'true' : undefined}
           className={cn(
             'relative grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1 px-2 transition-colors',
-            hasNode && 'bg-[var(--panel-alt)]/45',
+            hasNode && 'bg-[var(--workspace-panel)]',
             tone.background,
             hasNode && 'cursor-pointer hover:bg-[var(--hover-bg)]',
             selected && 'bg-[var(--source)]/[0.07]'
@@ -1234,7 +1234,7 @@ export function AfterPanel({
       )}
       <div
         className={cn(
-          'grid shrink-0 bg-[var(--panel)]',
+          'grid shrink-0 bg-[var(--workspace-panel)]',
           showBefore ? 'grid-cols-2' : 'grid-cols-1'
         )}
         style={splitGridStyle}
@@ -1342,7 +1342,10 @@ export function AfterPanel({
         </output>
       )}
 
-      <div ref={resultScrollRef} className="flex-1 min-h-0 overflow-auto bg-[var(--panel)]">
+      <div
+        ref={resultScrollRef}
+        className="flex-1 min-h-0 overflow-auto bg-[var(--workspace-panel)]"
+      >
         {rows.length === 0 && lastError ? (
           <div className="flex h-full min-h-[160px] items-center justify-center px-6">
             <div className="flex max-w-[280px] flex-col items-center gap-2 text-center">
@@ -1470,7 +1473,7 @@ export function AfterPanel({
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-3 bg-[var(--panel)] px-3"
+        className="flex shrink-0 items-center justify-between gap-3 bg-[var(--workspace-panel)] px-3"
         style={{ height: TREE_FOOTER_HEIGHT }}
       >
         <span
@@ -1520,7 +1523,7 @@ export function AfterPanel({
           data-testid="commit-dialog"
           className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-[var(--overlay-scrim)] backdrop-blur-[var(--fx-blur-panel)]"
         >
-          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--panel)] p-4 shadow-[var(--fx-shadow-lg)]">
+          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]">
             <label
               htmlFor="after-panel-commit-message"
               className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"

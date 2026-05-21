@@ -354,7 +354,7 @@ export function ChatWorkspace({
       {/* Message list */}
       <div
         ref={chatContainerRef}
-        className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--panel)]"
+        className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--chat-panel)]"
       >
         {/* Parent conversation banner */}
         {parentConversationId && (
@@ -509,7 +509,7 @@ export function ChatWorkspace({
       {isCommitted ? (
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
-        <div className="shrink-0 bg-[var(--panel)] pb-3 pt-4">
+        <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
           <div className="mx-auto max-w-[620px] px-5">
             <ChatInput
               onSend={handleSend}
