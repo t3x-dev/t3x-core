@@ -91,6 +91,7 @@ next-env.d.ts
 # apps/api/src/scripts) are tracked.
 scratchpad/
 preview/
+videos/
 docs/
 specs/
 /scripts/

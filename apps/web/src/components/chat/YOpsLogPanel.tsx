@@ -71,7 +71,7 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
         'rounded border transition-colors',
         human
           ? 'border-[var(--status-success)]/30 bg-[var(--status-success-muted)]/40'
-          : 'border-[var(--stroke-default)] bg-[var(--panel-alt)]'
+          : 'border-[var(--stroke-default)] bg-[var(--workspace-panel)]'
       )}
     >
       <button
@@ -189,7 +189,7 @@ function OpRow({ model, index }: { model: OpCardModel; index: number }) {
               shows — one canonical YAML representation across every
               surface.
             */}
-            <pre className="text-[11px] font-mono text-[var(--text-primary)] bg-[var(--panel)] border border-[var(--stroke-default)] rounded px-2 py-1.5 overflow-x-auto whitespace-pre">
+            <pre className="text-[11px] font-mono text-[var(--text-primary)] bg-[var(--workspace-panel)] border border-[var(--stroke-default)] rounded px-2 py-1.5 overflow-x-auto whitespace-pre">
               {model.rawYaml}
             </pre>
           </section>
@@ -327,7 +327,7 @@ function Group({
         </span>
       </div>
       {count === 0 ? (
-        <div className="rounded border border-dashed border-[var(--stroke-default)] bg-[var(--panel)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
+        <div className="rounded border border-dashed border-[var(--stroke-default)] bg-[var(--workspace-panel)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
           {empty}
         </div>
       ) : (
@@ -339,7 +339,7 @@ function Group({
 
 function PendingRow({ label }: { label: string }) {
   return (
-    <div className="rounded border border-[var(--stroke-default)] bg-[var(--panel)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)]">
+    <div className="rounded border border-[var(--stroke-default)] bg-[var(--workspace-panel)] px-2.5 py-1.5 text-[12px] text-[var(--text-primary)]">
       {label}
     </div>
   );
@@ -400,7 +400,7 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
 
     return (
       <div
-        className="flex flex-col h-full bg-[var(--panel)]"
+        className="flex flex-col h-full bg-[var(--workspace-panel)]"
         data-testid="yops-log-panel-materialized"
       >
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-3">
@@ -479,7 +479,10 @@ export function YOpsLogPanel({ tab = 'applied', mode = 'materialized' }: YOpsLog
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--panel)]" data-testid={`yops-log-panel-${tab}`}>
+    <div
+      className="flex flex-col h-full bg-[var(--workspace-panel)]"
+      data-testid={`yops-log-panel-${tab}`}
+    >
       {visibleOps.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-[280px]">

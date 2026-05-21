@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 export const CHAT_SIDEBAR_COLLAPSED_WIDTH = 64;
 export const CHAT_SIDEBAR_DEFAULT_WIDTH = 276;
-export const CHAT_SIDEBAR_MIN_WIDTH = 260;
+export const CHAT_SIDEBAR_MIN_WIDTH = 220;
 export const CHAT_SIDEBAR_MAX_WIDTH = 420;
 
 export function clampChatSidebarWidth(width: number): number {

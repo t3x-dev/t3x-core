@@ -73,7 +73,7 @@ export function ProjectFolder({
         // so the user immediately sees which project they're producing in,
         // even before the folder is expanded or has any conversations yet.
         isActive
-          ? 'border-[var(--accent-commit)]/25 bg-[var(--surface-panel)]/55 text-[var(--text-primary)] shadow-none'
+          ? 'border-[var(--accent-commit)]/25 bg-[var(--sidebar-panel)] text-[var(--text-primary)] shadow-none'
           : isExpanded && !collapsed
             ? 'bg-[var(--hover-bg)]/65 text-[var(--text-primary)]'
             : 'text-[var(--text-secondary)]'

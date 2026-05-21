@@ -202,7 +202,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
     return (
       <div
         data-testid="yops-panel-collapsed"
-        className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-divider)] bg-[var(--panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
+        className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-divider)] bg-[var(--workspace-panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
         title="Expand workspace"
@@ -218,7 +218,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   return (
     <div
       ref={containerRef}
-      className="flex h-full flex-col bg-[var(--panel)]"
+      className="flex h-full flex-col bg-[var(--workspace-panel)]"
       style={{ width, minWidth: WORKSPACE_PANEL_MIN_WIDTH }}
     >
       <WorkspaceTopbar />
@@ -228,7 +228,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         style={{ height: `${splitRatio * 100}%` }}
         className="flex-shrink-0 overflow-hidden border-b border-[var(--stroke-divider)] flex flex-col"
       >
-        <div className="flex h-9 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--panel)] px-3">
+        <div className="flex h-9 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3">
           {topView === 'script' ? (
             <span
               className="min-w-0 max-w-[180px] truncate text-[10px] font-mono text-[var(--text-tertiary)]"

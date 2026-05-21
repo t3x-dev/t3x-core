@@ -65,7 +65,10 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
     state.status === 'loading' || (conversationId !== null && state.status === 'idle');
 
   return (
-    <div className="flex flex-col h-full bg-[var(--panel)]" data-testid="archived-ops-panel">
+    <div
+      className="flex flex-col h-full bg-[var(--workspace-panel)]"
+      data-testid="archived-ops-panel"
+    >
       {state.status === 'error' ? (
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-[280px] text-[11px] text-[var(--text-tertiary)] leading-relaxed">
@@ -104,8 +107,8 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
               key={row.id}
               data-testid={`archived-op-${i}`}
               className={cn(
-                'rounded border border-[var(--stroke-default)]/60 bg-[var(--panel)]/40 px-2.5 py-1.5',
-                'transition-colors hover:bg-[var(--panel)]/60'
+                'rounded border border-[var(--stroke-default)]/60 bg-[var(--workspace-panel)] px-2.5 py-1.5',
+                'transition-colors hover:bg-[var(--hover-bg)]'
               )}
             >
               <div className="flex items-center gap-2">

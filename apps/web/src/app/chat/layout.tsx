@@ -21,7 +21,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       <ChatSidebar />
       <main
         className={cn(
-          'h-full overflow-hidden',
+          'h-full overflow-hidden bg-[var(--chat-panel)]',
           !sidebarResizing &&
             'transition-[margin-left] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]'
         )}
