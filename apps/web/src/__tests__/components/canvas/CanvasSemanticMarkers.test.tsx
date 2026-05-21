@@ -174,6 +174,21 @@ function renderUnitNode(data: CanvasNodeData) {
   );
 }
 
+function renderSelectedUnitNode(data: CanvasNodeData) {
+  const UnitNode = canvasNodeTypes.unit;
+  return render(
+    <UnitNode
+      data={data}
+      dragging={false}
+      id="unit_canvas"
+      isConnectable={true}
+      selected={true}
+      type="unit"
+      zIndex={0}
+    />
+  );
+}
+
 describe('Canvas node semantic markers', () => {
   it('labels committed, source, and leaf regions without relying on color alone', () => {
     renderUnitNode(makeNodeData());
@@ -212,5 +227,27 @@ describe('Canvas node semantic markers', () => {
       'data-kind-shape',
       'dashed-square'
     );
+  });
+
+  it('keeps committed card borders neutral for broad-audience scanning', () => {
+    renderSelectedUnitNode(
+      makeNodeData({
+        branchName: 'branch 1',
+        branchType: 'branch',
+      })
+    );
+
+    const node = screen.getByRole('treeitem', { name: /Semantic canvas node/i });
+    expect(node.className).toContain('border-[var(--stroke-default)]');
+    expect(node.className).toContain('ring-[var(--accent-commit)]/30');
+    expect(node.className).not.toContain('border-l-');
+    expect(node.className).not.toContain('ring-[var(--accent-branch)]');
+  });
+
+  it('does not duplicate committed node actions inside every card', () => {
+    renderUnitNode(makeNodeData({ leaves: [] }));
+
+    const node = screen.getByRole('treeitem', { name: /Semantic canvas node/i });
+    expect(within(node).queryByText(/Create Output/i)).not.toBeInTheDocument();
   });
 });

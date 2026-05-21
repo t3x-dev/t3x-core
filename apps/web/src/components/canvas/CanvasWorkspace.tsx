@@ -1,4 +1,4 @@
-import type { ColorMode } from '@xyflow/react';
+import type { ColorMode, Node } from '@xyflow/react';
 import {
   Background,
   BackgroundVariant,
@@ -9,7 +9,7 @@ import {
 } from '@xyflow/react';
 import { GitCommit, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
@@ -50,8 +51,10 @@ import { MergePanel } from '../merge/MergePanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
+import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 
 const GRID_SIZE = 16;
+type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 
 interface CanvasWorkspaceProps {
   projectName: string;
@@ -87,8 +90,8 @@ function CanvasWorkspaceInner({
     x: number;
     y: number;
     nodeId: string;
-    hash: string;
   } | null>(null);
+  const reopenActionPanelNodeRef = useRef<string | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
@@ -189,6 +192,12 @@ function CanvasWorkspaceInner({
   const [initialLayoutDone, setInitialLayoutDone] = useState(false);
   // Track the fingerprint from the previous render to detect topology changes vs initial load
   const prevTopoRef = useRef<string | null>(null);
+  const useVersionPathLayout = useMemo(
+    () =>
+      nodes.length > 1 &&
+      nodes.every((node) => node.data.kind === 'unit' && node.data.commitStatus === 'committed'),
+    [nodes]
+  );
 
   // DAG auto-layout:
   // - Initial load with DB positions → skip ELK, use saved positions
@@ -207,8 +216,10 @@ function CanvasWorkspaceInner({
     const topoChanged = prevTopoRef.current !== null && prevTopoRef.current !== topoFingerprint;
     prevTopoRef.current = topoFingerprint;
 
-    // Initial load with DB positions → skip ELK, just mark done
-    if (isInitialLoad && hasDbPositions) {
+    // Initial load with DB positions → skip ELK, except for committed version paths.
+    // Version paths should read left-to-right like a commit lineage instead of
+    // inheriting stale free-canvas positions from earlier experiments.
+    if (isInitialLoad && hasDbPositions && !useVersionPathLayout) {
       setInitialLayoutDone(true);
       return;
     }
@@ -223,9 +234,9 @@ function CanvasWorkspaceInner({
     (async () => {
       try {
         const layouted = await getLayoutedElements(currentNodes, getEdges(), {
-          direction: 'DOWN',
-          nodeSpacing: 80,
-          rankSpacing: 120,
+          direction: useVersionPathLayout ? 'RIGHT' : 'DOWN',
+          nodeSpacing: useVersionPathLayout ? 96 : 80,
+          rankSpacing: useVersionPathLayout ? 132 : 120,
         });
         if (cancelled) return;
         setNodes(layouted);
@@ -255,7 +266,7 @@ function CanvasWorkspaceInner({
       prevTopoRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topoFingerprint]);
+  }, [topoFingerprint, useVersionPathLayout]);
 
   const modalNode = nodes.find((node) => node.id === openNodeId);
   const pendingCommitBranchMode = useCanvasStore((state) => {
@@ -324,6 +335,105 @@ function CanvasWorkspaceInner({
     return undefined;
   }, [modalNode, addConversationFromCommit, router]);
 
+  const selectedUnitNode = useMemo<CanvasUnitNode | null>(() => {
+    const actionNode = actionPanel
+      ? nodes.find((node) => node.id === actionPanel.nodeId)
+      : undefined;
+    const selectedNode = nodes.find(
+      (node) => node.selected && node.data.kind === 'unit' && node.data.commitStatus === 'committed'
+    );
+    const node = actionNode ?? selectedNode;
+    if (!node || node.data.kind !== 'unit' || node.data.commitStatus !== 'committed') {
+      return null;
+    }
+    return node as CanvasUnitNode;
+  }, [actionPanel, nodes]);
+
+  const buildNodeActionModel = (node: CanvasUnitNode | null) => {
+    if (!node) {
+      return { actions: [], canMerge: false, hash: '', parentHash: undefined };
+    }
+    const hash = node.data.commitHash ?? node.data.commit?.hash ?? '';
+    const parentEdge = edges.find((edge) => edge.target === node.id);
+    const parentNode = parentEdge
+      ? (nodes.find((candidate) => candidate.id === parentEdge.source) as
+          | CanvasUnitNode
+          | undefined)
+      : undefined;
+    const parentHash =
+      parentNode?.data.commitHash ??
+      parentNode?.data.commit?.hash ??
+      (parentEdge?.source?.startsWith('sha') ? parentEdge.source : undefined);
+    const panelTone = getCommitTone(node.id);
+    const firstLeaf = node.data.leaves?.[0];
+    const canMerge =
+      node.data.branchType === 'branch' &&
+      node.data.commitStatus === 'committed' &&
+      panelTone === 'branch-latest' &&
+      hasMainCommit;
+
+    return {
+      actions: buildCommitActions({
+        onViewDetails: () => {
+          if (projectId && hash) {
+            router.push(`/project/${projectId}/commit/${encodeURIComponent(hash)}`);
+          }
+        },
+        onViewDiff:
+          parentHash && projectId && hash
+            ? () => {
+                const query = new URLSearchParams({
+                  base: parentHash,
+                  target: hash,
+                });
+                router.push(`/project/${projectId}/diff?${query.toString()}`);
+              }
+            : undefined,
+        onOpenLeaf:
+          firstLeaf?.id && projectId
+            ? () => {
+                router.push(`/project/${projectId}/leaf/${firstLeaf.id}`);
+              }
+            : undefined,
+        onCreateLeaf: () => {
+          openLeafPanel(node.id);
+        },
+        onMerge:
+          canMerge && projectId
+            ? () => {
+                void (async () => {
+                  const draftId = await startMerge(node.id);
+                  if (draftId) {
+                    router.push(`/project/${projectId}/merge/${draftId}`);
+                  }
+                })();
+              }
+            : undefined,
+      }),
+      canMerge,
+      hash,
+      parentHash,
+    };
+  };
+
+  const selectionActionModel = buildNodeActionModel(selectedUnitNode);
+
+  const showActionPanelForNode = useCallback(
+    (event: React.MouseEvent | MouseEvent, nodeId: string) => {
+      const rect = (event.target as HTMLElement)
+        .closest('.react-flow__node')
+        ?.getBoundingClientRect();
+      const px = rect ? rect.left + rect.width / 2 : event.clientX;
+      const py = rect ? rect.bottom + 8 : event.clientY;
+      setActionPanel({
+        x: px,
+        y: py,
+        nodeId,
+      });
+    },
+    []
+  );
+
   // Keyboard shortcuts (extracted hook)
   useCanvasKeyboardShortcuts({
     selectAllNodes,
@@ -349,151 +459,192 @@ function CanvasWorkspaceInner({
         }
       />
 
-      <div
-        ref={canvasRef}
-        className={cn(
-          'relative flex-1 transition-opacity duration-300',
-          isPanMode && 'cursor-grab active:cursor-grabbing',
-          !initialLayoutDone && nodes.length > 0 && 'opacity-0'
-        )}
-        role="tree"
-        aria-label="Knowledge graph canvas"
-        style={{
-          background: 'var(--surface-app)',
-          backgroundImage:
-            'radial-gradient(ellipse at 50% 30%, var(--surface-radial), transparent 70%)',
-        }}
-      >
-        <ReactFlow
-          nodes={nodesForRender}
-          edges={edgesForRender}
-          nodeTypes={canvasNodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={(event, node) => {
-            // Skip node click logic when user is interacting with editable title
-            const target = event.target as HTMLElement;
-            if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
-              return;
-            }
-
-            const data = node.data as import('@/types/nodes').CanvasNodeData;
-
-            // Leaf nodes -> navigate to leaf detail page (always single click)
-            if (data.kind === 'leaf' && data.leafId && projectId) {
-              router.push(`/project/${projectId}/leaf/${data.leafId}`);
-              return;
-            }
-
-            // Staging/pending units -> navigate to chat page (always single click)
-            if (data.commitStatus !== 'committed') {
-              if (data.conversationId) {
-                router.push(`/chat/${data.conversationId}`);
-              } else {
-                openNodeModal(node.id, 'commit');
-              }
-              return;
-            }
-
-            // Committed nodes: single click = action panel, double click = detail page
-            if (!compactViewport) {
-              if (data.branchType === 'branch') {
-                setHighlight({ branch: data.branchName, mode: 'branch' });
-              } else {
-                setHighlight({ mode: 'node', nodeId: node.id });
-              }
-            }
-            if (clickTimerRef.current) {
-              // Double click detected
-              clearTimeout(clickTimerRef.current);
-              clickTimerRef.current = null;
-              setActionPanel(null);
-              if (data.commitHash && projectId) {
-                router.push(`/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`);
-              }
-            } else {
-              // First click — wait to see if double click follows
-              const rect = (event.target as HTMLElement)
-                .closest('.react-flow__node')
-                ?.getBoundingClientRect();
-              const px = rect ? rect.right + 8 : (event as React.MouseEvent).clientX;
-              const py = rect ? rect.top : (event as React.MouseEvent).clientY;
-              clickTimerRef.current = setTimeout(() => {
-                clickTimerRef.current = null;
-                setActionPanel({
-                  x: px,
-                  y: py,
-                  nodeId: node.id,
-                  hash: data.commitHash ?? '',
-                });
-              }, 250);
-            }
-          }}
-          onNodeContextMenu={handleNodeContextMenu}
-          onPaneContextMenu={handlePaneContextMenu}
-          onPaneClick={() => {
-            // Clear active path highlight and close transient canvas overlays.
-            if (highlight) {
-              setHighlight(null);
-            }
-            closeContextMenu();
-            setActionPanel(null);
-          }}
-          panOnDrag={isPanMode}
-          selectionOnDrag={!isPanMode}
-          snapToGrid
-          snapGrid={[GRID_SIZE, GRID_SIZE]}
-          proOptions={{ hideAttribution: true }}
-          fitView={!initialViewport}
-          fitViewOptions={{ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1 }}
-          defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
-          onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
-          minZoom={canvasMinZoom}
-          maxZoom={2}
-          deleteKeyCode={['Backspace', 'Delete']}
-          selectNodesOnDrag={false}
-          colorMode={colorMode}
-          defaultEdgeOptions={{
-            type: 'animated',
-            style: { strokeWidth: 2 },
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={canvasRef}
+          className={cn(
+            'relative min-w-0 flex-1 transition-opacity duration-300',
+            isPanMode && 'cursor-grab active:cursor-grabbing',
+            !initialLayoutDone && nodes.length > 0 && 'opacity-0'
+          )}
+          role="tree"
+          aria-label="Knowledge graph canvas"
+          style={{
+            backgroundColor: 'var(--surface-canvas)',
           }}
         >
-          {!compactViewport && (
-            <MiniMap
-              nodeStrokeWidth={3}
-              pannable
-              zoomable
-              className={cn('!rounded-xl', glass.cardBase, glass.highlight)}
-              style={{
-                backgroundColor: 'transparent',
-              }}
-              maskColor={
-                colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
+          <ReactFlow
+            nodes={nodesForRender}
+            edges={edgesForRender}
+            nodeTypes={canvasNodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(event, node) => {
+              // Skip node click logic when user is interacting with editable title
+              const target = event.target as HTMLElement;
+              if (target.tagName === 'INPUT' || target.closest('[data-title-editable]')) {
+                return;
               }
+
+              const data = node.data as CanvasNodeData;
+
+              // Leaf nodes -> navigate to leaf detail page (always single click)
+              if (data.kind === 'leaf' && data.leafId && projectId) {
+                router.push(`/project/${projectId}/leaf/${data.leafId}`);
+                return;
+              }
+
+              // Staging/pending units -> navigate to chat page (always single click)
+              if (data.commitStatus !== 'committed') {
+                if (data.conversationId) {
+                  router.push(`/chat/${data.conversationId}`);
+                } else {
+                  openNodeModal(node.id, 'commit');
+                }
+                return;
+              }
+
+              // Committed nodes: single click = action panel, double click = detail page
+              if (!compactViewport) {
+                if (data.branchType === 'branch') {
+                  setHighlight({ branch: data.branchName, mode: 'branch' });
+                } else {
+                  setHighlight({ mode: 'node', nodeId: node.id });
+                }
+              }
+              if (clickTimerRef.current) {
+                // Double click detected
+                clearTimeout(clickTimerRef.current);
+                clickTimerRef.current = null;
+                setActionPanel(null);
+                if (data.commitHash && projectId) {
+                  router.push(
+                    `/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`
+                  );
+                }
+              } else {
+                // First click — wait to see if double click follows
+                clickTimerRef.current = setTimeout(() => {
+                  clickTimerRef.current = null;
+                  showActionPanelForNode(event, node.id);
+                }, 250);
+              }
+            }}
+            onNodeDragStart={(_event, node) => {
+              const data = node.data as CanvasNodeData;
+              reopenActionPanelNodeRef.current =
+                (actionPanel?.nodeId === node.id || selectedUnitNode?.id === node.id) &&
+                data.kind === 'unit' &&
+                data.commitStatus === 'committed'
+                  ? node.id
+                  : null;
+              setActionPanel(null);
+            }}
+            onNodeDragStop={(event, node) => {
+              if (reopenActionPanelNodeRef.current === node.id) {
+                showActionPanelForNode(event, node.id);
+              }
+              reopenActionPanelNodeRef.current = null;
+            }}
+            onNodeContextMenu={handleNodeContextMenu}
+            onPaneContextMenu={handlePaneContextMenu}
+            onPaneClick={() => {
+              // Clear active path highlight and close transient canvas overlays.
+              if (highlight) {
+                setHighlight(null);
+              }
+              closeContextMenu();
+              setActionPanel(null);
+            }}
+            panOnDrag={isPanMode}
+            selectionOnDrag={!isPanMode}
+            snapToGrid
+            snapGrid={[GRID_SIZE, GRID_SIZE]}
+            proOptions={{ hideAttribution: true }}
+            fitView={!initialViewport}
+            fitViewOptions={{ padding: compactViewport ? 0.12 : 0.3, maxZoom: 1 }}
+            defaultViewport={initialViewport ?? { x: 0, y: 0, zoom: 1 }}
+            onMoveStart={() => setActionPanel(null)}
+            onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
+            minZoom={canvasMinZoom}
+            maxZoom={2}
+            deleteKeyCode={['Backspace', 'Delete']}
+            selectNodesOnDrag={false}
+            colorMode={colorMode}
+            defaultEdgeOptions={{
+              type: 'animated',
+              style: { strokeWidth: 2 },
+            }}
+          >
+            {!compactViewport && (
+              <MiniMap
+                nodeStrokeWidth={3}
+                pannable
+                zoomable
+                className={cn(
+                  '!bottom-11 !right-5 !h-24 !w-44 !rounded-xl',
+                  glass.cardBase,
+                  glass.highlight
+                )}
+                style={{
+                  backgroundColor: 'transparent',
+                }}
+                maskColor={
+                  colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
+                }
+              />
+            )}
+            <ZoomSlider
+              compact={compactViewport}
+              position="bottom-left"
+              className="!bottom-11 !left-4 !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)]/95"
+            />
+            <Background
+              variant={BackgroundVariant.Lines}
+              gap={32}
+              size={1}
+              color={colorMode === 'dark' ? 'var(--stroke-grid)' : 'var(--stroke-grid)'}
+            />
+          </ReactFlow>
+
+          {/* Empty state overlay - guided 3-step onboarding card */}
+          {nodes.length === 0 && !canvasLoading && !onboardingDismissed && (
+            <CanvasOnboarding
+              onAddNode={() => handleAddNode('unit')}
+              onDismiss={() => {
+                setOnboardingDismissed(true);
+                localStorage.setItem('t3x_onboarded', 'true');
+              }}
+              isAdding={isAdding}
             />
           )}
-          <ZoomSlider compact={compactViewport} position="bottom-left" />
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={32}
-            size={1}
-            color={colorMode === 'dark' ? 'var(--stroke-grid)' : 'var(--stroke-grid)'}
-          />
-        </ReactFlow>
-
-        {/* Empty state overlay - guided 3-step onboarding card */}
-        {nodes.length === 0 && !canvasLoading && !onboardingDismissed && (
-          <CanvasOnboarding
-            onAddNode={() => handleAddNode('unit')}
-            onDismiss={() => {
-              setOnboardingDismissed(true);
-              localStorage.setItem('t3x_onboarded', 'true');
-            }}
-            isAdding={isAdding}
-          />
-        )}
+          {nodes.length > 0 && (
+            <div className="pointer-events-none absolute left-8 top-8 z-10 hidden items-center gap-2 text-xs text-[var(--text-tertiary)] md:flex">
+              <span className="font-semibold text-[var(--text-secondary)]">Version Path</span>
+              <span>click a commit to inspect source, diff, leaves, and next actions</span>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowShortcuts(true)}
+            title="Keyboard Shortcuts (?)"
+            className={cn(
+              'absolute bottom-10 right-4 z-20 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
+              glass.cardBase
+            )}
+          >
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+        </div>
+        <CanvasSelectionPanel
+          actions={selectionActionModel.actions}
+          canMerge={selectionActionModel.canMerge}
+          node={selectedUnitNode}
+          parentHash={selectionActionModel.parentHash}
+        />
       </div>
 
       {/* Right-click context menu */}
@@ -505,50 +656,14 @@ function CanvasWorkspaceInner({
           onClose={closeContextMenu}
         />
       )}
-      {actionPanel &&
-        (() => {
-          const panelNode = nodes.find((n) => n.id === actionPanel.nodeId);
-          const panelTone = getCommitTone(actionPanel.nodeId);
-          const canMerge =
-            !!panelNode &&
-            panelNode.data.branchType === 'branch' &&
-            panelNode.data.commitStatus === 'committed' &&
-            panelTone === 'branch-latest' &&
-            hasMainCommit;
-          return (
-            <CommitActionPanel
-              x={actionPanel.x}
-              y={actionPanel.y}
-              actions={buildCommitActions({
-                onContinueConversation: () => {
-                  addConversationFromCommit(actionPanel.nodeId);
-                },
-                onViewDetails: () => {
-                  if (projectId) {
-                    router.push(
-                      `/project/${projectId}/commit/${encodeURIComponent(actionPanel.hash)}`
-                    );
-                  }
-                },
-                onCreateLeaf: () => {
-                  openLeafPanel(actionPanel.nodeId);
-                },
-                onMerge:
-                  canMerge && projectId
-                    ? () => {
-                        void (async () => {
-                          const draftId = await startMerge(actionPanel.nodeId);
-                          if (draftId) {
-                            router.push(`/project/${projectId}/merge/${draftId}`);
-                          }
-                        })();
-                      }
-                    : undefined,
-              })}
-              onClose={() => setActionPanel(null)}
-            />
-          );
-        })()}
+      {actionPanel && selectedUnitNode && (
+        <CommitActionPanel
+          x={actionPanel.x}
+          y={actionPanel.y}
+          actions={selectionActionModel.actions.filter((action) => action.label !== 'View Diff')}
+          onClose={() => setActionPanel(null)}
+        />
+      )}
       <CanvasStatusBar />
       {modalNode &&
         modalNode.data.commitStatus === 'draft' &&
@@ -627,20 +742,6 @@ function CanvasWorkspaceInner({
           }}
         />
       )}
-
-      {/* Keyboard shortcuts help button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setShowShortcuts(true)}
-        title="Keyboard Shortcuts (?)"
-        className={cn(
-          'absolute bottom-11 right-4 z-10 h-8 w-8 rounded-full text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
-          glass.cardBase
-        )}
-      >
-        <HelpCircle className="h-4 w-4" />
-      </Button>
 
       {/* Keyboard shortcuts dialog */}
       <CanvasShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} />

@@ -40,6 +40,12 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
     | undefined;
   removeLeafFromNode: (nodeId: string, leafId: string) => void;
 }) {
+  const firstLeaf = leaves[0];
+  const collapsedStatus =
+    firstLeaf?.status && firstLeaf.status !== 'idle'
+      ? firstLeaf.status.replace('_', ' ')
+      : 'not run';
+
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
     return `/project/${projectId}/leaf/${leaf.id}`;
@@ -55,24 +61,51 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
         }}
         type="button"
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <NodeKindIcon kind="leaf" label="Leaf" />
-          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{leaves.length}</span>
-          {totalAssertions > 0 && (
-            <span className="text-[10px] font-normal text-[var(--text-tertiary)]">
-              <span className="text-[var(--status-success)]">{totalPassed}</span>
-              <span className="text-[var(--text-tertiary)]/50">/</span>
-              <span>{totalAssertions}</span>
+        {firstLeaf && !leavesExpanded && !isDetail ? (
+          <>
+            <span className="flex min-w-0 items-center gap-2">
+              <NodeKindIcon compact kind="leaf" label="Leaf" />
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
+                  {firstLeaf.title}
+                </span>
+                <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                  leaf output
+                </span>
+              </span>
             </span>
-          )}
-        </span>
-        <ChevronRight
-          size={12}
-          className={cn(
-            'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
-            (leavesExpanded || isDetail) && 'rotate-90'
-          )}
-        />
+            <span className="flex items-center gap-2">
+              <span className="text-[11px] text-[var(--text-tertiary)]">{collapsedStatus}</span>
+              <ChevronRight
+                size={12}
+                className="text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]"
+              />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <NodeKindIcon kind="leaf" label="Leaf" />
+              <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                {leaves.length}
+              </span>
+              {totalAssertions > 0 && (
+                <span className="text-[10px] font-normal text-[var(--text-tertiary)]">
+                  <span className="text-[var(--status-success)]">{totalPassed}</span>
+                  <span className="text-[var(--text-tertiary)]/50">/</span>
+                  <span>{totalAssertions}</span>
+                </span>
+              )}
+            </span>
+            <ChevronRight
+              size={12}
+              className={cn(
+                'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
+                (leavesExpanded || isDetail) && 'rotate-90'
+              )}
+            />
+          </>
+        )}
       </button>
       <AnimatePresence>
         {(leavesExpanded || isDetail) && (

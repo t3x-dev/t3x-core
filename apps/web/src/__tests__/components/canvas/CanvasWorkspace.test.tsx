@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CanvasWorkspace from '@/components/canvas/CanvasWorkspace';
@@ -12,6 +12,13 @@ const flowMocks = vi.hoisted(() => ({
   fitView: vi.fn(),
   getEdges: vi.fn(),
   getNodes: vi.fn(),
+  reactFlowProps: undefined as
+    | {
+        onNodeClick?: (...args: unknown[]) => void;
+        onNodeDragStart?: (...args: unknown[]) => void;
+        onNodeDragStop?: (...args: unknown[]) => void;
+      }
+    | undefined,
   screenToFlowPosition: vi.fn(),
   setCenter: vi.fn(),
   setNodes: vi.fn(),
@@ -31,14 +38,27 @@ vi.mock('@xyflow/react', async () => {
     React.createElement('div', null, children);
 
   return {
-    Background: () => React.createElement('div', { 'data-testid': 'flow-background' }),
-    BackgroundVariant: { Dots: 'dots' },
+    Background: (props: { gap?: number; size?: number; variant?: string }) =>
+      React.createElement('div', {
+        'data-gap': props.gap,
+        'data-testid': 'flow-background',
+        'data-variant': props.variant,
+      }),
+    BackgroundVariant: { Dots: 'dots', Lines: 'lines' },
     BaseEdge: () => React.createElement('path'),
     Handle: () => React.createElement('span'),
     MiniMap: () => React.createElement('div', { 'data-testid': 'flow-minimap' }),
     Panel: passthrough,
     Position: { Left: 'left', Right: 'right' },
-    ReactFlow: passthrough,
+    ReactFlow: (props: {
+      children?: React.ReactNode;
+      onNodeClick?: (...args: unknown[]) => void;
+      onNodeDragStart?: (...args: unknown[]) => void;
+      onNodeDragStop?: (...args: unknown[]) => void;
+    }) => {
+      flowMocks.reactFlowProps = props;
+      return React.createElement('div', { 'data-testid': 'react-flow' }, props.children);
+    },
     ReactFlowProvider: passthrough,
     getSmoothStepPath: () => ['M0 0'],
     useReactFlow: () => ({
@@ -214,6 +234,7 @@ describe('CanvasWorkspace initial fit view', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    flowMocks.reactFlowProps = undefined;
     globalThis.ResizeObserver = class {
       disconnect() {}
       observe() {}
@@ -293,5 +314,114 @@ describe('CanvasWorkspace initial fit view', () => {
         padding: 0.3,
       });
     });
+  });
+
+  it('renders a line-grid canvas background instead of a decorative radial wash', () => {
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-variant', 'lines');
+    expect(screen.getByTestId('flow-background')).toHaveAttribute('data-gap', '32');
+    const style = screen
+      .getByRole('tree', { name: /knowledge graph canvas/i })
+      .getAttribute('style');
+    expect(style).toContain('--surface-canvas');
+  });
+
+  it('lays out committed version paths from left to right even when DB positions exist', async () => {
+    const nodes = [
+      {
+        ...unitNode('sha256:parent'),
+        data: { ...unitNode('sha256:parent').data, commitHash: 'sha256:parent' },
+      },
+      {
+        ...unitNode('sha256:child'),
+        data: { ...unitNode('sha256:child').data, commitHash: 'sha256:child' },
+      },
+    ];
+    useCanvasStore.setState({
+      edges: [{ id: 'e1', source: 'sha256:parent', target: 'sha256:child' }],
+      hasDbPositions: true,
+      nodes,
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    flowMocks.getEdges.mockImplementation(() => useCanvasStore.getState().edges);
+    layoutMocks.getLayoutedElements.mockResolvedValue(nodes);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(layoutMocks.getLayoutedElements).toHaveBeenCalledWith(
+        nodes,
+        useCanvasStore.getState().edges,
+        expect.objectContaining({ direction: 'RIGHT' })
+      );
+    });
+  });
+
+  it('reanchors an open commit action panel after dragging the selected node', async () => {
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    const node = useCanvasStore.getState().nodes[0];
+    const clickTarget = document.createElement('div');
+    clickTarget.className = 'react-flow__node';
+    clickTarget.getBoundingClientRect = () =>
+      ({
+        bottom: 300,
+        height: 160,
+        left: 100,
+        right: 300,
+        top: 140,
+        width: 200,
+        x: 100,
+        y: 140,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: clickTarget },
+        node
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
+    });
+
+    const firstPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
+    expect(firstPanel).toHaveStyle({ left: '200px', top: '308px' });
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeDragStart?.({ target: clickTarget }, node);
+    });
+    expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
+
+    const dropTarget = document.createElement('div');
+    dropTarget.className = 'react-flow__node';
+    dropTarget.getBoundingClientRect = () =>
+      ({
+        bottom: 460,
+        height: 160,
+        left: 360,
+        right: 560,
+        top: 300,
+        width: 200,
+        x: 360,
+        y: 300,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeDragStop?.(
+        { clientX: 460, clientY: 460, target: dropTarget },
+        node
+      );
+    });
+
+    const reanchoredPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
+    expect(reanchoredPanel).toHaveStyle({ left: '460px', top: '468px' });
   });
 });

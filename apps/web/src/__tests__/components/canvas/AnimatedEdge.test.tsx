@@ -48,7 +48,7 @@ describe('AnimatedEdge rhythm contract', () => {
     expect(getBaseStyle()).toMatchObject({
       opacity: 'var(--edge-default-opacity)',
       stroke: 'var(--edge-evolve-base)',
-      strokeWidth: 1.5,
+      strokeWidth: 2,
     });
     expect(screen.queryByTestId('edge-glow-edge-a')).not.toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe('AnimatedEdge rhythm contract', () => {
     expect(getBaseStyle()).toMatchObject({
       opacity: 'var(--edge-selected-opacity)',
       stroke: 'var(--edge-branch-selected)',
-      strokeWidth: 2.75,
+      strokeWidth: 2.5,
     });
     expect(screen.getByTestId('edge-glow-edge-a')).toHaveAttribute(
       'stroke',
