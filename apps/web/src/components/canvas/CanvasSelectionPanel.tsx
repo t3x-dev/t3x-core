@@ -188,11 +188,11 @@ export function CanvasSelectionPanel({
 }: CanvasSelectionPanelProps) {
   if (!node) {
     return (
-    <aside className="hidden w-80 shrink-0 border-l border-[var(--stroke-default)] bg-[var(--surface-panel)] xl:flex xl:flex-col">
-      <div className="border-b border-[var(--stroke-default)] px-3 py-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-          SELECTION
-        </div>
+      <aside className="hidden w-80 shrink-0 border-l border-[var(--stroke-default)] bg-[var(--surface-panel)] xl:flex xl:flex-col">
+        <div className="border-b border-[var(--stroke-default)] px-3 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+            SELECTION
+          </div>
           <div className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
             Select a commit on the canvas.
           </div>

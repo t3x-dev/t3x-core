@@ -123,7 +123,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const canvasProjectId = useCanvasStore((state) => state.projectId);
   const activeChatProjectId = useChatStore((state) => state.activeProjectId);
   const fallbackProjectId = routeProjectId ?? canvasProjectId ?? activeChatProjectId;
-  const canvasHref = fallbackProjectId ? `/project/${encodeURIComponent(fallbackProjectId)}` : '/chat';
+  const canvasHref = fallbackProjectId
+    ? `/project/${encodeURIComponent(fallbackProjectId)}`
+    : '/chat';
   const isChatsActive = pathname === '/' || pathname.startsWith('/chat');
   const isCanvasActive = Boolean(routeProjectId);
 

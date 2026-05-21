@@ -48,10 +48,10 @@ import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
 import { MemoryContextModal } from '../memory/MemoryContextModal';
 import { MergePanel } from '../merge/MergePanel';
+import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 import { DeletionConfirmDialog } from './DeletionConfirmDialog';
 import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
-import { CanvasSelectionPanel } from './CanvasSelectionPanel';
 
 const GRID_SIZE = 16;
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
