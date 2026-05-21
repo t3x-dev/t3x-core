@@ -61,6 +61,8 @@ function summarizeArchivedRow(row: ArchivedYOpsRow): string {
 
 export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOpsPanelProps) {
   const state = useArchivedYopsLog(conversationId, topicId);
+  const isLoading =
+    state.status === 'loading' || (conversationId !== null && state.status === 'idle');
 
   return (
     <div className="flex flex-col h-full bg-[var(--panel)]" data-testid="archived-ops-panel">
@@ -71,6 +73,12 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
               Couldn&rsquo;t load archived ops
             </div>
             <div>{state.error}</div>
+          </div>
+        </div>
+      ) : isLoading ? (
+        <div className="flex-1 flex items-center justify-center text-center px-6">
+          <div className="max-w-[280px] text-[11px] font-semibold text-[var(--text-tertiary)]">
+            loading archived ops
           </div>
         </div>
       ) : state.status === 'ready' && state.rows.length === 0 ? (
@@ -88,6 +96,9 @@ export function ArchivedOpsPanel({ conversationId, topicId = null }: ArchivedOps
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 opacity-80">
+          <div className="px-1 pb-1 text-[10px] font-mono text-[var(--text-tertiary)]">
+            {state.rows.length} {state.rows.length === 1 ? 'entry' : 'entries'}
+          </div>
           {state.rows.map((row, i) => (
             <div
               key={row.id}

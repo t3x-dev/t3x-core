@@ -237,4 +237,32 @@ describe('ChatSidebar', () => {
       'proj_smoke'
     );
   });
+
+  it('collapses an expanded project with conversations when clicked again', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 3,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_smoke: [{ conversation_id: 'conv_latest', title: 'Untitled Unit' }],
+    };
+    mocks.chatState.activeProjectId = 'proj_smoke';
+    mocks.chatState.activeConversationId = 'conv_latest';
+    mocks.chatState.expandedProjectIds = new Set(['proj_smoke']);
+
+    render(<ChatSidebar />);
+    mocks.loadConversations.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Smoke English Extraction/i }));
+
+    expect(mocks.chatState.toggleProjectExpanded).toHaveBeenCalledWith('proj_smoke');
+    expect(mocks.loadConversations).not.toHaveBeenCalled();
+    expect(mocks.chatState.setActiveConversation).not.toHaveBeenCalled();
+    expect(mocks.routerPush).not.toHaveBeenCalled();
+  });
 });
