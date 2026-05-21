@@ -185,18 +185,6 @@ export function ScriptEditor() {
             backgroundColor: 'var(--workspace-panel)',
             color: 'var(--text-primary)',
           },
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            top: '0',
-            right: '0',
-            bottom: '0',
-            zIndex: '4',
-            width: '24px',
-            pointerEvents: 'none',
-            background:
-              'linear-gradient(90deg, color-mix(in srgb, var(--workspace-panel) 0%, transparent), var(--workspace-panel))',
-          },
           '.cm-content': {
             padding: '3px 0 7px',
             caretColor: 'var(--text-primary)',
