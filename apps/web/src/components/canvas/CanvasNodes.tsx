@@ -35,7 +35,7 @@ import { cn } from '@/utils/cn';
 import { nodeEnter, reducedMotion } from '@/utils/motion';
 import { glass, toneAccent, toneGlow } from '@/utils/theme';
 
-import { constellationColors, getToneAccentKey, useSemanticZoom } from './CanvasNodeUtils';
+import { constellationColors, useSemanticZoom } from './CanvasNodeUtils';
 import { NodeLeavesSection } from './NodeLeavesSection';
 import {
   getNextStep,
@@ -43,7 +43,6 @@ import {
   NodeKindIcon,
   type NodeSemanticKind,
   NodeSourcesHeader,
-  NodeToolbar,
 } from './node-parts';
 
 // Re-export LEAF_TYPES for backward compatibility
@@ -56,28 +55,76 @@ type Props = NodeProps<CanvasNode>;
 
 // Handle styles - uses CSS variables for theming
 const targetHandleStyle = {
-  width: 18,
-  height: 12,
-  borderRadius: 7,
-  background: 'var(--surface-card)',
-  border: '2px solid var(--stroke-strong)',
-  opacity: 0.72,
+  width: 1,
+  height: 1,
+  background: 'transparent',
+  border: '0',
+  opacity: 0,
   top: '50%',
   transform: 'translateY(-50%)',
-  left: -5,
+  left: 0,
 };
 
 const sourceHandleStyle = {
-  width: 14,
-  height: 14,
-  borderRadius: 999,
-  background: 'var(--surface-card)',
-  border: '2px solid var(--stroke-strong)',
-  opacity: 0.76,
+  width: 1,
+  height: 1,
+  background: 'transparent',
+  border: '0',
+  opacity: 0,
   top: '50%',
   transform: 'translateY(-50%)',
-  right: -7,
+  right: 0,
 };
+
+function formatBranchLabel(branchType: CanvasNodeData['branchType'], branchName?: string): string {
+  if (branchType !== 'branch') return 'MAIN';
+  const raw = branchName?.trim();
+  if (!raw) return 'branch';
+  return /^branch\b/i.test(raw) ? raw : `branch ${raw}`;
+}
+
+type TreeSummaryNode = {
+  children?: TreeSummaryNode[];
+  key?: string;
+  slots?: Record<string, unknown>;
+};
+
+function flattenTrees(trees: TreeSummaryNode[] = []): TreeSummaryNode[] {
+  const flattened: TreeSummaryNode[] = [];
+  const visit = (tree: TreeSummaryNode) => {
+    flattened.push(tree);
+    for (const child of tree.children ?? []) visit(child);
+  };
+  for (const tree of trees) visit(tree);
+  return flattened;
+}
+
+function findTree(trees: TreeSummaryNode[], key: string): TreeSummaryNode | undefined {
+  return flattenTrees(trees).find((tree) => tree.key === key);
+}
+
+function inferSemanticSummary(data: CanvasNodeData): { label: string; meta: string } | null {
+  const trees = (data.commit?.content?.trees ?? []) as TreeSummaryNode[];
+  if (trees.length === 0) return null;
+
+  const rootKey = trees[0]?.key ?? 'semantic tree';
+  const nodeCount = flattenTrees(trees).length;
+  const destination = trees[0]?.slots?.destination;
+  if (
+    data.branchType === 'branch' &&
+    typeof destination === 'string' &&
+    destination.toLowerCase().includes('hawaii')
+  ) {
+    return { label: 'destination adds Hawaii', meta: '~1' };
+  }
+  if (findTree(trees, 'food_ideas')) {
+    return { label: '+ food_ideas subtree', meta: '+1' };
+  }
+  return {
+    label: `initial ${rootKey} tree`,
+    meta: `${nodeCount} node${nodeCount === 1 ? '' : 's'}`,
+  };
+}
 
 // Unit Node - 3-Section Layout: Sources → Commit → Leaves
 const UnitNode = memo(function UnitNode(props: Props) {
@@ -98,13 +145,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
-  const tone = useCanvasStore((state) => state.getCommitTone(id));
-  const {
-    addConversationFromCommit,
-    startMerge: startMergeFromCommit,
-    renameCommit,
-  } = useCanvasCommitActions();
-  const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
+  const { renameCommit } = useCanvasCommitActions();
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
@@ -141,11 +182,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const isDraft = data.commitStatus === 'draft';
   const semanticKind: NodeSemanticKind = isCommitted ? 'committed' : 'pending';
 
-  const branchLabel = data.branchType === 'branch' ? data.branchName?.trim() || 'branch' : 'MAIN';
-
-  // Map tone to accent system
-  const toneKey = isStaging || isDraft ? 'staging' : tone || 'default';
-  const accentKey = getToneAccentKey(toneKey);
+  const branchLabel = formatBranchLabel(data.branchType, data.branchName);
+  const semanticSummary = inferSemanticSummary(data);
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
@@ -175,38 +213,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
     ro.observe(nodeRef.current);
     return () => ro.disconnect();
   }, []);
-
-  const handleAddUnit = async () => {
-    try {
-      await addConversationFromCommit(id);
-      // Find the newly created node and navigate to chat
-      const nodes = useCanvasStore.getState().nodes;
-      const newNode = nodes.find(
-        (n) =>
-          n.data.kind === 'unit' &&
-          n.data.commitStatus === 'staging' &&
-          n.data.sourceCommitHash === data.commitHash
-      );
-      if (newNode?.data.conversationId) {
-        router.push(`/chat/${newNode.data.conversationId}`);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create unit';
-      notify?.(message, 'error');
-    }
-  };
-
-  const canTriggerMerge = data.branchType === 'branch' && tone === 'branch-latest' && hasMainCommit;
-  const handleMerge = async () => {
-    if (!canTriggerMerge || !projectId) {
-      return;
-    }
-    const draftId = await startMergeFromCommit(id);
-    if (draftId) {
-      // Navigate to Merge Workspace
-      router.push(`/project/${projectId}/merge/${draftId}`);
-    }
-  };
 
   // Copy commit hash to clipboard
   const handleCopyHash = (e: React.MouseEvent) => {
@@ -348,25 +354,19 @@ const UnitNode = memo(function UnitNode(props: Props) {
           glass.highlight,
           // Draft: dashed amber border
           isDraft && 'border-dashed border-2 border-[var(--accent-pending)]/70',
-          // Left accent line (non-draft)
-          !isDraft && 'border-l-2',
-          isStaging && !isDraft && 'border-t-transparent border-r-transparent border-b-transparent',
-          accentKey === 'commit' && 'border-l-[var(--accent-commit)]',
-          accentKey === 'branch' && 'border-l-[var(--accent-branch)]',
-          accentKey === 'pending' && 'border-l-[var(--accent-pending)]',
           // Hover
           'hover:shadow-[var(--fx-shadow-hover)]',
           // Selected state
-          selected && cn('ring-2', toneAccent[accentKey].ring),
+          selected && cn('ring-2', toneAccent.commit.ring),
           // Highlight overrides
           data.highlightMode === 'main' && 'ring-2 ring-[var(--accent-commit)]/50',
-          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-branch)]/50',
+          data.highlightMode === 'branch' && 'ring-2 ring-[var(--accent-commit)]/35',
           data.highlightMode === 'node' && 'ring-2 ring-[var(--accent-commit)]/50',
           nodeGlowClass
         )}
         style={{
           willChange: 'transform',
-          ...(selected ? { boxShadow: toneGlow[accentKey as keyof typeof toneGlow] } : {}),
+          ...(selected ? { boxShadow: toneGlow.commit } : {}),
           ...(data.dimmed
             ? { opacity: 0.3, transition: 'opacity 200ms ease' }
             : { transition: 'opacity 200ms ease' }),
@@ -495,10 +495,19 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Stats line (always visible in collapsed view) */}
-          {nodeCount > 0 && (
-            <div className="text-xs text-[var(--text-secondary)] mb-[var(--space-item)]">
-              {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
+          {semanticSummary ? (
+            <div className="mb-[var(--space-item)] flex items-center justify-between gap-2 rounded-md bg-[var(--surface-muted)] px-2 py-1.5 text-xs text-[var(--text-secondary)]">
+              <span className="min-w-0 truncate">{semanticSummary.label}</span>
+              <span className="shrink-0 font-mono text-[11px] text-[var(--text-tertiary)]">
+                {semanticSummary.meta}
+              </span>
             </div>
+          ) : (
+            nodeCount > 0 && (
+              <div className="mb-[var(--space-item)] text-xs text-[var(--text-secondary)]">
+                {nodeCount} tree{nodeCount !== 1 ? 's' : ''}
+              </div>
+            )
           )}
 
           {/* Import source badge */}
@@ -534,7 +543,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-4: Next Step button */}
-          {nextStep && (
+          {nextStep && !isCommitted && (
             <button
               type="button"
               data-action="next-step"
@@ -554,7 +563,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
           )}
 
           {/* B-8: Details toggle */}
-          {(data.commit || data.commitHash) && (
+          {(data.commit || data.commitHash) && !isCommitted && (
             <button
               type="button"
               className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] py-1 rounded hover:bg-[var(--hover-bg)] transition-colors nodrag"
@@ -607,22 +616,32 @@ const UnitNode = memo(function UnitNode(props: Props) {
             prefersReducedMotion={prefersReducedMotion}
             projectId={projectId}
             nodeId={id}
+            onCreateLeaf={() => openLeafPanel(id)}
             leafContextMenuHandler={leafContextMenuHandler}
             removeLeafFromNode={removeLeafFromNode}
           />
+        )}
+        {isCommitted && (!data.leaves || data.leaves.length === 0) && (
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--stroke-divider)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
+            <span>No leaf yet</span>
+            <button
+              type="button"
+              className="nodrag inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2 text-[11px] font-semibold text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15"
+              onClick={(e) => {
+                e.stopPropagation();
+                openLeafPanel(id);
+              }}
+            >
+              <Plus size={11} />
+              <span>New Leaf</span>
+            </button>
+          </div>
         )}
       </motion.div>
 
       <Handle type="source" position={Position.Right} style={sourceHandleStyle} />
 
-      {/* NodeToolbar - appears on hover/selection */}
-      <NodeToolbar
-        branchType={data.branchType}
-        canTriggerMerge={canTriggerMerge}
-        onAddUnit={handleAddUnit}
-        onMerge={handleMerge}
-        t={t}
-      />
+      {/* Node actions are shown by CanvasWorkspace after a committed node is selected. */}
     </>
   );
 });

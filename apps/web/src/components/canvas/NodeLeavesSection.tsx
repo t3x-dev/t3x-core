@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronRight, Circle, Clock, Loader2, Trash2, X } from 'lucide-react';
+import { Check, ChevronRight, Circle, Clock, Loader2, Plus, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { memo } from 'react';
 import type { EmbeddedLeaf } from '@/types/nodes';
@@ -22,6 +22,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   prefersReducedMotion,
   projectId,
   nodeId,
+  onCreateLeaf,
   leafContextMenuHandler,
   removeLeafFromNode,
 }: {
@@ -34,46 +35,103 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
   prefersReducedMotion: boolean;
   projectId?: string;
   nodeId: string;
+  onCreateLeaf: () => void;
   leafContextMenuHandler:
     | ((e: React.MouseEvent, leafId: string, nodeId: string) => void)
     | null
     | undefined;
   removeLeafFromNode: (nodeId: string, leafId: string) => void;
 }) {
+  const firstLeaf = leaves[0];
+  const collapsedStatus =
+    firstLeaf?.status && firstLeaf.status !== 'idle'
+      ? firstLeaf.status.replace('_', ' ')
+      : 'not run';
+
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
     return `/project/${projectId}/leaf/${leaf.id}`;
   };
 
+  const handleCreateLeaf = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onCreateLeaf();
+  };
+
   return (
     <div className="border-t border-[var(--stroke-divider)]">
-      <button
-        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
-        onClick={(e) => {
-          e.stopPropagation();
-          setLeavesExpanded((prev) => !prev);
-        }}
-        type="button"
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <NodeKindIcon kind="leaf" label="Leaf" />
-          <span className="font-mono text-[10px] text-[var(--text-tertiary)]">{leaves.length}</span>
-          {totalAssertions > 0 && (
-            <span className="text-[10px] font-normal text-[var(--text-tertiary)]">
-              <span className="text-[var(--status-success)]">{totalPassed}</span>
-              <span className="text-[var(--text-tertiary)]/50">/</span>
-              <span>{totalAssertions}</span>
+      {firstLeaf && !leavesExpanded && !isDetail ? (
+        <button
+          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLeavesExpanded((prev) => !prev);
+          }}
+          type="button"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <NodeKindIcon compact kind="leaf" label="Leaf" />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">
+                {firstLeaf.title}
+              </span>
+              <span className="block truncate text-[10px] text-[var(--text-tertiary)]">
+                leaf output
+              </span>
             </span>
-          )}
-        </span>
-        <ChevronRight
-          size={12}
-          className={cn(
-            'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
-            (leavesExpanded || isDetail) && 'rotate-90'
-          )}
-        />
-      </button>
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-[11px] text-[var(--text-tertiary)]">{collapsedStatus}</span>
+            <ChevronRight
+              size={12}
+              className="text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]"
+            />
+          </span>
+        </button>
+      ) : (
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          <button
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left transition-colors hover:text-[var(--text-secondary)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLeavesExpanded((prev) => !prev);
+            }}
+            type="button"
+          >
+            <span className="flex min-w-0 items-center gap-1.5">
+              <NodeKindIcon compact kind="leaf" label="Leaf" />
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">Leaf</span>
+              <span className="text-[var(--text-tertiary)]/50">·</span>
+              <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
+                {leaves.length}
+              </span>
+              {totalAssertions > 0 && (
+                <span className="text-[10px] font-normal text-[var(--text-tertiary)]">
+                  <span className="text-[var(--status-success)]">{totalPassed}</span>
+                  <span className="text-[var(--text-tertiary)]/50">/</span>
+                  <span>{totalAssertions}</span>
+                </span>
+              )}
+            </span>
+            <ChevronRight
+              size={12}
+              className={cn(
+                'text-[var(--text-tertiary)] transition-transform duration-[var(--duration-normal)]',
+                (leavesExpanded || isDetail) && 'rotate-90'
+              )}
+            />
+          </button>
+          <button
+            type="button"
+            className="nodrag inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2 text-[11px] font-semibold text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15"
+            onClick={handleCreateLeaf}
+          >
+            <Plus size={11} />
+            <span>New Leaf</span>
+          </button>
+        </div>
+      )}
       <AnimatePresence>
         {(leavesExpanded || isDetail) && (
           <motion.div

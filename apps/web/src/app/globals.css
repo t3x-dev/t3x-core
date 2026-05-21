@@ -170,11 +170,11 @@
   --edge-color: #94a3b8;
   --edge-active-color: #3b82f6;
   --edge-selected-color: #2563eb;
-  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 54%, transparent);
+  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 70%, transparent);
   --edge-evolve-hover: var(--accent-commit);
   --edge-evolve-selected: var(--accent-commit);
   --edge-evolve-glow: color-mix(in srgb, var(--accent-commit) 32%, transparent);
-  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 58%, transparent);
+  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 72%, transparent);
   --edge-merge-hover: var(--accent-branch);
   --edge-merge-selected: var(--accent-branch);
   --edge-merge-glow: color-mix(in srgb, var(--accent-branch) 34%, transparent);
@@ -186,7 +186,7 @@
   --edge-commit-glow: color-mix(in srgb, var(--accent-commit) 34%, transparent);
   --edge-branch-selected: var(--accent-branch);
   --edge-branch-glow: color-mix(in srgb, var(--accent-branch) 34%, transparent);
-  --edge-default-opacity: 0.42;
+  --edge-default-opacity: 0.74;
   --edge-hover-opacity: 0.78;
   --edge-selected-opacity: 0.96;
   --edge-dim-opacity: 0.18;
@@ -268,6 +268,7 @@
   --accent-commit-soft: rgba(37, 99, 235, 0.1);
   --accent-pending-soft: rgba(249, 115, 22, 0.1);
   --accent-leaf-soft: rgba(13, 148, 136, 0.1);
+  --accent-branch-soft: rgba(245, 158, 11, 0.1);
   --accent-conversation-soft: rgba(99, 102, 241, 0.1);
   --on-accent: #ffffff;
   --on-status: #ffffff;
@@ -516,6 +517,7 @@
   --accent-commit-soft: rgba(107, 138, 255, 0.1);
   --accent-pending-soft: rgba(229, 160, 48, 0.1);
   --accent-leaf-soft: rgba(45, 212, 191, 0.12);
+  --accent-branch-soft: rgba(229, 160, 48, 0.1);
   --accent-conversation-soft: rgba(129, 140, 248, 0.1);
   --on-accent: #111827;
   --on-status: #111827;
@@ -665,8 +667,8 @@
   --edge-color: #475569;
   --edge-active-color: #818cf8;
   --edge-selected-color: #6366f1;
-  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 50%, transparent);
-  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 52%, transparent);
+  --edge-evolve-base: color-mix(in srgb, var(--accent-commit) 66%, transparent);
+  --edge-merge-base: color-mix(in srgb, var(--accent-branch) 68%, transparent);
   --edge-draft-base: color-mix(in srgb, var(--text-tertiary) 40%, transparent);
   --edge-default-opacity: 0.46;
   --edge-dim-opacity: 0.2;

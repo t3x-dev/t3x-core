@@ -94,10 +94,10 @@ export function AnimatedEdge({
   });
 
   const getStrokeWidth = () => {
-    if (isRhythmSelected) return 2.75;
+    if (isRhythmSelected) return 2.5;
     if (isHovered) return 2.25;
     if (edgeRhythm === 'dimmed') return 1.25;
-    return edgeType === 'draft' ? 1.35 : 1.5;
+    return edgeType === 'draft' ? 1.35 : 2;
   };
 
   const getStrokeColor = () => {
