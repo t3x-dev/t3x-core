@@ -102,16 +102,23 @@ function scalarValueHighlightExtension() {
   });
 }
 
-function pendingEditLineHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
+function pendingEditTextHighlightExtension(lineNumbersToHighlight: ReadonlySet<number>) {
   return EditorView.decorations.of((view) => {
     const ranges = [...lineNumbersToHighlight]
       .filter((lineNumber) => lineNumber >= 1 && lineNumber <= view.state.doc.lines)
       .sort((a, b) => a - b)
-      .map((lineNumber) =>
-        Decoration.line({ class: 'cm-yops-pending-edit-line' }).range(
-          view.state.doc.line(lineNumber).from
-        )
-      );
+      .flatMap((lineNumber) => {
+        const line = view.state.doc.line(lineNumber);
+        const textStart = line.text.search(/\S/);
+        if (textStart === -1) return [];
+        const textEnd = line.text.search(/\s*$/);
+        return [
+          Decoration.mark({ class: 'cm-yops-pending-edit-text' }).range(
+            line.from + textStart,
+            line.from + textEnd
+          ),
+        ];
+      });
     return Decoration.set(ranges, true);
   });
 }
@@ -159,7 +166,7 @@ export function ScriptEditor() {
         keymap.of(defaultKeymap),
         cmPlaceholder(PLACEHOLDER),
         readOnlyCompartment.current.of(EditorState.readOnly.of(false)),
-        humanHighlightCompartment.current.of(pendingEditLineHighlightExtension(new Set())),
+        humanHighlightCompartment.current.of(pendingEditTextHighlightExtension(new Set())),
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !isExternalUpdate.current) {
             const text = update.state.doc.toString();
@@ -243,8 +250,9 @@ export function ScriptEditor() {
           '.cm-activeLine': {
             backgroundColor: 'color-mix(in srgb, var(--text-primary) 4%, transparent)',
           },
-          '.cm-yops-pending-edit-line': {
-            backgroundColor: 'color-mix(in srgb, var(--accent-commit) 4.5%, transparent)',
+          '.cm-yops-pending-edit-text': {
+            backgroundColor: 'color-mix(in srgb, var(--accent-commit) 8%, transparent)',
+            borderRadius: '3px',
           },
           '.cm-cursor': {
             borderLeftColor: 'var(--text-primary)',
@@ -297,7 +305,7 @@ export function ScriptEditor() {
     if (!view) return;
     view.dispatch({
       effects: humanHighlightCompartment.current.reconfigure(
-        pendingEditLineHighlightExtension(highlightedLines)
+        pendingEditTextHighlightExtension(highlightedLines)
       ),
     });
   }, [highlightedLines]);
