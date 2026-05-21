@@ -165,7 +165,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
           collapsed
             ? 'h-9 w-9 justify-center text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-            : 'h-10 justify-start gap-2.5 border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2.5 pr-3 text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] hover:border-[var(--stroke-strong)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]'
+            : 'h-10 justify-start gap-2.5 border border-[var(--stroke-default)] bg-[var(--sidebar-panel)] px-2.5 pr-3 text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-primary)]'
         )}
         aria-label={displayName}
       >

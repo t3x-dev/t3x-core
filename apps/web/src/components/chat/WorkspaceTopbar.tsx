@@ -9,14 +9,14 @@ import {
 } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 
-function formatSurfaceSummary(groups: ReturnType<typeof buildMaterializedOpGroups>): string {
+function getSurfaceSummaryParts(groups: ReturnType<typeof buildMaterializedOpGroups>): string[] {
   const parts: string[] = [];
   const { surfaces } = groups.user;
   if (surfaces.script > 0) parts.push(`YOps: ${surfaces.script}`);
   if (surfaces.tree > 0) parts.push(`Tree: ${surfaces.tree}`);
   if (surfaces.inline > 0) parts.push(`Inline: ${surfaces.inline}`);
   if (surfaces.unknown > 0) parts.push(`User: ${surfaces.unknown}`);
-  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+  return parts;
 }
 
 export function WorkspaceTopbar() {
@@ -34,7 +34,7 @@ export function WorkspaceTopbar() {
   const isInheritedBaselineOnly = useWorkspaceStore(selectIsInheritedBaselineOnly);
   const dirtyCopy = 'Inline changes · Apply or discard before commit';
   const pendingCopy = 'Pending extract · Apply or discard before commit';
-  const surfaceSummary = formatSurfaceSummary(groups);
+  const surfaceSummaryParts = getSurfaceSummaryParts(groups);
   const pendingCount = groups.pending.count;
 
   return (
@@ -71,11 +71,14 @@ export function WorkspaceTopbar() {
               <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] px-2 text-[var(--accent-commit)]">
                 Materialized {opsLog.length}
               </span>
-              {surfaceSummary && (
-                <span className="hidden min-w-0 max-w-[160px] truncate text-[var(--text-tertiary)] 2xl:inline">
-                  {surfaceSummary.replace(/^ · /, '')}
+              {surfaceSummaryParts.map((part) => (
+                <span
+                  key={part}
+                  className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-[var(--text-tertiary)]"
+                >
+                  {part}
                 </span>
-              )}
+              ))}
               <span
                 className={cn(
                   'inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full border px-2',

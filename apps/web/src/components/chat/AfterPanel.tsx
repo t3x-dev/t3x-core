@@ -140,7 +140,9 @@ function TreeStatusLegend() {
 function TreeInlineActions({ children }: { children?: ReactNode }) {
   if (!children) return null;
   return (
-    <div className="relative z-[1] flex shrink-0 items-center justify-end gap-1">{children}</div>
+    <div className="pointer-events-none relative z-[1] flex shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+      {children}
+    </div>
   );
 }
 
@@ -661,7 +663,7 @@ function SlotCell({ side, row, selected, onSelect, onClear, onDelete, onEdit }: 
                     e.stopPropagation();
                     handleStartEdit();
                   }}
-                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-70 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-info)] hover:opacity-100"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-info)] hover:opacity-100"
                 >
                   <Pencil className="h-2.5 w-2.5" />
                 </button>
@@ -675,7 +677,7 @@ function SlotCell({ side, row, selected, onSelect, onClear, onDelete, onEdit }: 
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] opacity-0 transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-error)] group-hover:opacity-100"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded text-[var(--text-tertiary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--status-error)] hover:opacity-100"
                 >
                   <X className="h-2.5 w-2.5" />
                 </button>
@@ -774,7 +776,7 @@ function NodeCell({
           {side === 'after' && (
             <TreeInlineActions>
               {row.afterNode && (
-                <div className="flex items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     data-testid="add-child-button"

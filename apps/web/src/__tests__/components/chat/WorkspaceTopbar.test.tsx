@@ -84,11 +84,16 @@ describe('WorkspaceTopbar', () => {
       hasConversationChanges: true,
     });
 
-    render(<WorkspaceTopbar />);
+    const { container } = render(<WorkspaceTopbar />);
 
     expect(screen.getByText(/Materialized 3/)).not.toBeNull();
     expect(screen.getByText(/YOps: 1/)).not.toBeNull();
     expect(screen.getByText(/Tree: 1/)).not.toBeNull();
+    expect(screen.getByText(/YOps: 1/).className).toContain('rounded-full');
+    expect(screen.getByText(/YOps: 1/).className).not.toContain('hidden');
+    expect(screen.getByText(/Tree: 1/).className).toContain('rounded-full');
+    expect(screen.getByText(/Tree: 1/).className).not.toContain('hidden');
+    expect(container.textContent).not.toContain('·');
     expect(screen.queryByText(/Manual:/)).toBeNull();
     expect(screen.getByText(/Pending 1/)).not.toBeNull();
   });
