@@ -48,9 +48,9 @@ describe('ProjectFolder active state', () => {
     // The active style is the source of the visible "selected project"
     // signal — pin the actual classes the production code emits so a
     // refactor that drops them fails loudly here, not silently in the UI.
-    expect(button.className).toContain('border-[var(--accent-commit)]/20');
-    expect(button.className).toContain('bg-[var(--accent-commit)]/[0.075]');
-    expect(button.className).toContain('shadow-[var(--fx-shadow-sm)]');
+    expect(button.className).toContain('border-[var(--accent-commit)]/25');
+    expect(button.className).toContain('bg-[var(--surface-panel)]/55');
+    expect(button.className).toContain('shadow-none');
     expect(button.className).toContain('text-[var(--text-primary)]');
 
     const iconWrapper = button.querySelector('span');
@@ -64,7 +64,7 @@ describe('ProjectFolder active state', () => {
     const button = screen.getByRole('button', { name: /Test Project/i });
 
     expect(button).not.toHaveAttribute('aria-current');
-    expect(button.className).not.toContain('bg-[var(--accent-commit)]/[0.075]');
+    expect(button.className).not.toContain('bg-[var(--surface-panel)]/55');
 
     const iconWrapper = button.querySelector('span');
     expect(iconWrapper?.className).not.toContain('bg-[var(--accent-commit)]/10');
