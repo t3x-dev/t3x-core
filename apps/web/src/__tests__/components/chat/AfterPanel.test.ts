@@ -237,7 +237,7 @@ describe('AfterPanel tree edit controls', () => {
     prompt.mockRestore();
   });
 
-  it('marks human tree edits with the human label and blue-highlight marker', () => {
+  it('marks human tree edits with the row highlight marker and keeps the label in the header legend', () => {
     seedSingleSlot(
       new Map([
         [
@@ -254,9 +254,9 @@ describe('AfterPanel tree edit controls', () => {
 
     render(createElement(AfterPanel));
 
-    const label = screen.getByText('Human · Tree');
-    expect(label).not.toBeNull();
-    expect(label.closest('[data-human-edit="true"]')).not.toBeNull();
+    expect(screen.queryByText('Human · Tree')).toBeNull();
+    expect(screen.getByText('Human')).not.toBeNull();
+    expect(screen.getByText('teams').closest('[data-human-edit="true"]')).not.toBeNull();
   });
 
   it('renders the parent commit tree for an inherited child before Apply', () => {
