@@ -186,6 +186,11 @@ export function ChatSidebar() {
       return;
     }
 
+    if (wasExpanded) {
+      store.toggleProjectExpanded(projectId);
+      return;
+    }
+
     if (!wasExpanded) {
       store.toggleProjectExpanded(projectId);
     }
