@@ -242,7 +242,7 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
               <span className="text-[var(--text-primary)]">{LOG_VIEW_META[topView].label}</span>
             </span>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto mr-2 flex items-center gap-2">
             {logsMenu}
             <button
               type="button"

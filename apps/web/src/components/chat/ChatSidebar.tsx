@@ -167,13 +167,29 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
-  async function handleProjectClick(projectId: string) {
+  async function handleProjectClick(projectId: string, knownConversationCount?: number) {
     const store = useChatStore.getState();
-    if (!store.expandedProjectIds.has(projectId)) {
+    const wasExpanded = store.expandedProjectIds.has(projectId);
+    const cachedConversations = projectConversations[projectId];
+    const conversationCount = knownConversationCount ?? cachedConversations?.length;
+
+    if (conversationCount === 0) {
+      if (wasExpanded && store.activeProjectId === projectId) {
+        store.toggleProjectExpanded(projectId);
+        return;
+      }
+      if (!wasExpanded) {
+        store.toggleProjectExpanded(projectId);
+      }
+      setActiveConversation(null, projectId);
+      router.push(`/chat?projectId=${encodeURIComponent(projectId)}`);
+      return;
+    }
+
+    if (!wasExpanded) {
       store.toggleProjectExpanded(projectId);
     }
 
-    const cachedConversations = projectConversations[projectId];
     if (cachedConversations?.length) {
       handleConversationClick(cachedConversations[0].conversation_id, projectId);
       return;
@@ -490,7 +506,9 @@ export function ChatSidebar() {
                 isActive={activeProjectId === project.project_id}
                 activeConversationId={activeConversationId}
                 collapsed={collapsed}
-                onToggleExpand={() => void handleProjectClick(project.project_id)}
+                onToggleExpand={() =>
+                  void handleProjectClick(project.project_id, project.conversations_count)
+                }
                 onConversationClick={(convId) =>
                   handleConversationClick(convId, project.project_id)
                 }
