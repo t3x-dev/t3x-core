@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasNodeTypes } from '@/components/canvas/CanvasNodes';
 import type { CanvasNodeData } from '@/types/nodes';
 
@@ -94,12 +94,14 @@ vi.mock('@/hooks/shared/useTerminology', () => ({
   }),
 }));
 
+const openLeafPanelMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@/store/canvasStore', () => ({
   useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       getCommitTone: () => 'main-latest',
       hasMainCommit: false,
-      openLeafPanel: vi.fn(),
+      openLeafPanel: openLeafPanelMock,
       openNodeModal: vi.fn(),
       updateNode: vi.fn(),
     }),
@@ -190,6 +192,10 @@ function renderSelectedUnitNode(data: CanvasNodeData) {
 }
 
 describe('Canvas node semantic markers', () => {
+  beforeEach(() => {
+    openLeafPanelMock.mockClear();
+  });
+
   it('labels committed, source, and leaf regions without relying on color alone', () => {
     renderUnitNode(makeNodeData());
 
@@ -249,5 +255,25 @@ describe('Canvas node semantic markers', () => {
 
     const node = screen.getByRole('treeitem', { name: /Semantic canvas node/i });
     expect(within(node).queryByText(/Create Output/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a local new leaf action after expanding existing leaf output', () => {
+    renderUnitNode(makeNodeData());
+
+    fireEvent.click(screen.getByRole('button', { name: /Launch brief/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
+
+    expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+  });
+
+  it('shows a local new leaf action when a committed node has no leaves', () => {
+    renderUnitNode(makeNodeData({ leaves: [] }));
+
+    expect(screen.getByText('No leaf yet')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
+
+    expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
   });
 });
