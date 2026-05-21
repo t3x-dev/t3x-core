@@ -1,10 +1,12 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, GitBranch, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCanvasStore } from '@/store/canvasStore';
+import { useChatStore } from '@/store/chatStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { UserMenu } from './UserMenu';
@@ -82,7 +84,7 @@ function NavItem({ href, label, isActive, children, collapsed }: NavItemProps) {
   );
 
   const linkElement = (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} aria-current={isActive ? 'page' : undefined}>
       {inner}
     </Link>
   );
@@ -105,10 +107,25 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+export function projectIdFromPathname(pathname: string): string | null {
+  const match = pathname.match(/^\/project\/([^/]+)/);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const isHome =
-    pathname === '/' || pathname.startsWith('/project') || pathname.startsWith('/chat');
+  const routeProjectId = projectIdFromPathname(pathname);
+  const canvasProjectId = useCanvasStore((state) => state.projectId);
+  const activeChatProjectId = useChatStore((state) => state.activeProjectId);
+  const fallbackProjectId = routeProjectId ?? canvasProjectId ?? activeChatProjectId;
+  const canvasHref = fallbackProjectId ? `/project/${encodeURIComponent(fallbackProjectId)}` : '/chat';
+  const isChatsActive = pathname === '/' || pathname.startsWith('/chat');
+  const isCanvasActive = Boolean(routeProjectId);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -140,8 +157,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
         {/* Main Navigation */}
         <nav className={cn('flex flex-col gap-1', collapsed ? 'items-center' : '')}>
-          <NavItem href="/chat" label="Chats" isActive={isHome} collapsed={collapsed}>
+          <NavItem href="/chat" label="Chats" isActive={isChatsActive} collapsed={collapsed}>
             <MessageSquare className="h-5 w-5" />
+          </NavItem>
+          <NavItem href={canvasHref} label="Canvas" isActive={isCanvasActive} collapsed={collapsed}>
+            <GitBranch className="h-5 w-5" />
           </NavItem>
         </nav>
 
