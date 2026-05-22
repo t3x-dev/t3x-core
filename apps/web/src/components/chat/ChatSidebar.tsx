@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { GitBranch, Leaf, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -27,7 +27,6 @@ import { useCommitStore } from '@/store/commitStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
-import { CurrentProjectWorkbench } from './sidebar/CurrentProjectWorkbench';
 import { LogoIcon } from './sidebar/LogoIcon';
 import { ProjectFolder } from './sidebar/ProjectFolder';
 
@@ -45,6 +44,13 @@ type RenameTarget =
       conversationId: string;
       currentName: string;
     };
+
+type RecentConversation = {
+  conversationId: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+};
 
 export function ChatSidebar() {
   const router = useRouter();
@@ -109,13 +115,26 @@ export function ChatSidebar() {
   }, [activeConversationId, activeProjectId, projectConversations, projects]);
 
   const currentProjectId = currentProject?.project_id ?? null;
-  const currentProjectConversations = currentProjectId
-    ? (projectConversations[currentProjectId] ?? [])
-    : [];
   const { leaves: currentProjectLeaves, loading: currentProjectLeavesLoading } = useProjectLeaves(
     currentProjectId,
     Boolean(currentProjectId && !collapsed)
   );
+
+  const recentConversations = useMemo<RecentConversation[]>(() => {
+    return Object.entries(projectConversations)
+      .flatMap(([projectId, conversations]) => {
+        const projectName =
+          projects.find((project) => project.project_id === projectId)?.name ?? 'Project';
+        return conversations.map((conversation) => ({
+          conversationId: conversation.conversation_id,
+          projectId,
+          projectName,
+          title: conversation.title ?? conversation.conversation_id.slice(0, 30),
+        }));
+      })
+      .slice(0, 6);
+  }, [projectConversations, projects]);
+
   const sidebarVisibleWidth = collapsed
     ? `${CHAT_SIDEBAR_COLLAPSED_WIDTH}px`
     : compactViewport
@@ -312,31 +331,45 @@ export function ChatSidebar() {
     router.push(`/project/${projectId}`);
   }
 
-  function handleCommitsClick(projectId: string) {
-    router.push(`/project/${projectId}/history`);
+  function expandSidebarFromRail() {
+    if (collapsed && !compactViewport) {
+      useChatStore.setState({ sidebarCollapsed: false });
+    }
   }
 
-  function handleOutputsClick(projectId: string, leafId: string) {
-    router.push(`/project/${projectId}/leaf/${leafId}`);
+  function handleChatTabClick() {
+    expandSidebarFromRail();
+    if (activeConversationId) {
+      router.push(`/chat/${activeConversationId}`);
+      return;
+    }
+    if (activeProjectId) {
+      router.push(`/chat?projectId=${encodeURIComponent(activeProjectId)}`);
+      return;
+    }
+    router.push('/chat');
   }
 
-  function handleSourceChatsClick(projectId: string) {
-    const conversations = projectConversations[projectId] ?? [];
-    if (
-      activeConversationId &&
-      conversations.some((conversation) => conversation.conversation_id === activeConversationId)
-    ) {
+  function handleCanvasTabClick() {
+    expandSidebarFromRail();
+    if (!currentProjectId) return;
+    handleCanvasClick(currentProjectId);
+  }
+
+  function handleLeafTabClick() {
+    expandSidebarFromRail();
+    const firstLeaf = currentProjectLeaves[0];
+    if (!currentProjectId || !firstLeaf) return;
+    router.push(`/project/${currentProjectId}/leaf/${firstLeaf.id}`);
+  }
+
+  function handleNewChatClick() {
+    if (activeProjectId) {
+      void handleNewChatInProject(activeProjectId);
       return;
     }
-
-    const firstConversation = conversations[0];
-    if (firstConversation) {
-      handleConversationClick(firstConversation.conversation_id, projectId);
-      return;
-    }
-
-    setActiveConversation(null, projectId);
-    router.push(`/chat?projectId=${encodeURIComponent(projectId)}`);
+    setActiveConversation(null, null);
+    router.push('/chat');
   }
 
   async function handleDeleteProject(projectId: string) {
@@ -490,149 +523,287 @@ export function ChatSidebar() {
         )}
         style={sidebarStyle}
       >
-        {/* Logo */}
-        <div
-          className={cn(
-            'flex h-14 shrink-0 items-center',
-            collapsed ? 'justify-center px-2' : 'px-5'
-          )}
-        >
+        <div className={cn('flex h-14 shrink-0 items-center px-3', collapsed && 'justify-center')}>
           <button
             type="button"
-            onClick={() => {
-              setActiveConversation(null, null);
-              router.push('/chat');
-            }}
-            className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={handleChatTabClick}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-80"
+            aria-label="T3X chat home"
           >
             <LogoIcon />
-            {!collapsed && (
-              <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                T3X - Git for Meaning
-              </span>
-            )}
           </button>
         </div>
 
-        {/* New Project action */}
-        <div className={cn('py-1', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <div className="flex items-center">
+        {collapsed ? (
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
+                <button
+                  type="button"
+                  onClick={handleChatTabClick}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]"
+                  aria-label="Chat"
+                  aria-current="page"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-conversation)]"
+                  />
+                  <MessageSquare className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Chat
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleCanvasTabClick}
+                  disabled={!currentProjectId}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]"
+                  aria-label="Canvas"
+                >
+                  <GitBranch className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Canvas
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleLeafTabClick}
+                  disabled={
+                    !currentProjectId ||
+                    currentProjectLeavesLoading ||
+                    currentProjectLeaves.length === 0
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-leaf)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]"
+                  aria-label="Leaf"
+                >
+                  <Leaf className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Leaf
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
                   onClick={openNewProjectDialog}
-                  className={cn(
-                    'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
-                    'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-                    'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
-                    'transition-all duration-[var(--motion-base)]',
-                    collapsed
-                      ? 'h-9 w-9'
-                      : 'h-8 w-full justify-start gap-2 px-2 text-xs font-medium'
-                  )}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
                   aria-label="New project"
                 >
-                  <Plus className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span className="truncate">New Project</span>}
-                </Button>
+                  <Plus className="h-4 w-4" />
+                </button>
               </TooltipTrigger>
-              <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
+              <TooltipContent side="right" sideOffset={8}>
                 New Project
               </TooltipContent>
             </Tooltip>
           </div>
-        </div>
-
-        {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
-          <div
-            className={cn(
-              'flex min-w-0 flex-col gap-1 pb-2 pt-0',
-              collapsed ? 'items-center px-2' : 'px-0'
-            )}
-            style={
-              collapsed
-                ? undefined
-                : {
-                    width: 'var(--chat-sidebar-visible-width)',
-                    maxWidth: 'var(--chat-sidebar-visible-width)',
+        ) : (
+          <>
+            <div className="px-3 pb-3">
+              <div
+                className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-0.5"
+                role="tablist"
+                aria-label="Workspace mode"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-current="page"
+                  onClick={handleChatTabClick}
+                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--surface-panel)] px-2 text-[12px] font-semibold text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-conversation)]" />
+                  <span className="truncate">Chat</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  onClick={handleCanvasTabClick}
+                  disabled={!currentProjectId}
+                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+                  title={currentProjectId ? 'Canvas' : 'Select a project before opening Canvas'}
+                >
+                  <GitBranch className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
+                  <span className="truncate">Canvas</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  onClick={handleLeafTabClick}
+                  disabled={
+                    !currentProjectId ||
+                    currentProjectLeavesLoading ||
+                    currentProjectLeaves.length === 0
                   }
-            }
-          >
-            {!collapsed && currentProject && (
-              <CurrentProjectWorkbench
-                project={currentProject}
-                conversations={currentProjectConversations}
-                activeConversationId={activeConversationId}
-                leaves={currentProjectLeaves}
-                leavesLoading={currentProjectLeavesLoading}
-                onSourceChatsClick={() => handleSourceChatsClick(currentProject.project_id)}
-                onCanvasClick={() => handleCanvasClick(currentProject.project_id)}
-                onCommitsClick={() => handleCommitsClick(currentProject.project_id)}
-                onOutputsClick={(leafId) => handleOutputsClick(currentProject.project_id, leafId)}
-                onConversationClick={(conversationId) =>
-                  handleConversationClick(conversationId, currentProject.project_id)
-                }
-                onNewChat={() => handleNewChatInProject(currentProject.project_id)}
-                onProjectContextMenu={(e) => handleProjectContextMenu(e, currentProject.project_id)}
-                onConversationContextMenu={(e, conversationId) =>
-                  handleConversationContextMenu(e, currentProject.project_id, conversationId)
-                }
-              />
-            )}
+                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+                  title={
+                    currentProjectId && currentProjectLeaves.length > 0
+                      ? 'Leaf'
+                      : 'Select a project with leaves before opening Leaf'
+                  }
+                >
+                  <Leaf className="h-3.5 w-3.5 text-[var(--accent-leaf)]" />
+                  <span className="truncate">Leaf</span>
+                </button>
+              </div>
+            </div>
 
-            {/* Projects section header */}
-            {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                  Projects
+            <div className="px-3 pb-2">
+              <Button
+                variant="ghost"
+                onClick={handleNewChatClick}
+                className="h-10 w-full justify-between rounded-lg bg-[var(--hover-bg-strong)] px-3 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                aria-label="New chat"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span className="truncate">New chat</span>
                 </span>
+                <span className="text-[11px] font-medium text-[var(--text-tertiary)]">⌘N</span>
+              </Button>
+            </div>
+
+            {/* Scrollable content: Projects + recent chats */}
+            <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
+              <div
+                className="flex min-w-0 flex-col gap-2 pb-4 pt-0"
+                style={{
+                  width: 'var(--chat-sidebar-visible-width)',
+                  maxWidth: 'var(--chat-sidebar-visible-width)',
+                }}
+              >
+                <div className="px-3">
+                  <div className="flex items-center justify-between px-1 pb-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                      Projects
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={openNewProjectDialog}
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                          aria-label="New project"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={8}>
+                        New Project
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+
+                {projects.map((project) => (
+                  <ProjectFolder
+                    key={project.project_id}
+                    project={project}
+                    conversations={projectConversations[project.project_id] ?? []}
+                    isExpanded={expandedProjectIds.has(project.project_id)}
+                    isActive={activeProjectId === project.project_id}
+                    activeConversationId={activeConversationId}
+                    collapsed={false}
+                    onToggleExpand={() =>
+                      void handleProjectClick(project.project_id, project.conversations_count)
+                    }
+                    onConversationClick={(convId) =>
+                      handleConversationClick(convId, project.project_id)
+                    }
+                    onNewChat={(pid) => handleNewChatInProject(pid)}
+                    onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
+                    onConversationContextMenu={(e, convId) =>
+                      handleConversationContextMenu(e, project.project_id, convId)
+                    }
+                  />
+                ))}
+
+                {projects.length === 0 && (
+                  <div className="px-4 py-4 text-center">
+                    <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
+                  </div>
+                )}
+
+                {recentConversations.length > 0 && (
+                  <div className="mt-3 px-3">
+                    <div className="px-1 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                        Recents
+                      </span>
+                    </div>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      {recentConversations.map((conversation) => {
+                        const isActive = activeConversationId === conversation.conversationId;
+                        return (
+                          <button
+                            key={`${conversation.projectId}:${conversation.conversationId}`}
+                            type="button"
+                            onClick={() =>
+                              handleConversationClick(
+                                conversation.conversationId,
+                                conversation.projectId
+                              )
+                            }
+                            className={cn(
+                              'grid min-h-[38px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors',
+                              isActive
+                                ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--text-primary)]'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                            )}
+                          >
+                            <MessageSquare
+                              className={cn(
+                                'h-4 w-4 shrink-0',
+                                isActive
+                                  ? 'text-[var(--accent-conversation)]'
+                                  : 'text-[var(--text-tertiary)]'
+                              )}
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-medium leading-4">
+                                {conversation.title}
+                              </span>
+                              <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                {conversation.projectName}
+                              </span>
+                            </span>
+                            {isActive && (
+                              <span className="h-2 w-2 rounded-full bg-[var(--accent-conversation)]" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </ScrollArea>
+          </>
+        )}
 
-            {/* Project folders */}
-            {projects.map((project) => (
-              <ProjectFolder
-                key={project.project_id}
-                project={project}
-                conversations={projectConversations[project.project_id] ?? []}
-                isExpanded={expandedProjectIds.has(project.project_id)}
-                isActive={activeProjectId === project.project_id}
-                activeConversationId={activeConversationId}
-                collapsed={collapsed}
-                onToggleExpand={() =>
-                  void handleProjectClick(project.project_id, project.conversations_count)
-                }
-                onConversationClick={(convId) =>
-                  handleConversationClick(convId, project.project_id)
-                }
-                onNewChat={(pid) => handleNewChatInProject(pid)}
-                onCanvasClick={() => handleCanvasClick(project.project_id)}
-                showChildren={false}
-                onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
-                onConversationContextMenu={(e, convId) =>
-                  handleConversationContextMenu(e, project.project_id, convId)
-                }
-              />
-            ))}
-
-            {projects.length === 0 && !collapsed && (
-              <div className="px-4 py-4 text-center">
-                <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Bottom section */}
         <div
           className={cn(
             'mt-auto flex min-w-0 flex-col gap-1 py-2.5',
             collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >
-          {/* User Menu — Settings lives in this dropdown (Profile / Settings / Sign Out) */}
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>

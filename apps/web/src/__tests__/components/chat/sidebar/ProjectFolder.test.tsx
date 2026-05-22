@@ -31,7 +31,6 @@ function renderFolder(overrides: { isActive?: boolean; isExpanded?: boolean } = 
       onToggleExpand={vi.fn()}
       onConversationClick={vi.fn()}
       onNewChat={vi.fn()}
-      onCanvasClick={vi.fn()}
       onProjectContextMenu={vi.fn()}
       onConversationContextMenu={vi.fn()}
     />
@@ -82,7 +81,6 @@ describe('ProjectFolder active state', () => {
         onToggleExpand={vi.fn()}
         onConversationClick={vi.fn()}
         onNewChat={vi.fn()}
-        onCanvasClick={vi.fn()}
         onProjectContextMenu={vi.fn()}
         onConversationContextMenu={vi.fn()}
       />

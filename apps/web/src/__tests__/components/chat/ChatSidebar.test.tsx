@@ -236,7 +236,7 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Smoke English Extraction/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Smoke English Extraction/i })[0]);
 
     await waitFor(() => {
       expect(mocks.loadConversations).toHaveBeenCalledWith('proj_smoke');
@@ -249,7 +249,7 @@ describe('ChatSidebar', () => {
     );
   });
 
-  it('shows the active project workbench functions above the project switcher', () => {
+  it('shows Claude-style mode tabs above chat navigation lists', () => {
     mocks.projects = [
       {
         project_id: 'proj_smoke',
@@ -278,29 +278,26 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    const currentProjectHeader = screen.getByText('Current Project');
-    const functionsHeader = screen.getByText('Functions');
-    const chatsHeader = screen.getByText('Chats in current project');
+    const chatTab = screen.getByRole('tab', { name: 'Chat' });
+    const canvasTab = screen.getByRole('tab', { name: 'Canvas' });
+    const leafTab = screen.getByRole('tab', { name: 'Leaf' });
+    const newChat = screen.getByRole('button', { name: 'New chat' });
     const projectsHeader = screen.getByText('Projects');
+    const recentsHeader = screen.getByText('Recents');
 
-    expect(currentProjectHeader.compareDocumentPosition(functionsHeader)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-    expect(functionsHeader.compareDocumentPosition(chatsHeader)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-    expect(chatsHeader.compareDocumentPosition(projectsHeader)).toBe(
+    expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    expect(canvasTab).toBeEnabled();
+    expect(leafTab).toBeDisabled();
+    expect(chatTab.compareDocumentPosition(newChat)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(newChat.compareDocumentPosition(projectsHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(projectsHeader.compareDocumentPosition(recentsHeader)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
-    expect(screen.getByRole('button', { name: /Source Chats\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Canvas\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commits\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Outputs\s*0/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /I also want to try som/i })).toBeInTheDocument();
   });
 
-  it('routes active project workbench functions to canvas, commits, and first output', () => {
+  it('routes top-level Canvas and Leaf tabs from the active project context', () => {
     mocks.projects = [
       {
         project_id: 'proj_smoke',
@@ -319,13 +316,10 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Canvas\s*3/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
     expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke');
 
-    fireEvent.click(screen.getByRole('button', { name: /Commits\s*3/i }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/history');
-
-    fireEvent.click(screen.getByRole('button', { name: /Outputs\s*1/i }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Leaf' }));
     expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/leaf/leaf_first');
   });
 
@@ -349,7 +343,7 @@ describe('ChatSidebar', () => {
     render(<ChatSidebar />);
     mocks.loadConversations.mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: /Smoke English Extraction/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Smoke English Extraction/i })[0]);
 
     expect(mocks.chatState.toggleProjectExpanded).toHaveBeenCalledWith('proj_smoke');
     expect(mocks.loadConversations).not.toHaveBeenCalled();

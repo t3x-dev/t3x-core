@@ -17,7 +17,6 @@ export interface ProjectFolderProps {
   onToggleExpand: () => void;
   onConversationClick: (convId: string) => void;
   onNewChat: (projectId: string) => void;
-  onCanvasClick: () => void;
   showChildren?: boolean;
   onProjectContextMenu: (e: React.MouseEvent) => void;
   onConversationContextMenu: (e: React.MouseEvent, convId: string) => void;
@@ -42,7 +41,6 @@ export function ProjectFolder({
   onToggleExpand,
   onConversationClick,
   onNewChat,
-  onCanvasClick: _onCanvasClick,
   showChildren = true,
   onProjectContextMenu,
   onConversationContextMenu,
