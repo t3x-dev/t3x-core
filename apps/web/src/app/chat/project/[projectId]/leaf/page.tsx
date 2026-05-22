@@ -22,7 +22,7 @@ export default function ChatProjectLeafIndexPage() {
   if (error) {
     return (
       <div className="flex h-full flex-col">
-        <ErrorMessage error={error} onRetry={() => void refresh()} />
+        <ErrorMessage error={new Error(error)} onRetry={() => void refresh()} />
       </div>
     );
   }
