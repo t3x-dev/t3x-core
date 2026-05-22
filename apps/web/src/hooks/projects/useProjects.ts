@@ -17,6 +17,7 @@ import type { Project } from '@/infrastructure/types';
 export interface UseProjectsResult {
   projects: Project[];
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
   remove: (projectId: string) => Promise<void>;
   create: (name?: string) => Promise<Project>;
@@ -26,12 +27,16 @@ export interface UseProjectsResult {
 export function useProjects(limit = 50): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const data = await listProjects(limit, 0);
       setProjects(data.projects ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -64,5 +69,5 @@ export function useProjects(limit = 50): UseProjectsResult {
     return project;
   }, []);
 
-  return { projects, loading, refresh, remove, create, rename };
+  return { projects, loading, error, refresh, remove, create, rename };
 }
