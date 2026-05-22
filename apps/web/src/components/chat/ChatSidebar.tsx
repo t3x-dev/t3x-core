@@ -1,7 +1,18 @@
 'use client';
 
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import {
+  AlertCircle,
+  FileText,
+  GitBranch,
+  GitCommitHorizontal,
+  Leaf,
+  Loader2,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
@@ -17,6 +28,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
@@ -24,10 +36,10 @@ import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
+import type { ApiCommit, Leaf as ApiLeaf } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
-import { CurrentProjectWorkbench } from './sidebar/CurrentProjectWorkbench';
 import { LogoIcon } from './sidebar/LogoIcon';
 import { ProjectFolder } from './sidebar/ProjectFolder';
 
@@ -46,8 +58,37 @@ type RenameTarget =
       currentName: string;
     };
 
+type RecentConversation = {
+  conversationId: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+};
+
+type LeafFilter = 'all' | 'generated' | 'draft' | 'review';
+
+function shortHash(hash: string): string {
+  return hash.replace(/^sha256:/, '').slice(0, 8);
+}
+
+function getLeafAssertionCounts(leaf: ApiLeaf): { total: number; passed: number } {
+  const assertions = leaf.runner_assertions ?? leaf.assertions ?? [];
+  return {
+    total: assertions.length,
+    passed: assertions.filter((assertion) => assertion.passed).length,
+  };
+}
+
+function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
+  const assertions = leaf.runner_assertions ?? leaf.assertions ?? [];
+  if (assertions.some((assertion) => !assertion.passed)) return 'review';
+  if (leaf.output || leaf.generated_at) return 'generated';
+  return 'draft';
+}
+
 export function ChatSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectError, setNewProjectError] = useState<string | null>(null);
@@ -56,6 +97,10 @@ export function ChatSidebar() {
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [canvasCommits, setCanvasCommits] = useState<ApiCommit[]>([]);
+  const [canvasCommitsLoading, setCanvasCommitsLoading] = useState(false);
+  const [canvasCommitsError, setCanvasCommitsError] = useState<string | null>(null);
+  const [leafFilter, setLeafFilter] = useState<LeafFilter>('all');
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -87,6 +132,7 @@ export function ChatSidebar() {
     rename: renameConversation,
   } = useProjectConversations();
   const { start: startNewChat } = useNewProjectChat();
+  const { loadCommits } = useCommitsList();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
@@ -94,9 +140,27 @@ export function ChatSidebar() {
 
   const refreshKey = useChatStore((s) => s.refreshKey);
 
+  const routeProjectId = useMemo(() => {
+    const match = pathname.match(/^\/chat\/project\/([^/]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }, [pathname]);
+  const effectiveProjectId = routeProjectId ?? activeProjectId;
+  const workspaceMode = pathname.includes('/canvas')
+    ? 'canvas'
+    : pathname.includes('/leaf')
+      ? 'leaf'
+      : 'chat';
+  const isChatActive = workspaceMode === 'chat';
+  const isCanvasActive = workspaceMode === 'canvas';
+  const isLeafActive = workspaceMode === 'leaf';
+  const activeLeafId = useMemo(() => {
+    const match = pathname.match(/^\/chat\/project\/[^/]+\/leaf\/([^/]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }, [pathname]);
+
   const currentProject = useMemo(() => {
-    if (activeProjectId) {
-      return projects.find((project) => project.project_id === activeProjectId) ?? null;
+    if (effectiveProjectId) {
+      return projects.find((project) => project.project_id === effectiveProjectId) ?? null;
     }
     if (!activeConversationId) return null;
     return (
@@ -106,16 +170,49 @@ export function ChatSidebar() {
         )
       ) ?? null
     );
-  }, [activeConversationId, activeProjectId, projectConversations, projects]);
+  }, [activeConversationId, effectiveProjectId, projectConversations, projects]);
 
-  const currentProjectId = currentProject?.project_id ?? null;
-  const currentProjectConversations = currentProjectId
-    ? (projectConversations[currentProjectId] ?? [])
-    : [];
-  const { leaves: currentProjectLeaves, loading: currentProjectLeavesLoading } = useProjectLeaves(
+  const currentProjectId = currentProject?.project_id ?? effectiveProjectId;
+  const { leaves: projectLeaves, loading: projectLeavesLoading } = useProjectLeaves(
     currentProjectId,
-    Boolean(currentProjectId && !collapsed)
+    Boolean(currentProjectId && !collapsed && (isCanvasActive || isLeafActive))
   );
+
+  const recentConversations = useMemo<RecentConversation[]>(() => {
+    return Object.entries(projectConversations)
+      .flatMap(([projectId, conversations]) => {
+        const projectName =
+          projects.find((project) => project.project_id === projectId)?.name ?? 'Project';
+        return conversations.map((conversation) => ({
+          conversationId: conversation.conversation_id,
+          projectId,
+          projectName,
+          title: conversation.title ?? conversation.conversation_id.slice(0, 30),
+        }));
+      })
+      .slice(0, 6);
+  }, [projectConversations, projects]);
+
+  const filteredLeaves = useMemo(() => {
+    if (leafFilter === 'all') return projectLeaves;
+    return projectLeaves.filter((leaf) => getLeafStatus(leaf) === leafFilter);
+  }, [leafFilter, projectLeaves]);
+
+  const leafStatusCounts = useMemo(() => {
+    return projectLeaves.reduce(
+      (counts, leaf) => {
+        counts[getLeafStatus(leaf)] += 1;
+        return counts;
+      },
+      { all: projectLeaves.length, generated: 0, draft: 0, review: 0 }
+    );
+  }, [projectLeaves]);
+  const currentProjectCommitCount = currentProject?.commits_count ?? canvasCommits.length;
+  const canvasBranchCount = useMemo(
+    () => new Set(canvasCommits.map((commit) => commit.branch || 'main')).size,
+    [canvasCommits]
+  );
+
   const sidebarVisibleWidth = collapsed
     ? `${CHAT_SIDEBAR_COLLAPSED_WIDTH}px`
     : compactViewport
@@ -181,17 +278,59 @@ export function ChatSidebar() {
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
 
+  useEffect(() => {
+    if (!routeProjectId || activeProjectId === routeProjectId) return;
+    setActiveConversation(null, routeProjectId);
+  }, [activeProjectId, routeProjectId, setActiveConversation]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCanvasCommits() {
+      if (!isCanvasActive || !currentProjectId || collapsed) {
+        setCanvasCommits([]);
+        setCanvasCommitsError(null);
+        setCanvasCommitsLoading(false);
+        return;
+      }
+
+      setCanvasCommitsLoading(true);
+      setCanvasCommitsError(null);
+      try {
+        const commits = await loadCommits(currentProjectId, undefined, 40);
+        if (!cancelled) {
+          setCanvasCommits(commits);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setCanvasCommitsError(err instanceof Error ? err.message : 'Failed to load commits');
+          setCanvasCommits([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setCanvasCommitsLoading(false);
+        }
+      }
+    }
+
+    void loadCanvasCommits();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [collapsed, currentProjectId, isCanvasActive, loadCommits, refreshKey]);
+
   // Fetch conversations for expanded projects and the active top workbench
   // project (re-fetch on refreshKey).
   useEffect(() => {
     const projectIdsToLoad = new Set(expandedProjectIds);
-    if (activeProjectId) {
-      projectIdsToLoad.add(activeProjectId);
+    if (effectiveProjectId) {
+      projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
       void loadConversations(projectId);
     }
-  }, [activeProjectId, expandedProjectIds, refreshKey, loadConversations]);
+  }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
 
   useEffect(() => {
     if (!renameTarget) return;
@@ -309,34 +448,47 @@ export function ChatSidebar() {
   }
 
   function handleCanvasClick(projectId: string) {
-    router.push(`/project/${projectId}`);
+    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas`);
   }
 
-  function handleCommitsClick(projectId: string) {
-    router.push(`/project/${projectId}/history`);
+  function expandSidebarFromRail() {
+    if (collapsed && !compactViewport) {
+      useChatStore.setState({ sidebarCollapsed: false });
+    }
   }
 
-  function handleOutputsClick(projectId: string, leafId: string) {
-    router.push(`/project/${projectId}/leaf/${leafId}`);
-  }
-
-  function handleSourceChatsClick(projectId: string) {
-    const conversations = projectConversations[projectId] ?? [];
-    if (
-      activeConversationId &&
-      conversations.some((conversation) => conversation.conversation_id === activeConversationId)
-    ) {
+  function handleChatTabClick() {
+    expandSidebarFromRail();
+    if (activeConversationId) {
+      router.push(`/chat/${activeConversationId}`);
       return;
     }
-
-    const firstConversation = conversations[0];
-    if (firstConversation) {
-      handleConversationClick(firstConversation.conversation_id, projectId);
+    if (currentProjectId) {
+      router.push(`/chat?projectId=${encodeURIComponent(currentProjectId)}`);
       return;
     }
+    router.push('/chat');
+  }
 
-    setActiveConversation(null, projectId);
-    router.push(`/chat?projectId=${encodeURIComponent(projectId)}`);
+  function handleCanvasTabClick() {
+    expandSidebarFromRail();
+    if (!currentProjectId) return;
+    handleCanvasClick(currentProjectId);
+  }
+
+  function handleLeafTabClick() {
+    expandSidebarFromRail();
+    if (!currentProjectId) return;
+    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf`);
+  }
+
+  function handleNewChatClick() {
+    if (currentProjectId) {
+      void handleNewChatInProject(currentProjectId);
+      return;
+    }
+    setActiveConversation(null, null);
+    router.push('/chat');
   }
 
   async function handleDeleteProject(projectId: string) {
@@ -490,149 +642,613 @@ export function ChatSidebar() {
         )}
         style={sidebarStyle}
       >
-        {/* Logo */}
-        <div
-          className={cn(
-            'flex h-14 shrink-0 items-center',
-            collapsed ? 'justify-center px-2' : 'px-5'
-          )}
-        >
+        <div className={cn('flex h-14 shrink-0 items-center px-3', collapsed && 'justify-center')}>
           <button
             type="button"
-            onClick={() => {
-              setActiveConversation(null, null);
-              router.push('/chat');
-            }}
-            className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={handleChatTabClick}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-80"
+            aria-label="T3X chat home"
           >
             <LogoIcon />
-            {!collapsed && (
-              <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                T3X - Git for Meaning
-              </span>
-            )}
           </button>
         </div>
 
-        {/* New Project action */}
-        <div className={cn('py-1', collapsed ? 'flex justify-center px-2' : 'px-3')}>
-          <div className="flex items-center">
+        {collapsed ? (
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  onClick={openNewProjectDialog}
+                <button
+                  type="button"
+                  onClick={handleChatTabClick}
                   className={cn(
-                    'rounded-lg border border-transparent bg-transparent p-0 text-[var(--text-secondary)]',
-                    'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
-                    'focus-visible:ring-1 focus-visible:ring-[var(--accent-commit)]/30',
-                    'transition-all duration-[var(--motion-base)]',
-                    collapsed
-                      ? 'h-9 w-9'
-                      : 'h-8 w-full justify-start gap-2 px-2 text-xs font-medium'
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors',
+                    isChatActive
+                      ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-conversation)]'
                   )}
+                  aria-label="Chat"
+                  aria-current={isChatActive ? 'page' : undefined}
+                >
+                  {isChatActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-conversation)]"
+                    />
+                  )}
+                  <MessageSquare className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Chat
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleCanvasTabClick}
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]',
+                    isCanvasActive
+                      ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)]'
+                  )}
+                  aria-label="Canvas"
+                  aria-current={isCanvasActive ? 'page' : undefined}
+                >
+                  {isCanvasActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-commit)]"
+                    />
+                  )}
+                  <GitBranch className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Canvas
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleLeafTabClick}
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]',
+                    isLeafActive
+                      ? 'border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-leaf)]'
+                  )}
+                  aria-label="Leaf"
+                  aria-current={isLeafActive ? 'page' : undefined}
+                >
+                  {isLeafActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-leaf)]"
+                    />
+                  )}
+                  <Leaf className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Leaf
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={openNewProjectDialog}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
                   aria-label="New project"
                 >
-                  <Plus className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span className="truncate">New Project</span>}
-                </Button>
+                  <Plus className="h-4 w-4" />
+                </button>
               </TooltipTrigger>
-              <TooltipContent side={collapsed ? 'right' : 'top'} sideOffset={8}>
+              <TooltipContent side="right" sideOffset={8}>
                 New Project
               </TooltipContent>
             </Tooltip>
           </div>
-        </div>
-
-        {/* Scrollable content: Projects + conversations */}
-        <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
-          <div
-            className={cn(
-              'flex min-w-0 flex-col gap-1 pb-2 pt-0',
-              collapsed ? 'items-center px-2' : 'px-0'
-            )}
-            style={
-              collapsed
-                ? undefined
-                : {
-                    width: 'var(--chat-sidebar-visible-width)',
-                    maxWidth: 'var(--chat-sidebar-visible-width)',
-                  }
-            }
-          >
-            {!collapsed && currentProject && (
-              <CurrentProjectWorkbench
-                project={currentProject}
-                conversations={currentProjectConversations}
-                activeConversationId={activeConversationId}
-                leaves={currentProjectLeaves}
-                leavesLoading={currentProjectLeavesLoading}
-                onSourceChatsClick={() => handleSourceChatsClick(currentProject.project_id)}
-                onCanvasClick={() => handleCanvasClick(currentProject.project_id)}
-                onCommitsClick={() => handleCommitsClick(currentProject.project_id)}
-                onOutputsClick={(leafId) => handleOutputsClick(currentProject.project_id, leafId)}
-                onConversationClick={(conversationId) =>
-                  handleConversationClick(conversationId, currentProject.project_id)
-                }
-                onNewChat={() => handleNewChatInProject(currentProject.project_id)}
-                onProjectContextMenu={(e) => handleProjectContextMenu(e, currentProject.project_id)}
-                onConversationContextMenu={(e, conversationId) =>
-                  handleConversationContextMenu(e, currentProject.project_id, conversationId)
-                }
-              />
-            )}
-
-            {/* Projects section header */}
-            {!collapsed && projects.length > 0 && (
-              <div className="px-4 pb-0.5 pt-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                  Projects
-                </span>
+        ) : (
+          <>
+            <div className="px-3 pb-3">
+              <div
+                className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-0.5"
+                role="tablist"
+                aria-label="Workspace mode"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isChatActive}
+                  aria-current={isChatActive ? 'page' : undefined}
+                  onClick={handleChatTabClick}
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors',
+                    isChatActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-conversation)]" />
+                  <span className="truncate">Chat</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isCanvasActive}
+                  onClick={handleCanvasTabClick}
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
+                    isCanvasActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
+                  title={currentProjectId ? 'Canvas' : 'Select a project before opening Canvas'}
+                >
+                  <GitBranch className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
+                  <span className="truncate">Canvas</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isLeafActive}
+                  onClick={handleLeafTabClick}
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
+                    isLeafActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
+                  title={currentProjectId ? 'Leaf' : 'Select a project before opening Leaf'}
+                >
+                  <Leaf className="h-3.5 w-3.5 text-[var(--accent-leaf)]" />
+                  <span className="truncate">Leaf</span>
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* Project folders */}
-            {projects.map((project) => (
-              <ProjectFolder
-                key={project.project_id}
-                project={project}
-                conversations={projectConversations[project.project_id] ?? []}
-                isExpanded={expandedProjectIds.has(project.project_id)}
-                isActive={activeProjectId === project.project_id}
-                activeConversationId={activeConversationId}
-                collapsed={collapsed}
-                onToggleExpand={() =>
-                  void handleProjectClick(project.project_id, project.conversations_count)
-                }
-                onConversationClick={(convId) =>
-                  handleConversationClick(convId, project.project_id)
-                }
-                onNewChat={(pid) => handleNewChatInProject(pid)}
-                onCanvasClick={() => handleCanvasClick(project.project_id)}
-                showChildren={false}
-                onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
-                onConversationContextMenu={(e, convId) =>
-                  handleConversationContextMenu(e, project.project_id, convId)
-                }
-              />
-            ))}
+            <div className="px-3 pb-2">
+              {isChatActive ? (
+                <Button
+                  variant="ghost"
+                  onClick={handleNewChatClick}
+                  className="h-10 w-full justify-between rounded-lg bg-[var(--hover-bg-strong)] px-3 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                  aria-label="New chat"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Plus className="h-4 w-4 shrink-0" />
+                    <span className="truncate">New chat</span>
+                  </span>
+                  <span className="text-[11px] font-medium text-[var(--text-tertiary)]">⌘N</span>
+                </Button>
+              ) : isCanvasActive ? (
+                <Button
+                  variant="ghost"
+                  onClick={handleCanvasTabClick}
+                  disabled={!currentProjectId}
+                  className="h-10 w-full justify-between rounded-lg bg-[var(--accent-commit-soft)] px-3 text-[13px] font-semibold text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 disabled:opacity-45"
+                  aria-label="Open canvas"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <GitBranch className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Open canvas</span>
+                  </span>
+                  <span className="text-[11px] font-medium text-[var(--text-tertiary)]">map</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={handleLeafTabClick}
+                  disabled={!currentProjectId}
+                  className="h-10 w-full justify-between rounded-lg bg-[var(--accent-leaf-soft)] px-3 text-[13px] font-semibold text-[var(--accent-leaf)] hover:bg-[var(--accent-leaf)]/15 disabled:opacity-45"
+                  aria-label="Leaf index"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Leaf className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Leaf index</span>
+                  </span>
+                  <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
+                    {projectLeaves.length}
+                  </span>
+                </Button>
+              )}
+            </div>
 
-            {projects.length === 0 && !collapsed && (
-              <div className="px-4 py-4 text-center">
-                <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
+            {/* Scrollable content: Projects + recent chats */}
+            <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
+              <div
+                className="flex min-w-0 flex-col gap-2 pb-4 pt-0"
+                style={{
+                  width: 'var(--chat-sidebar-visible-width)',
+                  maxWidth: 'var(--chat-sidebar-visible-width)',
+                }}
+              >
+                {isChatActive && (
+                  <>
+                    <div className="px-3">
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          Projects
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={openNewProjectDialog}
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                              aria-label="New project"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={8}>
+                            New Project
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+
+                    {projects.map((project) => (
+                      <ProjectFolder
+                        key={project.project_id}
+                        project={project}
+                        conversations={projectConversations[project.project_id] ?? []}
+                        isExpanded={expandedProjectIds.has(project.project_id)}
+                        isActive={activeProjectId === project.project_id}
+                        activeConversationId={activeConversationId}
+                        collapsed={false}
+                        onToggleExpand={() =>
+                          void handleProjectClick(project.project_id, project.conversations_count)
+                        }
+                        onConversationClick={(convId) =>
+                          handleConversationClick(convId, project.project_id)
+                        }
+                        onNewChat={(pid) => handleNewChatInProject(pid)}
+                        onProjectContextMenu={(e) =>
+                          handleProjectContextMenu(e, project.project_id)
+                        }
+                        onConversationContextMenu={(e, convId) =>
+                          handleConversationContextMenu(e, project.project_id, convId)
+                        }
+                      />
+                    ))}
+
+                    {projects.length === 0 && (
+                      <div className="px-4 py-4 text-center">
+                        <span className="text-xs text-[var(--text-tertiary)]">No projects yet</span>
+                      </div>
+                    )}
+
+                    {recentConversations.length > 0 && (
+                      <div className="mt-3 px-3">
+                        <div className="px-1 pb-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                            Recents
+                          </span>
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          {recentConversations.map((conversation) => {
+                            const isActive = activeConversationId === conversation.conversationId;
+                            return (
+                              <button
+                                key={`${conversation.projectId}:${conversation.conversationId}`}
+                                type="button"
+                                onClick={() =>
+                                  handleConversationClick(
+                                    conversation.conversationId,
+                                    conversation.projectId
+                                  )
+                                }
+                                className={cn(
+                                  'grid min-h-[38px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors',
+                                  isActive
+                                    ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--text-primary)]'
+                                    : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                                )}
+                              >
+                                <MessageSquare
+                                  className={cn(
+                                    'h-4 w-4 shrink-0',
+                                    isActive
+                                      ? 'text-[var(--accent-conversation)]'
+                                      : 'text-[var(--text-tertiary)]'
+                                  )}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-[12px] font-medium leading-4">
+                                    {conversation.title}
+                                  </span>
+                                  <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                    {conversation.projectName}
+                                  </span>
+                                </span>
+                                {isActive && (
+                                  <span className="h-2 w-2 rounded-full bg-[var(--accent-conversation)]" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {isCanvasActive && (
+                  <div className="flex min-w-0 flex-col gap-3 px-3">
+                    {!currentProjectId ? (
+                      <div className="rounded-lg border border-dashed border-[var(--stroke-divider)] px-3 py-5 text-center">
+                        <GitBranch className="mx-auto mb-2 h-4 w-4 text-[var(--text-tertiary)]" />
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">
+                          Select a project
+                        </p>
+                        <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                          Canvas navigation is project scoped.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
+                              <GitBranch className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">
+                                {currentProject?.name ?? 'Project'}
+                              </span>
+                              <span className="block text-[10px] text-[var(--text-tertiary)]">
+                                Canvas view · version graph
+                              </span>
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-1 text-center">
+                            <span className="rounded-md bg-[var(--hover-bg)] px-1.5 py-1">
+                              <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
+                                {currentProjectCommitCount}
+                              </span>
+                              <span className="block text-[9px] uppercase text-[var(--text-tertiary)]">
+                                commits
+                              </span>
+                            </span>
+                            <span className="rounded-md bg-[var(--hover-bg)] px-1.5 py-1">
+                              <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
+                                {projectLeaves.length}
+                              </span>
+                              <span className="block text-[9px] uppercase text-[var(--text-tertiary)]">
+                                leaves
+                              </span>
+                            </span>
+                            <span className="rounded-md bg-[var(--hover-bg)] px-1.5 py-1">
+                              <span className="block text-[12px] font-semibold text-[var(--text-primary)]">
+                                {canvasBranchCount || 1}
+                              </span>
+                              <span className="block text-[9px] uppercase text-[var(--text-tertiary)]">
+                                branches
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between px-1 pb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                              Commits
+                            </span>
+                            <span className="text-[10px] text-[var(--text-tertiary)]">
+                              {canvasCommits.length || currentProjectCommitCount}
+                            </span>
+                          </div>
+
+                          {canvasCommitsLoading && (
+                            <div className="flex items-center gap-2 rounded-lg px-2 py-3 text-xs text-[var(--text-tertiary)]">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading commits
+                            </div>
+                          )}
+
+                          {canvasCommitsError && (
+                            <div className="flex items-start gap-2 rounded-lg border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-2 py-2 text-[11px] text-[var(--status-error)]">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span className="min-w-0 break-words">{canvasCommitsError}</span>
+                            </div>
+                          )}
+
+                          {!canvasCommitsLoading &&
+                            !canvasCommitsError &&
+                            canvasCommits.length === 0 && (
+                              <div className="rounded-lg border border-dashed border-[var(--stroke-divider)] px-3 py-4 text-center text-xs text-[var(--text-tertiary)]">
+                                No commits yet
+                              </div>
+                            )}
+
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            {canvasCommits.map((commit) => {
+                              const commitLeaves = projectLeaves.filter(
+                                (leaf) => leaf.commit_hash === commit.hash
+                              );
+                              return (
+                                <button
+                                  key={commit.hash}
+                                  type="button"
+                                  onClick={() =>
+                                    router.push(
+                                      `/chat/project/${encodeURIComponent(
+                                        currentProjectId
+                                      )}/canvas?commit=${encodeURIComponent(commit.hash)}`
+                                    )
+                                  }
+                                  className="grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                                >
+                                  <GitCommitHorizontal className="h-4 w-4 shrink-0 text-[var(--accent-commit)]" />
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-[12px] font-medium leading-4">
+                                      {commit.message || shortHash(commit.hash)}
+                                    </span>
+                                    <span className="block truncate font-mono text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                      {commit.branch || 'main'} · {shortHash(commit.hash)}
+                                    </span>
+                                  </span>
+                                  {commitLeaves.length > 0 && (
+                                    <span className="rounded-full bg-[var(--accent-leaf-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent-leaf)]">
+                                      {commitLeaves.length}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {isLeafActive && (
+                  <div className="flex min-w-0 flex-col gap-3 px-3">
+                    {!currentProjectId ? (
+                      <div className="rounded-lg border border-dashed border-[var(--stroke-divider)] px-3 py-5 text-center">
+                        <Leaf className="mx-auto mb-2 h-4 w-4 text-[var(--text-tertiary)]" />
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">
+                          Select a project
+                        </p>
+                        <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                          Leaf outputs live under a project.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
+                          <div className="flex items-start gap-2">
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
+                              <Leaf className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">
+                                {currentProject?.name ?? 'Project'}
+                              </span>
+                              <span className="block text-[10px] text-[var(--text-tertiary)]">
+                                Output artifacts
+                              </span>
+                            </span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {(['all', 'generated', 'draft', 'review'] as const).map((filter) => (
+                              <button
+                                key={filter}
+                                type="button"
+                                onClick={() => setLeafFilter(filter)}
+                                className={cn(
+                                  'rounded-md border px-2 py-1 text-[10px] font-semibold capitalize transition-colors',
+                                  leafFilter === filter
+                                    ? 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
+                                    : 'border-[var(--stroke-divider)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                                )}
+                              >
+                                {filter} {leafStatusCounts[filter]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between px-1 pb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                              Leaves
+                            </span>
+                            <span className="text-[10px] text-[var(--text-tertiary)]">
+                              {filteredLeaves.length}
+                            </span>
+                          </div>
+
+                          {projectLeavesLoading && (
+                            <div className="flex items-center gap-2 rounded-lg px-2 py-3 text-xs text-[var(--text-tertiary)]">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading leaves
+                            </div>
+                          )}
+
+                          {!projectLeavesLoading && filteredLeaves.length === 0 && (
+                            <div className="rounded-lg border border-dashed border-[var(--stroke-divider)] px-3 py-4 text-center text-xs text-[var(--text-tertiary)]">
+                              No leaves in this view
+                            </div>
+                          )}
+
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            {filteredLeaves.map((leaf) => {
+                              const counts = getLeafAssertionCounts(leaf);
+                              const status = getLeafStatus(leaf);
+                              const isActive = activeLeafId === leaf.id;
+                              return (
+                                <button
+                                  key={leaf.id}
+                                  type="button"
+                                  onClick={() =>
+                                    router.push(
+                                      `/chat/project/${encodeURIComponent(
+                                        currentProjectId
+                                      )}/leaf/${encodeURIComponent(leaf.id)}`
+                                    )
+                                  }
+                                  className={cn(
+                                    'grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors',
+                                    isActive
+                                      ? 'border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] text-[var(--text-primary)]'
+                                      : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                                  )}
+                                >
+                                  <FileText
+                                    className={cn(
+                                      'h-4 w-4 shrink-0',
+                                      isActive
+                                        ? 'text-[var(--accent-leaf)]'
+                                        : 'text-[var(--text-tertiary)]'
+                                    )}
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-[12px] font-medium leading-4">
+                                      {leaf.title || `Leaf ${leaf.id.slice(0, 8)}`}
+                                    </span>
+                                    <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                      {leaf.type} · {status}
+                                    </span>
+                                  </span>
+                                  {counts.total > 0 && (
+                                    <span className="rounded-full bg-[var(--hover-bg)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-tertiary)]">
+                                      {counts.passed}/{counts.total}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </ScrollArea>
+            </ScrollArea>
+          </>
+        )}
 
-        {/* Bottom section */}
         <div
           className={cn(
             'mt-auto flex min-w-0 flex-col gap-1 py-2.5',
             collapsed ? 'items-center px-2' : 'px-2.5'
           )}
         >
-          {/* User Menu — Settings lives in this dropdown (Profile / Settings / Sign Out) */}
           <UserMenu collapsed={collapsed} />
         </div>
       </aside>

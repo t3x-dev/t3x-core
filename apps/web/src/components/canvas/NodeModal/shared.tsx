@@ -378,7 +378,9 @@ export function CommitConstraintsAndLeaves({
             {leaves.map((leaf) => (
               <li key={leaf.id}>
                 <Link
-                  href={`/project/${projectId}/leaf/${leaf.id}`}
+                  href={`/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
+                    leaf.id
+                  )}`}
                   className="flex items-center justify-between p-2 bg-[var(--color-bg-white)] rounded border border-[var(--status-success)]/15 hover:border-[var(--status-success)]/30 hover:bg-[var(--status-success-muted)] transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">

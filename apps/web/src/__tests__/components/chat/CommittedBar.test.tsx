@@ -31,6 +31,14 @@ describe('CommittedBar', () => {
     );
   });
 
+  it('opens canvas inside the chat workspace shell', () => {
+    render(<CommittedBar projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /view canvas/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/chat/project/proj_1/canvas');
+  });
+
   it('uses the chat panel surface for the committed card', () => {
     const { container } = render(<CommittedBar projectId="proj_1" />);
 

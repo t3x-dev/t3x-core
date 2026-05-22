@@ -86,7 +86,9 @@ export function LeafCreationDialog({
       onOpenChange(false);
 
       // Navigate to leaf detail page
-      router.push(`/project/${projectId}/leaf/${leaf.id}`);
+      router.push(
+        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`
+      );
     } catch (err) {
       // Handle specific error codes
       if (err instanceof Error) {

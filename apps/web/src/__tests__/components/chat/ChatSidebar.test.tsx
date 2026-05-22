@@ -34,7 +34,15 @@ const mocks = vi.hoisted(() => {
   return {
     createProject: vi.fn(),
     conversationsByProject: {} as Record<string, Array<{ conversation_id: string; title: string }>>,
+    commits: [] as Array<{
+      hash: string;
+      message: string | null;
+      branch: string;
+      committed_at: string;
+    }>,
     loadConversations: vi.fn(),
+    loadCommits: vi.fn(),
+    pathname: '/chat/conv_a432e35d',
     projects: [] as Array<{
       project_id: string;
       name: string;
@@ -42,14 +50,14 @@ const mocks = vi.hoisted(() => {
       conversations_count?: number;
       commits_count?: number;
     }>,
-    projectLeaves: [] as Array<{ id: string }>,
+    projectLeaves: [] as Array<Record<string, unknown> & { id: string }>,
     routerPush: vi.fn(),
     chatState,
   };
 });
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/chat/conv_a432e35d',
+  usePathname: () => mocks.pathname,
   useRouter: () => ({
     push: mocks.routerPush,
   }),
@@ -93,6 +101,12 @@ vi.mock('@/hooks/conversations/useNewProjectChat', () => ({
   }),
 }));
 
+vi.mock('@/hooks/commits/useCommitsList', () => ({
+  useCommitsList: () => ({
+    loadCommits: mocks.loadCommits,
+  }),
+}));
+
 vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
   useProjectLeaves: () => ({
     leaves: mocks.projectLeaves,
@@ -122,6 +136,9 @@ afterEach(() => {
   mocks.projects = [];
   mocks.projectLeaves = [];
   mocks.conversationsByProject = {};
+  mocks.commits = [];
+  mocks.loadCommits.mockResolvedValue(mocks.commits);
+  mocks.pathname = '/chat/conv_a432e35d';
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
   mocks.chatState.expandedProjectIds = new Set<string>();
@@ -236,7 +253,7 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Smoke English Extraction/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Smoke English Extraction/i })[0]);
 
     await waitFor(() => {
       expect(mocks.loadConversations).toHaveBeenCalledWith('proj_smoke');
@@ -249,7 +266,7 @@ describe('ChatSidebar', () => {
     );
   });
 
-  it('shows the active project workbench functions above the project switcher', () => {
+  it('shows Claude-style mode tabs above chat navigation lists', () => {
     mocks.projects = [
       {
         project_id: 'proj_smoke',
@@ -278,29 +295,26 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    const currentProjectHeader = screen.getByText('Current Project');
-    const functionsHeader = screen.getByText('Functions');
-    const chatsHeader = screen.getByText('Chats in current project');
+    const chatTab = screen.getByRole('tab', { name: 'Chat' });
+    const canvasTab = screen.getByRole('tab', { name: 'Canvas' });
+    const leafTab = screen.getByRole('tab', { name: 'Leaf' });
+    const newChat = screen.getByRole('button', { name: 'New chat' });
     const projectsHeader = screen.getByText('Projects');
+    const recentsHeader = screen.getByText('Recents');
 
-    expect(currentProjectHeader.compareDocumentPosition(functionsHeader)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-    expect(functionsHeader.compareDocumentPosition(chatsHeader)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-    expect(chatsHeader.compareDocumentPosition(projectsHeader)).toBe(
+    expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    expect(canvasTab).toBeEnabled();
+    expect(leafTab).toBeEnabled();
+    expect(chatTab.compareDocumentPosition(newChat)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(newChat.compareDocumentPosition(projectsHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(projectsHeader.compareDocumentPosition(recentsHeader)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
-    expect(screen.getByRole('button', { name: /Source Chats\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Canvas\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commits\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Outputs\s*0/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /I also want to try som/i })).toBeInTheDocument();
   });
 
-  it('routes active project workbench functions to canvas, commits, and first output', () => {
+  it('routes top-level Canvas and Leaf tabs from the active project context', () => {
     mocks.projects = [
       {
         project_id: 'proj_smoke',
@@ -319,14 +333,79 @@ describe('ChatSidebar', () => {
 
     render(<ChatSidebar />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Canvas\s*3/i }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke');
+    fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/canvas');
 
-    fireEvent.click(screen.getByRole('button', { name: /Commits\s*3/i }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/history');
+    fireEvent.click(screen.getByRole('tab', { name: 'Leaf' }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/leaf');
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: /Outputs\s*1/i }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/leaf/leaf_first');
+  it('shows canvas-scoped navigation below the Canvas tab', async () => {
+    mocks.pathname = '/chat/project/proj_smoke/canvas';
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 3,
+      },
+    ];
+    mocks.commits = [
+      {
+        hash: 'sha256:abcdef123456',
+        message: 'Extract release decisions',
+        branch: 'main',
+        committed_at: '2026-05-08T00:00:00Z',
+      },
+    ];
+    mocks.loadCommits.mockResolvedValue(mocks.commits);
+    mocks.projectLeaves = [{ id: 'leaf_first', commit_hash: 'sha256:abcdef123456' }];
+
+    render(<ChatSidebar />);
+
+    expect(screen.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'New chat' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open canvas' })).toBeInTheDocument();
+    expect(screen.getByText('Canvas view · version graph')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mocks.loadCommits).toHaveBeenCalledWith('proj_smoke', undefined, 40);
+      expect(screen.getByText('Extract release decisions')).toBeInTheDocument();
+    });
+  });
+
+  it('shows leaf-scoped navigation below the Leaf tab', () => {
+    mocks.pathname = '/chat/project/proj_smoke/leaf/leaf_first';
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 3,
+      },
+    ];
+    mocks.projectLeaves = [
+      {
+        id: 'leaf_first',
+        commit_hash: 'sha256:abcdef123456',
+        title: 'Release note brief',
+        type: 'report',
+        output: 'Generated',
+        generated_at: '2026-05-08T00:00:00Z',
+        runner_assertions: [{ passed: true }, { passed: false }],
+      },
+    ];
+
+    render(<ChatSidebar />);
+
+    expect(screen.getByRole('tab', { name: 'Leaf' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: 'New chat' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leaf index' })).toBeInTheDocument();
+    expect(screen.getByText('Output artifacts')).toBeInTheDocument();
+    expect(screen.getByText('Release note brief')).toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
   });
 
   it('collapses an expanded project with conversations when clicked again', () => {
@@ -349,7 +428,7 @@ describe('ChatSidebar', () => {
     render(<ChatSidebar />);
     mocks.loadConversations.mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: /Smoke English Extraction/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Smoke English Extraction/i })[0]);
 
     expect(mocks.chatState.toggleProjectExpanded).toHaveBeenCalledWith('proj_smoke');
     expect(mocks.loadConversations).not.toHaveBeenCalled();
