@@ -7,7 +7,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { TreeNode } from '@t3x-dev/core';
-import { applyYOps, YOpSchema } from '@t3x-dev/core';
+import { applyYOps } from '@t3x-dev/core';
 import { ConflictError, findDraftById, updateDraft } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -22,7 +22,7 @@ export const draftsYopsRoutes = new OpenAPIHono({
 // ============================================================
 
 const ApplyYOpsRequest = z.object({
-  yops: z.array(YOpSchema).min(1),
+  yops: z.array(z.record(z.string(), z.unknown())).min(1),
   if_revision: z.number().int().min(0),
 });
 

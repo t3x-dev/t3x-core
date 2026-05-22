@@ -232,8 +232,8 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       version: '1.0.0',
       description: 'Semantic version control for AI conversations. Git for meaning.',
       license: {
-        name: 'MIT',
-        url: 'https://opensource.org/licenses/MIT',
+        name: 'Apache-2.0',
+        url: 'https://www.apache.org/licenses/LICENSE-2.0',
       },
     },
     servers: [{ url: 'http://localhost:8000/api', description: 'Local development' }],

@@ -36,15 +36,33 @@ const OapiTreeNodeSchema: z.ZodType<{
   children: unknown[];
   slot_quotes?: Record<string, string>;
   source?: string;
-}> = z.lazy(() =>
-  z.object({
-    key: z.string().min(1),
-    slots: z.record(z.string(), OapiSlotValueSchema),
-    children: z.array(OapiTreeNodeSchema).default([]),
-    slot_quotes: z.record(z.string(), z.string()).optional(),
-    source: z.string().optional(),
-  })
-);
+}> = z
+  .lazy(() =>
+    z.object({
+      key: z.string().min(1),
+      slots: z.record(z.string(), OapiSlotValueSchema),
+      children: z.array(OapiTreeNodeSchema).default([]),
+      slot_quotes: z.record(z.string(), z.string()).optional(),
+      source: z.string().optional(),
+    })
+  )
+  .openapi('TreeNode', {
+    type: 'object',
+    required: ['key', 'slots'],
+    properties: {
+      key: { type: 'string' },
+      slots: { type: 'object', additionalProperties: true },
+      children: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/TreeNode' },
+      },
+      slot_quotes: {
+        type: 'object',
+        additionalProperties: { type: 'string' },
+      },
+      source: { type: 'string' },
+    },
+  });
 
 const OapiRelationTypeSchema = z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']);
 
@@ -644,6 +662,56 @@ export const DraftConstraintSchema = z.object({
   reason: z.string().max(2000).optional(),
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Incremental Extraction Contracts
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const LocatedEvidenceSchema = z.object({
+  conversation_id: z.string(),
+  turn_hash: z.string(),
+  quoted_text: z.string(),
+  start_char: z.number().int(),
+  end_char: z.number().int(),
+  match_score: z.number(),
+  role: z.enum(['primary', 'supporting']),
+  relevance: z.string(),
+  enabled: z.boolean(),
+});
+
+export const SemanticPointSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  extraction_mode: z.enum(['deterministic', 'llm_extracted', 'manual']),
+  inference_type: z.enum(['direct', 'paraphrase', 'cross_turn', 'implicit']).optional(),
+  status: z.enum(['inherited', 'auto_landed', 'reviewed', 'modified', 'reinforced', 'undone']),
+  zone: z.enum(['ready', 'review']),
+  routing_reason: z.string().optional(),
+  inherited_from: z.string().optional(),
+  evidence: z.array(LocatedEvidenceSchema),
+  low_coverage: z.boolean().optional(),
+  position: z.number().int(),
+  staged: z.boolean(),
+});
+
+export const ExtractionCursorSchema = z.object({
+  cursors: z.record(
+    z.string(),
+    z.object({
+      last_processed_turn: z.string(),
+      processed_at: z.string(),
+    })
+  ),
+});
+
+export const ExtractionStatsSchema = z.object({
+  total_turns: z.number(),
+  new_turns: z.number(),
+  proposals: z.number(),
+  auto_landed: z.number(),
+  needs_review: z.number(),
+  rejected: z.number(),
+});
+
 // POST /v1/drafts
 export const CreateDraftRequest = z.object({
   project_id: z.string().min(1),
@@ -665,9 +733,9 @@ export const UpdateDraftRequest = z.object({
   target_branch: z.string().optional(),
   if_revision: z.number().int().min(1),
   // LLM extraction fields
-  semantic_points: z.array(z.lazy(() => SemanticPointSchema)).optional(),
+  semantic_points: z.array(SemanticPointSchema).optional(),
   extraction_mode: z.enum(['deterministic', 'llm']).optional(),
-  extraction_cursor: z.lazy(() => ExtractionCursorSchema).optional(),
+  extraction_cursor: ExtractionCursorSchema.optional(),
 });
 
 // Response
@@ -693,14 +761,8 @@ export const DraftResponse = z.object({
   updated_at: z.string(),
   // LLM extraction fields
   extraction_mode: z.enum(['deterministic', 'llm']).nullable().optional(),
-  semantic_points: z
-    .array(z.lazy(() => SemanticPointSchema))
-    .nullable()
-    .optional(),
-  extraction_cursor: z
-    .lazy(() => ExtractionCursorSchema)
-    .nullable()
-    .optional(),
+  semantic_points: z.array(SemanticPointSchema).nullable().optional(),
+  extraction_cursor: ExtractionCursorSchema.nullable().optional(),
 });
 
 // POST /v1/drafts/:id/preview
@@ -757,56 +819,6 @@ export const SuggestDraftResponse = SuccessResponse(
 
 // POST /v1/drafts/:id/fork
 export const ForkDraftResponse = SuccessResponse(DraftResponse);
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Incremental Extraction Contracts
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const LocatedEvidenceSchema = z.object({
-  conversation_id: z.string(),
-  turn_hash: z.string(),
-  quoted_text: z.string(),
-  start_char: z.number().int(),
-  end_char: z.number().int(),
-  match_score: z.number(),
-  role: z.enum(['primary', 'supporting']),
-  relevance: z.string(),
-  enabled: z.boolean(),
-});
-
-export const SemanticPointSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  extraction_mode: z.enum(['deterministic', 'llm_extracted', 'manual']),
-  inference_type: z.enum(['direct', 'paraphrase', 'cross_turn', 'implicit']).optional(),
-  status: z.enum(['inherited', 'auto_landed', 'reviewed', 'modified', 'reinforced', 'undone']),
-  zone: z.enum(['ready', 'review']),
-  routing_reason: z.string().optional(),
-  inherited_from: z.string().optional(),
-  evidence: z.array(LocatedEvidenceSchema),
-  low_coverage: z.boolean().optional(),
-  position: z.number().int(),
-  staged: z.boolean(),
-});
-
-export const ExtractionCursorSchema = z.object({
-  cursors: z.record(
-    z.string(),
-    z.object({
-      last_processed_turn: z.string(),
-      processed_at: z.string(),
-    })
-  ),
-});
-
-export const ExtractionStatsSchema = z.object({
-  total_turns: z.number(),
-  new_turns: z.number(),
-  proposals: z.number(),
-  auto_landed: z.number(),
-  needs_review: z.number(),
-  rejected: z.number(),
-});
 
 // POST /v1/extract/incremental
 export const IncrementalExtractRequest = z.object({

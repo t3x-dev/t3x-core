@@ -103,4 +103,13 @@ describe('visual token contract', () => {
 
     expect(mergeActionBar).toMatch(/<Button\s+variant="commit"[\s\S]*\{t\('mergeConfirm'\)\}/);
   });
+
+  it('does not use success green for commit workflow progression', () => {
+    const commitConfigStep = readFileSync(
+      path.join(ROOT, 'components/canvas/NodeModal/CommitConfigStep.tsx'),
+      'utf8'
+    );
+
+    expect(commitConfigStep).not.toContain('bg-[var(--status-success)]');
+  });
 });

@@ -343,9 +343,9 @@
   --source-dim: rgba(124, 58, 237, 0.06);
   --action: #3b82f6;
   --action-hover: #2563eb;
-  --commit: #16a34a;
-  --commit-hover: #15803d;
-  --commit-text: #ffffff;
+  --commit: var(--accent-commit);
+  --commit-hover: var(--accent-commit);
+  --commit-text: var(--on-accent);
   --syn-key: #7c3aed;
   --syn-string: #059669;
   --syn-op: #c026d3;
@@ -493,9 +493,9 @@
   --source-dim: rgba(155, 143, 216, 0.1);
   --action: #8299dc;
   --action-hover: #91a7e5;
-  --commit: #8299dc;
-  --commit-hover: #91a7e5;
-  --commit-text: #07101d;
+  --commit: var(--accent-commit);
+  --commit-hover: var(--accent-commit);
+  --commit-text: var(--on-accent);
   --syn-key: #9b8fd8;
   --syn-string: #7bc99f;
   --syn-op: #c89b54;

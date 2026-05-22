@@ -32,6 +32,21 @@ afterEach(() => {
 });
 
 describe('useProjects.create', () => {
+  it('keeps refresh failures in hook state instead of throwing to the page', async () => {
+    const { result } = renderHook(() => useProjects());
+    await waitForHook();
+
+    (listProjects as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Failed to fetch'));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.projects).toEqual([]);
+    expect(result.current.error).toBe('Failed to fetch');
+    expect(result.current.loading).toBe(false);
+  });
+
   it('invokes the createProject command and returns the new project', async () => {
     const fake = {
       project_id: 'proj_test123',

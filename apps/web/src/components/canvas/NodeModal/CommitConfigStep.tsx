@@ -102,7 +102,7 @@ export function CommitConfigStep({
               className={cn(
                 'w-2 h-2 rounded-full',
                 !configLocked && !isMergeDraft
-                  ? 'bg-[var(--status-success)]'
+                  ? 'bg-[var(--accent-pending)]'
                   : 'bg-[var(--text-tertiary)]'
               )}
             />
@@ -236,7 +236,7 @@ export function CommitConfigStep({
                 onClick={handleProceed}
                 disabled={!hasSourceConversation || !!branchLinearityError}
                 title="Lock configuration and start LLM extraction"
-                className="flex-1 gap-1.5 bg-[var(--status-success)] hover:bg-[var(--status-success)]/90"
+                className="flex-1 gap-1.5 bg-[var(--accent-commit)] text-[var(--on-accent)] hover:bg-[var(--accent-commit)]/90"
               >
                 <Check size={16} />
                 <span>Proceed</span>
@@ -298,7 +298,7 @@ export function CommitConfigStep({
             <span
               className={cn(
                 'w-2 h-2 rounded-full',
-                configLocked ? 'bg-[var(--status-success)]' : 'bg-[var(--stroke-divider)]'
+                configLocked ? 'bg-[var(--accent-commit)]' : 'bg-[var(--stroke-divider)]'
               )}
             />
             Extract & Review
