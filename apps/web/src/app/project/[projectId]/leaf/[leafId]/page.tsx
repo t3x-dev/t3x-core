@@ -50,6 +50,10 @@ function getGenerateErrorMessage(error: string): {
 }
 
 export default function LeafDetailPage() {
+  return <LeafDetailWorkspace />;
+}
+
+export function LeafDetailWorkspace() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;

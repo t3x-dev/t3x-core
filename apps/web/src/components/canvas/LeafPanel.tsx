@@ -59,7 +59,9 @@ export function LeafPanel() {
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
     if (leafId && projectId) {
-      router.push(`/project/${projectId}/leaf/${leafId}`);
+      router.push(
+        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}`
+      );
     }
   };
 
@@ -67,7 +69,9 @@ export function LeafPanel() {
     async (template: Template) => {
       const leafId = await addLeafFromTemplate(template);
       if (leafId && projectId) {
-        router.push(`/project/${projectId}/leaf/${leafId}`);
+        router.push(
+          `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}`
+        );
       }
     },
     [addLeafFromTemplate, projectId, router]

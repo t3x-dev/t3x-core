@@ -20,7 +20,7 @@ export default function ProjectDetailPage() {
   );
 }
 
-function ProjectDetailPageContent() {
+export function ProjectDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;

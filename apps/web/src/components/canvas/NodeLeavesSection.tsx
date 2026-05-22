@@ -50,7 +50,7 @@ export const NodeLeavesSection = memo(function NodeLeavesSection({
 
   const getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
-    return `/project/${projectId}/leaf/${leaf.id}`;
+    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
   };
 
   const handleCreateLeaf = (e: React.MouseEvent<HTMLButtonElement>) => {

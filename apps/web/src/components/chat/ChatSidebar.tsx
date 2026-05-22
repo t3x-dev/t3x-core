@@ -1,7 +1,7 @@
 'use client';
 
 import { GitBranch, Leaf, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
-import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
@@ -54,6 +53,7 @@ type RecentConversation = {
 
 export function ChatSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectError, setNewProjectError] = useState<string | null>(null);
@@ -100,9 +100,23 @@ export function ChatSidebar() {
 
   const refreshKey = useChatStore((s) => s.refreshKey);
 
+  const routeProjectId = useMemo(() => {
+    const match = pathname.match(/^\/chat\/project\/([^/]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }, [pathname]);
+  const effectiveProjectId = routeProjectId ?? activeProjectId;
+  const workspaceMode = pathname.includes('/canvas')
+    ? 'canvas'
+    : pathname.includes('/leaf')
+      ? 'leaf'
+      : 'chat';
+  const isChatActive = workspaceMode === 'chat';
+  const isCanvasActive = workspaceMode === 'canvas';
+  const isLeafActive = workspaceMode === 'leaf';
+
   const currentProject = useMemo(() => {
-    if (activeProjectId) {
-      return projects.find((project) => project.project_id === activeProjectId) ?? null;
+    if (effectiveProjectId) {
+      return projects.find((project) => project.project_id === effectiveProjectId) ?? null;
     }
     if (!activeConversationId) return null;
     return (
@@ -112,13 +126,9 @@ export function ChatSidebar() {
         )
       ) ?? null
     );
-  }, [activeConversationId, activeProjectId, projectConversations, projects]);
+  }, [activeConversationId, effectiveProjectId, projectConversations, projects]);
 
-  const currentProjectId = currentProject?.project_id ?? null;
-  const { leaves: currentProjectLeaves, loading: currentProjectLeavesLoading } = useProjectLeaves(
-    currentProjectId,
-    Boolean(currentProjectId && !collapsed)
-  );
+  const currentProjectId = currentProject?.project_id ?? effectiveProjectId;
 
   const recentConversations = useMemo<RecentConversation[]>(() => {
     return Object.entries(projectConversations)
@@ -200,17 +210,22 @@ export function ChatSidebar() {
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
 
+  useEffect(() => {
+    if (!routeProjectId || activeProjectId === routeProjectId) return;
+    setActiveConversation(null, routeProjectId);
+  }, [activeProjectId, routeProjectId, setActiveConversation]);
+
   // Fetch conversations for expanded projects and the active top workbench
   // project (re-fetch on refreshKey).
   useEffect(() => {
     const projectIdsToLoad = new Set(expandedProjectIds);
-    if (activeProjectId) {
-      projectIdsToLoad.add(activeProjectId);
+    if (effectiveProjectId) {
+      projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
       void loadConversations(projectId);
     }
-  }, [activeProjectId, expandedProjectIds, refreshKey, loadConversations]);
+  }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
 
   useEffect(() => {
     if (!renameTarget) return;
@@ -328,7 +343,7 @@ export function ChatSidebar() {
   }
 
   function handleCanvasClick(projectId: string) {
-    router.push(`/project/${projectId}`);
+    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas`);
   }
 
   function expandSidebarFromRail() {
@@ -343,8 +358,8 @@ export function ChatSidebar() {
       router.push(`/chat/${activeConversationId}`);
       return;
     }
-    if (activeProjectId) {
-      router.push(`/chat?projectId=${encodeURIComponent(activeProjectId)}`);
+    if (currentProjectId) {
+      router.push(`/chat?projectId=${encodeURIComponent(currentProjectId)}`);
       return;
     }
     router.push('/chat');
@@ -358,14 +373,13 @@ export function ChatSidebar() {
 
   function handleLeafTabClick() {
     expandSidebarFromRail();
-    const firstLeaf = currentProjectLeaves[0];
-    if (!currentProjectId || !firstLeaf) return;
-    router.push(`/project/${currentProjectId}/leaf/${firstLeaf.id}`);
+    if (!currentProjectId) return;
+    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf`);
   }
 
   function handleNewChatClick() {
-    if (activeProjectId) {
-      void handleNewChatInProject(activeProjectId);
+    if (currentProjectId) {
+      void handleNewChatInProject(currentProjectId);
       return;
     }
     setActiveConversation(null, null);
@@ -541,14 +555,21 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   onClick={handleChatTabClick}
-                  className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]"
+                  className={cn(
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors',
+                    isChatActive
+                      ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--accent-conversation)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-conversation)]'
+                  )}
                   aria-label="Chat"
-                  aria-current="page"
+                  aria-current={isChatActive ? 'page' : undefined}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-conversation)]"
-                  />
+                  {isChatActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-conversation)]"
+                    />
+                  )}
                   <MessageSquare className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
@@ -563,9 +584,21 @@ export function ChatSidebar() {
                   type="button"
                   onClick={handleCanvasTabClick}
                   disabled={!currentProjectId}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]"
+                  className={cn(
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]',
+                    isCanvasActive
+                      ? 'border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)]'
+                  )}
                   aria-label="Canvas"
+                  aria-current={isCanvasActive ? 'page' : undefined}
                 >
+                  {isCanvasActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-commit)]"
+                    />
+                  )}
                   <GitBranch className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
@@ -579,14 +612,22 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   onClick={handleLeafTabClick}
-                  disabled={
-                    !currentProjectId ||
-                    currentProjectLeavesLoading ||
-                    currentProjectLeaves.length === 0
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-leaf)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]"
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'relative flex h-9 w-9 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[var(--text-tertiary)]',
+                    isLeafActive
+                      ? 'border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]'
+                      : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--accent-leaf)]'
+                  )}
                   aria-label="Leaf"
+                  aria-current={isLeafActive ? 'page' : undefined}
                 >
+                  {isLeafActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[-8px] h-5 w-[3px] rounded-full bg-[var(--accent-leaf)]"
+                    />
+                  )}
                   <Leaf className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
@@ -622,10 +663,15 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected="true"
-                  aria-current="page"
+                  aria-selected={isChatActive}
+                  aria-current={isChatActive ? 'page' : undefined}
                   onClick={handleChatTabClick}
-                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--surface-panel)] px-2 text-[12px] font-semibold text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]"
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors',
+                    isChatActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
                 >
                   <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-conversation)]" />
                   <span className="truncate">Chat</span>
@@ -633,10 +679,15 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected="false"
+                  aria-selected={isCanvasActive}
                   onClick={handleCanvasTabClick}
                   disabled={!currentProjectId}
-                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
+                    isCanvasActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
                   title={currentProjectId ? 'Canvas' : 'Select a project before opening Canvas'}
                 >
                   <GitBranch className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
@@ -645,19 +696,16 @@ export function ChatSidebar() {
                 <button
                   type="button"
                   role="tab"
-                  aria-selected="false"
+                  aria-selected={isLeafActive}
                   onClick={handleLeafTabClick}
-                  disabled={
-                    !currentProjectId ||
-                    currentProjectLeavesLoading ||
-                    currentProjectLeaves.length === 0
-                  }
-                  className="flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]"
-                  title={
-                    currentProjectId && currentProjectLeaves.length > 0
-                      ? 'Leaf'
-                      : 'Select a project with leaves before opening Leaf'
-                  }
+                  disabled={!currentProjectId}
+                  className={cn(
+                    'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
+                    isLeafActive
+                      ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-[var(--fx-shadow-sm)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-panel)] hover:text-[var(--text-primary)]'
+                  )}
+                  title={currentProjectId ? 'Leaf' : 'Select a project before opening Leaf'}
                 >
                   <Leaf className="h-3.5 w-3.5 text-[var(--accent-leaf)]" />
                   <span className="truncate">Leaf</span>

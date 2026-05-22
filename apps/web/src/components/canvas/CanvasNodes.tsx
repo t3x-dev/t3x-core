@@ -247,7 +247,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
     if (!projectId || !leaf.id) return undefined;
-    return `/project/${projectId}/leaf/${leaf.id}`;
+    return `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`;
   };
 
   // B-4: Next Step button logic

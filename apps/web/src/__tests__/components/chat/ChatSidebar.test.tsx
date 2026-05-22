@@ -287,7 +287,7 @@ describe('ChatSidebar', () => {
 
     expect(chatTab).toHaveAttribute('aria-selected', 'true');
     expect(canvasTab).toBeEnabled();
-    expect(leafTab).toBeDisabled();
+    expect(leafTab).toBeEnabled();
     expect(chatTab.compareDocumentPosition(newChat)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(newChat.compareDocumentPosition(projectsHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(projectsHeader.compareDocumentPosition(recentsHeader)).toBe(
@@ -317,10 +317,10 @@ describe('ChatSidebar', () => {
     render(<ChatSidebar />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke');
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/canvas');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Leaf' }));
-    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/leaf/leaf_first');
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/chat/project/proj_smoke/leaf');
   });
 
   it('collapses an expanded project with conversations when clicked again', () => {

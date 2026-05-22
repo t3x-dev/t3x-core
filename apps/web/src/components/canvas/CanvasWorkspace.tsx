@@ -392,7 +392,11 @@ function CanvasWorkspaceInner({
         onOpenLeaf:
           firstLeaf?.id && projectId
             ? () => {
-                router.push(`/project/${projectId}/leaf/${firstLeaf.id}`);
+                router.push(
+                  `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
+                    firstLeaf.id
+                  )}`
+                );
               }
             : undefined,
         onCreateLeaf: () => {
@@ -492,7 +496,11 @@ function CanvasWorkspaceInner({
 
               // Leaf nodes -> navigate to leaf detail page (always single click)
               if (data.kind === 'leaf' && data.leafId && projectId) {
-                router.push(`/project/${projectId}/leaf/${data.leafId}`);
+                router.push(
+                  `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
+                    data.leafId
+                  )}`
+                );
                 return;
               }
 
