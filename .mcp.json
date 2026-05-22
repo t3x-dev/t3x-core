@@ -2,7 +2,7 @@
   "mcpServers": {
     "t3x": {
       "command": "node",
-      "args": ["./tmp/mcp-codex-wrapper.mjs"],
+      "args": ["./tools/mcp-codex-wrapper.mjs"],
       "cwd": ".",
       "env": {
         "T3X_TOOLSETS": "core,advanced",

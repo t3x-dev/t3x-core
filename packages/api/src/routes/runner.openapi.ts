@@ -25,8 +25,9 @@ import {
   type RunRecord,
   RunRecordSchema,
 } from '@t3x-dev/runner';
-import { zodErrorHook } from '../lib/errors';
+import { errorJson, formatZodErrors, successJson, zodErrorHook } from '../lib/errors';
 import { pinoLogger } from '../middleware/logger';
+import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const runnerRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -44,6 +45,21 @@ const EvalRequestSchema = z.object({
   rules: EvalRulesSchema.optional(),
   rules_ref: z.string().optional(),
 });
+
+const hasZodIssues = (
+  error: unknown
+): error is { issues: Array<{ path: (string | number)[]; message: string }> } =>
+  typeof error === 'object' &&
+  error !== null &&
+  'issues' in error &&
+  Array.isArray((error as { issues?: unknown }).issues);
+
+const errorMessage = (error: unknown): string => {
+  if (hasZodIssues(error)) {
+    return formatZodErrors(error.issues);
+  }
+  return error instanceof Error ? error.message : String(error);
+};
 
 // ============================================
 // Route Definitions
@@ -65,7 +81,7 @@ const registerAgentRoute = createRoute({
       description: 'Agent registered successfully',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), agent_id: z.string() }),
+          schema: SuccessResponseSchema(z.object({ agent_id: z.string() })),
         },
       },
     },
@@ -73,7 +89,7 @@ const registerAgentRoute = createRoute({
       description: 'Invalid agent config',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -93,7 +109,7 @@ const getAgentRoute = createRoute({
       description: 'Agent config',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -101,7 +117,7 @@ const getAgentRoute = createRoute({
       description: 'Agent not found',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -125,7 +141,7 @@ const executeRunRoute = createRoute({
       description: 'Run completed',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -133,7 +149,7 @@ const executeRunRoute = createRoute({
       description: 'Invalid input',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -141,7 +157,7 @@ const executeRunRoute = createRoute({
       description: 'Agent not found',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -149,7 +165,7 @@ const executeRunRoute = createRoute({
       description: 'Run failed',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string(), data: z.any() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -174,7 +190,7 @@ const addRunEventRoute = createRoute({
       description: 'Event recorded',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true) }),
+          schema: SuccessResponseSchema(z.object({ recorded: z.boolean() })),
         },
       },
     },
@@ -182,7 +198,7 @@ const addRunEventRoute = createRoute({
       description: 'Invalid event',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -202,7 +218,7 @@ const getRunRoute = createRoute({
       description: 'Run record',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -210,7 +226,7 @@ const getRunRoute = createRoute({
       description: 'Run not found',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -227,10 +243,7 @@ const listRunsRoute = createRoute({
       description: 'List of runs',
       content: {
         'application/json': {
-          schema: z.object({
-            success: z.literal(true),
-            data: z.object({ runs: z.array(z.any()) }),
-          }),
+          schema: SuccessResponseSchema(z.object({ runs: z.array(z.any()) })),
         },
       },
     },
@@ -254,7 +267,7 @@ const evalRoute = createRoute({
       description: 'Evaluation result',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -262,7 +275,7 @@ const evalRoute = createRoute({
       description: 'Invalid request',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -270,7 +283,7 @@ const evalRoute = createRoute({
       description: 'Run not found',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -294,7 +307,7 @@ const validateRulesRoute = createRoute({
       description: 'Validation results',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -302,7 +315,7 @@ const validateRulesRoute = createRoute({
       description: 'Invalid request',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -326,7 +339,7 @@ const webhookRunRoute = createRoute({
       description: 'Run completed with optional eval',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(true), data: z.any() }),
+          schema: SuccessResponseSchema(z.any()),
         },
       },
     },
@@ -334,7 +347,7 @@ const webhookRunRoute = createRoute({
       description: 'Run failed',
       content: {
         'application/json': {
-          schema: z.object({ success: z.literal(false), error: z.string() }),
+          schema: ErrorResponseSchema,
         },
       },
     },
@@ -354,9 +367,9 @@ runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
     const config = AgentConfigSchema.parse(body);
     observer.registerAgent(config);
     pinoLogger.info({ agent_id: config.id }, 'agent registered');
-    return c.json({ success: true as const, agent_id: config.id });
+    return successJson(c, { agent_id: config.id });
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 400);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });
 
@@ -366,9 +379,9 @@ runnerRoutes.openapi(registerAgentRoute, async (c: any): Promise<any> => {
 runnerRoutes.openapi(getAgentRoute, (c: any): any => {
   const agent = observer.getAgent(c.req.param('id'));
   if (!agent) {
-    return c.json({ success: false as const, error: 'Agent not found' }, 404);
+    return errorJson(c, 'NOT_FOUND', 'Agent not found', 404);
   }
-  return c.json({ success: true as const, data: agent });
+  return successJson(c, agent);
 });
 
 /**
@@ -381,7 +394,7 @@ runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
     const agent = observer.getAgent(input.agent_id);
 
     if (!agent) {
-      return c.json({ success: false as const, error: `Agent not found: ${input.agent_id}` }, 404);
+      return errorJson(c, 'NOT_FOUND', `Agent not found: ${input.agent_id}`, 404);
     }
 
     // Start observing
@@ -413,31 +426,21 @@ runnerRoutes.openapi(executeRunRoute, async (c: any): Promise<any> => {
       const record = observer.completeRun(runId, output, 'completed');
       pinoLogger.info({ run_id: runId, latency_ms: latencyMs }, 'run completed');
 
-      return c.json({
-        success: true as const,
-        data: {
-          run_id: runId,
-          output,
-          record,
-        },
+      return successJson(c, {
+        run_id: runId,
+        output,
+        record,
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = errorMessage(error);
       observer.recordError(runId, errorMsg);
       const record = observer.completeRun(runId, null, 'failed');
 
       pinoLogger.error({ run_id: runId, err: errorMsg }, 'run failed');
-      return c.json(
-        {
-          success: false as const,
-          error: errorMsg,
-          data: { run_id: runId, record },
-        },
-        500
-      );
+      return errorJson(c, 'INTERNAL_ERROR', errorMsg, 500, { run_id: runId, record });
     }
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 400);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });
 
@@ -457,9 +460,9 @@ runnerRoutes.openapi(addRunEventRoute, async (c: any): Promise<any> => {
       observer.recordError(runId, data.error);
     }
 
-    return c.json({ success: true as const });
+    return successJson(c, { recorded: true });
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 400);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });
 
@@ -469,9 +472,9 @@ runnerRoutes.openapi(addRunEventRoute, async (c: any): Promise<any> => {
 runnerRoutes.openapi(getRunRoute, (c: any): any => {
   const record = observer.getRun(c.req.param('id'));
   if (!record) {
-    return c.json({ success: false as const, error: 'Run not found' }, 404);
+    return errorJson(c, 'NOT_FOUND', 'Run not found', 404);
   }
-  return c.json({ success: true as const, data: record });
+  return successJson(c, record);
 });
 
 /**
@@ -479,7 +482,7 @@ runnerRoutes.openapi(getRunRoute, (c: any): any => {
  */
 runnerRoutes.openapi(listRunsRoute, (c: any): any => {
   const runs = observer.listRuns();
-  return c.json({ success: true as const, data: { runs } });
+  return successJson(c, { runs });
 });
 
 /**
@@ -498,15 +501,12 @@ runnerRoutes.openapi(evalRoute, async (c: any): Promise<any> => {
     if (!runRecord && request.run_id) {
       runRecord = observer.getRun(request.run_id);
       if (!runRecord) {
-        return c.json({ success: false as const, error: `Run not found: ${request.run_id}` }, 404);
+        return errorJson(c, 'NOT_FOUND', `Run not found: ${request.run_id}`, 404);
       }
     }
 
     if (!runRecord) {
-      return c.json(
-        { success: false as const, error: 'Either run_id or run_record is required' },
-        400
-      );
+      return errorJson(c, 'INVALID_REQUEST', 'Either run_id or run_record is required', 400);
     }
 
     // Get rules: from request or use default
@@ -526,9 +526,9 @@ runnerRoutes.openapi(evalRoute, async (c: any): Promise<any> => {
       'eval completed'
     );
 
-    return c.json({ success: true as const, data: result });
+    return successJson(c, result);
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 400);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });
 
@@ -543,7 +543,7 @@ runnerRoutes.openapi(validateRulesRoute, async (c: any): Promise<any> => {
     const rules = body.rules || body.test_steps; // Support both new and legacy field names
 
     if (!Array.isArray(rules)) {
-      return c.json({ success: false as const, error: 'rules must be an array' }, 400);
+      return errorJson(c, 'INVALID_REQUEST', 'rules must be an array', 400);
     }
 
     const validated = rules.map((rule: unknown, i: number) => {
@@ -551,13 +551,13 @@ runnerRoutes.openapi(validateRulesRoute, async (c: any): Promise<any> => {
         RuleSchema.parse(rule);
         return { index: i, valid: true };
       } catch (error) {
-        return { index: i, valid: false, error: String(error) };
+        return { index: i, valid: false, error: errorMessage(error) };
       }
     });
 
-    return c.json({ success: true as const, data: { rules: validated } });
+    return successJson(c, { rules: validated });
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 400);
+    return errorJson(c, 'INVALID_REQUEST', errorMessage(error), 400);
   }
 });
 
@@ -573,7 +573,7 @@ runnerRoutes.openapi(webhookRunRoute, async (c: any): Promise<any> => {
     // Run agent
     const agent = observer.getAgent(agent_id);
     if (!agent) {
-      return c.json({ success: false as const, error: `Agent not found: ${agent_id}` }, 404);
+      return errorJson(c, 'NOT_FOUND', `Agent not found: ${agent_id}`, 404);
     }
 
     const runId = observer.startRun(agent_id, { agent_id, input });
@@ -603,16 +603,13 @@ runnerRoutes.openapi(webhookRunRoute, async (c: any): Promise<any> => {
       evalResult = evalEngine.evaluate(runRecord, evalRules);
     }
 
-    return c.json({
-      success: true as const,
-      data: {
-        run_id: runId,
-        output,
-        record: runRecord,
-        eval_result: evalResult,
-      },
+    return successJson(c, {
+      run_id: runId,
+      output,
+      record: runRecord,
+      eval_result: evalResult,
     });
   } catch (error) {
-    return c.json({ success: false as const, error: String(error) }, 500);
+    return errorJson(c, 'INTERNAL_ERROR', errorMessage(error), 500);
   }
 });

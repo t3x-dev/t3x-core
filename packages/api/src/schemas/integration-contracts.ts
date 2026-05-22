@@ -21,16 +21,28 @@ export const ExtractRequest = z
   })
   .openapi('ExtractRequest');
 
-export const ExtractTree: z.ZodType<unknown> = z.lazy(() =>
-  z
-    .object({
+export const ExtractTree: z.ZodType<unknown> = z
+  .lazy(() =>
+    z.object({
       key: z.string(),
       slots: z.record(z.string(), z.unknown()),
       children: z.array(ExtractTree).default([]),
       source: z.string().optional(),
     })
-    .openapi('ExtractTree')
-);
+  )
+  .openapi('ExtractTree', {
+    type: 'object',
+    required: ['key', 'slots'],
+    properties: {
+      key: { type: 'string' },
+      slots: { type: 'object', additionalProperties: true },
+      children: {
+        type: 'array',
+        items: { $ref: '#/components/schemas/ExtractTree' },
+      },
+      source: { type: 'string' },
+    },
+  });
 
 export const DriftItem = z
   .object({

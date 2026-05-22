@@ -4,6 +4,7 @@ import {
   ChatResponseDataSchema,
   ProvidersResponseDataSchema,
 } from '../schemas/chat';
+import { ErrorResponseSchema } from '../schemas/common';
 import {
   CreateLeafRequest,
   LeafHistoryResponse,
@@ -23,6 +24,27 @@ import {
 } from '../schemas/providers';
 
 describe('route contract schemas', () => {
+  it('describes optional error details in standard error envelopes', () => {
+    expect(
+      ErrorResponseSchema.parse({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Agent failed',
+          details: {
+            run_id: 'run_test',
+          },
+        },
+      })
+    ).toMatchObject({
+      error: {
+        details: {
+          run_id: 'run_test',
+        },
+      },
+    });
+  });
+
   it('parses chat request and response payloads from dedicated schema modules', () => {
     expect(
       ChatRequestBodySchema.parse({
