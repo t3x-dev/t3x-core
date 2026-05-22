@@ -18,6 +18,7 @@ export interface ProjectFolderProps {
   onConversationClick: (convId: string) => void;
   onNewChat: (projectId: string) => void;
   onCanvasClick: () => void;
+  showChildren?: boolean;
   onProjectContextMenu: (e: React.MouseEvent) => void;
   onConversationContextMenu: (e: React.MouseEvent, convId: string) => void;
 }
@@ -42,6 +43,7 @@ export function ProjectFolder({
   onConversationClick,
   onNewChat,
   onCanvasClick: _onCanvasClick,
+  showChildren = true,
   onProjectContextMenu,
   onConversationContextMenu,
 }: ProjectFolderProps) {
@@ -147,7 +149,7 @@ export function ProjectFolder({
         <div className="min-w-0 w-full px-2.5">{folderButton}</div>
       )}
 
-      {isExpanded && !collapsed && (
+      {showChildren && isExpanded && !collapsed && (
         <div className="ml-[29px] mr-2.5 mt-1 flex min-w-0 flex-col gap-0.5 border-l border-[var(--stroke-divider)]/80 pl-2">
           {/* Conversations */}
           {conversations.map((conv) => {

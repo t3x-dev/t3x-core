@@ -2,7 +2,7 @@
 
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
+import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
@@ -26,6 +27,7 @@ import { useCommitStore } from '@/store/commitStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
+import { CurrentProjectWorkbench } from './sidebar/CurrentProjectWorkbench';
 import { LogoIcon } from './sidebar/LogoIcon';
 import { ProjectFolder } from './sidebar/ProjectFolder';
 
@@ -92,6 +94,38 @@ export function ChatSidebar() {
 
   const refreshKey = useChatStore((s) => s.refreshKey);
 
+  const currentProject = useMemo(() => {
+    if (activeProjectId) {
+      return projects.find((project) => project.project_id === activeProjectId) ?? null;
+    }
+    if (!activeConversationId) return null;
+    return (
+      projects.find((project) =>
+        (projectConversations[project.project_id] ?? []).some(
+          (conversation) => conversation.conversation_id === activeConversationId
+        )
+      ) ?? null
+    );
+  }, [activeConversationId, activeProjectId, projectConversations, projects]);
+
+  const currentProjectId = currentProject?.project_id ?? null;
+  const currentProjectConversations = currentProjectId
+    ? (projectConversations[currentProjectId] ?? [])
+    : [];
+  const { leaves: currentProjectLeaves, loading: currentProjectLeavesLoading } = useProjectLeaves(
+    currentProjectId,
+    Boolean(currentProjectId && !collapsed)
+  );
+  const sidebarVisibleWidth = collapsed
+    ? `${CHAT_SIDEBAR_COLLAPSED_WIDTH}px`
+    : compactViewport
+      ? `min(${sidebarWidth}px, calc(100vw - ${CHAT_SIDEBAR_COLLAPSED_WIDTH}px))`
+      : `${sidebarWidth}px`;
+  const sidebarStyle = {
+    width: sidebarVisibleWidth,
+    '--chat-sidebar-visible-width': sidebarVisibleWidth,
+  } as React.CSSProperties;
+
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       if (collapsed || compactViewport) return;
@@ -147,12 +181,17 @@ export function ChatSidebar() {
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
 
-  // Fetch conversations for expanded projects (re-fetch on refreshKey)
+  // Fetch conversations for expanded projects and the active top workbench
+  // project (re-fetch on refreshKey).
   useEffect(() => {
-    for (const projectId of Array.from(expandedProjectIds)) {
+    const projectIdsToLoad = new Set(expandedProjectIds);
+    if (activeProjectId) {
+      projectIdsToLoad.add(activeProjectId);
+    }
+    for (const projectId of Array.from(projectIdsToLoad)) {
       void loadConversations(projectId);
     }
-  }, [expandedProjectIds, refreshKey, loadConversations]);
+  }, [activeProjectId, expandedProjectIds, refreshKey, loadConversations]);
 
   useEffect(() => {
     if (!renameTarget) return;
@@ -271,6 +310,33 @@ export function ChatSidebar() {
 
   function handleCanvasClick(projectId: string) {
     router.push(`/project/${projectId}`);
+  }
+
+  function handleCommitsClick(projectId: string) {
+    router.push(`/project/${projectId}/history`);
+  }
+
+  function handleOutputsClick(projectId: string, leafId: string) {
+    router.push(`/project/${projectId}/leaf/${leafId}`);
+  }
+
+  function handleSourceChatsClick(projectId: string) {
+    const conversations = projectConversations[projectId] ?? [];
+    if (
+      activeConversationId &&
+      conversations.some((conversation) => conversation.conversation_id === activeConversationId)
+    ) {
+      return;
+    }
+
+    const firstConversation = conversations[0];
+    if (firstConversation) {
+      handleConversationClick(firstConversation.conversation_id, projectId);
+      return;
+    }
+
+    setActiveConversation(null, projectId);
+    router.push(`/chat?projectId=${encodeURIComponent(projectId)}`);
   }
 
   async function handleDeleteProject(projectId: string) {
@@ -422,13 +488,7 @@ export function ChatSidebar() {
           glass.highlight,
           collapsed ? 'items-center' : ''
         )}
-        style={{
-          width: collapsed
-            ? CHAT_SIDEBAR_COLLAPSED_WIDTH
-            : compactViewport
-              ? `min(${sidebarWidth}px, calc(100vw - ${CHAT_SIDEBAR_COLLAPSED_WIDTH}px))`
-              : sidebarWidth,
-        }}
+        style={sidebarStyle}
       >
         {/* Logo */}
         <div
@@ -491,7 +551,37 @@ export function ChatSidebar() {
               'flex min-w-0 flex-col gap-1 pb-2 pt-0',
               collapsed ? 'items-center px-2' : 'px-0'
             )}
+            style={
+              collapsed
+                ? undefined
+                : {
+                    width: 'var(--chat-sidebar-visible-width)',
+                    maxWidth: 'var(--chat-sidebar-visible-width)',
+                  }
+            }
           >
+            {!collapsed && currentProject && (
+              <CurrentProjectWorkbench
+                project={currentProject}
+                conversations={currentProjectConversations}
+                activeConversationId={activeConversationId}
+                leaves={currentProjectLeaves}
+                leavesLoading={currentProjectLeavesLoading}
+                onSourceChatsClick={() => handleSourceChatsClick(currentProject.project_id)}
+                onCanvasClick={() => handleCanvasClick(currentProject.project_id)}
+                onCommitsClick={() => handleCommitsClick(currentProject.project_id)}
+                onOutputsClick={(leafId) => handleOutputsClick(currentProject.project_id, leafId)}
+                onConversationClick={(conversationId) =>
+                  handleConversationClick(conversationId, currentProject.project_id)
+                }
+                onNewChat={() => handleNewChatInProject(currentProject.project_id)}
+                onProjectContextMenu={(e) => handleProjectContextMenu(e, currentProject.project_id)}
+                onConversationContextMenu={(e, conversationId) =>
+                  handleConversationContextMenu(e, currentProject.project_id, conversationId)
+                }
+              />
+            )}
+
             {/* Projects section header */}
             {!collapsed && projects.length > 0 && (
               <div className="px-4 pb-0.5 pt-1">
@@ -519,6 +609,7 @@ export function ChatSidebar() {
                 }
                 onNewChat={(pid) => handleNewChatInProject(pid)}
                 onCanvasClick={() => handleCanvasClick(project.project_id)}
+                showChildren={false}
                 onProjectContextMenu={(e) => handleProjectContextMenu(e, project.project_id)}
                 onConversationContextMenu={(e, convId) =>
                   handleConversationContextMenu(e, project.project_id, convId)

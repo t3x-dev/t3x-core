@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
       conversations_count?: number;
       commits_count?: number;
     }>,
+    projectLeaves: [] as Array<{ id: string }>,
     routerPush: vi.fn(),
     chatState,
   };
@@ -92,6 +93,15 @@ vi.mock('@/hooks/conversations/useNewProjectChat', () => ({
   }),
 }));
 
+vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
+  useProjectLeaves: () => ({
+    leaves: mocks.projectLeaves,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock('@/components/layout/UserMenu', () => ({
   UserMenu: () => <div data-testid="user-menu">User menu</div>,
 }));
@@ -110,6 +120,7 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 afterEach(() => {
   vi.clearAllMocks();
   mocks.projects = [];
+  mocks.projectLeaves = [];
   mocks.conversationsByProject = {};
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
@@ -236,6 +247,86 @@ describe('ChatSidebar', () => {
       'conv_latest',
       'proj_smoke'
     );
+  });
+
+  it('shows the active project workbench functions above the project switcher', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 3,
+        commits_count: 3,
+      },
+      {
+        project_id: 'proj_other',
+        name: 'Other Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 0,
+        commits_count: 0,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_smoke: [
+        { conversation_id: 'conv_first', title: 'Untitled Unit' },
+        { conversation_id: 'conv_a432e35d', title: 'I also want to try som...' },
+        { conversation_id: 'conv_third', title: 'English extraction smoke' },
+      ],
+    };
+    mocks.chatState.activeProjectId = 'proj_smoke';
+    mocks.chatState.activeConversationId = 'conv_a432e35d';
+
+    render(<ChatSidebar />);
+
+    const currentProjectHeader = screen.getByText('Current Project');
+    const functionsHeader = screen.getByText('Functions');
+    const chatsHeader = screen.getByText('Chats in current project');
+    const projectsHeader = screen.getByText('Projects');
+
+    expect(currentProjectHeader.compareDocumentPosition(functionsHeader)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(functionsHeader.compareDocumentPosition(chatsHeader)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(chatsHeader.compareDocumentPosition(projectsHeader)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    expect(screen.getByRole('button', { name: /Source Chats\s*3/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Canvas\s*3/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Commits\s*3/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Outputs\s*0/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /I also want to try som/i })).toBeInTheDocument();
+  });
+
+  it('routes active project workbench functions to canvas, commits, and first output', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 3,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_smoke: [{ conversation_id: 'conv_a432e35d', title: 'I also want to try som...' }],
+    };
+    mocks.projectLeaves = [{ id: 'leaf_first' }];
+    mocks.chatState.activeProjectId = 'proj_smoke';
+    mocks.chatState.activeConversationId = 'conv_a432e35d';
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Canvas\s*3/i }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke');
+
+    fireEvent.click(screen.getByRole('button', { name: /Commits\s*3/i }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/history');
+
+    fireEvent.click(screen.getByRole('button', { name: /Outputs\s*1/i }));
+    expect(mocks.routerPush).toHaveBeenLastCalledWith('/project/proj_smoke/leaf/leaf_first');
   });
 
   it('collapses an expanded project with conversations when clicked again', () => {
