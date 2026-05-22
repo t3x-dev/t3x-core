@@ -58,7 +58,7 @@ export function CommittedBar({ projectId }: CommittedBarProps) {
             {projectId && (
               <button
                 type="button"
-                onClick={() => router.push(`/project/${projectId}`)}
+                onClick={() => router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas`)}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-commit)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--on-accent)] transition-opacity hover:opacity-90"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
