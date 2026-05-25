@@ -714,7 +714,7 @@ export function ChatSidebar() {
       <aside
         aria-label="Chat navigation"
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--sidebar-panel)] backdrop-blur-[var(--fx-blur-panel)]',
+          'fixed inset-y-0 left-0 z-40 flex h-dvh flex-col overflow-hidden border-r border-[var(--stroke-default)] bg-[var(--sidebar-panel)] backdrop-blur-[var(--fx-blur-panel)]',
           !sidebarResizing &&
             'transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-soft)]',
           glass.highlight,
@@ -722,7 +722,12 @@ export function ChatSidebar() {
         )}
         style={sidebarStyle}
       >
-        <div className={cn('flex h-14 shrink-0 items-center px-3', collapsed && 'justify-center')}>
+        <div
+          className={cn(
+            'flex h-14 shrink-0 items-center bg-[var(--sidebar-panel)] px-3',
+            collapsed && 'justify-center'
+          )}
+        >
           <button
             type="button"
             onClick={handleChatTabClick}

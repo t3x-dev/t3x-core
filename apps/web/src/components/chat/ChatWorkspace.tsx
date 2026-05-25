@@ -499,7 +499,7 @@ export function ChatWorkspace({
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
         <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
-          <div className="mx-auto max-w-[620px] px-5">
+          <div className="mx-auto max-w-[540px] px-5">
             <ChatInput
               onSend={handleSend}
               onStop={stopGenerating}
