@@ -208,6 +208,17 @@ describe('AfterPanel tree edit controls', () => {
     });
   });
 
+  it('hides tree edit controls after commit', () => {
+    seedSingleSlot();
+    useWorkspaceStore.getState().setCommitted(true);
+
+    render(createElement(AfterPanel));
+
+    expect(screen.queryByTestId('slot-edit')).toBeNull();
+    expect(screen.queryByTestId('add-child-button')).toBeNull();
+    expect(screen.queryByTestId('add-field-button')).toBeNull();
+  });
+
   it('adds child nodes from the node row add button', () => {
     seedSingleSlot();
     const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce('soccer facts');

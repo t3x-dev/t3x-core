@@ -773,47 +773,51 @@ function NodeCell({
               </>
             )}
           </div>
-          {side === 'after' && (
+          {side === 'after' && (onAddChild || onAddField || onDeleteNode) && (
             <TreeInlineActions>
-              {row.afterNode && (
-                <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1">
+                {onAddChild && (
                   <button
                     type="button"
                     data-testid="add-child-button"
                     title="Add child node"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onAddChild?.();
+                      onAddChild();
                     }}
                     className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-success)] hover:bg-[var(--hover-bg)]"
                   >
                     <Plus className="h-2.5 w-2.5" />
                   </button>
+                )}
+                {onAddField && (
                   <button
                     type="button"
                     data-testid="add-field-button"
                     title="Add field"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onAddField?.();
+                      onAddField();
                     }}
                     className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-info)] hover:bg-[var(--hover-bg)]"
                   >
                     <ListPlus className="h-2.5 w-2.5" />
                   </button>
+                )}
+                {onDeleteNode && (
                   <button
                     type="button"
                     title="Remove node and children"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteNode?.();
+                      onDeleteNode();
                     }}
                     className="p-0.5 rounded text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--hover-bg)]"
                   >
                     <X className="h-2.5 w-2.5" />
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </TreeInlineActions>
           )}
         </div>
@@ -1341,7 +1345,7 @@ export function AfterPanel({
               // bypassing the script/Apply flow and leaving the staged
               // script stale relative to what just changed. Disable them
               // here; the user should edit the YAML or click Apply first.
-              const allowInlineEdit = !hasDraft;
+              const allowInlineEdit = !hasDraft && !isCommitted;
               const afterCell =
                 row.kind === 'node' ? (
                   <NodeCell

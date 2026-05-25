@@ -101,12 +101,16 @@ function stageSourceEditOps(
 
 export function useSourceTextDraft() {
   const [pending, setPending] = useState(false);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
 
   const applySourceTextEdit = useCallback(
     async (target: SourceTextEditTarget): Promise<SourceTextEditResult> => {
       setPending(true);
       try {
         const store = useWorkspaceStore.getState();
+        if (store.isCommitted) {
+          throw new Error('Committed conversations are read-only.');
+        }
         const turn = store.turns.find((candidate) => candidate.turn_hash === target.turnHash);
         const projectId =
           target.projectId ??
@@ -283,5 +287,5 @@ export function useSourceTextDraft() {
     []
   );
 
-  return { applySourceTextEdit, pending, enabled: true };
+  return { applySourceTextEdit, pending, enabled: !isCommitted };
 }

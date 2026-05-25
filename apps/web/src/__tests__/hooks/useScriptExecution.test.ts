@@ -103,6 +103,23 @@ describe('useScriptExecution', () => {
     expect(result.current.disabledReason).toBeNull();
   });
 
+  it('disables Apply and refuses execution after commit', async () => {
+    useWorkspaceStore.getState().setCommitted(true);
+    useWorkspaceStore.getState().setEditorOverride('yops:\n  - {set: {path: foo, value: bar}}');
+
+    const { result } = renderHook(() => useScriptExecution());
+
+    expect(result.current.canRun).toBe(false);
+    expect(result.current.disabledReason).toBe('Already committed');
+
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith('Already committed');
+  });
+
   describe('committed-mirror gate (PR-D: blank-dirty-script coherence)', () => {
     // The mirror effect writes `serializeOpsToYaml(opsLog) → scriptText`
     // when no draft is staged. The pre-PR-D gate skipped any time

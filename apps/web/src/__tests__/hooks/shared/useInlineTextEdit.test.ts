@@ -168,4 +168,32 @@ describe('useInlineTextEdit', () => {
       surface: 'inline',
     });
   });
+
+  it('rejects inline text edits after commit', async () => {
+    useWorkspaceStore.getState().setCommitted(true);
+    const { result } = renderHook(() => useInlineTextEdit());
+
+    expect(result.current.enabled).toBe(false);
+
+    let error: unknown;
+    await act(async () => {
+      try {
+        await result.current.applyInlineEdit({
+          action: 'edit',
+          turnHash: 'turn_1',
+          text: 'psychology',
+          replacementText: 'group psychology',
+          start: 10,
+          end: 20,
+        });
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Committed conversations are read-only.');
+    expect(resolveHumanSourceMock).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().hasDraft).toBe(false);
+  });
 });

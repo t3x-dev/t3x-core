@@ -84,6 +84,7 @@ export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const mode = useWorkspaceStore((s) => s.mode);
   const replayWarningRowId = useWorkspaceStore((s) => s.replayWarning?.rowId);
   const activeUncommittedRowCount = useWorkspaceStore(selectActiveUncommittedRowCount);
@@ -119,6 +120,11 @@ export function useScriptExecution() {
     const store = useWorkspaceStore.getState();
     const convId = store.conversationId;
     const projectId = useChatStore.getState().activeProjectId;
+    if (store.isCommitted) {
+      store.setError('Already committed');
+      toast.error('Already committed');
+      return;
+    }
     if (!convId || !projectId) return;
 
     const currentReplayWarningRowId = store.replayWarning?.rowId;
@@ -274,7 +280,12 @@ export function useScriptExecution() {
   // draft from Extract (`hasDraft`) or a manual edit (`scriptDirty`). A
   // clean script that mirrors committed state is a no-op and keeps the
   // button disabled.
-  const disabledReason = applyPolicy.canApply ? null : applyPolicy.tooltip;
+  const canRun = !isCommitted && applyPolicy.canApply;
+  const disabledReason = isCommitted
+    ? 'Already committed'
+    : applyPolicy.canApply
+      ? null
+      : applyPolicy.tooltip;
 
-  return { execute, canRun: applyPolicy.canApply, disabledReason, scriptState, applyPolicy };
+  return { execute, canRun, disabledReason, scriptState, applyPolicy };
 }

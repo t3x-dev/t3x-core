@@ -132,6 +132,10 @@ export function useExtraction({
       }
 
       const store = useWorkspaceStore.getState();
+      if (store.isCommitted) {
+        toast.message('Committed conversations are read-only.', { id: EXTRACTION_TOAST_ID });
+        return;
+      }
       if (store.hasDraft) {
         toast.message('Apply or discard the staged draft before extracting again.', {
           id: EXTRACTION_TOAST_ID,

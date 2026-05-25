@@ -129,4 +129,32 @@ describe('useSourceTextDraft', () => {
     expect((error as Error).message).toContain('user questions are not editable');
     expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
   });
+
+  it('rejects source text edits after commit', async () => {
+    useWorkspaceStore.getState().setCommitted(true);
+    const { result } = renderHook(() => useSourceTextDraft());
+
+    expect(result.current.enabled).toBe(false);
+
+    let error: unknown;
+    await act(async () => {
+      try {
+        await result.current.applySourceTextEdit({
+          action: 'edit',
+          turnHash: 'turn_1',
+          turnRole: 'assistant',
+          text: 'psychology',
+          start: 17,
+          end: 27,
+          replacementText: 'group identity',
+        });
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Committed conversations are read-only.');
+    expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
+  });
 });

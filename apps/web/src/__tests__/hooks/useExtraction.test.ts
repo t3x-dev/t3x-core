@@ -343,6 +343,28 @@ describe('useExtraction', () => {
     expect(callExtractionLLMMock).not.toHaveBeenCalled();
   });
 
+  it('skips extraction after the conversation is committed', async () => {
+    useWorkspaceStore.getState().setCommitted(true);
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(toastMessageMock).toHaveBeenCalledWith('Committed conversations are read-only.', {
+      id: EXTRACTION_TOAST_ID,
+    });
+    expect(runExtractionMock).not.toHaveBeenCalled();
+    expect(callExtractionLLMMock).not.toHaveBeenCalled();
+  });
+
   it('dismisses any prior extraction toast at the start of a new attempt', async () => {
     // The bug this guards against: a prior failed Extract leaves a red
     // sonner toast on screen; a later successful Extract rehydrates the

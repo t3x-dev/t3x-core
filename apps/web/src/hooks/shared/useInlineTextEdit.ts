@@ -167,6 +167,7 @@ function stageInlineOps(ops: SourcedYOp[]): number {
 
 export function useInlineTextEdit() {
   const convId = useWorkspaceStore((s) => s.conversationId);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const [pending, setPending] = useState(false);
 
   const previewTargets = useCallback((target: Omit<InlineTextEditTarget, 'action'>) => {
@@ -181,6 +182,9 @@ export function useInlineTextEdit() {
   const applyInlineEdit = useCallback(
     async (target: InlineTextEditTarget): Promise<number> => {
       if (!convId) throw new Error('No active conversation');
+      if (useWorkspaceStore.getState().isCommitted) {
+        throw new Error('Committed conversations are read-only.');
+      }
       setPending(true);
       try {
         const source = await resolveInlineHumanSource();
@@ -227,5 +231,5 @@ export function useInlineTextEdit() {
     [convId]
   );
 
-  return { applyInlineEdit, previewTargets, pending, enabled: !!convId };
+  return { applyInlineEdit, previewTargets, pending, enabled: !!convId && !isCommitted };
 }
