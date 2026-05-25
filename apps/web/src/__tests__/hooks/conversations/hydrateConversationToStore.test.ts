@@ -45,6 +45,7 @@ function snapshot(opts: {
   committedAt?: string | null;
   parentCommitHash?: string | null;
   parentCommitBranch?: string | null;
+  parentCommit?: { hash: string; trees: SemanticContent['trees']; message: string | null } | null;
 }): {
   turns: Array<{
     turn_hash: string;
@@ -58,6 +59,7 @@ function snapshot(opts: {
   committedAt?: string | null;
   parentCommitHash?: string | null;
   parentCommitBranch?: string | null;
+  parentCommit?: { hash: string; trees: SemanticContent['trees']; message: string | null } | null;
 } {
   return {
     turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
@@ -68,6 +70,7 @@ function snapshot(opts: {
     committedAt: opts.committedAt,
     parentCommitHash: opts.parentCommitHash,
     parentCommitBranch: opts.parentCommitBranch,
+    parentCommit: opts.parentCommit,
   };
 }
 
@@ -88,6 +91,7 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
       conversationTitle: null,
       isCommitting: false,
       commitError: null,
+      parentCommitCache: {},
     });
     useChatStore.setState({ activeBranch: 'main' });
     useWorkspaceStore.setState({
@@ -203,6 +207,11 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
         tree: SAMPLE_TREE,
         parentCommitHash: 'sha256:parent_commit',
         parentCommitBranch: '5',
+        parentCommit: {
+          hash: 'sha256:parent_commit',
+          trees: SAMPLE_TREE.trees,
+          message: 'parent message',
+        },
       })
     );
 
@@ -212,6 +221,11 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
     expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:parent_commit');
     expect(useWorkspaceStore.getState().hasConversationChanges).toBe(false);
     expect(useCommitStore.getState().lastCommitHash).toBe('sha256:parent_commit');
+    expect(useCommitStore.getState().parentCommitCache['sha256:parent_commit']).toEqual({
+      hash: 'sha256:parent_commit',
+      trees: SAMPLE_TREE.trees,
+      message: 'parent message',
+    });
     expect(useCommitStore.getState().commitBranch).toBe('5');
     expect(useChatStore.getState().activeBranch).toBe('5');
   });

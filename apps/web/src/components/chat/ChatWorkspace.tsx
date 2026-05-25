@@ -8,9 +8,11 @@ import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
+import { useContextManifest } from '@/hooks/conversations/useContextManifest';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
+import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
-import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
+import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
@@ -27,8 +29,8 @@ import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 import { ChatSpanActions } from './ChatSpanActions';
 import { CommittedBar } from './CommittedBar';
+import { ContextManifestBar } from './ContextManifestBar';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
-import { SourceMaterialPanel } from './SourceMaterialPanel';
 
 interface ChatWorkspaceProps {
   conversationId: string;
@@ -64,11 +66,15 @@ export function ChatWorkspace({
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const pins = usePinsStore((s) => s.pins);
+  const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
-  const { fetch: fetchPins } = usePinsCrud();
-  const [showSourcePanel, setShowSourcePanel] = useState(false);
+  const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
+  const [contextManifestOpen, setContextManifestOpen] = useState(false);
+  const [pinningParentConversation, setPinningParentConversation] = useState(false);
+  const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
-  const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
+  const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
+  const contextManifestUpdatingRef = useRef(false);
   const showAddForm =
     !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
@@ -103,6 +109,19 @@ export function ChatWorkspace({
 
   // Real-time sync — WebSocket connection to receive backend state changes
   useRealtimeSync(resolvedProjectId ? (resolvedConversationId ?? conversationId) : null);
+
+  const {
+    manifest: contextManifest,
+    loading: contextManifestLoading,
+    error: contextManifestError,
+    reload: reloadContextManifest,
+  } = useContextManifest(resolvedConversationId);
+  const { updateSelectedPins: updateContextSelectedPins } = useConversationContextPins();
+  const {
+    leaves: projectLeaves,
+    loading: projectLeavesLoading,
+    error: projectLeavesError,
+  } = useProjectLeaves(resolvedProjectId, contextManifestOpen && !isCommitted);
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -200,6 +219,7 @@ export function ChatWorkspace({
   const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const baselineCommitHash = useWorkspaceStore((s) => s.baselineCommitHash);
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
   const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
   const workspaceLastError = useWorkspaceStore((s) => s.lastError);
@@ -239,18 +259,7 @@ export function ChatWorkspace({
         // Came from source panel confirm — extract with selected pins
         handleExtract(detail.sourcePinIds);
       } else if (detail?.chooseSources) {
-        if (pins.length === 0) {
-          toast.message('No pinned sources yet');
-          return;
-        }
-
-        setShowSourcePanel(true);
-        requestAnimationFrame(() => {
-          chatContainerRef.current?.scrollTo({
-            top: chatContainerRef.current.scrollHeight,
-            behavior: 'smooth',
-          });
-        });
+        setContextManifestOpen(true);
       } else {
         // Default behavior: extract immediately, even when pins exist.
         handleExtract();
@@ -266,7 +275,6 @@ export function ChatWorkspace({
     isLoading,
     isStreaming,
     modelsLoading,
-    pins.length,
     resolvedConversationId,
     resolvedProjectId,
     selectedModel,
@@ -277,10 +285,130 @@ export function ChatWorkspace({
     workspaceMode,
   ]);
 
-  // Hide source panel when extraction starts
-  useEffect(() => {
-    if (isExtracting) setShowSourcePanel(false);
-  }, [isExtracting]);
+  const parentConversationPinned = useMemo(
+    () =>
+      parentConversationId
+        ? pins.some((pin) => pin.type === 'conversation' && pin.ref_id === parentConversationId)
+        : false,
+    [parentConversationId, pins]
+  );
+
+  const selectedPinsIncludingNewPin = useCallback(
+    (pinId: string): string[] | null => {
+      const references = contextManifest?.references ?? [];
+      if (references.length === 0) return null;
+
+      const selectedPinIds = new Set(
+        references.filter((reference) => reference.included).map((reference) => reference.pin_id)
+      );
+      const everyExistingReferenceSelected = references.every((reference) =>
+        selectedPinIds.has(reference.pin_id)
+      );
+      if (everyExistingReferenceSelected) return null;
+
+      selectedPinIds.add(pinId);
+      return Array.from(selectedPinIds);
+    },
+    [contextManifest]
+  );
+
+  const handlePinParentConversation = useCallback(async () => {
+    if (!resolvedProjectId || !parentConversationId || pinningParentConversation) return;
+
+    setPinningParentConversation(true);
+    try {
+      const created = await addPin(resolvedProjectId, 'conversation', parentConversationId);
+      if (created && resolvedConversationId) {
+        await updateContextSelectedPins(
+          resolvedConversationId,
+          selectedPinsIncludingNewPin(created.id)
+        );
+      }
+      if (created) await reloadContextManifest();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to pin parent conversation';
+      toast.message(message);
+    } finally {
+      setPinningParentConversation(false);
+    }
+  }, [
+    addPin,
+    parentConversationId,
+    pinningParentConversation,
+    reloadContextManifest,
+    resolvedConversationId,
+    resolvedProjectId,
+    selectedPinsIncludingNewPin,
+    updateContextSelectedPins,
+  ]);
+
+  const handlePinLeafForContext = useCallback(
+    async (leafId: string) => {
+      if (!resolvedProjectId) return;
+
+      const existing = usePinsStore.getState().getPinByRef('leaf', leafId);
+      if (existing) return;
+
+      setPinningLeafIds((prev) => {
+        const next = new Set(prev);
+        next.add(leafId);
+        return next;
+      });
+
+      try {
+        const created = await addPin(resolvedProjectId, 'leaf', leafId);
+        if (created && resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(created.id)
+          );
+        }
+        if (created) await reloadContextManifest();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to pin leaf';
+        toast.message(message);
+      } finally {
+        setPinningLeafIds((prev) => {
+          const next = new Set(prev);
+          next.delete(leafId);
+          return next;
+        });
+      }
+    },
+    [
+      addPin,
+      reloadContextManifest,
+      resolvedConversationId,
+      resolvedProjectId,
+      selectedPinsIncludingNewPin,
+      updateContextSelectedPins,
+    ]
+  );
+
+  const baselineForSourcePanel = useMemo(() => {
+    const manifestBaseline =
+      contextManifest?.baseline.source === 'parent_commit' ? contextManifest.baseline : null;
+    const commitHash =
+      manifestBaseline?.commit_hash ?? baselineCommitHash ?? inheritFromCommitHash ?? null;
+    if (!commitHash) return undefined;
+
+    return {
+      commitHash,
+      branch: manifestBaseline?.branch ?? null,
+      parentConversationId,
+      parentConversationPinned,
+      pinningParentConversation,
+      onPinParentConversation: handlePinParentConversation,
+    };
+  }, [
+    baselineCommitHash,
+    contextManifest,
+    handlePinParentConversation,
+    inheritFromCommitHash,
+    parentConversationId,
+    parentConversationPinned,
+    pinningParentConversation,
+  ]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -311,6 +439,91 @@ export function ChatWorkspace({
     [sendMessage, isSelectionReady, isCommitted]
   );
 
+  const handleContextReferenceToggle = useCallback(
+    async (pinId: string, included: boolean) => {
+      if (!resolvedConversationId || !contextManifest || contextManifestUpdatingRef.current) return;
+
+      const selectedPinIds = new Set(
+        contextManifest.references
+          .filter((reference) => reference.included)
+          .map((reference) => reference.pin_id)
+      );
+      if (included) {
+        selectedPinIds.add(pinId);
+      } else {
+        selectedPinIds.delete(pinId);
+      }
+
+      const allReferencePinIds = contextManifest.references.map((reference) => reference.pin_id);
+      const nextSelectedPinIds =
+        allReferencePinIds.length > 0 &&
+        allReferencePinIds.every((referencePinId) => selectedPinIds.has(referencePinId))
+          ? null
+          : Array.from(selectedPinIds);
+
+      contextManifestUpdatingRef.current = true;
+      setContextManifestUpdating(true);
+      try {
+        await updateContextSelectedPins(resolvedConversationId, nextSelectedPinIds);
+        await reloadContextManifest();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to update context';
+        toast.message(message);
+      } finally {
+        contextManifestUpdatingRef.current = false;
+        setContextManifestUpdating(false);
+      }
+    },
+    [contextManifest, reloadContextManifest, resolvedConversationId, updateContextSelectedPins]
+  );
+
+  const handleContextAssertionToggle = useCallback(
+    async (pinId: string, assertionId: string, included: boolean) => {
+      if (!contextManifest || contextManifestUpdatingRef.current) return;
+
+      const selectedAssertionIds = new Set(
+        contextManifest.feedback
+          .filter((feedback) => feedback.pin_id === pinId && feedback.selected)
+          .map((feedback) => feedback.id)
+      );
+      if (included) {
+        selectedAssertionIds.add(assertionId);
+      } else {
+        selectedAssertionIds.delete(assertionId);
+      }
+
+      contextManifestUpdatingRef.current = true;
+      setContextManifestUpdating(true);
+      try {
+        const updatedPin = await setAssertions(pinId, Array.from(selectedAssertionIds));
+        if (!updatedPin) {
+          toast.message('Failed to update feedback');
+          return;
+        }
+
+        if (resolvedProjectId) {
+          invalidatePins();
+          await fetchPins(resolvedProjectId);
+        }
+        await reloadContextManifest();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to update feedback';
+        toast.message(message);
+      } finally {
+        contextManifestUpdatingRef.current = false;
+        setContextManifestUpdating(false);
+      }
+    },
+    [
+      contextManifest,
+      fetchPins,
+      invalidatePins,
+      reloadContextManifest,
+      resolvedProjectId,
+      setAssertions,
+    ]
+  );
+
   return (
     <div className={cn('flex flex-col h-full min-h-0 relative', className)} style={style}>
       {/* Header */}
@@ -324,13 +537,37 @@ export function ChatWorkspace({
         modelsLoading={modelsLoading}
       />
 
+      <ContextManifestBar
+        manifest={contextManifest}
+        loading={contextManifestLoading}
+        error={contextManifestError}
+        open={contextManifestOpen}
+        updating={contextManifestUpdating}
+        sourcePicker={
+          isCommitted
+            ? undefined
+            : {
+                availableLeaves: projectLeaves,
+                availableLeavesLoading: projectLeavesLoading,
+                availableLeavesError: projectLeavesError,
+                leafPinningIds: pinningLeafIds,
+                baseline: baselineForSourcePanel,
+                onPinLeaf: handlePinLeafForContext,
+              }
+        }
+        onOpenChange={setContextManifestOpen}
+        onReload={reloadContextManifest}
+        onReferenceToggle={handleContextReferenceToggle}
+        onAssertionToggle={handleContextAssertionToggle}
+      />
+
       {/* Coverage toggle — visible after extraction */}
       {sourceMapByTurn.size > 0 && (
         <button
           type="button"
           onClick={() => setCoverageMode((p) => !p)}
           className={cn(
-            'absolute top-12 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+            'absolute top-24 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
             coverageMode
               ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
               : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -343,6 +580,7 @@ export function ChatWorkspace({
       {/* Message list */}
       <div
         ref={chatContainerRef}
+        data-testid="chat-message-scroll"
         className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--chat-panel)]"
       >
         {/* Parent conversation banner */}
@@ -466,23 +704,6 @@ export function ChatWorkspace({
                 </div>
               </div>
             )}
-
-            {/* Pinned source material panel */}
-            {showSourcePanel && pins.length > 0 && (
-              <SourceMaterialPanel
-                pins={pins.map((p) => ({
-                  ...p,
-                  title: enrichedPinData.get(p.id)?.title ?? p.ref_id.slice(0, 12),
-                  assertionLessons: enrichedPinData.get(p.id)?.assertionLessons,
-                  turnCount: enrichedPinData.get(p.id)?.turnCount,
-                }))}
-                onConfirm={(selectedPinIds) => {
-                  setShowSourcePanel(false);
-                  handleExtract(selectedPinIds);
-                }}
-                onCancel={() => setShowSourcePanel(false)}
-              />
-            )}
           </div>
         )}
 
@@ -499,7 +720,7 @@ export function ChatWorkspace({
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
         <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
-          <div className="mx-auto max-w-[540px] px-5">
+          <div className="relative mx-auto max-w-[540px] px-5">
             <ChatInput
               onSend={handleSend}
               onStop={stopGenerating}

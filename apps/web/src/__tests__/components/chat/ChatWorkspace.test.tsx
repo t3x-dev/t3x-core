@@ -5,15 +5,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { ConversationContextManifest } from '@/types/api';
 
 const mocks = vi.hoisted(() => ({
   ensureProject: vi.fn(),
+  addPin: vi.fn(),
   fetchPins: vi.fn(),
   handleExtract: vi.fn(),
   handleModelChange: vi.fn(),
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  reloadContextManifest: vi.fn(),
+  updateSelectedPins: vi.fn(),
+  parentConversationId: null as string | null,
+  contextManifest: null as ConversationContextManifest | null,
+  projectLeaves: [],
   textSelection: {
     current: null as null | {
       selection: {
@@ -45,7 +52,22 @@ vi.mock('@/hooks/commits/useCommittedHighlights', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useChatInit', () => ({
-  useChatInit: () => ({ parentConversationId: null }),
+  useChatInit: () => ({ parentConversationId: mocks.parentConversationId }),
+}));
+
+vi.mock('@/hooks/conversations/useContextManifest', () => ({
+  useContextManifest: () => ({
+    manifest: mocks.contextManifest,
+    loading: false,
+    error: null,
+    reload: mocks.reloadContextManifest,
+  }),
+}));
+
+vi.mock('@/hooks/conversations/useConversationContextPins', () => ({
+  useConversationContextPins: () => ({
+    updateSelectedPins: mocks.updateSelectedPins,
+  }),
 }));
 
 vi.mock('@/hooks/conversations/useConversationChat', () => ({
@@ -72,12 +94,17 @@ vi.mock('@/hooks/drafts/useExtraction', () => ({
   }),
 }));
 
-vi.mock('@/hooks/pins/usePinEnrichment', () => ({
-  usePinEnrichment: () => new Map(),
+vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
+  useProjectLeaves: () => ({
+    leaves: mocks.projectLeaves,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock('@/hooks/pins/usePinsCrud', () => ({
-  usePinsCrud: () => ({ fetch: mocks.fetchPins }),
+  usePinsCrud: () => ({ fetch: mocks.fetchPins, add: mocks.addPin, setAssertions: vi.fn() }),
 }));
 
 vi.mock('@/hooks/projects/useAutoProject', () => ({
@@ -118,12 +145,45 @@ vi.mock('@/components/chat/ChatSpanActions', () => ({
   ChatSpanActions: () => <div data-testid="chat-span-actions" />,
 }));
 
+function makeContextManifest(): ConversationContextManifest {
+  return {
+    conversation_id: 'conv_123',
+    project_id: 'proj_123',
+    baseline: {
+      commit_hash: 'sha256:parent',
+      branch: 'main',
+      message: 'Parent commit',
+      source: 'parent_commit',
+      node_count: 0,
+      relation_count: 0,
+      content: { trees: [], relations: [] },
+    },
+    references: [
+      {
+        type: 'conversation',
+        id: 'conv_parent',
+        pin_id: 'pin_parent',
+        included: true,
+        title: 'Parent conversation',
+      },
+    ],
+    feedback: [],
+    token_estimate: 0,
+    sources: [{ type: 'commit', id: 'sha256:parent', title: 'Parent commit' }],
+    chat_context_text: '',
+    extraction_context_text: '',
+  };
+}
+
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
     mocks.textSelection.current = null;
+    mocks.parentConversationId = null;
+    mocks.contextManifest = null;
+    mocks.projectLeaves = [];
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -138,7 +198,16 @@ describe('ChatWorkspace', () => {
     });
   });
 
-  it('does not start extraction when Choose sources is requested without pinned sources', () => {
+  it('opens source chooser inside the context manifest instead of the composer or message stream', () => {
+    mocks.parentConversationId = 'conv_parent';
+    mocks.contextManifest = makeContextManifest();
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+      baselineCommitHash: 'sha256:parent',
+      hasConversationChanges: false,
+    });
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
     act(() => {
@@ -150,7 +219,14 @@ describe('ChatWorkspace', () => {
     });
 
     expect(mocks.handleExtract).not.toHaveBeenCalled();
-    expect(mocks.toastMessage.mock.calls[0]?.[0]).toBe('No pinned sources yet');
+    expect(mocks.toastMessage).not.toHaveBeenCalledWith('No pinned sources yet');
+
+    const manifest = screen.getByRole('region', { name: /context manifest/i });
+    const messageScroll = screen.getByTestId('chat-message-scroll');
+    expect(screen.queryByTestId('source-picker-overlay')).toBeNull();
+    expect(manifest.contains(screen.getByRole('heading', { name: 'References' }))).toBe(true);
+    expect(screen.getByText('Parent conversation')).not.toBeNull();
+    expect(messageScroll.contains(manifest)).toBe(false);
   });
 
   it('shows source text actions for a valid selection even before executed mode', () => {

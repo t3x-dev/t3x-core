@@ -223,9 +223,15 @@ test.describe('DiffDisplayView Full E2E', () => {
       .waitFor({ state: 'hidden', timeout: 30000 })
       .catch(() => {});
 
+    const nodes = page.locator('.react-flow__node');
+    await expect(nodes.first()).toBeVisible({ timeout: 15000 });
+    await nodes.first().click();
+    const sidebar = page.locator('aside').first();
+    await sidebar.waitFor({ state: 'visible', timeout: 10000 });
+
     // Find View full button
     const viewFullBtn = page.getByText('View full').first();
-    const hasViewFull = await viewFullBtn.isVisible({ timeout: 10000 });
+    const hasViewFull = await viewFullBtn.isVisible({ timeout: 5_000 }).catch(() => false);
 
     if (hasViewFull) {
       await viewFullBtn.click();
@@ -243,13 +249,8 @@ test.describe('DiffDisplayView Full E2E', () => {
 
       expect(hasCompare || hasCompareBtn || modalOpened).toBe(true);
     } else {
-      // Fallback: Click SOURCES to open modal, then check if we can switch view
-      const sourcesBtn = page.locator('text=SOURCES').first();
-      await sourcesBtn.click();
-
-      // Wait for modal content to appear
-      await page.locator('aside').first().waitFor({ state: 'visible', timeout: 5000 });
-
+      // Current canvas opens the commit detail sidebar directly from the node.
+      await expect(sidebar).toBeVisible();
       await page.screenshot({ path: 'test-results/diff-full-modal-sources.png' });
     }
   });

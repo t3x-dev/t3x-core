@@ -8,82 +8,35 @@
  * DELETE /v1/conversations/:id - Delete conversation
  * GET    /v1/conversations/:id/context - Get context config
  * PUT    /v1/conversations/:id/context - Update context config
+ * GET    /v1/conversations/:id/context-manifest - Get structured context manifest
  * GET    /v1/conversations/:id/memory - Get built memory string (requires Track A)
  * GET    /v1/conversations/:id/context-export - Export context as JSON/Markdown file
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  buildConversationContext,
-  type ConversationData,
-  flattenTrees,
-  getCanonicalModelId,
-  type SemanticContent,
-} from '@t3x-dev/core';
+import { type BuiltContext, getCanonicalModelId } from '@t3x-dev/core';
 import {
   deleteConversation,
   findConversationById,
   findConversationsByProject,
-  findCurrentBranch,
-  findPinsByProject,
   findProjectById,
-  findTurnsByConversation,
-  getCommitUnified,
   getConversationContext,
   getConversationTurnCount,
-  getLeavesByIds,
   insertConversation,
-  listActiveYOpsLogByConversation,
   renameConversation,
   setConversationContext,
   updateConversation,
 } from '@t3x-dev/storage';
 import { formatContextForExport } from '../lib/context-formatter';
+import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
-import { replayActiveDraftOnBaseline } from '../lib/yops-log-utils';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
   IdParamSchema,
   SuccessResponseSchema,
 } from '../schemas/common';
-
-/**
- * Serialize a SemanticContent snapshot as YAML-like text for LLM context injection.
- */
-function serializeSnapshotForContext(snapshot: SemanticContent): string {
-  const lines: string[] = ['## Extracted Knowledge (YAML Tree)\n'];
-  const flat = flattenTrees(snapshot.trees);
-
-  for (const node of flat) {
-    lines.push(`${node.type}:`);
-    for (const [key, value] of Object.entries(node.slots)) {
-      if (Array.isArray(value)) {
-        lines.push(`  ${key}:`);
-        for (const item of value) {
-          lines.push(`    - ${typeof item === 'object' ? JSON.stringify(item) : String(item)}`);
-        }
-      } else {
-        lines.push(
-          `  ${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
-        );
-      }
-    }
-  }
-
-  if (snapshot.relations.length > 0) {
-    lines.push('\nrelations:');
-    for (const rel of snapshot.relations) {
-      const fromNode = flat.find((f) => f.id === rel.from);
-      const toNode = flat.find((f) => f.id === rel.to);
-      lines.push(`  - ${fromNode?.type ?? rel.from} → ${toNode?.type ?? rel.to} (${rel.type})`);
-    }
-  }
-
-  lines.push('');
-  return lines.join('\n');
-}
 
 export const conversationRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 
@@ -162,6 +115,54 @@ const UpdateConversationSchema = z.object({
 
 const UpdateContextSchema = z.object({
   selected_pin_ids: z.array(z.string()).nullable(),
+});
+
+const ContextManifestBaselineSchema = z.object({
+  commit_hash: z.string().nullable(),
+  branch: z.string().nullable(),
+  message: z.string().nullable(),
+  content: z.unknown().nullable(),
+  source: z.enum(['parent_commit', 'none']),
+  node_count: z.number(),
+  relation_count: z.number(),
+});
+
+const ContextManifestReferenceSchema = z.object({
+  type: z.enum(['conversation', 'leaf']),
+  id: z.string(),
+  pin_id: z.string(),
+  included: z.boolean(),
+  title: z.string().optional(),
+});
+
+const ContextManifestFeedbackSchema = z.object({
+  type: z.enum(['leaf_assertion', 'runner_assertion']),
+  id: z.string(),
+  parent_ref_id: z.string(),
+  pin_id: z.string(),
+  selected: z.boolean(),
+  included: z.boolean(),
+  passed: z.boolean().optional(),
+  details: z.string().optional(),
+  lesson: z.string().optional(),
+});
+
+const ContextSourceSchema = z.object({
+  type: z.enum(['commit', 'conversation', 'leaf']),
+  id: z.string(),
+  title: z.string().optional(),
+});
+
+const ConversationContextManifestSchema = z.object({
+  conversation_id: z.string(),
+  project_id: z.string(),
+  baseline: ContextManifestBaselineSchema,
+  references: z.array(ContextManifestReferenceSchema),
+  feedback: z.array(ContextManifestFeedbackSchema),
+  chat_context_text: z.string(),
+  extraction_context_text: z.string(),
+  token_estimate: z.number(),
+  sources: z.array(ContextSourceSchema),
 });
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -705,6 +706,65 @@ conversationRoutes.openapi(updateContextRoute, async (c) => {
 });
 
 /**
+ * GET /v1/conversations/:id/context-manifest - Get structured context manifest
+ *
+ * Returns the conversation's fully assembled context manifest, including the
+ * parent baseline, references, selected feedback, chat text, extraction text,
+ * token estimate, and sources.
+ */
+const getContextManifestRoute = createRoute({
+  method: 'get',
+  path: '/v1/conversations/{id}/context-manifest',
+  tags: ['Conversations'],
+  summary: 'Get structured conversation context manifest',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    200: {
+      description: 'Structured context manifest',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ConversationContextManifestSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+conversationRoutes.openapi(getContextManifestRoute, async (c) => {
+  const { id: conversationId } = c.req.valid('param');
+
+  try {
+    const db = await getDB();
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
+    }
+
+    const manifest = await buildConversationContextManifest(db, conversationId);
+    return c.json({ success: true as const, data: manifest }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'GET_CONTEXT_MANIFEST_FAILED', message },
+      },
+      500
+    );
+  }
+});
+
+/**
  * GET /v1/conversations/:id/memory - Get built memory string
  *
  * Returns the assembled context string for LLM consumption.
@@ -743,84 +803,24 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
 
   try {
     const db = await getDB();
-
-    // 1. Verify conversation exists and get project_id
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
 
-    // 2. Get context config (null = use all pins)
-    const contextConfig = await getConversationContext(db, conversationId);
+    const manifest = await buildConversationContextManifest(db, conversationId);
 
-    // 3. Get project pins
-    const projectPins = await findPinsByProject(db, conversation.projectId);
-
-    // 4. Build YAML knowledge from best available source:
-    //    - YOps log snapshot (working draft, most up-to-date)
-    //    - Committed frames (HEAD, fallback)
-    //    The YAML tree IS the knowledge — no flattening to nodes.
-    let yamlKnowledge = '';
-    const yopsRecords = await listActiveYOpsLogByConversation(db, conversationId);
-    if (yopsRecords.length > 0) {
-      const snapshot = await replayActiveDraftOnBaseline(db, conversationId);
-      if (snapshot.trees.length > 0) {
-        yamlKnowledge = serializeSnapshotForContext(snapshot);
-      }
-    }
-    if (!yamlKnowledge) {
-      const currentBranch = await findCurrentBranch(db, conversation.projectId);
-      if (currentBranch?.headCommitHash) {
-        const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-        if (unified && unified.content.trees.length > 0) {
-          yamlKnowledge = serializeSnapshotForContext(unified.content);
-        }
-      }
-    }
-
-    // 5. Load pinned conversations data
-    const conversationPins = projectPins.filter((p) => p.type === 'conversation');
-    const conversationsMap = new Map<string, ConversationData>();
-
-    for (const pin of conversationPins) {
-      if (pin.ref_id === conversationId) continue;
-
-      const conv = await findConversationById(db, pin.ref_id);
-      if (!conv) continue;
-
-      const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 50 });
-      conversationsMap.set(pin.ref_id, {
-        id: conv.conversationId,
-        title: conv.title ?? 'Untitled',
-        turns: turns.map((t) => ({
-          role: t.role,
-          content: t.content,
-        })),
-      });
-    }
-
-    // 6. Load pinned leaves data
-    const leafPins = projectPins.filter((p) => p.type === 'leaf');
-    const leafIds = leafPins.map((p) => p.ref_id);
-    const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
-    const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
-
-    // 7. Build context: YAML knowledge + pins (conversations, leaves)
-    const builtContext = buildConversationContext({
-      knowledge: undefined,
-      projectPins,
-      contextConfig,
-      conversations: conversationsMap,
-      leaves,
-    });
-
-    // Prepend YAML knowledge as the primary context
-    if (yamlKnowledge) {
-      builtContext.text = `## Current Knowledge\n\n${yamlKnowledge}\n${builtContext.text}`;
-      builtContext.token_estimate = Math.ceil(builtContext.text.length / 4);
-    }
-
-    return c.json({ success: true as const, data: builtContext }, 200);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          text: manifest.chat_context_text,
+          token_estimate: manifest.token_estimate,
+          sources: manifest.sources,
+        },
+      },
+      200
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return c.json({ success: false as const, error: { code: 'GET_MEMORY_FAILED', message } }, 500);
@@ -846,7 +846,7 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
   try {
     const db = await getDB();
 
-    // 1. Verify conversation exists and get project_id
+    // 1. Verify conversation exists.
     const conversation = await findConversationById(db, conversationId);
     if (!conversation) {
       return c.json(
@@ -858,66 +858,22 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
       );
     }
 
-    // 2. Get context config (null = use all pins)
-    const contextConfig = await getConversationContext(db, conversationId);
+    // 2. Build export context from the same manifest-backed context as /memory.
+    const manifest = await buildConversationContextManifest(db, conversationId);
+    const builtContext: BuiltContext = {
+      text: manifest.chat_context_text,
+      token_estimate: manifest.token_estimate,
+      sources: manifest.sources,
+    };
 
-    // 3. Get project pins
-    const projectPins = await findPinsByProject(db, conversation.projectId);
-
-    // 4. Get current knowledge from branch HEAD
-    let currentKnowledge: SemanticContent | undefined;
-    const currentBranch = await findCurrentBranch(db, conversation.projectId);
-    if (currentBranch?.headCommitHash) {
-      const unified = await getCommitUnified(db, currentBranch.headCommitHash);
-      if (unified && unified.content.trees.length > 0) {
-        currentKnowledge = unified.content;
-      }
-    }
-
-    // 5. Load pinned conversations data
-    const conversationPins = projectPins.filter((p) => p.type === 'conversation');
-    const conversationsMap = new Map<string, ConversationData>();
-
-    for (const pin of conversationPins) {
-      if (pin.ref_id === conversationId) continue;
-
-      const conv = await findConversationById(db, pin.ref_id);
-      if (!conv) continue;
-
-      const turns = await findTurnsByConversation(db, { conversationId: pin.ref_id, limit: 50 });
-      conversationsMap.set(pin.ref_id, {
-        id: conv.conversationId,
-        title: conv.title ?? 'Untitled',
-        turns: turns.map((t) => ({
-          role: t.role,
-          content: t.content,
-        })),
-      });
-    }
-
-    // 6. Load pinned leaves data
-    const leafPins = projectPins.filter((p) => p.type === 'leaf');
-    const leafIds = leafPins.map((p) => p.ref_id);
-    const leafRecords = leafIds.length > 0 ? await getLeavesByIds(db, leafIds) : [];
-    const leaves = new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
-
-    // 7. Build context
-    const builtContext = buildConversationContext({
-      knowledge: currentKnowledge,
-      projectPins,
-      contextConfig,
-      conversations: conversationsMap,
-      leaves,
-    });
-
-    // 8. Format for export
+    // 3. Format for export
     const { content, contentType, fileExtension } = formatContextForExport(
       builtContext,
       conversationId,
       format
     );
 
-    // 9. Return as downloadable file
+    // 4. Return as downloadable file
     const filename = `${conversationId}-context.${fileExtension}`;
 
     return new Response(content, {

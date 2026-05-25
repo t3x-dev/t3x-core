@@ -93,8 +93,15 @@ function mockYopsAppend(page: import('@playwright/test').Page) {
   });
 }
 
+async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
+  const collapsed = page.getByTestId('yops-panel-collapsed');
+  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await collapsed.click();
+  }
+}
+
 /**
- * Click Extract. The panel auto-expands via useChatInit after hydration.
+ * Click Extract. The workspace may start collapsed on chat routes.
  *
  * `useExtraction.handleExtract` requires `activeProjectId` in the chat store,
  * which is backfilled asynchronously from `GET /conversations/:id` when the
@@ -103,6 +110,7 @@ function mockYopsAppend(page: import('@playwright/test').Page) {
  * backfill completes, we retry once.
  */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
+  await expandWorkspaceIfCollapsed(page);
   const extractBtn = page.getByTestId('extract-button');
   await extractBtn.waitFor({ state: 'visible' });
   const waitForExtract = page.waitForRequest(
@@ -119,6 +127,13 @@ async function openPanelAndClickExtract(page: import('@playwright/test').Page): 
       (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
       { timeout: 10_000 }
     );
+  }
+}
+
+async function applyDraftIfPresent(page: import('@playwright/test').Page): Promise<void> {
+  const applyButton = page.getByTestId('workspace-action-apply_changes');
+  if (await applyButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await applyButton.click();
   }
 }
 
@@ -217,6 +232,7 @@ test.describe('Gold-edit flow', () => {
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
     await expect(page.getByTestId('after-panel')).toContainText('budget', { timeout: 5_000 });
+    await applyDraftIfPresent(page);
 
     // Hover the slot row to reveal the delete button (opacity-0 → group-hover:opacity-100)
     const slotRow = page.getByTestId('slot-row-trip-budget');
@@ -276,6 +292,7 @@ test.describe('Gold-edit flow', () => {
     // Extract to populate the tree
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
 
     // Hover the 'trip' node header to reveal its action buttons
     // The NodeRow renders a group div with buttons that are opacity-0 group-hover:opacity-100

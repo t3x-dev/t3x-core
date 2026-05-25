@@ -10,6 +10,10 @@ import { useCommitStore } from '@/store/commitStore';
 export function useParentCommit(): ParentCommit | null {
   const beforeCommitHash = useCommitStore((s) => s.beforeCommitHash);
   const projectId = useCommitStore((s) => s.projectId);
+  const cachedParent = useCommitStore((s) =>
+    s.beforeCommitHash ? (s.parentCommitCache[s.beforeCommitHash] ?? null) : null
+  );
+  const cacheParentCommit = useCommitStore((s) => s.cacheParentCommit);
   const [parentState, setParentState] = useState<{
     projectId: string;
     beforeCommitHash: string;
@@ -18,8 +22,10 @@ export function useParentCommit(): ParentCommit | null {
 
   useEffect(() => {
     let cancelled = false;
-    setParentState(null);
-    if (!projectId || !beforeCommitHash) return;
+    if (!projectId || !beforeCommitHash || cachedParent) {
+      setParentState(null);
+      return;
+    }
     fetchParentCommit(beforeCommitHash)
       .then((result) => {
         const current = useCommitStore.getState();
@@ -28,6 +34,9 @@ export function useParentCommit(): ParentCommit | null {
           current.projectId === projectId &&
           current.beforeCommitHash === beforeCommitHash
         ) {
+          if (result) {
+            cacheParentCommit(result);
+          }
           setParentState({ projectId, beforeCommitHash, parent: result });
         }
       })
@@ -37,7 +46,15 @@ export function useParentCommit(): ParentCommit | null {
     return () => {
       cancelled = true;
     };
-  }, [beforeCommitHash, projectId]);
+  }, [beforeCommitHash, cacheParentCommit, cachedParent, projectId]);
+
+  if (!projectId || !beforeCommitHash) {
+    return null;
+  }
+
+  if (cachedParent) {
+    return cachedParent;
+  }
 
   if (
     !parentState ||

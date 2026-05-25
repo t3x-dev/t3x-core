@@ -7,18 +7,14 @@
  * an empty state.
  */
 
-import type { TreeNode } from '@t3x-dev/core';
 import { getApiCommit } from '@/infrastructure/commits';
+import type { ParentCommit } from '@/types/parentCommit';
 
-export interface ParentCommit {
-  hash: string;
-  trees: TreeNode[];
-  message: string | null;
-}
+export type { ParentCommit } from '@/types/parentCommit';
 
 export async function fetchParentCommit(hash: string | null): Promise<ParentCommit | null> {
   if (!hash) return null;
   const commit = await getApiCommit(hash);
-  const trees = (commit.content?.trees as TreeNode[] | undefined) ?? [];
+  const trees = (commit.content?.trees as ParentCommit['trees'] | undefined) ?? [];
   return { hash, trees, message: commit.message ?? null };
 }

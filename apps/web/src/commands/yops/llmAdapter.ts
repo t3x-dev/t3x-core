@@ -26,6 +26,7 @@ export interface CallExtractionLLMInput {
   conversationId: string;
   turns: ValidationTurn[];
   failingOps?: RetryFailingOp[];
+  selectedPinIds?: string[];
   provider?: string;
   model?: string;
   /**
@@ -121,6 +122,7 @@ export async function callExtractionLLM(
     ...(input.provider ? { provider: input.provider } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.preset ? { preset: input.preset } : {}),
+    ...(input.selectedPinIds !== undefined ? { selected_pin_ids: input.selectedPinIds } : {}),
   });
 
   let parsedBody: unknown;

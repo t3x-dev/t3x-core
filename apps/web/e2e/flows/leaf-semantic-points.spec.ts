@@ -77,10 +77,12 @@ test.describe('Leaf Semantic Points', () => {
   test('shows semantic points, syncs left badges, and persists toggles', async ({ page }) => {
     await page.goto(`/project/${projectId}/leaf/${leafId}`);
 
-    await expect(page.getByText('Semantic Points')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Semantic Points', { exact: true })).toBeVisible({
+      timeout: 15000,
+    });
     await expect(page.getByText('6 / 8 included')).toBeVisible();
-    await expect(page.getByText('4/5 included')).toBeVisible();
-    await expect(page.getByText('2/3 included')).toBeVisible();
+    await expect(page.getByText('4/5')).toBeVisible();
+    await expect(page.getByText('2/3')).toBeVisible();
 
     const durationCheckbox = page.getByLabel('trip.duration = 2 days');
     const hotelAreaCheckbox = page.getByLabel('trip.hotel.area = Gion');
@@ -90,7 +92,7 @@ test.describe('Leaf Semantic Points', () => {
 
     await durationCheckbox.check();
     await expect(page.getByText('7 / 8 included')).toBeVisible();
-    await expect(page.getByText('5/5 included')).toBeVisible();
+    await expect(page.getByText('5/5')).toBeVisible();
 
     await page.reload({ waitUntil: 'networkidle' });
     await expect(page.getByText('7 / 8 included')).toBeVisible();

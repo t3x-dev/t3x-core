@@ -224,6 +224,72 @@ describe('extractors/v2 pipeline', () => {
     expect(capturedPrompt).toContain('Mode: incremental');
   });
 
+  it('includes contextText as non-evidence guidance before conversation turns', async () => {
+    let capturedPrompt = '';
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        capturedPrompt = prompt.messages[0].content as string;
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'turn_1', role: 'user', content: 'Ship the product.' }],
+      mode: 'bootstrap',
+      providerId: 'test',
+      provider,
+      model: 'test-model',
+      contextText: 'Selected feedback: add evidence before launch claims.',
+    });
+
+    expect(capturedPrompt).toContain('Selected feedback: add evidence before launch claims.');
+    expect(capturedPrompt).toMatch(/not source evidence/i);
+    expect(capturedPrompt).toContain('[T1][user] Ship the product.');
+    expect(capturedPrompt.indexOf('Selected feedback')).toBeLessThan(
+      capturedPrompt.indexOf('Conversation turns:')
+    );
+  });
+
+  it('omits the context guidance block when contextText is blank', async () => {
+    let capturedPrompt = '';
+    const provider: Pick<LLMProvider, 'generateStructured'> = {
+      async generateStructured(prompt) {
+        capturedPrompt = prompt.messages[0].content as string;
+        return {
+          data: {
+            schema: 't3x/provider-extraction-draft',
+            version: 1,
+            mode: 'bootstrap',
+            items: [],
+            warnings: [],
+          },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        };
+      },
+    };
+
+    await runExtractionV2Pipeline({
+      turns: [{ turn_hash: 'turn_1', role: 'user', content: 'Ship the product.' }],
+      mode: 'bootstrap',
+      providerId: 'test',
+      provider,
+      model: 'test-model',
+      contextText: '   \n\t  ',
+    });
+
+    expect(capturedPrompt).not.toContain('Selected context guidance');
+    expect(capturedPrompt).toContain('Conversation turns:\n[T1][user] Ship the product.');
+  });
+
   it('treats caller mode as authoritative when provider draft mode drifts', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

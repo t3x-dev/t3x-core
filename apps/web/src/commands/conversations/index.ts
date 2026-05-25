@@ -11,3 +11,4 @@ export { createConversation } from './createConversation';
 export { deleteConversation } from './deleteConversation';
 export { ConversationPersistenceError } from './errors';
 export { type UpdateConversationInput, updateConversation } from './updateConversation';
+export { updateConversationContextPins } from './updateConversationContextPins';

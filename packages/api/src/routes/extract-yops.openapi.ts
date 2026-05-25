@@ -43,6 +43,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { extractAndApply, extractToOutcome, PRESETS, type PresetName } from '@t3x-dev/core';
 import { findConversationById } from '@t3x-dev/storage';
+import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { getUserId } from '../lib/project-access';
@@ -67,6 +68,7 @@ const ExtractYopsRequest = z.object({
   turns: z.array(TurnInput),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  selected_pin_ids: z.array(z.string()).nullable().optional(),
   /**
    * Extraction style preset. Drives a granularity-aware system prompt
    * (concise: hard 6-item budget + single-tree shape; detailed: capture
@@ -199,6 +201,7 @@ extractYopsRoutes.openapi(route, async (c) => {
     turns,
     provider: requestedProvider,
     model: requestedModel,
+    selected_pin_ids: selectedPinIds,
     preset,
   } = c.req.valid('json');
 
@@ -258,6 +261,10 @@ extractYopsRoutes.openapi(route, async (c) => {
         return errorResponse(c, errorCode, resolution.message);
       }
 
+      const manifest = await buildConversationContextManifest(db, conversation_id, {
+        selectedPinIdsOverride: selectedPinIds,
+      });
+
       // Map the wire-level preset name to the full ExtractionStyleConfig
       // the core pipeline expects. Omitted preset → undefined → core
       // emits the historical no-style prompt.
@@ -274,6 +281,7 @@ extractYopsRoutes.openapi(route, async (c) => {
         provider: resolution.provider,
         model: resolution.model,
         snapshot: baselineSnapshot.trees.length > 0 ? baselineSnapshot : undefined,
+        contextText: manifest.extraction_context_text || undefined,
         style,
       });
 

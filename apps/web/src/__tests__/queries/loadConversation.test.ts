@@ -47,5 +47,10 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.tree).toEqual(PARENT_TREE);
     expect(snapshot.parentCommitHash).toBe('sha256:parent_commit');
     expect(snapshot.parentCommitBranch).toBe('5');
+    expect(snapshot.parentCommit).toEqual({
+      hash: 'sha256:parent_commit',
+      trees: PARENT_TREE.trees,
+      message: null,
+    });
   });
 });

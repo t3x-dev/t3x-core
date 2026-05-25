@@ -283,6 +283,10 @@ function slotPreviewToEditText(value: SlotPreviewValue | null): string {
     .join(', ');
 }
 
+function testIdSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
 /**
  * Whether the panel's Commit button should be disabled.
  *
@@ -584,7 +588,15 @@ function SlotCell({ side, row, selected, onSelect, onClear, onDelete, onEdit }: 
   );
 
   return (
-    <div className="h-full w-full" data-yaml-tree-row="true">
+    <div
+      className="h-full w-full"
+      data-yaml-tree-row="true"
+      data-testid={
+        side === 'after'
+          ? `slot-row-${testIdSegment(row.path)}-${testIdSegment(row.slotKey)}`
+          : undefined
+      }
+    >
       <div className="flex h-full w-full items-stretch">
         <div className={`w-px shrink-0 ${selected ? 'bg-[var(--source)]/75' : tone.rail}`} />
         <div

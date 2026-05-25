@@ -1,4 +1,9 @@
-import { API_BASE, cleanupProject, createTestProject } from '../fixtures/api-helpers';
+import {
+  API_BASE,
+  cleanupProject,
+  createTestCommit,
+  createTestProject,
+} from '../fixtures/api-helpers';
 import { expect, test } from '../fixtures/test';
 import { generateProjectName } from '../fixtures/test-data-factory';
 
@@ -52,6 +57,7 @@ test.describe('Project Lifecycle', () => {
   test('PL-03: Navigate to project canvas', async ({ page, request }) => {
     const { projectId } = await createTestProject(request, generateProjectName('PL-03'));
     projectIdsToCleanup.push(projectId);
+    await createTestCommit(request, projectId, [{ id: 'pl_03_node', text: 'Canvas node' }]);
 
     await page.goto(`/project/${projectId}?view=canvas`);
 

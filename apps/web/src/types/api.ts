@@ -15,6 +15,13 @@ export type {
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
 export type { ApiCommit } from '@/infrastructure/commits';
+export type {
+  ContextManifestBaseline,
+  ContextManifestFeedback,
+  ContextManifestReference,
+  ContextManifestSource,
+  ConversationContextManifest,
+} from '@/infrastructure/contextManifest';
 export { ApiError } from '@/infrastructure/core';
 export type { DeployAgent } from '@/infrastructure/deploy';
 export type { TreeMergeSuggestion } from '@/infrastructure/diff';
