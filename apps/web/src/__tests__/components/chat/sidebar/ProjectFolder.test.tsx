@@ -114,4 +114,98 @@ describe('ProjectFolder active state', () => {
       'Test Project\nmain · 2 commits · 3 sources'
     );
   });
+
+  it('appends the latest main commit hash to the visible project name', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, conversations_count: 3, commits_count: 2 }}
+        conversations={[]}
+        isExpanded={false}
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        latestMainCommitHash="sha256:abcdef1234567890"
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('· abcdef12')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Test Project/i })).toHaveAttribute(
+      'title',
+      'Test Project · abcdef12\nmain · 2 commits · latest sha256:abcdef1234567890 · 3 sources'
+    );
+  });
+
+  it('appends committed conversation hashes without changing the base title', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, conversations_count: 1, commits_count: 1 }}
+        conversations={[
+          {
+            conversation_id: 'conv_committed',
+            project_id: 'proj_test',
+            title: 'Chestnut meal plan',
+            committed_as: 'sha256:fedcba9876543210',
+            committed_at: '2026-05-25T00:00:00Z',
+            created_at: '2026-05-25T00:00:00Z',
+          },
+        ]}
+        isExpanded
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Chestnut meal plan')).toBeInTheDocument();
+    expect(screen.getByText('· fedcba98')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Chestnut meal plan/i })).toHaveAttribute(
+      'title',
+      'Chestnut meal plan · fedcba98\ncommit sha256:fedcba9876543210'
+    );
+  });
+
+  it('appends branch commit hashes for conversations that are not marked committed', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, conversations_count: 1, commits_count: 1 }}
+        conversations={[
+          {
+            conversation_id: 'conv_branch',
+            project_id: 'proj_test',
+            title: 'Branch exploration',
+            committed_as: null,
+            committed_at: null,
+            created_at: '2026-05-25T00:00:00Z',
+          },
+        ]}
+        isExpanded
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        conversationCommitHashes={{ conv_branch: 'sha256:1234567890abcdef' }}
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Branch exploration')).toBeInTheDocument();
+    expect(screen.getByText('· 12345678')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Branch exploration/i })).toHaveAttribute(
+      'title',
+      'Branch exploration · 12345678\ncommit sha256:1234567890abcdef'
+    );
+  });
 });

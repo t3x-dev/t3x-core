@@ -1,4 +1,4 @@
-const MAX_CONVERSATION_TITLE_LENGTH = 25;
+export const MAX_CONVERSATION_TITLE_LENGTH = 25;
 const PLACEHOLDER_TITLES = new Set(['new chat', 'untitled conversation', 'temporary chat']);
 
 export function deriveConversationTitleFromMessage(message: string): string {
@@ -6,6 +6,22 @@ export function deriveConversationTitleFromMessage(message: string): string {
   if (!normalized) return 'New Chat';
   if (normalized.length <= MAX_CONVERSATION_TITLE_LENGTH) return normalized;
   return `${normalized.slice(0, MAX_CONVERSATION_TITLE_LENGTH - 3).trimEnd()}...`;
+}
+
+export function normalizeGeneratedConversationTitle(
+  rawTitle: string | null | undefined,
+  fallback: string
+): string {
+  const normalized = (rawTitle ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, '')
+    .replace(/^(title|标题)\s*[:：]\s*/i, '')
+    .trim();
+
+  const title = normalized || fallback;
+  if (title.length <= MAX_CONVERSATION_TITLE_LENGTH) return title;
+  return `${title.slice(0, MAX_CONVERSATION_TITLE_LENGTH - 3).trimEnd()}...`;
 }
 
 export function isPlaceholderConversationTitle(title: string | null | undefined): boolean {

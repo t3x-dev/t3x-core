@@ -14,6 +14,8 @@ export interface ProjectFolderProps {
   isActive: boolean;
   activeConversationId: string | null;
   collapsed: boolean;
+  latestMainCommitHash?: string | null;
+  conversationCommitHashes?: Record<string, string>;
   onToggleExpand: () => void;
   onConversationClick: (convId: string) => void;
   onNewChat: (projectId: string) => void;
@@ -31,6 +33,10 @@ export const PROJECT_ICON_COLORS = [
   { bg: 'bg-[var(--accent-conversation)]/15', text: 'text-[var(--accent-conversation)]' },
 ];
 
+function shortCommitHash(hash: string | null | undefined): string | null {
+  return hash ? hash.replace(/^sha256:/, '').slice(0, 8) : null;
+}
+
 export function ProjectFolder({
   project,
   conversations,
@@ -38,6 +44,8 @@ export function ProjectFolder({
   isActive,
   activeConversationId,
   collapsed,
+  latestMainCommitHash,
+  conversationCommitHashes = {},
   onToggleExpand,
   onConversationClick,
   onNewChat,
@@ -48,13 +56,17 @@ export function ProjectFolder({
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
   const isDemoProject = project.metadata?.is_demo === true;
+  const latestMainShortHash = shortCommitHash(latestMainCommitHash);
+  const projectDisplayName = latestMainShortHash
+    ? `${project.name} · ${latestMainShortHash}`
+    : project.name;
   const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'}`;
-  const projectDetails = `${projectSummary} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
+  const projectDetails = `${projectSummary}${latestMainCommitHash ? ` · latest ${latestMainCommitHash}` : ''} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
 
   const folderButton = (
     <button
       type="button"
-      title={`${project.name}\n${projectDetails}`}
+      title={`${projectDisplayName}\n${projectDetails}`}
       onClick={() => {
         if (collapsed) {
           useChatStore.setState({ sidebarCollapsed: false });
@@ -94,10 +106,15 @@ export function ProjectFolder({
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <span
               className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-4"
-              title={project.name}
+              title={projectDisplayName}
             >
               {project.name}
             </span>
+            {latestMainShortHash && (
+              <span className="shrink-0 text-[10px] font-medium leading-4 text-[var(--text-tertiary)]">
+                · {latestMainShortHash}
+              </span>
+            )}
             {isDemoProject && (
               <span className="inline-flex h-[15px] shrink-0 items-center rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-1 text-[9px] font-semibold uppercase leading-none text-[var(--text-tertiary)]">
                 Demo
@@ -137,7 +154,7 @@ export function ProjectFolder({
         <Tooltip>
           <TooltipTrigger asChild>{folderButton}</TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            {project.name}
+            {projectDisplayName}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -150,11 +167,19 @@ export function ProjectFolder({
           {conversations.map((conv) => {
             const isActive = activeConversationId === conv.conversation_id;
             const title = conv.title ?? conv.conversation_id.slice(0, 30);
+            const conversationCommitHash =
+              conv.committed_as ?? conversationCommitHashes[conv.conversation_id];
+            const committedShortHash = shortCommitHash(conversationCommitHash);
+            const displayTitle = committedShortHash ? `${title} · ${committedShortHash}` : title;
             return (
               <button
                 key={conv.conversation_id}
                 type="button"
-                title={title}
+                title={
+                  conversationCommitHash
+                    ? `${displayTitle}\ncommit ${conversationCommitHash}`
+                    : displayTitle
+                }
                 onClick={() => onConversationClick(conv.conversation_id)}
                 onContextMenu={(e) => onConversationContextMenu(e, conv.conversation_id)}
                 className={cn(
@@ -176,6 +201,11 @@ export function ProjectFolder({
                 <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                   {title}
                 </span>
+                {committedShortHash && (
+                  <span className="shrink-0 text-[10px] font-medium text-[var(--text-tertiary)]">
+                    · {committedShortHash}
+                  </span>
+                )}
               </button>
             );
           })}

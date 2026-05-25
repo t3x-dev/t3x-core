@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createConversationMock = vi.fn();
 const getConversationMemoryMock = vi.fn();
+const chatMock = vi.fn();
 const chatStreamMock = vi.fn();
 const createTurnMock = vi.fn();
 const updateConversationMock = vi.fn();
@@ -75,6 +76,7 @@ vi.mock('@/store/chatSessionStore', () => ({
 vi.mock('@/infrastructure', () => ({
   createConversation: (...args: unknown[]) => createConversationMock(...args),
   getConversationMemory: (...args: unknown[]) => getConversationMemoryMock(...args),
+  chat: (...args: unknown[]) => chatMock(...args),
   chatStream: (...args: unknown[]) => chatStreamMock(...args),
   createTurn: (...args: unknown[]) => createTurnMock(...args),
   updateConversation: (...args: unknown[]) => updateConversationMock(...args),
@@ -109,11 +111,12 @@ describe('useConversationChat', () => {
     useTemporaryChatsStore.setState({ chats: [] });
     createConversationMock.mockResolvedValue({ conversation_id: 'conv_child' });
     getConversationMemoryMock.mockResolvedValue({ text: '' });
+    chatMock.mockResolvedValue({ content: 'Chestnut meal plan' });
     chatStreamMock.mockReturnValue(emptyChatStream());
     createTurnMock.mockResolvedValue({ turn_hash: 'sha256:turn' });
     updateConversationMock.mockResolvedValue({
       conversation_id: 'conv_existing',
-      title: 'I want to eat chestnuts.',
+      title: 'Chestnut meal plan',
     });
   });
 
@@ -140,7 +143,7 @@ describe('useConversationChat', () => {
     });
   });
 
-  it('derives new conversation titles from the first user message when no title is supplied', async () => {
+  it('generates new conversation titles from the first user message when no title is supplied', async () => {
     const { result } = renderHook(() =>
       useConversationChat({
         projectId: 'proj_1',
@@ -159,9 +162,23 @@ describe('useConversationChat', () => {
         undefined
       );
     });
+    await waitFor(() => {
+      expect(chatMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({ role: 'user', content: 'I want to eat chestnuts.' }),
+          ]),
+          provider: 'openai',
+          model: 'gpt-5.4',
+        })
+      );
+      expect(updateConversationMock).toHaveBeenCalledWith('conv_child', {
+        title: 'Chestnut meal plan',
+      });
+    });
   });
 
-  it('renames placeholder conversations after the first saved user turn', async () => {
+  it('renames placeholder conversations with a generated title after the first saved user turn', async () => {
     const { result } = renderHook(() =>
       useConversationChat({
         projectId: 'proj_1',
@@ -176,7 +193,7 @@ describe('useConversationChat', () => {
 
     await waitFor(() => {
       expect(updateConversationMock).toHaveBeenCalledWith('conv_existing', {
-        title: 'I want to eat chestnuts.',
+        title: 'Chestnut meal plan',
       });
     });
   });
@@ -207,9 +224,31 @@ describe('useConversationChat', () => {
     result.current.sendMessage('I want to eat chestnuts.');
 
     await waitFor(() => {
-      expect(useTemporaryChatsStore.getState().chats[0]?.title).toBe('I want to eat chestnuts.');
+      expect(useTemporaryChatsStore.getState().chats[0]?.title).toBe('Chestnut meal plan');
     });
     expect(updateConversationMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a derived title when title generation fails', async () => {
+    chatMock.mockRejectedValueOnce(new Error('title model unavailable'));
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'New Chat',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(updateConversationMock).toHaveBeenCalledWith('conv_existing', {
+        title: 'I want to eat chestnuts.',
+      });
+    });
   });
 
   it('does not rename conversations with custom titles', async () => {

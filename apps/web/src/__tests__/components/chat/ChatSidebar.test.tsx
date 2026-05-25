@@ -34,12 +34,21 @@ const mocks = vi.hoisted(() => {
   return {
     createProject: vi.fn(),
     contextMenuItems: [] as Array<{ label: string; onClick: () => void }>,
-    conversationsByProject: {} as Record<string, Array<{ conversation_id: string; title: string }>>,
+    conversationsByProject: {} as Record<
+      string,
+      Array<{
+        conversation_id: string;
+        title: string;
+        committed_as?: string | null;
+        committed_at?: string | null;
+      }>
+    >,
     commits: [] as Array<{
       hash: string;
       message: string | null;
       branch: string;
       committed_at: string;
+      sources?: Array<{ type: string; id: string; title?: string }> | null;
     }>,
     loadConversations: vi.fn(),
     loadCommits: vi.fn(),
@@ -364,6 +373,74 @@ describe('ChatSidebar', () => {
       'conv_latest',
       'proj_smoke'
     );
+  });
+
+  it('shows the latest main commit hash next to committed project names', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_committed',
+        name: 'Committed Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 2,
+      },
+    ];
+    mocks.loadCommits.mockResolvedValue([
+      {
+        hash: 'sha256:abcdef1234567890',
+        message: 'Latest main commit',
+        branch: 'main',
+        committed_at: '2026-05-08T00:00:00Z',
+      },
+    ]);
+
+    render(<ChatSidebar />);
+
+    await waitFor(() => {
+      expect(mocks.loadCommits).toHaveBeenCalledWith('proj_committed', 'main', 1);
+      expect(screen.getByText('· abcdef12')).toBeInTheDocument();
+    });
+  });
+
+  it('shows branch commit hashes next to source conversation names', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_branch',
+        name: 'Branch Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_branch: [
+        {
+          conversation_id: 'conv_branch_source',
+          title: 'Branch source chat',
+          committed_as: null,
+        },
+      ],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_branch']);
+    mocks.loadCommits.mockImplementation(async (_projectId, branch, limit) => {
+      if (branch === 'main' && limit === 1) return [];
+      return [
+        {
+          hash: 'sha256:1234567890abcdef',
+          message: 'Branch exploration',
+          branch: 'feature-branch',
+          committed_at: '2026-05-08T00:00:00Z',
+          sources: [{ type: 'conversation', id: 'conv_branch_source' }],
+        },
+      ];
+    });
+
+    render(<ChatSidebar />);
+
+    await waitFor(() => {
+      expect(mocks.loadCommits).toHaveBeenCalledWith('proj_branch', undefined, 100);
+      expect(screen.getByText('· 12345678')).toBeInTheDocument();
+    });
   });
 
   it('shows Claude-style mode tabs above chat navigation lists', () => {
