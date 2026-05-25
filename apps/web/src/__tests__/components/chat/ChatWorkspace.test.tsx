@@ -8,12 +8,15 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const mocks = vi.hoisted(() => ({
   ensureProject: vi.fn(),
+  addPin: vi.fn(),
   fetchPins: vi.fn(),
   handleExtract: vi.fn(),
   handleModelChange: vi.fn(),
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  parentConversationId: null as string | null,
+  projectLeaves: [],
   textSelection: {
     current: null as null | {
       selection: {
@@ -45,7 +48,7 @@ vi.mock('@/hooks/commits/useCommittedHighlights', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useChatInit', () => ({
-  useChatInit: () => ({ parentConversationId: null }),
+  useChatInit: () => ({ parentConversationId: mocks.parentConversationId }),
 }));
 
 vi.mock('@/hooks/conversations/useConversationChat', () => ({
@@ -72,12 +75,21 @@ vi.mock('@/hooks/drafts/useExtraction', () => ({
   }),
 }));
 
+vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
+  useProjectLeaves: () => ({
+    leaves: mocks.projectLeaves,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock('@/hooks/pins/usePinEnrichment', () => ({
   usePinEnrichment: () => new Map(),
 }));
 
 vi.mock('@/hooks/pins/usePinsCrud', () => ({
-  usePinsCrud: () => ({ fetch: mocks.fetchPins }),
+  usePinsCrud: () => ({ fetch: mocks.fetchPins, add: mocks.addPin, setAssertions: vi.fn() }),
 }));
 
 vi.mock('@/hooks/projects/useAutoProject', () => ({
@@ -124,6 +136,8 @@ describe('ChatWorkspace', () => {
     Element.prototype.scrollIntoView = vi.fn();
     Element.prototype.scrollTo = vi.fn();
     mocks.textSelection.current = null;
+    mocks.parentConversationId = null;
+    mocks.projectLeaves = [];
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -138,7 +152,15 @@ describe('ChatWorkspace', () => {
     });
   });
 
-  it('does not start extraction when Choose sources is requested without pinned sources', () => {
+  it('opens source chooser instead of toast when inherited baseline exists without pinned sources', () => {
+    mocks.parentConversationId = 'conv_parent';
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+      baselineCommitHash: 'sha256:parent',
+      hasConversationChanges: false,
+    });
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
     act(() => {
@@ -150,7 +172,9 @@ describe('ChatWorkspace', () => {
     });
 
     expect(mocks.handleExtract).not.toHaveBeenCalled();
-    expect(mocks.toastMessage.mock.calls[0]?.[0]).toBe('No pinned sources yet');
+    expect(mocks.toastMessage).not.toHaveBeenCalledWith('No pinned sources yet');
+    expect(screen.getByText('Inherited baseline is already included')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /pin parent conversation/i })).not.toBeNull();
   });
 
   it('shows source text actions for a valid selection even before executed mode', () => {

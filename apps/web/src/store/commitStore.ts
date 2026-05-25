@@ -10,6 +10,7 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
+import type { ParentCommit } from '@/types/parentCommit';
 import { create } from 'zustand';
 import { useWorkspaceStore } from './workspaceStore';
 
@@ -45,6 +46,7 @@ interface CommitState {
   conversationTitle: string | null;
   isCommitting: boolean;
   commitError: string | null;
+  parentCommitCache: Record<string, ParentCommit>;
 
   // Pure state mutation
   confirmNode: (treeId: string) => void;
@@ -68,6 +70,7 @@ interface CommitState {
     committedNodeSnapshot: Record<string, TreeNode>;
   }) => void;
   setBeforeCommitHash: (hash: string | null) => void;
+  cacheParentCommit: (commit: ParentCommit) => void;
   setInitialCommit: (
     hash: string,
     committedNodeIds: Record<string, boolean>,
@@ -88,6 +91,7 @@ export const useCommitStore = create<CommitState>((set, get) => ({
   conversationTitle: null,
   isCommitting: false,
   commitError: null,
+  parentCommitCache: {},
 
   confirmNode: (treeId) =>
     set((s) => ({
@@ -155,6 +159,11 @@ export const useCommitStore = create<CommitState>((set, get) => ({
     }),
 
   setBeforeCommitHash: (hash) => set({ beforeCommitHash: hash }),
+
+  cacheParentCommit: (commit) =>
+    set((s) => ({
+      parentCommitCache: { ...s.parentCommitCache, [commit.hash]: commit },
+    })),
 
   setInitialCommit: (hash, committedNodeIds, committedNodeSnapshot) =>
     set({ lastCommitHash: hash, committedNodeIds, committedNodeSnapshot }),

@@ -34,6 +34,7 @@ function resetCommitStore() {
     conversationTitle: null,
     isCommitting: false,
     commitError: null,
+    parentCommitCache: {},
   });
 }
 
@@ -47,6 +48,22 @@ afterEach(() => {
 });
 
 describe('useParentCommit', () => {
+  it('uses a cached parent commit without refetching it', () => {
+    const cached = {
+      hash: 'sha256:parent',
+      trees: [node('cached_parent')],
+      message: 'cached parent',
+    };
+    useCommitStore.getState().setProjectId('proj_1');
+    useCommitStore.getState().setBeforeCommitHash('sha256:parent');
+    useCommitStore.getState().cacheParentCommit(cached);
+
+    const { result } = renderHook(() => useParentCommit());
+
+    expect(result.current).toEqual(cached);
+    expect(mocks.fetchParentCommit).not.toHaveBeenCalled();
+  });
+
   it('loads the parent commit for the active project baseline', async () => {
     mocks.fetchParentCommit.mockResolvedValueOnce({
       hash: 'sha256:parent',

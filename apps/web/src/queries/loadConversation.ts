@@ -19,6 +19,7 @@ import { YOpsReplayError } from '@/commands/yops/errors';
 import { type ReplayPartial, replay } from '@/domain/replay';
 import type { YOpsOpOrigin, YOpsRowMeta } from '@/domain/yops/rowMeta';
 import { loadConversation as loadL1 } from '@/infrastructure/conversationLoader';
+import type { ParentCommit } from '@/types/parentCommit';
 import { fetchCommitForInheritance } from './chatInitFetch';
 
 export interface WorkspaceTurn {
@@ -52,18 +53,28 @@ export interface ConversationSnapshot {
   committedAt: string | null;
   parentCommitHash: string | null;
   parentCommitBranch: string | null;
+  parentCommit: ParentCommit | null;
   partial?: SnapshotPartial;
 }
 
 async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
   content: SemanticContent;
   branch: string | null;
+  parentCommit: ParentCommit | null;
 }> {
-  if (!parentCommitHash) return { content: { trees: [], relations: [] }, branch: null };
+  if (!parentCommitHash) {
+    return { content: { trees: [], relations: [] }, branch: null, parentCommit: null };
+  }
   const parentCommit = await fetchCommitForInheritance(parentCommitHash);
+  const content = parentCommit.content ?? { trees: [], relations: [] };
   return {
-    content: parentCommit.content ?? { trees: [], relations: [] },
+    content,
     branch: parentCommit.branch ?? null,
+    parentCommit: {
+      hash: parentCommit.hash ?? parentCommitHash,
+      trees: (content.trees as ParentCommit['trees'] | undefined) ?? [],
+      message: parentCommit.message ?? null,
+    },
   };
 }
 
@@ -124,6 +135,7 @@ export async function fetchConversationSnapshot(
     committedAt,
     parentCommitHash,
     parentCommitBranch: parentCommitInfo.branch,
+    parentCommit: parentCommitInfo.parentCommit,
   };
 
   if (partial) {

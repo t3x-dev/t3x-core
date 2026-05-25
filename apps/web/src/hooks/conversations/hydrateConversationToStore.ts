@@ -91,7 +91,11 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
 
   const post = useWorkspaceStore.getState();
   useChatStore.getState().setConversationTitle(snapshot.title);
-  useCommitStore.getState().setConversationTitle(snapshot.title);
+  const commitStore = useCommitStore.getState();
+  commitStore.setConversationTitle(snapshot.title);
+  if (snapshot.parentCommit) {
+    commitStore.cacheParentCommit(snapshot.parentCommit);
+  }
   post.setTurns(snapshot.turns);
   post.setDerived({
     tree: snapshot.tree,
@@ -119,7 +123,6 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
   } else {
     post.setCommitted(false);
     if (snapshot.parentCommitHash) {
-      const commitStore = useCommitStore.getState();
       commitStore.setInitialCommit(snapshot.parentCommitHash, {}, {});
       commitStore.setBeforeCommitHash(snapshot.parentCommitHash);
       if (snapshot.parentCommitBranch) {
