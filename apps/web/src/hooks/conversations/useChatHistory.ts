@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from '@/infrastructure';
+import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 
 const CHAT_PAGE_SIZE = 100;
 
@@ -64,7 +65,22 @@ export function useChatHistory(
     prevConversationIdRef.current = currentConversationId;
 
     const load = async () => {
-      if (!projectId || !currentConversationId) return;
+      if (!currentConversationId) return;
+      if (!projectId && isTemporaryChatId(currentConversationId)) {
+        const chat = getTemporaryChat(currentConversationId);
+        setMessages(
+          (chat?.messages ?? []).map((message) => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+          }))
+        );
+        setOffset(chat?.messages.length ?? 0);
+        setHasMore(false);
+        setIsChatLoading(false);
+        return;
+      }
+      if (!projectId) return;
       if (prevConversationId === undefined && messagesRef.current.length > 0) return;
 
       loadMoreAbortRef.current?.abort();

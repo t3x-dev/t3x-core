@@ -130,9 +130,11 @@ vi.mock('@/components/chat/sidebar/ContextMenu', () => ({
 }));
 
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 
 afterEach(() => {
   vi.clearAllMocks();
+  useTemporaryChatsStore.setState({ chats: [] });
   mocks.projects = [];
   mocks.projectLeaves = [];
   mocks.conversationsByProject = {};
@@ -146,6 +148,45 @@ afterEach(() => {
 });
 
 describe('ChatSidebar', () => {
+  it('creates a temporary chat from the Temporary chats action', () => {
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New temporary chat' }));
+
+    const [chat] = useTemporaryChatsStore.getState().chats;
+    expect(chat).toMatchObject({ title: 'Temporary chat', messages: [] });
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(chat.id, null);
+    expect(mocks.chatState.setConversationTitle).toHaveBeenCalledWith('Temporary chat');
+    expect(mocks.routerPush).toHaveBeenCalledWith(`/chat/${encodeURIComponent(chat.id)}`);
+  });
+
+  it('uses the shared purple tint selected shell for active temporary chats', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_selected',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+    mocks.chatState.activeConversationId = 'temp_selected';
+    mocks.chatState.activeProjectId = null;
+
+    render(<ChatSidebar />);
+
+    const chatButton = screen.getByRole('button', {
+      name: /Temporary chat\s*0 messages · not in a project/,
+    });
+    const row = chatButton.parentElement;
+
+    expect(row).toHaveClass('bg-[var(--accent-conversation-soft)]');
+    expect(row).toHaveClass('border-[var(--accent-conversation)]/20');
+    expect(row).not.toHaveClass('bg-[var(--sidebar-panel)]');
+  });
+
   it('opens a project name dialog and creates a named project', async () => {
     mocks.createProject.mockResolvedValue({
       project_id: 'proj_custom',
@@ -298,20 +339,26 @@ describe('ChatSidebar', () => {
     const chatTab = screen.getByRole('tab', { name: 'Chat' });
     const canvasTab = screen.getByRole('tab', { name: 'Canvas' });
     const leafTab = screen.getByRole('tab', { name: 'Leaf' });
-    const newChat = screen.getByRole('button', { name: 'New chat' });
+    const newProject = screen.getByRole('button', { name: 'New project' });
+    const newTemporaryChat = screen.getByRole('button', { name: 'New temporary chat' });
+    const temporaryHeader = screen.getByText('Temporary chats');
     const projectsHeader = screen.getByText('Projects');
-    const recentsHeader = screen.getByText('Recents');
 
     expect(chatTab).toHaveAttribute('aria-selected', 'true');
     expect(canvasTab).toBeEnabled();
     expect(leafTab).toBeEnabled();
-    expect(chatTab.compareDocumentPosition(newChat)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(newChat.compareDocumentPosition(projectsHeader)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(projectsHeader.compareDocumentPosition(recentsHeader)).toBe(
+    expect(chatTab.compareDocumentPosition(newProject)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(newProject.compareDocumentPosition(projectsHeader)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(projectsHeader.compareDocumentPosition(temporaryHeader)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(temporaryHeader.compareDocumentPosition(newTemporaryChat)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
 
-    expect(screen.getByRole('button', { name: /I also want to try som/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Smoke English Extraction/i })).toBeInTheDocument();
   });
 
   it('routes top-level Canvas and Leaf tabs from the active project context', () => {

@@ -12,6 +12,7 @@ import type { Citation } from '@/infrastructure/chat';
 import { useChatSessionStore } from '@/store/chatSessionStore';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
+import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import type { AttachedImage } from '@/types/chat';
 
 export type { ChatMessage } from '@/hooks/conversations/useChatHistory';
@@ -118,6 +119,7 @@ export function useConversationChat({
   const history = useChatHistory(projectId, conversationId);
   const stream = useChatStreamState();
   const warnings = useChatWarnings();
+  const isTemporaryMode = !projectId;
 
   const [turnsSavedCounter, setTurnsSavedCounter] = useState(0);
 
@@ -203,7 +205,15 @@ export function useConversationChat({
 
       try {
         let convId = conversationIdRef.current;
-        if (!convId && projectId) {
+        if (!convId && isTemporaryMode) {
+          const newTitle = title?.trim() ? title : messageTitle;
+          const chat = useTemporaryChatsStore.getState().createChat(newTitle);
+          convId = chat.id;
+          conversationIdRef.current = convId;
+          syncConversationTitle(chat.title);
+          useChatStore.getState().setActiveConversation(convId, null);
+          onConversationCreated?.(convId);
+        } else if (!convId && projectId) {
           const newTitle = title?.trim() ? title : messageTitle;
           const newConv = await api.createConversation(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
@@ -218,11 +228,19 @@ export function useConversationChat({
 
         const currentConversationId = convId;
         stableConversationId = currentConversationId;
-        const userTurn = await saveTurnWithRetry(() =>
-          api.createTurn(projectId, currentConversationId, 'user', userMessage)
-        );
-        mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
-        if (shouldRenamePlaceholder) {
+        if (isTemporaryMode) {
+          useTemporaryChatsStore.getState().addMessage(currentConversationId, newUserMessage);
+          if (shouldRenamePlaceholder) {
+            useTemporaryChatsStore.getState().renameChat(currentConversationId, messageTitle);
+            syncConversationTitle(messageTitle);
+          }
+        } else {
+          const userTurn = await saveTurnWithRetry(() =>
+            api.createTurn(projectId, currentConversationId, 'user', userMessage)
+          );
+          mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
+        }
+        if (!isTemporaryMode && shouldRenamePlaceholder) {
           try {
             const updated = await api.updateConversation(currentConversationId, {
               title: messageTitle,
@@ -236,7 +254,7 @@ export function useConversationChat({
         onTurnsSaved?.();
 
         let memoryContext = '';
-        if (!options?.skipMemoryFetch) {
+        if (!isTemporaryMode && !options?.skipMemoryFetch) {
           try {
             const ctx = await api.getConversationMemory(currentConversationId);
             if (ctx.text) memoryContext = ctx.text;
@@ -302,11 +320,18 @@ export function useConversationChat({
               history.setMessages((prev) => [
                 ...prev,
                 {
-                  id: `msg-${Date.now()}`,
+                  id: `msg-${Date.now()}-assistant`,
                   role: 'assistant' as const,
                   content: fullResponse,
                 },
               ]);
+              if (isTemporaryMode) {
+                useTemporaryChatsStore.getState().addMessage(currentConversationId, {
+                  id: `msg-${Date.now()}-assistant`,
+                  role: 'assistant',
+                  content: fullResponse,
+                });
+              }
               stream.setStreamingContent('');
               addedFinalMessage = true;
             } else if (!addedFinalMessage) {
@@ -329,10 +354,17 @@ export function useConversationChat({
               content: fullResponse,
             },
           ]);
+          if (isTemporaryMode && stableConversationId) {
+            useTemporaryChatsStore.getState().addMessage(stableConversationId, {
+              id: `msg-${Date.now()}-assistant`,
+              role: 'assistant',
+              content: fullResponse,
+            });
+          }
           stream.setStreamingContent('');
         }
 
-        await saveAssistantResponse(fullResponse);
+        if (!isTemporaryMode) await saveAssistantResponse(fullResponse);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
@@ -345,7 +377,15 @@ export function useConversationChat({
                 content: partial,
               },
             ]);
-            await saveAssistantResponse(partial);
+            if (isTemporaryMode && stableConversationId) {
+              useTemporaryChatsStore.getState().addMessage(stableConversationId, {
+                id: `msg-${Date.now()}-assistant`,
+                role: 'assistant',
+                content: partial,
+              });
+            } else {
+              await saveAssistantResponse(partial);
+            }
           }
           stream.setStreamingContent('');
           stream.setIsChatStreaming(false);
@@ -372,6 +412,7 @@ export function useConversationChat({
       onTurnsSaved,
       webSearchEnabled,
       thinkingEnabled,
+      isTemporaryMode,
     ]
   );
 

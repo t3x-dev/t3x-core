@@ -143,6 +143,12 @@ interface WorkspaceState {
    */
   panelExpandedByProject: Record<string, boolean>;
   /**
+   * Per-temporary-conversation workspace expansion preference (persisted).
+   * Temporary chats deliberately have no project_id, so they cannot use
+   * `panelExpandedByProject`. Keyed by the local `temp_*` conversation id.
+   */
+  panelExpandedByTemporaryConversation: Record<string, boolean>;
+  /**
    * Project that the workspace is currently scoped to. Read by
    * `selectPanelExpanded` / `setPanelExpanded` to look up the per-project
    * preference. Null until a conversation has resolved its project_id.
@@ -244,10 +250,12 @@ interface WorkspaceState {
   setMode: (mode: WorkspaceMode) => void;
   /**
    * User-intent expansion setter. When a project is active, writes
-   * directly to `panelExpandedByProject[activeProjectId]`. When no
-   * project is resolved yet (cold-load race), captures the intent in
-   * `pendingPanelExpanded` so it can be promoted by the next
-   * `setActiveProject` call. Either way the click is no longer lost.
+   * directly to `panelExpandedByProject[activeProjectId]`. Temporary
+   * conversations write to `panelExpandedByTemporaryConversation[tempId]`.
+   * When no project is resolved yet for a persisted conversation
+   * (cold-load race), captures the intent in `pendingPanelExpanded` so it
+   * can be promoted by the next `setActiveProject` call. Either way the
+   * click is no longer lost.
    */
   setPanelExpanded: (expanded: boolean) => void;
   /**
@@ -363,7 +371,15 @@ const EMPTY_TREE: SemanticContent = { trees: [], relations: [] };
  * project. Components subscribe via `useWorkspaceStore(selectPanelExpanded)`.
  */
 export const selectPanelExpanded = (state: WorkspaceState): boolean =>
-  state.activeProjectId ? Boolean(state.panelExpandedByProject[state.activeProjectId]) : false;
+  state.activeProjectId
+    ? Boolean(state.panelExpandedByProject[state.activeProjectId])
+    : isTemporaryWorkspaceConversationId(state.conversationId)
+      ? Boolean(state.panelExpandedByTemporaryConversation?.[state.conversationId])
+      : false;
+
+function isTemporaryWorkspaceConversationId(id: string | null): id is string {
+  return Boolean(id?.startsWith('temp_'));
+}
 
 export const selectIsInheritedBaselineOnly = (state: WorkspaceState): boolean =>
   Boolean(
@@ -435,10 +451,11 @@ export const selectActiveUncommittedRowCount = (state: WorkspaceState): number =
 
 /**
  * State that gets cleared by `reset()` — i.e. conversation-scoped data only.
- * Note this object intentionally does NOT include `panelExpandedByProject` or
+ * Note this object intentionally does NOT include UI scope fields such as
+ * `panelExpandedByProject`, `panelExpandedByTemporaryConversation`, or
  * `activeProjectId`: zustand's `set` is a partial update, so any field absent
- * here is left untouched. That preserves the per-project expansion preference
- * and the workspace's project scope across a conversation switch.
+ * here is left untouched. That preserves expansion preferences and the
+ * workspace's project scope across a conversation switch.
  *
  * Do not add UI prefs to this object — anything listed here gets reset on
  * every `reset()` call.
@@ -609,12 +626,25 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       ...conversationResetState(),
       panelExpandedByProject: {},
+      panelExpandedByTemporaryConversation: {},
       activeProjectId: null,
       pendingPanelExpanded: null,
       draftsByConversation: {},
 
       setConversation: (id) => {
         const prev = get().conversationId;
+        const pending = get().pendingPanelExpanded;
+        if (isTemporaryWorkspaceConversationId(id) && pending !== null) {
+          set((s) => ({
+            conversationId: id,
+            panelExpandedByTemporaryConversation: {
+              ...s.panelExpandedByTemporaryConversation,
+              [id]: pending,
+            },
+            pendingPanelExpanded: null,
+          }));
+          return;
+        }
         // Cross-conversation guard: a pending expand intent captured
         // for one conversation must not bleed into another. The guard
         // fires when `prev` is a real conversation and `id` differs
@@ -632,7 +662,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         //      when resolvedProjectId changes and re-invokes
         //      setConversation with the same id; that's not a real
         //      cross-conversation move.
-        if (prev !== null && id !== prev && get().pendingPanelExpanded !== null) {
+        if (prev !== null && id !== prev && pending !== null) {
           set({ conversationId: id, pendingPanelExpanded: null });
           return;
         }
@@ -687,6 +717,17 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setMode: (mode) => set({ mode }),
       setPanelExpanded: (expanded) => {
         const projectId = get().activeProjectId;
+        const conversationId = get().conversationId;
+        if (!projectId && isTemporaryWorkspaceConversationId(conversationId)) {
+          set((s) => ({
+            panelExpandedByTemporaryConversation: {
+              ...s.panelExpandedByTemporaryConversation,
+              [conversationId]: expanded,
+            },
+            pendingPanelExpanded: null,
+          }));
+          return;
+        }
         if (!projectId) {
           // No project yet — capture as pending. setActiveProject will
           // promote it once a project resolves. This used to silently
@@ -953,6 +994,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
       partialize: (state) => ({
         panelExpandedByProject: state.panelExpandedByProject,
+        panelExpandedByTemporaryConversation: state.panelExpandedByTemporaryConversation,
         draftsByConversation: state.draftsByConversation,
       }),
       // Falls back to in-memory storage on the server / in tests where

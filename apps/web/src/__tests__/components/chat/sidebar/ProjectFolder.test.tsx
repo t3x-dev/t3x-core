@@ -47,14 +47,14 @@ describe('ProjectFolder active state', () => {
     // The active style is the source of the visible "selected project"
     // signal — pin the actual classes the production code emits so a
     // refactor that drops them fails loudly here, not silently in the UI.
-    expect(button.className).toContain('border-[var(--accent-commit)]/25');
-    expect(button.className).toContain('bg-[var(--sidebar-panel)]');
+    expect(button.className).toContain('border-[var(--accent-conversation)]/20');
+    expect(button.className).toContain('bg-[var(--accent-conversation-soft)]');
     expect(button.className).toContain('shadow-none');
     expect(button.className).toContain('text-[var(--text-primary)]');
 
     const iconWrapper = button.querySelector('span');
-    expect(iconWrapper?.className).toContain('bg-[var(--accent-commit)]/10');
-    expect(iconWrapper?.className).toContain('text-[var(--accent-commit)]');
+    expect(iconWrapper?.className).toContain('bg-transparent');
+    expect(iconWrapper?.className).toContain('text-[var(--accent-conversation)]');
   });
 
   it('omits the active highlight (and aria-current) when isActive is false', () => {
@@ -63,10 +63,10 @@ describe('ProjectFolder active state', () => {
     const button = screen.getByRole('button', { name: /Test Project/i });
 
     expect(button).not.toHaveAttribute('aria-current');
-    expect(button.className).not.toContain('bg-[var(--sidebar-panel)]');
+    expect(button.className).not.toContain('bg-[var(--accent-conversation-soft)]');
 
     const iconWrapper = button.querySelector('span');
-    expect(iconWrapper?.className).not.toContain('bg-[var(--accent-commit)]/10');
+    expect(iconWrapper?.className).not.toContain('text-[var(--accent-conversation)]');
   });
 
   it('marks demo workspaces with a Demo badge from project metadata', () => {

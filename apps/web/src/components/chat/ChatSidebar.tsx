@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   FileText,
+  FolderInput,
   GitBranch,
   GitCommitHorizontal,
   Leaf,
@@ -31,11 +32,13 @@ import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
+import { useTemporaryChatImport } from '@/hooks/conversations/useTemporaryChatImport';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
+import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import type { ApiCommit, Leaf as ApiLeaf } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
@@ -57,13 +60,6 @@ type RenameTarget =
       conversationId: string;
       currentName: string;
     };
-
-type RecentConversation = {
-  conversationId: string;
-  projectId: string;
-  projectName: string;
-  title: string;
-};
 
 type LeafFilter = 'all' | 'generated' | 'draft' | 'review';
 
@@ -101,6 +97,11 @@ export function ChatSidebar() {
   const [canvasCommitsLoading, setCanvasCommitsLoading] = useState(false);
   const [canvasCommitsError, setCanvasCommitsError] = useState<string | null>(null);
   const [leafFilter, setLeafFilter] = useState<LeafFilter>('all');
+  const [importTargetId, setImportTargetId] = useState<string | null>(null);
+  const [importProjectId, setImportProjectId] = useState<string>('');
+  const [importNewProjectName, setImportNewProjectName] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -117,6 +118,9 @@ export function ChatSidebar() {
   } = useChatStore();
   const compactViewport = useChatCompactViewport();
   const setCommitConversationTitle = useCommitStore((s) => s.setConversationTitle);
+  const temporaryChats = useTemporaryChatsStore((s) => s.chats);
+  const createTemporaryChat = useTemporaryChatsStore((s) => s.createChat);
+  const removeTemporaryChat = useTemporaryChatsStore((s) => s.removeChat);
 
   const {
     projects,
@@ -132,6 +136,7 @@ export function ChatSidebar() {
     rename: renameConversation,
   } = useProjectConversations();
   const { start: startNewChat } = useNewProjectChat();
+  const { importChat } = useTemporaryChatImport();
   const { loadCommits } = useCommitsList();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
@@ -139,6 +144,10 @@ export function ChatSidebar() {
   const wasCompactViewportRef = useRef(false);
 
   const refreshKey = useChatStore((s) => s.refreshKey);
+  const importTarget = useMemo(
+    () => temporaryChats.find((chat) => chat.id === importTargetId) ?? null,
+    [importTargetId, temporaryChats]
+  );
 
   const routeProjectId = useMemo(() => {
     const match = pathname.match(/^\/chat\/project\/([^/]+)/);
@@ -178,20 +187,13 @@ export function ChatSidebar() {
     Boolean(currentProjectId && !collapsed && (isCanvasActive || isLeafActive))
   );
 
-  const recentConversations = useMemo<RecentConversation[]>(() => {
-    return Object.entries(projectConversations)
-      .flatMap(([projectId, conversations]) => {
-        const projectName =
-          projects.find((project) => project.project_id === projectId)?.name ?? 'Project';
-        return conversations.map((conversation) => ({
-          conversationId: conversation.conversation_id,
-          projectId,
-          projectName,
-          title: conversation.title ?? conversation.conversation_id.slice(0, 30),
-        }));
-      })
-      .slice(0, 6);
-  }, [projectConversations, projects]);
+  const sortedTemporaryChats = useMemo(
+    () =>
+      [...temporaryChats].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      ),
+    [temporaryChats]
+  );
 
   const filteredLeaves = useMemo(() => {
     if (leafFilter === 'all') return projectLeaves;
@@ -345,6 +347,11 @@ export function ChatSidebar() {
     router.push(`/chat/${convId}`);
   }
 
+  function handleTemporaryChatClick(chatId: string) {
+    setActiveConversation(chatId, null);
+    router.push(`/chat/${encodeURIComponent(chatId)}`);
+  }
+
   async function handleProjectClick(projectId: string, knownConversationCount?: number) {
     const store = useChatStore.getState();
     const wasExpanded = store.expandedProjectIds.has(projectId);
@@ -413,10 +420,8 @@ export function ChatSidebar() {
 
     try {
       const project = await createProject(name);
-      // Prime the store so ChatWorkspace.useAutoProject reuses this project
-      // for the first message instead of creating another one. The query
-      // param is the source of truth on refresh (store state is in-memory),
-      // and matches the existing empty-project redirect contract.
+      // Prime the store and URL so the first message on the landing route
+      // becomes a project conversation instead of a temporary chat.
       setActiveConversation(null, project.project_id);
       // Expand the new folder so the user sees the empty state
       // ("No conversations") under the highlighted project, reinforcing
@@ -445,6 +450,60 @@ export function ChatSidebar() {
     setActiveConversation(convId, projectId);
     router.push(`/chat/${convId}`);
     useChatStore.getState().refreshSidebar();
+  }
+
+  function openTemporaryImportDialog(chat: TemporaryChat) {
+    setImportTargetId(chat.id);
+    setImportProjectId(currentProjectId ?? projects[0]?.project_id ?? '__new__');
+    setImportNewProjectName('');
+    setImportError(null);
+  }
+
+  function handleImportDialogOpenChange(open: boolean) {
+    if (isImporting) return;
+    if (!open) {
+      setImportTargetId(null);
+      setImportProjectId('');
+      setImportNewProjectName('');
+      setImportError(null);
+    }
+  }
+
+  async function handleImportTemporaryChat(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!importTarget || isImporting) return;
+
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const project =
+        importProjectId === '__new__' || !importProjectId
+          ? await createProject(importNewProjectName.trim() || DEFAULT_PROJECT_NAME)
+          : projects.find((item) => item.project_id === importProjectId);
+
+      if (!project) {
+        setImportError('Select a project to import into');
+        return;
+      }
+
+      const conversation = await importChat({ chat: importTarget, project });
+
+      removeTemporaryChat(importTarget.id);
+      await loadConversations(project.project_id);
+      await refreshProjects();
+      useChatStore.getState().refreshSidebar();
+      setActiveConversation(conversation.conversation_id, project.project_id);
+      setConversationTitle(conversation.title ?? importTarget.title);
+      setCommitConversationTitle(conversation.title ?? importTarget.title);
+      setImportTargetId(null);
+      setImportProjectId('');
+      setImportNewProjectName('');
+      router.push(`/chat/${conversation.conversation_id}`);
+    } catch {
+      setImportError('Failed to import temporary chat');
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   function handleCanvasClick(projectId: string) {
@@ -482,13 +541,12 @@ export function ChatSidebar() {
     router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf`);
   }
 
-  function handleNewChatClick() {
-    if (currentProjectId) {
-      void handleNewChatInProject(currentProjectId);
-      return;
-    }
-    setActiveConversation(null, null);
-    router.push('/chat');
+  function handleNewTemporaryChatClick() {
+    const chat = createTemporaryChat('Temporary chat');
+    setActiveConversation(chat.id, null);
+    setConversationTitle(chat.title);
+    setCommitConversationTitle(chat.title);
+    router.push(`/chat/${encodeURIComponent(chat.id)}`);
   }
 
   async function handleDeleteProject(projectId: string) {
@@ -625,6 +683,28 @@ export function ChatSidebar() {
         icon: <Trash2 className="h-3.5 w-3.5" />,
         danger: true,
         onClick: () => handleDeleteConversation(projectId, convId),
+      },
+    ]);
+  }
+
+  function handleTemporaryChatContextMenu(e: React.MouseEvent, chat: TemporaryChat) {
+    openMenu(e, [
+      {
+        label: 'Import to Project',
+        icon: <FolderInput className="h-3.5 w-3.5" />,
+        onClick: () => openTemporaryImportDialog(chat),
+      },
+      {
+        label: 'Delete Temporary Chat',
+        icon: <Trash2 className="h-3.5 w-3.5" />,
+        danger: true,
+        onClick: () => {
+          removeTemporaryChat(chat.id);
+          if (activeConversationId === chat.id) {
+            setActiveConversation(null, null);
+            router.push('/chat');
+          }
+        },
       },
     ]);
   }
@@ -822,15 +902,14 @@ export function ChatSidebar() {
               {isChatActive ? (
                 <Button
                   variant="ghost"
-                  onClick={handleNewChatClick}
+                  onClick={openNewProjectDialog}
                   className="h-10 w-full justify-between rounded-lg bg-[var(--hover-bg-strong)] px-3 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-                  aria-label="New chat"
+                  aria-label="New project"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Plus className="h-4 w-4 shrink-0" />
-                    <span className="truncate">New chat</span>
+                    <span className="truncate">New project</span>
                   </span>
-                  <span className="text-[11px] font-medium text-[var(--text-tertiary)]">⌘N</span>
                 </Button>
               ) : isCanvasActive ? (
                 <Button
@@ -865,7 +944,7 @@ export function ChatSidebar() {
               )}
             </div>
 
-            {/* Scrollable content: Projects + recent chats */}
+            {/* Scrollable content: Projects + temporary chats */}
             <ScrollArea className="sidebar-scrollarea min-h-0 min-w-0 flex-1 w-full">
               <div
                 className="flex min-w-0 flex-col gap-2 pb-4 pt-0"
@@ -877,25 +956,10 @@ export function ChatSidebar() {
                 {isChatActive && (
                   <>
                     <div className="px-3">
-                      <div className="flex items-center justify-between px-1 pb-1">
+                      <div className="px-1 pb-1">
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                           Projects
                         </span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={openNewProjectDialog}
-                              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-                              aria-label="New project"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" sideOffset={8}>
-                            New Project
-                          </TooltipContent>
-                        </Tooltip>
                       </div>
                     </div>
 
@@ -930,58 +994,92 @@ export function ChatSidebar() {
                       </div>
                     )}
 
-                    {recentConversations.length > 0 && (
-                      <div className="mt-3 px-3">
-                        <div className="px-1 pb-1">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-                            Recents
-                          </span>
+                    <div className="px-3">
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                          Temporary chats
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={handleNewTemporaryChatClick}
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                              aria-label="New temporary chat"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={8}>
+                            New Temporary Chat
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      {sortedTemporaryChats.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-[var(--stroke-divider)] px-3 py-3 text-[11px] leading-4 text-[var(--text-tertiary)]">
+                          Start chatting without a project. Import the chat when it is ready to
+                          become project work.
                         </div>
+                      ) : (
                         <div className="flex min-w-0 flex-col gap-0.5">
-                          {recentConversations.map((conversation) => {
-                            const isActive = activeConversationId === conversation.conversationId;
+                          {sortedTemporaryChats.map((chat) => {
+                            const isActive = activeConversationId === chat.id;
                             return (
-                              <button
-                                key={`${conversation.projectId}:${conversation.conversationId}`}
-                                type="button"
-                                onClick={() =>
-                                  handleConversationClick(
-                                    conversation.conversationId,
-                                    conversation.projectId
-                                  )
+                              <div
+                                key={chat.id}
+                                onContextMenu={(event) =>
+                                  handleTemporaryChatContextMenu(event, chat)
                                 }
                                 className={cn(
-                                  'grid min-h-[38px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors',
+                                  'group/temporary relative box-border grid min-h-[44px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 overflow-hidden rounded-lg border px-2 py-1.5 transition-all duration-[var(--motion-base)] ease-[var(--ease-out-soft)]',
+                                  'hover:bg-[var(--hover-bg)]',
                                   isActive
-                                    ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--text-primary)]'
-                                    : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                                    ? 'border-[var(--accent-conversation)]/20 bg-[var(--accent-conversation-soft)] text-[var(--text-primary)] shadow-none'
+                                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                                 )}
                               >
-                                <MessageSquare
-                                  className={cn(
-                                    'h-4 w-4 shrink-0',
-                                    isActive
-                                      ? 'text-[var(--accent-conversation)]'
-                                      : 'text-[var(--text-tertiary)]'
-                                  )}
-                                />
-                                <span className="min-w-0">
-                                  <span className="block truncate text-[12px] font-medium leading-4">
-                                    {conversation.title}
+                                <button
+                                  type="button"
+                                  onClick={() => handleTemporaryChatClick(chat.id)}
+                                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50"
+                                >
+                                  <span
+                                    className={cn(
+                                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--hover-bg)]/75 text-[var(--text-tertiary)] transition-colors',
+                                      isActive &&
+                                        'bg-transparent text-[var(--accent-conversation)]',
+                                      !isActive &&
+                                        'group-hover/temporary:text-[var(--text-secondary)]'
+                                    )}
+                                  >
+                                    <MessageSquare className="h-4 w-4" />
                                   </span>
-                                  <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
-                                    {conversation.projectName}
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-[12px] font-medium leading-4">
+                                      {chat.title}
+                                    </span>
+                                    <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                      {chat.messages.length} message
+                                      {chat.messages.length === 1 ? '' : 's'} · not in a project
+                                    </span>
                                   </span>
-                                </span>
-                                {isActive && (
-                                  <span className="h-2 w-2 rounded-full bg-[var(--accent-conversation)]" />
-                                )}
-                              </button>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openTemporaryImportDialog(chat);
+                                  }}
+                                  className="inline-flex h-6 items-center rounded-md border border-[var(--stroke-divider)] px-1.5 text-[10px] font-semibold text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
+                                >
+                                  Import
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </>
                 )}
 
@@ -1332,6 +1430,83 @@ export function ChatSidebar() {
               </Button>
               <Button type="submit" variant="commit" disabled={isRenaming || !renameValue.trim()}>
                 {isRenaming ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(importTarget)} onOpenChange={handleImportDialogOpenChange}>
+        <DialogContent className="sm:max-w-[440px]">
+          <form onSubmit={handleImportTemporaryChat} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>Import Temporary Chat</DialogTitle>
+              <DialogDescription>
+                Move "{importTarget?.title ?? 'Temporary chat'}" into a project so it can use
+                Extract, Canvas, and Leaf.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="import-project"
+                className="text-sm font-medium text-[var(--text-primary)]"
+              >
+                Destination
+              </label>
+              <select
+                id="import-project"
+                value={importProjectId || '__new__'}
+                onChange={(event) => {
+                  setImportProjectId(event.target.value);
+                  if (importError) setImportError(null);
+                }}
+                disabled={isImporting}
+                className="h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-commit)]"
+              >
+                <option value="__new__">New project</option>
+                {projects.map((project) => (
+                  <option key={project.project_id} value={project.project_id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {(importProjectId === '__new__' || !importProjectId) && (
+              <div className="grid gap-2">
+                <label
+                  htmlFor="import-new-project-name"
+                  className="text-sm font-medium text-[var(--text-primary)]"
+                >
+                  New project name
+                </label>
+                <Input
+                  id="import-new-project-name"
+                  value={importNewProjectName}
+                  onChange={(event) => {
+                    setImportNewProjectName(event.target.value);
+                    if (importError) setImportError(null);
+                  }}
+                  placeholder={DEFAULT_PROJECT_NAME}
+                  disabled={isImporting}
+                />
+              </div>
+            )}
+
+            {importError && <p className="text-xs text-[var(--status-error)]">{importError}</p>}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleImportDialogOpenChange(false)}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="commit" disabled={isImporting}>
+                {isImporting ? 'Importing...' : 'Import'}
               </Button>
             </DialogFooter>
           </form>

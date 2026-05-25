@@ -82,6 +82,7 @@ vi.mock('@/infrastructure', () => ({
 
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
+import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 
 async function* emptyChatStream() {
   yield { type: 'done', content: 'assistant response' };
@@ -105,6 +106,7 @@ function deferred<T>() {
 describe('useConversationChat', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useTemporaryChatsStore.setState({ chats: [] });
     createConversationMock.mockResolvedValue({ conversation_id: 'conv_child' });
     getConversationMemoryMock.mockResolvedValue({ text: '' });
     chatStreamMock.mockReturnValue(emptyChatStream());
@@ -177,6 +179,37 @@ describe('useConversationChat', () => {
         title: 'I want to eat chestnuts.',
       });
     });
+  });
+
+  it('renames temporary placeholder chats from the first user message', async () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_existing',
+          title: 'Temporary chat',
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+          messages: [],
+        },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: '',
+        conversationId: 'temp_existing',
+        title: 'Temporary chat',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(useTemporaryChatsStore.getState().chats[0]?.title).toBe('I want to eat chestnuts.');
+    });
+    expect(updateConversationMock).not.toHaveBeenCalled();
   });
 
   it('does not rename conversations with custom titles', async () => {

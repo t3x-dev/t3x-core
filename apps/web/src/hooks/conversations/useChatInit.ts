@@ -7,6 +7,7 @@ import { fetchParentCommitData } from '@/queries/hydrateFromParent';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface UseChatInitParams {
@@ -49,6 +50,7 @@ export function useChatInit({
 
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
+    const isTemporaryConversation = isTemporaryChatId(convId);
 
     // ── 1. Sync store state for the current conversation ──
     const chatStore = useChatStore.getState();
@@ -70,7 +72,7 @@ export function useChatInit({
     }
 
     // ── 2. Backfill the project id from the conversation when it's missing ──
-    if (!resolvedProjectId && convId && convId !== 'new') {
+    if (!resolvedProjectId && convId && convId !== 'new' && !isTemporaryConversation) {
       void fetchConversationMeta(convId).then((conv) => {
         if (!conv?.project_id) return;
         setResolvedProjectId(conv.project_id);
