@@ -97,4 +97,21 @@ describe('WorkspaceTopbar', () => {
     expect(screen.queryByText(/Manual:/)).toBeNull();
     expect(screen.getByText(/Pending 1/)).not.toBeNull();
   });
+
+  it('renders zero pending as a neutral weak status', () => {
+    useWorkspaceStore.setState({
+      opsLog: [llmOp('sights')],
+      draftOps: [],
+      hasDraft: false,
+      baselineCommitHash: null,
+      hasConversationChanges: true,
+    });
+
+    render(<WorkspaceTopbar />);
+
+    const pending = screen.getByText('Pending 0');
+    expect(pending.className).toContain('border-[var(--stroke-divider)]');
+    expect(pending.className).toContain('text-[var(--text-tertiary)]');
+    expect(pending.className).not.toContain('accent-pending-soft');
+  });
 });

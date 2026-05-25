@@ -78,6 +78,19 @@ describe('YOpsWorkspace view switcher', () => {
     expect(container.querySelector('[data-testid="yops-log-panel-stub-draft"]')).toBeNull();
   });
 
+  it('does not repeat workspace op counts in the YOps editor toolbar', () => {
+    useWorkspaceStore.setState({
+      opsLog: [llmOp()],
+      draftOps: [llmOp()],
+      hasDraft: true,
+    });
+
+    render(<YOpsWorkspace />);
+
+    expect(screen.getByText('YOps editor')).toBeInTheDocument();
+    expect(screen.queryByText(/1 ops · 1 pending/)).not.toBeInTheDocument();
+  });
+
   it('uses the shared workspace minimum width when expanded', () => {
     const { container } = render(<YOpsWorkspace />);
     expect(container.firstElementChild).toHaveStyle({
