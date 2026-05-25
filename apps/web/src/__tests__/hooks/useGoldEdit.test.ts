@@ -148,4 +148,26 @@ describe('useGoldEdit.applyEdit', () => {
     expect(replayMock).not.toHaveBeenCalled();
     expect(commitGoldEditMock).not.toHaveBeenCalled();
   });
+
+  it('rejects edits after the conversation is committed', async () => {
+    useWorkspaceStore.getState().setCommitted(true);
+    const { result } = renderHook(() => useGoldEdit());
+
+    expect(result.current.enabled).toBe(false);
+
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.applyEdit({ unset: { path: 'x' } });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('Committed conversations are read-only.');
+    expect(resolveGoldEditSourceMock).not.toHaveBeenCalled();
+    expect(replayMock).not.toHaveBeenCalled();
+    expect(commitGoldEditMock).not.toHaveBeenCalled();
+  });
 });

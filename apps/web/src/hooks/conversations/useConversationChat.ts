@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   deriveConversationTitleFromMessage,
   isPlaceholderConversationTitle,
+  MAX_CONVERSATION_TITLE_LENGTH,
+  normalizeGeneratedConversationTitle,
 } from '@/domain/conversationTitle';
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
@@ -65,6 +67,35 @@ function syncConversationTitle(title: string) {
   chatStore.setConversationTitle(title);
   chatStore.refreshSidebar();
   useCommitStore.getState().setConversationTitle(title);
+}
+
+async function generateConversationTitleFromFirstMessage(
+  message: string,
+  options: { provider?: string; model?: string }
+): Promise<string> {
+  const fallback = deriveConversationTitleFromMessage(message);
+
+  try {
+    const response = await api.chat({
+      provider: options.provider,
+      model: options.model,
+      temperature: 0.2,
+      max_tokens: 32,
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'Summarize the user message as a concise conversation title.',
+            `Return only the title, with no quotes, no markdown, and no more than ${MAX_CONVERSATION_TITLE_LENGTH} characters.`,
+          ].join(' '),
+        },
+        { role: 'user', content: message },
+      ],
+    });
+    return normalizeGeneratedConversationTitle(response.content, fallback);
+  } catch {
+    return fallback;
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -176,8 +207,46 @@ export function useConversationChat({
           }));
       const messageTitle = deriveConversationTitleFromMessage(userMessage);
       const currentTitle = title ?? useChatStore.getState().conversationTitle;
-      const shouldRenamePlaceholder =
-        previousMessages.length === 0 && isPlaceholderConversationTitle(currentTitle);
+      const hasExistingConversation = Boolean(conversationIdRef.current);
+      const hasExplicitNonPlaceholderTitle =
+        Boolean(title?.trim()) && !isPlaceholderConversationTitle(title);
+      const shouldAutoGenerateTitle =
+        previousMessages.length === 0 &&
+        (hasExistingConversation
+          ? isPlaceholderConversationTitle(currentTitle)
+          : !hasExplicitNonPlaceholderTitle);
+      const generatedTitlePromise = shouldAutoGenerateTitle
+        ? generateConversationTitleFromFirstMessage(userMessage, { provider, model })
+        : null;
+
+      const applyGeneratedTitle = (targetConversationId: string, initialTitle: string) => {
+        if (!generatedTitlePromise) return;
+
+        void generatedTitlePromise.then(async (generatedTitle) => {
+          if (!generatedTitle || generatedTitle === initialTitle) return;
+
+          if (isTemporaryMode) {
+            useTemporaryChatsStore.getState().renameChat(targetConversationId, generatedTitle);
+            if (useChatStore.getState().activeConversationId === targetConversationId) {
+              syncConversationTitle(generatedTitle);
+            }
+            return;
+          }
+
+          try {
+            const updated = await api.updateConversation(targetConversationId, {
+              title: generatedTitle,
+            });
+            if (useChatStore.getState().activeConversationId === targetConversationId) {
+              syncConversationTitle(updated.title || generatedTitle);
+            } else {
+              useChatStore.getState().refreshSidebar();
+            }
+          } catch {
+            // Title refresh is cosmetic; keep the saved chat turn.
+          }
+        });
+      };
 
       const newUserMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -205,11 +274,13 @@ export function useConversationChat({
 
       try {
         let convId = conversationIdRef.current;
+        let initialTitleForGeneratedTitle = currentTitle ?? messageTitle;
         if (!convId && isTemporaryMode) {
           const newTitle = title?.trim() ? title : messageTitle;
           const chat = useTemporaryChatsStore.getState().createChat(newTitle);
           convId = chat.id;
           conversationIdRef.current = convId;
+          initialTitleForGeneratedTitle = chat.title;
           syncConversationTitle(chat.title);
           useChatStore.getState().setActiveConversation(convId, null);
           onConversationCreated?.(convId);
@@ -218,6 +289,7 @@ export function useConversationChat({
           const newConv = await api.createConversation(projectId, newTitle, parentCommitHash);
           convId = newConv.conversation_id;
           conversationIdRef.current = convId;
+          initialTitleForGeneratedTitle = newConv.title || newTitle;
           syncConversationTitle(newConv.title || newTitle);
           onConversationCreated?.(convId);
         }
@@ -230,25 +302,13 @@ export function useConversationChat({
         stableConversationId = currentConversationId;
         if (isTemporaryMode) {
           useTemporaryChatsStore.getState().addMessage(currentConversationId, newUserMessage);
-          if (shouldRenamePlaceholder) {
-            useTemporaryChatsStore.getState().renameChat(currentConversationId, messageTitle);
-            syncConversationTitle(messageTitle);
-          }
+          applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         } else {
           const userTurn = await saveTurnWithRetry(() =>
             api.createTurn(projectId, currentConversationId, 'user', userMessage)
           );
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
-        }
-        if (!isTemporaryMode && shouldRenamePlaceholder) {
-          try {
-            const updated = await api.updateConversation(currentConversationId, {
-              title: messageTitle,
-            });
-            syncConversationTitle(updated.title || messageTitle);
-          } catch {
-            // Title refresh is cosmetic; keep the saved chat turn.
-          }
+          applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         }
         setTurnsSavedCounter((c) => c + 1);
         onTurnsSaved?.();

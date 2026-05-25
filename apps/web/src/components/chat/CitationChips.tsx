@@ -9,9 +9,13 @@ interface CitationChipsProps {
 export function CitationChips({ citations }: CitationChipsProps) {
   if (citations.length === 0) return null;
 
+  const uniqueCitations = citations.filter(
+    (cite, index) => citations.findIndex((candidate) => candidate.url === cite.url) === index
+  );
+
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
-      {citations.map((cite) => {
+      {uniqueCitations.map((cite) => {
         let domain: string;
         try {
           domain = new URL(cite.url).hostname.replace('www.', '');

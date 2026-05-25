@@ -476,7 +476,8 @@ export function ChatMessage({
   const hoverSourceIndex = useWorkspaceStore((s) => s.sourceIndex);
   const turns = useWorkspaceStore((s) => s.turns);
   const wsMode = useWorkspaceStore((s) => s.mode);
-  const isReviewPhase = wsMode === 'executed' || wsMode === 'committing';
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const isReviewPhase = !isCommitted && (wsMode === 'executed' || wsMode === 'committing');
   const textRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 

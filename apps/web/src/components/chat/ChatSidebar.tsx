@@ -96,6 +96,12 @@ export function ChatSidebar() {
   const [canvasCommits, setCanvasCommits] = useState<ApiCommit[]>([]);
   const [canvasCommitsLoading, setCanvasCommitsLoading] = useState(false);
   const [canvasCommitsError, setCanvasCommitsError] = useState<string | null>(null);
+  const [projectMainCommitHashes, setProjectMainCommitHashes] = useState<Record<string, string>>(
+    {}
+  );
+  const [projectConversationCommitHashes, setProjectConversationCommitHashes] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [leafFilter, setLeafFilter] = useState<LeafFilter>('all');
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
   const [importProjectId, setImportProjectId] = useState<string>('');
@@ -289,6 +295,83 @@ export function ChatSidebar() {
     if (!routeProjectId || activeProjectId === routeProjectId) return;
     setActiveConversation(null, routeProjectId);
   }, [activeProjectId, routeProjectId, setActiveConversation]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectsWithCommits = projects.filter((project) => (project.commits_count ?? 0) > 0);
+
+    if (projectsWithCommits.length === 0) {
+      setProjectMainCommitHashes({});
+      return;
+    }
+
+    async function loadMainCommitHeads() {
+      const entries = await Promise.all(
+        projectsWithCommits.map(async (project) => {
+          try {
+            const commits = await loadCommits(project.project_id, 'main', 1);
+            return [project.project_id, commits[0]?.hash ?? null] as const;
+          } catch {
+            return [project.project_id, null] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setProjectMainCommitHashes(
+        Object.fromEntries(
+          entries.filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+        )
+      );
+    }
+
+    void loadMainCommitHeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadCommits, projects, refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const projectsWithCommits = projects.filter((project) => (project.commits_count ?? 0) > 0);
+
+    if (projectsWithCommits.length === 0) {
+      setProjectConversationCommitHashes({});
+      return;
+    }
+
+    async function loadConversationCommitHeads() {
+      const entries = await Promise.all(
+        projectsWithCommits.map(async (project) => {
+          try {
+            const commits = await loadCommits(project.project_id, undefined, 100);
+            const conversationHashes: Record<string, string> = {};
+            for (const commit of commits) {
+              for (const source of commit.sources ?? []) {
+                if (source.type !== 'conversation' || conversationHashes[source.id]) continue;
+                conversationHashes[source.id] = commit.hash;
+              }
+            }
+            return [project.project_id, conversationHashes] as const;
+          } catch {
+            return [project.project_id, {}] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setProjectConversationCommitHashes(Object.fromEntries(entries));
+    }
+
+    void loadConversationCommitHeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadCommits, projects, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -991,6 +1074,10 @@ export function ChatSidebar() {
                         isActive={activeProjectId === project.project_id}
                         activeConversationId={activeConversationId}
                         collapsed={false}
+                        latestMainCommitHash={projectMainCommitHashes[project.project_id]}
+                        conversationCommitHashes={
+                          projectConversationCommitHashes[project.project_id]
+                        }
                         onToggleExpand={() =>
                           void handleProjectClick(project.project_id, project.conversations_count)
                         }
@@ -1077,21 +1164,26 @@ export function ChatSidebar() {
                                     <span className="block truncate text-[12px] font-medium leading-4">
                                       {chat.title}
                                     </span>
-                                    <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                    <span
+                                      className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]"
+                                      title={`${chat.messages.length} message${chat.messages.length === 1 ? '' : 's'} · not in a project`}
+                                    >
                                       {chat.messages.length} message
-                                      {chat.messages.length === 1 ? '' : 's'} · not in a project
+                                      {chat.messages.length === 1 ? '' : 's'}
                                     </span>
                                   </span>
                                 </button>
                                 <button
                                   type="button"
+                                  aria-label="Import temporary chat"
+                                  title="Import temporary chat"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openTemporaryImportDialog(chat);
                                   }}
-                                  className="inline-flex h-6 items-center rounded-md border border-[var(--stroke-divider)] px-1.5 text-[10px] font-semibold text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50"
                                 >
-                                  Import
+                                  <FolderInput className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             );

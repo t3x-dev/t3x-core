@@ -23,34 +23,38 @@ export function useSlotActions() {
 
   const updateSlot = useCallback(
     (nodeId: string, slotKey: string, value: string | number) => {
+      if (!enabled) return Promise.resolve();
       trackAction(`Edit ${nodeId}/${slotKey}`);
       return applyEdit({ set: { path: `${nodeId}/${slotKey}`, value } } as YOp);
     },
-    [applyEdit, trackAction]
+    [applyEdit, enabled, trackAction]
   );
 
   const deleteSlot = useCallback(
     (nodeId: string, slotKey: string) => {
+      if (!enabled) return Promise.resolve();
       trackAction(`Remove ${nodeId}/${slotKey}`);
       return applyEdit({ unset: { path: `${nodeId}/${slotKey}` } } as YOp);
     },
-    [applyEdit, trackAction]
+    [applyEdit, enabled, trackAction]
   );
 
   const deleteNode = useCallback(
     (nodeId: string) => {
+      if (!enabled) return Promise.resolve();
       trackAction(`Delete ${nodeId}`);
       return applyEdit({ drop: { path: nodeId } } as YOp);
     },
-    [applyEdit, trackAction]
+    [applyEdit, enabled, trackAction]
   );
 
   const addSlot = useCallback(
     (nodeId: string, key: string, value: string) => {
+      if (!enabled) return Promise.resolve();
       trackAction(`Add ${nodeId}/${key}`);
       return applyEdit({ set: { path: `${nodeId}/${key}`, value } } as YOp);
     },
-    [applyEdit, trackAction]
+    [applyEdit, enabled, trackAction]
   );
 
   return { updateSlot, deleteSlot, deleteNode, addSlot, enabled };

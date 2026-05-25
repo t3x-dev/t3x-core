@@ -37,6 +37,7 @@ export function useSpanActions() {
 
   const removeSpan = useCallback(
     async (target: SpanTarget) => {
+      if (!enabled) return 0;
       const { sourceIndex } = useWorkspaceStore.getState();
       const matches = findPathsOverlappingSpan(
         sourceIndex,
@@ -53,7 +54,7 @@ export function useSpanActions() {
       }
       return matches.length;
     },
-    [applyEdit, trackAction]
+    [applyEdit, enabled, trackAction]
   );
 
   return { previewRemoveSpan, removeSpan, enabled };

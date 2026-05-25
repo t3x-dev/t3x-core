@@ -10,6 +10,7 @@ interface CurrentProjectWorkbenchProps {
   activeConversationId: string | null;
   leaves: Leaf[];
   leavesLoading: boolean;
+  conversationCommitHashes?: Record<string, string>;
   onSourceChatsClick: () => void;
   onCanvasClick: () => void;
   onCommitsClick: () => void;
@@ -86,12 +87,17 @@ function WorkbenchButton({
   );
 }
 
+function shortCommitHash(hash: string | null | undefined): string | null {
+  return hash ? hash.replace(/^sha256:/, '').slice(0, 8) : null;
+}
+
 export function CurrentProjectWorkbench({
   project,
   conversations,
   activeConversationId,
   leaves,
   leavesLoading,
+  conversationCommitHashes = {},
   onSourceChatsClick,
   onCanvasClick,
   onCommitsClick,
@@ -189,11 +195,19 @@ export function CurrentProjectWorkbench({
         {conversations.map((conversation) => {
           const isActive = activeConversationId === conversation.conversation_id;
           const title = conversation.title ?? conversation.conversation_id.slice(0, 30);
+          const conversationCommitHash =
+            conversation.committed_as ?? conversationCommitHashes[conversation.conversation_id];
+          const committedShortHash = shortCommitHash(conversationCommitHash);
+          const displayTitle = committedShortHash ? `${title} · ${committedShortHash}` : title;
           return (
             <button
               key={conversation.conversation_id}
               type="button"
-              title={title}
+              title={
+                conversationCommitHash
+                  ? `${displayTitle}\ncommit ${conversationCommitHash}`
+                  : displayTitle
+              }
               onClick={() => onConversationClick(conversation.conversation_id)}
               onContextMenu={(event) =>
                 onConversationContextMenu(event, conversation.conversation_id)
@@ -216,6 +230,11 @@ export function CurrentProjectWorkbench({
               <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                 {title}
               </span>
+              {committedShortHash && (
+                <span className="shrink-0 text-[10px] font-medium text-[var(--text-tertiary)]">
+                  · {committedShortHash}
+                </span>
+              )}
             </button>
           );
         })}

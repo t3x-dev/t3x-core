@@ -127,6 +127,7 @@ export function ScriptEditor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const scriptText = useWorkspaceStore(selectScriptText);
   const canonicalScriptText = useWorkspaceStore(selectCanonicalScriptText);
   const scriptDirty = useWorkspaceStore(selectScriptDirty);
@@ -283,10 +284,10 @@ export function ScriptEditor() {
     if (!view) return;
     view.dispatch({
       effects: readOnlyCompartment.current.reconfigure(
-        EditorState.readOnly.of(mode === 'streaming')
+        EditorState.readOnly.of(mode === 'streaming' || isCommitted)
       ),
     });
-  }, [mode]);
+  }, [mode, isCommitted]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -301,6 +302,12 @@ export function ScriptEditor() {
   return (
     <div className="flex flex-col h-full bg-[var(--workspace-panel)]">
       <div ref={editorRef} className="flex-1 min-h-0 overflow-hidden" />
+
+      {isCommitted && (
+        <div className="border-t border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3 py-1.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+          Committed conversations are read-only.
+        </div>
+      )}
 
       {lastError && (
         <div className="border-t border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-3 py-1.5 text-[10px] font-mono text-[var(--status-error)] max-h-16 overflow-y-auto">

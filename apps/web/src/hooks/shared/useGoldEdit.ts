@@ -39,10 +39,16 @@ function rollbackGoldEdit(snapshot: GoldEditSnapshot) {
 
 export function useGoldEdit() {
   const convId = useWorkspaceStore((s) => s.conversationId);
+  const isCommitted = useWorkspaceStore((s) => s.isCommitted);
 
   const applyEdit = useCallback(
     async (op: YOp) => {
       if (!convId) return;
+      if (useWorkspaceStore.getState().isCommitted) {
+        const message = 'Committed conversations are read-only.';
+        useWorkspaceStore.getState().setError(message);
+        throw new Error(message);
+      }
       // Snapshot pre-edit state for rollback
       const pre = useWorkspaceStore.getState();
       const snapshot: GoldEditSnapshot = {
@@ -98,5 +104,5 @@ export function useGoldEdit() {
     [convId]
   );
 
-  return { applyEdit, enabled: !!convId };
+  return { applyEdit, enabled: !!convId && !isCommitted };
 }

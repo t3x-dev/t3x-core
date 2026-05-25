@@ -2,8 +2,7 @@
 
 import { PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildMaterializedOpGroups } from '@/domain/yops/opCardGroups';
-import { selectPanelExpanded, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
   WORKSPACE_PANEL_FALLBACK_WIDTH,
   WORKSPACE_PANEL_MIN_WIDTH,
@@ -47,7 +46,6 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
   const [logsOpen, setLogsOpen] = useState(false);
   const draftOps = useWorkspaceStore((s) => s.draftOps);
   const opsLog = useWorkspaceStore((s) => s.opsLog);
-  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const conversationId = useWorkspaceStore((s) => s.conversationId);
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
@@ -72,20 +70,6 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
       archived: null,
     } satisfies Record<LogView, number | null>;
   }, [draftOps.length, materializedLogs.applied.length, materializedLogs.committed.length]);
-
-  const opGroups = useMemo(
-    () =>
-      buildMaterializedOpGroups({
-        ops: opsLog,
-        pendingDraftOps: draftOps,
-        scriptDirty,
-      }),
-    [draftOps, opsLog, scriptDirty]
-  );
-
-  const workspaceSummary = useMemo(() => {
-    return `${opsLog.length} ops · ${opGroups.pending.count} pending`;
-  }, [opGroups.pending.count, opsLog.length]);
 
   const setTopView = useCallback((next: TopView) => {
     setTopViewState(next);
@@ -230,11 +214,8 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
       >
         <div className="flex h-9 items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3">
           {topView === 'script' ? (
-            <span
-              className="min-w-0 max-w-[180px] truncate text-[10px] font-mono text-[var(--text-tertiary)]"
-              title={workspaceSummary}
-            >
-              {workspaceSummary}
+            <span className="min-w-0 text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+              YOps editor
             </span>
           ) : (
             <span className="min-w-0 text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
