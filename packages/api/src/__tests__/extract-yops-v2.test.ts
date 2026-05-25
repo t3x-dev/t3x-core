@@ -1,10 +1,14 @@
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
+  createLeaf,
+  createPin,
   deleteProviderCredential,
   insertConversation,
   insertProject,
   insertYOpsLogEntry,
+  setConversationContext,
+  updateLeafAssertions,
   upsertProviderCredential,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -106,6 +110,199 @@ describe('POST /v1/extract-yops (v2)', () => {
       model: 'gpt-5.4',
       turns: [{ turn_hash: 'sha256:aabbcc', role: 'assistant', content: 'hello world' }],
     });
+  });
+
+  it('treats omitted/null selected_pin_ids as default context and [] as no feedback guidance', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'ExtractYopsV2 Empty Pin Override Test' })
+    );
+    const parentCommit = await createCommit(mockDB, {
+      project_id: project.projectId,
+      author: { type: 'human', id: 'user_test', name: 'Test User' },
+      content: {
+        trees: [{ key: 'context_seed', slots: { goal: 'prove pin override' }, children: [] }],
+        relations: [],
+      },
+    });
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Extract with configured feedback',
+      parentCommitHash: parentCommit.hash,
+    });
+    const leaf = await createLeaf(mockDB, {
+      project_id: project.projectId,
+      commit_hash: parentCommit.hash,
+      type: 'article',
+      title: 'Configured Feedback Leaf',
+    });
+    await updateLeafAssertions(mockDB, leaf.id, [
+      {
+        id: 'ast_extract_default_keep',
+        constraint_id: 'cst_extract_default_keep',
+        passed: true,
+        details: 'Default selected extraction feedback',
+        lesson: 'Preserve configured extraction feedback when pins default.',
+      },
+    ]);
+    const leafPin = await createPin(mockDB, {
+      project_id: project.projectId,
+      type: 'leaf',
+      ref_id: leaf.id,
+      selected_assertion_ids: ['ast_extract_default_keep'],
+    });
+    await setConversationContext(mockDB, conversation.conversationId, [leafPin.id]);
+
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+    extractAndApply.mockResolvedValue({
+      ok: true,
+      draft: {
+        schema: 't3x/extraction-draft',
+        version: 1,
+        mode: 'bootstrap',
+        items: [],
+      },
+      compiled: { ops: [], warnings: [] },
+      snapshot: { trees: [], relations: [] },
+      turnHashByTag: { T1: 'sha256:aabbcc' },
+    });
+
+    const requestBody = {
+      conversation_id: conversation.conversationId,
+      turns: [{ turn_hash: 'sha256:aabbcc', role: 'assistant', content: 'hello world' }],
+      provider: 'openai',
+      model: 'gpt-5.4',
+    };
+
+    const defaultRes = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    expect(defaultRes.status).toBe(200);
+    expect(extractAndApply).toHaveBeenCalledTimes(1);
+    expect(extractAndApply.mock.calls[0][0]).toMatchObject({
+      mode: 'incremental',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+    });
+    expect(extractAndApply.mock.calls[0][0]?.contextText).toContain(
+      'Preserve configured extraction feedback when pins default.'
+    );
+
+    const nullRes = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...requestBody, selected_pin_ids: null }),
+    });
+
+    expect(nullRes.status).toBe(200);
+    expect(extractAndApply).toHaveBeenCalledTimes(2);
+    expect(extractAndApply.mock.calls[1][0]).toMatchObject({
+      mode: 'incremental',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+    });
+    expect(extractAndApply.mock.calls[1][0]?.contextText).toContain(
+      'Preserve configured extraction feedback when pins default.'
+    );
+
+    const emptyRes = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...requestBody, selected_pin_ids: [] }),
+    });
+
+    expect(emptyRes.status).toBe(200);
+    expect(extractAndApply).toHaveBeenCalledTimes(3);
+    expect(extractAndApply.mock.calls[2][0]).toMatchObject({
+      mode: 'incremental',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+    });
+    expect(extractAndApply.mock.calls[2][0]?.contextText).toBeUndefined();
+  });
+
+  it('passes selected leaf assertion feedback to the canonical v2 pipeline as contextText', async () => {
+    const project = await insertProject(
+      mockDB,
+      testData.project({ name: 'ExtractYopsV2 Manifest Guidance Test' })
+    );
+    const parentCommit = await createCommit(mockDB, {
+      project_id: project.projectId,
+      author: { type: 'human', id: 'user_test', name: 'Test User' },
+      content: {
+        trees: [{ key: 'launch', slots: { goal: 'ship carefully' }, children: [] }],
+        relations: [],
+      },
+    });
+    const conversation = await insertConversation(mockDB, {
+      projectId: project.projectId,
+      title: 'Extract with selected feedback',
+      parentCommitHash: parentCommit.hash,
+    });
+    const leaf = await createLeaf(mockDB, {
+      project_id: project.projectId,
+      commit_hash: parentCommit.hash,
+      type: 'article',
+      title: 'Feedback Leaf',
+    });
+    await updateLeafAssertions(mockDB, leaf.id, [
+      {
+        id: 'ast_extract_keep',
+        constraint_id: 'cst_extract_keep',
+        passed: true,
+        details: 'Selected extraction feedback',
+        lesson: 'Keep every launch claim tied to concrete evidence.',
+      },
+    ]);
+    const leafPin = await createPin(mockDB, {
+      project_id: project.projectId,
+      type: 'leaf',
+      ref_id: leaf.id,
+      selected_assertion_ids: ['ast_extract_keep'],
+    });
+
+    await upsertProviderCredential(mockDB, {
+      providerId: 'openai',
+      apiKey: 'sk-local-openai',
+    });
+    extractAndApply.mockResolvedValue({
+      ok: true,
+      draft: {
+        schema: 't3x/extraction-draft',
+        version: 1,
+        mode: 'incremental',
+        items: [],
+      },
+      compiled: { ops: [], warnings: [] },
+      snapshot: { trees: [], relations: [] },
+      turnHashByTag: { T1: 'sha256:aabbcc' },
+    });
+
+    const res = await app.request('/v1/extract-yops', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversation.conversationId,
+        turns: [{ turn_hash: 'sha256:aabbcc', role: 'user', content: 'hello' }],
+        provider: 'openai',
+        model: 'gpt-5.4',
+        selected_pin_ids: [leafPin.id],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
+    expect(callArgs?.contextText).toContain('## Selected Leaf Feedback');
+    expect(callArgs?.contextText).toContain(
+      'Keep every launch claim tied to concrete evidence.'
+    );
+    expect(callArgs?.contextText).not.toContain('launch:');
   });
 
   it('surfaces exhausted pipeline failures as 200 + kind:"failed" (extraction outcome envelope)', async () => {

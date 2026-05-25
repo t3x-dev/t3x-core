@@ -8,7 +8,9 @@ import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
+import { useContextManifest } from '@/hooks/conversations/useContextManifest';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
+import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
@@ -27,6 +29,7 @@ import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 import { ChatSpanActions } from './ChatSpanActions';
 import { CommittedBar } from './CommittedBar';
+import { ContextManifestBar } from './ContextManifestBar';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
 import { SourceMaterialPanel } from './SourceMaterialPanel';
 
@@ -64,10 +67,13 @@ export function ChatWorkspace({
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const pins = usePinsStore((s) => s.pins);
+  const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
-  const { fetch: fetchPins } = usePinsCrud();
+  const { fetch: fetchPins, setAssertions } = usePinsCrud();
   const [showSourcePanel, setShowSourcePanel] = useState(false);
   const [coverageMode, setCoverageMode] = useState(false);
+  const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
+  const contextManifestUpdatingRef = useRef(false);
   const enrichedPinData = usePinEnrichment(pins, showSourcePanel);
   const showAddForm =
     !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
@@ -101,6 +107,14 @@ export function ChatWorkspace({
 
   // Real-time sync — WebSocket connection to receive backend state changes
   useRealtimeSync(resolvedConversationId ?? conversationId);
+
+  const {
+    manifest: contextManifest,
+    loading: contextManifestLoading,
+    error: contextManifestError,
+    reload: reloadContextManifest,
+  } = useContextManifest(resolvedConversationId);
+  const { updateSelectedPins: updateContextSelectedPins } = useConversationContextPins();
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -322,6 +336,91 @@ export function ChatWorkspace({
     [resolvedProjectId, ensureProject, sendMessage, isSelectionReady, isCommitted]
   );
 
+  const handleContextReferenceToggle = useCallback(
+    async (pinId: string, included: boolean) => {
+      if (!resolvedConversationId || !contextManifest || contextManifestUpdatingRef.current) return;
+
+      const selectedPinIds = new Set(
+        contextManifest.references
+          .filter((reference) => reference.included)
+          .map((reference) => reference.pin_id)
+      );
+      if (included) {
+        selectedPinIds.add(pinId);
+      } else {
+        selectedPinIds.delete(pinId);
+      }
+
+      const allReferencePinIds = contextManifest.references.map((reference) => reference.pin_id);
+      const nextSelectedPinIds =
+        allReferencePinIds.length > 0 &&
+        allReferencePinIds.every((referencePinId) => selectedPinIds.has(referencePinId))
+          ? null
+          : Array.from(selectedPinIds);
+
+      contextManifestUpdatingRef.current = true;
+      setContextManifestUpdating(true);
+      try {
+        await updateContextSelectedPins(resolvedConversationId, nextSelectedPinIds);
+        await reloadContextManifest();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to update context';
+        toast.message(message);
+      } finally {
+        contextManifestUpdatingRef.current = false;
+        setContextManifestUpdating(false);
+      }
+    },
+    [contextManifest, reloadContextManifest, resolvedConversationId, updateContextSelectedPins]
+  );
+
+  const handleContextAssertionToggle = useCallback(
+    async (pinId: string, assertionId: string, included: boolean) => {
+      if (!contextManifest || contextManifestUpdatingRef.current) return;
+
+      const selectedAssertionIds = new Set(
+        contextManifest.feedback
+          .filter((feedback) => feedback.pin_id === pinId && feedback.selected)
+          .map((feedback) => feedback.id)
+      );
+      if (included) {
+        selectedAssertionIds.add(assertionId);
+      } else {
+        selectedAssertionIds.delete(assertionId);
+      }
+
+      contextManifestUpdatingRef.current = true;
+      setContextManifestUpdating(true);
+      try {
+        const updatedPin = await setAssertions(pinId, Array.from(selectedAssertionIds));
+        if (!updatedPin) {
+          toast.message('Failed to update feedback');
+          return;
+        }
+
+        if (resolvedProjectId) {
+          invalidatePins();
+          await fetchPins(resolvedProjectId);
+        }
+        await reloadContextManifest();
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to update feedback';
+        toast.message(message);
+      } finally {
+        contextManifestUpdatingRef.current = false;
+        setContextManifestUpdating(false);
+      }
+    },
+    [
+      contextManifest,
+      fetchPins,
+      invalidatePins,
+      reloadContextManifest,
+      resolvedProjectId,
+      setAssertions,
+    ]
+  );
+
   return (
     <div className={cn('flex flex-col h-full min-h-0 relative', className)} style={style}>
       {/* Header */}
@@ -335,13 +434,23 @@ export function ChatWorkspace({
         modelsLoading={modelsLoading}
       />
 
+      <ContextManifestBar
+        manifest={contextManifest}
+        loading={contextManifestLoading}
+        error={contextManifestError}
+        updating={contextManifestUpdating}
+        onReload={reloadContextManifest}
+        onReferenceToggle={handleContextReferenceToggle}
+        onAssertionToggle={handleContextAssertionToggle}
+      />
+
       {/* Coverage toggle — visible after extraction */}
       {sourceMapByTurn.size > 0 && (
         <button
           type="button"
           onClick={() => setCoverageMode((p) => !p)}
           className={cn(
-            'absolute top-12 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+            'absolute top-24 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
             coverageMode
               ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
               : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'

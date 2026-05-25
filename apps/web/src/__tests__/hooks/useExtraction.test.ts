@@ -274,6 +274,26 @@ describe('useExtraction', () => {
     expect(callArgs?.preset).toBe('detailed');
   });
 
+  it('forwards source pin ids to callExtractionLLM as selectedPinIds', async () => {
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract(['pin_1']);
+    });
+
+    expect(callExtractionLLMMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedPinIds: ['pin_1'],
+      })
+    );
+  });
+
   it('validates extraction against the latest workspace tree after hydration changes', async () => {
     const { result } = renderHook(() =>
       useExtraction({

@@ -206,6 +206,7 @@ export function useExtraction({
               provider: selectedProvider ?? undefined,
               model: selectedModel ?? undefined,
               preset: extractionPreset,
+              ...(sourcePinIds !== undefined ? { selectedPinIds: sourcePinIds } : {}),
             }),
         });
 

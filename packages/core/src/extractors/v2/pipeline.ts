@@ -36,6 +36,7 @@ export interface ExtractionV2PipelineInput {
   model: string;
   snapshot?: SemanticContent;
   extractedAt?: string;
+  contextText?: string;
   /**
    * Optional extraction style. When supplied, drives a style summary line
    * + granularity-specific budget rules in the system prompt. Omitted
@@ -212,6 +213,7 @@ function buildDraftPrompt(input: {
   providerId: string;
   turns: Array<{ turn_tag: string; role: string; content: string }>;
   snapshot?: SemanticContent;
+  contextText?: string;
   style?: ExtractionStyleConfig;
 }): LLMPrompt {
   // F9: one simple prompt for all providers. The shape drift we used to warn
@@ -227,6 +229,10 @@ function buildDraftPrompt(input: {
     input.mode === 'incremental' && input.snapshot
       ? `\nCurrent knowledge snapshot:\n${serializeForPrompt(input.snapshot)}\n`
       : '';
+  const normalizedContextText = input.contextText?.trim();
+  const contextBlock = normalizedContextText
+    ? `\nSelected context guidance (not source evidence):\n${normalizedContextText}\n`
+    : '';
 
   const styleBlock = styleGuidanceBlock(input.style);
   return {
@@ -261,7 +267,7 @@ function buildDraftPrompt(input: {
       {
         role: 'user',
         content:
-          `Mode: ${input.mode}\n${snapshotBlock}Conversation turns:\n${turnsBlock}\n\n` +
+          `Mode: ${input.mode}\n${snapshotBlock}${contextBlock}Conversation turns:\n${turnsBlock}\n\n` +
           'Extract the knowledge as a ProviderExtractionDraft. Return JSON only.',
       },
     ],
@@ -750,6 +756,7 @@ export async function runExtractionV2Pipeline(
     providerId: input.providerId,
     turns: taggedTurns,
     snapshot: input.snapshot,
+    contextText: input.contextText,
     style: generationStyle,
   });
   let prompt = basePrompt;

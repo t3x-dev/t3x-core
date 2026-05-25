@@ -68,6 +68,30 @@ describe('callExtractionLLM', () => {
     });
   });
 
+  it('sends selected_pin_ids when selectedPinIds are provided', async () => {
+    postExtractYopsMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { kind: 'ok', ops: [], warnings: [] },
+      }),
+      text: async () => '',
+    });
+
+    await callExtractionLLM({
+      conversationId: 'conv_123',
+      turns: [],
+      selectedPinIds: ['pin_1', 'pin_2'],
+    });
+
+    expect(postExtractYopsMock).toHaveBeenCalledWith({
+      conversation_id: 'conv_123',
+      turns: [],
+      selected_pin_ids: ['pin_1', 'pin_2'],
+    });
+  });
+
   it('treats kind:"partial" as success and surfaces ops, logging the salvage reason', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     postExtractYopsMock.mockResolvedValueOnce({
