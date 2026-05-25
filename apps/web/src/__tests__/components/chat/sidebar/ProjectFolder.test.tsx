@@ -88,4 +88,30 @@ describe('ProjectFolder active state', () => {
 
     expect(screen.getByText('Demo')).toBeInTheDocument();
   });
+
+  it('keeps project row metadata compact while preserving full details on hover', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, conversations_count: 3, commits_count: 2 }}
+        conversations={[]}
+        isExpanded={false}
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('main')).toBeInTheDocument();
+    expect(screen.getByText('2 commits')).toBeInTheDocument();
+    expect(screen.queryByText('3 sources')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Test Project/i })).toHaveAttribute(
+      'title',
+      'Test Project\nmain · 2 commits · 3 sources'
+    );
+  });
 });

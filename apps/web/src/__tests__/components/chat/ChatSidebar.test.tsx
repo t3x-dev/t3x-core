@@ -182,7 +182,7 @@ describe('ChatSidebar', () => {
     render(<ChatSidebar />);
 
     const chatButton = screen.getByRole('button', {
-      name: /Temporary chat\s*0 messages · not in a project/,
+      name: /Temporary chat\s*0 messages/,
     });
     const row = chatButton.parentElement;
 
@@ -210,7 +210,7 @@ describe('ChatSidebar', () => {
 
     fireEvent.contextMenu(
       screen.getByRole('button', {
-        name: /Temporary chat\s*0 messages · not in a project/,
+        name: /Temporary chat\s*0 messages/,
       }).parentElement as HTMLElement
     );
     const deleteAction = mocks.contextMenuItems.find(
@@ -229,7 +229,7 @@ describe('ChatSidebar', () => {
 
     fireEvent.contextMenu(
       screen.getByRole('button', {
-        name: /Temporary chat\s*0 messages · not in a project/,
+        name: /Temporary chat\s*0 messages/,
       }).parentElement as HTMLElement
     );
     const confirmDeleteAction = mocks.contextMenuItems.find(

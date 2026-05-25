@@ -1077,21 +1077,26 @@ export function ChatSidebar() {
                                     <span className="block truncate text-[12px] font-medium leading-4">
                                       {chat.title}
                                     </span>
-                                    <span className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]">
+                                    <span
+                                      className="block truncate text-[10px] leading-3 text-[var(--text-tertiary)]"
+                                      title={`${chat.messages.length} message${chat.messages.length === 1 ? '' : 's'} · not in a project`}
+                                    >
                                       {chat.messages.length} message
-                                      {chat.messages.length === 1 ? '' : 's'} · not in a project
+                                      {chat.messages.length === 1 ? '' : 's'}
                                     </span>
                                   </span>
                                 </button>
                                 <button
                                   type="button"
+                                  aria-label="Import temporary chat"
+                                  title="Import temporary chat"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openTemporaryImportDialog(chat);
                                   }}
-                                  className="inline-flex h-6 items-center rounded-md border border-[var(--stroke-divider)] px-1.5 text-[10px] font-semibold text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50"
                                 >
-                                  Import
+                                  <FolderInput className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             );

@@ -48,12 +48,13 @@ export function ProjectFolder({
   const convCount = project.conversations_count ?? conversations.length;
   const commitCount = project.commits_count ?? 0;
   const isDemoProject = project.metadata?.is_demo === true;
-  const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
+  const projectSummary = `${commitCount > 0 ? 'main · ' : ''}${commitCount} ${commitCount === 1 ? 'commit' : 'commits'}`;
+  const projectDetails = `${projectSummary} · ${convCount} ${convCount === 1 ? 'source' : 'sources'}`;
 
   const folderButton = (
     <button
       type="button"
-      title={`${project.name}\n${projectSummary}`}
+      title={`${project.name}\n${projectDetails}`}
       onClick={() => {
         if (collapsed) {
           useChatStore.setState({ sidebarCollapsed: false });
@@ -105,7 +106,7 @@ export function ProjectFolder({
           </span>
           <span
             className="flex max-w-full items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-none text-[var(--text-tertiary)]"
-            title={projectSummary}
+            title={projectDetails}
           >
             {commitCount > 0 && (
               <>
@@ -118,10 +119,6 @@ export function ProjectFolder({
             )}
             <span className="inline-flex h-3 items-center leading-none">
               {commitCount} {commitCount === 1 ? 'commit' : 'commits'}
-            </span>
-            <span className="inline-flex h-3 items-center leading-none">·</span>
-            <span className="inline-flex h-3 items-center leading-none">
-              {convCount} {convCount === 1 ? 'source' : 'sources'}
             </span>
           </span>
         </div>
