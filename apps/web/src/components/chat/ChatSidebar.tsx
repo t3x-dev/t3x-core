@@ -102,6 +102,7 @@ export function ChatSidebar() {
   const [importNewProjectName, setImportNewProjectName] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [temporaryDeleteTargetId, setTemporaryDeleteTargetId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -147,6 +148,10 @@ export function ChatSidebar() {
   const importTarget = useMemo(
     () => temporaryChats.find((chat) => chat.id === importTargetId) ?? null,
     [importTargetId, temporaryChats]
+  );
+  const temporaryDeleteTarget = useMemo(
+    () => temporaryChats.find((chat) => chat.id === temporaryDeleteTargetId) ?? null,
+    [temporaryDeleteTargetId, temporaryChats]
   );
 
   const routeProjectId = useMemo(() => {
@@ -549,6 +554,21 @@ export function ChatSidebar() {
     router.push(`/chat/${encodeURIComponent(chat.id)}`);
   }
 
+  function handleTemporaryDeleteDialogOpenChange(open: boolean) {
+    if (!open) setTemporaryDeleteTargetId(null);
+  }
+
+  function handleConfirmDeleteTemporaryChat() {
+    if (!temporaryDeleteTarget) return;
+    const deletedChatId = temporaryDeleteTarget.id;
+    removeTemporaryChat(deletedChatId);
+    setTemporaryDeleteTargetId(null);
+    if (activeConversationId === deletedChatId) {
+      setActiveConversation(null, null);
+      router.push('/chat');
+    }
+  }
+
   async function handleDeleteProject(projectId: string) {
     if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) {
       return;
@@ -698,13 +718,7 @@ export function ChatSidebar() {
         label: 'Delete Temporary Chat',
         icon: <Trash2 className="h-3.5 w-3.5" />,
         danger: true,
-        onClick: () => {
-          removeTemporaryChat(chat.id);
-          if (activeConversationId === chat.id) {
-            setActiveConversation(null, null);
-            router.push('/chat');
-          }
-        },
+        onClick: () => setTemporaryDeleteTargetId(chat.id),
       },
     ]);
   }
@@ -1438,6 +1452,32 @@ export function ChatSidebar() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(temporaryDeleteTarget)}
+        onOpenChange={handleTemporaryDeleteDialogOpenChange}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Temporary Chat</DialogTitle>
+            <DialogDescription>
+              Delete "{temporaryDeleteTarget?.title ?? 'Temporary chat'}"? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleTemporaryDeleteDialogOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleConfirmDeleteTemporaryChat}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

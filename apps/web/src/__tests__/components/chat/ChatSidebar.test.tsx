@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     createProject: vi.fn(),
+    contextMenuItems: [] as Array<{ label: string; onClick: () => void }>,
     conversationsByProject: {} as Record<string, Array<{ conversation_id: string; title: string }>>,
     commits: [] as Array<{
       hash: string;
@@ -124,7 +125,9 @@ vi.mock('@/components/chat/sidebar/ContextMenu', () => ({
   ContextMenuPortal: () => null,
   useContextMenu: () => ({
     menu: null,
-    open: vi.fn(),
+    open: vi.fn((_event, items) => {
+      mocks.contextMenuItems = items;
+    }),
     close: vi.fn(),
   }),
 }));
@@ -138,6 +141,7 @@ afterEach(() => {
   mocks.projects = [];
   mocks.projectLeaves = [];
   mocks.conversationsByProject = {};
+  mocks.contextMenuItems = [];
   mocks.commits = [];
   mocks.loadCommits.mockResolvedValue(mocks.commits);
   mocks.pathname = '/chat/conv_a432e35d';
@@ -185,6 +189,61 @@ describe('ChatSidebar', () => {
     expect(row).toHaveClass('bg-[var(--accent-conversation-soft)]');
     expect(row).toHaveClass('border-[var(--accent-conversation)]/20');
     expect(row).not.toHaveClass('bg-[var(--sidebar-panel)]');
+  });
+
+  it('confirms before deleting a temporary chat', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_delete',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+    mocks.chatState.activeConversationId = 'temp_delete';
+    mocks.chatState.activeProjectId = null;
+
+    render(<ChatSidebar />);
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*0 messages · not in a project/,
+      }).parentElement as HTMLElement
+    );
+    const deleteAction = mocks.contextMenuItems.find(
+      (item) => item.label === 'Delete Temporary Chat'
+    );
+    expect(deleteAction).toBeDefined();
+    act(() => {
+      deleteAction?.onClick();
+    });
+
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(1);
+    expect(screen.getByText('Delete Temporary Chat')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(1);
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*0 messages · not in a project/,
+      }).parentElement as HTMLElement
+    );
+    const confirmDeleteAction = mocks.contextMenuItems.find(
+      (item) => item.label === 'Delete Temporary Chat'
+    );
+    expect(confirmDeleteAction).toBeDefined();
+    act(() => {
+      confirmDeleteAction?.onClick();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(0);
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(null, null);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat');
   });
 
   it('opens a project name dialog and creates a named project', async () => {
