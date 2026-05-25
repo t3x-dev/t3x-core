@@ -1,6 +1,7 @@
 'use client';
 
 import { ClipboardPaste, Copy, Download, FileJson, FileText } from 'lucide-react';
+import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ interface LeafWorkspaceHeaderProps {
   onExport: (format: ExportFormat) => Promise<void>;
   mode?: WorkspaceMode;
   onModeChange?: (mode: WorkspaceMode) => void;
+  showChatSidebarToggle?: boolean;
   className?: string;
 }
 
@@ -31,6 +33,7 @@ export function LeafWorkspaceHeader({
   onExport,
   mode,
   onModeChange,
+  showChatSidebarToggle = false,
   className,
 }: LeafWorkspaceHeaderProps) {
   const { t } = useTerminology();
@@ -40,34 +43,37 @@ export function LeafWorkspaceHeader({
   return (
     <header
       className={cn(
-        'flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4 py-2',
+        'relative flex min-h-[58px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4 py-2',
         'bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)]',
         'backdrop-blur-[6px]',
         className
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="min-w-0">
-          <Breadcrumb
-            className="hidden min-w-0 text-[11px] md:flex"
-            segments={[
-              { label: 'Home', href: '/' },
-              { label: 'Project', href: `/project/${projectId}` },
-              {
-                label: `${t('commit')} ${shortHash}`,
-                href: `/project/${projectId}?focus=${leaf.commit_hash}`,
-              },
-              { label: 'Leaf' },
-            ]}
-          />
-          <div className="flex min-w-0 items-baseline gap-2">
-            <h1 className="truncate text-[15px] font-semibold leading-5 text-[var(--text-primary)]">
-              {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
-            </h1>
-            <span className="hidden shrink-0 font-mono text-[11px] text-[var(--text-tertiary)] sm:inline">
-              {leaf.id.slice(0, 9)} · sha:{shortHash}
-              {generatedTime ? ` · generated ${generatedTime}` : ''}
-            </span>
+      {showChatSidebarToggle && <ChatSidebarToggleButton className="absolute left-2.5 top-2" />}
+      <div className={cn('min-w-0 flex-1', showChatSidebarToggle && 'pl-[34px]')}>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="min-w-0">
+            <Breadcrumb
+              className="hidden min-w-0 text-[11px] md:flex"
+              segments={[
+                { label: 'Home', href: '/' },
+                { label: 'Project', href: `/project/${projectId}` },
+                {
+                  label: `${t('commit')} ${shortHash}`,
+                  href: `/project/${projectId}?focus=${leaf.commit_hash}`,
+                },
+                { label: 'Leaf' },
+              ]}
+            />
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h1 className="truncate text-[15px] font-semibold leading-5 text-[var(--text-primary)]">
+                {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
+              </h1>
+              <span className="hidden shrink-0 font-mono text-[11px] text-[var(--text-tertiary)] sm:inline">
+                {leaf.id.slice(0, 9)} · sha:{shortHash}
+                {generatedTime ? ` · generated ${generatedTime}` : ''}
+              </span>
+            </div>
           </div>
         </div>
       </div>

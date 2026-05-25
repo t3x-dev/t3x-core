@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Loader2, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
+import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
@@ -12,6 +12,7 @@ import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { getFixedPopoverStyle } from '@/utils/popoverPosition';
 import { BranchSwitcher } from './BranchSwitcher';
+import { ChatSidebarToggleButton } from './ChatSidebarToggleButton';
 
 const EXTRACT_MENU_WIDTH = 224;
 const EXTRACT_MENU_ESTIMATED_HEIGHT = 260;
@@ -48,8 +49,6 @@ export function ChatHeader({
     activeProjectId,
     activeBranch,
     setActiveBranch,
-    sidebarCollapsed,
-    toggleSidebar,
     conversationTitle: storeTitle,
   } = useChatStore();
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
@@ -144,19 +143,7 @@ export function ChatHeader({
         'flex h-11 shrink-0 items-center gap-3 bg-[var(--chat-panel)] px-4 backdrop-blur-[var(--fx-blur-panel)]'
       )}
     >
-      {/* Sidebar toggle */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        className="shrink-0 p-1.5 -ml-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)] transition-colors"
-        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        {sidebarCollapsed ? (
-          <PanelLeftOpen className="h-4 w-4" />
-        ) : (
-          <PanelLeftClose className="h-4 w-4" />
-        )}
-      </button>
+      <ChatSidebarToggleButton className="-ml-1.5" />
 
       {/* Left: Conversation title */}
       <div className="flex-1 min-w-0">
