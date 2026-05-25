@@ -54,6 +54,7 @@ describe('workspaceStore (state-only)', () => {
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
       panelExpandedByProject: {},
+      panelExpandedByTemporaryConversation: {},
       activeProjectId: null,
       draftsByConversation: {},
     });
@@ -667,6 +668,21 @@ describe('workspaceStore (state-only)', () => {
       expect(useWorkspaceStore.getState().pendingPanelExpanded).toBeNull();
     });
 
+    it('first setConversation promotes pending immediately for temporary conversations', () => {
+      expect(useWorkspaceStore.getState().conversationId).toBeNull();
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      expect(useWorkspaceStore.getState().pendingPanelExpanded).toBe(true);
+
+      useWorkspaceStore.getState().setConversation('temp_chat_early');
+
+      const s = useWorkspaceStore.getState();
+      expect(s.pendingPanelExpanded).toBeNull();
+      expect(s.panelExpandedByTemporaryConversation).toEqual({
+        temp_chat_early: true,
+      });
+      expect(selectPanelExpanded(s)).toBe(true);
+    });
+
     it('setConversation back to null (e.g. nav to /chat/new) clears pending', () => {
       // Leaving a real conversation IS the binding event. If the user
       // clicked Workspace on conv_A, then navigates to /chat/new before
@@ -710,6 +726,31 @@ describe('workspaceStore (state-only)', () => {
       const s = useWorkspaceStore.getState();
       expect(s.panelExpandedByProject).toEqual({ proj_X: true });
       expect(s.pendingPanelExpanded).toBeNull();
+    });
+
+    it('expands immediately for temporary conversations without a project', () => {
+      useWorkspaceStore.getState().setConversation('temp_chat_1');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+
+      const s = useWorkspaceStore.getState();
+      expect(s.panelExpandedByTemporaryConversation).toEqual({ temp_chat_1: true });
+      expect(s.panelExpandedByProject).toEqual({});
+      expect(s.pendingPanelExpanded).toBeNull();
+      expect(selectPanelExpanded(s)).toBe(true);
+    });
+
+    it('keeps temporary workspace expansion scoped per temporary conversation', () => {
+      useWorkspaceStore.getState().setConversation('temp_chat_1');
+      useWorkspaceStore.getState().setPanelExpanded(true);
+
+      useWorkspaceStore.getState().setConversation('temp_chat_2');
+      expect(selectPanelExpanded(useWorkspaceStore.getState())).toBe(false);
+
+      useWorkspaceStore.getState().setPanelExpanded(true);
+      expect(useWorkspaceStore.getState().panelExpandedByTemporaryConversation).toEqual({
+        temp_chat_1: true,
+        temp_chat_2: true,
+      });
     });
   });
 

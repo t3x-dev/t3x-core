@@ -2,6 +2,7 @@
 
 import { FileText, Leaf as LeafIcon } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
+import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { cn } from '@/utils/cn';
@@ -29,12 +30,15 @@ export default function ChatProjectLeafIndexPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-app)]">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-5">
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold text-[var(--text-primary)]">Leaf</h1>
-          <p className="truncate text-[11px] text-[var(--text-tertiary)]">
-            Project output artifacts
-          </p>
+      <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-4">
+        <ChatSidebarToggleButton className="absolute left-2.5 top-2" />
+        <div className="min-w-0 pl-[34px]">
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold text-[var(--text-primary)]">Leaf</h1>
+            <p className="truncate text-[11px] text-[var(--text-tertiary)]">
+              Project output artifacts
+            </p>
+          </div>
         </div>
         <span className="inline-flex h-7 items-center rounded-full border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2.5 text-[11px] font-medium text-[var(--accent-leaf)]">
           {leaves.length} {leaves.length === 1 ? 'leaf' : 'leaves'}

@@ -38,7 +38,7 @@ export function WorkspaceTopbar() {
   const pendingCount = groups.pending.count;
 
   return (
-    <div className="flex h-11 items-center gap-2 overflow-hidden border-b border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3">
+    <div className="flex h-9 items-center gap-2 overflow-hidden border-b border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3">
       <span className="shrink-0 text-xs font-semibold">Workspace</span>
 
       {mode === 'streaming' && (

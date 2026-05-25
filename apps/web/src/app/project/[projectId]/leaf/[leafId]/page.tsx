@@ -53,7 +53,13 @@ export default function LeafDetailPage() {
   return <LeafDetailWorkspace />;
 }
 
-export function LeafDetailWorkspace() {
+interface LeafDetailWorkspaceProps {
+  showChatSidebarToggle?: boolean;
+}
+
+export function LeafDetailWorkspace({
+  showChatSidebarToggle = false,
+}: LeafDetailWorkspaceProps = {}) {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
@@ -228,6 +234,7 @@ export function LeafDetailWorkspace() {
         leaf={leaf}
         projectId={projectId}
         projectName={projectName}
+        showChatSidebarToggle={showChatSidebarToggle}
         onExport={handleExport}
         mode={mode}
         onModeChange={handleModeChange}

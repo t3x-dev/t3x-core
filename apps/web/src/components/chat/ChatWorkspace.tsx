@@ -12,13 +12,13 @@ import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { usePinEnrichment } from '@/hooks/pins/usePinEnrichment';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
-import { useAutoProject } from '@/hooks/projects/useAutoProject';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
 import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
+import { getTemporaryChat } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { ChatHeader } from './ChatHeader';
@@ -85,22 +85,24 @@ export function ChatWorkspace({
     initialModel,
   });
 
-  // For "/chat/new" routes: auto-create project + conversation
+  // For "/chat/new" routes: create either a temporary local chat or a project conversation.
   const isNewChat = conversationId === 'new';
-  const { ensureProject } = useAutoProject();
   const [resolvedProjectId, setResolvedProjectId] = useState(projectId ?? '');
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
+  const isTemporaryChat = !resolvedProjectId;
   const chatInputDraftKey = resolvedConversationId
-    ? `conversation:${resolvedConversationId}`
+    ? isTemporaryChat
+      ? `temporary:${resolvedConversationId}`
+      : `conversation:${resolvedConversationId}`
     : isNewChat && resolvedProjectId
       ? `new:${resolvedProjectId}`
-      : null;
+      : 'temporary:new';
   const pendingMessageRef = useRef<string | null>(null);
 
   // Real-time sync — WebSocket connection to receive backend state changes
-  useRealtimeSync(resolvedConversationId ?? conversationId);
+  useRealtimeSync(resolvedProjectId ? (resolvedConversationId ?? conversationId) : null);
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -156,12 +158,12 @@ export function ChatWorkspace({
       pendingMessageRef.current = null;
       return;
     }
-    if (resolvedProjectId && pendingMessageRef.current && isSelectionReady) {
+    if ((resolvedProjectId || isTemporaryChat) && pendingMessageRef.current && isSelectionReady) {
       const msg = pendingMessageRef.current;
       pendingMessageRef.current = null;
       sendMessage(msg);
     }
-  }, [resolvedProjectId, sendMessage, isSelectionReady, isCommitted]);
+  }, [resolvedProjectId, sendMessage, isSelectionReady, isCommitted, isTemporaryChat]);
 
   // Store initialization, draft loading, inheritance hydration, topic loading
   const { parentConversationId } = useChatInit({
@@ -172,6 +174,12 @@ export function ChatWorkspace({
     inheritFromCommitHash,
     onInheritComplete,
   });
+
+  useEffect(() => {
+    if (!isTemporaryChat || !resolvedConversationId) return;
+    const chat = getTemporaryChat(resolvedConversationId);
+    useChatStore.getState().setConversationTitle(chat?.title ?? 'Temporary chat');
+  }, [isTemporaryChat, resolvedConversationId]);
 
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
@@ -280,25 +288,12 @@ export function ChatWorkspace({
       firstMessageSentRef.current = true;
       pendingMessageRef.current = firstMessage;
 
-      if (isNewChat && !resolvedProjectId) {
-        ensureProject(firstMessage).then((projId) => {
-          setResolvedProjectId(projId);
-          // pendingMessageRef will be flushed by the effect above
-        });
-      } else if (isSelectionReady) {
+      if (isSelectionReady) {
         pendingMessageRef.current = null;
         sendMessage(firstMessage);
       }
     }
-  }, [
-    firstMessage,
-    isLoading,
-    isNewChat,
-    resolvedProjectId,
-    ensureProject,
-    sendMessage,
-    isSelectionReady,
-  ]);
+  }, [firstMessage, isLoading, sendMessage, isSelectionReady]);
 
   const handleSend = useCallback(
     async (message: string, images?: AttachedImage[]) => {
@@ -311,15 +306,9 @@ export function ChatWorkspace({
         return;
       }
 
-      if (!resolvedProjectId) {
-        pendingMessageRef.current = message;
-        const projId = await ensureProject(message);
-        setResolvedProjectId(projId);
-      } else {
-        sendMessage(message, images ? { images } : undefined);
-      }
+      sendMessage(message, images ? { images } : undefined);
     },
-    [resolvedProjectId, ensureProject, sendMessage, isSelectionReady, isCommitted]
+    [sendMessage, isSelectionReady, isCommitted]
   );
 
   return (
@@ -510,7 +499,7 @@ export function ChatWorkspace({
         <CommittedBar projectId={resolvedProjectId || undefined} />
       ) : (
         <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
-          <div className="mx-auto max-w-[620px] px-5">
+          <div className="mx-auto max-w-[540px] px-5">
             <ChatInput
               onSend={handleSend}
               onStop={stopGenerating}
