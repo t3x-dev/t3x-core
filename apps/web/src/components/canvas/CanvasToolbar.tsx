@@ -2,6 +2,7 @@
 
 import { Maximize } from 'lucide-react';
 import { useMemo } from 'react';
+import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/store/canvasStore';
 import { cn } from '@/utils/cn';
@@ -10,9 +11,14 @@ import { glass } from '@/utils/theme';
 interface CanvasToolbarProps {
   projectName: string;
   onFitView: () => void;
+  showChatSidebarToggle?: boolean;
 }
 
-export function CanvasToolbar({ projectName, onFitView }: CanvasToolbarProps) {
+export function CanvasToolbar({
+  projectName,
+  onFitView,
+  showChatSidebarToggle = false,
+}: CanvasToolbarProps) {
   const nodes = useCanvasStore((state) => state.nodes);
   const stats = useMemo(() => {
     let mainCommits = 0;
@@ -49,37 +55,42 @@ export function CanvasToolbar({ projectName, onFitView }: CanvasToolbarProps) {
   return (
     <header
       className={cn(
-        'flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-5',
+        'relative flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4',
         glass.panelBase,
         glass.highlight
       )}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">
-            {projectName}
-          </h2>
-        </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
-          <span className="rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-commit)]">
-            main · {stats.mainCommits} commit{stats.mainCommits === 1 ? '' : 's'}
-          </span>
-          {stats.branches.map(([branch, count]) => (
-            <span
-              key={branch}
-              className="rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-branch)]"
-            >
-              {branch} · {count} commit{count === 1 ? '' : 's'}
+      {showChatSidebarToggle && (
+        <ChatSidebarToggleButton className="absolute left-[9px] top-[7px]" />
+      )}
+      <div className={cn('min-w-0 flex-1', showChatSidebarToggle && 'pl-[34px]')}>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">
+              {projectName}
+            </h2>
+          </div>
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden">
+            <span className="rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-commit)]">
+              main · {stats.mainCommits} commit{stats.mainCommits === 1 ? '' : 's'}
             </span>
-          ))}
-          <span className="rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-leaf)]">
-            {stats.leaves} output leaf{stats.leaves === 1 ? '' : 's'}
-          </span>
-          {stats.latestHash && (
-            <span className="rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--text-secondary)]">
-              latest commit sha:{stats.latestHash}
+            {stats.branches.map(([branch, count]) => (
+              <span
+                key={branch}
+                className="rounded-full border border-[var(--accent-branch)]/30 bg-[var(--accent-branch-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-branch)]"
+              >
+                {branch} · {count} commit{count === 1 ? '' : 's'}
+              </span>
+            ))}
+            <span className="rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-leaf)]">
+              {stats.leaves} output leaf{stats.leaves === 1 ? '' : 's'}
             </span>
-          )}
+            {stats.latestHash && (
+              <span className="rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--text-secondary)]">
+                latest commit sha:{stats.latestHash}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       <div className="hidden items-center gap-3 text-xs text-[var(--text-tertiary)] lg:flex">

@@ -6,7 +6,7 @@ import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 export default function ChatProjectCanvasPage() {
   return (
     <Suspense fallback={null}>
-      <ProjectDetailPageContent />
+      <ProjectDetailPageContent showChatSidebarToggle />
     </Suspense>
   );
 }

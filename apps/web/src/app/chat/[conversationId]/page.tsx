@@ -7,6 +7,7 @@ import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
+import { isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
   CHAT_COLUMN_MIN_WIDTH,
@@ -39,9 +40,13 @@ function ConversationRoute() {
   //     conversation to a specific project on cold start).
   // The query param wins so a direct load / refresh of the chat URL
   // doesn't lose the project context the URL is explicitly carrying.
+  // Temporary chats are intentionally projectless; do not let a stale
+  // activeProjectId from the previous project bleed into their workspace.
   const projectIdParam = searchParams.get('projectId');
   const activeProjectId = useChatStore((s) => s.activeProjectId);
-  const resolvedProjectId = projectIdParam ?? activeProjectId;
+  const resolvedProjectId = isTemporaryChatId(conversationId)
+    ? null
+    : (projectIdParam ?? activeProjectId);
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const setActiveWorkspaceProject = useWorkspaceStore((s) => s.setActiveProject);
   const compactViewport = useChatCompactViewport();

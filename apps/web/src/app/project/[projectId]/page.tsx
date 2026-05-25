@@ -20,7 +20,13 @@ export default function ProjectDetailPage() {
   );
 }
 
-export function ProjectDetailPageContent() {
+interface ProjectDetailPageContentProps {
+  showChatSidebarToggle?: boolean;
+}
+
+export function ProjectDetailPageContent({
+  showChatSidebarToggle = false,
+}: ProjectDetailPageContentProps = {}) {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
@@ -226,6 +232,7 @@ export function ProjectDetailPageContent() {
       <CanvasWorkspace
         key={projectId}
         projectName={project.name}
+        showChatSidebarToggle={showChatSidebarToggle}
         initialViewport={initialViewport}
         onViewportChange={handleViewportChange}
       />

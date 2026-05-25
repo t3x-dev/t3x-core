@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let searchParamsValue: URLSearchParams = new URLSearchParams();
 let storeProjectId: string | null = null;
+let routeConversationId = 'conv_123';
 let compactViewport = false;
 const workspaceMock = vi.hoisted(() => ({
   expanded: false,
@@ -12,7 +13,7 @@ const workspaceMock = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ conversationId: 'conv_123' }),
+  useParams: () => ({ conversationId: routeConversationId }),
   useSearchParams: () => searchParamsValue,
 }));
 
@@ -40,6 +41,10 @@ vi.mock('@/store/chatStore', () => ({
     selector({ activeProjectId: storeProjectId }),
 }));
 
+vi.mock('@/store/temporaryChatsStore', () => ({
+  isTemporaryChatId: (id: string) => id.startsWith('temp_'),
+}));
+
 vi.mock('@/store/workspaceStore', () => {
   type WorkspaceMockState = {
     setActiveProject: (id: string | null) => void;
@@ -62,6 +67,7 @@ afterEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
   storeProjectId = null;
+  routeConversationId = 'conv_123';
   compactViewport = false;
   workspaceMock.expanded = false;
 });
@@ -124,6 +130,23 @@ describe('ConversationPage', () => {
 
     const props = vi.mocked(ChatWorkspace).mock.calls[0][0];
     expect(props.projectId).toBe('proj_store');
+  });
+
+  it('does not apply stale project context to temporary conversations', () => {
+    routeConversationId = 'temp_chat_123';
+    searchParamsValue = new URLSearchParams({ projectId: 'proj_url' });
+    storeProjectId = 'proj_stale';
+
+    render(<ConversationPage />);
+
+    const props = vi.mocked(ChatWorkspace).mock.calls[0][0];
+    expect(props).toEqual(
+      expect.objectContaining({
+        conversationId: 'temp_chat_123',
+        projectId: undefined,
+      })
+    );
+    expect(workspaceMock.setActiveProject).toHaveBeenCalledWith(null);
   });
 
   it('clamps the expanded workspace width against the actual chat container on first layout', async () => {
