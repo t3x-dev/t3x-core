@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ContextManifestBar } from '@/components/chat/ContextManifestBar';
-import type { ConversationContextManifest } from '@/types/api';
+import type { ConversationContextManifest, Leaf } from '@/types/api';
 
 vi.mock('@/components/commit/CommitYAMLDocument', () => ({
   CommitYAMLDocument: ({ content }: { content: { trees: { key: string }[] } }) => (
@@ -63,6 +63,22 @@ const makeManifest = (): ConversationContextManifest => ({
   extraction_context_text: 'feedback context',
 });
 
+const followUpLeaf = {
+  id: 'leaf_followup',
+  commit_hash: 'sha256:commit2',
+  type: 'article',
+  title: 'Follow-up brief',
+  constraints: [],
+  config: {},
+  output: null,
+  generated_at: null,
+  assertions: null,
+  runner_assertions: null,
+  project_id: 'proj_1',
+  created_at: '2026-05-01T00:00:00.000Z',
+  created_by: null,
+} satisfies Leaf;
+
 describe('ContextManifestBar', () => {
   it('renders the collapsed baseline and feedback summary', () => {
     render(
@@ -100,6 +116,39 @@ describe('ContextManifestBar', () => {
     expect(screen.getByText('Baseline YAML')).not.toBeNull();
     expect(screen.getByTestId('baseline-yaml').textContent).toContain('goal');
     expect(screen.getByText('Keep the tone precise.')).not.toBeNull();
+  });
+
+  it('renders source choices at the top of the manifest panel', () => {
+    const onPinLeaf = vi.fn();
+    render(
+      <ContextManifestBar
+        manifest={makeManifest()}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          availableLeaves: [followUpLeaf],
+          availableLeavesLoading: false,
+          availableLeavesError: null,
+          leafPinningIds: new Set(),
+          onPinLeaf,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
+
+    const referencesHeading = screen.getByRole('heading', { name: 'References' });
+    const baselineHeading = screen.getByText('Baseline YAML');
+    expect(
+      referencesHeading.compareDocumentPosition(baselineHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).not.toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /pin and include leaf follow-up brief/i }));
+
+    expect(onPinLeaf).toHaveBeenCalledWith('leaf_followup');
   });
 
   it('toggles reference inclusion from the opened panel', () => {

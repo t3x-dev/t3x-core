@@ -10,8 +10,8 @@
 
 import type { TreeNode } from '@t3x-dev/core';
 import { flattenTrees } from '@t3x-dev/core';
-import type { ParentCommit } from '@/types/parentCommit';
 import { create } from 'zustand';
+import type { ParentCommit } from '@/types/parentCommit';
 import { useWorkspaceStore } from './workspaceStore';
 
 function resetCommitTracking(projectId: string | null): Partial<CommitState> {

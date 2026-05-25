@@ -15,7 +15,7 @@ import { BranchSwitcher } from './BranchSwitcher';
 import { ChatSidebarToggleButton } from './ChatSidebarToggleButton';
 
 const EXTRACT_MENU_WIDTH = 224;
-const EXTRACT_MENU_ESTIMATED_HEIGHT = 260;
+const EXTRACT_MENU_ESTIMATED_HEIGHT = 190;
 
 const PRESET_LABELS: Record<string, { label: string; desc: string }> = {
   concise: { label: 'Concise', desc: 'Key points (~30%)' },
@@ -234,26 +234,6 @@ export function ChatHeader({
                     </span>
                   </button>
                 ))}
-                <div className="my-1 border-t border-[var(--stroke-default)]" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('t3x:extract-requested', {
-                        detail: { chooseSources: true },
-                      })
-                    );
-                    setDropdownOpen(false);
-                  }}
-                  className="flex w-full flex-col px-3 py-2 text-left hover:bg-[var(--hover-bg)] transition-colors"
-                >
-                  <span className="text-xs font-medium text-[var(--text-primary)]">
-                    Choose sources
-                  </span>
-                  <span className="text-[10px] text-[var(--text-tertiary)]">
-                    Review pinned sources before extracting
-                  </span>
-                </button>
               </div>,
               document.body
             )}

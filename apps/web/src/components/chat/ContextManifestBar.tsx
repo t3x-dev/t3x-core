@@ -12,13 +12,16 @@ import {
 import { useId, useMemo, useState } from 'react';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
-import { ContextManifestPanel } from './ContextManifestPanel';
+import { ContextManifestPanel, type ContextManifestSourcePicker } from './ContextManifestPanel';
 
 interface ContextManifestBarProps {
   manifest: ConversationContextManifest | null;
   loading: boolean;
   error: Error | string | null;
+  open?: boolean;
   updating?: boolean;
+  sourcePicker?: ContextManifestSourcePicker;
+  onOpenChange?: (open: boolean) => void;
   onReload: () => void | Promise<void>;
   onReferenceToggle: (pinId: string, included: boolean) => void | Promise<void>;
   onAssertionToggle: (
@@ -47,14 +50,22 @@ export function ContextManifestBar({
   manifest,
   loading,
   error,
+  open,
   updating = false,
+  sourcePicker,
+  onOpenChange,
   onReload,
   onReferenceToggle,
   onAssertionToggle,
 }: ContextManifestBarProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = open ?? uncontrolledOpen;
   const panelId = useId();
   const message = errorMessage(error);
+  const setOpen = (nextOpen: boolean) => {
+    if (open === undefined) setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
   const summary = useMemo(() => {
     const includedFeedback = manifest?.feedback.filter((item) => item.included).length ?? 0;
 
@@ -72,16 +83,16 @@ export function ContextManifestBar({
       <div className="mx-auto flex h-9 max-w-[760px] items-center gap-2">
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => setOpen(!isOpen)}
           className={cn(
             'flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors',
-            open
+            isOpen
               ? 'border-[var(--accent-conversation)]/35 bg-[var(--accent-conversation)]/10 text-[var(--text-primary)]'
               : 'border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
           )}
-          aria-expanded={open}
+          aria-expanded={isOpen}
           aria-controls={panelId}
-          aria-label={open ? 'Close context manifest' : 'Open context manifest'}
+          aria-label={isOpen ? 'Close context manifest' : 'Open context manifest'}
         >
           {loading ? (
             <Loader2 size={14} className="shrink-0 animate-spin text-[var(--text-tertiary)]" />
@@ -125,7 +136,7 @@ export function ContextManifestBar({
             size={14}
             className={cn(
               'shrink-0 text-[var(--text-tertiary)] transition-transform',
-              open && 'rotate-180'
+              isOpen && 'rotate-180'
             )}
           />
         </button>
@@ -142,11 +153,12 @@ export function ContextManifestBar({
         </button>
       </div>
 
-      {open && (
+      {isOpen && (
         <ContextManifestPanel
           id={panelId}
           manifest={manifest}
           disabled={updating}
+          sourcePicker={sourcePicker}
           onReferenceToggle={onReferenceToggle}
           onAssertionToggle={onAssertionToggle}
         />
