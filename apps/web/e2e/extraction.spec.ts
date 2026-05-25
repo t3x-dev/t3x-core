@@ -12,13 +12,13 @@ import { expect, test } from './fixtures/test';
  * endpoint so we don't invoke real LLMs in CI.
  *
  * The worker (extractionWorker.ts) calls callExtractionLLM which fetches
- * http://localhost:8000/api/v1/extract-yops. The mock returns SourcedYOp[]
- * wrapped as { ops: [...] }, matching the shape in llmAdapter.ts.
+ * http://localhost:8000/api/v1/extract-yops. The mock returns the v2
+ * ExtractionOutcome envelope consumed by llmAdapter.ts.
  *
- * validateSource (in @t3x-dev/core) verifies that each op's turn_ref.quote
- * is a verbatim substring of the actual turn content loaded from the API.
- * Valid ops use a quote drawn from userContent; invalid ops use a phrase
- * not present in the turn.
+ * In the real API, validateSource (in @t3x-dev/core) verifies that each
+ * op's turn_ref.quote is a verbatim substring of the loaded turn content.
+ * The mocked success path uses quotes drawn from userContent so the fixture
+ * remains representative of the production contract.
  */
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
@@ -53,24 +53,6 @@ function validOps(turnHash: string) {
   ];
 }
 
-/** Quote NOT present in userContent — triggers unverifiable_quote failure. */
-function invalidOps(turnHash: string) {
-  return [
-    {
-      set: { path: 'trip/budget', value: 'twenty' },
-      source: {
-        type: 'llm',
-        model: 'mock-model',
-        at: '2026-04-12T00:00:00Z',
-        turn_ref: {
-          turn_hash: turnHash,
-          quote: 'PHRASE_NOT_IN_TURN_CONTENT_XYZ',
-        },
-      },
-    },
-  ];
-}
-
 /** Expand the YOps panel (collapsed by default on first load) then click Extract. */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
   const collapsed = page.getByTestId('yops-panel-collapsed');
@@ -79,6 +61,24 @@ async function openPanelAndClickExtract(page: import('@playwright/test').Page): 
   }
   // Extract button is only rendered when panelExpanded && !isCommitted
   await page.getByTestId('extract-button').click();
+}
+
+async function expandWorkspaceIfNeeded(page: import('@playwright/test').Page): Promise<void> {
+  if (await page.getByTestId('after-panel').isVisible({ timeout: 10_000 }).catch(() => false)) {
+    return;
+  }
+
+  const collapsed = page.getByTestId('yops-panel-collapsed').first();
+  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await collapsed.click({ force: true, timeout: 2_000 }).catch(() => {});
+  }
+}
+
+async function applyDraftIfPresent(page: import('@playwright/test').Page): Promise<void> {
+  const applyButton = page.getByTestId('workspace-action-apply_changes');
+  if (await applyButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await applyButton.click();
+  }
 }
 
 test.describe('Extraction flow', () => {
@@ -91,6 +91,9 @@ test.describe('Extraction flow', () => {
 
   test.beforeAll(async ({ request }) => {
     ({ projectId } = await createTestProject(request, `Extraction E2E ${Date.now()}`));
+  });
+
+  test.beforeEach(async ({ request }) => {
     conversationId = await createTestConversation(request, projectId, 'E2E Extraction');
     userTurnHash = await createTestTurn(request, projectId, conversationId, 'user', userContent);
   });
@@ -125,57 +128,43 @@ test.describe('Extraction flow', () => {
 
     // AfterPanel should show the extracted tree key "trip"
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
     expect(callCount).toBeGreaterThanOrEqual(1);
 
     // ── Persistence: reload and verify state is restored ──
     await page.reload();
     // Re-expand panel if it collapsed on reload
-    const collapsed = page.getByTestId('yops-panel-collapsed');
-    if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await collapsed.click();
-    }
+    await expandWorkspaceIfNeeded(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 10_000 });
   });
 
-  // ── EXT-02: retry path ─────────────────────────────────────────────────────
+  // ── EXT-02: transport retry path ───────────────────────────────────────────
 
-  test('EXT-02: invalid ops on first call → valid on second → YAML renders', async ({ page }) => {
+  test('EXT-02: transport failure on first call → valid on second → YAML renders', async ({
+    page,
+  }) => {
     let callCount = 0;
 
     await page.route(EXTRACT_URL, async (route: Route) => {
       callCount += 1;
-      const ops = callCount === 1 ? invalidOps(userTurnHash) : validOps(userTurnHash);
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ops }),
-      });
-    });
+      if (callCount === 1) {
+        await route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            error: { code: 'RATE_LIMITED', message: 'rate limited' },
+          }),
+        });
+        return;
+      }
 
-    await page.goto(`/chat/${conversationId}`);
-    await expect(page.getByText(userContent).first()).toBeVisible({ timeout: 10_000 });
-
-    await openPanelAndClickExtract(page);
-
-    // Worker retried and succeeded — AfterPanel shows the tree
-    await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 20_000 });
-    // At least 2 calls: first invalid, second valid
-    expect(callCount).toBeGreaterThanOrEqual(2);
-  });
-
-  // ── EXT-03: hard fail ──────────────────────────────────────────────────────
-
-  test('EXT-03: three invalid calls → error surfaces', async ({ page }) => {
-    let callCount = 0;
-
-    await page.route(EXTRACT_URL, async (route: Route) => {
-      callCount += 1;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           success: true,
-          data: { kind: 'ok', ops: invalidOps(userTurnHash), warnings: [] },
+          data: { kind: 'ok', ops: validOps(userTurnHash), warnings: [] },
         }),
       });
     });
@@ -185,8 +174,49 @@ test.describe('Extraction flow', () => {
 
     await openPanelAndClickExtract(page);
 
-    // The worker exhausts MAX_RETRIES (3 calls) before throwing ExtractionFailedError
-    // useExtraction catches it and calls toast.error() via sonner
+    // Web retries transport failures and succeeds — AfterPanel shows the tree
+    await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 20_000 });
+    // At least 2 calls: first rate-limited, second valid
+    expect(callCount).toBeGreaterThanOrEqual(2);
+  });
+
+  // ── EXT-03: server-side extraction failure ─────────────────────────────────
+
+  test('EXT-03: server failed outcome → error surfaces without client retry', async ({ page }) => {
+    let callCount = 0;
+
+    await page.route(EXTRACT_URL, async (route: Route) => {
+      callCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            kind: 'failed',
+            reason: 'unverifiable_quote',
+            message: 'quote did not verify',
+            details: {
+              failingOps: [
+                {
+                  opIndex: 0,
+                  path: 'trip/budget',
+                  turnTag: userTurnHash,
+                  badQuote: 'PHRASE_NOT_IN_TURN_CONTENT_XYZ',
+                },
+              ],
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/chat/${conversationId}`);
+    await expect(page.getByText(userContent).first()).toBeVisible({ timeout: 10_000 });
+
+    await openPanelAndClickExtract(page);
+
+    // The API owns domain retry/reask budget; Web surfaces the terminal outcome.
     await expect(
       page
         .locator('[data-sonner-toast]')
@@ -194,8 +224,7 @@ test.describe('Extraction flow', () => {
         .first(),
     ).toBeVisible({ timeout: 20_000 });
 
-    // Exactly 3 LLM calls (initial + 2 retries)
-    expect(callCount).toBe(3);
+    expect(callCount).toBe(1);
   });
 
   // ── EXT-04: network error ─────────────────────────────────────────────────

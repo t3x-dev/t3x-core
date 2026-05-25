@@ -216,7 +216,9 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () => `/project/${projectId}/merge/${mergeId}`,
           ready: async (p) => {
             await expect(p.getByText('Conflicts (2)')).toBeVisible({ timeout: 15000 });
-            await expect(p.getByRole('button', { name: /Accept Source/i }).first()).toBeVisible();
+            await expect(
+              p.getByRole('button', { name: /(Accept Source|Use source|Use feature)/i }).first()
+            ).toBeVisible();
           },
         },
       ];

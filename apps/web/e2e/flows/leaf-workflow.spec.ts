@@ -89,9 +89,8 @@ test.describe('Leaf Workflow', () => {
 
     // Find generate button — may not exist if LLM is not configured
     const generateBtn = page
-      .locator('button:has-text("Generate")')
-      .or(page.locator('button:has-text("Verify")'))
-      .first();
+      .getByRole('button', { name: /Generate & Verify/i })
+      .or(page.locator('button:has-text("Generate")').filter({ hasNotText: 'Display' }).last());
     const hasGenerate = await generateBtn.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!hasGenerate) {
@@ -122,7 +121,7 @@ test.describe('Leaf Workflow', () => {
     }
 
     // Verify actual output content appeared
-    const outputText = page.locator('pre, [class*="whitespace-pre"]').first();
+    const outputText = page.locator('[class*="whitespace-pre"], pre').first();
     await expect(outputText).toBeVisible({ timeout: 5000 });
   });
 
@@ -185,7 +184,7 @@ test.describe('Leaf Workflow', () => {
     await expect(constraintsSection).toBeVisible({ timeout: 10000 });
 
     // Verify output content rendered before checking Export
-    const outputContent = page.locator('pre, [class*="whitespace-pre"]').first();
+    const outputContent = page.locator('[class*="whitespace-pre"], pre').first();
     await expect(outputContent).toBeVisible({ timeout: 10000 });
 
     // Look for export/download/clipboard button with multiple patterns

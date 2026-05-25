@@ -63,6 +63,6 @@ test.describe('Inherited baseline workspace state', () => {
     await expect(afterPanel).toContainText('Inherited baseline', { timeout: 10_000 });
     await expect(afterPanel).toContainText('Parent');
     await expect(page.locator('text=Inherited baseline').first()).toBeVisible();
-    await expect(page.getByTestId('commit-button')).toBeDisabled();
+    await expect(page.getByTestId('commit-button')).not.toBeVisible();
   });
 });

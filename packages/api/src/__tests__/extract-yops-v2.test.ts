@@ -299,9 +299,7 @@ describe('POST /v1/extract-yops (v2)', () => {
     expect(res.status).toBe(200);
     const callArgs = extractAndApply.mock.calls.at(-1)?.[0];
     expect(callArgs?.contextText).toContain('## Selected Leaf Feedback');
-    expect(callArgs?.contextText).toContain(
-      'Keep every launch claim tied to concrete evidence.'
-    );
+    expect(callArgs?.contextText).toContain('Keep every launch claim tied to concrete evidence.');
     expect(callArgs?.contextText).not.toContain('launch:');
   });
 

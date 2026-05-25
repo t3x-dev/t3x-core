@@ -62,11 +62,19 @@ function validOps(turnHash: string) {
   ];
 }
 
+async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
+  const collapsed = page.getByTestId('yops-panel-collapsed');
+  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await collapsed.click();
+  }
+}
+
 /**
- * Click Extract. The panel auto-expands via useChatInit after hydration.
+ * Click Extract. The workspace may start collapsed on chat routes.
  * If the first click races the activeProjectId backfill, retry once.
  */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
+  await expandWorkspaceIfCollapsed(page);
   const extractBtn = page.getByTestId('extract-button');
   await extractBtn.waitFor({ state: 'visible' });
   const waitForExtract = page.waitForRequest(
@@ -82,6 +90,13 @@ async function openPanelAndClickExtract(page: import('@playwright/test').Page): 
       (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
       { timeout: 10_000 }
     );
+  }
+}
+
+async function applyDraftIfPresent(page: import('@playwright/test').Page): Promise<void> {
+  const applyButton = page.getByTestId('workspace-action-apply_changes');
+  if (await applyButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await applyButton.click();
   }
 }
 
@@ -104,7 +119,7 @@ test.describe('Commit-lock flow', () => {
 
   // ── LOCK-01: Full commit via mocked API ───────────────────────────────────
 
-  test('LOCK-01: commit via dialog → extract button hidden, commit button disabled', async ({
+  test('LOCK-01: commit via dialog → extract and commit buttons disabled', async ({
     page,
   }) => {
     // Mock extraction
@@ -153,9 +168,10 @@ test.describe('Commit-lock flow', () => {
     // Extract
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
 
     // Open commit dialog
-    const commitBtn = page.getByTestId('commit-button');
+    const commitBtn = page.getByTestId('workspace-action-commit');
     await expect(commitBtn).toBeEnabled({ timeout: 5_000 });
     await commitBtn.click();
 
@@ -165,13 +181,11 @@ test.describe('Commit-lock flow', () => {
     // Confirm commit
     await page.getByTestId('commit-dialog-confirm').click();
 
-    // After commit: extract button should no longer be visible
-    // (ChatHeader renders it only when panelExpanded && !isCommitted)
-    await expect(page.getByTestId('extract-button')).not.toBeVisible({ timeout: 5_000 });
+    // After commit: the header keeps Extract visible for layout stability but disables it.
+    await expect(page.getByTestId('extract-button')).toBeDisabled({ timeout: 5_000 });
 
-    // Commit button in AfterPanel footer should be disabled (no result after commit state)
-    // workspaceStore.isCommitted = true → hasResult check in AfterPanel disables button
-    await expect(page.getByTestId('commit-button')).toBeDisabled({ timeout: 3_000 });
+    // Commit action remains in the action bar for layout stability, but is locked.
+    await expect(page.getByTestId('workspace-action-commit')).toBeDisabled({ timeout: 3_000 });
   });
 
   // ── LOCK-02: Store injection — no server round-trip ───────────────────────
@@ -194,6 +208,7 @@ test.describe('Commit-lock flow', () => {
     // Extract to get the panel expanded with content
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
 
     // Extract button should be visible now (panelExpanded && !isCommitted)
     await expect(page.getByTestId('extract-button')).toBeVisible({ timeout: 3_000 });
@@ -231,7 +246,7 @@ test.describe('Commit-lock flow', () => {
     // For now, verify the pre-commit state is correct (not locked) — confirming the
     // lock logic relies on isCommitted flag that LOCK-01 covers end-to-end.
     await expect(page.getByTestId('extract-button')).toBeVisible();
-    await expect(page.getByTestId('commit-button')).toBeEnabled();
+    await expect(page.getByTestId('workspace-action-commit')).toBeEnabled();
   });
 
   // ── LOCK-03: Refresh lock persistence ─────────────────────────────────────

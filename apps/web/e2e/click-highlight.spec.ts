@@ -55,11 +55,19 @@ function validOps(turnHash: string) {
   ];
 }
 
+async function expandWorkspaceIfCollapsed(page: import('@playwright/test').Page): Promise<void> {
+  const collapsed = page.getByTestId('yops-panel-collapsed');
+  if (await collapsed.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await collapsed.click();
+  }
+}
+
 /**
- * Click Extract. The panel auto-expands via useChatInit after hydration.
+ * Click Extract. The workspace may start collapsed on chat routes.
  * If the first click races the activeProjectId backfill, retry once.
  */
 async function openPanelAndClickExtract(page: import('@playwright/test').Page): Promise<void> {
+  await expandWorkspaceIfCollapsed(page);
   const extractBtn = page.getByTestId('extract-button');
   await extractBtn.waitFor({ state: 'visible' });
   const waitForExtract = page.waitForRequest(
@@ -75,6 +83,13 @@ async function openPanelAndClickExtract(page: import('@playwright/test').Page): 
       (req) => req.url().includes('/api/v1/extract-yops') && req.method() === 'POST',
       { timeout: 10_000 }
     );
+  }
+}
+
+async function applyDraftIfPresent(page: import('@playwright/test').Page): Promise<void> {
+  const applyButton = page.getByTestId('workspace-action-apply_changes');
+  if (await applyButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await applyButton.click();
   }
 }
 
@@ -118,6 +133,7 @@ test.describe('Click-highlight flow', () => {
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('trip', { timeout: 15_000 });
     await expect(page.getByTestId('after-panel')).toContainText('budget', { timeout: 5_000 });
+    await applyDraftIfPresent(page);
 
     // Click the slot row for trip/budget — this calls workspaceStore.select()
     const slotRow = page.getByTestId('slot-row-trip-budget');
@@ -153,6 +169,7 @@ test.describe('Click-highlight flow', () => {
     // Extract
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('budget', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
 
     // Click slot to activate
     await page.getByTestId('slot-row-trip-budget').click();
@@ -191,6 +208,7 @@ test.describe('Click-highlight flow', () => {
     // Extract
     await openPanelAndClickExtract(page);
     await expect(page.getByTestId('after-panel')).toContainText('budget', { timeout: 15_000 });
+    await applyDraftIfPresent(page);
 
     // Hover the slot row (no click) — should NOT produce a chat highlight
     await page.getByTestId('slot-row-trip-budget').hover();
