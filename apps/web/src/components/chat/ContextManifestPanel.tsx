@@ -213,13 +213,15 @@ function SourceItemRow({
   const subtitleParts = [sourceKindLabel(item.kind)];
   if (isLesson && parentTitle) subtitleParts.push(parentTitle);
   if (!isLesson && item.pin_id) subtitleParts.push(item.pin_id);
-  if (isLesson && checked && !item.included)
-    subtitleParts.push('inactive until parent is included');
+  if (isLesson && checked && !item.included) subtitleParts.push('selected');
 
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-[16px_20px_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
+        'grid min-w-0 items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
+        canToggle
+          ? 'grid-cols-[16px_20px_minmax(0,1fr)_auto]'
+          : 'grid-cols-[20px_minmax(0,1fr)_auto]',
         selected
           ? isLesson
             ? 'bg-[var(--accent-extract)]/10'
@@ -245,11 +247,9 @@ function SourceItemRow({
             'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[var(--stroke-default)]',
             isLesson ? 'accent-[var(--accent-extract)]' : 'accent-[var(--accent-commit)]'
           )}
-          aria-label={isLesson ? `Include lesson ${title}` : `Include ${title}`}
+          aria-label={isLesson ? `Include lesson ${title}` : `Use material ${title}`}
         />
-      ) : (
-        <span className="mt-0.5 h-4 w-4" />
-      )}
+      ) : null}
       <span className="mt-0.5">
         <SourceItemIcon kind={item.kind} />
       </span>
@@ -302,7 +302,7 @@ function AvailableLeafRow({
       </span>
       <button
         type="button"
-        aria-label={`Pin and include leaf ${title}`}
+        aria-label={`Pin leaf ${title} as material`}
         onClick={() => {
           void onPinLeaf?.(leaf.id);
         }}
@@ -310,7 +310,7 @@ function AvailableLeafRow({
         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf)]/10 px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pinning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        Pin & include
+        Pin material
       </button>
     </div>
   );
@@ -361,15 +361,15 @@ function PreviewPanel({
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">{label}</h3>
             <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
               {sourceKindLabel(item.kind)} ·{' '}
-              {item.included ? 'included this turn' : 'not used this turn'}
+              {item.included ? 'included in context' : 'not used this turn'}
             </p>
           </div>
           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
             {item.role === 'baseline'
               ? 'Baseline YAML is inherited from the parent commit. It is automatically included and does not require pinning the parent conversation.'
               : item.role === 'guidance'
-                ? 'Lessons are not evidence sources. They summarize prior output or result feedback and only affect extraction context when selected and their parent source is included.'
-                : 'This source is pinned in the project library. Its checkbox controls only whether the current conversation turn includes it.'}
+                ? 'Lessons are not evidence sources. They summarize prior output or result feedback and affect extraction context when selected.'
+                : 'Pinned materials are available in the project library. Use the material checkbox to include this source in the current conversation context.'}
           </p>
           <dl className="grid grid-cols-2 gap-2 text-[10px]">
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
@@ -379,9 +379,9 @@ function PreviewPanel({
               </dd>
             </div>
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
-              <dt className="text-[var(--text-tertiary)]">Include</dt>
+              <dt className="text-[var(--text-tertiary)]">Context</dt>
               <dd className="mt-1 font-mono text-[var(--text-secondary)]">
-                {item.included ? 'true' : 'false'}
+                {item.included ? 'included' : 'not included'}
               </dd>
             </div>
             {item.pin_id && (
@@ -697,7 +697,7 @@ export function ContextManifestPanel({
             <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
               <Pane
                 title="Materials"
-                meta={`${materialSourceItems.filter((item) => item.included).length}/${materialSourceItems.length} included`}
+                meta={`${materialSourceItems.filter((item) => item.included).length}/${materialSourceItems.length} used`}
               >
                 <div className="space-y-1">
                   {materialSourceItems.length > 0 ? (
@@ -758,7 +758,7 @@ export function ContextManifestPanel({
                   )}
                 </div>
               </Pane>
-              <Pane title="Preview" meta="checkbox = include">
+              <Pane title="Preview" meta="source details">
                 <PreviewPanel
                   manifest={manifest}
                   sourceItemsByKey={sourceItemsByKey}

@@ -113,10 +113,6 @@ export async function buildConversationContextManifest(
   const contextConfig = await getConversationContext(db, conversationId);
   const effectiveContextConfig = getEffectiveContextConfig(conversationId, contextConfig, options);
   const projectPins = await findPinsByProject(db, conversation.projectId, { limit: 100000 });
-  const contextPins = normalizePinsForContext(projectPins);
-  const activePinIds = new Set(
-    filterActivePins(contextPins, effectiveContextConfig).map((p) => p.id)
-  );
 
   const baselineContent = await loadBaselineContent(
     db,
@@ -124,13 +120,18 @@ export async function buildConversationContextManifest(
     conversation.projectId
   );
   const baseline = toBaseline(baselineContent);
+  const materialPins = filterMaterialPins(projectPins);
+  const contextPins = normalizePinsForContext(materialPins);
+  const activePinIds = new Set(
+    filterActivePins(contextPins, effectiveContextConfig).map((p) => p.id)
+  );
 
   const { conversations, conversationTitles } = await loadPinnedConversations(
     db,
-    projectPins,
+    materialPins,
     conversationId
   );
-  const leaves = await loadPinnedLeaves(db, projectPins);
+  const leaves = await loadPinnedLeaves(db, materialPins);
 
   const builtPinContext = buildConversationContext({
     knowledge: undefined,
@@ -145,7 +146,7 @@ export async function buildConversationContextManifest(
     : '';
   const chat_context_text = [baselineText, builtPinContext.text].filter(Boolean).join('\n\n');
   const feedback = buildFeedback(contextPins, leaves, activePinIds);
-  const references = buildReferences(projectPins, leaves, conversationTitles, activePinIds);
+  const references = buildReferences(materialPins, leaves, conversationTitles, activePinIds);
   const extraction_context_text = buildExtractionContextText(feedback);
   const source_items = buildSourceItems(baseline, references, feedback);
 
@@ -174,6 +175,10 @@ function normalizePinsForContext(projectPins: Pin[]): Pin[] {
       selected_assertion_ids: [],
     };
   });
+}
+
+function filterMaterialPins(projectPins: Pin[]): Pin[] {
+  return projectPins.filter((pin) => pin.type === 'leaf');
 }
 
 function getEffectiveContextConfig(

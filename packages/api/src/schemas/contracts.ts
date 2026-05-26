@@ -488,7 +488,7 @@ export const ConversationContextResponse = z.object({
 });
 
 export const GetConversationContextResponse = SuccessResponse(
-  ConversationContextResponse.nullable() // null = using default (all pins)
+  ConversationContextResponse.nullable() // null response = no explicit context config
 );
 
 // PUT /v1/conversations/:id/context

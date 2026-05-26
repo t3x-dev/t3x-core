@@ -237,18 +237,20 @@ describe('ContextManifestBar', () => {
     fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
 
     expect(screen.getByRole('heading', { name: 'Materials' })).not.toBeNull();
-    expect(screen.getByText('Launch leaf')).not.toBeNull();
+    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'References' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /pin and include leaf follow-up brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /pin leaf follow-up brief as material/i }));
 
     expect(onPinLeaf).toHaveBeenCalledWith('leaf_followup');
   });
 
-  it('toggles reference inclusion from the opened panel', () => {
+  it('lets users choose whether a pinned material is used in this conversation', () => {
     const onReferenceToggle = vi.fn();
     const manifest = makeManifest();
-    const { rerender } = render(
+    manifest.references[0].included = false;
+    manifest.source_items[1].included = false;
+    render(
       <ContextManifestBar
         manifest={manifest}
         loading={false}
@@ -259,30 +261,20 @@ describe('ContextManifestBar', () => {
       />
     );
 
+    expect(screen.getByText('0 included')).not.toBeNull();
+
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
     fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
+    fireEvent.click(screen.getByText('Launch leaf'));
 
-    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
-
-    const excludedManifest = makeManifest();
-    excludedManifest.references[0].included = false;
-    excludedManifest.source_items[1].included = false;
-    rerender(
-      <ContextManifestBar
-        manifest={excludedManifest}
-        loading={false}
-        error={null}
-        onReload={vi.fn()}
-        onReferenceToggle={onReferenceToggle}
-        onAssertionToggle={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
-
-    expect(onReferenceToggle).toHaveBeenLastCalledWith('pin_leaf', true);
+    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
+    expect(screen.getByText(/not used this turn/i)).not.toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /include launch leaf/i })).toBeNull();
+    const checkbox = screen.getByRole('checkbox', { name: /use material launch leaf/i });
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', true);
+    expect(screen.queryByText(/checkbox = include/i)).toBeNull();
   });
 
   it('toggles lesson inclusion from the Lessons tab', () => {

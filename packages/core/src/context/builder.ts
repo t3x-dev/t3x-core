@@ -35,7 +35,7 @@ export interface ContextBuildInput {
   /** All project pins */
   projectPins: Pin[];
 
-  /** Conversation's context config (null = use all pins) */
+  /** Conversation's context config (undefined/null = no pins; selected_pin_ids null = use all pins) */
   contextConfig?: ConversationContext | null;
 
   /** Loaded conversations (for pinned conversation content) */
@@ -207,12 +207,17 @@ export function buildMemoryFromPins(input: Omit<ContextBuildInput, 'knowledge'>)
  * Filter pins based on conversation context configuration.
  *
  * @param pins - All project pins
- * @param config - Conversation context config (null = use all)
+ * @param config - Conversation context config (missing = no pins; selected_pin_ids null = use all)
  * @returns Filtered list of active pins
  */
 export function filterActivePins(pins: Pin[], config?: ConversationContext | null): Pin[] {
-  // null or undefined config = use all pins
-  if (!config || config.selected_pin_ids === null) {
+  // Missing config = no pins. Users opt materials into a conversation explicitly.
+  if (!config) {
+    return [];
+  }
+
+  // Explicit null selected_pin_ids = use all project pins.
+  if (config.selected_pin_ids === null) {
     return pins;
   }
 

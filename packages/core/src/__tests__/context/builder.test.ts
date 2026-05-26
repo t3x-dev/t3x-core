@@ -110,16 +110,14 @@ describe('estimateTokens', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('filterActivePins', () => {
-  it('returns all pins when config is null', () => {
+  it('returns no pins when config is null', () => {
     const result = filterActivePins(mockPins, null);
-    expect(result).toHaveLength(2);
-    expect(result).toEqual(mockPins);
+    expect(result).toHaveLength(0);
   });
 
-  it('returns all pins when config is undefined', () => {
+  it('returns no pins when config is undefined', () => {
     const result = filterActivePins(mockPins, undefined);
-    expect(result).toHaveLength(2);
-    expect(result).toEqual(mockPins);
+    expect(result).toHaveLength(0);
   });
 
   it('returns all pins when selected_pin_ids is null', () => {
@@ -192,6 +190,11 @@ describe('buildConversationContext', () => {
     const result = buildConversationContext({
       knowledge: mockKnowledge,
       projectPins: [mockPins[0]], // Only conversation pin
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations,
       leaves: new Map(),
     });
@@ -211,6 +214,11 @@ describe('buildConversationContext', () => {
     const result = buildConversationContext({
       knowledge: mockKnowledge,
       projectPins: [mockPins[1]], // Only leaf pin
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations: new Map(),
       leaves,
     });
@@ -235,6 +243,11 @@ describe('buildConversationContext', () => {
     const result = buildConversationContext({
       knowledge: mockKnowledge,
       projectPins: [pinWithSelectedAssertions],
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations: new Map(),
       leaves,
     });
@@ -285,6 +298,11 @@ describe('buildConversationContext', () => {
     const result = buildConversationContext({
       knowledge: mockKnowledge,
       projectPins: [mockPins[0]], // Conversation pin
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations: new Map(), // But no conversation data
       leaves: new Map(),
     });
@@ -304,6 +322,11 @@ describe('buildConversationContext', () => {
     const result = buildConversationContext({
       knowledge: mockKnowledge,
       projectPins: [mockPins[1]],
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations: new Map(),
       leaves,
     });
@@ -357,6 +380,11 @@ describe('buildMemoryFromPins', () => {
 
     const result = buildMemoryFromPins({
       projectPins: [mockPins[0]],
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: null,
+        updated_at: '2025-01-10T00:00:00Z',
+      },
       conversations,
       leaves: new Map(),
     });

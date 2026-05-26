@@ -365,7 +365,7 @@ export const pins = pgTable(
  * Stores per-conversation context configuration.
  *
  * Each conversation can customize which pins are included in its LLM context.
- * Default (no row): use all project pins.
+ * Default (no row): no project pins.
  */
 export const conversationContexts = pgTable('conversation_contexts', {
   /** The conversation this config belongs to */
@@ -375,7 +375,7 @@ export const conversationContexts = pgTable('conversation_contexts', {
 
   /**
    * Which pins to include in context
-   * null = use all project pins (default)
+   * null = use all project pins
    * [] = no pins (fresh start)
    * [...ids] = specific pins only
    */

@@ -671,8 +671,9 @@ conversationRoutes.openapi(getContextRoute, async (c) => {
  * PUT /v1/conversations/:id/context - Update context config
  *
  * Sets which pins to include in this conversation's context.
- * - null: use all project pins (default)
- * - []: no pins (fresh start)
+ * - no context row: no project pins
+ * - null: use all project pins
+ * - []: no pins
  * - [...ids]: specific pins only
  */
 const updateContextRoute = createRoute({

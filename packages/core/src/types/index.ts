@@ -372,8 +372,8 @@ export interface Pin {
 /**
  * Each conversation can customize which pins are included in its LLM context.
  *
- * Default behavior: use all project pins.
- * Custom behavior: select specific pins for this conversation.
+ * Missing config means no project pins are used.
+ * Explicit config can select no pins, some pins, or all pins.
  */
 export interface ConversationContext {
   /** The conversation this config belongs to */
@@ -381,7 +381,7 @@ export interface ConversationContext {
 
   /**
    * Which pins to include in this conversation's context.
-   * null = use all project pins (default)
+   * null = use all project pins
    * [] = no pins (fresh start)
    * [...ids] = specific pins only
    */
