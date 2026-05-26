@@ -270,20 +270,21 @@ describe('AfterPanel tree edit controls', () => {
     expect(screen.getByText('teams').closest('[data-human-edit="true"]')).not.toBeNull();
   });
 
-  it('renders the parent commit tree for an inherited child before Apply', () => {
+  it('renders empty output instead of the parent baseline for an inherited child before Apply', () => {
+    const parentTrees = [
+      {
+        key: 'concepts',
+        slots: { definition: 'A parent baseline concept' },
+        children: [],
+      },
+    ];
     mocks.parentCommit.current = {
       message: 'Parent commit',
-      trees: [
-        {
-          key: 'concepts',
-          slots: { definition: 'A parent baseline concept' },
-          children: [],
-        },
-      ],
+      trees: parentTrees,
     };
     useWorkspaceStore.getState().setConversation('conv_child');
     useWorkspaceStore.getState().setDerived({
-      tree: { trees: [], relations: [] },
+      tree: { trees: parentTrees, relations: [] },
       sourceIndex: new Map(),
       opsLog: [],
       baselineCommitHash: 'sha256:parent_commit',
@@ -292,9 +293,12 @@ describe('AfterPanel tree edit controls', () => {
 
     render(createElement(AfterPanel));
 
-    expect(screen.getByText('Inherited baseline')).not.toBeNull();
-    expect(screen.getByText('concepts')).not.toBeNull();
-    expect(screen.getByText('A parent baseline concept')).not.toBeNull();
+    expect(screen.getByText('Output')).not.toBeNull();
+    expect(screen.getByText('No knowledge extracted yet')).not.toBeNull();
+    expect(screen.queryByText('Inherited baseline')).toBeNull();
+    expect(screen.queryByText('Parent')).toBeNull();
+    expect(screen.queryByText('concepts')).toBeNull();
+    expect(screen.queryByText('A parent baseline concept')).toBeNull();
     expect(screen.queryByText('Removed node')).toBeNull();
   });
 

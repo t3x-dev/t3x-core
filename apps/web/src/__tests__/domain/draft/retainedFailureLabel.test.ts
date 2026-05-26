@@ -102,48 +102,31 @@ describe('formatApplyTooltipForRetainedFailure', () => {
 });
 
 describe('getResultPanelHeaderLabel', () => {
-  // Four-state label (Output / Inherited baseline / Draft preview / Previous draft)
-  // factored out of AfterPanel JSX so the precedence — retained-failure
-  // wins over draft, draft wins over inherited baseline, inherited
-  // baseline wins over applied — is locked in one place.
   it('returns "Output" in the steady state with no draft staged', () => {
     expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: false })).toBe(
       'Output'
     );
   });
 
-  it('returns "Inherited baseline" when only a parent commit baseline is visible', () => {
+  it('returns "Output" when only a parent commit baseline exists', () => {
     expect(
       getResultPanelHeaderLabel({
         hasDraft: false,
         hasRetainedFailure: false,
         isInheritedBaselineOnly: true,
       })
-    ).toBe('Inherited baseline');
+    ).toBe('Output');
   });
 
-  it('returns "Draft preview" when a draft is staged from a successful extract', () => {
-    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: false })).toBe(
-      'Draft preview'
-    );
+  it('returns "Output" when a draft is staged from a successful extract', () => {
+    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: false })).toBe('Output');
   });
 
-  it('returns "Previous draft" when a retained failure rides alongside the draft', () => {
-    // The combination is what AfterPanel reads as "render the prior
-    // proposal + show the retained-failure error row + flip the Apply
-    // tooltip". Without the precedence here, a re-extract failure with
-    // a still-staged draft would label as "Draft preview" and the
-    // user couldn't tell the latest attempt failed.
-    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: true })).toBe(
-      'Previous draft'
-    );
+  it('returns "Output" when a retained failure rides alongside the draft', () => {
+    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: true })).toBe('Output');
   });
 
   it('ignores a stray hasRetainedFailure flag when no draft is staged', () => {
-    // Defensive: hasRetainedFailure should never be true with hasDraft
-    // false (the store wires it that way), but if a code path ever
-    // produces that combination, fall back to the steady-state label
-    // rather than rendering "Previous draft" against a committed tree.
     expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe('Output');
   });
 });

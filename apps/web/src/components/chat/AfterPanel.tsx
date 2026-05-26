@@ -1,6 +1,6 @@
 'use client';
 
-import type { HumanEditSurface, Source, TreeNode } from '@t3x-dev/core';
+import type { HumanEditSurface, SemanticContent, Source, TreeNode } from '@t3x-dev/core';
 import { AlertCircle, ListPlus, Pencil, Play, Plus, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,6 +47,8 @@ type SlotDiffType = 'added' | 'modified' | 'removed' | null;
 const YAML_KEY_CLASS = 'text-[color-mix(in_srgb,var(--yaml-key)_88%,var(--text-primary))]';
 const YAML_VALUE_CLASS = 'text-[color-mix(in_srgb,var(--yaml-string)_82%,var(--text-primary))]';
 const YAML_PUNCTUATION_CLASS = 'text-[color-mix(in_srgb,var(--yaml-punctuation)_70%,transparent)]';
+const EMPTY_SEMANTIC_CONTENT: SemanticContent = { trees: [], relations: [] };
+const EMPTY_TREE_NODES: TreeNode[] = [];
 type TreeStatusKind = 'human' | 'new' | 'modified' | 'removed' | 'inherited';
 
 function rowTone(input: {
@@ -859,15 +861,11 @@ export function AfterPanel({
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const activeBranch = useChatStore((s) => s.activeBranch);
   const parent = useParentCommit();
-  const inheritedBaselineTree =
-    isInheritedBaselineOnly && parent
-      ? { trees: parent.trees, relations: committedTree.relations }
-      : null;
+  const committedOutputTree = isInheritedBaselineOnly ? EMPTY_SEMANTIC_CONTENT : committedTree;
   // Render the dry-run preview tree when an Extract has staged a draft.
-  // For a new child conversation with no applied YOps yet, render the
-  // inherited parent commit tree; otherwise an empty local replay would diff
-  // against the parent as if every inherited node had been removed.
-  const tree = hasDraft && draftTree ? draftTree : (inheritedBaselineTree ?? committedTree);
+  // Otherwise this pane is the current conversation output only; the
+  // inherited parent baseline is shown in Sources, not duplicated here.
+  const tree = hasDraft && draftTree ? draftTree : committedOutputTree;
   // Same split as the WorkspaceTopbar: committed (yops_log) vs draft
   // (un-applied LLM proposal). The footer next to Discard / Commit
   // was the leftover ambiguous count after PR 904 covered the
@@ -878,8 +876,8 @@ export function AfterPanel({
   const lastError = useWorkspaceStore((s) => s.lastError);
   // When a re-Extract failed but the previous draft is still applicable,
   // the panel renders the retained draft tree + a persistent error row +
-  // a "Previous draft" header label. Set by useExtraction's catch block;
-  // cleared on successful extract / Discard / successful Apply.
+  // a Retained badge. Set by useExtraction's catch block; cleared on
+  // successful extract / Discard / successful Apply.
   const retainedDraftFailure = useWorkspaceStore((s) => s.retainedDraftFailure);
   const hasRetainedFailure = hasDraft && retainedDraftFailure !== null;
   const selectedNodePath = useWorkspaceStore((s) => s.selectedNodePath);
@@ -905,7 +903,8 @@ export function AfterPanel({
   const [resultScrollbarGutter, setResultScrollbarGutter] = useState(0);
 
   const trees = tree.trees as TreeNode[];
-  const parentTrees = parent?.trees ?? [];
+  const parentTrees = parent?.trees ?? EMPTY_TREE_NODES;
+  const comparisonParentTrees = isInheritedBaselineOnly ? EMPTY_TREE_NODES : parentTrees;
   const hasResult = trees.length > 0;
   const hasParent = !!parent;
   const showBefore = !!beforeVisible && hasParent;
@@ -920,9 +919,9 @@ export function AfterPanel({
     : undefined;
 
   const diff = useMemo<TreeDiffResult | null>(() => {
-    if (!parent) return null;
-    return computeTreeDiff(parent.trees, tree.trees);
-  }, [parent, tree.trees]);
+    if (!parent || isInheritedBaselineOnly) return null;
+    return computeTreeDiff(comparisonParentTrees, tree.trees);
+  }, [comparisonParentTrees, isInheritedBaselineOnly, parent, tree.trees]);
 
   const summary = useMemo(() => summarizeVisibleDiff(diff), [diff]);
   const parentMessage = parent?.message ?? null;
@@ -979,13 +978,13 @@ export function AfterPanel({
     commitInputRef.current?.select();
   }, [showCommitDialog]);
 
-  // Auto-close the commit dialog when a draft preview arrives. The dialog
+  // Auto-close the commit dialog when a draft arrives. The dialog
   // can already be open against the committed tree when Extract fires
   // from elsewhere (chat header, hotkey, programmatic). Leaving it open
-  // would render a Commit dialog over a Draft-preview tree — confusing
+  // would render a Commit dialog over an unapplied output tree — confusing
   // even with the confirm gated. Closing it sends the user back to the
-  // panel where the new "Draft preview" badge is visible and Apply /
-  // Discard are the only forward moves.
+  // panel where the new Unapplied badge is visible and Apply / Discard
+  // are the only forward moves.
   useEffect(() => {
     if (hasDraft && showCommitDialog) {
       setShowCommitDialog(false);
@@ -993,7 +992,7 @@ export function AfterPanel({
   }, [hasDraft, showCommitDialog]);
 
   const rows = useMemo<RenderRow[]>(() => {
-    const baseRoots = new Map(parentTrees.map((node) => [node.key, node]));
+    const baseRoots = new Map(comparisonParentTrees.map((node) => [node.key, node]));
     const resultRoots = new Map(trees.map((node) => [node.key, node]));
     const rootOrder = [
       ...resultRoots.keys(),
@@ -1009,7 +1008,7 @@ export function AfterPanel({
         sourceIndex
       )
     );
-  }, [diff, parentTrees, sourceIndex, trees]);
+  }, [comparisonParentTrees, diff, sourceIndex, trees]);
 
   useEffect(() => {
     if (!showBefore) {
@@ -1235,22 +1234,10 @@ export function AfterPanel({
         )}
         <div className="flex items-center justify-between gap-3 px-3 py-1.5 min-w-0">
           {/*
-            The header now states whether the rendered tree is the
-            applied result (the live yops_log replay), an inherited
-            baseline from the parent commit, or a dry-run preview of a
-            staged draft. Without this distinction, a child conversation
-            with no YOps of its own can look like it already committed
-            the parent's tree.
-          */}
-          {/*
-            Header label table (post-PR-B):
-              hasDraft && retainedDraftFailure → "Previous draft" + Retained badge
-              hasDraft                         → "Draft preview"  + Unapplied badge
-              inherited baseline only          → "Inherited baseline"
-              otherwise                        → "Applied result"
-            The retained-draft variant signals that the rendered tree is
-            the prior successful proposal, NOT the new (failed) attempt
-            the user just clicked Extract on.
+            The header labels this pane as Output. State nuance stays in
+            the badges/error rows: retained means the prior successful
+            proposal is visible, and unapplied means the staged draft
+            still needs Apply.
           */}
           <span className="flex min-w-0 items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
             {getResultPanelHeaderLabel({
@@ -1271,13 +1258,6 @@ export function AfterPanel({
                 className="rounded bg-[var(--source)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--source)]"
               >
                 Unapplied
-              </span>
-            ) : isInheritedBaselineOnly ? (
-              <span
-                title="This tree is inherited from the parent commit. Extract, edit, or Apply new YOps before committing this conversation."
-                className="rounded bg-[var(--accent-commit)]/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent-commit)]"
-              >
-                Parent
               </span>
             ) : null}
           </span>
@@ -1461,20 +1441,12 @@ export function AfterPanel({
         <span
           className="text-[9px] font-mono text-[var(--text-tertiary)] truncate"
           title={
-            isInheritedBaselineOnly
-              ? 'Inherited from parent commit; no current conversation YOps applied'
-              : hasDraft
-                ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
-                : `${opsCount} applied op${opsCount === 1 ? '' : 's'} in yops_log`
+            hasDraft
+              ? `${opsCount} committed op${opsCount === 1 ? '' : 's'} in yops_log; ${draftCount} new draft op${draftCount === 1 ? '' : 's'} staged for Apply`
+              : `${opsCount} applied op${opsCount === 1 ? '' : 's'} in yops_log`
           }
         >
-          {isInheritedBaselineOnly ? (
-            'Inherited baseline'
-          ) : (
-            <>
-              {opsCount} applied{hasDraft ? ` · ${draftCount} draft` : ''}
-            </>
-          )}
+          {opsCount} applied{hasDraft ? ` · ${draftCount} draft` : ''}
           {diff && (
             <>
               {' · '}

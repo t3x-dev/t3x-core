@@ -31,6 +31,8 @@ export function useContextManifest(
   currentConversationIdRef.current = conversationId;
 
   useEffect(() => {
+    mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
       requestIdRef.current += 1;

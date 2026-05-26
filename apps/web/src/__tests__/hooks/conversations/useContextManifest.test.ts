@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, useState } from 'react';
+import { act, createElement, StrictMode, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from '../../hooks/renderHook';
 
@@ -21,6 +21,7 @@ const manifest: ConversationContextManifest = {
     message: null,
     content: null,
     source: 'none',
+    source_conversation_id: null,
     node_count: 0,
     relation_count: 0,
   },
@@ -69,6 +70,22 @@ describe('useContextManifest', () => {
     expect(result.current.manifest).toBeNull();
     expect(result.current.loading).toBe(true);
 
+    await waitForHook();
+
+    expect(fetchContextManifest).toHaveBeenCalledWith('conv_1');
+    expect(result.current.manifest).toBe(manifest);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('settles loading when StrictMode remounts effects during navigation', async () => {
+    vi.mocked(fetchContextManifest).mockResolvedValue(manifest);
+
+    const { result } = renderHook(() => useContextManifest('conv_1'), {
+      wrapper: (children) => createElement(StrictMode, null, children),
+    });
+
+    await waitForHook();
     await waitForHook();
 
     expect(fetchContextManifest).toHaveBeenCalledWith('conv_1');
