@@ -187,7 +187,9 @@ function toBaseline(baselineContent: Commit | null): ContextManifestBaseline {
     };
   }
 
-  const sourceConversation = baselineContent.sources?.find((source) => source.type === 'conversation');
+  const sourceConversation = baselineContent.sources?.find(
+    (source) => source.type === 'conversation'
+  );
 
   return {
     commit_hash: baselineContent.hash,

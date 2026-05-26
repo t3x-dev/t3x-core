@@ -119,20 +119,14 @@ describe('getResultPanelHeaderLabel', () => {
   });
 
   it('returns "Output" when a draft is staged from a successful extract', () => {
-    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: false })).toBe(
-      'Output'
-    );
+    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: false })).toBe('Output');
   });
 
   it('returns "Output" when a retained failure rides alongside the draft', () => {
-    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: true })).toBe(
-      'Output'
-    );
+    expect(getResultPanelHeaderLabel({ hasDraft: true, hasRetainedFailure: true })).toBe('Output');
   });
 
   it('ignores a stray hasRetainedFailure flag when no draft is staged', () => {
-    expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe(
-      'Output'
-    );
+    expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe('Output');
   });
 });

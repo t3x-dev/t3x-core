@@ -357,12 +357,7 @@ export function ChatWorkspace({
       branch: manifestBaseline?.branch ?? null,
       parentConversationId,
     };
-  }, [
-    baselineCommitHash,
-    contextManifest,
-    inheritFromCommitHash,
-    parentConversationId,
-  ]);
+  }, [baselineCommitHash, contextManifest, inheritFromCommitHash, parentConversationId]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

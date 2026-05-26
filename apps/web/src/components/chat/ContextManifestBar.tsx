@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  AlertCircle,
-  ChevronDown,
-  GitCommit,
-  Loader2,
-  RefreshCw,
-} from 'lucide-react';
+import { AlertCircle, ChevronDown, GitCommit, Loader2, RefreshCw } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';

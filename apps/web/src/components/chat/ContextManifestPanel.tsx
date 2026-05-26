@@ -88,13 +88,7 @@ function ReferenceIcon({ type }: { type: ContextManifestReference['type'] }) {
   );
 }
 
-function OpenSourceLink({
-  href,
-  label,
-}: {
-  href: string | null;
-  label: string;
-}) {
+function OpenSourceLink({ href, label }: { href: string | null; label: string }) {
   if (!href) {
     return (
       <span className="shrink-0 rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-1 text-[10px] font-medium text-[var(--text-tertiary)]">
@@ -138,7 +132,8 @@ function BaselineIncludedRow({
           Baseline inherited
         </span>
         <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-          commit {shortHash(manifest?.baseline.commit_hash)} · {manifest?.baseline.branch ?? 'no branch'}
+          commit {shortHash(manifest?.baseline.commit_hash)} ·{' '}
+          {manifest?.baseline.branch ?? 'no branch'}
         </span>
       </button>
       <span className="rounded-[var(--radius-sm)] bg-[var(--accent-commit)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[var(--accent-commit)]">
@@ -298,15 +293,7 @@ function EmptyState({ children }: { children: string }) {
   );
 }
 
-function Pane({
-  title,
-  meta,
-  children,
-}: {
-  title: string;
-  meta?: string;
-  children: ReactNode;
-}) {
+function Pane({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
       <div className="flex min-h-9 items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-2.5 py-1.5">
@@ -570,200 +557,212 @@ export function ContextManifestPanel({
 
         {activeTab === 'included' && (
           <div role="tabpanel" aria-label="Included" className="min-h-0 flex-1 overflow-hidden p-2">
-          <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
-            <Pane title="This turn uses" meta="row click previews">
-              <div className="space-y-1">
-                {manifest?.baseline.commit_hash && (
-                  <BaselineIncludedRow
-                    selected={selectedPreview.kind === 'baseline'}
-                    manifest={manifest}
-                    onPreview={() => setSelectedPreview({ kind: 'baseline' })}
-                  />
-                )}
-                {includedReferences.length > 0 ? (
-                  includedReferences.map((reference) => (
-                    <ReferenceRow
-                      key={reference.pin_id}
-                      reference={reference}
-                      projectId={manifest?.project_id}
-                      selected={
-                        selectedPreview.kind === 'reference' && selectedPreview.id === reference.id
-                      }
-                      disabled={disabled}
-                      onPreview={() => setSelectedPreview({ kind: 'reference', id: reference.id })}
-                      onReferenceToggle={onReferenceToggle}
+            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
+              <Pane title="This turn uses" meta="row click previews">
+                <div className="space-y-1">
+                  {manifest?.baseline.commit_hash && (
+                    <BaselineIncludedRow
+                      selected={selectedPreview.kind === 'baseline'}
+                      manifest={manifest}
+                      onPreview={() => setSelectedPreview({ kind: 'baseline' })}
                     />
-                  ))
-                ) : (
-                  <EmptyState>No included sources beyond the baseline.</EmptyState>
-                )}
-              </div>
-            </Pane>
-            <Pane title="Preview" meta="not navigation">
-              <PreviewPanel
-                manifest={manifest}
-                referencesById={referencesById}
-                selectedPreview={selectedPreview}
-              />
-            </Pane>
+                  )}
+                  {includedReferences.length > 0 ? (
+                    includedReferences.map((reference) => (
+                      <ReferenceRow
+                        key={reference.pin_id}
+                        reference={reference}
+                        projectId={manifest?.project_id}
+                        selected={
+                          selectedPreview.kind === 'reference' &&
+                          selectedPreview.id === reference.id
+                        }
+                        disabled={disabled}
+                        onPreview={() =>
+                          setSelectedPreview({ kind: 'reference', id: reference.id })
+                        }
+                        onReferenceToggle={onReferenceToggle}
+                      />
+                    ))
+                  ) : (
+                    <EmptyState>No included sources beyond the baseline.</EmptyState>
+                  )}
+                </div>
+              </Pane>
+              <Pane title="Preview" meta="not navigation">
+                <PreviewPanel
+                  manifest={manifest}
+                  referencesById={referencesById}
+                  selectedPreview={selectedPreview}
+                />
+              </Pane>
+            </div>
           </div>
-        </div>
         )}
 
         {activeTab === 'baseline' && (
           <div role="tabpanel" aria-label="Baseline" className="min-h-0 flex-1 overflow-hidden p-2">
-          <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_240px] gap-2 max-sm:grid-cols-1">
-            <div className="min-h-0 overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-              {manifest?.baseline.content ? (
-                <CommitYAMLDocument content={manifest.baseline.content} />
-              ) : (
-                <EmptyState>No baseline commit.</EmptyState>
-              )}
+            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_240px] gap-2 max-sm:grid-cols-1">
+              <div className="min-h-0 overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
+                {manifest?.baseline.content ? (
+                  <CommitYAMLDocument content={manifest.baseline.content} />
+                ) : (
+                  <EmptyState>No baseline commit.</EmptyState>
+                )}
+              </div>
+              <aside className="min-h-0 overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                  Baseline inherited
+                </h3>
+                <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
+                  Automatic semantic baseline from the parent commit.
+                </p>
+                <dl className="mt-3 space-y-2 text-[10px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-[var(--text-tertiary)]">Commit</dt>
+                    <dd className="font-mono text-[var(--text-secondary)]">
+                      {shortHash(manifest?.baseline.commit_hash)}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-[var(--text-tertiary)]">Branch</dt>
+                    <dd className="font-mono text-[var(--text-secondary)]">
+                      {manifest?.baseline.branch ?? sourcePicker?.baseline?.branch ?? 'none'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-[var(--text-tertiary)]">Nodes</dt>
+                    <dd className="font-mono text-[var(--text-secondary)]">
+                      {manifest?.baseline.node_count ?? 0}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-[var(--text-tertiary)]">Relations</dt>
+                    <dd className="font-mono text-[var(--text-secondary)]">
+                      {manifest?.baseline.relation_count ?? 0}
+                    </dd>
+                  </div>
+                </dl>
+                <BaselineActions manifest={manifest} sourcePicker={sourcePicker} />
+              </aside>
             </div>
-            <aside className="min-h-0 overflow-auto rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                Baseline inherited
-              </h3>
-              <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
-                Automatic semantic baseline from the parent commit.
-              </p>
-              <dl className="mt-3 space-y-2 text-[10px]">
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-[var(--text-tertiary)]">Commit</dt>
-                  <dd className="font-mono text-[var(--text-secondary)]">
-                    {shortHash(manifest?.baseline.commit_hash)}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-[var(--text-tertiary)]">Branch</dt>
-                  <dd className="font-mono text-[var(--text-secondary)]">
-                    {manifest?.baseline.branch ?? sourcePicker?.baseline?.branch ?? 'none'}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-[var(--text-tertiary)]">Nodes</dt>
-                  <dd className="font-mono text-[var(--text-secondary)]">
-                    {manifest?.baseline.node_count ?? 0}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-[var(--text-tertiary)]">Relations</dt>
-                  <dd className="font-mono text-[var(--text-secondary)]">
-                    {manifest?.baseline.relation_count ?? 0}
-                  </dd>
-                </div>
-              </dl>
-              <BaselineActions manifest={manifest} sourcePicker={sourcePicker} />
-            </aside>
           </div>
-        </div>
         )}
 
         {activeTab === 'leaves' && (
           <div role="tabpanel" aria-label="Leaves" className="min-h-0 flex-1 overflow-hidden p-2">
-          <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
-            <Pane title="Leaves" meta={`${leafReferences.filter((item) => item.included).length}/${leafReferences.length} included`}>
-              <div className="space-y-1">
-                {leafReferences.length > 0 ? (
-                  leafReferences.map((reference) => (
-                    <ReferenceRow
-                      key={reference.pin_id}
-                      reference={reference}
-                      projectId={manifest?.project_id}
-                      selected={
-                        selectedPreview.kind === 'reference' && selectedPreview.id === reference.id
-                      }
-                      disabled={disabled}
-                      onPreview={() => setSelectedPreview({ kind: 'reference', id: reference.id })}
-                      onReferenceToggle={onReferenceToggle}
-                    />
-                  ))
-                ) : (
-                  <EmptyState>No pinned leaf sources.</EmptyState>
-                )}
+            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
+              <Pane
+                title="Leaves"
+                meta={`${leafReferences.filter((item) => item.included).length}/${leafReferences.length} included`}
+              >
+                <div className="space-y-1">
+                  {leafReferences.length > 0 ? (
+                    leafReferences.map((reference) => (
+                      <ReferenceRow
+                        key={reference.pin_id}
+                        reference={reference}
+                        projectId={manifest?.project_id}
+                        selected={
+                          selectedPreview.kind === 'reference' &&
+                          selectedPreview.id === reference.id
+                        }
+                        disabled={disabled}
+                        onPreview={() =>
+                          setSelectedPreview({ kind: 'reference', id: reference.id })
+                        }
+                        onReferenceToggle={onReferenceToggle}
+                      />
+                    ))
+                  ) : (
+                    <EmptyState>No pinned leaf sources.</EmptyState>
+                  )}
 
-                {showAvailableLeaves && (
-                  <div className="mt-2 space-y-1 border-t border-[var(--stroke-divider)] pt-2">
-                    <div className="px-2 text-[10px] font-medium uppercase tracking-normal text-[var(--text-tertiary)]">
-                      Available leaves
+                  {showAvailableLeaves && (
+                    <div className="mt-2 space-y-1 border-t border-[var(--stroke-divider)] pt-2">
+                      <div className="px-2 text-[10px] font-medium uppercase tracking-normal text-[var(--text-tertiary)]">
+                        Available leaves
+                      </div>
+                      {sourcePicker?.availableLeavesLoading ? (
+                        <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Loading leaves...
+                        </div>
+                      ) : sourcePicker?.availableLeavesError ? (
+                        <div className="rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-2 py-1.5 text-xs text-[var(--status-error)]">
+                          {sourcePicker.availableLeavesError}
+                        </div>
+                      ) : availableLeafOptions.length > 0 ? (
+                        availableLeafOptions.map((leaf) => (
+                          <AvailableLeafRow
+                            key={leaf.id}
+                            leaf={leaf}
+                            pinning={leafPinningIds.has(leaf.id)}
+                            onPinLeaf={sourcePicker?.onPinLeaf}
+                          />
+                        ))
+                      ) : availableLeaves.length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
+                          No project leaves available.
+                        </p>
+                      ) : (
+                        <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
+                          All project leaves are already pinned.
+                        </p>
+                      )}
                     </div>
-                    {sourcePicker?.availableLeavesLoading ? (
-                      <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading leaves...
-                      </div>
-                    ) : sourcePicker?.availableLeavesError ? (
-                      <div className="rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-2 py-1.5 text-xs text-[var(--status-error)]">
-                        {sourcePicker.availableLeavesError}
-                      </div>
-                    ) : availableLeafOptions.length > 0 ? (
-                      availableLeafOptions.map((leaf) => (
-                        <AvailableLeafRow
-                          key={leaf.id}
-                          leaf={leaf}
-                          pinning={leafPinningIds.has(leaf.id)}
-                          onPinLeaf={sourcePicker?.onPinLeaf}
-                        />
-                      ))
-                    ) : availableLeaves.length === 0 ? (
-                      <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                        No project leaves available.
-                      </p>
-                    ) : (
-                      <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                        All project leaves are already pinned.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Pane>
-            <Pane title="Preview" meta="checkbox = include">
-              <PreviewPanel
-                manifest={manifest}
-                referencesById={referencesById}
-                selectedPreview={selectedPreview}
-              />
-            </Pane>
+                  )}
+                </div>
+              </Pane>
+              <Pane title="Preview" meta="checkbox = include">
+                <PreviewPanel
+                  manifest={manifest}
+                  referencesById={referencesById}
+                  selectedPreview={selectedPreview}
+                />
+              </Pane>
+            </div>
           </div>
-        </div>
         )}
 
         {activeTab === 'lessons' && (
           <div role="tabpanel" aria-label="Lessons" className="min-h-0 flex-1 overflow-hidden p-2">
-          <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
-            <Pane title="Lessons" meta={`${effectiveLessons.length}/${manifest?.feedback.length ?? 0} effective`}>
-              {manifest && manifest.feedback.length > 0 ? (
-                <div className="space-y-1">
-                  {manifest.feedback.map((feedback) => (
-                    <LessonRow
-                      key={feedback.id}
-                      feedback={feedback}
-                      parentTitle={
-                        referenceTitlesById.get(feedback.parent_ref_id) ?? feedback.parent_ref_id
-                      }
-                      selected={
-                        selectedPreview.kind === 'lesson' && selectedPreview.id === feedback.id
-                      }
-                      disabled={disabled}
-                      onPreview={() => setSelectedPreview({ kind: 'lesson', id: feedback.id })}
-                      onAssertionToggle={onAssertionToggle}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState>No lessons selected from prior outputs.</EmptyState>
-              )}
-            </Pane>
-            <Pane title="Preview" meta="not evidence">
-              <PreviewPanel
-                manifest={manifest}
-                referencesById={referencesById}
-                selectedPreview={selectedPreview}
-              />
-            </Pane>
+            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
+              <Pane
+                title="Lessons"
+                meta={`${effectiveLessons.length}/${manifest?.feedback.length ?? 0} effective`}
+              >
+                {manifest && manifest.feedback.length > 0 ? (
+                  <div className="space-y-1">
+                    {manifest.feedback.map((feedback) => (
+                      <LessonRow
+                        key={feedback.id}
+                        feedback={feedback}
+                        parentTitle={
+                          referenceTitlesById.get(feedback.parent_ref_id) ?? feedback.parent_ref_id
+                        }
+                        selected={
+                          selectedPreview.kind === 'lesson' && selectedPreview.id === feedback.id
+                        }
+                        disabled={disabled}
+                        onPreview={() => setSelectedPreview({ kind: 'lesson', id: feedback.id })}
+                        onAssertionToggle={onAssertionToggle}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState>No lessons selected from prior outputs.</EmptyState>
+                )}
+              </Pane>
+              <Pane title="Preview" meta="not evidence">
+                <PreviewPanel
+                  manifest={manifest}
+                  referencesById={referencesById}
+                  selectedPreview={selectedPreview}
+                />
+              </Pane>
+            </div>
           </div>
-        </div>
         )}
       </div>
     </section>
