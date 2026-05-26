@@ -2,7 +2,7 @@
 
 import type { Node } from '@xyflow/react';
 import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,7 @@ export function ConversationView({
   onShowCommitConfig,
 }: ConversationViewProps) {
   const { t } = useTerminology();
+  const router = useRouter();
   const data = node.data;
 
   // Get projectId from route params for sidebar links
@@ -112,7 +113,14 @@ export function ConversationView({
             {/* For staging units: show Commit button to enter commit config view */}
             {isStagingUnit && (
               <Button
-                onClick={() => onShowCommitConfig()}
+                onClick={() => {
+                  if (data.conversationId) {
+                    router.push(`/chat/${encodeURIComponent(data.conversationId)}`);
+                    onClose();
+                    return;
+                  }
+                  onShowCommitConfig();
+                }}
                 title={t('configure_and_commit')}
                 className="gap-1.5"
               >
