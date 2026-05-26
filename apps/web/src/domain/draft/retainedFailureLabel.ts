@@ -74,31 +74,17 @@ export function formatApplyTooltipForRetainedFailure(input: RetainedFailureForma
 }
 
 /** Label rendered at the top of the AfterPanel rendered-tree band. */
-export type ResultPanelHeaderLabel =
-  | 'Applied result' // No draft staged — showing this conversation's applied yops_log replay.
-  | 'Inherited baseline' // Parent commit is visible, but the conversation has no applied changes.
-  | 'Draft preview' // Draft staged from a successful Extract; user can Apply.
-  | 'Previous draft'; // Draft staged previously, latest Extract attempt failed.
+export type ResultPanelHeaderLabel = 'Output';
 
 /**
- * Decide which of the three header-label variants AfterPanel should
- * render. Pulled out of the component so the conditional is unit-
- * testable and the wording is locked once — without this, the inline
- * ternary in JSX has to be eyeballed in PR review every time.
- *
- * Precedence reflects what the user actually has:
- *   1. retained failure on top of a draft → "Previous draft"
- *   2. draft → "Draft preview"
- *   3. inherited baseline only → "Inherited baseline"
- *   4. otherwise → applied result (the steady state)
+ * Label for the lower workspace result pane. State nuance lives in the
+ * adjacent badges/error rows; the pane itself is always the current
+ * conversation's output, not the inherited Sources baseline.
  */
-export function getResultPanelHeaderLabel(input: {
+export function getResultPanelHeaderLabel(_input: {
   hasDraft: boolean;
   hasRetainedFailure: boolean;
   isInheritedBaselineOnly?: boolean;
 }): ResultPanelHeaderLabel {
-  if (input.hasDraft && input.hasRetainedFailure) return 'Previous draft';
-  if (input.hasDraft) return 'Draft preview';
-  if (input.isInheritedBaselineOnly) return 'Inherited baseline';
-  return 'Applied result';
+  return 'Output';
 }
