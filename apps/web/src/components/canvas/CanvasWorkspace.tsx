@@ -634,7 +634,11 @@ function CanvasWorkspaceInner({
           {nodes.length > 0 && (
             <div className="pointer-events-none absolute left-8 top-8 z-10 hidden items-center gap-2 text-xs text-[var(--text-tertiary)] md:flex">
               <span className="font-semibold text-[var(--text-secondary)]">Version Path</span>
-              <span>click a commit to inspect source, diff, leaves, and next actions</span>
+              <span>
+                {selectedUnitNode
+                  ? 'selected commit shows source, diff, leaves, and next actions'
+                  : 'select a commit on the canvas to inspect source, diff, leaves, and next actions'}
+              </span>
             </div>
           )}
           <Button
