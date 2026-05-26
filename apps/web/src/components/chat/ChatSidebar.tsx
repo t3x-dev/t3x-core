@@ -63,6 +63,18 @@ type RenameTarget =
 
 type LeafFilter = 'all' | 'generated' | 'draft' | 'review';
 
+interface CommitCreatedSidebarEvent {
+  type?: string;
+  projectId?: string;
+  conversationId?: string | null;
+  conversationIds?: string[];
+  branch?: string;
+  payload?: {
+    hash?: string;
+    branch?: string;
+  };
+}
+
 function shortHash(hash: string): string {
   return hash.replace(/^sha256:/, '').slice(0, 8);
 }
@@ -225,6 +237,38 @@ export function ChatSidebar() {
     () => new Set(canvasCommits.map((commit) => commit.branch || 'main')).size,
     [canvasCommits]
   );
+  const applyCommitCreatedMessage = useCallback((message: CommitCreatedSidebarEvent | null) => {
+    if (!message) return;
+    if (message.type !== 'commit.created') return;
+    const projectId = typeof message.projectId === 'string' ? message.projectId : null;
+    const hash =
+      typeof message.payload?.hash === 'string'
+        ? message.payload.hash
+        : typeof (message as { hash?: unknown }).hash === 'string'
+          ? (message as { hash: string }).hash
+          : null;
+    if (!projectId || !hash) return;
+
+    const conversationIds = [
+      ...(Array.isArray(message.conversationIds) ? message.conversationIds : []),
+      ...(typeof message.conversationId === 'string' ? [message.conversationId] : []),
+    ].filter((id, index, ids): id is string => id.length > 0 && ids.indexOf(id) === index);
+
+    if (conversationIds.length > 0) {
+      setProjectConversationCommitHashes((prev) => ({
+        ...prev,
+        [projectId]: {
+          ...(prev[projectId] ?? {}),
+          ...Object.fromEntries(conversationIds.map((conversationId) => [conversationId, hash])),
+        },
+      }));
+    }
+
+    const branch = message.branch ?? message.payload?.branch;
+    if (branch === 'main') {
+      setProjectMainCommitHashes((prev) => ({ ...prev, [projectId]: hash }));
+    }
+  }, []);
 
   const sidebarVisibleWidth = collapsed
     ? `${CHAT_SIDEBAR_COLLAPSED_WIDTH}px`
@@ -290,6 +334,26 @@ export function ChatSidebar() {
     if (refreshKey === 0) return;
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
+
+  useEffect(() => {
+    const handleWindowCommit = (event: Event) => {
+      applyCommitCreatedMessage((event as CustomEvent<CommitCreatedSidebarEvent>).detail);
+    };
+    window.addEventListener('t3x:commit-created', handleWindowCommit);
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel = new BroadcastChannel('t3x-commits');
+      channel.onmessage = (event: MessageEvent<CommitCreatedSidebarEvent>) => {
+        applyCommitCreatedMessage(event.data);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('t3x:commit-created', handleWindowCommit);
+      channel?.close();
+    };
+  }, [applyCommitCreatedMessage]);
 
   useEffect(() => {
     if (!routeProjectId || activeProjectId === routeProjectId) return;

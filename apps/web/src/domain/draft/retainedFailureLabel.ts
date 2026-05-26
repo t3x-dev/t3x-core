@@ -75,7 +75,7 @@ export function formatApplyTooltipForRetainedFailure(input: RetainedFailureForma
 
 /** Label rendered at the top of the AfterPanel rendered-tree band. */
 export type ResultPanelHeaderLabel =
-  | 'Applied result' // No draft staged — showing this conversation's applied yops_log replay.
+  | 'Output' // No draft staged — showing this conversation's applied yops_log replay.
   | 'Inherited baseline' // Parent commit is visible, but the conversation has no applied changes.
   | 'Draft preview' // Draft staged from a successful Extract; user can Apply.
   | 'Previous draft'; // Draft staged previously, latest Extract attempt failed.
@@ -90,7 +90,7 @@ export type ResultPanelHeaderLabel =
  *   1. retained failure on top of a draft → "Previous draft"
  *   2. draft → "Draft preview"
  *   3. inherited baseline only → "Inherited baseline"
- *   4. otherwise → applied result (the steady state)
+ *   4. otherwise → output (the steady state)
  */
 export function getResultPanelHeaderLabel(input: {
   hasDraft: boolean;
@@ -100,5 +100,5 @@ export function getResultPanelHeaderLabel(input: {
   if (input.hasDraft && input.hasRetainedFailure) return 'Previous draft';
   if (input.hasDraft) return 'Draft preview';
   if (input.isInheritedBaselineOnly) return 'Inherited baseline';
-  return 'Applied result';
+  return 'Output';
 }

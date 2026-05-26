@@ -5,6 +5,77 @@ import { PRESETS } from '../../extractionStyleConfig';
 import { runExtractionV2Pipeline } from '../pipeline';
 
 describe('extractors/v2 pipeline', () => {
+  it('rescues provider schema-mismatch errors that carry raw provider JSON', async () => {
+    const rawDraft = {
+      schema: 't3x/provider-extraction-draft',
+      version: 1,
+      mode: 'bootstrap',
+      items: [
+        {
+          id: 'item_1',
+          intent: 'add',
+          confidence: 0.9,
+          reasoning_type: 'direct',
+          target_ref: {
+            node_key: '',
+            path: '',
+            existing_node_id: '',
+          },
+          candidate: {
+            key: 'airport_issue',
+            path_hint: 'airport_issue',
+            slot: '',
+            value_json: '',
+            values_json: '{"summary":"SEA had a cyberattack"}',
+            children_json: '',
+          },
+          evidence: [
+            {
+              turn_tag: 'T1',
+              quote: 'Seattle-Tacoma International Airport (SEA)',
+              role: 'primary',
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    };
+
+    const provider: Pick<LLMProvider, 'generate' | 'generateStructured'> = {
+      async generate() {
+        return { text: '', usage: { inputTokens: 0, outputTokens: 0 } };
+      },
+      async generateStructured() {
+        throw new LLMProviderError(
+          'openai',
+          undefined,
+          'Response JSON does not match expected schema',
+          'SCHEMA_MISMATCH',
+          { jsonText: JSON.stringify(rawDraft) }
+        );
+      },
+    };
+
+    const result = await runExtractionV2Pipeline({
+      turns: [
+        {
+          turn_hash: 'sha256:turn-1',
+          role: 'assistant',
+          content: 'Seattle-Tacoma International Airport (SEA) had a cyberattack.',
+        },
+      ],
+      mode: 'bootstrap',
+      providerId: 'openai',
+      model: 'gpt-5.4',
+      provider,
+      extractedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.compiled.ops).toHaveLength(2);
+  });
+
   it('runs one canonical bootstrap pipeline from structured draft to compiled ops', async () => {
     const provider: Pick<LLMProvider, 'generateStructured'> = {
       async generateStructured() {

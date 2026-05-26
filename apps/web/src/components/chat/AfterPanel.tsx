@@ -1163,8 +1163,34 @@ export function AfterPanel({
         setCeremonyHash(result.hash);
         setShowCommitDialog(false);
         toast.success('Committed successfully');
+        const commitProjectId = result.projectId ?? useCommitStore.getState().projectId;
+        const commitConversationId =
+          result.conversationId ?? useWorkspaceStore.getState().conversationId;
+        const commitBranch = result.branch ?? useCommitStore.getState().commitBranch;
+        const sourceConversationIds =
+          result.sourceConversationIds && result.sourceConversationIds.length > 0
+            ? result.sourceConversationIds
+            : commitConversationId
+              ? [commitConversationId]
+              : [];
+        const commitCreatedEvent = {
+          type: 'commit.created',
+          projectId: commitProjectId ?? undefined,
+          conversationId: commitConversationId ?? undefined,
+          conversationIds: sourceConversationIds,
+          branch: commitBranch,
+          payload: { hash: result.hash, branch: commitBranch },
+        };
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('t3x:commit-created', { detail: commitCreatedEvent })
+          );
+        }
+        useChatStore.getState().refreshSidebar();
         try {
-          new BroadcastChannel('t3x-commits').postMessage({ type: 'commit.created' });
+          const channel = new BroadcastChannel('t3x-commits');
+          channel.postMessage(commitCreatedEvent);
+          channel.close();
         } catch {
           // BroadcastChannel not supported
         }

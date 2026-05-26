@@ -102,13 +102,13 @@ describe('formatApplyTooltipForRetainedFailure', () => {
 });
 
 describe('getResultPanelHeaderLabel', () => {
-  // Four-state label (Applied result / Inherited baseline / Draft preview / Previous draft)
+  // Four-state label (Output / Inherited baseline / Draft preview / Previous draft)
   // factored out of AfterPanel JSX so the precedence — retained-failure
   // wins over draft, draft wins over inherited baseline, inherited
   // baseline wins over applied — is locked in one place.
-  it('returns "Applied result" in the steady state with no draft staged', () => {
+  it('returns "Output" in the steady state with no draft staged', () => {
     expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: false })).toBe(
-      'Applied result'
+      'Output'
     );
   });
 
@@ -144,8 +144,6 @@ describe('getResultPanelHeaderLabel', () => {
     // false (the store wires it that way), but if a code path ever
     // produces that combination, fall back to the steady-state label
     // rather than rendering "Previous draft" against a committed tree.
-    expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe(
-      'Applied result'
-    );
+    expect(getResultPanelHeaderLabel({ hasDraft: false, hasRetainedFailure: true })).toBe('Output');
   });
 });
