@@ -54,6 +54,8 @@ import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
+const CANVAS_MINIMAP_WIDTH = 176;
+const CANVAS_MINIMAP_HEIGHT = 96;
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 
 interface CanvasWorkspaceProps {
@@ -595,11 +597,11 @@ function CanvasWorkspaceInner({
                 pannable
                 zoomable
                 className={cn(
-                  '!bottom-11 !right-5 !h-24 !w-44 !rounded-xl',
-                  glass.cardBase,
-                  glass.highlight
+                  '!bottom-11 !right-16 !overflow-hidden !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]'
                 )}
                 style={{
+                  width: CANVAS_MINIMAP_WIDTH,
+                  height: CANVAS_MINIMAP_HEIGHT,
                   backgroundColor: 'var(--surface-elevated)',
                 }}
                 maskColor={
