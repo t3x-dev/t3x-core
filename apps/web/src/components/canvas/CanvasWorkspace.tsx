@@ -600,7 +600,7 @@ function CanvasWorkspaceInner({
                   glass.highlight
                 )}
                 style={{
-                  backgroundColor: 'transparent',
+                  backgroundColor: 'var(--surface-elevated)',
                 }}
                 maskColor={
                   colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
