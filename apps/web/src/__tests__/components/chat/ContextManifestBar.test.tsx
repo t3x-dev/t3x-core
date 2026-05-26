@@ -86,9 +86,13 @@ const makeManifest = (): ConversationContextManifest => ({
       title: 'Keep the tone precise.',
       parent_source_id: 'leaf_1',
       pin_id: 'pin_leaf',
-      pinned: true,
+      pinned: false,
       pinnable: false,
       included: true,
+      metadata: {
+        selected: true,
+        passed: true,
+      },
     },
   ],
   token_estimate: 128,
@@ -263,6 +267,7 @@ describe('ContextManifestBar', () => {
 
     const excludedManifest = makeManifest();
     excludedManifest.references[0].included = false;
+    excludedManifest.source_items[1].included = false;
     rerender(
       <ContextManifestBar
         manifest={excludedManifest}
@@ -303,6 +308,11 @@ describe('ContextManifestBar', () => {
     const updatedManifest = makeManifest();
     updatedManifest.feedback[0].selected = false;
     updatedManifest.feedback[0].included = false;
+    updatedManifest.source_items[2].included = false;
+    updatedManifest.source_items[2].metadata = {
+      selected: false,
+      passed: true,
+    };
     rerender(
       <ContextManifestBar
         manifest={updatedManifest}
@@ -325,6 +335,12 @@ describe('ContextManifestBar', () => {
     manifest.references[0].included = false;
     manifest.feedback[0].selected = true;
     manifest.feedback[0].included = false;
+    manifest.source_items[1].included = false;
+    manifest.source_items[2].included = false;
+    manifest.source_items[2].metadata = {
+      selected: true,
+      passed: true,
+    };
 
     render(
       <ContextManifestBar
@@ -347,6 +363,82 @@ describe('ContextManifestBar', () => {
         }) as HTMLInputElement
       ).checked
     ).toBe(true);
+  });
+
+  it('uses source_items as the display contract for included context and materials', () => {
+    const manifest = makeManifest();
+    manifest.references = [
+      {
+        type: 'leaf',
+        id: 'leaf_legacy',
+        pin_id: 'pin_legacy',
+        included: false,
+        title: 'Legacy reference title',
+      },
+    ];
+    manifest.feedback = [];
+    manifest.source_items = [
+      {
+        id: 'sha256:abcdef1234567890',
+        kind: 'baseline',
+        role: 'baseline',
+        title: 'Baseline inherited',
+        pinned: false,
+        pinnable: false,
+        included: true,
+        readonly: true,
+      },
+      {
+        id: 'conv_material',
+        kind: 'conversation',
+        role: 'evidence',
+        title: 'Pinned conversation material',
+        pin_id: 'pin_conversation',
+        pinned: true,
+        pinnable: true,
+        included: true,
+      },
+      {
+        id: 'ast_guidance',
+        kind: 'lesson',
+        role: 'guidance',
+        title: 'Guidance from prior result',
+        parent_source_id: 'conv_material',
+        pin_id: 'pin_conversation',
+        pinned: false,
+        pinnable: false,
+        included: true,
+        metadata: {
+          selected: true,
+          passed: true,
+        },
+      },
+    ];
+
+    render(
+      <ContextManifestBar
+        manifest={manifest}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('1 included')).not.toBeNull();
+    expect(screen.getByText('1 lesson')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+
+    expect(screen.getByText('Pinned conversation material')).not.toBeNull();
+    expect(screen.getByText('Guidance from prior result')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    expect(screen.getByText('Pinned conversation material')).not.toBeNull();
+    expect(screen.queryByText('Guidance from prior result')).toBeNull();
+    expect(screen.queryByText('Legacy reference title')).toBeNull();
   });
 
   it('renders a stable loading summary state', () => {

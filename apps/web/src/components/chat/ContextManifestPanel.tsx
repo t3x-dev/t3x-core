@@ -16,8 +16,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { CommitYAMLDocument } from '@/components/commit/CommitYAMLDocument';
 import type {
-  ContextManifestFeedback,
-  ContextManifestReference,
+  ContextManifestSourceItem,
   ConversationContextManifest,
   Leaf as ProjectLeaf,
 } from '@/types/api';
@@ -25,10 +24,7 @@ import { cn } from '@/utils/cn';
 
 const EMPTY_LEAF_IDS = new Set<string>();
 
-type PreviewTarget =
-  | { kind: 'baseline' }
-  | { kind: 'reference'; id: string }
-  | { kind: 'lesson'; id: string };
+type PreviewTarget = { kind: 'baseline' } | { kind: 'source'; key: string };
 type SourceTab = 'included' | 'baseline' | 'materials' | 'lessons';
 
 export interface ContextManifestSourcePicker {
@@ -62,30 +58,68 @@ function shortHash(hash: string | null | undefined): string {
   return hash.replace(/^sha256:/, '').slice(0, 8);
 }
 
-function referenceLabel(reference: ContextManifestReference): string {
-  return reference.title ?? reference.id;
-}
-
-function feedbackLabel(feedback: ContextManifestFeedback): string {
-  return feedback.lesson ?? feedback.details ?? feedback.id;
-}
-
 function leafTitle(leaf: ProjectLeaf): string {
   return leaf.title || leaf.id.slice(0, 12);
 }
 
-function referenceOpenHref(reference: ContextManifestReference, projectId: string | undefined) {
-  if (reference.type === 'conversation') return `/chat/${encodeURIComponent(reference.id)}`;
-  if (!projectId) return null;
-  return `/project/${projectId}/leaf/${encodeURIComponent(reference.id)}`;
+function sourceItemKey(item: ContextManifestSourceItem): string {
+  return `${item.kind}:${item.id}:${item.pin_id ?? 'readonly'}`;
 }
 
-function ReferenceIcon({ type }: { type: ContextManifestReference['type'] }) {
-  return type === 'leaf' ? (
-    <LeafIcon size={13} className="text-[var(--accent-leaf)]" />
-  ) : (
-    <MessageSquare size={13} className="text-[var(--accent-conversation)]" />
-  );
+function sourceItemLabel(item: ContextManifestSourceItem): string {
+  return item.title || item.id;
+}
+
+function isMaterialSourceItem(item: ContextManifestSourceItem): boolean {
+  return item.role === 'evidence' && item.pinned;
+}
+
+function isLessonSourceItem(item: ContextManifestSourceItem): boolean {
+  return item.role === 'guidance';
+}
+
+function sourceItemSelected(item: ContextManifestSourceItem): boolean {
+  return item.metadata?.selected === true;
+}
+
+function sourceItemPassed(item: ContextManifestSourceItem): boolean | undefined {
+  const value = item.metadata?.passed;
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function sourceKindLabel(kind: ContextManifestSourceItem['kind']): string {
+  if (kind === 'baseline') return 'baseline';
+  if (kind === 'conversation') return 'conversation';
+  if (kind === 'leaf') return 'leaf';
+  if (kind === 'commit') return 'commit';
+  if (kind === 'import') return 'import';
+  if (kind === 'file') return 'file';
+  if (kind === 'web') return 'web';
+  if (kind === 'result') return 'result';
+  return 'lesson';
+}
+
+function sourceItemOpenHref(item: ContextManifestSourceItem, projectId: string | undefined) {
+  if (item.kind === 'conversation') return `/chat/${encodeURIComponent(item.id)}`;
+  if (item.kind === 'leaf' && projectId)
+    return `/project/${projectId}/leaf/${encodeURIComponent(item.id)}`;
+  if ((item.kind === 'commit' || item.kind === 'baseline') && projectId) {
+    return `/project/${projectId}/commit/${encodeURIComponent(item.id)}`;
+  }
+  return null;
+}
+
+function SourceItemIcon({ kind }: { kind: ContextManifestSourceItem['kind'] }) {
+  if (kind === 'leaf') {
+    return <LeafIcon size={13} className="text-[var(--accent-leaf)]" />;
+  }
+  if (kind === 'conversation') {
+    return <MessageSquare size={13} className="text-[var(--accent-conversation)]" />;
+  }
+  if (kind === 'lesson') {
+    return <MessageSquareQuote size={13} className="text-[var(--accent-extract)]" />;
+  }
+  return <GitCommit size={13} className="text-[var(--accent-commit)]" />;
 }
 
 function OpenSourceLink({ href, label }: { href: string | null; label: string }) {
@@ -143,53 +177,102 @@ function BaselineIncludedRow({
   );
 }
 
-function ReferenceRow({
-  reference,
+function SourceItemRow({
+  item,
   projectId,
+  parentTitle,
   selected,
   disabled,
   onPreview,
   onReferenceToggle,
+  onAssertionToggle,
 }: {
-  reference: ContextManifestReference;
+  item: ContextManifestSourceItem;
   projectId: string | undefined;
+  parentTitle?: string;
   selected: boolean;
   disabled?: boolean;
   onPreview: () => void;
   onReferenceToggle: ContextManifestPanelProps['onReferenceToggle'];
+  onAssertionToggle: ContextManifestPanelProps['onAssertionToggle'];
 }) {
-  const title = referenceLabel(reference);
-  const openLabel = reference.type === 'leaf' ? 'Open leaf' : 'Open conversation';
+  const title = sourceItemLabel(item);
+  const isLesson = isLessonSourceItem(item);
+  const canToggleMaterial = item.role === 'evidence' && item.pinnable && Boolean(item.pin_id);
+  const canToggleLesson = isLesson && Boolean(item.pin_id);
+  const canToggle = canToggleMaterial || canToggleLesson;
+  const checked = isLesson ? sourceItemSelected(item) : item.included;
+  const passed = sourceItemPassed(item);
+  const openHref = sourceItemOpenHref(item, projectId);
+  const openLabel =
+    item.kind === 'conversation'
+      ? 'Open conversation'
+      : item.kind === 'leaf'
+        ? 'Open leaf'
+        : 'Open source';
+  const subtitleParts = [sourceKindLabel(item.kind)];
+  if (isLesson && parentTitle) subtitleParts.push(parentTitle);
+  if (!isLesson && item.pin_id) subtitleParts.push(item.pin_id);
+  if (isLesson && checked && !item.included)
+    subtitleParts.push('inactive until parent is included');
 
   return (
     <div
       className={cn(
         'grid min-w-0 grid-cols-[16px_20px_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
-        selected ? 'bg-[var(--accent-commit)]/10' : 'hover:bg-[var(--hover-bg)]'
+        selected
+          ? isLesson
+            ? 'bg-[var(--accent-extract)]/10'
+            : 'bg-[var(--accent-commit)]/10'
+          : 'hover:bg-[var(--hover-bg)]'
       )}
     >
-      <input
-        type="checkbox"
-        checked={reference.included}
-        disabled={disabled}
-        onChange={(event) => {
-          void onReferenceToggle(reference.pin_id, event.target.checked);
-        }}
-        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[var(--stroke-default)] accent-[var(--accent-commit)]"
-        aria-label={`Include ${title}`}
-      />
+      {canToggle ? (
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => {
+            if (canToggleLesson && item.pin_id) {
+              void onAssertionToggle(item.pin_id, item.id, event.target.checked);
+              return;
+            }
+            if (item.pin_id) {
+              void onReferenceToggle(item.pin_id, event.target.checked);
+            }
+          }}
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[var(--stroke-default)]',
+            isLesson ? 'accent-[var(--accent-extract)]' : 'accent-[var(--accent-commit)]'
+          )}
+          aria-label={isLesson ? `Include lesson ${title}` : `Include ${title}`}
+        />
+      ) : (
+        <span className="mt-0.5 h-4 w-4" />
+      )}
       <span className="mt-0.5">
-        <ReferenceIcon type={reference.type} />
+        <SourceItemIcon kind={item.kind} />
       </span>
       <button type="button" onClick={onPreview} className="min-w-0 text-left">
-        <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
+        <span
+          className={cn(
+            'block text-xs text-[var(--text-primary)]',
+            isLesson ? 'break-words' : 'truncate font-medium'
+          )}
+        >
           {title}
         </span>
         <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
-          {reference.type} · {reference.pin_id}
+          {subtitleParts.join(' · ')}
         </span>
       </button>
-      <OpenSourceLink href={referenceOpenHref(reference, projectId)} label={openLabel} />
+      {passed === true && (
+        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-[var(--status-success)]" />
+      )}
+      {passed === false && (
+        <XCircle size={13} className="mt-0.5 shrink-0 text-[var(--status-error)]" />
+      )}
+      {passed === undefined && <OpenSourceLink href={openHref} label={openLabel} />}
     </div>
   );
 }
@@ -233,58 +316,6 @@ function AvailableLeafRow({
   );
 }
 
-function LessonRow({
-  feedback,
-  parentTitle,
-  selected,
-  disabled,
-  onPreview,
-  onAssertionToggle,
-}: {
-  feedback: ContextManifestFeedback;
-  parentTitle: string;
-  selected: boolean;
-  disabled?: boolean;
-  onPreview: () => void;
-  onAssertionToggle: ContextManifestPanelProps['onAssertionToggle'];
-}) {
-  const label = feedbackLabel(feedback);
-
-  return (
-    <div
-      className={cn(
-        'grid min-w-0 grid-cols-[16px_20px_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-2 py-1.5 transition-colors',
-        selected ? 'bg-[var(--accent-extract)]/10' : 'hover:bg-[var(--hover-bg)]'
-      )}
-    >
-      <input
-        type="checkbox"
-        checked={feedback.selected}
-        disabled={disabled}
-        onChange={(event) => {
-          void onAssertionToggle(feedback.pin_id, feedback.id, event.target.checked);
-        }}
-        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[var(--stroke-default)] accent-[var(--accent-extract)]"
-        aria-label={`Include lesson ${label}`}
-      />
-      <MessageSquareQuote size={13} className="mt-0.5 shrink-0 text-[var(--accent-extract)]" />
-      <button type="button" onClick={onPreview} className="min-w-0 text-left">
-        <span className="block break-words text-xs text-[var(--text-primary)]">{label}</span>
-        <span className="mt-0.5 block truncate text-[10px] text-[var(--text-tertiary)]">
-          {parentTitle}
-          {feedback.selected && !feedback.included ? ' · inactive until parent is included' : ''}
-        </span>
-      </button>
-      {feedback.passed === true && (
-        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-[var(--status-success)]" />
-      )}
-      {feedback.passed === false && (
-        <XCircle size={13} className="mt-0.5 shrink-0 text-[var(--status-error)]" />
-      )}
-    </div>
-  );
-}
-
 function EmptyState({ children }: { children: string }) {
   return (
     <p className="rounded-md border border-dashed border-[var(--stroke-default)] px-3 py-4 text-center text-xs text-[var(--text-tertiary)]">
@@ -313,64 +344,59 @@ function Pane({ title, meta, children }: { title: string; meta?: string; childre
 
 function PreviewPanel({
   manifest,
-  referencesById,
+  sourceItemsByKey,
   selectedPreview,
 }: {
   manifest: ConversationContextManifest | null;
-  referencesById: Map<string, ContextManifestReference>;
+  sourceItemsByKey: Map<string, ContextManifestSourceItem>;
   selectedPreview: PreviewTarget;
 }) {
-  if (selectedPreview.kind === 'reference') {
-    const reference = referencesById.get(selectedPreview.id);
-    if (reference) {
+  if (selectedPreview.kind === 'source') {
+    const item = sourceItemsByKey.get(selectedPreview.key);
+    if (item) {
+      const label = sourceItemLabel(item);
       return (
         <div className="space-y-3 p-2">
           <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-              {referenceLabel(reference)}
-            </h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{label}</h3>
             <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
-              {reference.type} · {reference.included ? 'included this turn' : 'not used this turn'}
+              {sourceKindLabel(item.kind)} ·{' '}
+              {item.included ? 'included this turn' : 'not used this turn'}
             </p>
           </div>
           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
-            This source is pinned in the project library. Its checkbox controls only whether the
-            current conversation turn includes it.
+            {item.role === 'baseline'
+              ? 'Baseline YAML is inherited from the parent commit. It is automatically included and does not require pinning the parent conversation.'
+              : item.role === 'guidance'
+                ? 'Lessons are not evidence sources. They summarize prior output or result feedback and only affect extraction context when selected and their parent source is included.'
+                : 'This source is pinned in the project library. Its checkbox controls only whether the current conversation turn includes it.'}
           </p>
           <dl className="grid grid-cols-2 gap-2 text-[10px]">
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
-              <dt className="text-[var(--text-tertiary)]">Pin</dt>
-              <dd className="mt-1 font-mono text-[var(--text-secondary)]">{reference.pin_id}</dd>
+              <dt className="text-[var(--text-tertiary)]">Kind</dt>
+              <dd className="mt-1 font-mono text-[var(--text-secondary)]">
+                {sourceKindLabel(item.kind)}
+              </dd>
             </div>
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
               <dt className="text-[var(--text-tertiary)]">Include</dt>
               <dd className="mt-1 font-mono text-[var(--text-secondary)]">
-                {reference.included ? 'true' : 'false'}
+                {item.included ? 'true' : 'false'}
+              </dd>
+            </div>
+            {item.pin_id && (
+              <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
+                <dt className="text-[var(--text-tertiary)]">Pin</dt>
+                <dd className="mt-1 font-mono text-[var(--text-secondary)]">{item.pin_id}</dd>
+              </div>
+            )}
+            <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
+              <dt className="text-[var(--text-tertiary)]">Pinned</dt>
+              <dd className="mt-1 font-mono text-[var(--text-secondary)]">
+                {item.pinned ? 'true' : 'false'}
               </dd>
             </div>
           </dl>
-        </div>
-      );
-    }
-  }
-
-  if (selectedPreview.kind === 'lesson') {
-    const feedback = manifest?.feedback.find((item) => item.id === selectedPreview.id);
-    if (feedback) {
-      return (
-        <div className="space-y-3 p-2">
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-              {feedbackLabel(feedback)}
-            </h3>
-            <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
-              lesson · {feedback.included ? 'effective' : 'not effective for this turn'}
-            </p>
-          </div>
-          <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
-            Lessons are not evidence sources. They summarize prior output or result feedback and
-            only affect extraction context when selected and their parent source is included.
-          </p>
         </div>
       );
     }
@@ -447,22 +473,24 @@ export function ContextManifestPanel({
 }: ContextManifestPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceTab>('included');
   const [selectedPreview, setSelectedPreview] = useState<PreviewTarget>({ kind: 'baseline' });
-  const references = manifest?.references ?? [];
-  const includedReferences = references.filter((reference) => reference.included);
-  const materialReferences = references;
-  const leafReferences = materialReferences.filter((reference) => reference.type === 'leaf');
-  const effectiveLessons = manifest?.feedback.filter((feedback) => feedback.included) ?? [];
-  const referencesById = useMemo(
-    () => new Map(references.map((reference) => [reference.id, reference])),
-    [references]
+  const sourceItems = manifest?.source_items ?? [];
+  const includedSourceItems = sourceItems.filter((item) => item.included);
+  const materialSourceItems = sourceItems.filter(isMaterialSourceItem);
+  const lessonSourceItems = sourceItems.filter(isLessonSourceItem);
+  const effectiveLessons = lessonSourceItems.filter((item) => item.included);
+  const sourceItemsByKey = useMemo(
+    () => new Map(sourceItems.map((item) => [sourceItemKey(item), item])),
+    [sourceItems]
   );
-  const referenceTitlesById = useMemo(
-    () => new Map(references.map((reference) => [reference.id, referenceLabel(reference)])),
-    [references]
+  const sourceTitlesById = useMemo(
+    () => new Map(sourceItems.map((item) => [item.id, sourceItemLabel(item)])),
+    [sourceItems]
   );
 
   const leafPinningIds = sourcePicker?.leafPinningIds ?? EMPTY_LEAF_IDS;
-  const pinnedLeafIds = new Set(leafReferences.map((reference) => reference.id));
+  const pinnedLeafIds = new Set(
+    materialSourceItems.filter((item) => item.kind === 'leaf').map((item) => item.id)
+  );
   const availableLeaves = sourcePicker?.availableLeaves ?? [];
   const availableLeafOptions = availableLeaves.filter((leaf) => !pinnedLeafIds.has(leaf.id));
   const showAvailableLeaves =
@@ -498,7 +526,7 @@ export function ContextManifestPanel({
             >
               Included
               <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                {includedReferences.length + (manifest?.baseline.commit_hash ? 1 : 0)}
+                {includedSourceItems.length}
               </span>
             </button>
             <button
@@ -529,7 +557,7 @@ export function ContextManifestPanel({
             >
               Materials
               <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                {materialReferences.length}
+                {materialSourceItems.length}
               </span>
             </button>
             <button
@@ -551,7 +579,7 @@ export function ContextManifestPanel({
             </button>
           </div>
           <div className="hidden shrink-0 items-center gap-2 text-[10px] text-[var(--text-tertiary)] sm:flex">
-            <span>{manifest?.sources.length ?? 0} sources</span>
+            <span>{sourceItems.length} items</span>
             <span>{manifest?.token_estimate ?? 0} tokens</span>
           </div>
         </div>
@@ -561,39 +589,49 @@ export function ContextManifestPanel({
             <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
               <Pane title="This turn uses" meta="row click previews">
                 <div className="space-y-1">
-                  {manifest?.baseline.commit_hash && (
-                    <BaselineIncludedRow
-                      selected={selectedPreview.kind === 'baseline'}
-                      manifest={manifest}
-                      onPreview={() => setSelectedPreview({ kind: 'baseline' })}
-                    />
-                  )}
-                  {includedReferences.length > 0 ? (
-                    includedReferences.map((reference) => (
-                      <ReferenceRow
-                        key={reference.pin_id}
-                        reference={reference}
-                        projectId={manifest?.project_id}
-                        selected={
-                          selectedPreview.kind === 'reference' &&
-                          selectedPreview.id === reference.id
-                        }
-                        disabled={disabled}
-                        onPreview={() =>
-                          setSelectedPreview({ kind: 'reference', id: reference.id })
-                        }
-                        onReferenceToggle={onReferenceToggle}
-                      />
-                    ))
+                  {includedSourceItems.length > 0 ? (
+                    includedSourceItems.map((item) => {
+                      if (item.kind === 'baseline') {
+                        return (
+                          <BaselineIncludedRow
+                            key={sourceItemKey(item)}
+                            selected={selectedPreview.kind === 'baseline'}
+                            manifest={manifest}
+                            onPreview={() => setSelectedPreview({ kind: 'baseline' })}
+                          />
+                        );
+                      }
+
+                      const key = sourceItemKey(item);
+                      return (
+                        <SourceItemRow
+                          key={key}
+                          item={item}
+                          projectId={manifest?.project_id}
+                          parentTitle={
+                            item.parent_source_id
+                              ? sourceTitlesById.get(item.parent_source_id)
+                              : undefined
+                          }
+                          selected={
+                            selectedPreview.kind === 'source' && selectedPreview.key === key
+                          }
+                          disabled={disabled}
+                          onPreview={() => setSelectedPreview({ kind: 'source', key })}
+                          onReferenceToggle={onReferenceToggle}
+                          onAssertionToggle={onAssertionToggle}
+                        />
+                      );
+                    })
                   ) : (
-                    <EmptyState>No included sources beyond the baseline.</EmptyState>
+                    <EmptyState>No included context sources.</EmptyState>
                   )}
                 </div>
               </Pane>
               <Pane title="Preview" meta="not navigation">
                 <PreviewPanel
                   manifest={manifest}
-                  referencesById={referencesById}
+                  sourceItemsByKey={sourceItemsByKey}
                   selectedPreview={selectedPreview}
                 />
               </Pane>
@@ -659,26 +697,27 @@ export function ContextManifestPanel({
             <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
               <Pane
                 title="Materials"
-                meta={`${materialReferences.filter((item) => item.included).length}/${materialReferences.length} included`}
+                meta={`${materialSourceItems.filter((item) => item.included).length}/${materialSourceItems.length} included`}
               >
                 <div className="space-y-1">
-                  {materialReferences.length > 0 ? (
-                    materialReferences.map((reference) => (
-                      <ReferenceRow
-                        key={reference.pin_id}
-                        reference={reference}
-                        projectId={manifest?.project_id}
-                        selected={
-                          selectedPreview.kind === 'reference' &&
-                          selectedPreview.id === reference.id
-                        }
-                        disabled={disabled}
-                        onPreview={() =>
-                          setSelectedPreview({ kind: 'reference', id: reference.id })
-                        }
-                        onReferenceToggle={onReferenceToggle}
-                      />
-                    ))
+                  {materialSourceItems.length > 0 ? (
+                    materialSourceItems.map((item) => {
+                      const key = sourceItemKey(item);
+                      return (
+                        <SourceItemRow
+                          key={key}
+                          item={item}
+                          projectId={manifest?.project_id}
+                          selected={
+                            selectedPreview.kind === 'source' && selectedPreview.key === key
+                          }
+                          disabled={disabled}
+                          onPreview={() => setSelectedPreview({ kind: 'source', key })}
+                          onReferenceToggle={onReferenceToggle}
+                          onAssertionToggle={onAssertionToggle}
+                        />
+                      );
+                    })
                   ) : (
                     <EmptyState>No pinned material sources.</EmptyState>
                   )}
@@ -722,7 +761,7 @@ export function ContextManifestPanel({
               <Pane title="Preview" meta="checkbox = include">
                 <PreviewPanel
                   manifest={manifest}
-                  referencesById={referencesById}
+                  sourceItemsByKey={sourceItemsByKey}
                   selectedPreview={selectedPreview}
                 />
               </Pane>
@@ -735,25 +774,33 @@ export function ContextManifestPanel({
             <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
               <Pane
                 title="Lessons"
-                meta={`${effectiveLessons.length}/${manifest?.feedback.length ?? 0} effective`}
+                meta={`${effectiveLessons.length}/${lessonSourceItems.length} effective`}
               >
-                {manifest && manifest.feedback.length > 0 ? (
+                {lessonSourceItems.length > 0 ? (
                   <div className="space-y-1">
-                    {manifest.feedback.map((feedback) => (
-                      <LessonRow
-                        key={feedback.id}
-                        feedback={feedback}
-                        parentTitle={
-                          referenceTitlesById.get(feedback.parent_ref_id) ?? feedback.parent_ref_id
-                        }
-                        selected={
-                          selectedPreview.kind === 'lesson' && selectedPreview.id === feedback.id
-                        }
-                        disabled={disabled}
-                        onPreview={() => setSelectedPreview({ kind: 'lesson', id: feedback.id })}
-                        onAssertionToggle={onAssertionToggle}
-                      />
-                    ))}
+                    {lessonSourceItems.map((item) => {
+                      const key = sourceItemKey(item);
+                      return (
+                        <SourceItemRow
+                          key={key}
+                          item={item}
+                          projectId={manifest?.project_id}
+                          parentTitle={
+                            item.parent_source_id
+                              ? (sourceTitlesById.get(item.parent_source_id) ??
+                                item.parent_source_id)
+                              : undefined
+                          }
+                          selected={
+                            selectedPreview.kind === 'source' && selectedPreview.key === key
+                          }
+                          disabled={disabled}
+                          onPreview={() => setSelectedPreview({ kind: 'source', key })}
+                          onReferenceToggle={onReferenceToggle}
+                          onAssertionToggle={onAssertionToggle}
+                        />
+                      );
+                    })}
                   </div>
                 ) : (
                   <EmptyState>No lessons selected from prior outputs.</EmptyState>
@@ -762,7 +809,7 @@ export function ContextManifestPanel({
               <Pane title="Preview" meta="not evidence">
                 <PreviewPanel
                   manifest={manifest}
-                  referencesById={referencesById}
+                  sourceItemsByKey={sourceItemsByKey}
                   selectedPreview={selectedPreview}
                 />
               </Pane>

@@ -59,13 +59,18 @@ export function ContextManifestBar({
     onOpenChange?.(nextOpen);
   };
   const summary = useMemo(() => {
-    const includedReferences = manifest?.references.filter((item) => item.included).length ?? 0;
-    const includedLessons = manifest?.feedback.filter((item) => item.included).length ?? 0;
+    const sourceItems = manifest?.source_items ?? [];
+    const includedMaterials = sourceItems.filter(
+      (item) => item.role === 'evidence' && item.pinned && item.included
+    ).length;
+    const includedLessons = sourceItems.filter(
+      (item) => item.role === 'guidance' && item.included
+    ).length;
 
     return {
       baseline: shortHash(manifest?.baseline.commit_hash),
       hasBaseline: Boolean(manifest?.baseline.commit_hash),
-      includedReferences,
+      includedReferences: includedMaterials,
       includedLessons,
       tokens: manifest?.token_estimate ?? 0,
     };

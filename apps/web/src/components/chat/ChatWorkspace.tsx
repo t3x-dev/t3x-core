@@ -22,6 +22,7 @@ import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { getTemporaryChat } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -46,6 +47,28 @@ interface ChatWorkspaceProps {
   inheritFromCommitHash?: string;
   /** Callback to clear inheritFromCommitHash after hydration (prevents re-hydration on remount) */
   onInheritComplete?: () => void;
+}
+
+function materialPinSourceItems(manifest: ConversationContextManifest | null) {
+  return (
+    manifest?.source_items.filter(
+      (item) => item.role === 'evidence' && item.pinned && Boolean(item.pin_id)
+    ) ?? []
+  );
+}
+
+function selectedLessonAssertionIds(
+  manifest: ConversationContextManifest | null,
+  pinId: string
+): string[] {
+  return (
+    manifest?.source_items
+      .filter(
+        (item) =>
+          item.role === 'guidance' && item.pin_id === pinId && item.metadata?.selected === true
+      )
+      .map((item) => item.id) ?? []
+  );
 }
 
 export function ChatWorkspace({
@@ -285,16 +308,13 @@ export function ChatWorkspace({
 
   const selectedPinsIncludingNewPin = useCallback(
     (pinId: string): string[] | null => {
-      const references = contextManifest?.references ?? [];
-      if (references.length === 0) return null;
+      const materials = materialPinSourceItems(contextManifest);
+      if (materials.length === 0) return null;
 
       const selectedPinIds = new Set(
-        references.filter((reference) => reference.included).map((reference) => reference.pin_id)
+        materials.flatMap((item) => (item.included && item.pin_id ? [item.pin_id] : []))
       );
-      const everyExistingReferenceSelected = references.every((reference) =>
-        selectedPinIds.has(reference.pin_id)
-      );
-      if (everyExistingReferenceSelected) return null;
+      if (materials.every((item) => item.pin_id && selectedPinIds.has(item.pin_id))) return null;
 
       selectedPinIds.add(pinId);
       return Array.from(selectedPinIds);
@@ -393,9 +413,9 @@ export function ChatWorkspace({
       if (!resolvedConversationId || !contextManifest || contextManifestUpdatingRef.current) return;
 
       const selectedPinIds = new Set(
-        contextManifest.references
-          .filter((reference) => reference.included)
-          .map((reference) => reference.pin_id)
+        materialPinSourceItems(contextManifest).flatMap((item) =>
+          item.included && item.pin_id ? [item.pin_id] : []
+        )
       );
       if (included) {
         selectedPinIds.add(pinId);
@@ -403,7 +423,9 @@ export function ChatWorkspace({
         selectedPinIds.delete(pinId);
       }
 
-      const allReferencePinIds = contextManifest.references.map((reference) => reference.pin_id);
+      const allReferencePinIds = materialPinSourceItems(contextManifest).flatMap((item) =>
+        item.pin_id ? [item.pin_id] : []
+      );
       const nextSelectedPinIds =
         allReferencePinIds.length > 0 &&
         allReferencePinIds.every((referencePinId) => selectedPinIds.has(referencePinId))
@@ -430,11 +452,7 @@ export function ChatWorkspace({
     async (pinId: string, assertionId: string, included: boolean) => {
       if (!contextManifest || contextManifestUpdatingRef.current) return;
 
-      const selectedAssertionIds = new Set(
-        contextManifest.feedback
-          .filter((feedback) => feedback.pin_id === pinId && feedback.selected)
-          .map((feedback) => feedback.id)
-      );
+      const selectedAssertionIds = new Set(selectedLessonAssertionIds(contextManifest, pinId));
       if (included) {
         selectedAssertionIds.add(assertionId);
       } else {

@@ -385,7 +385,7 @@ function buildSourceItems(
       title: item.lesson ?? item.details ?? item.id,
       parent_source_id: item.parent_ref_id,
       pin_id: item.pin_id,
-      pinned: true,
+      pinned: false,
       pinnable: false,
       included: item.included,
       metadata: {

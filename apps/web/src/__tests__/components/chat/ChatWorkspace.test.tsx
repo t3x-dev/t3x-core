@@ -247,7 +247,7 @@ describe('ChatWorkspace', () => {
     const manifest = screen.getByRole('region', { name: /sources/i });
     const messageScroll = screen.getByTestId('chat-message-scroll');
     expect(screen.queryByTestId('source-picker-overlay')).toBeNull();
-    expect(manifest.contains(screen.getByRole('tab', { name: /leaves/i }))).toBe(true);
+    expect(manifest.contains(screen.getByRole('tab', { name: /materials/i }))).toBe(true);
     expect(screen.queryByText('Pin parent')).toBeNull();
     expect(screen.getAllByText('Baseline inherited').length).toBeGreaterThan(0);
     expect(messageScroll.contains(manifest)).toBe(false);

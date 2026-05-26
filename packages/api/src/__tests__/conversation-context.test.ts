@@ -358,7 +358,7 @@ describe('Conversation Context Routes', () => {
             title: 'Keep the launch goal explicit.',
             parent_source_id: leaf.id,
             pin_id: leafPin.id,
-            pinned: true,
+            pinned: false,
             pinnable: false,
             included: true,
           }),
