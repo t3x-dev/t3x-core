@@ -58,6 +58,39 @@ const makeManifest = (): ConversationContextManifest => ({
       lesson: 'Avoid vague claims.',
     },
   ],
+  source_items: [
+    {
+      id: 'sha256:abcdef1234567890',
+      kind: 'baseline',
+      role: 'baseline',
+      title: 'Baseline inherited',
+      pinned: false,
+      pinnable: false,
+      included: true,
+      readonly: true,
+    },
+    {
+      id: 'leaf_1',
+      kind: 'leaf',
+      role: 'evidence',
+      title: 'Launch leaf',
+      pin_id: 'pin_leaf',
+      pinned: true,
+      pinnable: true,
+      included: true,
+    },
+    {
+      id: 'ast_1',
+      kind: 'lesson',
+      role: 'guidance',
+      title: 'Keep the tone precise.',
+      parent_source_id: 'leaf_1',
+      pin_id: 'pin_leaf',
+      pinned: true,
+      pinnable: false,
+      included: true,
+    },
+  ],
   token_estimate: 128,
   sources: [{ type: 'commit', id: 'sha256:abcdef1234567890', title: 'Parent commit' }],
   chat_context_text: 'chat context',
@@ -100,7 +133,7 @@ describe('ContextManifestBar', () => {
     expect(screen.getByText('128 tokens')).not.toBeNull();
   });
 
-  it('opens the sources panel with MVP tabs and no retired parent pin action', () => {
+  it('opens the sources panel with Materials tab and no retired parent pin action', () => {
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -117,8 +150,9 @@ describe('ContextManifestBar', () => {
     expect(screen.getByRole('region', { name: /sources/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /included/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /baseline/i })).not.toBeNull();
-    expect(screen.getByRole('tab', { name: /leaves/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /materials/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /lessons/i })).not.toBeNull();
+    expect(screen.queryByRole('tab', { name: /leaves/i })).toBeNull();
     expect(screen.queryByText('Context Manifest')).toBeNull();
     expect(screen.queryByText('Pin parent')).toBeNull();
   });
@@ -175,7 +209,7 @@ describe('ContextManifestBar', () => {
     expect(screen.queryByRole('link', { name: /view source conversation/i })).toBeNull();
   });
 
-  it('renders leaf source choices in the Leaves tab', () => {
+  it('renders pinned and available source choices in the Materials tab', () => {
     const onPinLeaf = vi.fn();
     render(
       <ContextManifestBar
@@ -196,9 +230,10 @@ describe('ContextManifestBar', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
 
-    expect(screen.getByRole('heading', { name: 'Leaves' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Materials' })).not.toBeNull();
+    expect(screen.getByText('Launch leaf')).not.toBeNull();
     expect(screen.queryByRole('heading', { name: 'References' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /pin and include leaf follow-up brief/i }));
@@ -221,7 +256,7 @@ describe('ContextManifestBar', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
 
     expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
@@ -239,7 +274,7 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
 
     expect(onReferenceToggle).toHaveBeenLastCalledWith('pin_leaf', true);

@@ -148,6 +148,33 @@ const ContextManifestFeedbackSchema = z.object({
   lesson: z.string().optional(),
 });
 
+const ContextManifestSourceItemSchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    'baseline',
+    'conversation',
+    'leaf',
+    'commit',
+    'import',
+    'file',
+    'web',
+    'result',
+    'lesson',
+  ]),
+  role: z.enum(['baseline', 'evidence', 'guidance', 'provenance']),
+  title: z.string(),
+  pinned: z.boolean(),
+  pinnable: z.boolean(),
+  included: z.boolean(),
+  readonly: z.boolean().optional(),
+  pin_id: z.string().optional(),
+  parent_source_id: z.string().optional(),
+  token_estimate: z.number().optional(),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
+});
+
 const ContextSourceSchema = z.object({
   type: z.enum(['commit', 'conversation', 'leaf']),
   id: z.string(),
@@ -160,6 +187,7 @@ const ConversationContextManifestSchema = z.object({
   baseline: ContextManifestBaselineSchema,
   references: z.array(ContextManifestReferenceSchema),
   feedback: z.array(ContextManifestFeedbackSchema),
+  source_items: z.array(ContextManifestSourceItemSchema),
   chat_context_text: z.string(),
   extraction_context_text: z.string(),
   token_estimate: z.number(),

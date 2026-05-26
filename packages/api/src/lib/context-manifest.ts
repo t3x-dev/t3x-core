@@ -55,12 +55,41 @@ export interface ContextManifestFeedback {
   lesson?: string;
 }
 
+export type ContextManifestSourceKind =
+  | 'baseline'
+  | 'conversation'
+  | 'leaf'
+  | 'commit'
+  | 'import'
+  | 'file'
+  | 'web'
+  | 'result'
+  | 'lesson';
+
+export type ContextManifestSourceRole = 'baseline' | 'evidence' | 'guidance' | 'provenance';
+
+export interface ContextManifestSourceItem {
+  id: string;
+  kind: ContextManifestSourceKind;
+  role: ContextManifestSourceRole;
+  title: string;
+  pinned: boolean;
+  pinnable: boolean;
+  included: boolean;
+  readonly?: boolean;
+  pin_id?: string;
+  parent_source_id?: string;
+  token_estimate?: number;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 export interface ConversationContextManifest {
   conversation_id: string;
   project_id: string;
   baseline: ContextManifestBaseline;
   references: ContextManifestReference[];
   feedback: ContextManifestFeedback[];
+  source_items: ContextManifestSourceItem[];
   chat_context_text: string;
   extraction_context_text: string;
   token_estimate: number;
@@ -116,14 +145,17 @@ export async function buildConversationContextManifest(
     : '';
   const chat_context_text = [baselineText, builtPinContext.text].filter(Boolean).join('\n\n');
   const feedback = buildFeedback(contextPins, leaves, activePinIds);
+  const references = buildReferences(projectPins, leaves, conversationTitles, activePinIds);
   const extraction_context_text = buildExtractionContextText(feedback);
+  const source_items = buildSourceItems(baseline, references, feedback);
 
   return {
     conversation_id: conversationId,
     project_id: conversation.projectId,
     baseline,
-    references: buildReferences(projectPins, leaves, conversationTitles, activePinIds),
+    references,
     feedback,
+    source_items,
     chat_context_text,
     extraction_context_text,
     token_estimate: estimateTokens(chat_context_text),
@@ -303,6 +335,67 @@ function buildFeedback(
   }
 
   return feedback;
+}
+
+function buildSourceItems(
+  baseline: ContextManifestBaseline,
+  references: ContextManifestReference[],
+  feedback: ContextManifestFeedback[]
+): ContextManifestSourceItem[] {
+  const items: ContextManifestSourceItem[] = [];
+
+  if (baseline.commit_hash) {
+    items.push({
+      id: baseline.commit_hash,
+      kind: 'baseline',
+      role: 'baseline',
+      title: 'Baseline inherited',
+      pinned: false,
+      pinnable: false,
+      included: true,
+      readonly: true,
+      metadata: {
+        branch: baseline.branch,
+        message: baseline.message,
+        nodes: baseline.node_count,
+        relations: baseline.relation_count,
+        source_conversation_id: baseline.source_conversation_id,
+      },
+    });
+  }
+
+  for (const reference of references) {
+    items.push({
+      id: reference.id,
+      kind: reference.type,
+      role: 'evidence',
+      title: reference.title ?? reference.id,
+      pin_id: reference.pin_id,
+      pinned: true,
+      pinnable: true,
+      included: reference.included,
+    });
+  }
+
+  for (const item of feedback) {
+    items.push({
+      id: item.id,
+      kind: 'lesson',
+      role: 'guidance',
+      title: item.lesson ?? item.details ?? item.id,
+      parent_source_id: item.parent_ref_id,
+      pin_id: item.pin_id,
+      pinned: true,
+      pinnable: false,
+      included: item.included,
+      metadata: {
+        selected: item.selected,
+        passed: item.passed ?? null,
+      },
+    });
+  }
+
+  return items;
 }
 
 function isAssertionExplicitlySelected(pin: Pin, assertionId: string): boolean {

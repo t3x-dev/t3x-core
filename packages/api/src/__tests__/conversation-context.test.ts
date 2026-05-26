@@ -329,6 +329,41 @@ describe('Conversation Context Routes', () => {
           lesson: 'This lesson should not be selected.',
         }),
       ]);
+      expect(manifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: parentCommit.hash,
+            kind: 'baseline',
+            role: 'baseline',
+            title: 'Baseline inherited',
+            pinned: false,
+            pinnable: false,
+            included: true,
+            readonly: true,
+          }),
+          expect.objectContaining({
+            id: leaf.id,
+            kind: 'leaf',
+            role: 'evidence',
+            title: 'Launch Review',
+            pin_id: leafPin.id,
+            pinned: true,
+            pinnable: true,
+            included: true,
+          }),
+          expect.objectContaining({
+            id: 'ast_keep',
+            kind: 'lesson',
+            role: 'guidance',
+            title: 'Keep the launch goal explicit.',
+            parent_source_id: leaf.id,
+            pin_id: leafPin.id,
+            pinned: true,
+            pinnable: false,
+            included: true,
+          }),
+        ])
+      );
       expect(manifest.chat_context_text).toContain('launch_plan:');
       expect(manifest.chat_context_text).toContain('goal: ship context manifest');
       expect(manifest.chat_context_text).toContain('Keep the launch goal explicit.');

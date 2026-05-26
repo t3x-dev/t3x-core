@@ -20,6 +20,9 @@ export type {
   ContextManifestFeedback,
   ContextManifestReference,
   ContextManifestSource,
+  ContextManifestSourceItem,
+  ContextManifestSourceKind,
+  ContextManifestSourceRole,
   ConversationContextManifest,
 } from '@/infrastructure/contextManifest';
 export { ApiError } from '@/infrastructure/core';

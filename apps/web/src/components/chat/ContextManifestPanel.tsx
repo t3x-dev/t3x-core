@@ -29,7 +29,7 @@ type PreviewTarget =
   | { kind: 'baseline' }
   | { kind: 'reference'; id: string }
   | { kind: 'lesson'; id: string };
-type SourceTab = 'included' | 'baseline' | 'leaves' | 'lessons';
+type SourceTab = 'included' | 'baseline' | 'materials' | 'lessons';
 
 export interface ContextManifestSourcePicker {
   availableLeaves?: ProjectLeaf[];
@@ -449,7 +449,8 @@ export function ContextManifestPanel({
   const [selectedPreview, setSelectedPreview] = useState<PreviewTarget>({ kind: 'baseline' });
   const references = manifest?.references ?? [];
   const includedReferences = references.filter((reference) => reference.included);
-  const leafReferences = references.filter((reference) => reference.type === 'leaf');
+  const materialReferences = references;
+  const leafReferences = materialReferences.filter((reference) => reference.type === 'leaf');
   const effectiveLessons = manifest?.feedback.filter((feedback) => feedback.included) ?? [];
   const referencesById = useMemo(
     () => new Map(references.map((reference) => [reference.id, reference])),
@@ -517,18 +518,18 @@ export function ContextManifestPanel({
             <button
               type="button"
               role="tab"
-              aria-selected={activeTab === 'leaves'}
-              onClick={() => setActiveTab('leaves')}
+              aria-selected={activeTab === 'materials'}
+              onClick={() => setActiveTab('materials')}
               className={cn(
                 'inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent px-2 font-medium transition-colors',
-                activeTab === 'leaves'
+                activeTab === 'materials'
                   ? 'bg-[var(--surface-panel)] text-[var(--text-primary)] shadow-sm'
                   : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
               )}
             >
-              Leaves
+              Materials
               <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                {leafReferences.length}
+                {materialReferences.length}
               </span>
             </button>
             <button
@@ -649,16 +650,20 @@ export function ContextManifestPanel({
           </div>
         )}
 
-        {activeTab === 'leaves' && (
-          <div role="tabpanel" aria-label="Leaves" className="min-h-0 flex-1 overflow-hidden p-2">
+        {activeTab === 'materials' && (
+          <div
+            role="tabpanel"
+            aria-label="Materials"
+            className="min-h-0 flex-1 overflow-hidden p-2"
+          >
             <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
               <Pane
-                title="Leaves"
-                meta={`${leafReferences.filter((item) => item.included).length}/${leafReferences.length} included`}
+                title="Materials"
+                meta={`${materialReferences.filter((item) => item.included).length}/${materialReferences.length} included`}
               >
                 <div className="space-y-1">
-                  {leafReferences.length > 0 ? (
-                    leafReferences.map((reference) => (
+                  {materialReferences.length > 0 ? (
+                    materialReferences.map((reference) => (
                       <ReferenceRow
                         key={reference.pin_id}
                         reference={reference}
@@ -675,18 +680,18 @@ export function ContextManifestPanel({
                       />
                     ))
                   ) : (
-                    <EmptyState>No pinned leaf sources.</EmptyState>
+                    <EmptyState>No pinned material sources.</EmptyState>
                   )}
 
                   {showAvailableLeaves && (
                     <div className="mt-2 space-y-1 border-t border-[var(--stroke-divider)] pt-2">
                       <div className="px-2 text-[10px] font-medium uppercase tracking-normal text-[var(--text-tertiary)]">
-                        Available leaves
+                        Available materials
                       </div>
                       {sourcePicker?.availableLeavesLoading ? (
                         <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Loading leaves...
+                          Loading materials...
                         </div>
                       ) : sourcePicker?.availableLeavesError ? (
                         <div className="rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-2 py-1.5 text-xs text-[var(--status-error)]">
@@ -703,11 +708,11 @@ export function ContextManifestPanel({
                         ))
                       ) : availableLeaves.length === 0 ? (
                         <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                          No project leaves available.
+                          No project materials available.
                         </p>
                       ) : (
                         <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                          All project leaves are already pinned.
+                          All project materials are already pinned.
                         </p>
                       )}
                     </div>
