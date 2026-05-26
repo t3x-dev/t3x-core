@@ -128,6 +128,7 @@ export function ChatInput({
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
   const skipNextDraftPersistRef = useRef(false);
   const draftStorageKey = getDraftStorageKey(draftKey);
 
@@ -242,6 +243,7 @@ export function ChatInput({
   }, [value, disabled, onSend, attachedImages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -311,6 +313,12 @@ export function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
