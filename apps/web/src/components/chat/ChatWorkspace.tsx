@@ -65,12 +65,10 @@ export function ChatWorkspace({
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
-  const pins = usePinsStore((s) => s.pins);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
   const [contextManifestOpen, setContextManifestOpen] = useState(false);
-  const [pinningParentConversation, setPinningParentConversation] = useState(false);
   const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
@@ -285,14 +283,6 @@ export function ChatWorkspace({
     workspaceMode,
   ]);
 
-  const parentConversationPinned = useMemo(
-    () =>
-      parentConversationId
-        ? pins.some((pin) => pin.type === 'conversation' && pin.ref_id === parentConversationId)
-        : false,
-    [parentConversationId, pins]
-  );
-
   const selectedPinsIncludingNewPin = useCallback(
     (pinId: string): string[] | null => {
       const references = contextManifest?.references ?? [];
@@ -311,36 +301,6 @@ export function ChatWorkspace({
     },
     [contextManifest]
   );
-
-  const handlePinParentConversation = useCallback(async () => {
-    if (!resolvedProjectId || !parentConversationId || pinningParentConversation) return;
-
-    setPinningParentConversation(true);
-    try {
-      const created = await addPin(resolvedProjectId, 'conversation', parentConversationId);
-      if (created && resolvedConversationId) {
-        await updateContextSelectedPins(
-          resolvedConversationId,
-          selectedPinsIncludingNewPin(created.id)
-        );
-      }
-      if (created) await reloadContextManifest();
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Failed to pin parent conversation';
-      toast.message(message);
-    } finally {
-      setPinningParentConversation(false);
-    }
-  }, [
-    addPin,
-    parentConversationId,
-    pinningParentConversation,
-    reloadContextManifest,
-    resolvedConversationId,
-    resolvedProjectId,
-    selectedPinsIncludingNewPin,
-    updateContextSelectedPins,
-  ]);
 
   const handlePinLeafForContext = useCallback(
     async (leafId: string) => {
@@ -396,19 +356,8 @@ export function ChatWorkspace({
       commitHash,
       branch: manifestBaseline?.branch ?? null,
       parentConversationId,
-      parentConversationPinned,
-      pinningParentConversation,
-      onPinParentConversation: handlePinParentConversation,
     };
-  }, [
-    baselineCommitHash,
-    contextManifest,
-    handlePinParentConversation,
-    inheritFromCommitHash,
-    parentConversationId,
-    parentConversationPinned,
-    pinningParentConversation,
-  ]);
+  }, [baselineCommitHash, contextManifest, inheritFromCommitHash, parentConversationId]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {

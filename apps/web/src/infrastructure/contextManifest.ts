@@ -16,6 +16,7 @@ export interface ContextManifestBaseline {
   message: string | null;
   content: SemanticContent | null;
   source: ContextManifestBaselineSource;
+  source_conversation_id: string | null;
   node_count: number;
   relation_count: number;
 }

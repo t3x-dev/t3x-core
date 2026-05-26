@@ -19,6 +19,7 @@ const makeManifest = (): ConversationContextManifest => ({
     branch: 'main',
     message: 'Parent commit',
     source: 'parent_commit',
+    source_conversation_id: null,
     node_count: 2,
     relation_count: 1,
     content: {
@@ -80,7 +81,7 @@ const followUpLeaf = {
 } satisfies Leaf;
 
 describe('ContextManifestBar', () => {
-  it('renders the collapsed baseline and feedback summary', () => {
+  it('renders the collapsed sources summary', () => {
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -92,14 +93,14 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    expect(screen.getByText('abcdef12')).not.toBeNull();
-    expect(screen.getByText('main')).not.toBeNull();
-    expect(screen.getByText('2 nodes')).not.toBeNull();
-    expect(screen.getByText('1 rel')).not.toBeNull();
-    expect(screen.getByText('1 feedback')).not.toBeNull();
+    expect(screen.getByText('Sources')).not.toBeNull();
+    expect(screen.getByText('Baseline abcdef12')).not.toBeNull();
+    expect(screen.getByText('1 included')).not.toBeNull();
+    expect(screen.getByText('1 lesson')).not.toBeNull();
+    expect(screen.getByText('128 tokens')).not.toBeNull();
   });
 
-  it('opens the panel and shows baseline YAML plus feedback lessons', () => {
+  it('opens the sources panel with MVP tabs and no retired parent pin action', () => {
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -111,14 +112,70 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
 
-    expect(screen.getByText('Baseline YAML')).not.toBeNull();
+    expect(screen.getByRole('region', { name: /sources/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /included/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /baseline/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /leaves/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /lessons/i })).not.toBeNull();
+    expect(screen.queryByText('Context Manifest')).toBeNull();
+    expect(screen.queryByText('Pin parent')).toBeNull();
+  });
+
+  it('shows baseline YAML with commit and source conversation links', () => {
+    const manifest = makeManifest();
+    manifest.baseline.source_conversation_id = 'conv_parent';
+
+    render(
+      <ContextManifestBar
+        manifest={manifest}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          baseline: {
+            commitHash: 'sha256:abcdef1234567890',
+            branch: 'main',
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /baseline/i }));
+
     expect(screen.getByTestId('baseline-yaml').textContent).toContain('goal');
-    expect(screen.getByText('Keep the tone precise.')).not.toBeNull();
+    expect(screen.getByRole('link', { name: /view commit/i }).getAttribute('href')).toBe(
+      '/project/proj_1/commit/sha256%3Aabcdef1234567890'
+    );
+    expect(
+      screen.getByRole('link', { name: /view source conversation/i }).getAttribute('href')
+    ).toBe('/chat/conv_parent');
   });
 
-  it('renders source choices at the top of the manifest panel', () => {
+  it('marks the baseline source conversation unavailable when lineage is missing', () => {
+    render(
+      <ContextManifestBar
+        manifest={makeManifest()}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /baseline/i }));
+
+    expect(screen.getByText('No source conversation')).not.toBeNull();
+    expect(screen.queryByRole('link', { name: /view source conversation/i })).toBeNull();
+  });
+
+  it('renders leaf source choices in the Leaves tab', () => {
     const onPinLeaf = vi.fn();
     render(
       <ContextManifestBar
@@ -138,13 +195,11 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
 
-    const referencesHeading = screen.getByRole('heading', { name: 'References' });
-    const baselineHeading = screen.getByText('Baseline YAML');
-    expect(
-      referencesHeading.compareDocumentPosition(baselineHeading) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).not.toBe(0);
+    expect(screen.getByRole('heading', { name: 'Leaves' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'References' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /pin and include leaf follow-up brief/i }));
 
@@ -165,7 +220,8 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
 
     expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
@@ -183,12 +239,13 @@ describe('ContextManifestBar', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
 
     expect(onReferenceToggle).toHaveBeenLastCalledWith('pin_leaf', true);
   });
 
-  it('toggles feedback assertion inclusion from the opened panel', () => {
+  it('toggles lesson inclusion from the Lessons tab', () => {
     const onAssertionToggle = vi.fn();
     const manifest = makeManifest();
     const { rerender } = render(
@@ -202,8 +259,9 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /include feedback keep the tone/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /lessons/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /include lesson keep the tone/i }));
 
     expect(onAssertionToggle).toHaveBeenCalledWith('pin_leaf', 'ast_1', false);
 
@@ -221,12 +279,13 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /include feedback keep the tone/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /lessons/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /include lesson keep the tone/i }));
 
     expect(onAssertionToggle).toHaveBeenLastCalledWith('pin_leaf', 'ast_1', true);
   });
 
-  it('keeps feedback checkboxes tied to selection, not effective inclusion', () => {
+  it('keeps lesson checkboxes tied to selection, not effective inclusion', () => {
     const manifest = makeManifest();
     manifest.references[0].included = false;
     manifest.feedback[0].selected = true;
@@ -243,12 +302,13 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open context manifest/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /lessons/i }));
 
     expect(
       (
         screen.getByRole('checkbox', {
-          name: /include feedback keep the tone/i,
+          name: /include lesson keep the tone/i,
         }) as HTMLInputElement
       ).checked
     ).toBe(true);
@@ -266,7 +326,7 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    expect(screen.getByText('Loading context')).not.toBeNull();
+    expect(screen.getByText('Loading sources')).not.toBeNull();
   });
 
   it('renders an error summary state', () => {

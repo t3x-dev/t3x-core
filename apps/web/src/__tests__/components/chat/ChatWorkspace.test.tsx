@@ -154,6 +154,7 @@ function makeContextManifest(): ConversationContextManifest {
       branch: 'main',
       message: 'Parent commit',
       source: 'parent_commit',
+      source_conversation_id: null,
       node_count: 0,
       relation_count: 0,
       content: { trees: [], relations: [] },
@@ -198,7 +199,7 @@ describe('ChatWorkspace', () => {
     });
   });
 
-  it('opens source chooser inside the context manifest instead of the composer or message stream', () => {
+  it('opens source chooser inside Sources instead of the composer or message stream', () => {
     mocks.parentConversationId = 'conv_parent';
     mocks.contextManifest = makeContextManifest();
     useWorkspaceStore.getState().setDerived({
@@ -221,11 +222,12 @@ describe('ChatWorkspace', () => {
     expect(mocks.handleExtract).not.toHaveBeenCalled();
     expect(mocks.toastMessage).not.toHaveBeenCalledWith('No pinned sources yet');
 
-    const manifest = screen.getByRole('region', { name: /context manifest/i });
+    const manifest = screen.getByRole('region', { name: /sources/i });
     const messageScroll = screen.getByTestId('chat-message-scroll');
     expect(screen.queryByTestId('source-picker-overlay')).toBeNull();
-    expect(manifest.contains(screen.getByRole('heading', { name: 'References' }))).toBe(true);
-    expect(screen.getByText('Parent conversation')).not.toBeNull();
+    expect(manifest.contains(screen.getByRole('tab', { name: /leaves/i }))).toBe(true);
+    expect(screen.queryByText('Pin parent')).toBeNull();
+    expect(screen.getAllByText('Baseline inherited').length).toBeGreaterThan(0);
     expect(messageScroll.contains(manifest)).toBe(false);
   });
 

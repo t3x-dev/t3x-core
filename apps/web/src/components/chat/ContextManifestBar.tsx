@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  AlertCircle,
-  ChevronDown,
-  GitBranch,
-  GitCommit,
-  Loader2,
-  Network,
-  RefreshCw,
-} from 'lucide-react';
+import { AlertCircle, ChevronDown, GitCommit, Loader2, RefreshCw } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -67,19 +59,20 @@ export function ContextManifestBar({
     onOpenChange?.(nextOpen);
   };
   const summary = useMemo(() => {
-    const includedFeedback = manifest?.feedback.filter((item) => item.included).length ?? 0;
+    const includedReferences = manifest?.references.filter((item) => item.included).length ?? 0;
+    const includedLessons = manifest?.feedback.filter((item) => item.included).length ?? 0;
 
     return {
       baseline: shortHash(manifest?.baseline.commit_hash),
-      branch: manifest?.baseline.branch ?? null,
-      nodes: manifest?.baseline.node_count ?? 0,
-      relations: manifest?.baseline.relation_count ?? 0,
-      includedFeedback,
+      hasBaseline: Boolean(manifest?.baseline.commit_hash),
+      includedReferences,
+      includedLessons,
+      tokens: manifest?.token_estimate ?? 0,
     };
   }, [manifest]);
 
   return (
-    <div className="relative shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-3 py-1.5">
+    <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-3 py-1.5">
       <div className="mx-auto flex h-9 max-w-[760px] items-center gap-2">
         <button
           type="button"
@@ -92,7 +85,7 @@ export function ContextManifestBar({
           )}
           aria-expanded={isOpen}
           aria-controls={panelId}
-          aria-label={isOpen ? 'Close context manifest' : 'Open context manifest'}
+          aria-label={isOpen ? 'Close sources' : 'Open sources'}
         >
           {loading ? (
             <Loader2 size={14} className="shrink-0 animate-spin text-[var(--text-tertiary)]" />
@@ -104,29 +97,25 @@ export function ContextManifestBar({
 
           <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             {loading ? (
-              <span className="truncate text-[var(--text-tertiary)]">Loading context</span>
+              <span className="truncate text-[var(--text-tertiary)]">Loading sources</span>
             ) : message ? (
               <span className="truncate text-[var(--status-error)]">{message}</span>
             ) : (
               <>
-                <span className="font-mono text-[11px] text-[var(--text-primary)]">
-                  {summary.baseline}
+                <span className="shrink-0 text-xs font-semibold text-[var(--text-primary)]">
+                  Sources
                 </span>
-                {summary.branch && (
-                  <span className="flex min-w-0 items-center gap-1 rounded-[var(--radius-sm)] bg-[var(--accent-branch)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent-branch)]">
-                    <GitBranch size={10} className="shrink-0" />
-                    <span className="truncate">{summary.branch}</span>
-                  </span>
-                )}
-                <span className="flex items-center gap-1 text-[11px] text-[var(--text-tertiary)]">
-                  <Network size={11} />
-                  {plural(summary.nodes, 'node')}
+                <span className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-[var(--accent-commit)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[var(--accent-commit)]">
+                  {summary.hasBaseline ? `Baseline ${summary.baseline}` : 'No baseline'}
                 </span>
-                <span className="text-[11px] text-[var(--text-tertiary)]">
-                  {plural(summary.relations, 'rel')}
+                <span className="shrink-0 whitespace-nowrap text-[11px] text-[var(--text-tertiary)]">
+                  {plural(summary.includedReferences, 'included', 'included')}
                 </span>
-                <span className="text-[11px] text-[var(--text-tertiary)]">
-                  {plural(summary.includedFeedback, 'feedback', 'feedback')}
+                <span className="hidden shrink-0 whitespace-nowrap text-[11px] text-[var(--text-tertiary)] sm:inline">
+                  {plural(summary.includedLessons, 'lesson')}
+                </span>
+                <span className="hidden shrink-0 whitespace-nowrap text-[11px] text-[var(--text-tertiary)] sm:inline">
+                  {summary.tokens} tokens
                 </span>
               </>
             )}
@@ -147,7 +136,7 @@ export function ContextManifestBar({
             void onReload();
           }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-          aria-label="Reload context manifest"
+          aria-label="Reload sources"
         >
           <RefreshCw size={14} className={cn(loading && 'animate-spin')} />
         </button>
