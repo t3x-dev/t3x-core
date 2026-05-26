@@ -63,6 +63,30 @@ export function mapProviderErrorToExtractionFailure(
       ? (error.details as Record<string, unknown>)
       : {};
 
+  if (providerCode === 'JSON_PARSE') {
+    return createExtractionFailure('draft_parse', error.message, {
+      provider,
+      cause: error,
+      details: {
+        statusCode,
+        providerCode,
+        ...providerDetails,
+      },
+    });
+  }
+
+  if (providerCode === 'SCHEMA_MISMATCH') {
+    return createExtractionFailure('draft_schema', error.message, {
+      provider,
+      cause: error,
+      details: {
+        statusCode,
+        providerCode,
+        ...providerDetails,
+      },
+    });
+  }
+
   return createExtractionFailure('transport', error.message, {
     provider,
     cause: error,

@@ -19,10 +19,29 @@ import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
 
+export function isCommitDetailRoute(pathname: string): boolean {
+  return /^\/project\/[^/]+\/commit\/[^/]+(?:\/)?$/.test(pathname);
+}
+
+export function isProjectDiffRoute(pathname: string): boolean {
+  return /^\/project\/[^/]+\/diff(?:\/)?$/.test(pathname);
+}
+
+export function isProjectMergeRoute(pathname: string): boolean {
+  return /^\/project\/[^/]+\/merge\/[^/]+(?:\/)?$/.test(pathname);
+}
+
+export function isShelllessDetailRoute(pathname: string): boolean {
+  return (
+    isCommitDetailRoute(pathname) || isProjectDiffRoute(pathname) || isProjectMergeRoute(pathname)
+  );
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
   const isChatRoute = pathname.startsWith('/chat');
+  const isShelllessRoute = isShelllessDetailRoute(pathname);
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
@@ -104,16 +123,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           >
             Skip to content
           </a>
-          {!isChatRoute && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
+          {!isChatRoute && !isShelllessRoute && (
+            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          )}
           <main
             id="main-content"
             aria-label="Main content"
             className={cn(
               'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-              !isChatRoute && (sidebarCollapsed ? 'ml-16' : 'ml-52')
+              !isChatRoute && !isShelllessRoute && (sidebarCollapsed ? 'ml-16' : 'ml-52')
             )}
           >
-            {!isChatRoute && (
+            {!isChatRoute && !isShelllessRoute && (
               <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
                 {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
                 <NotificationBell />

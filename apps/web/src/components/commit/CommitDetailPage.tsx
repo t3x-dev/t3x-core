@@ -104,6 +104,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const canvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
@@ -188,6 +189,14 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     [setActiveNode]
   );
 
+  const handleBack = useCallback(() => {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push(canvasHref);
+  }, [canvasHref, router]);
+
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
     ids: allNodeIds,
@@ -228,7 +237,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           <p className="text-sm text-[var(--status-error)]">{error || 'Commit not found'}</p>
           <button
             type="button"
-            onClick={() => router.push(`/project/${projectId}`)}
+            onClick={handleBack}
             className="flex items-center gap-2 text-sm text-[var(--status-info)] hover:underline"
           >
             <ArrowLeft size={14} />
@@ -249,15 +258,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => router.push(`/project/${projectId}`)}
+            onClick={handleBack}
             className="rounded-md p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+            aria-label="Back"
           >
             <ArrowLeft size={16} />
           </button>
           <Breadcrumb
             className="text-[13px]"
             segments={[
-              { label: projectName || 'Project', href: `/project/${projectId}` },
+              { label: projectName || 'Project', href: canvasHref },
               ...(commit.branch
                 ? [{ label: commit.branch, href: `/project/${projectId}/history` }]
                 : []),
@@ -267,7 +277,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         </div>
         <div className="flex items-center gap-1.5">
           <Link
-            href={`/project/${projectId}`}
+            href={canvasHref}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
             <Eye size={13} /> View Canvas

@@ -140,7 +140,7 @@ test.describe('commit ceremony', () => {
           timeout: 15_000,
         });
         await page.getByTestId('workspace-action-apply_changes').click();
-        await expect(page.getByTestId('after-panel')).toContainText('Applied result', {
+        await expect(page.getByTestId('after-panel')).toContainText('Output', {
           timeout: 5_000,
         });
         await expect(page.getByTestId('workspace-action-commit')).toBeEnabled({ timeout: 5_000 });

@@ -227,14 +227,16 @@ export function CurrentProjectWorkbench({
                     : 'bg-[var(--text-tertiary)] opacity-30'
                 )}
               />
-              <span className="block min-w-0 max-w-full flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                {title}
-              </span>
-              {committedShortHash && (
-                <span className="shrink-0 text-[10px] font-medium text-[var(--text-tertiary)]">
-                  · {committedShortHash}
+              <span className="flex min-w-0 flex-1 items-center gap-1">
+                <span className="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                  {title}
                 </span>
-              )}
+                {committedShortHash && (
+                  <span className="shrink-0 text-[10px] font-medium text-[var(--text-tertiary)]">
+                    · {committedShortHash}
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}

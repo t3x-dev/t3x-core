@@ -47,10 +47,11 @@ function makeNode(overrides: Partial<CanvasNodeData> = {}): Node<CanvasNodeData,
 
 describe('CanvasSelectionPanel', () => {
   it('keeps the empty state quiet until a commit is selected', () => {
-    render(<CanvasSelectionPanel actions={[]} node={null} />);
+    const { container } = render(<CanvasSelectionPanel actions={[]} node={null} />);
 
-    expect(screen.getByText('SELECTION')).toBeInTheDocument();
-    expect(screen.getByText('Select a commit on the canvas.')).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('SELECTION')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a commit on the canvas.')).not.toBeInTheDocument();
   });
 
   it('summarizes the selected commit and only shows actions that apply', () => {

@@ -443,6 +443,49 @@ describe('ChatSidebar', () => {
     });
   });
 
+  it('shows a new conversation commit hash immediately from commit-created events', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_live',
+        name: 'Live Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 0,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_live: [
+        {
+          conversation_id: 'conv_live_source',
+          title: 'Live source chat',
+          committed_as: null,
+        },
+      ],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_live']);
+
+    render(<ChatSidebar />);
+
+    expect(screen.queryByText('· 87654321')).not.toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('t3x:commit-created', {
+          detail: {
+            type: 'commit.created',
+            projectId: 'proj_live',
+            conversationId: 'conv_live_source',
+            conversationIds: ['conv_live_source'],
+            branch: 'main',
+            payload: { hash: 'sha256:876543210fedcba', branch: 'main' },
+          },
+        })
+      );
+    });
+
+    expect(screen.getAllByText('· 87654321').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('shows Claude-style mode tabs above chat navigation lists', () => {
     mocks.projects = [
       {

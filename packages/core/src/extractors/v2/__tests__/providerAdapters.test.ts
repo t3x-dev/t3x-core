@@ -43,6 +43,34 @@ describe('extractors/v2 provider adapters', () => {
     expect(failure.retry.strategy).toBe('backoff');
   });
 
+  it('maps provider JSON parse errors to draft_parse failures', () => {
+    const failure = mapProviderErrorToExtractionFailure(
+      'openai',
+      new LLMProviderError('openai', undefined, 'bad json', 'JSON_PARSE', {
+        rawText: 'not json',
+      })
+    );
+
+    expect(failure.code).toBe('draft_parse');
+    expect(failure.provider).toBe('openai');
+    expect(failure.retry.strategy).toBe('targeted_reask');
+    expect(failure.details?.rawText).toBe('not json');
+  });
+
+  it('maps provider schema errors to draft_schema failures', () => {
+    const failure = mapProviderErrorToExtractionFailure(
+      'openai',
+      new LLMProviderError('openai', undefined, 'bad schema', 'SCHEMA_MISMATCH', {
+        jsonText: '{"items":[]}',
+      })
+    );
+
+    expect(failure.code).toBe('draft_schema');
+    expect(failure.provider).toBe('openai');
+    expect(failure.retry.strategy).toBe('targeted_reask');
+    expect(failure.details?.jsonText).toBe('{"items":[]}');
+  });
+
   it('uses max_completion_tokens for GPT-5 family requests', () => {
     expect(
       buildOpenAIChatCompletionBody({

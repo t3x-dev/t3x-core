@@ -2,7 +2,7 @@
 
 import type { Node } from '@xyflow/react';
 import { Check, Clock, GitCommit, Link2, Settings, X } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,7 @@ export function ConversationView({
   onShowCommitConfig,
 }: ConversationViewProps) {
   const { t } = useTerminology();
+  const router = useRouter();
   const data = node.data;
 
   // Get projectId from route params for sidebar links
@@ -63,7 +64,17 @@ export function ConversationView({
   );
 
   // ========== Layout state ==========
-  const [showSettings, setShowSettings] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const createdLabel = useMemo(() => {
+    const createdAt = new Date(data.timestamp);
+    if (Number.isNaN(createdAt.getTime())) {
+      return data.timestamp;
+    }
+    return createdAt.toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  }, [data.timestamp]);
 
   // ========== Render ==========
   return (
@@ -75,7 +86,7 @@ export function ConversationView({
     >
       <div
         className={cn(
-          'flex flex-col w-screen h-screen overflow-hidden',
+          'relative flex flex-col w-screen h-screen overflow-hidden',
           glass.cardBase,
           glass.highlight
         )}
@@ -103,16 +114,28 @@ export function ConversationView({
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setShowSettings(!showSettings)}
-              title="Edit Meta"
-              className="h-9 w-9"
+              onClick={() => setDetailsOpen((open) => !open)}
+              title="Unit details"
+              aria-pressed={detailsOpen}
+              className={cn(
+                'h-9 w-9',
+                detailsOpen &&
+                  'border-[var(--stroke-strong)] bg-[var(--hover-bg)] text-[var(--text-primary)]'
+              )}
             >
               <Settings size={18} />
             </Button>
             {/* For staging units: show Commit button to enter commit config view */}
             {isStagingUnit && (
               <Button
-                onClick={() => onShowCommitConfig()}
+                onClick={() => {
+                  if (data.conversationId) {
+                    router.push(`/chat/${encodeURIComponent(data.conversationId)}`);
+                    onClose();
+                    return;
+                  }
+                  onShowCommitConfig();
+                }}
                 title={t('configure_and_commit')}
                 className="gap-1.5"
               >
@@ -147,85 +170,8 @@ export function ConversationView({
           </div>
         </header>
 
-        {/* Content: settings sidebar + chat */}
+        {/* Content */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Settings sidebar */}
-          {showSettings && (
-            <aside className="w-72 shrink-0 border-r border-[var(--stroke-divider)] overflow-y-auto">
-              <div className="p-5">
-                <div className="mb-5">
-                  <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
-                    Metadata
-                  </h4>
-                  <div className="mb-[var(--space-group)]">
-                    <label
-                      htmlFor="conversation-title"
-                      className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5"
-                    >
-                      Title
-                    </label>
-                    <Input
-                      id="conversation-title"
-                      type="text"
-                      value={data.title}
-                      onChange={(e) => onUpdate({ title: e.target.value })}
-                    />
-                  </div>
-                  <div className="mb-[var(--space-group)]">
-                    <label
-                      htmlFor="conversation-tags"
-                      className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5"
-                    >
-                      Tags
-                    </label>
-                    <Input
-                      id="conversation-tags"
-                      type="text"
-                      value={data.tags.join(', ')}
-                      onChange={(e) =>
-                        onUpdate({
-                          tags: e.target.value
-                            .split(',')
-                            .map((t) => t.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      placeholder="tag1, tag2, ..."
-                    />
-                  </div>
-                </div>
-
-                <div className="h-px bg-[var(--stroke-divider)] my-4" />
-
-                <div className="mb-5">
-                  <h4 className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wide mb-3">
-                    Info
-                  </h4>
-                  <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
-                    <Clock size={14} className="text-[var(--text-tertiary)] shrink-0" />
-                    <span>Created: {data.timestamp}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)] mb-[var(--space-item)]">
-                    <Link2 size={14} className="text-[var(--text-tertiary)] shrink-0" />
-                    <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
-                  </div>
-                </div>
-
-                <div className="h-px bg-[var(--stroke-divider)] my-4" />
-
-                <MemoryContextSidebar
-                  projectId={routeProjectId || projectId || undefined}
-                  conversationId={data?.conversationId || data?.sourceConversationId}
-                  branch={
-                    data.branchName ||
-                    (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) ||
-                    'main'
-                  }
-                />
-              </div>
-            </aside>
-          )}
-
           {/* ChatWorkspace replaces ConversationWorkspace */}
           {(() => {
             // Resolve conversation ID: use real source if conversationId is orphan
@@ -272,6 +218,101 @@ export function ConversationView({
             );
           })()}
         </div>
+
+        {detailsOpen && (
+          <aside
+            aria-label="Unit details"
+            className="absolute top-14 right-0 bottom-0 z-20 flex w-[min(360px,calc(100vw-24px))] flex-col border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-[var(--fx-shadow-lg)]"
+          >
+            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-5">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Details</h3>
+                <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                  Metadata, audit info, and memory context.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDetailsOpen(false)}
+                aria-label="Close details"
+                className="h-8 w-8 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              <section className="mb-5">
+                <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+                  Metadata
+                </h4>
+                <div className="mb-[var(--space-group)]">
+                  <label
+                    htmlFor="conversation-title"
+                    className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+                  >
+                    Title
+                  </label>
+                  <Input
+                    id="conversation-title"
+                    type="text"
+                    value={data.title}
+                    onChange={(e) => onUpdate({ title: e.target.value })}
+                  />
+                </div>
+                <div className="mb-[var(--space-group)]">
+                  <label
+                    htmlFor="conversation-tags"
+                    className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+                  >
+                    Tags
+                  </label>
+                  <Input
+                    id="conversation-tags"
+                    type="text"
+                    value={data.tags.join(', ')}
+                    onChange={(e) =>
+                      onUpdate({
+                        tags: e.target.value
+                          .split(',')
+                          .map((tag) => tag.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                    placeholder="tag1, tag2, ..."
+                  />
+                </div>
+              </section>
+
+              <div className="my-4 h-px bg-[var(--stroke-divider)]" />
+
+              <section className="mb-5">
+                <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+                  Info
+                </h4>
+                <div className="mb-[var(--space-item)] flex items-start gap-2 text-[0.85rem] text-[var(--text-secondary)]">
+                  <Clock size={14} className="mt-0.5 shrink-0 text-[var(--text-tertiary)]" />
+                  <span>Created: {createdLabel}</span>
+                </div>
+                <div className="mb-[var(--space-item)] flex items-start gap-2 text-[0.85rem] text-[var(--text-secondary)]">
+                  <Link2 size={14} className="mt-0.5 shrink-0 text-[var(--text-tertiary)]" />
+                  <span>Upstream: {data.baselineSummary ? 'Connected' : 'None (root)'}</span>
+                </div>
+              </section>
+
+              <MemoryContextSidebar
+                projectId={routeProjectId || projectId || undefined}
+                conversationId={data?.conversationId || data?.sourceConversationId}
+                branch={
+                  data.branchName ||
+                  (data.pendingBranch === 'main' ? 'main' : data.pendingBranchName) ||
+                  'main'
+                }
+              />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

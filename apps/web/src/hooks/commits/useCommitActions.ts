@@ -46,8 +46,16 @@ function sanitizeTrees(trees: TreeNode[]): TreeNode[] {
   );
 }
 
+interface CommitResult {
+  hash: string;
+  projectId: string;
+  conversationId: string | null;
+  branch: string;
+  sourceConversationIds: string[];
+}
+
 export function useCommitActions() {
-  const commit = useCallback(async (message: string): Promise<{ hash: string }> => {
+  const commit = useCallback(async (message: string): Promise<CommitResult> => {
     const { tree, sourceIndex, conversationId, lastExtractionPinIds } =
       useWorkspaceStore.getState();
     const draft = tree;
@@ -130,7 +138,15 @@ export function useCommitActions() {
         committedNodeSnapshot: newSnapshot,
       });
 
-      return { hash: result.commit.hash };
+      return {
+        hash: result.commit.hash,
+        projectId,
+        conversationId,
+        branch: commitBranch,
+        sourceConversationIds: sources
+          .filter((source) => source.type === 'conversation')
+          .map((source) => source.id),
+      };
     } catch (err) {
       useCommitStore.getState().setIsCommitting(false);
       useCommitStore
