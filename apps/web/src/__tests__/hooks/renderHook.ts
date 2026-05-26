@@ -17,7 +17,10 @@ const activeRoots: Array<{ root: ReturnType<typeof createRoot>; container: HTMLD
  * Render a React hook inside a minimal component and return a live ref to its
  * return value. Call `unmount()` when done (or rely on `cleanupRoots()`).
  */
-export function renderHook<T>(hook: () => T): RenderHookResult<T> {
+export function renderHook<T>(
+  hook: () => T,
+  options: { wrapper?: (children: ReactNode) => ReactNode } = {}
+): RenderHookResult<T> {
   const result = { current: undefined as unknown as T };
 
   function TestComponent(): ReactNode {
@@ -31,7 +34,8 @@ export function renderHook<T>(hook: () => T): RenderHookResult<T> {
 
   act(() => {
     root = createRoot(container);
-    root.render(createElement(TestComponent));
+    const child = createElement(TestComponent);
+    root.render(options.wrapper ? options.wrapper(child) : child);
   });
 
   activeRoots.push({ root: root!, container });
