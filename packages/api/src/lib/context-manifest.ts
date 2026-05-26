@@ -30,6 +30,7 @@ export interface ContextManifestBaseline {
   message: string | null;
   content: SemanticContent | null;
   source: BaselineSource;
+  source_conversation_id: string | null;
   node_count: number;
   relation_count: number;
 }
@@ -180,10 +181,13 @@ function toBaseline(baselineContent: Commit | null): ContextManifestBaseline {
       message: null,
       content: null,
       source: 'none',
+      source_conversation_id: null,
       node_count: 0,
       relation_count: 0,
     };
   }
+
+  const sourceConversation = baselineContent.sources?.find((source) => source.type === 'conversation');
 
   return {
     commit_hash: baselineContent.hash,
@@ -191,6 +195,7 @@ function toBaseline(baselineContent: Commit | null): ContextManifestBaseline {
     message: baselineContent.message,
     content: baselineContent.content,
     source: 'parent_commit',
+    source_conversation_id: sourceConversation?.id ?? null,
     node_count: flattenTrees(baselineContent.content.trees).length,
     relation_count: baselineContent.content.relations.length,
   };

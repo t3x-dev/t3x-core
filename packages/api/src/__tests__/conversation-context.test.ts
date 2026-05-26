@@ -223,6 +223,10 @@ describe('Conversation Context Routes', () => {
         mockDB,
         testData.project({ name: 'Manifest Builder Test Project' })
       );
+      const sourceConversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Parent Source Conversation',
+      });
 
       const parentCommit = await createCommit(mockDB, {
         project_id: project.projectId,
@@ -238,6 +242,13 @@ describe('Conversation Context Routes', () => {
           ],
           relations: [],
         },
+        sources: [
+          {
+            type: 'conversation',
+            id: sourceConversation.conversationId,
+            title: 'Parent Source Conversation',
+          },
+        ],
       });
 
       const conversation = await insertConversation(mockDB, {
@@ -287,6 +298,7 @@ describe('Conversation Context Routes', () => {
         content: parentCommit.content,
         node_count: 1,
         relation_count: 0,
+        source_conversation_id: sourceConversation.conversationId,
       });
       expect(manifest.references).toEqual(
         expect.arrayContaining([

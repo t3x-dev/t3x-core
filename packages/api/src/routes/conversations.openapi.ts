@@ -123,6 +123,7 @@ const ContextManifestBaselineSchema = z.object({
   message: z.string().nullable(),
   content: z.unknown().nullable(),
   source: z.enum(['parent_commit', 'none']),
+  source_conversation_id: z.string().nullable(),
   node_count: z.number(),
   relation_count: z.number(),
 });

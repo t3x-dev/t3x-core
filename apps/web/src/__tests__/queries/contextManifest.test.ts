@@ -22,6 +22,7 @@ describe('queries/contextManifest', () => {
         message: null,
         content: null,
         source: 'none',
+        source_conversation_id: null,
         node_count: 0,
         relation_count: 0,
       },
