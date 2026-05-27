@@ -10,6 +10,7 @@ import {
   MessageSquare,
   MessageSquareQuote,
   Plus,
+  X,
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -201,7 +202,6 @@ function SourceItemRow({
   selected,
   disabled,
   onPreview,
-  onReferenceToggle,
   onAssertionToggle,
 }: {
   item: ContextManifestSourceItem;
@@ -210,14 +210,12 @@ function SourceItemRow({
   selected: boolean;
   disabled?: boolean;
   onPreview: () => void;
-  onReferenceToggle: ContextManifestPanelProps['onReferenceToggle'];
   onAssertionToggle: ContextManifestPanelProps['onAssertionToggle'];
 }) {
   const title = sourceItemLabel(item);
   const isLesson = isLessonSourceItem(item);
-  const canToggleMaterial = item.role === 'evidence' && item.pinnable && Boolean(item.pin_id);
   const canToggleLesson = isLesson && Boolean(item.pin_id);
-  const canToggle = canToggleMaterial || canToggleLesson;
+  const canToggle = canToggleLesson;
   const checked = isLesson ? sourceItemSelected(item) : item.included;
   const passed = sourceItemPassed(item);
   const openHref = sourceItemOpenHref(item, projectId);
@@ -254,17 +252,13 @@ function SourceItemRow({
           onChange={(event) => {
             if (canToggleLesson && item.pin_id) {
               void onAssertionToggle(item.pin_id, item.id, event.target.checked);
-              return;
-            }
-            if (item.pin_id) {
-              void onReferenceToggle(item.pin_id, event.target.checked);
             }
           }}
           className={cn(
             'mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border border-[var(--stroke-default)]',
             isLesson ? 'accent-[var(--accent-extract)]' : 'accent-[var(--accent-commit)]'
           )}
-          aria-label={isLesson ? `Include lesson ${title}` : `Use material ${title}`}
+          aria-label={`Include lesson ${title}`}
         />
       ) : null}
       <span className="mt-0.5">
@@ -294,6 +288,49 @@ function SourceItemRow({
   );
 }
 
+function MaterialSourceRow({
+  item,
+  disabled,
+  onReferenceToggle,
+}: {
+  item: ContextManifestSourceItem;
+  disabled?: boolean;
+  onReferenceToggle: ContextManifestPanelProps['onReferenceToggle'];
+}) {
+  const title = sourceItemLabel(item);
+  const subtitleParts = [sourceKindLabel(item.kind)];
+  if (item.pin_id) subtitleParts.push(item.pin_id);
+
+  return (
+    <div className="grid min-w-0 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-[var(--hover-bg)]">
+      <span className="mt-0.5">
+        <SourceItemIcon kind={item.kind} />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-medium text-[var(--text-primary)]">
+          {title}
+        </span>
+        <span className="block truncate font-mono text-[10px] text-[var(--text-tertiary)]">
+          {subtitleParts.join(' · ')}
+        </span>
+      </span>
+      {item.pin_id ? (
+        <button
+          type="button"
+          aria-label={`Remove material ${title}`}
+          onClick={() => {
+            if (item.pin_id) void onReferenceToggle(item.pin_id, false);
+          }}
+          disabled={disabled}
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function AvailableLeafRow({
   leaf,
   pinning,
@@ -319,7 +356,7 @@ function AvailableLeafRow({
       </span>
       <button
         type="button"
-        aria-label={`Pin leaf ${title} as material`}
+        aria-label={`Add material ${title}`}
         onClick={() => {
           void onPinLeaf?.(leaf.id);
         }}
@@ -327,7 +364,7 @@ function AvailableLeafRow({
         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf)]/10 px-2 py-1 text-[10px] font-medium text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pinning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        Pin material
+        Add
       </button>
     </div>
   );
@@ -359,7 +396,7 @@ function AvailableMaterialRow({
       </span>
       <button
         type="button"
-        aria-label={`Use material ${title}`}
+        aria-label={`Add material ${title}`}
         onClick={() => {
           void onPinMaterial?.(material.id);
         }}
@@ -367,7 +404,7 @@ function AvailableMaterialRow({
         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--source)]/25 bg-[var(--source)]/10 px-2 py-1 text-[10px] font-medium text-[var(--source)] transition-colors hover:bg-[var(--source)]/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pinning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        Use material
+        Add
       </button>
     </div>
   );
@@ -426,7 +463,7 @@ function PreviewPanel({
               ? 'Baseline YAML is inherited from the parent commit. It is automatically included and does not require pinning the parent conversation.'
               : item.role === 'guidance'
                 ? 'Lessons are not evidence sources. They summarize prior output or result feedback and affect extraction context when selected.'
-                : 'Pinned materials are available in the project library. Use the material checkbox to include this source in the current conversation context.'}
+                : 'Pinned materials are available in the project library and can be added to or removed from the current conversation context.'}
           </p>
           <dl className="grid grid-cols-2 gap-2 text-[10px]">
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">
@@ -534,6 +571,7 @@ export function ContextManifestPanel({
   const sourceItems = manifest?.source_items ?? [];
   const includedSourceItems = sourceItems.filter((item) => item.included);
   const materialSourceItems = sourceItems.filter(isMaterialSourceItem);
+  const usedMaterialSourceItems = materialSourceItems.filter((item) => item.included);
   const lessonSourceItems = sourceItems.filter(isLessonSourceItem);
   const effectiveLessons = lessonSourceItems.filter((item) => item.included);
   const sourceItemsByKey = useMemo(
@@ -547,19 +585,19 @@ export function ContextManifestPanel({
 
   const leafPinningIds = sourcePicker?.leafPinningIds ?? EMPTY_LEAF_IDS;
   const materialPinningIds = sourcePicker?.materialPinningIds ?? EMPTY_MATERIAL_IDS;
-  const pinnedLeafIds = new Set(
-    materialSourceItems.filter((item) => item.kind === 'leaf').map((item) => item.id)
+  const usedLeafIds = new Set(
+    usedMaterialSourceItems.filter((item) => item.kind === 'leaf').map((item) => item.id)
   );
-  const pinnedMaterialIds = new Set(
-    materialSourceItems
+  const usedMaterialIds = new Set(
+    usedMaterialSourceItems
       .filter((item) => item.kind === 'import' || item.kind === 'file')
       .map((item) => item.id)
   );
   const availableLeaves = sourcePicker?.availableLeaves ?? [];
-  const availableLeafOptions = availableLeaves.filter((leaf) => !pinnedLeafIds.has(leaf.id));
+  const availableLeafOptions = availableLeaves.filter((leaf) => !usedLeafIds.has(leaf.id));
   const availableMaterials = sourcePicker?.availableMaterials ?? [];
   const availableMaterialOptions = availableMaterials.filter(
-    (material) => !pinnedMaterialIds.has(material.id)
+    (material) => !usedMaterialIds.has(material.id)
   );
   const showAvailableLeaves =
     Boolean(sourcePicker?.availableLeavesLoading) ||
@@ -631,7 +669,7 @@ export function ContextManifestPanel({
             >
               Materials
               <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
-                {materialSourceItems.length}
+                {usedMaterialSourceItems.length}
               </span>
             </button>
             <button
@@ -692,7 +730,6 @@ export function ContextManifestPanel({
                           }
                           disabled={disabled}
                           onPreview={() => setSelectedPreview({ kind: 'source', key })}
-                          onReferenceToggle={onReferenceToggle}
                           onAssertionToggle={onAssertionToggle}
                         />
                       );
@@ -768,10 +805,10 @@ export function ContextManifestPanel({
             aria-label="Materials"
             className="min-h-0 flex-1 overflow-hidden p-2"
           >
-            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.05fr)_minmax(220px,0.95fr)] gap-2 max-sm:grid-cols-1">
+            <div className="grid h-full min-h-0 grid-cols-1">
               <Pane
                 title="Materials"
-                meta={`${materialSourceItems.filter((item) => item.included).length}/${materialSourceItems.length} used`}
+                meta={`${usedMaterialSourceItems.length} used`}
               >
                 <div className="space-y-1">
                   {canUploadMaterial && (
@@ -806,26 +843,17 @@ export function ContextManifestPanel({
                       />
                     </div>
                   )}
-                  {materialSourceItems.length > 0 ? (
-                    materialSourceItems.map((item) => {
-                      const key = sourceItemKey(item);
-                      return (
-                        <SourceItemRow
-                          key={key}
-                          item={item}
-                          projectId={manifest?.project_id}
-                          selected={
-                            selectedPreview.kind === 'source' && selectedPreview.key === key
-                          }
-                          disabled={disabled}
-                          onPreview={() => setSelectedPreview({ kind: 'source', key })}
-                          onReferenceToggle={onReferenceToggle}
-                          onAssertionToggle={onAssertionToggle}
-                        />
-                      );
-                    })
+                  {usedMaterialSourceItems.length > 0 ? (
+                    usedMaterialSourceItems.map((item) => (
+                      <MaterialSourceRow
+                        key={sourceItemKey(item)}
+                        item={item}
+                        disabled={disabled}
+                        onReferenceToggle={onReferenceToggle}
+                      />
+                    ))
                   ) : (
-                    <EmptyState>No pinned material sources.</EmptyState>
+                    <EmptyState>No materials in context.</EmptyState>
                   )}
 
                   {(showAvailableMaterials || showAvailableLeaves) && (
@@ -877,7 +905,7 @@ export function ContextManifestPanel({
                       ) : availableLeafOptions.length === 0 &&
                         availableMaterialOptions.length === 0 ? (
                         <p className="px-2 py-1.5 text-xs text-[var(--text-tertiary)]">
-                          All project materials are already pinned.
+                          All project materials are already added.
                         </p>
                       ) : null}
                       {!sourcePicker?.availableLeavesLoading &&
@@ -885,18 +913,11 @@ export function ContextManifestPanel({
                       availableLeafOptions.length === 0 &&
                       availableLeaves.length > 0 &&
                       availableMaterialOptions.length > 0 ? (
-                        <p className="sr-only">All leaf materials are already pinned.</p>
+                        <p className="sr-only">All leaf materials are already added.</p>
                       ) : null}
                     </div>
                   )}
                 </div>
-              </Pane>
-              <Pane title="Preview" meta="source details">
-                <PreviewPanel
-                  manifest={manifest}
-                  sourceItemsByKey={sourceItemsByKey}
-                  selectedPreview={selectedPreview}
-                />
               </Pane>
             </div>
           </div>
@@ -929,7 +950,6 @@ export function ContextManifestPanel({
                           }
                           disabled={disabled}
                           onPreview={() => setSelectedPreview({ kind: 'source', key })}
-                          onReferenceToggle={onReferenceToggle}
                           onAssertionToggle={onAssertionToggle}
                         />
                       );

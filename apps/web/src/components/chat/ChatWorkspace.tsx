@@ -336,7 +336,16 @@ export function ChatWorkspace({
       if (!resolvedProjectId) return;
 
       const existing = usePinsStore.getState().getPinByRef('leaf', leafId);
-      if (existing) return;
+      if (existing) {
+        if (resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(existing.id)
+          );
+          await reloadContextManifest();
+        }
+        return;
+      }
 
       setPinningLeafIds((prev) => {
         const next = new Set(prev);
@@ -439,15 +448,16 @@ export function ChatWorkspace({
       if (!resolvedProjectId) return;
 
       try {
-        await uploadMaterial(resolvedProjectId, file);
+        const material = await uploadMaterial(resolvedProjectId, file);
         await refreshProjectMaterials();
-        toast.message('Material added');
+        await handlePinMaterialForContext(material.id);
+        toast.message('Material added to context');
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Failed to add material';
         toast.message(message);
       }
     },
-    [refreshProjectMaterials, resolvedProjectId, uploadMaterial]
+    [handlePinMaterialForContext, refreshProjectMaterials, resolvedProjectId, uploadMaterial]
   );
 
   const baselineForSourcePanel = useMemo(() => {
