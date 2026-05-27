@@ -7,22 +7,32 @@
  * with Git-style diff visualization and source tracing.
  */
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
 import { MergeWorkspace } from '@/components/merge/MergeWorkspace';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
 import { useMicrocopy } from '@/utils/microcopy';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 
 export default function MergeWorkspacePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.projectId as string;
   const mergeId = params.mergeId as string;
 
   const mc = useMicrocopy();
   const { loading, error, reset } = useMergeWorkspaceStore();
   const { load: loadDraft } = useMergeWorkspaceActions();
+  const returnHref = useMemo(
+    () =>
+      safeInternalReturnTo(
+        searchParams.get('returnTo'),
+        `/chat/project/${encodeURIComponent(projectId)}/canvas`
+      ),
+    [projectId, searchParams]
+  );
 
   useEffect(() => {
     if (mergeId) {
@@ -40,9 +50,13 @@ export default function MergeWorkspacePage() {
   // celebration timeout → onClose → handleClose → router.push.
   // An auto-redirect here would kill the celebration overlay.
 
+  const handleBack = () => {
+    router.push(returnHref);
+  };
+
   const handleClose = () => {
     reset();
-    router.push(`/project/${projectId}`);
+    router.push(returnHref);
   };
 
   const handleMergeCommitted = (commitHash: string) => {
@@ -83,6 +97,7 @@ export default function MergeWorkspacePage() {
   return (
     <MergeWorkspace
       projectId={projectId}
+      onBack={handleBack}
       onClose={handleClose}
       onMergeCommitted={handleMergeCommitted}
     />

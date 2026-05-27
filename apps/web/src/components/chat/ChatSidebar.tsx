@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,8 @@ import { LogoIcon } from './sidebar/LogoIcon';
 import { ProjectFolder } from './sidebar/ProjectFolder';
 
 // ── Main Sidebar ──
+
+const PROJECTS_COLLAPSED_MAX_HEIGHT = 220;
 
 type RenameTarget =
   | {
@@ -85,6 +88,13 @@ function getLeafAssertionCounts(leaf: ApiLeaf): { total: number; passed: number 
     total: assertions.length,
     passed: assertions.filter((assertion) => assertion.passed).length,
   };
+}
+
+function notifyProjectConversationsLoadFailure(err: unknown) {
+  const detail = err instanceof Error ? err.message : 'Unknown error';
+  toast.error(`Failed to load conversations: ${detail}`, {
+    id: 'project-conversations-load-error',
+  });
 }
 
 function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
@@ -237,6 +247,7 @@ export function ChatSidebar() {
     () => new Set(canvasCommits.map((commit) => commit.branch || 'main')).size,
     [canvasCommits]
   );
+
   const applyCommitCreatedMessage = useCallback((message: CommitCreatedSidebarEvent | null) => {
     if (!message) return;
     if (message.type !== 'commit.created') return;
@@ -482,7 +493,9 @@ export function ChatSidebar() {
       projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
-      void loadConversations(projectId);
+      void Promise.resolve(loadConversations(projectId)).catch(
+        notifyProjectConversationsLoadFailure
+      );
     }
   }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
 
@@ -538,7 +551,10 @@ export function ChatSidebar() {
     }
 
     setActiveConversation(null, projectId);
-    const loadedConversations = await loadConversations(projectId);
+    const loadedConversations = await Promise.resolve(loadConversations(projectId)).catch((err) => {
+      notifyProjectConversationsLoadFailure(err);
+      return [];
+    });
     if (loadedConversations.length > 0) {
       handleConversationClick(loadedConversations[0].conversation_id, projectId);
     }
@@ -1129,34 +1145,41 @@ export function ChatSidebar() {
                       </div>
                     </div>
 
-                    {projects.map((project) => (
-                      <ProjectFolder
-                        key={project.project_id}
-                        project={project}
-                        conversations={projectConversations[project.project_id] ?? []}
-                        isExpanded={expandedProjectIds.has(project.project_id)}
-                        isActive={activeProjectId === project.project_id}
-                        activeConversationId={activeConversationId}
-                        collapsed={false}
-                        latestMainCommitHash={projectMainCommitHashes[project.project_id]}
-                        conversationCommitHashes={
-                          projectConversationCommitHashes[project.project_id]
-                        }
-                        onToggleExpand={() =>
-                          void handleProjectClick(project.project_id, project.conversations_count)
-                        }
-                        onConversationClick={(convId) =>
-                          handleConversationClick(convId, project.project_id)
-                        }
-                        onNewChat={(pid) => handleNewChatInProject(pid)}
-                        onProjectContextMenu={(e) =>
-                          handleProjectContextMenu(e, project.project_id)
-                        }
-                        onConversationContextMenu={(e, convId) =>
-                          handleConversationContextMenu(e, project.project_id, convId)
-                        }
-                      />
-                    ))}
+                    <div
+                      className="chat-scrollbar min-w-0 overflow-y-auto overflow-x-hidden pr-1"
+                      style={{
+                        maxHeight: `${PROJECTS_COLLAPSED_MAX_HEIGHT}px`,
+                      }}
+                    >
+                      {projects.map((project) => (
+                        <ProjectFolder
+                          key={project.project_id}
+                          project={project}
+                          conversations={projectConversations[project.project_id] ?? []}
+                          isExpanded={expandedProjectIds.has(project.project_id)}
+                          isActive={activeProjectId === project.project_id}
+                          activeConversationId={activeConversationId}
+                          collapsed={false}
+                          latestMainCommitHash={projectMainCommitHashes[project.project_id]}
+                          conversationCommitHashes={
+                            projectConversationCommitHashes[project.project_id]
+                          }
+                          onToggleExpand={() =>
+                            void handleProjectClick(project.project_id, project.conversations_count)
+                          }
+                          onConversationClick={(convId) =>
+                            handleConversationClick(convId, project.project_id)
+                          }
+                          onNewChat={(pid) => handleNewChatInProject(pid)}
+                          onProjectContextMenu={(e) =>
+                            handleProjectContextMenu(e, project.project_id)
+                          }
+                          onConversationContextMenu={(e, convId) =>
+                            handleConversationContextMenu(e, project.project_id, convId)
+                          }
+                        />
+                      ))}
+                    </div>
 
                     {projects.length === 0 && (
                       <div className="px-4 py-4 text-center">

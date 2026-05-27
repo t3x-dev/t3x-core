@@ -36,12 +36,19 @@ import { useMergeKeyboard } from './useMergeKeyboard';
 
 interface MergeWorkspaceProps {
   projectId: string;
+  /** Return to the page that opened the merge workspace without cancelling the draft. */
+  onBack?: () => void;
   onClose: () => void;
   /** Called after a successful merge commit with the new commit hash */
   onMergeCommitted?: (commitHash: string) => void;
 }
 
-export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWorkspaceProps) {
+export function MergeWorkspace({
+  projectId,
+  onClose,
+  onBack = onClose,
+  onMergeCommitted,
+}: MergeWorkspaceProps) {
   const { create: createMergeCommit } = useCreateMergeCommit();
   const { load: loadCanvas } = useCanvasNodeActions();
   const {
@@ -373,7 +380,7 @@ export function MergeWorkspace({ projectId, onClose, onMergeCommitted }: MergeWo
           onCommit={handleNodeOpenReview}
           onCancel={handleCancel}
           canCommit={treeCanCommit}
-          onClose={onClose}
+          onBack={onBack}
         />
 
         {/* Main Content — 3-column layout */}
