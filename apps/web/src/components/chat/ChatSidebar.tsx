@@ -67,6 +67,11 @@ type RenameTarget =
 
 type LeafFilter = 'all' | 'generated' | 'draft' | 'review';
 
+interface ImportBranchBaseline {
+  branch: string;
+  commit: ApiCommit | null;
+}
+
 interface CommitCreatedSidebarEvent {
   type?: string;
   projectId?: string;
@@ -81,6 +86,29 @@ interface CommitCreatedSidebarEvent {
 
 function shortHash(hash: string): string {
   return hash.replace(/^sha256:/, '').slice(0, 8);
+}
+
+function getLatestCommitByBranch(commits: ApiCommit[]): ImportBranchBaseline[] {
+  const latest = new Map<string, ApiCommit>();
+
+  for (const commit of commits) {
+    const branch = commit.branch || 'main';
+    const current = latest.get(branch);
+    if (
+      !current ||
+      new Date(commit.committed_at).getTime() > new Date(current.committed_at).getTime()
+    ) {
+      latest.set(branch, commit);
+    }
+  }
+
+  return [...latest.entries()]
+    .map(([branch, commit]) => ({ branch, commit }))
+    .sort((a, b) => {
+      if (a.branch === 'main') return -1;
+      if (b.branch === 'main') return 1;
+      return a.branch.localeCompare(b.branch);
+    });
 }
 
 function getLeafAssertionCounts(leaf: ApiLeaf): { total: number; passed: number } {
@@ -135,6 +163,10 @@ export function ChatSidebar() {
   const [leafFilter, setLeafFilter] = useState<LeafFilter>('all');
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
   const [importProjectId, setImportProjectId] = useState<string>('');
+  const [importBranch, setImportBranch] = useState('main');
+  const [importBranchBaselines, setImportBranchBaselines] = useState<ImportBranchBaseline[]>([]);
+  const [importBranchesLoading, setImportBranchesLoading] = useState(false);
+  const [importBranchesError, setImportBranchesError] = useState<string | null>(null);
   const [importNewProjectName, setImportNewProjectName] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -146,8 +178,10 @@ export function ChatSidebar() {
     sidebarResizing,
     activeConversationId,
     activeProjectId,
+    activeBranch,
     expandedProjectIds,
     setActiveConversation,
+    setActiveBranch,
     setConversationTitle,
     sidebarWidth,
     setSidebarWidth,
@@ -155,6 +189,7 @@ export function ChatSidebar() {
   } = useChatStore();
   const compactViewport = useChatCompactViewport();
   const setCommitConversationTitle = useCommitStore((s) => s.setConversationTitle);
+  const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
   const temporaryChats = useTemporaryChatsStore((s) => s.chats);
   const getOrCreateEmptyTemporaryChat = useTemporaryChatsStore((s) => s.getOrCreateEmptyChat);
   const removeTemporaryChat = useTemporaryChatsStore((s) => s.removeChat);
@@ -184,6 +219,14 @@ export function ChatSidebar() {
   const importTarget = useMemo(
     () => temporaryChats.find((chat) => chat.id === importTargetId) ?? null,
     [importTargetId, temporaryChats]
+  );
+  const selectedImportBaseline = useMemo<ImportBranchBaseline>(
+    () =>
+      importBranchBaselines.find((baseline) => baseline.branch === importBranch) ?? {
+        branch: importBranch || 'main',
+        commit: null,
+      },
+    [importBranch, importBranchBaselines]
   );
   const temporaryDeleteTarget = useMemo(
     () => temporaryChats.find((chat) => chat.id === temporaryDeleteTargetId) ?? null,
@@ -353,6 +396,55 @@ export function ChatSidebar() {
     if (refreshKey === 0) return;
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
+
+  useEffect(() => {
+    if (!importTarget || !importProjectId || importProjectId === '__new__') {
+      setImportBranchBaselines([]);
+      setImportBranchesLoading(false);
+      setImportBranchesError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const preferredBranch = importProjectId === currentProjectId ? activeBranch || 'main' : 'main';
+
+    setImportBranchesLoading(true);
+    setImportBranchesError(null);
+
+    void loadCommits(importProjectId, undefined, 100)
+      .then((commits) => {
+        if (cancelled) return;
+        const baselines = getLatestCommitByBranch(commits);
+        if (!baselines.some((baseline) => baseline.branch === preferredBranch)) {
+          baselines.push({ branch: preferredBranch, commit: null });
+        }
+        if (!baselines.some((baseline) => baseline.branch === 'main')) {
+          baselines.unshift({ branch: 'main', commit: null });
+        }
+
+        setImportBranchBaselines(baselines);
+        setImportBranch((current) => {
+          if (baselines.some((baseline) => baseline.branch === current)) return current;
+          if (baselines.some((baseline) => baseline.branch === preferredBranch)) {
+            return preferredBranch;
+          }
+          return baselines[0]?.branch ?? 'main';
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setImportBranchBaselines([{ branch: preferredBranch, commit: null }]);
+        setImportBranch(preferredBranch);
+        setImportBranchesError('Failed to load branches. Import will start without a baseline.');
+      })
+      .finally(() => {
+        if (!cancelled) setImportBranchesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranch, currentProjectId, importProjectId, importTarget, loadCommits]);
 
   useEffect(() => {
     const handleWindowCommit = (event: Event) => {
@@ -629,8 +721,15 @@ export function ChatSidebar() {
   }
 
   function openTemporaryImportDialog(chat: TemporaryChat) {
+    const defaultProjectId = currentProjectId ?? projects[0]?.project_id ?? '__new__';
+    const defaultBranch = defaultProjectId === currentProjectId ? activeBranch || 'main' : 'main';
+
     setImportTargetId(chat.id);
-    setImportProjectId(currentProjectId ?? projects[0]?.project_id ?? '__new__');
+    setImportProjectId(defaultProjectId);
+    setImportBranch(defaultBranch);
+    setImportBranchBaselines([]);
+    setImportBranchesError(null);
+    setImportBranchesLoading(false);
     setImportNewProjectName('');
     setImportError(null);
   }
@@ -640,6 +739,10 @@ export function ChatSidebar() {
     if (!open) {
       setImportTargetId(null);
       setImportProjectId('');
+      setImportBranch('main');
+      setImportBranchBaselines([]);
+      setImportBranchesError(null);
+      setImportBranchesLoading(false);
       setImportNewProjectName('');
       setImportError(null);
     }
@@ -662,17 +765,29 @@ export function ChatSidebar() {
         return;
       }
 
-      const conversation = await importChat({ chat: importTarget, project });
+      const selectedBranch =
+        importProjectId === '__new__' || !importProjectId ? 'main' : selectedImportBaseline.branch;
+      const parentCommitHash =
+        importProjectId === '__new__' || !importProjectId
+          ? undefined
+          : selectedImportBaseline.commit?.hash;
+      const conversation = await importChat({ chat: importTarget, project, parentCommitHash });
 
       removeTemporaryChat(importTarget.id);
       await loadConversations(project.project_id);
       await refreshProjects();
       useChatStore.getState().refreshSidebar();
       setActiveConversation(conversation.conversation_id, project.project_id);
+      setActiveBranch(selectedBranch);
+      setCommitBranch(selectedBranch);
       setConversationTitle(conversation.title ?? importTarget.title);
       setCommitConversationTitle(conversation.title ?? importTarget.title);
       setImportTargetId(null);
       setImportProjectId('');
+      setImportBranch('main');
+      setImportBranchBaselines([]);
+      setImportBranchesError(null);
+      setImportBranchesLoading(false);
       setImportNewProjectName('');
       router.push(`/chat/${conversation.conversation_id}`);
     } catch {
@@ -1710,7 +1825,13 @@ export function ChatSidebar() {
                 id="import-project"
                 value={importProjectId || '__new__'}
                 onChange={(event) => {
-                  setImportProjectId(event.target.value);
+                  const nextProjectId = event.target.value;
+                  setImportProjectId(nextProjectId);
+                  setImportBranch(
+                    nextProjectId === currentProjectId ? activeBranch || 'main' : 'main'
+                  );
+                  setImportBranchBaselines([]);
+                  setImportBranchesError(null);
                   if (importError) setImportError(null);
                 }}
                 disabled={isImporting}
@@ -1724,6 +1845,46 @@ export function ChatSidebar() {
                 ))}
               </select>
             </div>
+
+            {importProjectId && importProjectId !== '__new__' && (
+              <div className="grid gap-2">
+                <label
+                  htmlFor="import-branch"
+                  className="text-sm font-medium text-[var(--text-primary)]"
+                >
+                  Branch baseline
+                </label>
+                <select
+                  id="import-branch"
+                  value={importBranch}
+                  onChange={(event) => setImportBranch(event.target.value)}
+                  disabled={isImporting || importBranchesLoading}
+                  className="h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-commit)]"
+                >
+                  {(importBranchBaselines.length > 0
+                    ? importBranchBaselines
+                    : [{ branch: importBranch || 'main', commit: null }]
+                  ).map((baseline) => (
+                    <option key={baseline.branch} value={baseline.branch}>
+                      {baseline.branch}
+                      {baseline.commit ? ` · ${shortHash(baseline.commit.hash)}` : ' · no commits'}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {importBranchesLoading
+                    ? 'Loading branch baselines...'
+                    : selectedImportBaseline.commit
+                      ? `Starts from ${selectedImportBaseline.branch} · ${shortHash(
+                          selectedImportBaseline.commit.hash
+                        )}`
+                      : `Starts from an empty ${selectedImportBaseline.branch || 'main'} branch.`}
+                </p>
+                {importBranchesError && (
+                  <p className="text-xs text-[var(--status-warning)]">{importBranchesError}</p>
+                )}
+              </div>
+            )}
 
             {(importProjectId === '__new__' || !importProjectId) && (
               <div className="grid gap-2">

@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => {
     setSidebarWidth: vi.fn(),
     activeConversationId: 'conv_a432e35d' as string | null,
     activeProjectId: null as string | null,
+    activeBranch: 'main',
     expandedProjectIds: new Set<string>(),
     toggleProjectExpanded: vi.fn(),
     setActiveConversation: vi.fn(),
+    setActiveBranch: vi.fn(),
     setConversationTitle: vi.fn(),
     refreshKey: 0,
     refreshSidebar: vi.fn(),
@@ -52,6 +54,7 @@ const mocks = vi.hoisted(() => {
     }>,
     loadConversations: vi.fn(),
     loadCommits: vi.fn(),
+    importChat: vi.fn(),
     pathname: '/chat/conv_a432e35d',
     projects: [] as Array<{
       project_id: string;
@@ -113,6 +116,12 @@ vi.mock('@/hooks/conversations/useNewProjectChat', () => ({
   }),
 }));
 
+vi.mock('@/hooks/conversations/useTemporaryChatImport', () => ({
+  useTemporaryChatImport: () => ({
+    importChat: mocks.importChat,
+  }),
+}));
+
 vi.mock('@/hooks/commits/useCommitsList', () => ({
   useCommitsList: () => ({
     loadCommits: mocks.loadCommits,
@@ -161,10 +170,17 @@ afterEach(() => {
   mocks.contextMenuItems = [];
   mocks.commits = [];
   mocks.loadCommits.mockResolvedValue(mocks.commits);
+  mocks.importChat.mockResolvedValue({
+    conversation_id: 'conv_imported',
+    project_id: 'proj_import',
+    title: 'Temporary chat',
+    created_at: '2026-05-25T00:02:00.000Z',
+  });
   mocks.startNewProjectChat.mockResolvedValue(null);
   mocks.pathname = '/chat/conv_a432e35d';
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
+  mocks.chatState.activeBranch = 'main';
   mocks.chatState.expandedProjectIds = new Set<string>();
   mocks.chatState.refreshKey = 0;
 });
@@ -336,6 +352,83 @@ describe('ChatSidebar', () => {
       }).parentElement as HTMLElement
     );
     expect(mocks.contextMenuItems.some((item) => item.label === 'Import to Project')).toBe(true);
+  });
+
+  it('imports a temporary chat on the selected project branch baseline', async () => {
+    const project = {
+      project_id: 'proj_import',
+      name: 'Import Project',
+      created_at: '2026-05-25T00:00:00.000Z',
+      conversations_count: 0,
+      commits_count: 2,
+    };
+    mocks.projects = [project];
+    mocks.loadCommits.mockImplementation(async (_projectId, branch, limit) => {
+      if (branch === undefined && limit === 100) {
+        return [
+          {
+            hash: 'sha256:mainabcdef',
+            message: 'Main baseline',
+            branch: 'main',
+            committed_at: '2026-05-25T00:00:00.000Z',
+          },
+          {
+            hash: 'sha256:feature1234',
+            message: 'Feature baseline',
+            branch: 'feature',
+            committed_at: '2026-05-25T00:01:00.000Z',
+          },
+        ];
+      }
+      return [];
+    });
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_ready_import',
+          title: 'Imported source',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+      ],
+    });
+    mocks.importChat.mockResolvedValue({
+      conversation_id: 'conv_imported',
+      project_id: 'proj_import',
+      title: 'Imported source',
+      created_at: '2026-05-25T00:02:00.000Z',
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import temporary chat' }));
+
+    await screen.findByText('Starts from main · mainabcd');
+    fireEvent.change(screen.getByLabelText('Branch baseline'), {
+      target: { value: 'feature' },
+    });
+    expect(screen.getByText('Starts from feature · feature1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => {
+      expect(mocks.importChat).toHaveBeenCalledWith({
+        chat: expect.objectContaining({ id: 'temp_ready_import' }),
+        project,
+        parentCommitHash: 'sha256:feature1234',
+      });
+    });
+    expect(mocks.chatState.setActiveBranch).toHaveBeenCalledWith('feature');
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/conv_imported');
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(0);
   });
 
   it('confirms before deleting a temporary chat', () => {
