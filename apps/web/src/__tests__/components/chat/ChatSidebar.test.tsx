@@ -72,7 +72,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mocks.routerPush,
   }),
-  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/store/chatStore', () => {

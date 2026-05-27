@@ -13,7 +13,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -98,6 +98,13 @@ function notifyProjectConversationsLoadFailure(err: unknown) {
   });
 }
 
+function buildCurrentReturnTo(pathname: string) {
+  if (typeof window !== 'undefined' && window.location.pathname === pathname) {
+    return buildReturnTo(pathname, window.location.search);
+  }
+  return buildReturnTo(pathname);
+}
+
 function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
   const assertions = leaf.runner_assertions ?? leaf.assertions ?? [];
   if (assertions.some((assertion) => !assertion.passed)) return 'review';
@@ -170,7 +177,6 @@ export function ChatSidebar() {
   const { loadCommits } = useCommitsList();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
-  const searchParams = useSearchParams();
 
   const wasCompactViewportRef = useRef(false);
 
@@ -188,10 +194,6 @@ export function ChatSidebar() {
     const match = pathname.match(/^\/chat\/project\/([^/]+)/);
     return match ? decodeURIComponent(match[1]) : null;
   }, [pathname]);
-  const currentReturnTo = useMemo(
-    () => buildReturnTo(pathname, searchParams),
-    [pathname, searchParams]
-  );
   const effectiveProjectId = routeProjectId ?? activeProjectId;
   const workspaceMode = pathname.includes('/canvas')
     ? 'canvas'
@@ -1390,7 +1392,7 @@ export function ChatSidebar() {
                                         `/project/${currentProjectId}/commit/${encodeURIComponent(
                                           commit.hash
                                         )}`,
-                                        currentReturnTo
+                                        buildCurrentReturnTo(pathname)
                                       )
                                     )
                                   }
