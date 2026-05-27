@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import type { ConversationContextManifest } from '@/types/api';
+import type { ConversationContextManifest, Material } from '@/types/api';
 
 const mocks = vi.hoisted(() => ({
   ensureProject: vi.fn(),
@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   projectMaterials: [],
   refreshProjectMaterials: vi.fn(),
   uploadMaterial: vi.fn(),
+  archiveMaterial: vi.fn(),
   textSelection: {
     current: null as null | {
       selection: {
@@ -122,6 +123,13 @@ vi.mock('@/hooks/materials/useMaterialUpload', () => ({
   }),
 }));
 
+vi.mock('@/hooks/materials/useMaterialArchive', () => ({
+  useMaterialArchive: () => ({
+    archiving: false,
+    archiveMaterial: mocks.archiveMaterial,
+  }),
+}));
+
 vi.mock('@/hooks/pins/usePinsCrud', () => ({
   usePinsCrud: () => ({ fetch: mocks.fetchPins, add: mocks.addPin, setAssertions: vi.fn() }),
 }));
@@ -217,6 +225,22 @@ function makeContextManifest(): ConversationContextManifest {
   };
 }
 
+const sourceDocumentMaterial = {
+  id: 'mat_source_doc',
+  project_id: 'proj_123',
+  source_type: 'document',
+  title: 'Launch notes',
+  filename: 'launch-notes.pdf',
+  mime_type: 'application/pdf',
+  content_hash: 'abc123',
+  content_excerpt: 'Private beta starts with five design partners.',
+  token_estimate: 12,
+  metadata: {},
+  created_at: '2026-05-26T00:00:00.000Z',
+  archived_at: null,
+  created_by: null,
+} satisfies Material;
+
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -229,6 +253,7 @@ describe('ChatWorkspace', () => {
     mocks.projectMaterials = [];
     mocks.refreshProjectMaterials.mockReset();
     mocks.uploadMaterial.mockReset();
+    mocks.archiveMaterial.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -312,5 +337,69 @@ describe('ChatWorkspace', () => {
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
     expect(screen.queryByTestId('chat-span-actions')).toBeNull();
+  });
+
+  it('uploads a material and immediately adds it to the current conversation context', async () => {
+    mocks.contextManifest = makeContextManifest();
+    mocks.uploadMaterial.mockResolvedValue(sourceDocumentMaterial);
+    mocks.addPin.mockResolvedValue({
+      id: 'pin_material',
+      project_id: 'proj_123',
+      type: 'import',
+      ref_id: 'mat_source_doc',
+      pinned_at: '2026-05-26T00:00:00.000Z',
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    const file = new File(['source material'], 'launch-notes.pdf', {
+      type: 'application/pdf',
+    });
+    fireEvent.change(screen.getByLabelText(/add material file/i), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(mocks.uploadMaterial).toHaveBeenCalledWith('proj_123', file);
+      expect(mocks.addPin).toHaveBeenCalledWith('proj_123', 'import', 'mat_source_doc');
+      expect(mocks.updateSelectedPins).toHaveBeenCalledWith('conv_123', null);
+    });
+
+    expect(mocks.reloadContextManifest).toHaveBeenCalled();
+    expect(mocks.refreshProjectMaterials).toHaveBeenCalled();
+  });
+
+  it('archives an available uploaded material from the Materials tab', async () => {
+    mocks.contextManifest = makeContextManifest();
+    mocks.projectMaterials = [sourceDocumentMaterial];
+    mocks.archiveMaterial.mockResolvedValue({
+      ...sourceDocumentMaterial,
+      content_text: sourceDocumentMaterial.content_excerpt,
+      page_count: null,
+      segment_count: 1,
+      segments: [],
+      parse_quality: {
+        status: 'ready',
+        score: 0.84,
+        message: 'Parsed text is available.',
+      },
+      metadata: {},
+      archived_at: '2026-05-27T00:00:00.000Z',
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+    fireEvent.click(screen.getByRole('button', { name: /archive material launch notes/i }));
+
+    await waitFor(() => {
+      expect(mocks.archiveMaterial).toHaveBeenCalledWith('proj_123', 'mat_source_doc');
+      expect(mocks.refreshProjectMaterials).toHaveBeenCalled();
+      expect(mocks.reloadContextManifest).toHaveBeenCalled();
+    });
   });
 });

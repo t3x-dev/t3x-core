@@ -16,7 +16,32 @@ export interface Material {
   token_estimate: number;
   metadata: Record<string, unknown>;
   created_at: string;
+  archived_at: string | null;
   created_by: string | null;
+}
+
+export interface MaterialSegment {
+  id: string;
+  index: number;
+  label: string;
+  text: string;
+  char_start: number;
+  char_end: number;
+  token_estimate: number;
+}
+
+export interface MaterialParseQuality {
+  status: 'ready' | 'partial' | 'poor' | 'empty';
+  score: number;
+  message: string;
+}
+
+export interface MaterialDetail extends Material {
+  content_text: string;
+  page_count: number | null;
+  segment_count: number;
+  segments: MaterialSegment[];
+  parse_quality: MaterialParseQuality;
 }
 
 export async function listMaterialsByProject(projectId: string): Promise<Material[]> {
@@ -24,6 +49,29 @@ export async function listMaterialsByProject(projectId: string): Promise<Materia
     `${API_V1}/projects/${encodeURIComponent(projectId)}/materials`
   );
   return handleResponse<Material[]>(res);
+}
+
+export async function getMaterialDetail(
+  projectId: string,
+  materialId: string
+): Promise<MaterialDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+  );
+  return handleResponse<MaterialDetail>(res);
+}
+
+export async function archiveProjectMaterial(
+  projectId: string,
+  materialId: string
+): Promise<MaterialDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+  return handleResponse<MaterialDetail>(res);
 }
 
 export async function uploadDocumentMaterial(projectId: string, file: File): Promise<Material> {

@@ -3,6 +3,7 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
@@ -49,7 +50,9 @@ function ConversationRoute() {
     : (projectIdParam ?? activeProjectId);
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const setActiveWorkspaceProject = useWorkspaceStore((s) => s.setActiveProject);
+  const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const compactViewport = useChatCompactViewport();
+  const [materialReader, setMaterialReader] = useState<MaterialReaderSelection | null>(null);
 
   // Mirror the resolved project into the workspace store so the per-project
   // expansion preference (`panelExpandedByProject[resolvedProjectId]`) keys
@@ -116,6 +119,18 @@ function ConversationRoute() {
     document.addEventListener('mouseup', handleMouseUp);
   }, []);
 
+  const handleMaterialReaderChange = useCallback(
+    (selection: MaterialReaderSelection | null) => {
+      setMaterialReader(selection);
+      if (selection) setPanelExpanded(true);
+    },
+    [setPanelExpanded]
+  );
+
+  useEffect(() => {
+    setMaterialReader(null);
+  }, [conversationId, resolvedProjectId]);
+
   return (
     <div ref={containerRef} className="flex h-full overflow-hidden">
       {/* Chat area takes remaining space — key forces full re-mount on conversation switch */}
@@ -130,6 +145,8 @@ function ConversationRoute() {
         style={showWorkspace ? { minWidth: CHAT_COLUMN_MIN_WIDTH } : undefined}
         inheritFromCommitHash={resolvedInheritFromCommitHash ?? undefined}
         onInheritComplete={clearInherit}
+        activeMaterialReader={materialReader}
+        onMaterialReaderChange={handleMaterialReaderChange}
       />
 
       {/* Drag handle (only when panel is expanded) */}
@@ -150,7 +167,13 @@ function ConversationRoute() {
       )}
 
       {/* YOps workspace panel */}
-      {showWorkspace && <YOpsWorkspace customWidth={isExpanded ? panelWidth : undefined} />}
+      {showWorkspace && (
+        <YOpsWorkspace
+          customWidth={isExpanded ? panelWidth : undefined}
+          materialReader={materialReader}
+          onCloseMaterialReader={() => handleMaterialReaderChange(null)}
+        />
+      )}
     </div>
   );
 }

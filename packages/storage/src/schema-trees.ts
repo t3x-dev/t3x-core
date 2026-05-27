@@ -355,12 +355,16 @@ export const materials = pgTable(
     /** When the material was imported */
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 
+    /** Soft archive timestamp; archived materials are hidden from source candidate lists */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+
     /** Who imported it */
     createdBy: text('created_by'),
   },
   (table) => ({
     projectIdx: index('idx_materials_project').on(table.projectId),
     createdAtIdx: index('idx_materials_created_at').on(table.createdAt),
+    archivedAtIdx: index('idx_materials_archived_at').on(table.archivedAt),
     uniqueMaterial: uniqueIndex('idx_materials_unique_hash').on(table.projectId, table.contentHash),
   })
 );

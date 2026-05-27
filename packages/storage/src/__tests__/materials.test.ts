@@ -8,11 +8,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
 import {
+  archiveMaterial,
   createMaterial,
   deleteMaterial,
   findMaterialById,
+  findMaterialByProjectHash,
   findMaterialsByIds,
   findMaterialsByProject,
+  restoreArchivedMaterial,
 } from '../queries/materials';
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
@@ -98,6 +101,39 @@ describe('Materials Storage', () => {
     );
 
     await expect(findMaterialsByIds(db, [older.id, newer.id])).resolves.toEqual([older, newer]);
+  });
+
+  it('archives a material without breaking direct lookup or ordered id fetches', async () => {
+    const material = await createMaterial(db, {
+      project_id: testProjectId,
+      source_type: 'document',
+      title: 'Archived Brief',
+      content_text: 'Archived source material.',
+      content_hash: 'sha256:archived-material',
+      metadata: { content_hash: 'sha256:archived-material' },
+      token_estimate: 6,
+    });
+
+    const archived = await archiveMaterial(db, material.id);
+
+    expect(archived?.archived_at).toEqual(expect.any(String));
+    await expect(findMaterialById(db, material.id)).resolves.toEqual(archived);
+    await expect(findMaterialsByIds(db, [material.id])).resolves.toEqual([archived]);
+    await expect(
+      findMaterialByProjectHash(db, testProjectId, 'sha256:archived-material')
+    ).resolves.toEqual(archived);
+    await expect(findMaterialsByProject(db, testProjectId, { limit: 100 })).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: material.id })])
+    );
+    await expect(
+      findMaterialsByProject(db, testProjectId, { limit: 100, includeArchived: true })
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ id: material.id })]));
+
+    const restored = await restoreArchivedMaterial(db, material.id);
+    expect(restored?.archived_at).toBeUndefined();
+    await expect(findMaterialsByProject(db, testProjectId, { limit: 100 })).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: material.id })])
+    );
   });
 
   it('deletes a material', async () => {
