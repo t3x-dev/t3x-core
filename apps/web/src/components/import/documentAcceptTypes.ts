@@ -18,7 +18,7 @@ export const DOCUMENT_SOURCE_ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ].join(',');
 
-export const DOCUMENT_SOURCE_ACCEPT_HINT = 'PDF, DOCX, Markdown, TXT, HTML, XLSX, CSV (max 10MB)';
+export const DOCUMENT_SOURCE_ACCEPT_HINT = 'PDF, DOCX, Markdown, TXT, HTML, XLSX, CSV (max 50MB)';
 
 export const LEGACY_DOC_UNSUPPORTED_MESSAGE =
   'Legacy .doc files are not supported. Please export as DOCX or PDF and upload again.';

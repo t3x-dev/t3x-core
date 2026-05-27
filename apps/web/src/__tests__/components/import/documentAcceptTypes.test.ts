@@ -26,6 +26,7 @@ describe('document source accepted types', () => {
     expect(acceptedTypes).not.toContain('application/msword');
     expect(DOCUMENT_SOURCE_ACCEPT_HINT).toContain('XLSX');
     expect(DOCUMENT_SOURCE_ACCEPT_HINT).toContain('CSV');
+    expect(DOCUMENT_SOURCE_ACCEPT_HINT).toContain('50MB');
   });
 
   it('rejects legacy Office formats before upload', () => {

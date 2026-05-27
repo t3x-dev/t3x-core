@@ -494,8 +494,17 @@ function ContentPreviewView({
   query: string;
 }) {
   const profile = materialProfile(material);
-  if (segments.length === 0) return <EmptyReaderState>{profile.emptyState}</EmptyReaderState>;
   const limitsNotice = <ExtractionLimitsNotice material={material} />;
+  if (segments.length === 0) {
+    return (
+      <div className="space-y-3">
+        {limitsNotice}
+        <EmptyReaderState>
+          {query.trim() ? profile.emptySearchState : profile.emptyState}
+        </EmptyReaderState>
+      </div>
+    );
+  }
 
   if (profile.kind === 'spreadsheet') {
     return (
@@ -1110,7 +1119,10 @@ function ExtractionLimitsDetails({ material }: { material: MaterialDetail }) {
 
   return (
     <section className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)]">
-      <SectionTitle label="Extraction Limits" meta={notice.tone === 'warning' ? 'check' : 'info'} />
+      <SectionTitle
+        label="Extraction Limits"
+        meta={notice.tone === 'warning' ? 'warning' : 'info'}
+      />
       <div className="space-y-1.5 p-3 text-[11px] leading-relaxed text-[var(--text-tertiary)]">
         {notice.items.map((item) => (
           <p key={item}>{item}</p>

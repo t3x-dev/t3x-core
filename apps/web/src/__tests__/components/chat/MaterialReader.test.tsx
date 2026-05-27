@@ -238,6 +238,13 @@ describe('MaterialReader', () => {
       screen.getAllByText(/scanned pages and image-only text require OCR/i).length
     ).toBeGreaterThan(0);
 
+    fireEvent.change(screen.getByPlaceholderText('Search PDF text'), {
+      target: { value: 'missing phrase' },
+    });
+
+    expect(screen.getByText('No matching PDF text.')).not.toBeNull();
+    expect(screen.getAllByText('PDF extraction limits').length).toBeGreaterThan(0);
+
     fireEvent.click(screen.getByRole('button', { name: /remove from chat/i }));
 
     expect(onRemove).toHaveBeenCalledWith('pin_material');
@@ -377,6 +384,7 @@ describe('MaterialReader', () => {
     expect(screen.getByText('Workbook summary included')).not.toBeNull();
     expect(screen.getByText('2 sheets · 20 tokens · 2 chunks')).not.toBeNull();
     expect(screen.getByText(/Workbook text is included in prompt context/)).not.toBeNull();
+    expect(screen.getByText('warning')).not.toBeNull();
     expect(screen.getByText('File type')).not.toBeNull();
     expect(screen.getByText('Spreadsheet')).not.toBeNull();
   });
