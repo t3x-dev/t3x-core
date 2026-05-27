@@ -879,19 +879,24 @@ export function ChatSidebar() {
   }
 
   function handleTemporaryChatContextMenu(e: React.MouseEvent, chat: TemporaryChat) {
-    openMenu(e, [
-      {
-        label: 'Import to Project',
-        icon: <FolderInput className="h-3.5 w-3.5" />,
-        onClick: () => openTemporaryImportDialog(chat),
-      },
+    const items = [
+      ...(chat.messages.length > 0
+        ? [
+            {
+              label: 'Import to Project',
+              icon: <FolderInput className="h-3.5 w-3.5" />,
+              onClick: () => openTemporaryImportDialog(chat),
+            },
+          ]
+        : []),
       {
         label: 'Delete Temporary Chat',
         icon: <Trash2 className="h-3.5 w-3.5" />,
         danger: true,
         onClick: () => setTemporaryDeleteTargetId(chat.id),
       },
-    ]);
+    ];
+    openMenu(e, items);
   }
 
   return (
@@ -1225,6 +1230,7 @@ export function ChatSidebar() {
                         <div className="flex min-w-0 flex-col gap-0.5">
                           {sortedTemporaryChats.map((chat) => {
                             const isActive = activeConversationId === chat.id;
+                            const canImport = chat.messages.length > 0;
                             return (
                               <div
                                 key={chat.id}
@@ -1271,12 +1277,23 @@ export function ChatSidebar() {
                                 <button
                                   type="button"
                                   aria-label="Import temporary chat"
-                                  title="Import temporary chat"
+                                  title={
+                                    canImport
+                                      ? 'Import temporary chat'
+                                      : 'Send a message before importing'
+                                  }
+                                  disabled={!canImport}
                                   onClick={(event) => {
                                     event.stopPropagation();
+                                    if (!canImport) return;
                                     openTemporaryImportDialog(chat);
                                   }}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50"
+                                  className={cn(
+                                    'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-divider)] text-[var(--text-tertiary)] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]/50',
+                                    canImport
+                                      ? 'hover:border-[var(--accent-commit)]/30 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]'
+                                      : 'cursor-not-allowed opacity-45'
+                                  )}
                                 >
                                   <FolderInput className="h-3.5 w-3.5" />
                                 </button>

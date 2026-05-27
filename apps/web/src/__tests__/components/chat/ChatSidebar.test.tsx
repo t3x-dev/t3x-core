@@ -277,6 +277,67 @@ describe('ChatSidebar', () => {
     expect(row).not.toHaveClass('bg-[var(--sidebar-panel)]');
   });
 
+  it('disables importing an empty temporary chat', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_empty_import',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    const importButton = screen.getByRole('button', { name: 'Import temporary chat' });
+    expect(importButton).toBeDisabled();
+    expect(importButton).toHaveAttribute('title', 'Send a message before importing');
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*0 messages/,
+      }).parentElement as HTMLElement
+    );
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Import to Project')).toBe(false);
+  });
+
+  it('enables importing a temporary chat after it has messages', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_ready_import',
+          title: 'Temporary chat',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    const importButton = screen.getByRole('button', { name: 'Import temporary chat' });
+    expect(importButton).toBeEnabled();
+    expect(importButton).toHaveAttribute('title', 'Import temporary chat');
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*1 message/,
+      }).parentElement as HTMLElement
+    );
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Import to Project')).toBe(true);
+  });
+
   it('confirms before deleting a temporary chat', () => {
     useTemporaryChatsStore.setState({
       chats: [
