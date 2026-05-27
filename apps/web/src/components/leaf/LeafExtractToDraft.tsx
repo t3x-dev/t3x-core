@@ -141,7 +141,7 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
       </Button>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="grid max-h-[min(90vh,720px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Extract to Draft</DialogTitle>
             <DialogDescription>
@@ -149,14 +149,13 @@ export function LeafExtractToDraft({ leafId, projectId, outputText }: LeafExtrac
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
+          <div className="chat-scrollbar min-h-0 space-y-3 overflow-y-auto pr-1 py-2">
             <div className="space-y-1.5">
               <Label>Text to extract</Label>
               <Textarea
                 value={extractedText}
                 onChange={(e) => setExtractedText(e.target.value)}
-                rows={3}
-                className="resize-none text-sm"
+                className="h-48 max-h-[min(42vh,24rem)] resize-y overflow-y-auto text-sm [field-sizing:fixed]"
               />
             </div>
 
