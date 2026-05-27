@@ -129,6 +129,7 @@ const sourceDocumentMaterial = {
   token_estimate: 12,
   metadata: {},
   created_at: '2026-05-26T00:00:00.000Z',
+  archived_at: null,
   created_by: null,
 } satisfies Material;
 
@@ -255,13 +256,15 @@ describe('ContextManifestBar', () => {
     expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'References' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /pin leaf follow-up brief as material/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add material follow-up brief/i }));
 
     expect(onPinLeaf).toHaveBeenCalledWith('leaf_followup');
   });
 
-  it('renders available uploaded materials and pins them on explicit user action', () => {
+  it('adds available uploaded materials to the current context', () => {
     const onPinMaterial = vi.fn();
+    const onOpenMaterial = vi.fn();
+    const onArchiveMaterial = vi.fn();
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -276,6 +279,8 @@ describe('ContextManifestBar', () => {
           availableMaterialsError: null,
           materialPinningIds: new Set(),
           onPinMaterial,
+          onOpenMaterial,
+          onArchiveMaterial,
         }}
       />
     );
@@ -285,10 +290,19 @@ describe('ContextManifestBar', () => {
 
     expect(screen.getByText('Launch notes')).not.toBeNull();
     expect(screen.getByText(/launch-notes\.pdf/i)).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /use material launch notes/i })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /use material launch notes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add material launch notes/i }));
 
     expect(onPinMaterial).toHaveBeenCalledWith('mat_source_doc');
+
+    fireEvent.click(screen.getByRole('button', { name: /open material launch notes/i }));
+
+    expect(onOpenMaterial).toHaveBeenCalledWith('mat_source_doc');
+
+    fireEvent.click(screen.getByRole('button', { name: /archive material launch notes/i }));
+
+    expect(onArchiveMaterial).toHaveBeenCalledWith('mat_source_doc');
   });
 
   it('lets users add an uploaded material from the Materials tab', () => {
@@ -320,11 +334,9 @@ describe('ContextManifestBar', () => {
     expect(onUploadMaterial).toHaveBeenCalledWith(file);
   });
 
-  it('lets users choose whether a pinned material is used in this conversation', () => {
+  it('removes currently used materials without showing checkboxes or a preview panel', () => {
     const onReferenceToggle = vi.fn();
     const manifest = makeManifest();
-    manifest.references[0].included = false;
-    manifest.source_items[1].included = false;
     render(
       <ContextManifestBar
         manifest={manifest}
@@ -336,20 +348,66 @@ describe('ContextManifestBar', () => {
       />
     );
 
-    expect(screen.getByText('0 included')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
+    expect(screen.queryByText('source details')).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /use material launch leaf/i })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /include launch leaf/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /remove material launch leaf/i }));
+
+    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
+    expect(screen.queryByText(/checkbox = include/i)).toBeNull();
+  });
+
+  it('opens a pinned uploaded material from the Materials tab', () => {
+    const onOpenMaterial = vi.fn();
+    const manifest = makeManifest();
+    manifest.references = [
+      {
+        type: 'import',
+        id: 'mat_source_doc',
+        pin_id: 'pin_material',
+        included: true,
+        title: 'Launch notes',
+      },
+    ];
+    manifest.source_items = [
+      manifest.source_items[0],
+      {
+        id: 'mat_source_doc',
+        kind: 'import',
+        role: 'evidence',
+        title: 'Launch notes',
+        pin_id: 'pin_material',
+        pinned: true,
+        pinnable: true,
+        included: true,
+      },
+    ];
+
+    render(
+      <ContextManifestBar
+        manifest={manifest}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          onOpenMaterial,
+        }}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
     fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
-    fireEvent.click(screen.getByText('Launch leaf'));
+    fireEvent.click(screen.getByRole('button', { name: /open material launch notes/i }));
 
-    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
-    expect(screen.getByText(/not used this turn/i)).not.toBeNull();
-    expect(screen.queryByRole('checkbox', { name: /include launch leaf/i })).toBeNull();
-    const checkbox = screen.getByRole('checkbox', { name: /use material launch leaf/i });
-    expect((checkbox as HTMLInputElement).checked).toBe(false);
-    fireEvent.click(checkbox);
-    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', true);
-    expect(screen.queryByText(/checkbox = include/i)).toBeNull();
+    expect(onOpenMaterial).toHaveBeenCalledWith('mat_source_doc');
   });
 
   it('toggles lesson inclusion from the Lessons tab', () => {

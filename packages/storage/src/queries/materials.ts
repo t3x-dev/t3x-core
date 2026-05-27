@@ -10,13 +10,14 @@ import {
   type Material,
   type MaterialSourceType,
 } from '@t3x-dev/core';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type MaterialRecord, materials } from '../schema-trees';
 
 export interface ListMaterialsOptions {
   limit?: number;
   offset?: number;
+  includeArchived?: boolean;
 }
 
 export async function createMaterial(db: AnyDB, input: CreateMaterialInput): Promise<Material> {
@@ -49,6 +50,19 @@ export async function findMaterialById(db: AnyDB, id: string): Promise<Material 
   return row ? rowToMaterial(row) : null;
 }
 
+export async function findMaterialByProjectHash(
+  db: AnyDB,
+  projectId: string,
+  contentHash: string
+): Promise<Material | null> {
+  const [row] = await db
+    .select()
+    .from(materials)
+    .where(and(eq(materials.projectId, projectId), eq(materials.contentHash, contentHash)))
+    .limit(1);
+  return row ? rowToMaterial(row) : null;
+}
+
 export async function findMaterialsByProject(
   db: AnyDB,
   projectId: string,
@@ -56,11 +70,15 @@ export async function findMaterialsByProject(
 ): Promise<Material[]> {
   const limit = options.limit ?? 100;
   const offset = options.offset ?? 0;
+  const conditions = [eq(materials.projectId, projectId)];
+  if (!options.includeArchived) {
+    conditions.push(isNull(materials.archivedAt));
+  }
 
   const rows = await db
     .select()
     .from(materials)
-    .where(eq(materials.projectId, projectId))
+    .where(and(...conditions))
     .orderBy(desc(materials.createdAt), desc(materials.id))
     .limit(limit)
     .offset(offset);
@@ -85,6 +103,34 @@ export async function deleteMaterial(db: AnyDB, id: string): Promise<boolean> {
   return result.length > 0;
 }
 
+export async function archiveMaterial(db: AnyDB, id: string): Promise<Material | null> {
+  const material = await findMaterialById(db, id);
+  if (!material) return null;
+
+  const [row] = await db
+    .update(materials)
+    .set({
+      archivedAt: new Date(),
+    })
+    .where(eq(materials.id, id))
+    .returning();
+
+  return row ? rowToMaterial(row) : null;
+}
+
+export async function restoreArchivedMaterial(db: AnyDB, id: string): Promise<Material | null> {
+  const material = await findMaterialById(db, id);
+  if (!material) return null;
+
+  const [row] = await db
+    .update(materials)
+    .set({ archivedAt: null })
+    .where(eq(materials.id, id))
+    .returning();
+
+  return row ? rowToMaterial(row) : null;
+}
+
 function rowToMaterial(row: MaterialRecord): Material {
   return {
     id: row.id,
@@ -98,6 +144,7 @@ function rowToMaterial(row: MaterialRecord): Material {
     metadata: row.metadata,
     token_estimate: row.tokenEstimate,
     created_at: row.createdAt.toISOString(),
+    archived_at: row.archivedAt?.toISOString(),
     created_by: row.createdBy ?? undefined,
   };
 }

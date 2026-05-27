@@ -155,10 +155,12 @@ CREATE TABLE IF NOT EXISTS materials (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   token_estimate INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  archived_at TIMESTAMPTZ,
   created_by TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
 CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
+CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
 
 -- Pins (source selection for commit sources + conversation context)

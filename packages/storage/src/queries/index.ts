@@ -222,12 +222,15 @@ export {
 } from './leaves';
 // Materials (raw imported source objects)
 export {
+  archiveMaterial,
   createMaterial,
   deleteMaterial,
   findMaterialById,
+  findMaterialByProjectHash,
   findMaterialsByIds,
   findMaterialsByProject,
   type ListMaterialsOptions,
+  restoreArchivedMaterial,
 } from './materials';
 // Merge Drafts (Pending merge operations)
 export {

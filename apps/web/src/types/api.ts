@@ -58,7 +58,12 @@ export type {
   ReverseLearnResult,
   SuggestedConstraint,
 } from '@/infrastructure/leaves';
-export type { Material } from '@/infrastructure/materials';
+export type {
+  Material,
+  MaterialDetail,
+  MaterialParseQuality,
+  MaterialSegment,
+} from '@/infrastructure/materials';
 export type {
   CreateTemplateInput,
   CreateWebhookInput,

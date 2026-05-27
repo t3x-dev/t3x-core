@@ -438,6 +438,7 @@ export interface Material {
   metadata: Record<string, unknown>;
   token_estimate: number;
   created_at: string;
+  archived_at?: string;
   created_by?: string;
 }
 
