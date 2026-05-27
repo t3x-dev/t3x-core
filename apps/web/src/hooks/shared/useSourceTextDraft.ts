@@ -102,6 +102,7 @@ function stageSourceEditOps(
 export function useSourceTextDraft() {
   const [pending, setPending] = useState(false);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
 
   const applySourceTextEdit = useCallback(
     async (target: SourceTextEditTarget): Promise<SourceTextEditResult> => {
@@ -110,6 +111,9 @@ export function useSourceTextDraft() {
         const store = useWorkspaceStore.getState();
         if (store.isCommitted) {
           throw new Error('Committed conversations are read-only.');
+        }
+        if (store.draftOps.length === 0 && store.opsLog.length === 0) {
+          throw new Error('Run Extract before editing source text.');
         }
         const turn = store.turns.find((candidate) => candidate.turn_hash === target.turnHash);
         const projectId =
@@ -287,5 +291,5 @@ export function useSourceTextDraft() {
     []
   );
 
-  return { applySourceTextEdit, pending, enabled: !isCommitted };
+  return { applySourceTextEdit, pending, enabled: !isCommitted && hasYopsContent };
 }

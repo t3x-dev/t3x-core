@@ -103,6 +103,7 @@ export function ChatWorkspace({
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
@@ -114,7 +115,11 @@ export function ChatWorkspace({
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
   const showAddForm =
-    !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
+    !isCommitted &&
+    hasYopsContent &&
+    selection &&
+    selection.turnRole !== 'user' &&
+    selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -927,7 +932,7 @@ export function ChatWorkspace({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Inline source-text actions (visible whenever editable chat text is selected) */}
+          {/* Inline source-text actions require an extracted/applied YOps context. */}
           {showAddForm && selection && (
             <ChatSpanActions selection={selection} onDone={clearSelection} />
           )}

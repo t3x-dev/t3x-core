@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
@@ -245,6 +246,11 @@ const sourceDocumentMaterial = {
   created_by: null,
 } satisfies Material;
 
+const extractedOp = {
+  set: { path: 'concepts/title', value: 'understand' },
+  source: { type: 'llm', provider: 'anthropic', model: 'claude-sonnet' },
+} as SourcedYOp;
+
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -305,7 +311,7 @@ describe('ChatWorkspace', () => {
     expect(messageScroll.contains(manifest)).toBe(false);
   });
 
-  it('shows source text actions for a valid selection even before executed mode', () => {
+  it('hides source text actions before YOps content exists', () => {
     mocks.textSelection.current = {
       selection: {
         text: 'understand',
@@ -319,6 +325,30 @@ describe('ChatWorkspace', () => {
       clearSelection: vi.fn(),
     };
     useWorkspaceStore.getState().setMode('idle');
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
+  });
+
+  it('shows source text actions for a valid selection after YOps content exists', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'understand',
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        turnText: 'hello',
+        startChar: 10,
+        endChar: 20,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+    useWorkspaceStore.getState().setMode('idle');
+    useWorkspaceStore.getState().setDraft({
+      ops: [extractedOp],
+      tree: { trees: [], relations: [] },
+    });
 
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 

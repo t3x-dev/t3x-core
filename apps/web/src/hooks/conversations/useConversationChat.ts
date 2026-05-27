@@ -128,6 +128,20 @@ function mirrorSavedTurn(
   });
 }
 
+function savedTurnMessage(
+  turn: api.Turn,
+  role: 'user' | 'assistant',
+  content: string
+): ChatMessage {
+  return {
+    id: turn.turn_hash,
+    ...(turn.project_id ? { projectId: turn.project_id } : {}),
+    ...(turn.conversation_id ? { conversationId: turn.conversation_id } : {}),
+    role,
+    content,
+  };
+}
+
 /**
  * useConversationChat — facade for the chat pane. Composes three
  * sub-hooks (history / stream state / warnings) and owns the
@@ -248,6 +262,21 @@ export function useConversationChat({
         });
       };
 
+      const replaceLocalMessageWithSavedTurn = (
+        localMessageId: string,
+        turn: api.Turn | undefined,
+        role: 'user' | 'assistant',
+        content: string
+      ) => {
+        if (!turn?.turn_hash) return;
+        const savedMessage = savedTurnMessage(turn, role, content);
+        history.setMessages((prev) => {
+          const next = prev.map((msg) => (msg.id === localMessageId ? savedMessage : msg));
+          history.messagesRef.current = next;
+          return next;
+        });
+      };
+
       const newUserMessage: ChatMessage = {
         id: `msg-${Date.now()}`,
         role: 'user' as const,
@@ -259,7 +288,10 @@ export function useConversationChat({
       stream.setStreamingContent('');
 
       let stableConversationId: string | null = null;
-      const saveAssistantResponse = async (content: string): Promise<void> => {
+      const saveAssistantResponse = async (
+        content: string,
+        localMessageId: string | null
+      ): Promise<void> => {
         const conversationForSave = stableConversationId;
         if (!projectId || !conversationForSave || content.trim().length === 0) return;
         try {
@@ -267,6 +299,9 @@ export function useConversationChat({
             api.createTurn(projectId, conversationForSave, 'assistant', content)
           );
           mirrorSavedTurn(conversationForSave, assistantTurn, 'assistant', content);
+          if (localMessageId) {
+            replaceLocalMessageWithSavedTurn(localMessageId, assistantTurn, 'assistant', content);
+          }
         } catch {
           warnings.showWarning('Assistant reply not saved — API may be unavailable');
         }
@@ -308,6 +343,7 @@ export function useConversationChat({
             api.createTurn(projectId, currentConversationId, 'user', userMessage)
           );
           mirrorSavedTurn(currentConversationId, userTurn, 'user', userMessage);
+          replaceLocalMessageWithSavedTurn(newUserMessage.id, userTurn, 'user', userMessage);
           applyGeneratedTitle(currentConversationId, initialTitleForGeneratedTitle);
         }
         setTurnsSavedCounter((c) => c + 1);
@@ -331,6 +367,7 @@ export function useConversationChat({
 
         let fullResponse = '';
         let addedFinalMessage = false;
+        let localAssistantMessageId: string | null = null;
         stream.tokenBufferRef.current = '';
 
         const flushBuffer = () => {
@@ -377,17 +414,18 @@ export function useConversationChat({
             // server validator rejects empty content with "messages[N]:
             // content must be non-empty" and chat stalls.
             if (!addedFinalMessage && fullResponse.trim().length > 0) {
+              localAssistantMessageId = `msg-${Date.now()}-assistant`;
               history.setMessages((prev) => [
                 ...prev,
                 {
-                  id: `msg-${Date.now()}-assistant`,
+                  id: localAssistantMessageId!,
                   role: 'assistant' as const,
                   content: fullResponse,
                 },
               ]);
               if (isTemporaryMode) {
                 useTemporaryChatsStore.getState().addMessage(currentConversationId, {
-                  id: `msg-${Date.now()}-assistant`,
+                  id: localAssistantMessageId,
                   role: 'assistant',
                   content: fullResponse,
                 });
@@ -406,17 +444,18 @@ export function useConversationChat({
         }
 
         if (fullResponse && !addedFinalMessage) {
+          localAssistantMessageId = `msg-${Date.now()}-assistant`;
           history.setMessages((prev) => [
             ...prev,
             {
-              id: `msg-${Date.now()}`,
+              id: localAssistantMessageId!,
               role: 'assistant' as const,
               content: fullResponse,
             },
           ]);
           if (isTemporaryMode && stableConversationId) {
             useTemporaryChatsStore.getState().addMessage(stableConversationId, {
-              id: `msg-${Date.now()}-assistant`,
+              id: localAssistantMessageId,
               role: 'assistant',
               content: fullResponse,
             });
@@ -424,27 +463,28 @@ export function useConversationChat({
           stream.setStreamingContent('');
         }
 
-        if (!isTemporaryMode) await saveAssistantResponse(fullResponse);
+        if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           const partial = stream.tokenBufferRef.current;
           if (partial) {
+            const localAssistantMessageId = `msg-${Date.now()}-assistant`;
             history.setMessages((prev) => [
               ...prev,
               {
-                id: `msg-${Date.now()}`,
+                id: localAssistantMessageId,
                 role: 'assistant' as const,
                 content: partial,
               },
             ]);
             if (isTemporaryMode && stableConversationId) {
               useTemporaryChatsStore.getState().addMessage(stableConversationId, {
-                id: `msg-${Date.now()}-assistant`,
+                id: localAssistantMessageId,
                 role: 'assistant',
                 content: partial,
               });
             } else {
-              await saveAssistantResponse(partial);
+              await saveAssistantResponse(partial, localAssistantMessageId);
             }
           }
           stream.setStreamingContent('');
