@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 47;
+const SCHEMA_VERSION = 48;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -332,6 +332,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       token_estimate INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      archived_at TIMESTAMPTZ,
       created_by TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
@@ -1365,6 +1366,12 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_as TEXT;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;
+  `);
+
+  // ── Schema v48: Soft archive support for reusable project materials ──
+  await sql.unsafe(`
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+    CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
   `);
 
   await ensureSourceTextRevisionsSchema(sql);

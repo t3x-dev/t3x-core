@@ -6,7 +6,14 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { estimateTokens, type Material } from '@t3x-dev/core';
-import { createMaterial, findMaterialById, findMaterialsByProject } from '@t3x-dev/storage';
+import {
+  archiveMaterial,
+  createMaterial,
+  findMaterialById,
+  findMaterialByProjectHash,
+  findMaterialsByProject,
+  restoreArchivedMaterial,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { parseDocument } from '../lib/import';
@@ -32,6 +39,7 @@ const MaterialResponseSchema = z.object({
   token_estimate: z.number(),
   metadata: z.record(z.string(), z.unknown()),
   created_at: z.string(),
+  archived_at: z.string().nullable(),
   created_by: z.string().nullable(),
 });
 
@@ -142,6 +150,69 @@ materialsRoutes.openapi(getMaterialRoute, async (c) => {
   });
 });
 
+const archiveMaterialRoute = createRoute({
+  method: 'delete',
+  path: '/v1/projects/{projectId}/materials/{materialId}',
+  tags: ['Materials'],
+  summary: 'Archive a project material',
+  description:
+    'Archives a material so it no longer appears as an available source candidate. Direct detail lookups remain available for audit trails.',
+  request: {
+    params: z.object({
+      projectId: z.string(),
+      materialId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Material archived',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(MaterialDetailResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Material not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+materialsRoutes.openapi(archiveMaterialRoute, async (c) => {
+  const { projectId, materialId } = c.req.valid('param');
+  const db = await getDB();
+  const material = await findMaterialById(db, materialId);
+
+  if (!material || material.project_id !== projectId) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'MATERIAL_NOT_FOUND', message: 'Material not found' },
+      },
+      404
+    );
+  }
+
+  const archived = await archiveMaterial(db, materialId);
+  if (!archived) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'MATERIAL_NOT_FOUND', message: 'Material not found' },
+      },
+      404
+    );
+  }
+
+  return c.json({
+    success: true as const,
+    data: toMaterialDetailResponse(archived),
+  });
+});
+
 const uploadDocumentMaterialRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/materials/document',
@@ -214,6 +285,18 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseDocument(buffer, file.name, file.type);
     const title = parsed.metadata.title ?? file.name;
+    const existing = await findMaterialByProjectHash(db, projectId, parsed.metadata.content_hash);
+    if (existing) {
+      const restored =
+        typeof existing.archived_at === 'string'
+          ? await restoreArchivedMaterial(db, existing.id)
+          : existing;
+
+      return c.json({
+        success: true as const,
+        data: toMaterialResponse(restored ?? existing),
+      });
+    }
 
     const material = await createMaterial(db, {
       project_id: projectId,
@@ -259,6 +342,7 @@ function toMaterialResponse(material: Material) {
     token_estimate: material.token_estimate,
     metadata: material.metadata,
     created_at: material.created_at,
+    archived_at: material.archived_at ?? null,
     created_by: material.created_by ?? null,
   };
 }

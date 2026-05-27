@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Archive,
   CheckCircle2,
   ExternalLink,
   FileText,
@@ -41,6 +42,7 @@ export interface ContextManifestSourcePicker {
   leafPinningIds?: ReadonlySet<string>;
   materialPinningIds?: ReadonlySet<string>;
   materialUploading?: boolean;
+  materialArchivingIds?: ReadonlySet<string>;
   baseline?: {
     commitHash: string | null;
     branch: string | null;
@@ -48,6 +50,7 @@ export interface ContextManifestSourcePicker {
   };
   onPinLeaf?: (leafId: string) => void | Promise<void>;
   onPinMaterial?: (materialId: string) => void | Promise<void>;
+  onArchiveMaterial?: (materialId: string) => void | Promise<void>;
   onUploadMaterial?: (file: File) => void | Promise<void>;
   onOpenMaterial?: (materialId: string) => void;
 }
@@ -392,12 +395,16 @@ function AvailableLeafRow({
 function AvailableMaterialRow({
   material,
   pinning,
+  archiving,
   onPinMaterial,
+  onArchiveMaterial,
   onOpenMaterial,
 }: {
   material: ProjectMaterial;
   pinning: boolean;
+  archiving: boolean;
   onPinMaterial?: ContextManifestSourcePicker['onPinMaterial'];
+  onArchiveMaterial?: ContextManifestSourcePicker['onArchiveMaterial'];
   onOpenMaterial?: ContextManifestSourcePicker['onOpenMaterial'];
 }) {
   const title = materialTitle(material);
@@ -426,6 +433,21 @@ function AvailableMaterialRow({
           className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ExternalLink className="h-3 w-3" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Archive material ${title}`}
+          onClick={() => {
+            void onArchiveMaterial?.(material.id);
+          }}
+          disabled={archiving || !onArchiveMaterial}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--status-warning-muted)] hover:text-[var(--status-warning)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {archiving ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Archive className="h-3 w-3" />
+          )}
         </button>
         <button
           type="button"
@@ -619,6 +641,7 @@ export function ContextManifestPanel({
 
   const leafPinningIds = sourcePicker?.leafPinningIds ?? EMPTY_LEAF_IDS;
   const materialPinningIds = sourcePicker?.materialPinningIds ?? EMPTY_MATERIAL_IDS;
+  const materialArchivingIds = sourcePicker?.materialArchivingIds ?? EMPTY_MATERIAL_IDS;
   const usedLeafIds = new Set(
     usedMaterialSourceItems.filter((item) => item.kind === 'leaf').map((item) => item.id)
   );
@@ -908,7 +931,9 @@ export function ContextManifestPanel({
                             key={material.id}
                             material={material}
                             pinning={materialPinningIds.has(material.id)}
+                            archiving={materialArchivingIds.has(material.id)}
                             onPinMaterial={sourcePicker?.onPinMaterial}
+                            onArchiveMaterial={sourcePicker?.onArchiveMaterial}
                             onOpenMaterial={sourcePicker?.onOpenMaterial}
                           />
                         ))

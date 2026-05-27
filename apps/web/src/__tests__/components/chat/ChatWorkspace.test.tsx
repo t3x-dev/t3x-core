@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   projectMaterials: [],
   refreshProjectMaterials: vi.fn(),
   uploadMaterial: vi.fn(),
+  archiveMaterial: vi.fn(),
   textSelection: {
     current: null as null | {
       selection: {
@@ -119,6 +120,13 @@ vi.mock('@/hooks/materials/useMaterialUpload', () => ({
   useMaterialUpload: () => ({
     uploading: false,
     upload: mocks.uploadMaterial,
+  }),
+}));
+
+vi.mock('@/hooks/materials/useMaterialArchive', () => ({
+  useMaterialArchive: () => ({
+    archiving: false,
+    archiveMaterial: mocks.archiveMaterial,
   }),
 }));
 
@@ -229,6 +237,7 @@ const sourceDocumentMaterial = {
   token_estimate: 12,
   metadata: {},
   created_at: '2026-05-26T00:00:00.000Z',
+  archived_at: null,
   created_by: null,
 } satisfies Material;
 
@@ -244,6 +253,7 @@ describe('ChatWorkspace', () => {
     mocks.projectMaterials = [];
     mocks.refreshProjectMaterials.mockReset();
     mocks.uploadMaterial.mockReset();
+    mocks.archiveMaterial.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -360,5 +370,36 @@ describe('ChatWorkspace', () => {
 
     expect(mocks.reloadContextManifest).toHaveBeenCalled();
     expect(mocks.refreshProjectMaterials).toHaveBeenCalled();
+  });
+
+  it('archives an available uploaded material from the Materials tab', async () => {
+    mocks.contextManifest = makeContextManifest();
+    mocks.projectMaterials = [sourceDocumentMaterial];
+    mocks.archiveMaterial.mockResolvedValue({
+      ...sourceDocumentMaterial,
+      content_text: sourceDocumentMaterial.content_excerpt,
+      page_count: null,
+      segment_count: 1,
+      segments: [],
+      parse_quality: {
+        status: 'ready',
+        score: 0.84,
+        message: 'Parsed text is available.',
+      },
+      metadata: {},
+      archived_at: '2026-05-27T00:00:00.000Z',
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+    fireEvent.click(screen.getByRole('button', { name: /archive material launch notes/i }));
+
+    await waitFor(() => {
+      expect(mocks.archiveMaterial).toHaveBeenCalledWith('proj_123', 'mat_source_doc');
+      expect(mocks.refreshProjectMaterials).toHaveBeenCalled();
+      expect(mocks.reloadContextManifest).toHaveBeenCalled();
+    });
   });
 });

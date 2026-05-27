@@ -13,6 +13,7 @@ import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
@@ -108,6 +109,7 @@ export function ChatWorkspace({
   const [contextManifestOpen, setContextManifestOpen] = useState(false);
   const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
   const [pinningMaterialIds, setPinningMaterialIds] = useState<Set<string>>(() => new Set());
+  const [archivingMaterialIds, setArchivingMaterialIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
@@ -165,6 +167,7 @@ export function ChatWorkspace({
     refresh: refreshProjectMaterials,
   } = useProjectMaterials(resolvedProjectId, contextManifestOpen && !isCommitted);
   const { uploading: materialUploading, upload: uploadMaterial } = useMaterialUpload();
+  const { archiveMaterial } = useMaterialArchive();
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -473,6 +476,35 @@ export function ChatWorkspace({
     [handlePinMaterialForContext, refreshProjectMaterials, resolvedProjectId, uploadMaterial]
   );
 
+  const handleArchiveMaterial = useCallback(
+    async (materialId: string) => {
+      if (!resolvedProjectId) return;
+
+      setArchivingMaterialIds((prev) => {
+        const next = new Set(prev);
+        next.add(materialId);
+        return next;
+      });
+
+      try {
+        await archiveMaterial(resolvedProjectId, materialId);
+        await refreshProjectMaterials();
+        await reloadContextManifest();
+        toast.message('Material archived');
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to archive material';
+        toast.message(message);
+      } finally {
+        setArchivingMaterialIds((prev) => {
+          const next = new Set(prev);
+          next.delete(materialId);
+          return next;
+        });
+      }
+    },
+    [archiveMaterial, refreshProjectMaterials, reloadContextManifest, resolvedProjectId]
+  );
+
   const materialReaderContext = useMemo(() => {
     if (!activeMaterialReader) return null;
 
@@ -717,10 +749,12 @@ export function ChatWorkspace({
                     availableMaterialsError: projectMaterialsError,
                     leafPinningIds: pinningLeafIds,
                     materialPinningIds: pinningMaterialIds,
+                    materialArchivingIds: archivingMaterialIds,
                     materialUploading,
                     baseline: baselineForSourcePanel,
                     onPinLeaf: handlePinLeafForContext,
                     onPinMaterial: handlePinMaterialForContext,
+                    onArchiveMaterial: handleArchiveMaterial,
                     onUploadMaterial: handleUploadMaterial,
                     onOpenMaterial: handleOpenMaterialReader,
                   }

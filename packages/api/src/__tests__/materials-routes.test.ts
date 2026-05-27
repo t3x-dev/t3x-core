@@ -149,4 +149,69 @@ describe('Materials Routes', () => {
     expect(detail.success).toBe(false);
     expect(detail.error.code).toBe('MATERIAL_NOT_FOUND');
   });
+
+  it('archives a project material so it no longer appears in available material lists', async () => {
+    const form = new FormData();
+    form.append(
+      'file',
+      new File(['Archive this material.'], 'archive-me.txt', {
+        type: 'text/plain',
+      })
+    );
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(uploadRes.status).toBe(200);
+
+    const uploaded: ApiResponse = await uploadRes.json();
+    const archiveRes = await app.request(
+      `/v1/projects/${testProjectId}/materials/${uploaded.data.id}`,
+      { method: 'DELETE' }
+    );
+    expect(archiveRes.status).toBe(200);
+
+    const archived: ApiResponse = await archiveRes.json();
+    expect(archived.success).toBe(true);
+    expect(archived.data.archived_at).toEqual(expect.any(String));
+
+    const listRes = await app.request(`/v1/projects/${testProjectId}/materials`);
+    expect(listRes.status).toBe(200);
+
+    const listed: ApiResponse = await listRes.json();
+    expect(listed.data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: uploaded.data.id })])
+    );
+
+    const detailRes = await app.request(
+      `/v1/projects/${testProjectId}/materials/${uploaded.data.id}`
+    );
+    expect(detailRes.status).toBe(200);
+    const detail: ApiResponse = await detailRes.json();
+    expect(detail.data.id).toBe(uploaded.data.id);
+
+    const restoreForm = new FormData();
+    restoreForm.append(
+      'file',
+      new File(['Archive this material.'], 'archive-me.txt', {
+        type: 'text/plain',
+      })
+    );
+    const restoreRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: restoreForm,
+    });
+    expect(restoreRes.status).toBe(200);
+
+    const restored: ApiResponse = await restoreRes.json();
+    expect(restored.data.id).toBe(uploaded.data.id);
+    expect(restored.data.archived_at).toBeNull();
+
+    const restoredListRes = await app.request(`/v1/projects/${testProjectId}/materials`);
+    const restoredListed: ApiResponse = await restoredListRes.json();
+    expect(restoredListed.data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: uploaded.data.id })])
+    );
+  });
 });

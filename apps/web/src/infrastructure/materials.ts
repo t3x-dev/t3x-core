@@ -16,6 +16,7 @@ export interface Material {
   token_estimate: number;
   metadata: Record<string, unknown>;
   created_at: string;
+  archived_at: string | null;
   created_by: string | null;
 }
 
@@ -56,6 +57,19 @@ export async function getMaterialDetail(
 ): Promise<MaterialDetail> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`
+  );
+  return handleResponse<MaterialDetail>(res);
+}
+
+export async function archiveProjectMaterial(
+  projectId: string,
+  materialId: string
+): Promise<MaterialDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/materials/${encodeURIComponent(materialId)}`,
+    {
+      method: 'DELETE',
+    }
   );
   return handleResponse<MaterialDetail>(res);
 }

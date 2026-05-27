@@ -129,6 +129,7 @@ const sourceDocumentMaterial = {
   token_estimate: 12,
   metadata: {},
   created_at: '2026-05-26T00:00:00.000Z',
+  archived_at: null,
   created_by: null,
 } satisfies Material;
 
@@ -263,6 +264,7 @@ describe('ContextManifestBar', () => {
   it('adds available uploaded materials to the current context', () => {
     const onPinMaterial = vi.fn();
     const onOpenMaterial = vi.fn();
+    const onArchiveMaterial = vi.fn();
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -278,6 +280,7 @@ describe('ContextManifestBar', () => {
           materialPinningIds: new Set(),
           onPinMaterial,
           onOpenMaterial,
+          onArchiveMaterial,
         }}
       />
     );
@@ -296,6 +299,10 @@ describe('ContextManifestBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /open material launch notes/i }));
 
     expect(onOpenMaterial).toHaveBeenCalledWith('mat_source_doc');
+
+    fireEvent.click(screen.getByRole('button', { name: /archive material launch notes/i }));
+
+    expect(onArchiveMaterial).toHaveBeenCalledWith('mat_source_doc');
   });
 
   it('lets users add an uploaded material from the Materials tab', () => {

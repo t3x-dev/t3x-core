@@ -10,6 +10,7 @@ vi.mock('@/infrastructure/core', () => ({
 }));
 
 import {
+  archiveProjectMaterial,
   getMaterialDetail,
   listMaterialsByProject,
   uploadDocumentMaterial,
@@ -35,6 +36,7 @@ describe('infrastructure/materials', () => {
         token_estimate: 2,
         metadata: {},
         created_at: '2026-05-26T00:00:00.000Z',
+        archived_at: null,
         created_by: null,
       },
     ];
@@ -64,6 +66,7 @@ describe('infrastructure/materials', () => {
       token_estimate: 2,
       metadata: {},
       created_at: '2026-05-26T00:00:00.000Z',
+      archived_at: null,
       created_by: null,
     };
     const file = new File(['source'], 'source.txt', { type: 'text/plain' });
@@ -118,6 +121,7 @@ describe('infrastructure/materials', () => {
       token_estimate: 2,
       metadata: {},
       created_at: '2026-05-26T00:00:00.000Z',
+      archived_at: null,
       created_by: null,
     };
 
@@ -128,6 +132,47 @@ describe('infrastructure/materials', () => {
 
     expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
       'https://api.test/api/v1/projects/proj%2Fwith%20space/materials/mat%2F1'
+    );
+    expect(handleResponseMock).toHaveBeenCalledWith(response);
+  });
+
+  it('archives encoded project materials', async () => {
+    const response = new Response('{}');
+    const detail = {
+      id: 'mat_1',
+      project_id: 'proj/with space',
+      source_type: 'document',
+      title: 'Notes',
+      filename: 'notes.txt',
+      mime_type: 'text/plain',
+      content_hash: 'abc',
+      content_excerpt: 'hello',
+      content_text: 'hello world',
+      page_count: null,
+      segment_count: 1,
+      segments: [],
+      parse_quality: {
+        status: 'ready',
+        score: 0.84,
+        message: 'Parsed text is available.',
+      },
+      token_estimate: 2,
+      metadata: {},
+      created_at: '2026-05-26T00:00:00.000Z',
+      archived_at: '2026-05-27T00:00:00.000Z',
+      created_by: null,
+    };
+
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce(detail);
+
+    await expect(archiveProjectMaterial('proj/with space', 'mat/1')).resolves.toBe(detail);
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      'https://api.test/api/v1/projects/proj%2Fwith%20space/materials/mat%2F1',
+      expect.objectContaining({
+        method: 'DELETE',
+      })
     );
     expect(handleResponseMock).toHaveBeenCalledWith(response);
   });
