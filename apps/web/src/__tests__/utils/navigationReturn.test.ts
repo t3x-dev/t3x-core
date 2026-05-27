@@ -6,6 +6,9 @@ describe('navigationReturn', () => {
     expect(buildReturnTo('/chat/project/proj_1/canvas', 'viewport=1')).toBe(
       '/chat/project/proj_1/canvas?viewport=1'
     );
+    expect(buildReturnTo('/chat/project/proj_1/canvas', '?zoom=0.51&x=421')).toBe(
+      '/chat/project/proj_1/canvas?zoom=0.51&x=421'
+    );
   });
 
   it('appends returnTo to plain and queried hrefs', () => {

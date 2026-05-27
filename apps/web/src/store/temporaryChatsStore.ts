@@ -19,6 +19,7 @@ export type TemporaryChat = {
 interface TemporaryChatsState {
   chats: TemporaryChat[];
   createChat: (title: string) => TemporaryChat;
+  getOrCreateEmptyChat: (title: string) => TemporaryChat;
   removeChat: (id: string) => void;
   renameChat: (id: string, title: string) => void;
   addMessage: (
@@ -55,9 +56,33 @@ function getFallbackStorage() {
 
 export const useTemporaryChatsStore = create<TemporaryChatsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       chats: [],
       createChat: (rawTitle) => {
+        const timestamp = nowIso();
+        const chat: TemporaryChat = {
+          id: createTemporaryChatId(),
+          title: rawTitle.trim() || 'Temporary chat',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          messages: [],
+        };
+        set((state) => ({ chats: [chat, ...state.chats] }));
+        return chat;
+      },
+      getOrCreateEmptyChat: (rawTitle) => {
+        const reusable = get()
+          .chats.filter((chat) => chat.messages.length === 0)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+        if (reusable) {
+          set((state) => ({
+            chats: state.chats.filter(
+              (chat) => chat.messages.length > 0 || chat.id === reusable.id
+            ),
+          }));
+          return reusable;
+        }
+
         const timestamp = nowIso();
         const chat: TemporaryChat = {
           id: createTemporaryChatId(),

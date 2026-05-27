@@ -1,7 +1,9 @@
 export const RETURN_TO_PARAM = 'returnTo';
 
 export function buildReturnTo(pathname: string, searchParams?: URLSearchParams | string | null) {
-  const search = typeof searchParams === 'string' ? searchParams : (searchParams?.toString() ?? '');
+  const rawSearch =
+    typeof searchParams === 'string' ? searchParams : (searchParams?.toString() ?? '');
+  const search = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch;
   return search ? `${pathname}?${search}` : pathname;
 }
 

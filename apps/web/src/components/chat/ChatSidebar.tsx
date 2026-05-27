@@ -156,7 +156,7 @@ export function ChatSidebar() {
   const compactViewport = useChatCompactViewport();
   const setCommitConversationTitle = useCommitStore((s) => s.setConversationTitle);
   const temporaryChats = useTemporaryChatsStore((s) => s.chats);
-  const createTemporaryChat = useTemporaryChatsStore((s) => s.createChat);
+  const getOrCreateEmptyTemporaryChat = useTemporaryChatsStore((s) => s.getOrCreateEmptyChat);
   const removeTemporaryChat = useTemporaryChatsStore((s) => s.removeChat);
 
   const {
@@ -718,7 +718,7 @@ export function ChatSidebar() {
   }
 
   function handleNewTemporaryChatClick() {
-    const chat = createTemporaryChat('Temporary chat');
+    const chat = getOrCreateEmptyTemporaryChat('Temporary chat');
     setActiveConversation(chat.id, null);
     setConversationTitle(chat.title);
     setCommitConversationTitle(chat.title);

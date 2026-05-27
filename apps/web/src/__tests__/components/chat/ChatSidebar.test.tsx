@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => {
     }>,
     projectLeaves: [] as Array<Record<string, unknown> & { id: string }>,
     routerPush: vi.fn(),
+    startNewProjectChat: vi.fn(),
     chatState,
     toastError: vi.fn(),
   };
@@ -108,7 +109,7 @@ vi.mock('@/hooks/conversations/useProjectConversations', () => ({
 
 vi.mock('@/hooks/conversations/useNewProjectChat', () => ({
   useNewProjectChat: () => ({
-    start: vi.fn(),
+    start: mocks.startNewProjectChat,
   }),
 }));
 
@@ -160,6 +161,7 @@ afterEach(() => {
   mocks.contextMenuItems = [];
   mocks.commits = [];
   mocks.loadCommits.mockResolvedValue(mocks.commits);
+  mocks.startNewProjectChat.mockResolvedValue(null);
   mocks.pathname = '/chat/conv_a432e35d';
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
@@ -178,6 +180,74 @@ describe('ChatSidebar', () => {
     expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(chat.id, null);
     expect(mocks.chatState.setConversationTitle).toHaveBeenCalledWith('Temporary chat');
     expect(mocks.routerPush).toHaveBeenCalledWith(`/chat/${encodeURIComponent(chat.id)}`);
+  });
+
+  it('reuses an existing empty temporary chat instead of creating another blank draft', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New temporary chat' }));
+
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(1);
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith('temp_empty', null);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/temp_empty');
+  });
+
+  it('keeps only the latest empty temporary draft when reusing blank chats', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_old_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+        {
+          id: 'temp_chat_with_messages',
+          title: 'Existing work',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:01:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+        {
+          id: 'temp_latest_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:02:00.000Z',
+          updatedAt: '2026-05-25T00:02:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New temporary chat' }));
+
+    expect(useTemporaryChatsStore.getState().chats.map((chat) => chat.id)).toEqual([
+      'temp_chat_with_messages',
+      'temp_latest_empty',
+    ]);
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith('temp_latest_empty', null);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/temp_latest_empty');
   });
 
   it('uses the shared purple tint selected shell for active temporary chats', () => {
@@ -447,6 +517,36 @@ describe('ChatSidebar', () => {
     await waitFor(() => {
       expect(mocks.loadCommits).toHaveBeenCalledWith('proj_branch', undefined, 100);
       expect(screen.getByText('· 12345678')).toBeInTheDocument();
+    });
+  });
+
+  it('routes project New Chat to the reusable project draft returned by the hook', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_draft',
+        name: 'Draft Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_draft: [{ conversation_id: 'conv_existing', title: 'Existing conversation' }],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_draft']);
+    mocks.startNewProjectChat.mockResolvedValue('conv_reusable_empty');
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /\+New Chat/ }));
+
+    await waitFor(() => {
+      expect(mocks.startNewProjectChat).toHaveBeenCalledWith('proj_draft');
+      expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(
+        'conv_reusable_empty',
+        'proj_draft'
+      );
+      expect(mocks.routerPush).toHaveBeenCalledWith('/chat/conv_reusable_empty');
     });
   });
 
