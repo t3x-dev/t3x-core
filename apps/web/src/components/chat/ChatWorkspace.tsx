@@ -31,7 +31,6 @@ import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 import { ChatSpanActions } from './ChatSpanActions';
-import { CommittedBar } from './CommittedBar';
 import { ContextManifestBar } from './ContextManifestBar';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
 
@@ -775,10 +774,8 @@ export function ChatWorkspace({
         <ChatSpanActions selection={selection} onDone={clearSelection} />
       )}
 
-      {/* Input area — committed bar replaces input after commit */}
-      {isCommitted ? (
-        <CommittedBar projectId={resolvedProjectId || undefined} />
-      ) : (
+      {/* Input area — committed conversations are read-only after commit */}
+      {!isCommitted && (
         <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
           <div className="relative mx-auto max-w-[540px] px-5">
             <ChatInput

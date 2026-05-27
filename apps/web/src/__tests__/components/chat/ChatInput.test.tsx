@@ -72,6 +72,21 @@ describe('ChatInput draft persistence', () => {
     });
   });
 
+  it('does not send when Enter confirms an IME composition candidate', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    const input = screen.getByPlaceholderText('Reply...');
+    fireEvent.change(input, { target: { value: 'tell' } });
+
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+    fireEvent.compositionEnd(input);
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(input).toHaveValue('tell');
+  });
+
   it('lets OpenAI chats enable web search', () => {
     render(<ChatInput selectedProvider="openai" onSend={vi.fn()} />);
 

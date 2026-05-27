@@ -257,6 +257,38 @@ describe('OpenAIProvider.generateStructured', () => {
     expect(mockFetchFn).toHaveBeenCalledTimes(2);
   });
 
+  it('surfaces structured schema mismatches with raw JSON details', async () => {
+    mockFetchFn.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              choices: [{ message: { content: '{"name":"Alice","age":"thirty"}' } }],
+              usage: { prompt_tokens: 10, completion_tokens: 8 },
+            })
+          ),
+      })
+    );
+
+    const provider = new OpenAIProvider({ apiKey: 'test-key' });
+    const schema = z.object({ name: z.string(), age: z.number() });
+
+    await expect(
+      provider.generateStructured({ messages: [{ role: 'user', content: 'Extract' }] }, schema, {
+        model: 'gpt-5.4',
+      })
+    ).rejects.toMatchObject({
+      code: 'SCHEMA_MISMATCH',
+      details: expect.objectContaining({
+        jsonText: '{"name":"Alice","age":"thirty"}',
+      }),
+    });
+
+    expect(mockFetchFn).toHaveBeenCalledTimes(1);
+  });
+
   it('lowers provider draft schema to an OpenAI-compatible strict subset', async () => {
     mockFetchFn.mockImplementation(() =>
       Promise.resolve({

@@ -54,6 +54,8 @@ import { LeafPanel } from './LeafPanel';
 import { NodeModal, type NodeQuickAction } from './NodeModal';
 
 const GRID_SIZE = 16;
+const CANVAS_MINIMAP_WIDTH = 176;
+const CANVAS_MINIMAP_HEIGHT = 96;
 type CanvasUnitNode = Node<CanvasNodeData, 'unit'>;
 
 interface CanvasWorkspaceProps {
@@ -595,12 +597,12 @@ function CanvasWorkspaceInner({
                 pannable
                 zoomable
                 className={cn(
-                  '!bottom-11 !right-5 !h-24 !w-44 !rounded-xl',
-                  glass.cardBase,
-                  glass.highlight
+                  '!bottom-11 !right-16 !overflow-hidden !rounded-xl !border-[var(--stroke-default)] !bg-[var(--surface-elevated)] shadow-[var(--fx-shadow-sm)]'
                 )}
                 style={{
-                  backgroundColor: 'transparent',
+                  width: CANVAS_MINIMAP_WIDTH,
+                  height: CANVAS_MINIMAP_HEIGHT,
+                  backgroundColor: 'var(--surface-elevated)',
                 }}
                 maskColor={
                   colorMode === 'dark' ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.7)'
@@ -634,7 +636,11 @@ function CanvasWorkspaceInner({
           {nodes.length > 0 && (
             <div className="pointer-events-none absolute left-8 top-8 z-10 hidden items-center gap-2 text-xs text-[var(--text-tertiary)] md:flex">
               <span className="font-semibold text-[var(--text-secondary)]">Version Path</span>
-              <span>click a commit to inspect source, diff, leaves, and next actions</span>
+              <span>
+                {selectedUnitNode
+                  ? 'selected commit shows source, diff, leaves, and next actions'
+                  : 'select a commit on the canvas to inspect source, diff, leaves, and next actions'}
+              </span>
             </div>
           )}
           <Button

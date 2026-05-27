@@ -824,10 +824,11 @@ h3,
 
 /* MiniMap - refined styling */
 .react-flow__minimap {
-  background: var(--color-bg-white);
-  border: 1px solid var(--color-border);
+  background: var(--surface-elevated);
+  border: 1px solid var(--stroke-default);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--fx-shadow-sm);
+  overflow: hidden;
 }
 
 /* Modal overlay - glassmorphism effect */

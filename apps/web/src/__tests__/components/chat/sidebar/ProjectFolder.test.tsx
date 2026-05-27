@@ -166,7 +166,9 @@ describe('ProjectFolder active state', () => {
       />
     );
 
-    expect(screen.getByText('Chestnut meal plan')).toBeInTheDocument();
+    const title = screen.getByText('Chestnut meal plan');
+    expect(title).toBeInTheDocument();
+    expect(title.nextElementSibling).toHaveTextContent('· fedcba98');
     expect(screen.getByText('· fedcba98')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Chestnut meal plan/i })).toHaveAttribute(
       'title',
@@ -201,7 +203,9 @@ describe('ProjectFolder active state', () => {
       />
     );
 
-    expect(screen.getByText('Branch exploration')).toBeInTheDocument();
+    const title = screen.getByText('Branch exploration');
+    expect(title).toBeInTheDocument();
+    expect(title.nextElementSibling).toHaveTextContent('· 12345678');
     expect(screen.getByText('· 12345678')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Branch exploration/i })).toHaveAttribute(
       'title',

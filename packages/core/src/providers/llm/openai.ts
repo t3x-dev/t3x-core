@@ -333,17 +333,31 @@ export class OpenAIProvider implements LLMProvider {
         throw new LLMProviderError(this.id, undefined, 'No content in response');
       }
 
+      let jsonData: unknown;
       try {
-        const jsonData = JSON.parse(content);
-        const parsed = schema.parse(jsonData);
-        return { data: parsed, usage };
+        jsonData = JSON.parse(content);
       } catch {
         throw new LLMProviderError(
           this.id,
           undefined,
-          'Failed to parse structured response as JSON'
+          'Failed to parse structured response as JSON',
+          'JSON_PARSE',
+          { jsonText: content, rawText: content }
         );
       }
+
+      const parsed = schema.safeParse(jsonData);
+      if (parsed.success) {
+        return { data: parsed.data, usage };
+      }
+
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Response JSON does not match expected schema',
+        'SCHEMA_MISMATCH',
+        { jsonText: content, rawText: content, issues: parsed.error.issues }
+      );
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof LLMProviderError) throw error;
@@ -366,24 +380,39 @@ export class OpenAIProvider implements LLMProvider {
     const result = await this.generateFromPrompt(prompt, options);
     const jsonText = extractJsonBlock(result.text);
     if (!jsonText) {
-      throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
+      throw new LLMProviderError(
+        this.id,
+        undefined,
+        'Failed to parse structured response as JSON',
+        'JSON_PARSE',
+        { rawText: result.text }
+      );
     }
     // F12: JSON.parse + deterministic repairs (strip comments, close
     // brackets, strip trailing commas).
     const repaired = tryParseWithRepair(jsonText);
     if (!repaired.ok) {
-      throw new LLMProviderError(this.id, undefined, 'Failed to parse structured response as JSON');
-    }
-    try {
-      const parsed = schema.parse(repaired.value);
-      return { data: parsed, usage: result.usage };
-    } catch {
       throw new LLMProviderError(
         this.id,
         undefined,
-        'Response JSON does not match expected schema'
+        'Failed to parse structured response as JSON',
+        'JSON_PARSE',
+        { jsonText, rawText: result.text }
       );
     }
+
+    const parsed = schema.safeParse(repaired.value);
+    if (parsed.success) {
+      return { data: parsed.data, usage: result.usage };
+    }
+
+    throw new LLMProviderError(
+      this.id,
+      undefined,
+      'Response JSON does not match expected schema',
+      'SCHEMA_MISMATCH',
+      { jsonText, rawText: result.text, issues: parsed.error.issues }
+    );
   }
 
   async resolveConflict(

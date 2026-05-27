@@ -406,7 +406,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
                 {conversationId}
               </span>
               <Link
-                href={`/project/${projectId}/conversation/${encodeURIComponent(conversationId)}`}
+                href={`/chat/${encodeURIComponent(conversationId)}`}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-commit)] transition-colors"
                 onClick={closeSourceViewer}
               >

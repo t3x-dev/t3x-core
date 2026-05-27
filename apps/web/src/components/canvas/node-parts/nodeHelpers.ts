@@ -32,6 +32,7 @@ export function getNextStep(opts: {
   };
   actions: {
     navigateToDraft: (projectId: string, draftId: string) => void;
+    navigateToConversation: (conversationId: string) => void;
     openNodeModal: (nodeId: string, mode: 'commit' | 'conversation') => void;
     openLeafPanel: (nodeId: string) => void;
   };
@@ -68,7 +69,7 @@ export function getNextStep(opts: {
     return {
       label: t('create_commit'),
       icon: icons.GitCommit,
-      action: () => actions.openNodeModal(nodeId, 'commit'),
+      action: () => actions.navigateToConversation(conversationId),
     };
   }
   if (isCommitted) {
