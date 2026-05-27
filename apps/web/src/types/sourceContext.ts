@@ -212,7 +212,7 @@ export interface CommitSourceContextProps {
   /** Default expanded state for turns (default: first turn expanded) */
   defaultExpanded?: boolean;
   /** Commit-level source refs (V4) for identifying leaf sources */
-  sourceRefs?: Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>;
+  sourceRefs?: Array<{ type: 'conversation' | 'leaf' | 'import'; id: string; title?: string }>;
 }
 
 /**

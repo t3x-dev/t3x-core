@@ -13,6 +13,8 @@ import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
+import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
@@ -22,6 +24,7 @@ import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { getTemporaryChat } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
@@ -47,6 +50,28 @@ interface ChatWorkspaceProps {
   onInheritComplete?: () => void;
 }
 
+function materialPinSourceItems(manifest: ConversationContextManifest | null) {
+  return (
+    manifest?.source_items.filter(
+      (item) => item.role === 'evidence' && item.pinned && Boolean(item.pin_id)
+    ) ?? []
+  );
+}
+
+function selectedLessonAssertionIds(
+  manifest: ConversationContextManifest | null,
+  pinId: string
+): string[] {
+  return (
+    manifest?.source_items
+      .filter(
+        (item) =>
+          item.role === 'guidance' && item.pin_id === pinId && item.metadata?.selected === true
+      )
+      .map((item) => item.id) ?? []
+  );
+}
+
 export function ChatWorkspace({
   conversationId,
   projectId,
@@ -69,6 +94,7 @@ export function ChatWorkspace({
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
   const [contextManifestOpen, setContextManifestOpen] = useState(false);
   const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
+  const [pinningMaterialIds, setPinningMaterialIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
@@ -119,6 +145,13 @@ export function ChatWorkspace({
     loading: projectLeavesLoading,
     error: projectLeavesError,
   } = useProjectLeaves(resolvedProjectId, contextManifestOpen && !isCommitted);
+  const {
+    materials: projectMaterials,
+    loading: projectMaterialsLoading,
+    error: projectMaterialsError,
+    refresh: refreshProjectMaterials,
+  } = useProjectMaterials(resolvedProjectId, contextManifestOpen && !isCommitted);
+  const { uploading: materialUploading, upload: uploadMaterial } = useMaterialUpload();
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -284,16 +317,13 @@ export function ChatWorkspace({
 
   const selectedPinsIncludingNewPin = useCallback(
     (pinId: string): string[] | null => {
-      const references = contextManifest?.references ?? [];
-      if (references.length === 0) return null;
+      const materials = materialPinSourceItems(contextManifest);
+      if (materials.length === 0) return null;
 
       const selectedPinIds = new Set(
-        references.filter((reference) => reference.included).map((reference) => reference.pin_id)
+        materials.flatMap((item) => (item.included && item.pin_id ? [item.pin_id] : []))
       );
-      const everyExistingReferenceSelected = references.every((reference) =>
-        selectedPinIds.has(reference.pin_id)
-      );
-      if (everyExistingReferenceSelected) return null;
+      if (materials.every((item) => item.pin_id && selectedPinIds.has(item.pin_id))) return null;
 
       selectedPinIds.add(pinId);
       return Array.from(selectedPinIds);
@@ -344,6 +374,82 @@ export function ChatWorkspace({
     ]
   );
 
+  const handlePinMaterialForContext = useCallback(
+    async (materialId: string) => {
+      if (!resolvedProjectId) return;
+
+      const existing = usePinsStore.getState().getPinByRef('import', materialId);
+      if (existing) {
+        if (resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(existing.id)
+          );
+          await reloadContextManifest();
+        }
+        return;
+      }
+
+      setPinningMaterialIds((prev) => {
+        const next = new Set(prev);
+        next.add(materialId);
+        return next;
+      });
+
+      try {
+        const created = await addPin(resolvedProjectId, 'import', materialId);
+        if (created && resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(created.id)
+          );
+        }
+        if (created) {
+          invalidatePins();
+          await fetchPins(resolvedProjectId);
+          await reloadContextManifest();
+          await refreshProjectMaterials();
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to use material';
+        toast.message(message);
+      } finally {
+        setPinningMaterialIds((prev) => {
+          const next = new Set(prev);
+          next.delete(materialId);
+          return next;
+        });
+      }
+    },
+    [
+      addPin,
+      fetchPins,
+      invalidatePins,
+      reloadContextManifest,
+      refreshProjectMaterials,
+      resolvedConversationId,
+      resolvedProjectId,
+      selectedPinsIncludingNewPin,
+      updateContextSelectedPins,
+    ]
+  );
+
+  const handleUploadMaterial = useCallback(
+    async (file: File) => {
+      if (!resolvedProjectId) return;
+
+      try {
+        await uploadMaterial(resolvedProjectId, file);
+        await refreshProjectMaterials();
+        toast.message('Material added');
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to add material';
+        toast.message(message);
+      }
+    },
+    [refreshProjectMaterials, resolvedProjectId, uploadMaterial]
+  );
+
   const baselineForSourcePanel = useMemo(() => {
     const manifestBaseline =
       contextManifest?.baseline.source === 'parent_commit' ? contextManifest.baseline : null;
@@ -392,9 +498,9 @@ export function ChatWorkspace({
       if (!resolvedConversationId || !contextManifest || contextManifestUpdatingRef.current) return;
 
       const selectedPinIds = new Set(
-        contextManifest.references
-          .filter((reference) => reference.included)
-          .map((reference) => reference.pin_id)
+        materialPinSourceItems(contextManifest).flatMap((item) =>
+          item.included && item.pin_id ? [item.pin_id] : []
+        )
       );
       if (included) {
         selectedPinIds.add(pinId);
@@ -402,7 +508,9 @@ export function ChatWorkspace({
         selectedPinIds.delete(pinId);
       }
 
-      const allReferencePinIds = contextManifest.references.map((reference) => reference.pin_id);
+      const allReferencePinIds = materialPinSourceItems(contextManifest).flatMap((item) =>
+        item.pin_id ? [item.pin_id] : []
+      );
       const nextSelectedPinIds =
         allReferencePinIds.length > 0 &&
         allReferencePinIds.every((referencePinId) => selectedPinIds.has(referencePinId))
@@ -429,11 +537,7 @@ export function ChatWorkspace({
     async (pinId: string, assertionId: string, included: boolean) => {
       if (!contextManifest || contextManifestUpdatingRef.current) return;
 
-      const selectedAssertionIds = new Set(
-        contextManifest.feedback
-          .filter((feedback) => feedback.pin_id === pinId && feedback.selected)
-          .map((feedback) => feedback.id)
-      );
+      const selectedAssertionIds = new Set(selectedLessonAssertionIds(contextManifest, pinId));
       if (included) {
         selectedAssertionIds.add(assertionId);
       } else {
@@ -498,9 +602,16 @@ export function ChatWorkspace({
                 availableLeaves: projectLeaves,
                 availableLeavesLoading: projectLeavesLoading,
                 availableLeavesError: projectLeavesError,
+                availableMaterials: projectMaterials,
+                availableMaterialsLoading: projectMaterialsLoading,
+                availableMaterialsError: projectMaterialsError,
                 leafPinningIds: pinningLeafIds,
+                materialPinningIds: pinningMaterialIds,
+                materialUploading,
                 baseline: baselineForSourcePanel,
                 onPinLeaf: handlePinLeafForContext,
+                onPinMaterial: handlePinMaterialForContext,
+                onUploadMaterial: handleUploadMaterial,
               }
         }
         onOpenChange={setContextManifestOpen}

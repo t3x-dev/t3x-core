@@ -4,7 +4,7 @@
  * Tests all conversation context CRUD operations and verifies database effects.
  * Conversation contexts store per-conversation pin selection configuration.
  *
- * Default behavior (no row): use all project pins.
+ * Default behavior (no row): no project pins.
  * null selectedPinIds: use all project pins.
  * [] selectedPinIds: no pins (fresh start).
  * [...ids] selectedPinIds: specific pins only.
@@ -250,7 +250,7 @@ describe('Conversation Contexts Storage', () => {
   });
 
   describe('semantic behavior', () => {
-    it('null means use all project pins (default behavior)', async () => {
+    it('null means use all project pins', async () => {
       const conversation = await insertConversation(
         db,
         testData.conversation(testProjectId, { title: 'Semantic Null Test' })

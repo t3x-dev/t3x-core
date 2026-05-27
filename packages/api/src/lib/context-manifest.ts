@@ -8,6 +8,7 @@ import {
   filterActivePins,
   flattenTrees,
   type Leaf,
+  type Material,
   type Pin,
   type SemanticContent,
   serializeForPrompt,
@@ -15,6 +16,7 @@ import {
 import {
   type AnyDB,
   findConversationById,
+  findMaterialsByIds,
   findPinsByProject,
   findTurnsByConversation,
   getCommitUnified,
@@ -55,12 +57,41 @@ export interface ContextManifestFeedback {
   lesson?: string;
 }
 
+export type ContextManifestSourceKind =
+  | 'baseline'
+  | 'conversation'
+  | 'leaf'
+  | 'commit'
+  | 'import'
+  | 'file'
+  | 'web'
+  | 'result'
+  | 'lesson';
+
+export type ContextManifestSourceRole = 'baseline' | 'evidence' | 'guidance' | 'provenance';
+
+export interface ContextManifestSourceItem {
+  id: string;
+  kind: ContextManifestSourceKind;
+  role: ContextManifestSourceRole;
+  title: string;
+  pinned: boolean;
+  pinnable: boolean;
+  included: boolean;
+  readonly?: boolean;
+  pin_id?: string;
+  parent_source_id?: string;
+  token_estimate?: number;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 export interface ConversationContextManifest {
   conversation_id: string;
   project_id: string;
   baseline: ContextManifestBaseline;
   references: ContextManifestReference[];
   feedback: ContextManifestFeedback[];
+  source_items: ContextManifestSourceItem[];
   chat_context_text: string;
   extraction_context_text: string;
   token_estimate: number;
@@ -84,10 +115,6 @@ export async function buildConversationContextManifest(
   const contextConfig = await getConversationContext(db, conversationId);
   const effectiveContextConfig = getEffectiveContextConfig(conversationId, contextConfig, options);
   const projectPins = await findPinsByProject(db, conversation.projectId, { limit: 100000 });
-  const contextPins = normalizePinsForContext(projectPins);
-  const activePinIds = new Set(
-    filterActivePins(contextPins, effectiveContextConfig).map((p) => p.id)
-  );
 
   const baselineContent = await loadBaselineContent(
     db,
@@ -95,13 +122,19 @@ export async function buildConversationContextManifest(
     conversation.projectId
   );
   const baseline = toBaseline(baselineContent);
+  const materialPins = filterMaterialPins(projectPins);
+  const contextPins = normalizePinsForContext(materialPins);
+  const activePinIds = new Set(
+    filterActivePins(contextPins, effectiveContextConfig).map((p) => p.id)
+  );
 
   const { conversations, conversationTitles } = await loadPinnedConversations(
     db,
-    projectPins,
+    materialPins,
     conversationId
   );
-  const leaves = await loadPinnedLeaves(db, projectPins);
+  const leaves = await loadPinnedLeaves(db, materialPins);
+  const materials = await loadPinnedMaterials(db, materialPins);
 
   const builtPinContext = buildConversationContext({
     knowledge: undefined,
@@ -109,6 +142,7 @@ export async function buildConversationContextManifest(
     contextConfig: effectiveContextConfig,
     conversations,
     leaves,
+    materials,
   });
 
   const baselineText = baselineContent
@@ -116,14 +150,28 @@ export async function buildConversationContextManifest(
     : '';
   const chat_context_text = [baselineText, builtPinContext.text].filter(Boolean).join('\n\n');
   const feedback = buildFeedback(contextPins, leaves, activePinIds);
-  const extraction_context_text = buildExtractionContextText(feedback);
+  const references = buildReferences(
+    materialPins,
+    leaves,
+    materials,
+    conversationTitles,
+    activePinIds
+  );
+  const extraction_context_text = buildExtractionContextText(
+    feedback,
+    contextPins,
+    materials,
+    activePinIds
+  );
+  const source_items = buildSourceItems(baseline, references, feedback, materials);
 
   return {
     conversation_id: conversationId,
     project_id: conversation.projectId,
     baseline,
-    references: buildReferences(projectPins, leaves, conversationTitles, activePinIds),
+    references,
     feedback,
+    source_items,
     chat_context_text,
     extraction_context_text,
     token_estimate: estimateTokens(chat_context_text),
@@ -142,6 +190,10 @@ function normalizePinsForContext(projectPins: Pin[]): Pin[] {
       selected_assertion_ids: [],
     };
   });
+}
+
+function filterMaterialPins(projectPins: Pin[]): Pin[] {
+  return projectPins.filter((pin) => pin.type === 'leaf' || pin.type === 'import');
 }
 
 function getEffectiveContextConfig(
@@ -249,14 +301,22 @@ async function loadPinnedLeaves(db: AnyDB, projectPins: Pin[]): Promise<Map<stri
   return new Map(leafRecords.map((leaf) => [leaf.id, leaf]));
 }
 
+async function loadPinnedMaterials(db: AnyDB, projectPins: Pin[]): Promise<Map<string, Material>> {
+  const materialIds = projectPins.filter((pin) => pin.type === 'import').map((pin) => pin.ref_id);
+  const materialRecords = materialIds.length > 0 ? await findMaterialsByIds(db, materialIds) : [];
+  return new Map(materialRecords.map((material) => [material.id, material]));
+}
+
 function buildReferences(
   projectPins: Pin[],
   leaves: Map<string, Leaf>,
+  materials: Map<string, Material>,
   conversationTitles: Map<string, string>,
   activePinIds: Set<string>
 ): ContextManifestReference[] {
   return projectPins.map((pin) => {
     const leaf = pin.type === 'leaf' ? leaves.get(pin.ref_id) : undefined;
+    const material = pin.type === 'import' ? materials.get(pin.ref_id) : undefined;
     const conversationTitle =
       pin.type === 'conversation' ? conversationTitles.get(pin.ref_id) : undefined;
 
@@ -265,7 +325,7 @@ function buildReferences(
       id: pin.ref_id,
       pin_id: pin.id,
       included: activePinIds.has(pin.id),
-      title: leaf?.title ?? conversationTitle,
+      title: leaf?.title ?? materialTitle(material) ?? conversationTitle,
     };
   });
 }
@@ -305,24 +365,133 @@ function buildFeedback(
   return feedback;
 }
 
+function buildSourceItems(
+  baseline: ContextManifestBaseline,
+  references: ContextManifestReference[],
+  feedback: ContextManifestFeedback[],
+  materials: Map<string, Material>
+): ContextManifestSourceItem[] {
+  const items: ContextManifestSourceItem[] = [];
+
+  if (baseline.commit_hash) {
+    items.push({
+      id: baseline.commit_hash,
+      kind: 'baseline',
+      role: 'baseline',
+      title: 'Baseline inherited',
+      pinned: false,
+      pinnable: false,
+      included: true,
+      readonly: true,
+      metadata: {
+        branch: baseline.branch,
+        message: baseline.message,
+        nodes: baseline.node_count,
+        relations: baseline.relation_count,
+        source_conversation_id: baseline.source_conversation_id,
+      },
+    });
+  }
+
+  for (const reference of references) {
+    const material = reference.type === 'import' ? materials.get(reference.id) : undefined;
+    items.push({
+      id: reference.id,
+      kind: reference.type,
+      role: 'evidence',
+      title: reference.title ?? reference.id,
+      pin_id: reference.pin_id,
+      pinned: true,
+      pinnable: true,
+      included: reference.included,
+      ...(material
+        ? {
+            token_estimate: material.token_estimate,
+            metadata: {
+              source_type: material.source_type,
+              filename: material.filename ?? null,
+              mime_type: material.mime_type ?? null,
+              tokens: material.token_estimate,
+            },
+          }
+        : {}),
+    });
+  }
+
+  for (const item of feedback) {
+    items.push({
+      id: item.id,
+      kind: 'lesson',
+      role: 'guidance',
+      title: item.lesson ?? item.details ?? item.id,
+      parent_source_id: item.parent_ref_id,
+      pin_id: item.pin_id,
+      pinned: false,
+      pinnable: false,
+      included: item.included,
+      metadata: {
+        selected: item.selected,
+        passed: item.passed ?? null,
+      },
+    });
+  }
+
+  return items;
+}
+
 function isAssertionExplicitlySelected(pin: Pin, assertionId: string): boolean {
   return pin.selected_assertion_ids?.includes(assertionId) ?? false;
 }
 
-function buildExtractionContextText(feedback: ContextManifestFeedback[]): string {
-  const selectedLessons = feedback.filter((item) => item.included && item.lesson);
-  if (selectedLessons.length === 0) return '';
+function buildExtractionContextText(
+  feedback: ContextManifestFeedback[],
+  projectPins: Pin[],
+  materials: Map<string, Material>,
+  activePinIds: Set<string>
+): string {
+  const lines: string[] = [];
 
-  const lines = [
+  const selectedMaterialPins = projectPins.filter(
+    (pin) => pin.type === 'import' && activePinIds.has(pin.id) && materials.has(pin.ref_id)
+  );
+  if (selectedMaterialPins.length > 0) {
+    lines.push(
+      '## Selected Source Materials',
+      '',
+      'Use these materials as source evidence when extracting meaning from the conversation.',
+      ''
+    );
+
+    for (const pin of selectedMaterialPins) {
+      const material = materials.get(pin.ref_id);
+      if (!material) continue;
+      lines.push(`### ${materialTitle(material) ?? material.id}`, '');
+      lines.push(truncateForPrompt(material.content_text, 4000), '');
+    }
+  }
+
+  const selectedLessons = feedback.filter((item) => item.included && item.lesson);
+  if (selectedLessons.length === 0) return lines.join('\n').trim();
+
+  lines.push(
     '## Selected Leaf Feedback',
     '',
     'These lessons are not source evidence. Use them only as feedback about prior outputs.',
-    '',
-  ];
+    ''
+  );
 
   for (const item of selectedLessons) {
     lines.push(`- ${item.lesson}`);
   }
 
-  return lines.join('\n');
+  return lines.join('\n').trim();
+}
+
+function materialTitle(material: Material | undefined): string | undefined {
+  return material?.title ?? material?.filename;
+}
+
+function truncateForPrompt(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}...`;
 }

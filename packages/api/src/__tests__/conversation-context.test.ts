@@ -8,10 +8,12 @@ import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
   createLeaf,
+  createMaterial,
   createPin,
   ensureMainBranch,
   insertConversation,
   insertProject,
+  insertTurn,
   setConversationContext,
   updateBranchHead,
   updateLeafAssertions,
@@ -329,6 +331,41 @@ describe('Conversation Context Routes', () => {
           lesson: 'This lesson should not be selected.',
         }),
       ]);
+      expect(manifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: parentCommit.hash,
+            kind: 'baseline',
+            role: 'baseline',
+            title: 'Baseline inherited',
+            pinned: false,
+            pinnable: false,
+            included: true,
+            readonly: true,
+          }),
+          expect.objectContaining({
+            id: leaf.id,
+            kind: 'leaf',
+            role: 'evidence',
+            title: 'Launch Review',
+            pin_id: leafPin.id,
+            pinned: true,
+            pinnable: true,
+            included: true,
+          }),
+          expect.objectContaining({
+            id: 'ast_keep',
+            kind: 'lesson',
+            role: 'guidance',
+            title: 'Keep the launch goal explicit.',
+            parent_source_id: leaf.id,
+            pin_id: leafPin.id,
+            pinned: false,
+            pinnable: false,
+            included: true,
+          }),
+        ])
+      );
       expect(manifest.chat_context_text).toContain('launch_plan:');
       expect(manifest.chat_context_text).toContain('goal: ship context manifest');
       expect(manifest.chat_context_text).toContain('Keep the launch goal explicit.');
@@ -528,26 +565,365 @@ describe('Conversation Context Routes', () => {
         mockDB,
         testData.project({ name: 'Manifest Pin Limit Test Project' })
       );
+      const parentCommit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'user_test', name: 'Test User' },
+        content: {
+          trees: [{ key: 'baseline', slots: { goal: 'pin limit test' }, children: [] }],
+          relations: [],
+        },
+      });
       const conversation = await insertConversation(mockDB, {
         projectId: project.projectId,
         title: 'Manifest Pin Limit Conversation',
+        parentCommitHash: parentCommit.hash,
       });
 
       for (let index = 0; index < 101; index += 1) {
-        const pinnedConversation = await insertConversation(mockDB, {
-          projectId: project.projectId,
-          title: `Pinned Conversation ${index}`,
+        const leaf = await createLeaf(mockDB, {
+          project_id: project.projectId,
+          commit_hash: parentCommit.hash,
+          type: 'article',
+          title: `Pinned Leaf ${index}`,
         });
         await createPin(mockDB, {
           project_id: project.projectId,
-          type: 'conversation',
-          ref_id: pinnedConversation.conversationId,
+          type: 'leaf',
+          ref_id: leaf.id,
         });
       }
 
       const manifest = await buildConversationContextManifest(mockDB, conversation.conversationId);
 
       expect(manifest.references).toHaveLength(101);
+      expect(manifest.references.every((reference) => reference.type === 'leaf')).toBe(true);
+    });
+
+    it('does not include project pins until the conversation selects them', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Manifest Opt In Pin Test Project' })
+      );
+      const parentCommit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'user_test', name: 'Test User' },
+        content: {
+          trees: [{ key: 'baseline', slots: { goal: 'keep pins opt-in' }, children: [] }],
+          relations: [],
+        },
+      });
+      const conversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Manifest Opt In Pin Conversation',
+        parentCommitHash: parentCommit.hash,
+      });
+      const leaf = await createLeaf(mockDB, {
+        project_id: project.projectId,
+        commit_hash: parentCommit.hash,
+        type: 'article',
+        title: 'Opt In Leaf',
+      });
+      await updateLeafAssertions(mockDB, leaf.id, [
+        {
+          id: 'ast_opt_in',
+          constraint_id: 'cst_opt_in',
+          passed: true,
+          details: 'Opt-in feedback',
+          lesson: 'Only include this lesson after material selection.',
+        },
+      ]);
+      const leafPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'leaf',
+        ref_id: leaf.id,
+        selected_assertion_ids: ['ast_opt_in'],
+      });
+
+      const manifest = await buildConversationContextManifest(mockDB, conversation.conversationId);
+
+      expect(manifest.references).toEqual([
+        expect.objectContaining({
+          pin_id: leafPin.id,
+          included: false,
+        }),
+      ]);
+      expect(manifest.feedback).toEqual([
+        expect.objectContaining({
+          id: 'ast_opt_in',
+          selected: true,
+          included: false,
+        }),
+      ]);
+      expect(manifest.chat_context_text).toContain('keep pins opt-in');
+      expect(manifest.chat_context_text).not.toContain('Only include this lesson');
+      expect(manifest.extraction_context_text).toBe('');
+    });
+
+    it('does not expose conversation pins as selectable materials', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Manifest Baseline Source Material Test Project' })
+      );
+      const sourceConversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Baseline Source Conversation',
+      });
+      await insertTurn(
+        mockDB,
+        testData.turn(project.projectId, sourceConversation.conversationId, {
+          role: 'user',
+          content: 'raw baseline source transcript should not be duplicated as material',
+        })
+      );
+      const extraConversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Extra Material Conversation',
+      });
+      await insertTurn(
+        mockDB,
+        testData.turn(project.projectId, extraConversation.conversationId, {
+          role: 'user',
+          content: 'extra material transcript should remain selectable',
+        })
+      );
+      const parentCommit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'user_test', name: 'Test User' },
+        message: 'Parent knowledge with source conversation',
+        content: {
+          trees: [
+            {
+              key: 'baseline_source',
+              slots: { summary: 'baseline YAML is the automatic inherited context' },
+              children: [],
+            },
+          ],
+          relations: [],
+        },
+        sources: [
+          {
+            type: 'conversation',
+            id: sourceConversation.conversationId,
+            title: 'Baseline Source Conversation',
+          },
+        ],
+      });
+      const conversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Manifest Baseline Source Material Conversation',
+        parentCommitHash: parentCommit.hash,
+      });
+      const sourceConversationPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'conversation',
+        ref_id: sourceConversation.conversationId,
+      });
+      const extraConversationPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'conversation',
+        ref_id: extraConversation.conversationId,
+      });
+      const leaf = await createLeaf(mockDB, {
+        project_id: project.projectId,
+        commit_hash: parentCommit.hash,
+        type: 'wechat',
+        title: 'Reusable Output Material',
+      });
+      const leafPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'leaf',
+        ref_id: leaf.id,
+      });
+      await setConversationContext(mockDB, conversation.conversationId, null);
+
+      const manifest = await buildConversationContextManifest(mockDB, conversation.conversationId);
+
+      expect(manifest.baseline.source_conversation_id).toBe(sourceConversation.conversationId);
+      expect(manifest.references).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: sourceConversationPin.id,
+            id: sourceConversation.conversationId,
+            type: 'conversation',
+          }),
+        ])
+      );
+      expect(manifest.source_items).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: sourceConversation.conversationId,
+            kind: 'conversation',
+            role: 'evidence',
+          }),
+        ])
+      );
+      expect(manifest.references).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: extraConversationPin.id,
+            id: extraConversation.conversationId,
+            type: 'conversation',
+          }),
+        ])
+      );
+      expect(manifest.source_items).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: extraConversation.conversationId,
+            kind: 'conversation',
+            role: 'evidence',
+          }),
+        ])
+      );
+      expect(manifest.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: leafPin.id,
+            id: leaf.id,
+            type: 'leaf',
+            included: true,
+          }),
+        ])
+      );
+      expect(manifest.chat_context_text).toContain(
+        'baseline YAML is the automatic inherited context'
+      );
+      expect(manifest.chat_context_text).not.toContain(
+        'raw baseline source transcript should not be duplicated as material'
+      );
+      expect(manifest.chat_context_text).not.toContain(
+        'extra material transcript should remain selectable'
+      );
+    });
+
+    it('treats import materials as opt-in evidence and extraction source text', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Manifest Import Materials Project' })
+      );
+      const parentCommit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'user_test', name: 'Test User' },
+        message: 'Parent knowledge for import materials',
+        content: {
+          trees: [
+            {
+              key: 'parent_fact',
+              slots: { summary: 'baseline stays automatic' },
+              children: [],
+            },
+          ],
+          relations: [],
+        },
+      });
+      const conversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Import Material Manifest Conversation',
+        parentCommitHash: parentCommit.hash,
+      });
+      const material = await createMaterial(mockDB, {
+        project_id: project.projectId,
+        source_type: 'document',
+        title: 'Launch Notes PDF',
+        filename: 'launch-notes.pdf',
+        mime_type: 'application/pdf',
+        content_text: 'Launch note source says private beta starts with five design partners.',
+        content_hash: 'sha256:launch-notes-material',
+        metadata: {
+          source_type: 'document',
+          source_filename: 'launch-notes.pdf',
+          content_hash: 'sha256:launch-notes-material',
+          content_length: 68,
+          imported_at: '2026-05-26T00:00:00.000Z',
+        },
+        token_estimate: 17,
+      });
+      const materialPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'import',
+        ref_id: material.id,
+      });
+
+      const defaultManifest = await buildConversationContextManifest(
+        mockDB,
+        conversation.conversationId
+      );
+
+      expect(defaultManifest.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: materialPin.id,
+            id: material.id,
+            type: 'import',
+            title: 'Launch Notes PDF',
+            included: false,
+          }),
+        ])
+      );
+      expect(defaultManifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: material.id,
+            kind: 'import',
+            role: 'evidence',
+            title: 'Launch Notes PDF',
+            pin_id: materialPin.id,
+            pinned: true,
+            pinnable: true,
+            included: false,
+          }),
+        ])
+      );
+      expect(defaultManifest.chat_context_text).not.toContain('five design partners');
+      expect(defaultManifest.extraction_context_text).not.toContain('five design partners');
+
+      await setConversationContext(mockDB, conversation.conversationId, [materialPin.id]);
+
+      const selectedManifest = await buildConversationContextManifest(
+        mockDB,
+        conversation.conversationId
+      );
+      expect(selectedManifest.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: materialPin.id,
+            id: material.id,
+            type: 'import',
+            title: 'Launch Notes PDF',
+            included: true,
+          }),
+        ])
+      );
+      expect(selectedManifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: material.id,
+            kind: 'import',
+            role: 'evidence',
+            title: 'Launch Notes PDF',
+            pin_id: materialPin.id,
+            included: true,
+            metadata: expect.objectContaining({
+              filename: 'launch-notes.pdf',
+              source_type: 'document',
+              tokens: 17,
+            }),
+          }),
+        ])
+      );
+      expect(selectedManifest.chat_context_text).toContain('## Source Materials');
+      expect(selectedManifest.chat_context_text).toContain('five design partners');
+      expect(selectedManifest.extraction_context_text).toContain('## Selected Source Materials');
+      expect(selectedManifest.extraction_context_text).toContain('five design partners');
+      expect(selectedManifest.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'import',
+            id: material.id,
+            title: 'Launch Notes PDF',
+          }),
+        ])
+      );
     });
   });
 

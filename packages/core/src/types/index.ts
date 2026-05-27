@@ -17,6 +17,7 @@ export const ID_PREFIXES = {
   assertion: 'ast_',
   leaf: 'leaf_',
   leaf_history: 'lhist_',
+  material: 'mat_',
   pin: 'pin_',
   api_key: 'ak_',
   share_token: 'share_',
@@ -38,7 +39,7 @@ export interface CommitAuthor {
  * Records where the commit's knowledge came from (frozen at commit time).
  */
 export interface CommitSourceRef {
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   id: string;
   title?: string;
   /** For leaf sources: lessons from selected assertions */
@@ -330,7 +331,7 @@ export interface CreateLeafHistoryInput {
 /**
  * What can be pinned.
  */
-export type PinType = 'conversation' | 'leaf';
+export type PinType = 'conversation' | 'leaf' | 'import';
 
 /**
  * A Pin marks an item as selected for:
@@ -349,7 +350,7 @@ export interface Pin {
   /** Type of pinned item */
   type: PinType;
 
-  /** ID of the pinned item (conversation_id or leaf_id) */
+  /** ID of the pinned item (conversation_id, leaf_id, or material/import id) */
   ref_id: string;
 
   /**
@@ -372,8 +373,8 @@ export interface Pin {
 /**
  * Each conversation can customize which pins are included in its LLM context.
  *
- * Default behavior: use all project pins.
- * Custom behavior: select specific pins for this conversation.
+ * Missing config means no project pins are used.
+ * Explicit config can select no pins, some pins, or all pins.
  */
 export interface ConversationContext {
   /** The conversation this config belongs to */
@@ -381,7 +382,7 @@ export interface ConversationContext {
 
   /**
    * Which pins to include in this conversation's context.
-   * null = use all project pins (default)
+   * null = use all project pins
    * [] = no pins (fresh start)
    * [...ids] = specific pins only
    */
@@ -410,9 +411,34 @@ export interface BuiltContext {
 }
 
 export interface ContextSource {
-  type: 'commit' | 'conversation' | 'leaf';
+  type: 'commit' | 'conversation' | 'leaf' | 'import';
   id: string;
   title?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Material (Imported Source Object)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type MaterialSourceType = 'document' | 'url' | 'platform';
+
+/**
+ * A raw source material that can be pinned as PinType "import".
+ */
+export interface Material {
+  /** Unique ID, format: "mat_" + 12 hex chars */
+  id: string;
+  project_id: string;
+  source_type: MaterialSourceType;
+  title?: string;
+  filename?: string;
+  mime_type?: string;
+  content_text: string;
+  content_hash: string;
+  metadata: Record<string, unknown>;
+  token_estimate: number;
+  created_at: string;
+  created_by?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -475,6 +501,22 @@ export interface CreatePinInput {
   ref_id: string;
   selected_assertion_ids?: string[];
   pinned_by?: string;
+}
+
+/**
+ * Input for creating a new Material.
+ */
+export interface CreateMaterialInput {
+  project_id: string;
+  source_type: MaterialSourceType;
+  title?: string;
+  filename?: string;
+  mime_type?: string;
+  content_text: string;
+  content_hash: string;
+  metadata?: Record<string, unknown>;
+  token_estimate?: number;
+  created_by?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

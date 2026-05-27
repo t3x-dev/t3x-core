@@ -311,6 +311,61 @@ export const leafHistory = pgTable(
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// materials: Raw Imported Source Objects
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Material stores raw imported source text that can be pinned with PinType "import".
+ */
+export const materials = pgTable(
+  'materials',
+  {
+    /** Unique ID: "mat_" + 12 hex chars */
+    id: text('id').primaryKey(),
+
+    /** Which project owns this material */
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+
+    /** Source class: document, url, or platform export */
+    sourceType: text('source_type').notNull(),
+
+    /** Human-readable title */
+    title: text('title'),
+
+    /** Original uploaded filename, when applicable */
+    filename: text('filename'),
+
+    /** Original MIME type, when applicable */
+    mimeType: text('mime_type'),
+
+    /** Parsed plain text or markdown content */
+    contentText: text('content_text').notNull(),
+
+    /** Hash of the parsed content or source bytes */
+    contentHash: text('content_hash').notNull(),
+
+    /** Parser/source metadata */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+
+    /** Approximate token count for prompt budgeting */
+    tokenEstimate: integer('token_estimate').notNull().default(0),
+
+    /** When the material was imported */
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
+    /** Who imported it */
+    createdBy: text('created_by'),
+  },
+  (table) => ({
+    projectIdx: index('idx_materials_project').on(table.projectId),
+    createdAtIdx: index('idx_materials_created_at').on(table.createdAt),
+    uniqueMaterial: uniqueIndex('idx_materials_unique_hash').on(table.projectId, table.contentHash),
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // pins: Source Selection Mechanism
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -332,7 +387,7 @@ export const pins = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Type of pinned item: 'conversation' | 'leaf' */
+    /** Type of pinned item: 'conversation' | 'leaf' | 'import' */
     type: text('type').notNull(),
 
     /** ID of the pinned item */
@@ -365,7 +420,7 @@ export const pins = pgTable(
  * Stores per-conversation context configuration.
  *
  * Each conversation can customize which pins are included in its LLM context.
- * Default (no row): use all project pins.
+ * Default (no row): no project pins.
  */
 export const conversationContexts = pgTable('conversation_contexts', {
   /** The conversation this config belongs to */
@@ -375,7 +430,7 @@ export const conversationContexts = pgTable('conversation_contexts', {
 
   /**
    * Which pins to include in context
-   * null = use all project pins (default)
+   * null = use all project pins
    * [] = no pins (fresh start)
    * [...ids] = specific pins only
    */
@@ -440,6 +495,9 @@ export type LeafInsert = typeof leaves.$inferInsert;
 
 export type LeafHistoryRecord = typeof leafHistory.$inferSelect;
 export type LeafHistoryInsert = typeof leafHistory.$inferInsert;
+
+export type MaterialRecord = typeof materials.$inferSelect;
+export type MaterialInsert = typeof materials.$inferInsert;
 
 export type PinRecord = typeof pins.$inferSelect;
 export type PinInsert = typeof pins.$inferInsert;

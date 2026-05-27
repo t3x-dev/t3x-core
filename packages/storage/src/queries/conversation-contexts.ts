@@ -4,7 +4,7 @@
  * CRUD operations for conversation_contexts table using Drizzle ORM.
  * This stores per-conversation context configuration - which pins to use.
  *
- * Default behavior (no row): use all project pins.
+ * Default behavior (no row): no project pins.
  * null selectedPinIds: use all project pins.
  * [] selectedPinIds: no pins (fresh start).
  * [...ids] selectedPinIds: specific pins only.

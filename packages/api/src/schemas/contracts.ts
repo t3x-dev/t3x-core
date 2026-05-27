@@ -438,7 +438,7 @@ export const BatchGenerateResponse = SuccessResponse(
 // Pins API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const PinTypeEnum = z.enum(['conversation', 'leaf']);
+const PinTypeEnum = z.enum(['conversation', 'leaf', 'import']);
 
 // POST /v1/projects/:id/pins
 export const CreatePinRequest = z.object({
@@ -488,7 +488,7 @@ export const ConversationContextResponse = z.object({
 });
 
 export const GetConversationContextResponse = SuccessResponse(
-  ConversationContextResponse.nullable() // null = using default (all pins)
+  ConversationContextResponse.nullable() // null response = no explicit context config
 );
 
 // PUT /v1/conversations/:id/context
@@ -505,7 +505,7 @@ export const GetConversationMemoryResponse = SuccessResponse(
     token_estimate: z.number(),
     sources: z.array(
       z.object({
-        type: z.enum(['commit', 'conversation', 'leaf']),
+        type: z.enum(['commit', 'conversation', 'leaf', 'import']),
         id: z.string(),
         title: z.string().optional(),
       })

@@ -22,6 +22,7 @@ export {
   generateDraftNodeId,
   generateLeafHistoryId,
   generateLeafId,
+  generateMaterialId,
   generateMergeDraftId,
   generateNodeId,
   generatePinId,

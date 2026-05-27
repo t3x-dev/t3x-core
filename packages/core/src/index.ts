@@ -512,6 +512,7 @@ export {
   type CreateDraftInput,
   type CreateLeafHistoryInput,
   type CreateLeafInput,
+  type CreateMaterialInput,
   type CreatePinInput,
   DEPLOY_TYPES,
   type DeployType,
@@ -531,6 +532,8 @@ export {
   type LeafSemanticPointOverride,
   type LeafSemanticPointState,
   type LeafType,
+  type Material,
+  type MaterialSourceType,
   // Merge summary
   type MergeSummaryData,
   // Pin (source selection)

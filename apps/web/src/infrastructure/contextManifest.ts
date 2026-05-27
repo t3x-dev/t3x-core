@@ -22,7 +22,7 @@ export interface ContextManifestBaseline {
 }
 
 export interface ContextManifestReference {
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   id: string;
   pin_id: string;
   included: boolean;
@@ -41,8 +41,36 @@ export interface ContextManifestFeedback {
   lesson?: string;
 }
 
+export type ContextManifestSourceKind =
+  | 'baseline'
+  | 'conversation'
+  | 'leaf'
+  | 'commit'
+  | 'import'
+  | 'file'
+  | 'web'
+  | 'result'
+  | 'lesson';
+
+export type ContextManifestSourceRole = 'baseline' | 'evidence' | 'guidance' | 'provenance';
+
+export interface ContextManifestSourceItem {
+  id: string;
+  kind: ContextManifestSourceKind;
+  role: ContextManifestSourceRole;
+  title: string;
+  pinned: boolean;
+  pinnable: boolean;
+  included: boolean;
+  readonly?: boolean;
+  pin_id?: string;
+  parent_source_id?: string;
+  token_estimate?: number;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 export interface ContextManifestSource {
-  type: 'commit' | 'conversation' | 'leaf';
+  type: 'commit' | 'conversation' | 'leaf' | 'import';
   id: string;
   title?: string;
 }
@@ -53,6 +81,7 @@ export interface ConversationContextManifest {
   baseline: ContextManifestBaseline;
   references: ContextManifestReference[];
   feedback: ContextManifestFeedback[];
+  source_items: ContextManifestSourceItem[];
   token_estimate: number;
   sources: ContextManifestSource[];
   chat_context_text: string;

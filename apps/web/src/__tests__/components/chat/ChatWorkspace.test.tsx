@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   parentConversationId: null as string | null,
   contextManifest: null as ConversationContextManifest | null,
   projectLeaves: [],
+  projectMaterials: [],
+  refreshProjectMaterials: vi.fn(),
+  uploadMaterial: vi.fn(),
   textSelection: {
     current: null as null | {
       selection: {
@@ -103,6 +106,22 @@ vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
   }),
 }));
 
+vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+  useProjectMaterials: () => ({
+    materials: mocks.projectMaterials,
+    loading: false,
+    error: null,
+    refresh: mocks.refreshProjectMaterials,
+  }),
+}));
+
+vi.mock('@/hooks/materials/useMaterialUpload', () => ({
+  useMaterialUpload: () => ({
+    uploading: false,
+    upload: mocks.uploadMaterial,
+  }),
+}));
+
 vi.mock('@/hooks/pins/usePinsCrud', () => ({
   usePinsCrud: () => ({ fetch: mocks.fetchPins, add: mocks.addPin, setAssertions: vi.fn() }),
 }));
@@ -169,6 +188,28 @@ function makeContextManifest(): ConversationContextManifest {
       },
     ],
     feedback: [],
+    source_items: [
+      {
+        id: 'sha256:parent',
+        kind: 'baseline',
+        role: 'baseline',
+        title: 'Baseline inherited',
+        pinned: false,
+        pinnable: false,
+        included: true,
+        readonly: true,
+      },
+      {
+        id: 'conv_parent',
+        kind: 'conversation',
+        role: 'evidence',
+        title: 'Parent conversation',
+        pin_id: 'pin_parent',
+        pinned: true,
+        pinnable: true,
+        included: true,
+      },
+    ],
     token_estimate: 0,
     sources: [{ type: 'commit', id: 'sha256:parent', title: 'Parent commit' }],
     chat_context_text: '',
@@ -185,6 +226,9 @@ describe('ChatWorkspace', () => {
     mocks.parentConversationId = null;
     mocks.contextManifest = null;
     mocks.projectLeaves = [];
+    mocks.projectMaterials = [];
+    mocks.refreshProjectMaterials.mockReset();
+    mocks.uploadMaterial.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -225,7 +269,7 @@ describe('ChatWorkspace', () => {
     const manifest = screen.getByRole('region', { name: /sources/i });
     const messageScroll = screen.getByTestId('chat-message-scroll');
     expect(screen.queryByTestId('source-picker-overlay')).toBeNull();
-    expect(manifest.contains(screen.getByRole('tab', { name: /leaves/i }))).toBe(true);
+    expect(manifest.contains(screen.getByRole('tab', { name: /materials/i }))).toBe(true);
     expect(screen.queryByText('Pin parent')).toBeNull();
     expect(screen.getAllByText('Baseline inherited').length).toBeGreaterThan(0);
     expect(messageScroll.contains(manifest)).toBe(false);

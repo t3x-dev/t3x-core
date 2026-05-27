@@ -58,6 +58,7 @@ import {
   leavesRoutes,
   llmRoutes,
   localConfigRoutes,
+  materialsRoutes,
   mergeRoutes,
   notificationsRoutes,
   pinsRoutes,
@@ -187,6 +188,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', webhooksRoutes);
   api.route('/', recipesRoutes);
   api.route('/', importRoutes);
+  api.route('/', materialsRoutes);
   api.route('/', ingestRoutes);
   api.route('/', notificationsRoutes);
   api.route('/', providersRoutes);

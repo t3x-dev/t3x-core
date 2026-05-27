@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ContextManifestBar } from '@/components/chat/ContextManifestBar';
-import type { ConversationContextManifest, Leaf } from '@/types/api';
+import type { ConversationContextManifest, Leaf, Material } from '@/types/api';
 
 vi.mock('@/components/commit/CommitYAMLDocument', () => ({
   CommitYAMLDocument: ({ content }: { content: { trees: { key: string }[] } }) => (
@@ -58,6 +58,43 @@ const makeManifest = (): ConversationContextManifest => ({
       lesson: 'Avoid vague claims.',
     },
   ],
+  source_items: [
+    {
+      id: 'sha256:abcdef1234567890',
+      kind: 'baseline',
+      role: 'baseline',
+      title: 'Baseline inherited',
+      pinned: false,
+      pinnable: false,
+      included: true,
+      readonly: true,
+    },
+    {
+      id: 'leaf_1',
+      kind: 'leaf',
+      role: 'evidence',
+      title: 'Launch leaf',
+      pin_id: 'pin_leaf',
+      pinned: true,
+      pinnable: true,
+      included: true,
+    },
+    {
+      id: 'ast_1',
+      kind: 'lesson',
+      role: 'guidance',
+      title: 'Keep the tone precise.',
+      parent_source_id: 'leaf_1',
+      pin_id: 'pin_leaf',
+      pinned: false,
+      pinnable: false,
+      included: true,
+      metadata: {
+        selected: true,
+        passed: true,
+      },
+    },
+  ],
   token_estimate: 128,
   sources: [{ type: 'commit', id: 'sha256:abcdef1234567890', title: 'Parent commit' }],
   chat_context_text: 'chat context',
@@ -80,6 +117,21 @@ const followUpLeaf = {
   created_by: null,
 } satisfies Leaf;
 
+const sourceDocumentMaterial = {
+  id: 'mat_source_doc',
+  project_id: 'proj_1',
+  source_type: 'document',
+  title: 'Launch notes',
+  filename: 'launch-notes.pdf',
+  mime_type: 'application/pdf',
+  content_hash: 'abc123',
+  content_excerpt: 'Private beta starts with five design partners.',
+  token_estimate: 12,
+  metadata: {},
+  created_at: '2026-05-26T00:00:00.000Z',
+  created_by: null,
+} satisfies Material;
+
 describe('ContextManifestBar', () => {
   it('renders the collapsed sources summary', () => {
     render(
@@ -100,7 +152,7 @@ describe('ContextManifestBar', () => {
     expect(screen.getByText('128 tokens')).not.toBeNull();
   });
 
-  it('opens the sources panel with MVP tabs and no retired parent pin action', () => {
+  it('opens the sources panel with Materials tab and no retired parent pin action', () => {
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -117,8 +169,9 @@ describe('ContextManifestBar', () => {
     expect(screen.getByRole('region', { name: /sources/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /included/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /baseline/i })).not.toBeNull();
-    expect(screen.getByRole('tab', { name: /leaves/i })).not.toBeNull();
+    expect(screen.getByRole('tab', { name: /materials/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /lessons/i })).not.toBeNull();
+    expect(screen.queryByRole('tab', { name: /leaves/i })).toBeNull();
     expect(screen.queryByText('Context Manifest')).toBeNull();
     expect(screen.queryByText('Pin parent')).toBeNull();
   });
@@ -175,7 +228,7 @@ describe('ContextManifestBar', () => {
     expect(screen.queryByRole('link', { name: /view source conversation/i })).toBeNull();
   });
 
-  it('renders leaf source choices in the Leaves tab', () => {
+  it('renders pinned and available source choices in the Materials tab', () => {
     const onPinLeaf = vi.fn();
     render(
       <ContextManifestBar
@@ -196,20 +249,83 @@ describe('ContextManifestBar', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
 
-    expect(screen.getByRole('heading', { name: 'Leaves' })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Materials' })).not.toBeNull();
+    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'References' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /pin and include leaf follow-up brief/i }));
+    fireEvent.click(screen.getByRole('button', { name: /pin leaf follow-up brief as material/i }));
 
     expect(onPinLeaf).toHaveBeenCalledWith('leaf_followup');
   });
 
-  it('toggles reference inclusion from the opened panel', () => {
+  it('renders available uploaded materials and pins them on explicit user action', () => {
+    const onPinMaterial = vi.fn();
+    render(
+      <ContextManifestBar
+        manifest={makeManifest()}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          availableMaterials: [sourceDocumentMaterial],
+          availableMaterialsLoading: false,
+          availableMaterialsError: null,
+          materialPinningIds: new Set(),
+          onPinMaterial,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    expect(screen.getByText('Launch notes')).not.toBeNull();
+    expect(screen.getByText(/launch-notes\.pdf/i)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /use material launch notes/i }));
+
+    expect(onPinMaterial).toHaveBeenCalledWith('mat_source_doc');
+  });
+
+  it('lets users add an uploaded material from the Materials tab', () => {
+    const onUploadMaterial = vi.fn();
+    render(
+      <ContextManifestBar
+        manifest={makeManifest()}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          onUploadMaterial,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    expect(screen.getByRole('button', { name: /add material/i })).not.toBeNull();
+
+    const file = new File(['source material'], 'source.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByLabelText(/add material file/i), {
+      target: { files: [file] },
+    });
+
+    expect(onUploadMaterial).toHaveBeenCalledWith(file);
+  });
+
+  it('lets users choose whether a pinned material is used in this conversation', () => {
     const onReferenceToggle = vi.fn();
     const manifest = makeManifest();
-    const { rerender } = render(
+    manifest.references[0].included = false;
+    manifest.source_items[1].included = false;
+    render(
       <ContextManifestBar
         manifest={manifest}
         loading={false}
@@ -220,29 +336,20 @@ describe('ContextManifestBar', () => {
       />
     );
 
+    expect(screen.getByText('0 included')).not.toBeNull();
+
     fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+    fireEvent.click(screen.getByText('Launch leaf'));
 
-    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
-
-    const excludedManifest = makeManifest();
-    excludedManifest.references[0].included = false;
-    rerender(
-      <ContextManifestBar
-        manifest={excludedManifest}
-        loading={false}
-        error={null}
-        onReload={vi.fn()}
-        onReferenceToggle={onReferenceToggle}
-        onAssertionToggle={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('tab', { name: /leaves/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /include launch leaf/i }));
-
-    expect(onReferenceToggle).toHaveBeenLastCalledWith('pin_leaf', true);
+    expect(screen.getAllByText('Launch leaf').length).toBeGreaterThan(0);
+    expect(screen.getByText(/not used this turn/i)).not.toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /include launch leaf/i })).toBeNull();
+    const checkbox = screen.getByRole('checkbox', { name: /use material launch leaf/i });
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', true);
+    expect(screen.queryByText(/checkbox = include/i)).toBeNull();
   });
 
   it('toggles lesson inclusion from the Lessons tab', () => {
@@ -268,6 +375,11 @@ describe('ContextManifestBar', () => {
     const updatedManifest = makeManifest();
     updatedManifest.feedback[0].selected = false;
     updatedManifest.feedback[0].included = false;
+    updatedManifest.source_items[2].included = false;
+    updatedManifest.source_items[2].metadata = {
+      selected: false,
+      passed: true,
+    };
     rerender(
       <ContextManifestBar
         manifest={updatedManifest}
@@ -290,6 +402,12 @@ describe('ContextManifestBar', () => {
     manifest.references[0].included = false;
     manifest.feedback[0].selected = true;
     manifest.feedback[0].included = false;
+    manifest.source_items[1].included = false;
+    manifest.source_items[2].included = false;
+    manifest.source_items[2].metadata = {
+      selected: true,
+      passed: true,
+    };
 
     render(
       <ContextManifestBar
@@ -312,6 +430,82 @@ describe('ContextManifestBar', () => {
         }) as HTMLInputElement
       ).checked
     ).toBe(true);
+  });
+
+  it('uses source_items as the display contract for included context and materials', () => {
+    const manifest = makeManifest();
+    manifest.references = [
+      {
+        type: 'leaf',
+        id: 'leaf_legacy',
+        pin_id: 'pin_legacy',
+        included: false,
+        title: 'Legacy reference title',
+      },
+    ];
+    manifest.feedback = [];
+    manifest.source_items = [
+      {
+        id: 'sha256:abcdef1234567890',
+        kind: 'baseline',
+        role: 'baseline',
+        title: 'Baseline inherited',
+        pinned: false,
+        pinnable: false,
+        included: true,
+        readonly: true,
+      },
+      {
+        id: 'conv_material',
+        kind: 'conversation',
+        role: 'evidence',
+        title: 'Pinned conversation material',
+        pin_id: 'pin_conversation',
+        pinned: true,
+        pinnable: true,
+        included: true,
+      },
+      {
+        id: 'ast_guidance',
+        kind: 'lesson',
+        role: 'guidance',
+        title: 'Guidance from prior result',
+        parent_source_id: 'conv_material',
+        pin_id: 'pin_conversation',
+        pinned: false,
+        pinnable: false,
+        included: true,
+        metadata: {
+          selected: true,
+          passed: true,
+        },
+      },
+    ];
+
+    render(
+      <ContextManifestBar
+        manifest={manifest}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('1 included')).not.toBeNull();
+    expect(screen.getByText('1 lesson')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+
+    expect(screen.getByText('Pinned conversation material')).not.toBeNull();
+    expect(screen.getByText('Guidance from prior result')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    expect(screen.getByText('Pinned conversation material')).not.toBeNull();
+    expect(screen.queryByText('Guidance from prior result')).toBeNull();
+    expect(screen.queryByText('Legacy reference title')).toBeNull();
   });
 
   it('renders a stable loading summary state', () => {

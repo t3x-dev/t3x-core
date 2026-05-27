@@ -28,6 +28,7 @@ describe('queries/contextManifest', () => {
       },
       references: [],
       feedback: [],
+      source_items: [],
       token_estimate: 0,
       sources: [],
       chat_context_text: '',
