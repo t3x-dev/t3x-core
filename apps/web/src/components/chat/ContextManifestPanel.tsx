@@ -49,6 +49,7 @@ export interface ContextManifestSourcePicker {
   onPinLeaf?: (leafId: string) => void | Promise<void>;
   onPinMaterial?: (materialId: string) => void | Promise<void>;
   onUploadMaterial?: (file: File) => void | Promise<void>;
+  onOpenMaterial?: (materialId: string) => void;
 }
 
 interface ContextManifestPanelProps {
@@ -292,14 +293,17 @@ function MaterialSourceRow({
   item,
   disabled,
   onReferenceToggle,
+  onOpenMaterial,
 }: {
   item: ContextManifestSourceItem;
   disabled?: boolean;
   onReferenceToggle: ContextManifestPanelProps['onReferenceToggle'];
+  onOpenMaterial?: ContextManifestSourcePicker['onOpenMaterial'];
 }) {
   const title = sourceItemLabel(item);
   const subtitleParts = [sourceKindLabel(item.kind)];
   if (item.pin_id) subtitleParts.push(item.pin_id);
+  const canOpenMaterial = item.kind === 'import' || item.kind === 'file';
 
   return (
     <div className="grid min-w-0 grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-[var(--hover-bg)]">
@@ -314,19 +318,34 @@ function MaterialSourceRow({
           {subtitleParts.join(' · ')}
         </span>
       </span>
-      {item.pin_id ? (
-        <button
-          type="button"
-          aria-label={`Remove material ${title}`}
-          onClick={() => {
-            if (item.pin_id) void onReferenceToggle(item.pin_id, false);
-          }}
-          disabled={disabled}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      ) : null}
+      <span className="flex shrink-0 items-center gap-1">
+        {canOpenMaterial && (
+          <button
+            type="button"
+            aria-label={`Open material ${title}`}
+            onClick={() => {
+              onOpenMaterial?.(item.id);
+            }}
+            disabled={!onOpenMaterial}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </button>
+        )}
+        {item.pin_id ? (
+          <button
+            type="button"
+            aria-label={`Remove material ${title}`}
+            onClick={() => {
+              if (item.pin_id) void onReferenceToggle(item.pin_id, false);
+            }}
+            disabled={disabled}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--status-error-muted)] hover:text-[var(--status-error)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -374,10 +393,12 @@ function AvailableMaterialRow({
   material,
   pinning,
   onPinMaterial,
+  onOpenMaterial,
 }: {
   material: ProjectMaterial;
   pinning: boolean;
   onPinMaterial?: ContextManifestSourcePicker['onPinMaterial'];
+  onOpenMaterial?: ContextManifestSourcePicker['onOpenMaterial'];
 }) {
   const title = materialTitle(material);
   const subtitle = [
@@ -394,18 +415,31 @@ function AvailableMaterialRow({
         </span>
         <span className="block truncate text-[10px] text-[var(--text-tertiary)]">{subtitle}</span>
       </span>
-      <button
-        type="button"
-        aria-label={`Add material ${title}`}
-        onClick={() => {
-          void onPinMaterial?.(material.id);
-        }}
-        disabled={pinning || !onPinMaterial}
-        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--source)]/25 bg-[var(--source)]/10 px-2 py-1 text-[10px] font-medium text-[var(--source)] transition-colors hover:bg-[var(--source)]/15 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {pinning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        Add
-      </button>
+      <span className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          aria-label={`Open material ${title}`}
+          onClick={() => {
+            onOpenMaterial?.(material.id);
+          }}
+          disabled={!onOpenMaterial}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-elevated)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ExternalLink className="h-3 w-3" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Add material ${title}`}
+          onClick={() => {
+            void onPinMaterial?.(material.id);
+          }}
+          disabled={pinning || !onPinMaterial}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--source)]/25 bg-[var(--source)]/10 px-2 py-1 text-[10px] font-medium text-[var(--source)] transition-colors hover:bg-[var(--source)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {pinning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+          Add
+        </button>
+      </span>
     </div>
   );
 }
@@ -806,10 +840,7 @@ export function ContextManifestPanel({
             className="min-h-0 flex-1 overflow-hidden p-2"
           >
             <div className="grid h-full min-h-0 grid-cols-1">
-              <Pane
-                title="Materials"
-                meta={`${usedMaterialSourceItems.length} used`}
-              >
+              <Pane title="Materials" meta={`${usedMaterialSourceItems.length} used`}>
                 <div className="space-y-1">
                   {canUploadMaterial && (
                     <div className="flex items-center justify-end px-2 pb-1">
@@ -850,6 +881,7 @@ export function ContextManifestPanel({
                         item={item}
                         disabled={disabled}
                         onReferenceToggle={onReferenceToggle}
+                        onOpenMaterial={sourcePicker?.onOpenMaterial}
                       />
                     ))
                   ) : (
@@ -877,6 +909,7 @@ export function ContextManifestPanel({
                             material={material}
                             pinning={materialPinningIds.has(material.id)}
                             onPinMaterial={sourcePicker?.onPinMaterial}
+                            onOpenMaterial={sourcePicker?.onOpenMaterial}
                           />
                         ))
                       )}

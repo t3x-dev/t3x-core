@@ -262,6 +262,7 @@ describe('ContextManifestBar', () => {
 
   it('adds available uploaded materials to the current context', () => {
     const onPinMaterial = vi.fn();
+    const onOpenMaterial = vi.fn();
     render(
       <ContextManifestBar
         manifest={makeManifest()}
@@ -276,6 +277,7 @@ describe('ContextManifestBar', () => {
           availableMaterialsError: null,
           materialPinningIds: new Set(),
           onPinMaterial,
+          onOpenMaterial,
         }}
       />
     );
@@ -290,6 +292,10 @@ describe('ContextManifestBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /add material launch notes/i }));
 
     expect(onPinMaterial).toHaveBeenCalledWith('mat_source_doc');
+
+    fireEvent.click(screen.getByRole('button', { name: /open material launch notes/i }));
+
+    expect(onOpenMaterial).toHaveBeenCalledWith('mat_source_doc');
   });
 
   it('lets users add an uploaded material from the Materials tab', () => {
@@ -348,6 +354,53 @@ describe('ContextManifestBar', () => {
 
     expect(onReferenceToggle).toHaveBeenCalledWith('pin_leaf', false);
     expect(screen.queryByText(/checkbox = include/i)).toBeNull();
+  });
+
+  it('opens a pinned uploaded material from the Materials tab', () => {
+    const onOpenMaterial = vi.fn();
+    const manifest = makeManifest();
+    manifest.references = [
+      {
+        type: 'import',
+        id: 'mat_source_doc',
+        pin_id: 'pin_material',
+        included: true,
+        title: 'Launch notes',
+      },
+    ];
+    manifest.source_items = [
+      manifest.source_items[0],
+      {
+        id: 'mat_source_doc',
+        kind: 'import',
+        role: 'evidence',
+        title: 'Launch notes',
+        pin_id: 'pin_material',
+        pinned: true,
+        pinnable: true,
+        included: true,
+      },
+    ];
+
+    render(
+      <ContextManifestBar
+        manifest={manifest}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          onOpenMaterial,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+    fireEvent.click(screen.getByRole('button', { name: /open material launch notes/i }));
+
+    expect(onOpenMaterial).toHaveBeenCalledWith('mat_source_doc');
   });
 
   it('toggles lesson inclusion from the Lessons tab', () => {

@@ -32,6 +32,7 @@ import { ChatInput } from './ChatInput';
 import { ChatMessage } from './ChatMessage';
 import { ChatSpanActions } from './ChatSpanActions';
 import { ContextManifestBar } from './ContextManifestBar';
+import { MaterialReader, type MaterialReaderSelection } from './MaterialReader';
 import { ProviderSetupBanner } from './ProviderSetupBanner';
 
 interface ChatWorkspaceProps {
@@ -48,6 +49,8 @@ interface ChatWorkspaceProps {
   inheritFromCommitHash?: string;
   /** Callback to clear inheritFromCommitHash after hydration (prevents re-hydration on remount) */
   onInheritComplete?: () => void;
+  activeMaterialReader?: MaterialReaderSelection | null;
+  onMaterialReaderChange?: (selection: MaterialReaderSelection | null) => void;
 }
 
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {
@@ -72,6 +75,14 @@ function selectedLessonAssertionIds(
   );
 }
 
+function materialDisplayTitle(material: {
+  title?: string | null;
+  filename?: string | null;
+  id: string;
+}) {
+  return material.title || material.filename || material.id.slice(0, 12);
+}
+
 export function ChatWorkspace({
   conversationId,
   projectId,
@@ -83,6 +94,8 @@ export function ChatWorkspace({
   onConversationCreated: onConversationCreatedProp,
   inheritFromCommitHash,
   onInheritComplete,
+  activeMaterialReader,
+  onMaterialReaderChange,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -460,6 +473,83 @@ export function ChatWorkspace({
     [handlePinMaterialForContext, refreshProjectMaterials, resolvedProjectId, uploadMaterial]
   );
 
+  const materialReaderContext = useMemo(() => {
+    if (!activeMaterialReader) return null;
+
+    const sourceItem = contextManifest?.source_items.find(
+      (item) =>
+        item.role === 'evidence' &&
+        (item.kind === 'import' || item.kind === 'file') &&
+        item.id === activeMaterialReader.materialId
+    );
+    const projectMaterial = projectMaterials.find(
+      (material) => material.id === activeMaterialReader.materialId
+    );
+
+    return {
+      title:
+        sourceItem?.title ??
+        (projectMaterial ? materialDisplayTitle(projectMaterial) : activeMaterialReader.materialId),
+      included: sourceItem?.included ?? false,
+      pinId: sourceItem?.pin_id ?? null,
+    };
+  }, [activeMaterialReader, contextManifest, projectMaterials]);
+
+  const materialReaderSelection = useMemo<MaterialReaderSelection | null>(() => {
+    if (!activeMaterialReader) return null;
+    return {
+      projectId: activeMaterialReader.projectId,
+      materialId: activeMaterialReader.materialId,
+      context: materialReaderContext,
+    };
+  }, [activeMaterialReader, materialReaderContext]);
+
+  useEffect(() => {
+    if (!materialReaderSelection || !activeMaterialReader || !onMaterialReaderChange) return;
+    const current = activeMaterialReader.context;
+    const next = materialReaderSelection.context;
+    if (
+      current?.title === next?.title &&
+      current?.included === next?.included &&
+      current?.pinId === next?.pinId
+    ) {
+      return;
+    }
+    onMaterialReaderChange(materialReaderSelection);
+  }, [activeMaterialReader, materialReaderSelection, onMaterialReaderChange]);
+
+  const handleOpenMaterialReader = useCallback(
+    (materialId: string) => {
+      if (!resolvedProjectId) return;
+
+      const sourceItem = contextManifest?.source_items.find(
+        (item) =>
+          item.role === 'evidence' &&
+          (item.kind === 'import' || item.kind === 'file') &&
+          item.id === materialId
+      );
+      const projectMaterial = projectMaterials.find((material) => material.id === materialId);
+
+      onMaterialReaderChange?.({
+        projectId: resolvedProjectId,
+        materialId,
+        context: {
+          title:
+            sourceItem?.title ??
+            (projectMaterial ? materialDisplayTitle(projectMaterial) : materialId),
+          included: sourceItem?.included ?? false,
+          pinId: sourceItem?.pin_id ?? null,
+        },
+      });
+      setContextManifestOpen(false);
+    },
+    [contextManifest, onMaterialReaderChange, projectMaterials, resolvedProjectId]
+  );
+
+  const handleCloseMaterialReader = useCallback(() => {
+    onMaterialReaderChange?.(null);
+  }, [onMaterialReaderChange]);
+
   const baselineForSourcePanel = useMemo(() => {
     const manifestBaseline =
       contextManifest?.baseline.source === 'parent_commit' ? contextManifest.baseline : null;
@@ -599,211 +689,232 @@ export function ChatWorkspace({
         modelsLoading={modelsLoading}
       />
 
-      <ContextManifestBar
-        manifest={contextManifest}
-        loading={contextManifestLoading}
-        error={contextManifestError}
-        open={contextManifestOpen}
-        updating={contextManifestUpdating}
-        sourcePicker={
-          isCommitted
-            ? undefined
-            : {
-                availableLeaves: projectLeaves,
-                availableLeavesLoading: projectLeavesLoading,
-                availableLeavesError: projectLeavesError,
-                availableMaterials: projectMaterials,
-                availableMaterialsLoading: projectMaterialsLoading,
-                availableMaterialsError: projectMaterialsError,
-                leafPinningIds: pinningLeafIds,
-                materialPinningIds: pinningMaterialIds,
-                materialUploading,
-                baseline: baselineForSourcePanel,
-                onPinLeaf: handlePinLeafForContext,
-                onPinMaterial: handlePinMaterialForContext,
-                onUploadMaterial: handleUploadMaterial,
-              }
-        }
-        onOpenChange={setContextManifestOpen}
-        onReload={reloadContextManifest}
-        onReferenceToggle={handleContextReferenceToggle}
-        onAssertionToggle={handleContextAssertionToggle}
-      />
-
-      {/* Coverage toggle — visible after extraction */}
-      {sourceMapByTurn.size > 0 && (
-        <button
-          type="button"
-          onClick={() => setCoverageMode((p) => !p)}
-          className={cn(
-            'absolute top-24 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
-            coverageMode
-              ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
-              : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
-          )}
-        >
-          {coverageMode ? 'Hide coverage' : 'Show coverage'}
-        </button>
-      )}
-
-      {/* Message list */}
-      <div
-        ref={chatContainerRef}
-        data-testid="chat-message-scroll"
-        className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--chat-panel)]"
-      >
-        {/* Parent conversation banner */}
-        {parentConversationId && (
-          <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
-            <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 text-xs text-[var(--text-secondary)]">
-              <GitCommit size={12} className="text-[var(--accent-commit)]" />
-              <span>Continuing from previous commit</span>
-              <a
-                href={`/chat/${parentConversationId}`}
-                className="text-[var(--accent-commit)] hover:underline font-medium"
-              >
-                View parent conversation
-              </a>
-            </div>
-          </div>
-        )}
-        {isLoading ? (
-          <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
-            <Loader2 size={40} strokeWidth={1} className="animate-spin" />
-            <p className="text-sm font-medium">Loading conversation...</p>
-          </div>
-        ) : messages.length === 0 && !isStreaming ? (
-          <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
-            {!modelsLoading && !hasConfiguredGenerationProvider && (
-              <div className="w-full max-w-[620px] px-5 pb-2">
-                <ProviderSetupBanner
-                  variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
-                />
-              </div>
-            )}
-            <MessageSquarePlus size={40} strokeWidth={1} />
-            <p className="text-sm font-medium text-[var(--text-primary)]">No messages yet</p>
-            <span className="text-xs text-[var(--text-tertiary)]">
-              Type a message below to start the conversation
-            </span>
-          </div>
-        ) : (
-          <div className="space-y-1 py-2">
-            {messages.map((msg, i) => {
-              const sourceDraft = sourceTextDrafts[msg.id];
-              return (
-                <ChatMessage
-                  key={msg.id}
-                  sender={msg.role}
-                  content={sourceDraft?.content ?? msg.content}
-                  projectId={msg.projectId}
-                  conversationId={msg.conversationId}
-                  turnHash={msg.id}
-                  turnIndex={i + 1}
-                  citations={
-                    msg.role === 'assistant' && i === messages.length - 1 ? citations : undefined
+      {materialReaderSelection ? (
+        <MaterialReader
+          selection={materialReaderSelection}
+          onBack={handleCloseMaterialReader}
+          onAddToChat={handlePinMaterialForContext}
+          onRemoveFromChat={(pinId) => handleContextReferenceToggle(pinId, false)}
+          disabled={contextManifestUpdating}
+        />
+      ) : (
+        <>
+          <ContextManifestBar
+            manifest={contextManifest}
+            loading={contextManifestLoading}
+            error={contextManifestError}
+            open={contextManifestOpen}
+            updating={contextManifestUpdating}
+            sourcePicker={
+              isCommitted
+                ? undefined
+                : {
+                    availableLeaves: projectLeaves,
+                    availableLeavesLoading: projectLeavesLoading,
+                    availableLeavesError: projectLeavesError,
+                    availableMaterials: projectMaterials,
+                    availableMaterialsLoading: projectMaterialsLoading,
+                    availableMaterialsError: projectMaterialsError,
+                    leafPinningIds: pinningLeafIds,
+                    materialPinningIds: pinningMaterialIds,
+                    materialUploading,
+                    baseline: baselineForSourcePanel,
+                    onPinLeaf: handlePinLeafForContext,
+                    onPinMaterial: handlePinMaterialForContext,
+                    onUploadMaterial: handleUploadMaterial,
+                    onOpenMaterial: handleOpenMaterialReader,
                   }
-                  sourceMap={sourceMapByTurn.get(i + 1)}
-                  committedHighlights={committedHighlightsByTurn.get(msg.id)}
-                  inlineEditSpans={sourceDraft?.spans}
-                  coverageMode={coverageMode}
-                />
-              );
-            })}
+            }
+            onOpenChange={setContextManifestOpen}
+            onReload={reloadContextManifest}
+            onReferenceToggle={handleContextReferenceToggle}
+            onAssertionToggle={handleContextAssertionToggle}
+          />
 
-            {/* Search indicator */}
-            {searchQuery && (
-              <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 py-2 text-xs text-[var(--text-tertiary)]">
-                <span className="animate-spin h-3 w-3 border border-[var(--text-tertiary)] border-t-transparent rounded-full" />
-                Searching: {searchQuery}
+          {/* Coverage toggle — visible after extraction */}
+          {sourceMapByTurn.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setCoverageMode((p) => !p)}
+              className={cn(
+                'absolute top-24 right-4 z-10 flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-md border transition-colors',
+                coverageMode
+                  ? 'bg-[var(--status-warning)]/10 border-[var(--status-warning)]/30 text-[var(--status-warning)]'
+                  : 'bg-[var(--surface-elevated)] border-[var(--stroke-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+              )}
+            >
+              {coverageMode ? 'Hide coverage' : 'Show coverage'}
+            </button>
+          )}
+
+          {/* Message list */}
+          <div
+            ref={chatContainerRef}
+            data-testid="chat-message-scroll"
+            className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--chat-panel)]"
+          >
+            {/* Parent conversation banner */}
+            {parentConversationId && (
+              <div className="w-full py-2 bg-[var(--accent-commit)]/5 border-b border-[var(--accent-commit)]/10">
+                <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 text-xs text-[var(--text-secondary)]">
+                  <GitCommit size={12} className="text-[var(--accent-commit)]" />
+                  <span>Continuing from previous commit</span>
+                  <a
+                    href={`/chat/${parentConversationId}`}
+                    className="text-[var(--accent-commit)] hover:underline font-medium"
+                  >
+                    View parent conversation
+                  </a>
+                </div>
               </div>
             )}
+            {isLoading ? (
+              <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
+                <Loader2 size={40} strokeWidth={1} className="animate-spin" />
+                <p className="text-sm font-medium">Loading conversation...</p>
+              </div>
+            ) : messages.length === 0 && !isStreaming ? (
+              <div className="flex h-full flex-col items-center justify-center text-[var(--text-tertiary)] gap-2">
+                {!modelsLoading && !hasConfiguredGenerationProvider && (
+                  <div className="w-full max-w-[620px] px-5 pb-2">
+                    <ProviderSetupBanner
+                      variant={
+                        availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'
+                      }
+                    />
+                  </div>
+                )}
+                <MessageSquarePlus size={40} strokeWidth={1} />
+                <p className="text-sm font-medium text-[var(--text-primary)]">No messages yet</p>
+                <span className="text-xs text-[var(--text-tertiary)]">
+                  Type a message below to start the conversation
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-1 py-2">
+                {messages.map((msg, i) => {
+                  const sourceDraft = sourceTextDrafts[msg.id];
+                  return (
+                    <ChatMessage
+                      key={msg.id}
+                      sender={msg.role}
+                      content={sourceDraft?.content ?? msg.content}
+                      projectId={msg.projectId}
+                      conversationId={msg.conversationId}
+                      turnHash={msg.id}
+                      turnIndex={i + 1}
+                      citations={
+                        msg.role === 'assistant' && i === messages.length - 1
+                          ? citations
+                          : undefined
+                      }
+                      sourceMap={sourceMapByTurn.get(i + 1)}
+                      committedHighlights={committedHighlightsByTurn.get(msg.id)}
+                      inlineEditSpans={sourceDraft?.spans}
+                      coverageMode={coverageMode}
+                    />
+                  );
+                })}
 
-            {/* Streaming response */}
-            {isStreaming && streamingContent && (
-              <ChatMessage
-                sender="assistant"
-                content={streamingContent}
-                isStreaming
-                thinkingContent={thinkingContent}
-                isThinking={isThinking}
-              />
-            )}
+                {/* Search indicator */}
+                {searchQuery && (
+                  <div className="mx-auto flex max-w-[620px] items-center gap-2 px-5 py-2 text-xs text-[var(--text-tertiary)]">
+                    <span className="animate-spin h-3 w-3 border border-[var(--text-tertiary)] border-t-transparent rounded-full" />
+                    Searching: {searchQuery}
+                  </div>
+                )}
 
-            {/* Waiting indicator */}
-            {isStreaming && !streamingContent && (
-              <div className="w-full py-4">
-                <div className="mx-auto max-w-[620px] px-5">
-                  <div className="flex gap-3">
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-conversation-soft)] text-xs font-medium text-[var(--accent-conversation)] ring-1 ring-[var(--accent-conversation)]/20">
-                      T3
-                    </div>
-                    <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm pt-1">
-                      <div className="flex gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:0ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:150ms]" />
-                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:300ms]" />
+                {/* Streaming response */}
+                {isStreaming && streamingContent && (
+                  <ChatMessage
+                    sender="assistant"
+                    content={streamingContent}
+                    isStreaming
+                    thinkingContent={thinkingContent}
+                    isThinking={isThinking}
+                  />
+                )}
+
+                {/* Waiting indicator */}
+                {isStreaming && !streamingContent && (
+                  <div className="w-full py-4">
+                    <div className="mx-auto max-w-[620px] px-5">
+                      <div className="flex gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-conversation-soft)] text-xs font-medium text-[var(--accent-conversation)] ring-1 ring-[var(--accent-conversation)]/20">
+                          T3
+                        </div>
+                        <div className="flex items-center gap-2 text-[var(--text-tertiary)] text-sm pt-1">
+                          <div className="flex gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:0ms]" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:150ms]" />
+                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-tertiary)] animate-bounce [animation-delay:300ms]" />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Error */}
-            {error && (
-              <div className="w-full py-3">
-                <div className="mx-auto max-w-[620px] px-5">
-                  <div className="flex items-center gap-2 py-2.5 px-3.5 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-xs">
-                    <AlertCircle size={14} />
-                    <span>{error}</span>
+                {/* Error */}
+                {error && (
+                  <div className="w-full py-3">
+                    <div className="mx-auto max-w-[620px] px-5">
+                      <div className="flex items-center gap-2 py-2.5 px-3.5 bg-[var(--status-error-muted)] border border-[var(--status-error)]/20 rounded-lg text-[var(--status-error)] text-xs">
+                        <AlertCircle size={14} />
+                        <span>{error}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Non-critical warning */}
-            {warning && !error && (
-              <div className="w-full py-3">
-                <div className="mx-auto max-w-[620px] px-5">
-                  <div className="flex items-center gap-2 py-2 px-3.5 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/20 rounded-lg text-[var(--status-warning)] text-xs">
-                    <AlertCircle size={14} />
-                    <span>{warning}</span>
+                {/* Non-critical warning */}
+                {warning && !error && (
+                  <div className="w-full py-3">
+                    <div className="mx-auto max-w-[620px] px-5">
+                      <div className="flex items-center gap-2 py-2 px-3.5 bg-[var(--status-warning-muted)] border border-[var(--status-warning)]/20 rounded-lg text-[var(--status-warning)] text-xs">
+                        <AlertCircle size={14} />
+                        <span>{warning}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
+
+            <div ref={messagesEndRef} />
           </div>
-        )}
 
-        <div ref={messagesEndRef} />
-      </div>
+          {/* Inline source-text actions (visible whenever editable chat text is selected) */}
+          {showAddForm && selection && (
+            <ChatSpanActions selection={selection} onDone={clearSelection} />
+          )}
 
-      {/* Inline source-text actions (visible whenever editable chat text is selected) */}
-      {showAddForm && selection && (
-        <ChatSpanActions selection={selection} onDone={clearSelection} />
-      )}
-
-      {/* Input area — committed conversations are read-only after commit */}
-      {!isCommitted && (
-        <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
-          <div className="relative mx-auto max-w-[540px] px-5">
-            <ChatInput
-              onSend={handleSend}
-              onStop={stopGenerating}
-              isStreaming={isStreaming}
-              draftKey={chatInputDraftKey}
-              disabled={
-                isLoading || isExtracting || modelsLoading || !selectedProvider || !selectedModel
-              }
-              placeholder="Reply..."
-              conversationId={resolvedConversationId}
-              selectedProvider={selectedProvider ?? ''}
-              selectedModel={selectedModel ?? ''}
-              onModelChange={handleModelChange}
-            />
-          </div>
-        </div>
+          {/* Input area — committed conversations are read-only after commit */}
+          {!isCommitted && (
+            <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
+              <div className="relative mx-auto max-w-[540px] px-5">
+                <ChatInput
+                  onSend={handleSend}
+                  onStop={stopGenerating}
+                  isStreaming={isStreaming}
+                  draftKey={chatInputDraftKey}
+                  disabled={
+                    isLoading ||
+                    isExtracting ||
+                    modelsLoading ||
+                    !selectedProvider ||
+                    !selectedModel
+                  }
+                  placeholder="Reply..."
+                  conversationId={resolvedConversationId}
+                  selectedProvider={selectedProvider ?? ''}
+                  selectedModel={selectedModel ?? ''}
+                  onModelChange={handleModelChange}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

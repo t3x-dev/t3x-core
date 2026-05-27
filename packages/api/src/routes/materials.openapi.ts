@@ -6,7 +6,7 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { estimateTokens, type Material } from '@t3x-dev/core';
-import { createMaterial, findMaterialsByProject } from '@t3x-dev/storage';
+import { createMaterial, findMaterialById, findMaterialsByProject } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { parseDocument } from '../lib/import';
@@ -14,6 +14,7 @@ import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const EXCERPT_CHARS = 600;
+const SEGMENT_MAX_CHARS = 1200;
 
 export const materialsRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
@@ -32,6 +33,30 @@ const MaterialResponseSchema = z.object({
   metadata: z.record(z.string(), z.unknown()),
   created_at: z.string(),
   created_by: z.string().nullable(),
+});
+
+const MaterialSegmentSchema = z.object({
+  id: z.string(),
+  index: z.number(),
+  label: z.string(),
+  text: z.string(),
+  char_start: z.number(),
+  char_end: z.number(),
+  token_estimate: z.number(),
+});
+
+const MaterialParseQualitySchema = z.object({
+  status: z.enum(['ready', 'partial', 'poor', 'empty']),
+  score: z.number(),
+  message: z.string(),
+});
+
+const MaterialDetailResponseSchema = MaterialResponseSchema.extend({
+  content_text: z.string(),
+  page_count: z.number().nullable(),
+  segment_count: z.number(),
+  segments: z.array(MaterialSegmentSchema),
+  parse_quality: MaterialParseQualitySchema,
 });
 
 const listMaterialsRoute = createRoute({
@@ -63,6 +88,57 @@ materialsRoutes.openapi(listMaterialsRoute, async (c) => {
   return c.json({
     success: true as const,
     data: materials.map(toMaterialResponse),
+  });
+});
+
+const getMaterialRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/materials/{materialId}',
+  tags: ['Materials'],
+  summary: 'Get project material detail',
+  description: 'Returns parsed material text and deterministic segments for the Material Reader.',
+  request: {
+    params: z.object({
+      projectId: z.string(),
+      materialId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Material detail',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(MaterialDetailResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Material not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
+materialsRoutes.openapi(getMaterialRoute, async (c) => {
+  const { projectId, materialId } = c.req.valid('param');
+  const db = await getDB();
+  const material = await findMaterialById(db, materialId);
+
+  if (!material || material.project_id !== projectId) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'MATERIAL_NOT_FOUND', message: 'Material not found' },
+      },
+      404
+    );
+  }
+
+  return c.json({
+    success: true as const,
+    data: toMaterialDetailResponse(material),
   });
 });
 
@@ -185,6 +261,110 @@ function toMaterialResponse(material: Material) {
     created_at: material.created_at,
     created_by: material.created_by ?? null,
   };
+}
+
+function toMaterialDetailResponse(material: Material) {
+  const segments = segmentMaterialText(material);
+  const pageCount = numberMetadata(material.metadata.page_count);
+
+  return {
+    ...toMaterialResponse(material),
+    content_text: material.content_text,
+    page_count: pageCount,
+    segment_count: segments.length,
+    segments,
+    parse_quality: parseQuality(material),
+  };
+}
+
+function segmentMaterialText(material: Material) {
+  const text = material.content_text.trim();
+  if (!text) return [];
+
+  const blocks = text
+    .split(/\n\s*\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const sourceBlocks = blocks.length > 0 ? blocks : [text];
+  const grouped: Array<{ text: string; char_start: number; char_end: number }> = [];
+  let currentText = '';
+  let currentStart = -1;
+  let currentEnd = -1;
+  let cursor = 0;
+
+  for (const block of sourceBlocks) {
+    const blockStart = Math.max(0, material.content_text.indexOf(block, cursor));
+    const blockEnd = blockStart + block.length;
+    cursor = blockEnd;
+
+    if (!currentText) {
+      currentText = block;
+      currentStart = blockStart;
+      currentEnd = blockEnd;
+      continue;
+    }
+
+    if (currentText.length + block.length + 2 > SEGMENT_MAX_CHARS) {
+      grouped.push({ text: currentText, char_start: currentStart, char_end: currentEnd });
+      currentText = block;
+      currentStart = blockStart;
+      currentEnd = blockEnd;
+      continue;
+    }
+
+    currentText = `${currentText}\n\n${block}`;
+    currentEnd = blockEnd;
+  }
+
+  if (currentText) {
+    grouped.push({ text: currentText, char_start: currentStart, char_end: currentEnd });
+  }
+
+  return grouped.map((segment, index) => ({
+    id: `${material.id}:seg_${String(index + 1).padStart(3, '0')}`,
+    index: index + 1,
+    label: `Section ${index + 1}`,
+    text: segment.text,
+    char_start: segment.char_start,
+    char_end: segment.char_end,
+    token_estimate: estimateTokens(segment.text),
+  }));
+}
+
+function parseQuality(material: Material) {
+  if (!material.content_text.trim()) {
+    return {
+      status: 'empty' as const,
+      score: 0,
+      message: 'No parsed text was extracted from this material.',
+    };
+  }
+
+  const quality = material.metadata.extraction_quality;
+  if (quality === 'poor') {
+    return {
+      status: 'poor' as const,
+      score: 0.25,
+      message: 'Parsed text is sparse. Inspect the source before relying on it.',
+    };
+  }
+  if (quality === 'partial') {
+    return {
+      status: 'partial' as const,
+      score: 0.55,
+      message: 'Parsed text is partial. Original layout is not shown here.',
+    };
+  }
+
+  return {
+    status: 'ready' as const,
+    score: 0.84,
+    message: 'Parsed text is available. Original layout is not preserved in this MVP.',
+  };
+}
+
+function numberMetadata(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function excerpt(text: string): string {

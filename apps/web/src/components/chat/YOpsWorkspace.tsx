@@ -10,6 +10,7 @@ import {
 import { cn } from '@/utils/cn';
 import { AfterPanel } from './AfterPanel';
 import { ArchivedOpsPanel } from './ArchivedOpsPanel';
+import { type MaterialReaderSelection, MaterialSourceDetails } from './MaterialReader';
 import { ReplayWarningBanner } from './ReplayWarningBanner';
 import { ScriptEditor } from './ScriptEditor';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
@@ -38,7 +39,15 @@ const LOG_VIEW_META: Record<LogView, { label: string; desc: string }> = {
 const COLLAPSED_WIDTH = 48;
 const DEFAULT_SPLIT_RATIO = 0.5;
 
-export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
+export function YOpsWorkspace({
+  customWidth,
+  materialReader,
+  onCloseMaterialReader,
+}: {
+  customWidth?: number;
+  materialReader?: MaterialReaderSelection | null;
+  onCloseMaterialReader?: () => void;
+}) {
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const setPanelExpanded = useWorkspaceStore((s) => s.setPanelExpanded);
   const [splitRatio, setSplitRatio] = useState(DEFAULT_SPLIT_RATIO);
@@ -189,12 +198,26 @@ export function YOpsWorkspace({ customWidth }: { customWidth?: number }) {
         className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-divider)] bg-[var(--workspace-panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
-        title="Expand workspace"
+        title={materialReader ? 'Expand source details' : 'Expand workspace'}
       >
         <PanelRightOpen className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
         <span className="text-[10px] font-bold text-[var(--source)] [writing-mode:vertical-rl] rotate-180">
-          Workspace
+          {materialReader ? 'Source Details' : 'Workspace'}
         </span>
+      </div>
+    );
+  }
+
+  if (materialReader) {
+    return (
+      <div
+        className="flex h-full flex-col bg-[var(--workspace-panel)]"
+        style={{ width, minWidth: WORKSPACE_PANEL_MIN_WIDTH }}
+      >
+        <MaterialSourceDetails
+          selection={materialReader}
+          onBackToChat={onCloseMaterialReader ?? (() => undefined)}
+        />
       </div>
     );
   }

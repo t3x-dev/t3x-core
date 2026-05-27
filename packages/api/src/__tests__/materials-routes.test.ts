@@ -98,5 +98,55 @@ describe('Materials Routes', () => {
         }),
       ])
     );
+
+    const detailRes = await app.request(
+      `/v1/projects/${testProjectId}/materials/${uploaded.data.id}`
+    );
+    expect(detailRes.status).toBe(200);
+
+    const detail: ApiResponse = await detailRes.json();
+    expect(detail.success).toBe(true);
+    expect(detail.data).toEqual(
+      expect.objectContaining({
+        id: uploaded.data.id,
+        content_text: 'Alpha source material for a launch plan.',
+        segment_count: 1,
+        page_count: null,
+        parse_quality: expect.objectContaining({
+          status: 'ready',
+        }),
+      })
+    );
+    expect(detail.data.segments[0]).toEqual(
+      expect.objectContaining({
+        id: `${uploaded.data.id}:seg_001`,
+        label: 'Section 1',
+        text: 'Alpha source material for a launch plan.',
+      })
+    );
+  });
+
+  it('does not return materials outside the requested project scope', async () => {
+    const form = new FormData();
+    form.append(
+      'file',
+      new File(['Scoped material.'], 'scoped.txt', {
+        type: 'text/plain',
+      })
+    );
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(uploadRes.status).toBe(200);
+
+    const uploaded: ApiResponse = await uploadRes.json();
+    const detailRes = await app.request(`/v1/projects/proj_other/materials/${uploaded.data.id}`);
+
+    expect(detailRes.status).toBe(404);
+    const detail: ApiResponse = await detailRes.json();
+    expect(detail.success).toBe(false);
+    expect(detail.error.code).toBe('MATERIAL_NOT_FOUND');
   });
 });
