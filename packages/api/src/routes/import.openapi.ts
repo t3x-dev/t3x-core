@@ -399,7 +399,7 @@ const documentPreviewRoute = createRoute({
   path: '/v1/import/document/preview',
   tags: ['Import'],
   summary: 'Preview document content before import',
-  description: 'Upload a PDF, DOCX, Markdown, or text file for preview.',
+  description: 'Upload a PDF, DOCX, Markdown, text, XLSX, or CSV file for preview.',
   request: {
     body: {
       content: {
@@ -503,7 +503,7 @@ const documentImportRoute = createRoute({
   path: '/v1/import/document',
   tags: ['Import'],
   summary: 'Import a document file',
-  description: 'Upload and import a PDF, DOCX, Markdown, or text file.',
+  description: 'Upload and import a PDF, DOCX, Markdown, text, XLSX, or CSV file.',
   request: {
     body: {
       content: {

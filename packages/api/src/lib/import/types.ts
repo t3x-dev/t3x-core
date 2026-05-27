@@ -39,6 +39,12 @@ export interface ImportMetadata {
   site_name?: string;
   extraction_quality?: 'good' | 'partial' | 'poor';
   page_count?: number;
+  sheet_count?: number;
+  sheet_names?: string[];
+  row_count?: number;
+  column_count?: number;
+  formula_count?: number;
+  truncated_sheet_count?: number;
   imported_at: string;
   turn_map?: TurnProvenance[];
 }

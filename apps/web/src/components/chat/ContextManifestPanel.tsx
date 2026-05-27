@@ -18,6 +18,10 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { CommitYAMLDocument } from '@/components/commit/CommitYAMLDocument';
+import {
+  DOCUMENT_SOURCE_ACCEPTED_TYPES,
+  unsupportedDocumentSourceMessage,
+} from '@/components/import/documentAcceptTypes';
 import type {
   ContextManifestSourceItem,
   ConversationContextManifest,
@@ -623,6 +627,7 @@ export function ContextManifestPanel({
 }: ContextManifestPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceTab>('included');
   const [selectedPreview, setSelectedPreview] = useState<PreviewTarget>({ kind: 'baseline' });
+  const [materialUploadError, setMaterialUploadError] = useState<string | null>(null);
   const materialUploadInputRef = useRef<HTMLInputElement>(null);
   const sourceItems = manifest?.source_items ?? [];
   const includedSourceItems = sourceItems.filter((item) => item.included);
@@ -886,15 +891,26 @@ export function ContextManifestPanel({
                         type="file"
                         aria-label="Add material file"
                         className="sr-only"
-                        accept=".pdf,.doc,.docx,.md,.markdown,.txt,.html,.htm,text/plain,text/markdown,text/html,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
                         onChange={(event) => {
                           const file = event.currentTarget.files?.[0];
                           if (file) {
-                            void sourcePicker?.onUploadMaterial?.(file);
+                            const unsupportedMessage = unsupportedDocumentSourceMessage(file);
+                            if (unsupportedMessage) {
+                              setMaterialUploadError(unsupportedMessage);
+                            } else {
+                              setMaterialUploadError(null);
+                              void sourcePicker?.onUploadMaterial?.(file);
+                            }
                           }
                           event.currentTarget.value = '';
                         }}
                       />
+                    </div>
+                  )}
+                  {materialUploadError && (
+                    <div className="mx-2 rounded-md border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] px-2 py-1.5 text-xs text-[var(--status-error)]">
+                      {materialUploadError}
                     </div>
                   )}
                   {usedMaterialSourceItems.length > 0 ? (

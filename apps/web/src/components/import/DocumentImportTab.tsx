@@ -6,6 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useDocumentImport } from '@/hooks/imports/useDocumentImport';
 import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
+import {
+  DOCUMENT_SOURCE_ACCEPT_HINT,
+  DOCUMENT_SOURCE_ACCEPTED_TYPES,
+  unsupportedDocumentSourceMessage,
+} from './documentAcceptTypes';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
@@ -14,8 +19,6 @@ interface DocumentImportTabProps {
   projectId: string;
   onImported: (conversationId: string) => void;
 }
-
-const ACCEPTED_TYPES = '.pdf,.docx,.doc,.md,.txt,.html,.htm';
 
 export function DocumentImportTab({ projectId, onImported }: DocumentImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -37,6 +40,17 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
       setFile(f);
       setPreview(null);
       setImportStatus('idle');
+      setStatusMessage('');
+      setStreamProgress(null);
+
+      const unsupportedMessage = unsupportedDocumentSourceMessage(f);
+      if (unsupportedMessage) {
+        setImportStatus('error');
+        setStatusMessage(unsupportedMessage);
+        setPreviewLoading(false);
+        return;
+      }
+
       setPreviewLoading(true);
       try {
         const result = await fetchPreview(f, projectId);
@@ -106,11 +120,11 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
   return (
     <div className="space-y-4">
       <FileDropZone
-        accept={ACCEPTED_TYPES}
+        accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
         maxSizeMB={10}
         onFile={handleFile}
         label="Drop a document here or click to browse"
-        hint="PDF, DOCX, Markdown, TXT, HTML (max 10MB)"
+        hint={DOCUMENT_SOURCE_ACCEPT_HINT}
         disabled={previewLoading || importStatus === 'loading' || importStatus === 'streaming'}
       />
 
