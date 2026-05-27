@@ -13,7 +13,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -42,6 +42,7 @@ import { useCommitStore } from '@/store/commitStore';
 import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import type { ApiCommit, Leaf as ApiLeaf } from '@/types/api';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
 import { LogoIcon } from './sidebar/LogoIcon';
@@ -169,6 +170,7 @@ export function ChatSidebar() {
   const { loadCommits } = useCommitsList();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
+  const searchParams = useSearchParams();
 
   const wasCompactViewportRef = useRef(false);
 
@@ -186,6 +188,10 @@ export function ChatSidebar() {
     const match = pathname.match(/^\/chat\/project\/([^/]+)/);
     return match ? decodeURIComponent(match[1]) : null;
   }, [pathname]);
+  const currentReturnTo = useMemo(
+    () => buildReturnTo(pathname, searchParams),
+    [pathname, searchParams]
+  );
   const effectiveProjectId = routeProjectId ?? activeProjectId;
   const workspaceMode = pathname.includes('/canvas')
     ? 'canvas'
@@ -1380,9 +1386,12 @@ export function ChatSidebar() {
                                   type="button"
                                   onClick={() =>
                                     router.push(
-                                      `/chat/project/${encodeURIComponent(
-                                        currentProjectId
-                                      )}/canvas?commit=${encodeURIComponent(commit.hash)}`
+                                      withReturnTo(
+                                        `/project/${currentProjectId}/commit/${encodeURIComponent(
+                                          commit.hash
+                                        )}`,
+                                        currentReturnTo
+                                      )
                                     )
                                   }
                                   className="grid min-h-[42px] min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-left text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"

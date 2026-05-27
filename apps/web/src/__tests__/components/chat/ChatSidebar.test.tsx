@@ -72,6 +72,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mocks.routerPush,
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/store/chatStore', () => {
@@ -606,6 +607,39 @@ describe('ChatSidebar', () => {
       expect(mocks.loadCommits).toHaveBeenCalledWith('proj_smoke', undefined, 40);
       expect(screen.getByText('Extract release decisions')).toBeInTheDocument();
     });
+  });
+
+  it('opens commit details from the canvas-scoped commit list', async () => {
+    mocks.pathname = '/chat/project/proj_smoke/canvas';
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.commits = [
+      {
+        hash: 'sha256:abcdef123456',
+        message: 'Extract release decisions',
+        branch: 'main',
+        committed_at: '2026-05-08T00:00:00Z',
+      },
+    ];
+    mocks.loadCommits.mockResolvedValue(mocks.commits);
+
+    render(<ChatSidebar />);
+
+    const commitButton = await screen.findByRole('button', {
+      name: /Extract release decisions/i,
+    });
+    fireEvent.click(commitButton);
+
+    expect(mocks.routerPush).toHaveBeenCalledWith(
+      '/project/proj_smoke/commit/sha256%3Aabcdef123456?returnTo=%2Fchat%2Fproject%2Fproj_smoke%2Fcanvas'
+    );
   });
 
   it('shows leaf-scoped navigation below the Leaf tab', () => {
