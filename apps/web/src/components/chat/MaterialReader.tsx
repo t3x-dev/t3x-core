@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { isValidElement, useMemo, useState } from 'react';
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -173,7 +173,7 @@ export function MaterialReader({
                 />
               </div>
               <span className="shrink-0 rounded-md bg-[var(--surface-elevated)] px-2 py-1 text-[10px] text-[var(--text-tertiary)]">
-                {filteredSegments.length} / {material.segment_count} {profile.unitPlural}
+                {filteredSegments.length} / {chunkCountLabel(material.segment_count)}
               </span>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-3">
@@ -254,21 +254,9 @@ function ReaderShell({ children }: { children: ReactNode }) {
 }
 
 const MARKDOWN_COMPONENTS: Components = {
-  h1: ({ children }) => (
-    <h1 className="mb-4 text-lg font-semibold leading-tight text-[var(--text-primary)]">
-      {children}
-    </h1>
-  ),
-  h2: ({ children }) => (
-    <h2 className="mb-3 mt-5 text-base font-semibold leading-tight text-[var(--text-primary)]">
-      {children}
-    </h2>
-  ),
-  h3: ({ children }) => (
-    <h3 className="mb-2 mt-4 text-sm font-semibold leading-tight text-[var(--text-primary)]">
-      {children}
-    </h3>
-  ),
+  h1: ({ children }) => <MarkdownHeading level={1}>{children}</MarkdownHeading>,
+  h2: ({ children }) => <MarkdownHeading level={2}>{children}</MarkdownHeading>,
+  h3: ({ children }) => <MarkdownHeading level={3}>{children}</MarkdownHeading>,
   p: ({ children }) => (
     <p className="my-3 text-sm leading-7 text-[var(--text-secondary)]">{children}</p>
   ),
@@ -315,6 +303,82 @@ const MARKDOWN_COMPONENTS: Components = {
   ),
 };
 
+function markdownComponentsWithHeadings(headings: DocumentHeading[]): Components {
+  const idsByText = new Map<string, string[]>();
+  for (const heading of headings) {
+    idsByText.set(heading.text, [...(idsByText.get(heading.text) ?? []), heading.id]);
+  }
+
+  const nextHeadingId = (children: ReactNode) => {
+    const text = cleanMarkdownHeading(childrenToText(children));
+    const ids = idsByText.get(text);
+    const id = ids?.shift();
+    return id ?? slugify(text);
+  };
+
+  return {
+    ...MARKDOWN_COMPONENTS,
+    h1: ({ children }) => (
+      <MarkdownHeading level={1} id={nextHeadingId(children)}>
+        {children}
+      </MarkdownHeading>
+    ),
+    h2: ({ children }) => (
+      <MarkdownHeading level={2} id={nextHeadingId(children)}>
+        {children}
+      </MarkdownHeading>
+    ),
+    h3: ({ children }) => (
+      <MarkdownHeading level={3} id={nextHeadingId(children)}>
+        {children}
+      </MarkdownHeading>
+    ),
+  };
+}
+
+function MarkdownHeading({
+  level,
+  id,
+  children,
+}: {
+  level: 1 | 2 | 3;
+  id?: string;
+  children: ReactNode;
+}) {
+  const headingId = id ?? headingIdFromChildren(children);
+
+  if (level === 1) {
+    return (
+      <h1
+        id={headingId}
+        className="mb-4 scroll-mt-4 text-lg font-semibold leading-tight text-[var(--text-primary)]"
+      >
+        {children}
+      </h1>
+    );
+  }
+
+  if (level === 2) {
+    return (
+      <h2
+        id={headingId}
+        className="mb-3 mt-5 scroll-mt-4 text-base font-semibold leading-tight text-[var(--text-primary)]"
+      >
+        {children}
+      </h2>
+    );
+  }
+
+  return (
+    <h3
+      id={headingId}
+      className="mb-2 mt-4 scroll-mt-4 text-sm font-semibold leading-tight text-[var(--text-primary)]"
+    >
+      {children}
+    </h3>
+  );
+}
+
 function StatusBadge({ status }: { status: MaterialDetail['parse_quality']['status'] }) {
   const label =
     status === 'empty'
@@ -339,13 +403,7 @@ function StatusBadge({ status }: { status: MaterialDetail['parse_quality']['stat
 
 function MaterialSummary({ material }: { material: MaterialDetail }) {
   const profile = materialProfile(material);
-  const stats = [
-    profile.fileTypeLabel,
-    profile.primaryMeasure,
-    `${formatNumber(material.token_estimate)} tokens`,
-    `${formatNumber(material.segment_count)} ${profile.unitPlural}`,
-    material.mime_type ?? 'unknown MIME',
-  ];
+  const stats = materialSummaryStats(material, profile);
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-[var(--stroke-divider)] p-3">
@@ -362,16 +420,19 @@ function MaterialSummary({ material }: { material: MaterialDetail }) {
           </p>
         </div>
       </div>
-      <div className="hidden min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 text-[10px] text-[var(--text-tertiary)] md:flex">
+      <ul
+        aria-label="Material summary stats"
+        className="hidden min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 text-[10px] text-[var(--text-tertiary)] md:flex"
+      >
         {stats.map((value) => (
-          <span
+          <li
             key={value}
             className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] px-2 py-1 font-mono"
           >
             {value}
-          </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -447,13 +508,116 @@ function ContentPreviewView({
 }
 
 function DocumentPreviewView({ material }: { material: MaterialDetail }) {
+  const headings = documentHeadings(material.content_text);
+  const outlineHeadings = headings.slice(0, 12);
+
   return (
-    <article className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-5">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-        {material.content_text}
-      </ReactMarkdown>
-    </article>
+    <div className="mx-auto max-w-[960px] space-y-3">
+      {outlineHeadings.length > 0 && <DocumentOutline headings={outlineHeadings} />}
+      <article className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-5">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={markdownComponentsWithHeadings(headings)}
+        >
+          {material.content_text}
+        </ReactMarkdown>
+      </article>
+    </div>
   );
+}
+
+function DocumentOutline({ headings }: { headings: DocumentHeading[] }) {
+  return (
+    <nav
+      aria-label="Document outline"
+      className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)]"
+    >
+      <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-normal text-[var(--text-tertiary)]">
+          Document outline
+        </h2>
+        <span className="rounded-md bg-[var(--surface-panel)] px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)]">
+          {headings.length}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5 p-3">
+        {headings.map((heading) => (
+          <a
+            key={`${heading.id}:${heading.level}:${heading.text}`}
+            href={`#${heading.id}`}
+            className={cn(
+              'rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:border-[var(--source)]/30 hover:text-[var(--text-primary)]',
+              heading.level > 1 && 'text-[var(--text-tertiary)]'
+            )}
+          >
+            {heading.text}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+interface DocumentHeading {
+  id: string;
+  text: string;
+  level: number;
+}
+
+function documentHeadings(markdown: string): DocumentHeading[] {
+  const usedIds = new Map<string, number>();
+
+  return markdown.split('\n').flatMap((line): DocumentHeading[] => {
+    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line.trim());
+    if (!match) return [];
+
+    const text = cleanMarkdownHeading(match[2]);
+    if (!text) return [];
+
+    return [
+      {
+        id: uniqueSlug(slugify(text), usedIds),
+        text,
+        level: match[1].length,
+      },
+    ];
+  });
+}
+
+function cleanMarkdownHeading(value: string): string {
+  return value
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[*_`#]/g, '')
+    .trim();
+}
+
+function headingIdFromChildren(children: ReactNode): string {
+  return slugify(childrenToText(children));
+}
+
+function childrenToText(children: ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(childrenToText).join('');
+  if (isValidElement<{ children?: ReactNode }>(children)) {
+    return childrenToText(children.props.children);
+  }
+  return '';
+}
+
+function slugify(value: string): string {
+  return (
+    value
+      .normalize('NFKD')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, '') || 'section'
+  );
+}
+
+function uniqueSlug(base: string, used: Map<string, number>): string {
+  const nextCount = (used.get(base) ?? 0) + 1;
+  used.set(base, nextCount);
+  return nextCount === 1 ? base : `${base}-${nextCount}`;
 }
 
 function SpreadsheetPreviewView({
@@ -469,6 +633,14 @@ function SpreadsheetPreviewView({
   const sheetCount = spreadsheetSheetCount(material);
   const rowCount = metadataNumber(material.metadata, ['row_count', 'rows']);
   const columnCount = metadataNumber(material.metadata, ['column_count', 'columns']);
+  const formulaCount = metadataNumber(material.metadata, ['formula_count', 'formulas']) ?? 0;
+  const truncatedSheetCount =
+    metadataNumber(material.metadata, ['truncated_sheet_count', 'truncated_sheets']) ?? 0;
+  const sheetPreviews = workbookSheetPreviews(material.content_text);
+  const sheetLinks =
+    sheetPreviews.length > 0
+      ? sheetPreviews.map((sheet) => ({ id: sheet.id, name: sheet.name }))
+      : sheetNames.map((sheetName) => ({ id: `sheet-${slugify(sheetName)}`, name: sheetName }));
 
   return (
     <div className="space-y-3">
@@ -480,31 +652,163 @@ function SpreadsheetPreviewView({
             and hidden sheets may not be fully preserved.
           </p>
         </div>
-        <dl className="grid grid-cols-2 divide-x divide-y divide-[var(--stroke-divider)] text-xs md:grid-cols-4">
+        <dl className="grid grid-cols-2 divide-x divide-y divide-[var(--stroke-divider)] text-xs md:grid-cols-3 xl:grid-cols-6">
           <SpreadsheetMetric label="Sheets" value={sheetCount ? formatNumber(sheetCount) : 'n/a'} />
           <SpreadsheetMetric label="Rows" value={rowCount ? formatNumber(rowCount) : 'unknown'} />
           <SpreadsheetMetric
             label="Columns"
             value={columnCount ? formatNumber(columnCount) : 'unknown'}
           />
+          <SpreadsheetMetric label="Formula cells" value={formatNumber(formulaCount)} />
           <SpreadsheetMetric label="Tokens" value={formatNumber(material.token_estimate)} />
+          {truncatedSheetCount > 0 && (
+            <SpreadsheetMetric label="Truncated sheets" value={formatNumber(truncatedSheetCount)} />
+          )}
         </dl>
-        {sheetNames.length > 0 && (
+        {sheetLinks.length > 0 && (
           <div className="flex flex-wrap gap-1.5 border-t border-[var(--stroke-divider)] p-3">
-            {sheetNames.map((sheetName) => (
-              <span
-                key={sheetName}
+            {sheetLinks.map((sheet) => (
+              <a
+                key={sheet.id}
+                href={`#${sheet.id}`}
                 className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)]"
               >
-                {sheetName}
-              </span>
+                {sheet.name}
+              </a>
             ))}
           </div>
         )}
       </section>
-      <ParsedTextView material={material} segments={segments} query={query} />
+      <WorkbookWarnings formulaCount={formulaCount} truncatedSheetCount={truncatedSheetCount} />
+      {!query.trim() && sheetPreviews.length > 0 ? (
+        <WorkbookSheetPreviewList sheets={sheetPreviews} />
+      ) : (
+        <ParsedTextView material={material} segments={segments} query={query} />
+      )}
     </div>
   );
+}
+
+function WorkbookWarnings({
+  formulaCount,
+  truncatedSheetCount,
+}: {
+  formulaCount: number;
+  truncatedSheetCount: number;
+}) {
+  const warnings: string[] = [];
+  if (formulaCount > 0) {
+    warnings.push(
+      `${formatNumber(formulaCount)} formula cells were detected. The preview shows extracted cell values, not the workbook's formula logic.`
+    );
+  }
+  if (truncatedSheetCount > 0) {
+    warnings.push(
+      `${formatNumber(truncatedSheetCount)} sheet${truncatedSheetCount === 1 ? ' was' : 's were'} truncated during import.`
+    );
+  }
+
+  if (warnings.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] p-3 text-xs text-[var(--status-warning)]">
+      <div className="flex gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="space-y-1.5">
+          {warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkbookSheetPreviewList({ sheets }: { sheets: WorkbookSheetPreview[] }) {
+  return (
+    <div className="space-y-3">
+      {sheets.map((sheet) => (
+        <section
+          key={sheet.id}
+          id={sheet.id}
+          aria-label={`${sheet.name} sheet preview`}
+          className="scroll-mt-3 rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)]"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--stroke-divider)] px-3 py-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                {sheet.name}
+              </h3>
+              <p className="mt-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
+                {sheet.rows ? `${formatNumber(sheet.rows)} rows` : 'rows unknown'} ·{' '}
+                {sheet.columns ? `${formatNumber(sheet.columns)} columns` : 'columns unknown'}
+              </p>
+            </div>
+            <span className="rounded-md bg-[var(--surface-panel)] px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)]">
+              Sheet preview
+            </span>
+          </div>
+          <div className="p-3">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+              {sheet.markdown || 'No non-empty cells found.'}
+            </ReactMarkdown>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+interface WorkbookSheetPreview {
+  id: string;
+  name: string;
+  rows: number | null;
+  columns: number | null;
+  markdown: string;
+}
+
+function workbookSheetPreviews(markdown: string): WorkbookSheetPreview[] {
+  const sheets: WorkbookSheetPreview[] = [];
+  const usedIds = new Map<string, number>();
+  let current: WorkbookSheetPreview | null = null;
+  let markdownLines: string[] = [];
+
+  const finishCurrent = () => {
+    if (!current) return;
+    current.markdown = markdownLines.join('\n').trim();
+    sheets.push(current);
+    markdownLines = [];
+  };
+
+  for (const line of markdown.split('\n')) {
+    const sheetMatch = /^##\s+Sheet:\s*(.+?)\s*$/.exec(line.trim());
+    if (sheetMatch) {
+      finishCurrent();
+      const name = sheetMatch[1].trim();
+      current = {
+        id: uniqueSlug(`sheet-${slugify(name)}`, usedIds),
+        name,
+        rows: null,
+        columns: null,
+        markdown: '',
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    const metricsMatch = /^Rows:\s*(\d+)\s*\|\s*Columns:\s*(\d+)/i.exec(line.trim());
+    if (metricsMatch) {
+      current.rows = Number.parseInt(metricsMatch[1], 10);
+      current.columns = Number.parseInt(metricsMatch[2], 10);
+      continue;
+    }
+
+    markdownLines.push(line);
+  }
+
+  finishCurrent();
+  return sheets.slice(0, 12);
 }
 
 function SpreadsheetMetric({ label, value }: { label: string; value: string }) {
@@ -757,7 +1061,6 @@ interface MaterialProfile {
   structureTabLabel: string;
   structureTabMeta: string;
   primaryMeasure: string;
-  unitPlural: string;
   searchPlaceholder: string;
   emptyState: string;
   emptySearchState: string;
@@ -771,7 +1074,7 @@ interface MaterialProfile {
 
 function materialProfile(material: MaterialDetail): MaterialProfile {
   const kind = detectMaterialKind(material);
-  const chunks = `${formatNumber(material.segment_count)} chunks`;
+  const chunks = chunkCountLabel(material.segment_count);
 
   if (kind === 'spreadsheet') {
     const sheetCount = spreadsheetSheetCount(material);
@@ -782,13 +1085,12 @@ function materialProfile(material: MaterialDetail): MaterialProfile {
       summaryDescription:
         'Workbook preview generated from extracted sheet text. Tables, formulas, and hidden sheets may not be fully preserved.',
       contentTabLabel: 'Workbook',
-      contentTabMeta: formatNumber(material.token_estimate),
+      contentTabMeta: `${formatNumber(material.token_estimate)} tokens`,
       structureTabLabel: 'Sheets',
       structureTabMeta: sheetCount
         ? formatNumber(sheetCount)
         : formatNumber(material.segment_count),
       primaryMeasure: sheetMeasure,
-      unitPlural: 'chunks',
       searchPlaceholder: 'Search workbook text',
       emptyState: 'No workbook text available.',
       emptySearchState: 'No matching workbook text.',
@@ -813,7 +1115,6 @@ function materialProfile(material: MaterialDetail): MaterialProfile {
       structureTabLabel: 'Pages',
       structureTabMeta: material.page_count ? formatNumber(material.page_count) : chunks,
       primaryMeasure: pages,
-      unitPlural: 'chunks',
       searchPlaceholder: 'Search PDF text',
       emptyState: 'No PDF text available.',
       emptySearchState: 'No matching PDF text.',
@@ -827,17 +1128,16 @@ function materialProfile(material: MaterialDetail): MaterialProfile {
   }
 
   if (kind === 'document') {
+    const fileTypeLabel = documentFormatLabel(material);
     return {
       kind,
-      fileTypeLabel: 'Document',
-      summaryDescription:
-        'Document preview generated from parsed Markdown. Original page styling is not preserved.',
+      fileTypeLabel,
+      summaryDescription: `${fileTypeLabel} preview generated from parsed source. Original page styling is not preserved.`,
       contentTabLabel: 'Document',
-      contentTabMeta: formatNumber(material.token_estimate),
+      contentTabMeta: `${formatNumber(material.token_estimate)} tokens`,
       structureTabLabel: 'Chunks',
-      structureTabMeta: formatNumber(material.segment_count),
+      structureTabMeta: chunks,
       primaryMeasure: material.page_count ? `${formatNumber(material.page_count)} pages` : chunks,
-      unitPlural: 'chunks',
       searchPlaceholder: 'Search document text',
       emptyState: 'No document text available.',
       emptySearchState: 'No matching document text.',
@@ -857,9 +1157,8 @@ function materialProfile(material: MaterialDetail): MaterialProfile {
     contentTabLabel: 'Text',
     contentTabMeta: 'parsed',
     structureTabLabel: 'Chunks',
-    structureTabMeta: formatNumber(material.segment_count),
+    structureTabMeta: chunks,
     primaryMeasure: chunks,
-    unitPlural: 'chunks',
     searchPlaceholder: 'Search source text',
     emptyState: 'No source text available.',
     emptySearchState: 'No matching chunks.',
@@ -874,8 +1173,7 @@ function materialProfile(material: MaterialDetail): MaterialProfile {
 
 function detectMaterialKind(material: MaterialDetail): MaterialKind {
   const mime = (material.mime_type ?? '').toLowerCase();
-  const filename = (material.filename ?? material.title ?? '').toLowerCase();
-  const ext = filename.includes('.') ? filename.split('.').pop() : '';
+  const ext = fileExtension(material);
 
   if (
     mime.includes('spreadsheet') ||
@@ -908,30 +1206,57 @@ function detectMaterialKind(material: MaterialDetail): MaterialKind {
   return 'text';
 }
 
+function materialSummaryStats(material: MaterialDetail, profile: MaterialProfile): string[] {
+  const stats = [
+    profile.fileTypeLabel,
+    profile.primaryMeasure,
+    `${formatNumber(material.token_estimate)} tokens`,
+    chunkCountLabel(material.segment_count),
+  ];
+
+  return Array.from(new Set(stats.filter(Boolean)));
+}
+
+function documentFormatLabel(material: MaterialDetail): string {
+  const mime = (material.mime_type ?? '').toLowerCase();
+  const ext = fileExtension(material);
+
+  if (mime.includes('markdown') || ext === 'md' || ext === 'markdown') return 'Markdown';
+  if (mime.includes('wordprocessingml') || ext === 'docx') return 'DOCX';
+  if (mime === 'application/msword' || ext === 'doc') return 'Word';
+  if (mime === 'text/html' || ext === 'html' || ext === 'htm') return 'HTML';
+  return 'Document';
+}
+
+function fileExtension(material: MaterialDetail): string {
+  const filename = (material.filename ?? material.title ?? '').toLowerCase();
+  return filename.includes('.') ? (filename.split('.').pop() ?? '') : '';
+}
+
 function sourceContextSummary(
   material: MaterialDetail,
   context: MaterialReaderContextStatus | null,
   profile: MaterialProfile
 ) {
-  const chunkCount = formatNumber(material.segment_count);
+  const chunkCount = chunkCountLabel(material.segment_count);
   const tokenCount = formatNumber(material.token_estimate);
   if (context?.included) {
     if (profile.kind === 'spreadsheet') {
       return {
         title: profile.includedSummaryTitle,
-        detail: `${profile.primaryMeasure} · ${tokenCount} tokens · ${chunkCount} chunks`,
+        detail: `${profile.primaryMeasure} · ${tokenCount} tokens · ${chunkCount}`,
       };
     }
 
     return {
       title: profile.includedSummaryTitle,
-      detail: `${capitalize(profile.promptIncludedLabel)} · ${tokenCount} tokens · ${chunkCount} chunks`,
+      detail: `${capitalize(profile.promptIncludedLabel)} · ${tokenCount} tokens · ${chunkCount}`,
     };
   }
 
   return {
     title: profile.availableSummaryTitle,
-    detail: `${profile.primaryMeasure} · ${tokenCount} tokens · ${chunkCount} chunks available`,
+    detail: `${profile.primaryMeasure} · ${tokenCount} tokens · ${chunkCount} available`,
   };
 }
 
@@ -941,22 +1266,22 @@ function sourcePreviewSummary(
   previewCount: number,
   profile: MaterialProfile
 ) {
-  const chunkCount = formatNumber(material.segment_count);
+  const chunkCount = chunkCountLabel(material.segment_count);
   if (profile.kind === 'spreadsheet') {
     if (context?.included) {
       return 'Workbook text is included in prompt context. Tables and formulas are represented as extracted text.';
     }
-    return `${formatNumber(previewCount)} of ${chunkCount} workbook chunks previewed. Add the workbook to include extracted sheet text.`;
+    return `${formatNumber(previewCount)} of ${chunkCount} previewed. Add the workbook to include extracted sheet text.`;
   }
 
   if (context?.included) {
     if (previewCount < material.segment_count) {
-      return `All ${chunkCount} chunks are included in prompt context. Showing first ${formatNumber(previewCount)} below.`;
+      return `All ${chunkCount} are included in prompt context. Showing first ${formatNumber(previewCount)} below.`;
     }
-    return `All ${chunkCount} chunks are included in prompt context.`;
+    return `All ${chunkCount} are included in prompt context.`;
   }
 
-  return `${formatNumber(previewCount)} of ${chunkCount} chunks previewed. Add the source to include it in prompt context.`;
+  return `${formatNumber(previewCount)} of ${chunkCount} previewed. Add the source to include it in prompt context.`;
 }
 
 function parseQualitySummary(material: MaterialDetail, profile: MaterialProfile) {
@@ -1145,4 +1470,8 @@ function stringifyMetadata(value: unknown): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
+}
+
+function chunkCountLabel(value: number): string {
+  return `${formatNumber(value)} ${value === 1 ? 'chunk' : 'chunks'}`;
 }
