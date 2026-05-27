@@ -22,7 +22,7 @@ export interface ContextManifestBaseline {
 }
 
 export interface ContextManifestReference {
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   id: string;
   pin_id: string;
   included: boolean;
@@ -70,7 +70,7 @@ export interface ContextManifestSourceItem {
 }
 
 export interface ContextManifestSource {
-  type: 'commit' | 'conversation' | 'leaf';
+  type: 'commit' | 'conversation' | 'leaf' | 'import';
   id: string;
   title?: string;
 }

@@ -8,6 +8,7 @@ import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
   createLeaf,
+  createMaterial,
   createPin,
   ensureMainBranch,
   insertConversation,
@@ -792,6 +793,136 @@ describe('Conversation Context Routes', () => {
       );
       expect(manifest.chat_context_text).not.toContain(
         'extra material transcript should remain selectable'
+      );
+    });
+
+    it('treats import materials as opt-in evidence and extraction source text', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Manifest Import Materials Project' })
+      );
+      const parentCommit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', id: 'user_test', name: 'Test User' },
+        message: 'Parent knowledge for import materials',
+        content: {
+          trees: [
+            {
+              key: 'parent_fact',
+              slots: { summary: 'baseline stays automatic' },
+              children: [],
+            },
+          ],
+          relations: [],
+        },
+      });
+      const conversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Import Material Manifest Conversation',
+        parentCommitHash: parentCommit.hash,
+      });
+      const material = await createMaterial(mockDB, {
+        project_id: project.projectId,
+        source_type: 'document',
+        title: 'Launch Notes PDF',
+        filename: 'launch-notes.pdf',
+        mime_type: 'application/pdf',
+        content_text: 'Launch note source says private beta starts with five design partners.',
+        content_hash: 'sha256:launch-notes-material',
+        metadata: {
+          source_type: 'document',
+          source_filename: 'launch-notes.pdf',
+          content_hash: 'sha256:launch-notes-material',
+          content_length: 68,
+          imported_at: '2026-05-26T00:00:00.000Z',
+        },
+        token_estimate: 17,
+      });
+      const materialPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'import',
+        ref_id: material.id,
+      });
+
+      const defaultManifest = await buildConversationContextManifest(
+        mockDB,
+        conversation.conversationId
+      );
+
+      expect(defaultManifest.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: materialPin.id,
+            id: material.id,
+            type: 'import',
+            title: 'Launch Notes PDF',
+            included: false,
+          }),
+        ])
+      );
+      expect(defaultManifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: material.id,
+            kind: 'import',
+            role: 'evidence',
+            title: 'Launch Notes PDF',
+            pin_id: materialPin.id,
+            pinned: true,
+            pinnable: true,
+            included: false,
+          }),
+        ])
+      );
+      expect(defaultManifest.chat_context_text).not.toContain('five design partners');
+      expect(defaultManifest.extraction_context_text).not.toContain('five design partners');
+
+      await setConversationContext(mockDB, conversation.conversationId, [materialPin.id]);
+
+      const selectedManifest = await buildConversationContextManifest(
+        mockDB,
+        conversation.conversationId
+      );
+      expect(selectedManifest.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            pin_id: materialPin.id,
+            id: material.id,
+            type: 'import',
+            title: 'Launch Notes PDF',
+            included: true,
+          }),
+        ])
+      );
+      expect(selectedManifest.source_items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: material.id,
+            kind: 'import',
+            role: 'evidence',
+            title: 'Launch Notes PDF',
+            pin_id: materialPin.id,
+            included: true,
+            metadata: expect.objectContaining({
+              filename: 'launch-notes.pdf',
+              source_type: 'document',
+              tokens: 17,
+            }),
+          }),
+        ])
+      );
+      expect(selectedManifest.chat_context_text).toContain('## Source Materials');
+      expect(selectedManifest.chat_context_text).toContain('five design partners');
+      expect(selectedManifest.extraction_context_text).toContain('## Selected Source Materials');
+      expect(selectedManifest.extraction_context_text).toContain('five design partners');
+      expect(selectedManifest.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'import',
+            id: material.id,
+            title: 'Launch Notes PDF',
+          }),
+        ])
       );
     });
   });

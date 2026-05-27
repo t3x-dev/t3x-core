@@ -50,6 +50,10 @@ export function generateLeafHistoryId(): string {
   return `lhist_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+export function generateMaterialId(): string {
+  return `mat_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
 export function generateNodeId(): string {
   return `s_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }

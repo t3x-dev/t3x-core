@@ -329,14 +329,14 @@ export interface RenameConversationResult {
 export interface Pin {
   id: string;
   project_id: string;
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   ref_id: string;
   selected_assertion_ids: string[];
   pinned_at: string;
 }
 
 export interface CreatePinInput {
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   ref_id: string;
   selected_assertion_ids?: string[];
 }

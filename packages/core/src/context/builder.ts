@@ -10,7 +10,14 @@
 
 import { serializeForPrompt } from '../semantic/serialize';
 import type { SemanticContent } from '../semantic/types';
-import type { BuiltContext, ContextSource, ConversationContext, Leaf, Pin } from '../types';
+import type {
+  BuiltContext,
+  ContextSource,
+  ConversationContext,
+  Leaf,
+  Material,
+  Pin,
+} from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Input Types
@@ -43,6 +50,9 @@ export interface ContextBuildInput {
 
   /** Loaded leaves (for pinned leaf content) */
   leaves: Map<string, Leaf>;
+
+  /** Loaded raw imported materials (for pinned import content) */
+  materials?: Map<string, Material>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -152,6 +162,34 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
     }
   }
 
+  // Pinned import materials (raw source evidence)
+  const importPins = activePins.filter((p) => p.type === 'import');
+  if (importPins.length > 0 && input.materials) {
+    let materialText = '';
+    const materialSources: ContextSource[] = [];
+
+    for (const pin of importPins) {
+      const material = input.materials.get(pin.ref_id);
+      if (!material) continue;
+
+      const title = material.title ?? material.filename ?? material.id;
+      materialText += `### ${title}\n\n`;
+      materialText += `${truncateForContext(material.content_text, 4000)}\n\n`;
+
+      materialSources.push({
+        type: 'import',
+        id: material.id,
+        title,
+      });
+    }
+
+    if (materialSources.length > 0) {
+      text += '## Source Materials\n\n';
+      text += materialText;
+      sources.push(...materialSources);
+    }
+  }
+
   return {
     text,
     token_estimate: estimateTokens(text),
@@ -244,4 +282,9 @@ export function estimateTokens(text: string): number {
   // Simple estimation: ~4 characters per token
   // This is a common approximation for English text
   return Math.ceil(text.length / 4);
+}
+
+function truncateForContext(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}...`;
 }

@@ -289,7 +289,11 @@ export function CommitSourceContent({ commit }: { commit: CommitDisplay }) {
       <CommitSourceContext
         nodes={mappedNodes}
         sourceRefs={
-          sourceRefs as Array<{ type: 'conversation' | 'leaf'; id: string; title?: string }>
+          sourceRefs as Array<{
+            type: 'conversation' | 'leaf' | 'import';
+            id: string;
+            title?: string;
+          }>
         }
       />
     );

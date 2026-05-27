@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   parentConversationId: null as string | null,
   contextManifest: null as ConversationContextManifest | null,
   projectLeaves: [],
+  projectMaterials: [],
+  refreshProjectMaterials: vi.fn(),
+  uploadMaterial: vi.fn(),
   textSelection: {
     current: null as null | {
       selection: {
@@ -100,6 +103,22 @@ vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
     loading: false,
     error: null,
     refresh: vi.fn(),
+  }),
+}));
+
+vi.mock('@/hooks/materials/useProjectMaterials', () => ({
+  useProjectMaterials: () => ({
+    materials: mocks.projectMaterials,
+    loading: false,
+    error: null,
+    refresh: mocks.refreshProjectMaterials,
+  }),
+}));
+
+vi.mock('@/hooks/materials/useMaterialUpload', () => ({
+  useMaterialUpload: () => ({
+    uploading: false,
+    upload: mocks.uploadMaterial,
   }),
 }));
 
@@ -207,6 +226,9 @@ describe('ChatWorkspace', () => {
     mocks.parentConversationId = null;
     mocks.contextManifest = null;
     mocks.projectLeaves = [];
+    mocks.projectMaterials = [];
+    mocks.refreshProjectMaterials.mockReset();
+    mocks.uploadMaterial.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');

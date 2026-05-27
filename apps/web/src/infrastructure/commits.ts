@@ -51,9 +51,9 @@ export interface CommitAuthor {
   id?: string;
 }
 
-/** Source reference at the commit level (conversation or leaf) */
+/** Source reference at the commit level */
 export interface CommitSourceRef {
-  type: 'conversation' | 'leaf';
+  type: 'conversation' | 'leaf' | 'import';
   id: string;
   title?: string;
   assertion_lessons?: string[];

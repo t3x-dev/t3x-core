@@ -142,6 +142,25 @@ CREATE TABLE IF NOT EXISTS leaves (
   created_by TEXT
 );
 
+-- Materials (raw imported source objects)
+CREATE TABLE IF NOT EXISTS materials (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL,
+  title TEXT,
+  filename TEXT,
+  mime_type TEXT,
+  content_text TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  token_estimate INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
+CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
+
 -- Pins (source selection for commit sources + conversation context)
 CREATE TABLE IF NOT EXISTS pins (
   id TEXT PRIMARY KEY,

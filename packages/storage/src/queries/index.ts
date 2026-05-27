@@ -220,6 +220,15 @@ export {
   updateLeafOutput,
   updateLeafRunnerAssertions,
 } from './leaves';
+// Materials (raw imported source objects)
+export {
+  createMaterial,
+  deleteMaterial,
+  findMaterialById,
+  findMaterialsByIds,
+  findMaterialsByProject,
+  type ListMaterialsOptions,
+} from './materials';
 // Merge Drafts (Pending merge operations)
 export {
   type CreateMergeDraftInput,

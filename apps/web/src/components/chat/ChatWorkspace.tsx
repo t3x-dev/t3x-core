@@ -13,6 +13,8 @@ import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
+import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
@@ -93,6 +95,7 @@ export function ChatWorkspace({
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
   const [contextManifestOpen, setContextManifestOpen] = useState(false);
   const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
+  const [pinningMaterialIds, setPinningMaterialIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
@@ -143,6 +146,13 @@ export function ChatWorkspace({
     loading: projectLeavesLoading,
     error: projectLeavesError,
   } = useProjectLeaves(resolvedProjectId, contextManifestOpen && !isCommitted);
+  const {
+    materials: projectMaterials,
+    loading: projectMaterialsLoading,
+    error: projectMaterialsError,
+    refresh: refreshProjectMaterials,
+  } = useProjectMaterials(resolvedProjectId, contextManifestOpen && !isCommitted);
+  const { uploading: materialUploading, upload: uploadMaterial } = useMaterialUpload();
 
   // Load project pins for multi-source extraction
   useEffect(() => {
@@ -365,6 +375,82 @@ export function ChatWorkspace({
     ]
   );
 
+  const handlePinMaterialForContext = useCallback(
+    async (materialId: string) => {
+      if (!resolvedProjectId) return;
+
+      const existing = usePinsStore.getState().getPinByRef('import', materialId);
+      if (existing) {
+        if (resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(existing.id)
+          );
+          await reloadContextManifest();
+        }
+        return;
+      }
+
+      setPinningMaterialIds((prev) => {
+        const next = new Set(prev);
+        next.add(materialId);
+        return next;
+      });
+
+      try {
+        const created = await addPin(resolvedProjectId, 'import', materialId);
+        if (created && resolvedConversationId) {
+          await updateContextSelectedPins(
+            resolvedConversationId,
+            selectedPinsIncludingNewPin(created.id)
+          );
+        }
+        if (created) {
+          invalidatePins();
+          await fetchPins(resolvedProjectId);
+          await reloadContextManifest();
+          await refreshProjectMaterials();
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to use material';
+        toast.message(message);
+      } finally {
+        setPinningMaterialIds((prev) => {
+          const next = new Set(prev);
+          next.delete(materialId);
+          return next;
+        });
+      }
+    },
+    [
+      addPin,
+      fetchPins,
+      invalidatePins,
+      reloadContextManifest,
+      refreshProjectMaterials,
+      resolvedConversationId,
+      resolvedProjectId,
+      selectedPinsIncludingNewPin,
+      updateContextSelectedPins,
+    ]
+  );
+
+  const handleUploadMaterial = useCallback(
+    async (file: File) => {
+      if (!resolvedProjectId) return;
+
+      try {
+        await uploadMaterial(resolvedProjectId, file);
+        await refreshProjectMaterials();
+        toast.message('Material added');
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : 'Failed to add material';
+        toast.message(message);
+      }
+    },
+    [refreshProjectMaterials, resolvedProjectId, uploadMaterial]
+  );
+
   const baselineForSourcePanel = useMemo(() => {
     const manifestBaseline =
       contextManifest?.baseline.source === 'parent_commit' ? contextManifest.baseline : null;
@@ -517,9 +603,16 @@ export function ChatWorkspace({
                 availableLeaves: projectLeaves,
                 availableLeavesLoading: projectLeavesLoading,
                 availableLeavesError: projectLeavesError,
+                availableMaterials: projectMaterials,
+                availableMaterialsLoading: projectMaterialsLoading,
+                availableMaterialsError: projectMaterialsError,
                 leafPinningIds: pinningLeafIds,
+                materialPinningIds: pinningMaterialIds,
+                materialUploading,
                 baseline: baselineForSourcePanel,
                 onPinLeaf: handlePinLeafForContext,
+                onPinMaterial: handlePinMaterialForContext,
+                onUploadMaterial: handleUploadMaterial,
               }
         }
         onOpenChange={setContextManifestOpen}

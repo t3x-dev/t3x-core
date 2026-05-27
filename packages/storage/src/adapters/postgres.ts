@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 46;
+const SCHEMA_VERSION = 47;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -318,6 +318,25 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_leaves_commit ON leaves(commit_hash);
     CREATE INDEX IF NOT EXISTS idx_leaves_project ON leaves(project_id);
     CREATE INDEX IF NOT EXISTS idx_leaves_type ON leaves(type);
+
+    -- Materials table (raw imported source objects)
+    CREATE TABLE IF NOT EXISTS materials (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      source_type TEXT NOT NULL,
+      title TEXT,
+      filename TEXT,
+      mime_type TEXT,
+      content_text TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      token_estimate INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);
+    CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_materials_unique_hash ON materials(project_id, content_hash);
 
     -- Pins table (source selection for commit sources + conversation context)
     CREATE TABLE IF NOT EXISTS pins (
