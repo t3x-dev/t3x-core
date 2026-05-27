@@ -233,6 +233,10 @@ describe('MaterialReader', () => {
     expect(screen.getByRole('heading', { name: 'Launch notes.pdf' })).not.toBeNull();
     expect(screen.getByText('Private beta scope.')).not.toBeNull();
     expect(screen.getByRole('tab', { name: /^Pages/i })).not.toBeNull();
+    expect(screen.getAllByText('PDF extraction limits').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/scanned pages and image-only text require OCR/i).length
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: /remove from chat/i }));
 
@@ -257,6 +261,8 @@ describe('MaterialReader', () => {
       chatSection.compareDocumentPosition(parseSection) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(screen.getByText('Text parsed')).not.toBeNull();
+    expect(screen.getByText('Extraction Limits')).not.toBeNull();
+    expect(screen.getByText(/Original page layout, images, charts/i)).not.toBeNull();
     expect(screen.getByText('Included Text Preview')).not.toBeNull();
     expect(screen.queryByText('Good extraction')).toBeNull();
     expect(screen.queryByText('84%')).toBeNull();
@@ -276,6 +282,8 @@ describe('MaterialReader', () => {
     render(<MaterialReader selection={selection} onBack={vi.fn()} />);
 
     expect(screen.getByRole('tab', { name: /document.*14 tokens/i })).not.toBeNull();
+    expect(screen.getAllByText('DOCX extraction limits').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Images, charts, SmartArt, equations/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('navigation', { name: 'Document outline' })).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Strategy memo' })).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Strategy memo' })).not.toBeNull();
@@ -343,6 +351,8 @@ describe('MaterialReader', () => {
 
     expect(screen.getByRole('tab', { name: /workbook/i })).not.toBeNull();
     expect(screen.getByRole('tab', { name: /sheets/i })).not.toBeNull();
+    expect(screen.getAllByText('Workbook extraction limits').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Formula logic, charts, pivots/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Workbook overview')).not.toBeNull();
     expect(screen.getByText('Formula cells')).not.toBeNull();
     expect(screen.getByText('Truncated sheets')).not.toBeNull();

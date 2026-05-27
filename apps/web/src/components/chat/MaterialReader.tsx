@@ -495,16 +495,68 @@ function ContentPreviewView({
 }) {
   const profile = materialProfile(material);
   if (segments.length === 0) return <EmptyReaderState>{profile.emptyState}</EmptyReaderState>;
+  const limitsNotice = <ExtractionLimitsNotice material={material} />;
 
   if (profile.kind === 'spreadsheet') {
-    return <SpreadsheetPreviewView material={material} segments={segments} query={query} />;
+    return (
+      <div className="space-y-3">
+        {limitsNotice}
+        <SpreadsheetPreviewView material={material} segments={segments} query={query} />
+      </div>
+    );
   }
 
   if (profile.prefersDocumentPreview && !query.trim()) {
-    return <DocumentPreviewView material={material} />;
+    return (
+      <div className="space-y-3">
+        {limitsNotice}
+        <DocumentPreviewView material={material} />
+      </div>
+    );
   }
 
-  return <ParsedTextView material={material} segments={segments} query={query} />;
+  return (
+    <div className="space-y-3">
+      {limitsNotice}
+      <ParsedTextView material={material} segments={segments} query={query} />
+    </div>
+  );
+}
+
+function ExtractionLimitsNotice({ material }: { material: MaterialDetail }) {
+  const notice = extractionLimitsNotice(material);
+  if (!notice) return null;
+
+  return (
+    <section
+      aria-label="Extraction limits"
+      className={cn(
+        'rounded-lg border p-3 text-xs',
+        notice.tone === 'warning'
+          ? 'border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] text-[var(--text-secondary)]'
+          : 'border-[var(--stroke-divider)] bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
+      )}
+    >
+      <div className="flex gap-2">
+        <AlertCircle
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0',
+            notice.tone === 'warning'
+              ? 'text-[var(--status-warning)]'
+              : 'text-[var(--text-tertiary)]'
+          )}
+        />
+        <div className="min-w-0">
+          <h2 className="text-xs font-semibold text-[var(--text-primary)]">{notice.title}</h2>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 leading-relaxed text-[11px]">
+            {notice.items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function DocumentPreviewView({ material }: { material: MaterialDetail }) {
@@ -1008,6 +1060,8 @@ function SourceDetailsContent({
         </div>
       </section>
 
+      <ExtractionLimitsDetails material={material} />
+
       <section className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)]">
         <SectionTitle label={previewTitle} meta="preview" />
         <p className="border-b border-[var(--stroke-divider)] px-3 py-2 text-[11px] leading-relaxed text-[var(--text-tertiary)]">
@@ -1050,7 +1104,29 @@ function SourceDetailsContent({
   );
 }
 
+function ExtractionLimitsDetails({ material }: { material: MaterialDetail }) {
+  const notice = extractionLimitsNotice(material);
+  if (!notice) return null;
+
+  return (
+    <section className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-elevated)]">
+      <SectionTitle label="Extraction Limits" meta={notice.tone === 'warning' ? 'check' : 'info'} />
+      <div className="space-y-1.5 p-3 text-[11px] leading-relaxed text-[var(--text-tertiary)]">
+        {notice.items.map((item) => (
+          <p key={item}>{item}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 type MaterialKind = 'pdf' | 'document' | 'spreadsheet' | 'text';
+
+interface ExtractionLimitNotice {
+  title: string;
+  items: string[];
+  tone: 'info' | 'warning';
+}
 
 interface MaterialProfile {
   kind: MaterialKind;
@@ -1213,6 +1289,71 @@ function materialSummaryStats(material: MaterialDetail, profile: MaterialProfile
   ];
 
   return Array.from(new Set(stats.filter(Boolean)));
+}
+
+function extractionLimitsNotice(material: MaterialDetail): ExtractionLimitNotice | null {
+  const profile = materialProfile(material);
+  const items: string[] = [];
+  let title = 'Extraction limits';
+  let tone: ExtractionLimitNotice['tone'] = 'info';
+
+  if (material.parse_quality.status === 'poor' || material.parse_quality.status === 'partial') {
+    tone = 'warning';
+    items.push(
+      material.parse_quality.status === 'poor'
+        ? 'Only sparse text was extracted. Inspect the preview before relying on this source.'
+        : 'The parse may be incomplete. Inspect the preview before relying on this source.'
+    );
+  }
+
+  if (profile.kind === 'pdf') {
+    title = 'PDF extraction limits';
+    items.push(
+      'Only selectable PDF text is extracted; scanned pages and image-only text require OCR and may appear empty.',
+      'Original page layout, images, charts, annotations, and visual positioning are not preserved.'
+    );
+  } else if (profile.kind === 'spreadsheet') {
+    title = 'Workbook extraction limits';
+    items.push(
+      'The preview shows extracted cell values. Formula logic, charts, pivots, formatting, merged cells, and hidden sheets may not be fully preserved.'
+    );
+
+    const formulaCount = metadataNumber(material.metadata, ['formula_count', 'formulas']) ?? 0;
+    const truncatedSheetCount =
+      metadataNumber(material.metadata, ['truncated_sheet_count', 'truncated_sheets']) ?? 0;
+    if (formulaCount > 0 || truncatedSheetCount > 0) tone = 'warning';
+  } else if (profile.kind === 'document') {
+    const format = documentFormatLabel(material);
+    if (format === 'DOCX') {
+      title = 'DOCX extraction limits';
+      items.push(
+        'Text, headings, lists, and simple tables are extracted. Images, charts, SmartArt, equations, comments, and embedded objects may not be extracted.',
+        'Original page styling and layout are not preserved.'
+      );
+    } else if (format === 'Markdown') {
+      title = 'Markdown extraction limits';
+      items.push(
+        'Markdown structure is rendered, but linked images and external media are not imported as visual context.'
+      );
+    } else if (format === 'HTML') {
+      title = 'HTML extraction limits';
+      items.push(
+        'HTML is converted to Markdown. Scripts, styles, interactive widgets, and media are ignored.'
+      );
+    } else {
+      items.push(
+        'Document text is extracted for context. Images, charts, equations, and embedded objects may not be extracted.'
+      );
+    }
+  } else if (profile.kind === 'text') {
+    title = 'Text extraction limits';
+    items.push(
+      'Plain text is imported as readable text only; layout and embedded media are not available.'
+    );
+  }
+
+  if (items.length === 0) return null;
+  return { title, items: Array.from(new Set(items)), tone };
 }
 
 function documentFormatLabel(material: MaterialDetail): string {
