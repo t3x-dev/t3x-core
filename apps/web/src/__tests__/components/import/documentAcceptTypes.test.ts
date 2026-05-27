@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DOCUMENT_SOURCE_ACCEPT_HINT,
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
+  LEGACY_DOC_UNSUPPORTED_MESSAGE,
+  LEGACY_XLS_UNSUPPORTED_MESSAGE,
+  unsupportedDocumentSourceMessage,
 } from '@/components/import/documentAcceptTypes';
 
 describe('document source accepted types', () => {
@@ -23,5 +26,29 @@ describe('document source accepted types', () => {
     expect(acceptedTypes).not.toContain('application/msword');
     expect(DOCUMENT_SOURCE_ACCEPT_HINT).toContain('XLSX');
     expect(DOCUMENT_SOURCE_ACCEPT_HINT).toContain('CSV');
+  });
+
+  it('rejects legacy Office formats before upload', () => {
+    expect(
+      unsupportedDocumentSourceMessage({ name: 'legacy.doc', type: 'application/msword' })
+    ).toBe(LEGACY_DOC_UNSUPPORTED_MESSAGE);
+    expect(
+      unsupportedDocumentSourceMessage({
+        name: 'legacy.xls',
+        type: 'application/vnd.ms-excel',
+      })
+    ).toBe(LEGACY_XLS_UNSUPPORTED_MESSAGE);
+    expect(
+      unsupportedDocumentSourceMessage({
+        name: 'browser-weird.csv',
+        type: 'application/vnd.ms-excel',
+      })
+    ).toBeNull();
+    expect(
+      unsupportedDocumentSourceMessage({
+        name: 'report.docx',
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      })
+    ).toBeNull();
   });
 });

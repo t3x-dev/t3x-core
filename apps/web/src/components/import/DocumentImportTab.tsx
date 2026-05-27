@@ -6,7 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useDocumentImport } from '@/hooks/imports/useDocumentImport';
 import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
-import { DOCUMENT_SOURCE_ACCEPT_HINT, DOCUMENT_SOURCE_ACCEPTED_TYPES } from './documentAcceptTypes';
+import {
+  DOCUMENT_SOURCE_ACCEPT_HINT,
+  DOCUMENT_SOURCE_ACCEPTED_TYPES,
+  unsupportedDocumentSourceMessage,
+} from './documentAcceptTypes';
 import { FileDropZone } from './FileDropZone';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
@@ -36,6 +40,17 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
       setFile(f);
       setPreview(null);
       setImportStatus('idle');
+      setStatusMessage('');
+      setStreamProgress(null);
+
+      const unsupportedMessage = unsupportedDocumentSourceMessage(f);
+      if (unsupportedMessage) {
+        setImportStatus('error');
+        setStatusMessage(unsupportedMessage);
+        setPreviewLoading(false);
+        return;
+      }
+
       setPreviewLoading(true);
       try {
         const result = await fetchPreview(f, projectId);
