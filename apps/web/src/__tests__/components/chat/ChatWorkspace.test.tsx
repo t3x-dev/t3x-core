@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  useContextManifest: vi.fn(),
   reloadContextManifest: vi.fn(),
   updateSelectedPins: vi.fn(),
   parentConversationId: null as string | null,
@@ -60,12 +61,15 @@ vi.mock('@/hooks/conversations/useChatInit', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useContextManifest', () => ({
-  useContextManifest: () => ({
-    manifest: mocks.contextManifest,
-    loading: false,
-    error: null,
-    reload: mocks.reloadContextManifest,
-  }),
+  useContextManifest: (conversationId: string | null | undefined) => {
+    mocks.useContextManifest(conversationId);
+    return {
+      manifest: mocks.contextManifest,
+      loading: false,
+      error: null,
+      reload: mocks.reloadContextManifest,
+    };
+  },
 }));
 
 vi.mock('@/hooks/conversations/useConversationContextPins', () => ({
@@ -254,6 +258,7 @@ describe('ChatWorkspace', () => {
     mocks.refreshProjectMaterials.mockReset();
     mocks.uploadMaterial.mockReset();
     mocks.archiveMaterial.mockReset();
+    mocks.useContextManifest.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -318,6 +323,14 @@ describe('ChatWorkspace', () => {
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
     expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
+  });
+
+  it('hides project context controls for temporary chats', () => {
+    render(<ChatWorkspace conversationId="temp_chat_1" />);
+
+    expect(mocks.useContextManifest).toHaveBeenCalledWith(null);
+    expect(screen.queryByRole('button', { name: /open sources/i })).toBeNull();
+    expect(screen.queryByRole('region', { name: /sources/i })).toBeNull();
   });
 
   it('does not show source text actions for a user question selection', () => {
