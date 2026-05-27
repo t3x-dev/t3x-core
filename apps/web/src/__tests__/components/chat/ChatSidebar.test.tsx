@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
         committed_at?: string | null;
       }>
     >,
+    conversationErrorsByProject: {} as Record<string, string>,
     commits: [] as Array<{
       hash: string;
       message: string | null;
@@ -99,6 +100,7 @@ vi.mock('@/hooks/projects/useProjects', () => ({
 vi.mock('@/hooks/conversations/useProjectConversations', () => ({
   useProjectConversations: () => ({
     conversationsByProject: mocks.conversationsByProject,
+    errorsByProject: mocks.conversationErrorsByProject,
     load: mocks.loadConversations,
     remove: vi.fn(),
     rename: vi.fn(),
@@ -150,6 +152,7 @@ afterEach(() => {
   mocks.projects = [];
   mocks.projectLeaves = [];
   mocks.conversationsByProject = {};
+  mocks.conversationErrorsByProject = {};
   mocks.contextMenuItems = [];
   mocks.commits = [];
   mocks.loadCommits.mockResolvedValue(mocks.commits);

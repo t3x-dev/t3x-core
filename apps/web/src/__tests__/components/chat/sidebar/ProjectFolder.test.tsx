@@ -115,6 +115,28 @@ describe('ProjectFolder active state', () => {
     );
   });
 
+  it('shows a load error instead of the empty state when conversations cannot be fetched', () => {
+    render(
+      <ProjectFolder
+        project={{ ...baseProject, conversations_count: 1 }}
+        conversations={[]}
+        isExpanded
+        isActive={false}
+        activeConversationId={null}
+        collapsed={false}
+        loadError="Failed to fetch"
+        onToggleExpand={vi.fn()}
+        onConversationClick={vi.fn()}
+        onNewChat={vi.fn()}
+        onProjectContextMenu={vi.fn()}
+        onConversationContextMenu={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Failed to load conversations')).toBeInTheDocument();
+    expect(screen.queryByText('No conversations')).not.toBeInTheDocument();
+  });
+
   it('appends the latest main commit hash to the visible project name', () => {
     render(
       <ProjectFolder

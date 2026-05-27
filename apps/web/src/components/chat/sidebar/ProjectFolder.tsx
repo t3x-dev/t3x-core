@@ -16,6 +16,7 @@ export interface ProjectFolderProps {
   collapsed: boolean;
   latestMainCommitHash?: string | null;
   conversationCommitHashes?: Record<string, string>;
+  loadError?: string | null;
   onToggleExpand: () => void;
   onConversationClick: (convId: string) => void;
   onNewChat: (projectId: string) => void;
@@ -46,6 +47,7 @@ export function ProjectFolder({
   collapsed,
   latestMainCommitHash,
   conversationCommitHashes = {},
+  loadError,
   onToggleExpand,
   onConversationClick,
   onNewChat,
@@ -212,10 +214,16 @@ export function ProjectFolder({
             );
           })}
 
-          {conversations.length === 0 && (
-            <span className="px-2 py-1 text-[10px] text-[var(--text-tertiary)]/80">
-              No conversations
+          {loadError && conversations.length === 0 ? (
+            <span className="px-2 py-1 text-[10px] text-[var(--status-error)]/90" title={loadError}>
+              Failed to load conversations
             </span>
+          ) : (
+            conversations.length === 0 && (
+              <span className="px-2 py-1 text-[10px] text-[var(--text-tertiary)]/80">
+                No conversations
+              </span>
+            )
           )}
 
           {/* Add new chat within this project — only when at least one commit exists */}

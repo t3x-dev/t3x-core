@@ -150,6 +150,7 @@ export function ChatSidebar() {
   } = useProjects();
   const {
     conversationsByProject: projectConversations,
+    errorsByProject: projectConversationErrors,
     load: loadConversations,
     remove: removeConversationFn,
     rename: renameConversation,
@@ -1142,6 +1143,7 @@ export function ChatSidebar() {
                         conversationCommitHashes={
                           projectConversationCommitHashes[project.project_id]
                         }
+                        loadError={projectConversationErrors[project.project_id]}
                         onToggleExpand={() =>
                           void handleProjectClick(project.project_id, project.conversations_count)
                         }

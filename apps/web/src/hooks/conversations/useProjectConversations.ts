@@ -13,6 +13,7 @@ import type { Conversation } from '@/infrastructure/types';
 
 export interface UseProjectConversationsResult {
   conversationsByProject: Record<string, Conversation[]>;
+  errorsByProject: Record<string, string>;
   load: (projectId: string) => Promise<Conversation[]>;
   remove: (projectId: string, conversationId: string) => Promise<void>;
   rename: (projectId: string, conversationId: string, title: string) => Promise<Conversation>;
@@ -20,13 +21,26 @@ export interface UseProjectConversationsResult {
 
 export function useProjectConversations(limit = 50): UseProjectConversationsResult {
   const [byProject, setByProject] = useState<Record<string, Conversation[]>>({});
+  const [errorsByProject, setErrorsByProject] = useState<Record<string, string>>({});
 
   const load = useCallback(
     async (projectId: string) => {
-      const data = await listConversations(projectId, limit, 0);
-      const conversations = data.conversations ?? [];
-      setByProject((prev) => ({ ...prev, [projectId]: conversations }));
-      return conversations;
+      try {
+        const data = await listConversations(projectId, limit, 0);
+        const conversations = data.conversations ?? [];
+        setByProject((prev) => ({ ...prev, [projectId]: conversations }));
+        setErrorsByProject((prev) => {
+          if (!prev[projectId]) return prev;
+          const next = { ...prev };
+          delete next[projectId];
+          return next;
+        });
+        return conversations;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load conversations';
+        setErrorsByProject((prev) => ({ ...prev, [projectId]: message }));
+        return [];
+      }
     },
     [limit]
   );
@@ -64,5 +78,5 @@ export function useProjectConversations(limit = 50): UseProjectConversationsResu
     []
   );
 
-  return { conversationsByProject: byProject, load, remove, rename };
+  return { conversationsByProject: byProject, errorsByProject, load, remove, rename };
 }
