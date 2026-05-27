@@ -30,7 +30,7 @@ interface MergeActionBarProps {
   onCommit: () => void;
   onCancel: () => void;
   canCommit: boolean;
-  onClose: () => void;
+  onBack: () => void;
 }
 
 export function MergeActionBar({
@@ -45,7 +45,7 @@ export function MergeActionBar({
   onCommit,
   onCancel,
   canCommit,
-  onClose,
+  onBack,
 }: MergeActionBarProps) {
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
   const { t } = useTerminology();
@@ -58,7 +58,7 @@ export function MergeActionBar({
       )}
     >
       {/* Back Button */}
-      <Button variant="ghost" size="icon" onClick={onClose}>
+      <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
         <ArrowLeft className="h-4 w-4" />
       </Button>
 

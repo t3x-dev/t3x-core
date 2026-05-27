@@ -77,4 +77,16 @@ describe('MergeWorkspace commit ceremony', () => {
     expect(await screen.findByRole('status', { name: 'Commit sealed' })).toBeVisible();
     expect(onMergeCommitted).not.toHaveBeenCalled();
   });
+
+  it('uses the top-left back action without cancelling the merge draft', async () => {
+    const onBack = vi.fn();
+    const onClose = vi.fn();
+    render(<MergeWorkspace projectId="proj_1" onBack={onBack} onClose={onClose} />);
+
+    await screen.findByText('Ready to merge');
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

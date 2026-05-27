@@ -12,8 +12,8 @@
 import type { TreeDiff } from '@t3x-dev/core';
 import { ArrowLeft, GitBranch, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
@@ -22,6 +22,7 @@ import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
+import { buildReturnTo, safeInternalReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { TreeDiffIndex } from './DiffIndex';
 import { DiffTreeOverview } from './DiffTreeOverview';
@@ -190,6 +191,8 @@ function TabBar({
 
 export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // State
   const [diffResponse, setDiffResponse] = useState<DiffResponse | null>(null);
@@ -207,6 +210,15 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   // Project name for breadcrumb
   const getProject = useProjectStore((s) => s.getProject);
   const project = getProject(projectId);
+  const fallbackCanvasHref = `/chat/project/${projectId}/canvas`;
+  const returnHref = useMemo(
+    () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackCanvasHref),
+    [fallbackCanvasHref, searchParams]
+  );
+  const currentReturnTo = useMemo(
+    () => buildReturnTo(pathname, searchParams),
+    [pathname, searchParams]
+  );
 
   // Data fetching
   useEffect(() => {
@@ -236,8 +248,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
   // Handlers
   const handleBack = useCallback(() => {
-    router.push(`/project/${projectId}`);
-  }, [router, projectId]);
+    router.push(returnHref);
+  }, [router, returnHref]);
 
   const handleSelectNode = useCallback((id: string) => {
     setActiveNodeId(id);
@@ -263,13 +275,13 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         diffResponse.base.branch || 'source',
         diffResponse.target.branch || 'main'
       );
-      router.push(`/project/${projectId}/merge/${draftId}`);
+      router.push(withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo));
     } catch (err) {
       setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');
     } finally {
       setMergeLoading(false);
     }
-  }, [diffResponse, projectId, baseHash, targetHash, router, createMergeDraft]);
+  }, [diffResponse, projectId, baseHash, targetHash, router, createMergeDraft, currentReturnTo]);
 
   // Loading state
   if (loading) {

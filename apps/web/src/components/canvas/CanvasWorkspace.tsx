@@ -8,7 +8,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { GitCommit, HelpCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
@@ -43,6 +43,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
 import { DraftQuickSheet } from '../draft/DraftQuickSheet';
 import { ImportDialog } from '../import/ImportDialog';
@@ -101,10 +102,16 @@ function CanvasWorkspaceInner({
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
   const compactViewport = useCompactViewport();
   const canvasMinZoom = compactViewport ? 0.55 : 0.25;
+  const currentReturnTo = useMemo(
+    () => buildReturnTo(pathname, searchParams),
+    [pathname, searchParams]
+  );
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -170,6 +177,7 @@ function CanvasWorkspaceInner({
       projectId,
       fitView,
       onNavigate: (url: string) => router.push(url),
+      returnTo: currentReturnTo,
     });
 
   // Path highlight (extracted hook)
@@ -390,7 +398,9 @@ function CanvasWorkspaceInner({
                   base: parentHash,
                   target: hash,
                 });
-                router.push(`/project/${projectId}/diff?${query.toString()}`);
+                router.push(
+                  withReturnTo(`/project/${projectId}/diff?${query.toString()}`, currentReturnTo)
+                );
               }
             : undefined,
         onOpenLeaf:
@@ -412,7 +422,9 @@ function CanvasWorkspaceInner({
                 void (async () => {
                   const draftId = await startMerge(node.id);
                   if (draftId) {
-                    router.push(`/project/${projectId}/merge/${draftId}`);
+                    router.push(
+                      withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo)
+                    );
                   }
                 })();
               }

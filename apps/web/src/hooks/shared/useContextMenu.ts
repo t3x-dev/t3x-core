@@ -12,6 +12,7 @@ import {
   buildUnitNodeMenu,
   type ContextMenuGroup,
 } from '@/utils/canvasMenuBuilders';
+import { withReturnTo } from '@/utils/navigationReturn';
 
 /**
  * Module-level ref for the leaf context menu handler.
@@ -36,6 +37,8 @@ interface UseContextMenuOptions {
   fitView: (options?: { padding?: number; duration?: number }) => void;
   /** Router push for page navigation */
   onNavigate?: (url: string) => void;
+  /** Source route for shellless detail pages opened from the canvas. */
+  returnTo?: string;
 }
 
 export function useContextMenu({
@@ -45,6 +48,7 @@ export function useContextMenu({
   projectId,
   fitView,
   onNavigate,
+  returnTo,
 }: UseContextMenuOptions) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [, startTransition] = useTransition();
@@ -88,7 +92,10 @@ export function useContextMenu({
           isCommitted && commitHash && parentCommitHash && projectId && onNavigate
             ? () =>
                 onNavigate(
-                  `/project/${projectId}/diff?base=${encodeURIComponent(parentCommitHash)}&target=${encodeURIComponent(commitHash)}`
+                  withReturnTo(
+                    `/project/${projectId}/diff?base=${encodeURIComponent(parentCommitHash)}&target=${encodeURIComponent(commitHash)}`,
+                    returnTo ?? `/chat/project/${projectId}/canvas`
+                  )
                 )
             : undefined,
         onQuickMerge:
@@ -97,7 +104,12 @@ export function useContextMenu({
                 startTransition(async () => {
                   const draftId = await startMerge(node.id);
                   if (draftId && onNavigate) {
-                    onNavigate(`/project/${projectId}/merge/${draftId}`);
+                    onNavigate(
+                      withReturnTo(
+                        `/project/${projectId}/merge/${draftId}`,
+                        returnTo ?? `/chat/project/${projectId}/canvas`
+                      )
+                    );
                   }
                 });
               }
@@ -131,7 +143,7 @@ export function useContextMenu({
       });
       setContextMenu({ x: event.clientX, y: event.clientY, groups });
     },
-    [addNode, isDeveloperMode, notify, projectId, onNavigate, startMerge]
+    [addNode, isDeveloperMode, notify, projectId, onNavigate, returnTo, startMerge]
   );
 
   // Pane context menu — inline addNode to avoid forward-declaration of handleAddNode

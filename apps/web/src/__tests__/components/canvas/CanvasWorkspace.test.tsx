@@ -85,7 +85,9 @@ vi.mock('next-themes', () => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: 'proj_test' }),
+  usePathname: () => '/chat/project/proj_test/canvas',
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/components/canvas/CanvasShortcutsContent', async () => {
