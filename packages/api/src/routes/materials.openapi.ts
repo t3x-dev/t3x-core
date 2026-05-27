@@ -218,7 +218,8 @@ const uploadDocumentMaterialRoute = createRoute({
   path: '/v1/projects/{projectId}/materials/document',
   tags: ['Materials'],
   summary: 'Upload a document as a source material',
-  description: 'Upload and store a PDF, DOCX, Markdown, HTML, or text file as a raw material.',
+  description:
+    'Upload and store a PDF, DOCX, Markdown, HTML, text, XLSX, or CSV file as a raw material.',
   request: {
     params: z.object({
       projectId: z.string(),
