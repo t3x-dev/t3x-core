@@ -63,6 +63,7 @@ const mocks = vi.hoisted(() => {
     projectLeaves: [] as Array<Record<string, unknown> & { id: string }>,
     routerPush: vi.fn(),
     chatState,
+    toastError: vi.fn(),
   };
 });
 
@@ -124,6 +125,12 @@ vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
     error: null,
     refresh: vi.fn(),
   }),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: mocks.toastError,
+  },
 }));
 
 vi.mock('@/components/layout/UserMenu', () => ({
@@ -660,5 +667,30 @@ describe('ChatSidebar', () => {
     expect(mocks.loadConversations).not.toHaveBeenCalled();
     expect(mocks.chatState.setActiveConversation).not.toHaveBeenCalled();
     expect(mocks.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('handles project conversation load failures without opening the runtime overlay', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_network',
+        name: 'Network Project',
+        created_at: '2026-05-27T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 0,
+      },
+    ];
+    mocks.loadConversations.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Network Project/i })[0]);
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'Failed to load conversations: Failed to fetch',
+        { id: 'project-conversations-load-error' }
+      );
+    });
+    expect(mocks.routerPush).not.toHaveBeenCalledWith('/chat/conv_network');
   });
 });

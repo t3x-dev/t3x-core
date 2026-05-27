@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,6 +88,13 @@ function getLeafAssertionCounts(leaf: ApiLeaf): { total: number; passed: number 
     total: assertions.length,
     passed: assertions.filter((assertion) => assertion.passed).length,
   };
+}
+
+function notifyProjectConversationsLoadFailure(err: unknown) {
+  const detail = err instanceof Error ? err.message : 'Unknown error';
+  toast.error(`Failed to load conversations: ${detail}`, {
+    id: 'project-conversations-load-error',
+  });
 }
 
 function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
@@ -485,7 +493,9 @@ export function ChatSidebar() {
       projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
-      void loadConversations(projectId);
+      void Promise.resolve(loadConversations(projectId)).catch(
+        notifyProjectConversationsLoadFailure
+      );
     }
   }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
 
@@ -541,7 +551,10 @@ export function ChatSidebar() {
     }
 
     setActiveConversation(null, projectId);
-    const loadedConversations = await loadConversations(projectId);
+    const loadedConversations = await Promise.resolve(loadConversations(projectId)).catch((err) => {
+      notifyProjectConversationsLoadFailure(err);
+      return [];
+    });
     if (loadedConversations.length > 0) {
       handleConversationClick(loadedConversations[0].conversation_id, projectId);
     }
