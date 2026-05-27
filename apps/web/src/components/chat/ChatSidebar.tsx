@@ -48,6 +48,8 @@ import { ProjectFolder } from './sidebar/ProjectFolder';
 
 // ── Main Sidebar ──
 
+const PROJECTS_COLLAPSED_MAX_HEIGHT = 220;
+
 type RenameTarget =
   | {
       kind: 'project';
@@ -237,6 +239,7 @@ export function ChatSidebar() {
     () => new Set(canvasCommits.map((commit) => commit.branch || 'main')).size,
     [canvasCommits]
   );
+
   const applyCommitCreatedMessage = useCallback((message: CommitCreatedSidebarEvent | null) => {
     if (!message) return;
     if (message.type !== 'commit.created') return;
@@ -1129,34 +1132,41 @@ export function ChatSidebar() {
                       </div>
                     </div>
 
-                    {projects.map((project) => (
-                      <ProjectFolder
-                        key={project.project_id}
-                        project={project}
-                        conversations={projectConversations[project.project_id] ?? []}
-                        isExpanded={expandedProjectIds.has(project.project_id)}
-                        isActive={activeProjectId === project.project_id}
-                        activeConversationId={activeConversationId}
-                        collapsed={false}
-                        latestMainCommitHash={projectMainCommitHashes[project.project_id]}
-                        conversationCommitHashes={
-                          projectConversationCommitHashes[project.project_id]
-                        }
-                        onToggleExpand={() =>
-                          void handleProjectClick(project.project_id, project.conversations_count)
-                        }
-                        onConversationClick={(convId) =>
-                          handleConversationClick(convId, project.project_id)
-                        }
-                        onNewChat={(pid) => handleNewChatInProject(pid)}
-                        onProjectContextMenu={(e) =>
-                          handleProjectContextMenu(e, project.project_id)
-                        }
-                        onConversationContextMenu={(e, convId) =>
-                          handleConversationContextMenu(e, project.project_id, convId)
-                        }
-                      />
-                    ))}
+                    <div
+                      className="chat-scrollbar min-w-0 overflow-y-auto overflow-x-hidden pr-1"
+                      style={{
+                        maxHeight: `${PROJECTS_COLLAPSED_MAX_HEIGHT}px`,
+                      }}
+                    >
+                      {projects.map((project) => (
+                        <ProjectFolder
+                          key={project.project_id}
+                          project={project}
+                          conversations={projectConversations[project.project_id] ?? []}
+                          isExpanded={expandedProjectIds.has(project.project_id)}
+                          isActive={activeProjectId === project.project_id}
+                          activeConversationId={activeConversationId}
+                          collapsed={false}
+                          latestMainCommitHash={projectMainCommitHashes[project.project_id]}
+                          conversationCommitHashes={
+                            projectConversationCommitHashes[project.project_id]
+                          }
+                          onToggleExpand={() =>
+                            void handleProjectClick(project.project_id, project.conversations_count)
+                          }
+                          onConversationClick={(convId) =>
+                            handleConversationClick(convId, project.project_id)
+                          }
+                          onNewChat={(pid) => handleNewChatInProject(pid)}
+                          onProjectContextMenu={(e) =>
+                            handleProjectContextMenu(e, project.project_id)
+                          }
+                          onConversationContextMenu={(e, convId) =>
+                            handleConversationContextMenu(e, project.project_id, convId)
+                          }
+                        />
+                      ))}
+                    </div>
 
                     {projects.length === 0 && (
                       <div className="px-4 py-4 text-center">
