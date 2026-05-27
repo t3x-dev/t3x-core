@@ -3,6 +3,31 @@ import { describe, expect, it } from 'vitest';
 import { parseDocument } from '../lib/import/document-parser';
 
 describe('document parser', () => {
+  it('parses Markdown files as source text', async () => {
+    const result = await parseDocument(
+      Buffer.from('# Plan\n\n- Ship source previews', 'utf-8'),
+      'plan.md',
+      'application/octet-stream'
+    );
+
+    expect(result.raw_text).toContain('# Plan');
+    expect(result.paragraphs.map((paragraph) => paragraph.text)).toContain(
+      '- Ship source previews'
+    );
+    expect(result.metadata.source_filename).toBe('plan.md');
+  });
+
+  it('parses TXT files as plain text', async () => {
+    const result = await parseDocument(
+      Buffer.from('Plain source note.\n\nSecond paragraph.', 'utf-8'),
+      'notes.txt',
+      'text/plain'
+    );
+
+    expect(result.raw_text).toContain('Plain source note.');
+    expect(result.paragraphs.map((paragraph) => paragraph.text)).toContain('Second paragraph.');
+  });
+
   it('parses XLSX workbooks into readable sheet text and metadata', async () => {
     const result = await parseDocument(
       createWorkbookFixture(),
@@ -36,6 +61,23 @@ describe('document parser', () => {
     expect(result.raw_text).toContain('# Workbook: revenue.csv');
     expect(result.raw_text).toContain('| Month | Revenue |');
     expect(result.raw_text).toContain('| Feb | 14000 |');
+  });
+
+  it('guesses CSV from filename when browsers send octet-stream', async () => {
+    const result = await parseDocument(
+      Buffer.from('Month,Revenue\nJan,12000', 'utf-8'),
+      'revenue.csv',
+      'application/octet-stream'
+    );
+
+    expect(result.metadata.sheet_count).toBe(1);
+    expect(result.raw_text).toContain('# Workbook: revenue.csv');
+  });
+
+  it('rejects legacy DOC files with a clear error', async () => {
+    await expect(
+      parseDocument(Buffer.from('not a docx', 'utf-8'), 'legacy.doc', 'application/msword')
+    ).rejects.toThrow('Legacy .doc files are not supported yet');
   });
 });
 

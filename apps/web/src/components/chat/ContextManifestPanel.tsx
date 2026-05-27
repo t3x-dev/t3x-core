@@ -18,6 +18,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { CommitYAMLDocument } from '@/components/commit/CommitYAMLDocument';
+import { DOCUMENT_SOURCE_ACCEPTED_TYPES } from '@/components/import/documentAcceptTypes';
 import type {
   ContextManifestSourceItem,
   ConversationContextManifest,
@@ -886,7 +887,7 @@ export function ContextManifestPanel({
                         type="file"
                         aria-label="Add material file"
                         className="sr-only"
-                        accept=".pdf,.doc,.docx,.md,.markdown,.txt,.html,.htm,text/plain,text/markdown,text/html,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        accept={DOCUMENT_SOURCE_ACCEPTED_TYPES}
                         onChange={(event) => {
                           const file = event.currentTarget.files?.[0];
                           if (file) {

@@ -1190,11 +1190,9 @@ function detectMaterialKind(material: MaterialDetail): MaterialKind {
 
   if (
     mime.includes('wordprocessingml') ||
-    mime === 'application/msword' ||
     mime.includes('markdown') ||
     mime === 'text/html' ||
     ext === 'docx' ||
-    ext === 'doc' ||
     ext === 'md' ||
     ext === 'markdown' ||
     ext === 'html' ||
@@ -1223,7 +1221,6 @@ function documentFormatLabel(material: MaterialDetail): string {
 
   if (mime.includes('markdown') || ext === 'md' || ext === 'markdown') return 'Markdown';
   if (mime.includes('wordprocessingml') || ext === 'docx') return 'DOCX';
-  if (mime === 'application/msword' || ext === 'doc') return 'Word';
   if (mime === 'text/html' || ext === 'html' || ext === 'htm') return 'HTML';
   return 'Document';
 }

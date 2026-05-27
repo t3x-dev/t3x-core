@@ -34,11 +34,13 @@ export async function parseDocument(
       metadata = result.metadata;
       break;
     }
-    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    case 'application/msword': {
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
       const result = await parseDocx(buffer);
       text = result.text;
       break;
+    }
+    case 'application/msword': {
+      throw new Error('Legacy .doc files are not supported yet. Export the document as .docx.');
     }
     case 'text/markdown':
     case 'text/x-markdown': {
