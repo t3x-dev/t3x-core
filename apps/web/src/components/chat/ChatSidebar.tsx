@@ -66,6 +66,11 @@ type RenameTarget =
       currentName: string;
     };
 
+type DeleteConversationTarget = {
+  projectId: string;
+  conversationId: string;
+};
+
 type LeafFilter = 'all' | 'generated' | 'draft' | 'review';
 
 interface ImportBranchBaseline {
@@ -194,6 +199,9 @@ export function ChatSidebar() {
   const [importNewProjectName, setImportNewProjectName] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [projectDeleteTargetId, setProjectDeleteTargetId] = useState<string | null>(null);
+  const [conversationDeleteTarget, setConversationDeleteTarget] =
+    useState<DeleteConversationTarget | null>(null);
   const [temporaryDeleteTargetId, setTemporaryDeleteTargetId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
@@ -272,6 +280,18 @@ export function ChatSidebar() {
     () => temporaryChats.find((chat) => chat.id === temporaryDeleteTargetId) ?? null,
     [temporaryDeleteTargetId, temporaryChats]
   );
+  const projectDeleteTarget = useMemo(
+    () => projects.find((project) => project.project_id === projectDeleteTargetId) ?? null,
+    [projectDeleteTargetId, projects]
+  );
+  const conversationDeleteTargetItem = useMemo(() => {
+    if (!conversationDeleteTarget) return null;
+    return (
+      (projectConversations[conversationDeleteTarget.projectId] ?? []).find(
+        (conversation) => conversation.conversation_id === conversationDeleteTarget.conversationId
+      ) ?? null
+    );
+  }, [conversationDeleteTarget, projectConversations]);
 
   const routeProjectId = useMemo(() => {
     const match = pathname.match(/^\/chat\/project\/([^/]+)/);
@@ -949,6 +969,14 @@ export function ChatSidebar() {
     if (!open) setTemporaryDeleteTargetId(null);
   }
 
+  function handleProjectDeleteDialogOpenChange(open: boolean) {
+    if (!open) setProjectDeleteTargetId(null);
+  }
+
+  function handleConversationDeleteDialogOpenChange(open: boolean) {
+    if (!open) setConversationDeleteTarget(null);
+  }
+
   function handleConfirmDeleteTemporaryChat() {
     if (!temporaryDeleteTarget) return;
     const deletedChatId = temporaryDeleteTarget.id;
@@ -960,10 +988,14 @@ export function ChatSidebar() {
     }
   }
 
-  async function handleDeleteProject(projectId: string) {
-    if (!window.confirm('Are you sure you want to delete this project? This cannot be undone.')) {
-      return;
-    }
+  function handleDeleteProject(projectId: string) {
+    setProjectDeleteTargetId(projectId);
+  }
+
+  async function handleConfirmDeleteProject() {
+    if (!projectDeleteTarget) return;
+    const projectId = projectDeleteTarget.project_id;
+    setProjectDeleteTargetId(null);
     try {
       await removeProject(projectId);
       if (activeProjectId === projectId) {
@@ -977,7 +1009,7 @@ export function ChatSidebar() {
     }
   }
 
-  async function handleDeleteConversation(projectId: string, convId: string) {
+  function handleDeleteConversation(projectId: string, convId: string) {
     const conversation = (projectConversations[projectId] ?? []).find(
       (item) => item.conversation_id === convId
     );
@@ -985,9 +1017,21 @@ export function ChatSidebar() {
       toast.error('Committed conversations cannot be deleted.');
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this conversation?')) {
+    setConversationDeleteTarget({ projectId, conversationId: convId });
+  }
+
+  async function handleConfirmDeleteConversation() {
+    if (!conversationDeleteTarget) return;
+    const { projectId, conversationId: convId } = conversationDeleteTarget;
+    const conversation = (projectConversations[projectId] ?? []).find(
+      (item) => item.conversation_id === convId
+    );
+    if (conversation?.committed_as ?? projectConversationCommitHashes[projectId]?.[convId]) {
+      toast.error('Committed conversations cannot be deleted.');
+      setConversationDeleteTarget(null);
       return;
     }
+    setConversationDeleteTarget(null);
     try {
       await removeConversationFn(projectId, convId);
       if (activeConversationId === convId) {
@@ -1904,6 +1948,59 @@ export function ChatSidebar() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(projectDeleteTarget)}
+        onOpenChange={handleProjectDeleteDialogOpenChange}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Delete "{projectDeleteTarget?.name ?? DEFAULT_PROJECT_NAME}"? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleProjectDeleteDialogOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleConfirmDeleteProject}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(conversationDeleteTarget)}
+        onOpenChange={handleConversationDeleteDialogOpenChange}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Conversation</DialogTitle>
+            <DialogDescription>
+              Delete "{conversationDeleteTargetItem?.title ?? 'Untitled Conversation'}"? This cannot
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleConversationDeleteDialogOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleConfirmDeleteConversation}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
