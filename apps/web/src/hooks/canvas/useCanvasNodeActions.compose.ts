@@ -15,6 +15,7 @@
  */
 
 import type { Edge, Node } from '@xyflow/react';
+import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { getTerminology } from '@/hooks/shared/useTerminology';
 import {
   backflowEdgeStyle,
@@ -185,12 +186,7 @@ export function composeCanvasFromFetches(
   if (projectLeaves.length > 0) {
     const leavesByCommit = new Map<string, EmbeddedLeaf[]>();
     for (const leaf of projectLeaves) {
-      const embedded: EmbeddedLeaf = {
-        id: leaf.id,
-        type: leaf.type,
-        title: leaf.title || leaf.type,
-        createdAt: leaf.created_at,
-      };
+      const embedded = toEmbeddedLeaf(leaf);
       const existing = leavesByCommit.get(leaf.commit_hash) || [];
       existing.push(embedded);
       leavesByCommit.set(leaf.commit_hash, existing);

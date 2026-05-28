@@ -12,6 +12,7 @@ import type { Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { createConversation } from '@/commands/conversations';
 import { createWorkbenchDraft } from '@/commands/drafts';
+import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { composeCanvasFromFetches } from '@/hooks/canvas/useCanvasNodeActions.compose';
 import { fetchCommits } from '@/queries/commits';
 import { fetchConversations } from '@/queries/conversations';
@@ -129,12 +130,7 @@ export function useCanvasNodeActions() {
       const projectLeaves = await fetchLeavesByProject(projectId).catch(() => [] as Leaf[]);
       const leavesByCommit = new Map<string, EmbeddedLeaf[]>();
       for (const leaf of projectLeaves) {
-        const embedded: EmbeddedLeaf = {
-          id: leaf.id,
-          type: leaf.type,
-          title: leaf.title || leaf.type,
-          createdAt: leaf.created_at,
-        };
+        const embedded = toEmbeddedLeaf(leaf);
         const existing = leavesByCommit.get(leaf.commit_hash) || [];
         existing.push(embedded);
         leavesByCommit.set(leaf.commit_hash, existing);

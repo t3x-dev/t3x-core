@@ -27,6 +27,18 @@ interface ProjectDataInput {
   hasDbPositions: boolean;
 }
 
+function leafFingerprint(leaf: EmbeddedLeaf): string {
+  return [
+    leaf.id,
+    leaf.type,
+    leaf.title,
+    leaf.status ?? '',
+    leaf.passedCount ?? '',
+    leaf.failedCount ?? '',
+    leaf.createdAt ?? '',
+  ].join('|');
+}
+
 export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (set) => ({
   // ── Passive setters ──────────────────────────────────────────────
   setLoading: (loading) => set({ loading }),
@@ -102,15 +114,9 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         if (!commitHash) return node;
         const newLeaves: EmbeddedLeaf[] = leavesByCommit.get(commitHash) || [];
         const oldLeaves = node.data.leaves || [];
-        const oldIds = oldLeaves
-          .map((l) => l.id)
-          .sort()
-          .join(',');
-        const newIds = newLeaves
-          .map((l) => l.id)
-          .sort()
-          .join(',');
-        if (oldIds === newIds) return node;
+        const oldSnapshot = oldLeaves.map(leafFingerprint).sort().join(',');
+        const newSnapshot = newLeaves.map(leafFingerprint).sort().join(',');
+        if (oldSnapshot === newSnapshot) return node;
         return { ...node, data: { ...node.data, leaves: newLeaves } };
       }),
     })),

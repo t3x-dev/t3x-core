@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { LeafType } from '@/types/api';
@@ -83,6 +84,12 @@ export function LeafCreationDialog({
       });
 
       toast.success('Leaf created successfully');
+      dispatchLeafChanged({
+        projectId,
+        commitHash,
+        leafId: leaf.id,
+        reason: 'created',
+      });
       onOpenChange(false);
 
       // Navigate to leaf detail page

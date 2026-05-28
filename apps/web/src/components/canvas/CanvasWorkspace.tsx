@@ -14,6 +14,7 @@ import { getLayoutedElements } from '@/components/canvas/elkLayout';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
+import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
 import { useCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useContextMenu } from '@/hooks/shared/useContextMenu';
 import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
@@ -135,7 +136,7 @@ function CanvasWorkspaceInner({
     closeNodeModal,
     openLeafPanel,
   } = useCanvasStore();
-  const { load: loadCanvas, add: addNode } = useCanvasNodeActions();
+  const { load: loadCanvas, refresh: refreshCanvasLeaves, add: addNode } = useCanvasNodeActions();
   const { addConversationFromCommit, startMerge } = useCanvasCommitActions();
   const hasMainCommit = useCanvasStore((state) => state.hasMainCommit);
   const getCommitTone = useCanvasStore((state) => state.getCommitTone);
@@ -153,6 +154,19 @@ function CanvasWorkspaceInner({
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const handleLeafChanged = (event: Event) => {
+      const detail = (event as CustomEvent<LeafChangedDetail>).detail;
+      if (detail?.projectId !== projectId) return;
+      void refreshCanvasLeaves(projectId);
+    };
+
+    window.addEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
+    return () => window.removeEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
+  }, [projectId, refreshCanvasLeaves]);
 
   const notify = useProjectStore((state) => state.notifyCallback);
 

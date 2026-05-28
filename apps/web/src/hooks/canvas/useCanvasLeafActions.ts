@@ -10,11 +10,13 @@
 
 import { useCallback } from 'react';
 import { createLeaf, deleteLeaf } from '@/commands/leaves';
+import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
+import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { getTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { isDeveloperMode } from '@/store/shared';
 import type { Template } from '@/types/api';
-import type { EmbeddedLeaf, LeafType } from '@/types/nodes';
+import type { LeafType } from '@/types/nodes';
 
 const LEAF_TYPE_LABELS: Record<LeafType, string> = {
   tweet: 'Twitter',
@@ -81,17 +83,18 @@ export function useCanvasLeafActions() {
         config: {},
       });
 
-      const embedded: EmbeddedLeaf = {
-        id: leaf.id,
-        type: leafType,
-        title: LEAF_TYPE_LABELS[leafType],
-        createdAt: leaf.created_at,
-      };
+      const embedded = toEmbeddedLeaf(leaf);
 
       // Close panel only after the API call succeeds.
       store.closeLeafPanel();
       store.setLeafCreating(false);
       store.embedLeafInNode(ctx.commitId, embedded);
+      dispatchLeafChanged({
+        projectId: ctx.projectId,
+        commitHash: ctx.commitHash,
+        leafId: leaf.id,
+        reason: 'created',
+      });
 
       notify?.(`${LEAF_TYPE_LABELS[leafType]} created successfully`, 'success');
       return leaf.id;
@@ -130,16 +133,17 @@ export function useCanvasLeafActions() {
         },
       });
 
-      const embedded: EmbeddedLeaf = {
-        id: leaf.id,
-        type: leafType,
-        title: template.title,
-        createdAt: leaf.created_at,
-      };
+      const embedded = toEmbeddedLeaf(leaf);
 
       store.closeLeafPanel();
       store.setLeafCreating(false);
       store.embedLeafInNode(ctx.commitId, embedded);
+      dispatchLeafChanged({
+        projectId: ctx.projectId,
+        commitHash: ctx.commitHash,
+        leafId: leaf.id,
+        reason: 'created',
+      });
 
       notify?.(`${template.title} leaf created from template`, 'success');
       return leaf.id;
@@ -154,9 +158,15 @@ export function useCanvasLeafActions() {
   const remove = useCallback(async (commitNodeId: string, leafId: string): Promise<void> => {
     const store = useCanvasStore.getState();
     const notify = store.notifyCallback;
+    const node = store.nodes.find((n) => n.id === commitNodeId);
+    const projectId = store.projectId;
+    const commitHash = node?.data.commitHash;
     try {
       await deleteLeaf(leafId);
       store.removeLeafFromNodeState(commitNodeId, leafId);
+      if (projectId) {
+        dispatchLeafChanged({ projectId, commitHash, leafId, reason: 'deleted' });
+      }
       notify?.('Leaf deleted', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete leaf';
