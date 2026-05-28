@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  useContextManifest: vi.fn(),
   reloadContextManifest: vi.fn(),
   updateSelectedPins: vi.fn(),
   parentConversationId: null as string | null,
@@ -60,12 +62,15 @@ vi.mock('@/hooks/conversations/useChatInit', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useContextManifest', () => ({
-  useContextManifest: () => ({
-    manifest: mocks.contextManifest,
-    loading: false,
-    error: null,
-    reload: mocks.reloadContextManifest,
-  }),
+  useContextManifest: (conversationId: string | null | undefined) => {
+    mocks.useContextManifest(conversationId);
+    return {
+      manifest: mocks.contextManifest,
+      loading: false,
+      error: null,
+      reload: mocks.reloadContextManifest,
+    };
+  },
 }));
 
 vi.mock('@/hooks/conversations/useConversationContextPins', () => ({
@@ -241,6 +246,11 @@ const sourceDocumentMaterial = {
   created_by: null,
 } satisfies Material;
 
+const extractedOp = {
+  set: { path: 'concepts/title', value: 'understand' },
+  source: { type: 'llm', provider: 'anthropic', model: 'claude-sonnet' },
+} as SourcedYOp;
+
 describe('ChatWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -254,6 +264,7 @@ describe('ChatWorkspace', () => {
     mocks.refreshProjectMaterials.mockReset();
     mocks.uploadMaterial.mockReset();
     mocks.archiveMaterial.mockReset();
+    mocks.useContextManifest.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -300,7 +311,7 @@ describe('ChatWorkspace', () => {
     expect(messageScroll.contains(manifest)).toBe(false);
   });
 
-  it('shows source text actions for a valid selection even before executed mode', () => {
+  it('hides source text actions before YOps content exists', () => {
     mocks.textSelection.current = {
       selection: {
         text: 'understand',
@@ -317,7 +328,39 @@ describe('ChatWorkspace', () => {
 
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
+  });
+
+  it('shows source text actions for a valid selection after YOps content exists', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'understand',
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        turnText: 'hello',
+        startChar: 10,
+        endChar: 20,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+    useWorkspaceStore.getState().setMode('idle');
+    useWorkspaceStore.getState().setDraft({
+      ops: [extractedOp],
+      tree: { trees: [], relations: [] },
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
     expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
+  });
+
+  it('hides project context controls for temporary chats', () => {
+    render(<ChatWorkspace conversationId="temp_chat_1" />);
+
+    expect(mocks.useContextManifest).toHaveBeenCalledWith(null);
+    expect(screen.queryByRole('button', { name: /open sources/i })).toBeNull();
+    expect(screen.queryByRole('region', { name: /sources/i })).toBeNull();
   });
 
   it('does not show source text actions for a user question selection', () => {

@@ -565,7 +565,7 @@ export function ChatMessage({
     !useCoverageHighlights &&
     hasCommittedHighlights;
 
-  const showSourceEditHint = !isUser && !isStreaming && Boolean(turnHash);
+  const showSourceEditHint = !isCommitted && !isUser && !isStreaming && Boolean(turnHash);
 
   return (
     <div

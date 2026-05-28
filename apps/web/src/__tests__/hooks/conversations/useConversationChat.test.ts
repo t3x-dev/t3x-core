@@ -83,6 +83,7 @@ vi.mock('@/infrastructure', () => ({
 }));
 
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
+import type { ChatMessage } from '@/hooks/conversations/useChatHistory';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 
@@ -103,6 +104,17 @@ function deferred<T>() {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
+}
+
+function replayLocalMessageUpdates(): ChatMessage[] {
+  let messages: ChatMessage[] = [];
+  for (const [update] of setMessagesMock.mock.calls) {
+    messages =
+      typeof update === 'function'
+        ? (update as (prev: ChatMessage[]) => ChatMessage[])(messages)
+        : (update as ChatMessage[]);
+  }
+  return messages;
 }
 
 describe('useConversationChat', () => {
@@ -299,6 +311,53 @@ describe('useConversationChat', () => {
       role: 'assistant',
       content: 'assistant response',
     });
+  });
+
+  it('replaces optimistic local messages with saved turn metadata', async () => {
+    createTurnMock
+      .mockResolvedValueOnce({
+        turn_hash: 'sha256:user_turn',
+        project_id: 'proj_1',
+        conversation_id: 'conv_existing',
+      })
+      .mockResolvedValueOnce({
+        turn_hash: 'sha256:assistant_turn',
+        project_id: 'proj_1',
+        conversation_id: 'conv_existing',
+      });
+
+    const { result } = renderHook(() =>
+      useConversationChat({
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        title: 'Meal planning',
+        provider: 'openai',
+        model: 'gpt-5.4',
+      })
+    );
+
+    result.current.sendMessage('I want to eat chestnuts.');
+
+    await waitFor(() => {
+      expect(createTurnMock.mock.calls.map((call) => call[2])).toEqual(['user', 'assistant']);
+    });
+
+    expect(replayLocalMessageUpdates()).toEqual([
+      {
+        id: 'sha256:user_turn',
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        role: 'user',
+        content: 'I want to eat chestnuts.',
+      },
+      {
+        id: 'sha256:assistant_turn',
+        projectId: 'proj_1',
+        conversationId: 'conv_existing',
+        role: 'assistant',
+        content: 'assistant response',
+      },
+    ]);
   });
 
   it('saves the user turn before starting the assistant stream', async () => {

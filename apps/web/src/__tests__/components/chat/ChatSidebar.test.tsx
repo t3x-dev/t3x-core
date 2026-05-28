@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => {
     setSidebarWidth: vi.fn(),
     activeConversationId: 'conv_a432e35d' as string | null,
     activeProjectId: null as string | null,
+    activeBranch: 'main',
     expandedProjectIds: new Set<string>(),
     toggleProjectExpanded: vi.fn(),
     setActiveConversation: vi.fn(),
+    setActiveBranch: vi.fn(),
     setConversationTitle: vi.fn(),
     refreshKey: 0,
     refreshSidebar: vi.fn(),
@@ -52,6 +54,7 @@ const mocks = vi.hoisted(() => {
     }>,
     loadConversations: vi.fn(),
     loadCommits: vi.fn(),
+    importChat: vi.fn(),
     pathname: '/chat/conv_a432e35d',
     projects: [] as Array<{
       project_id: string;
@@ -62,6 +65,7 @@ const mocks = vi.hoisted(() => {
     }>,
     projectLeaves: [] as Array<Record<string, unknown> & { id: string }>,
     routerPush: vi.fn(),
+    startNewProjectChat: vi.fn(),
     chatState,
     toastError: vi.fn(),
   };
@@ -108,7 +112,13 @@ vi.mock('@/hooks/conversations/useProjectConversations', () => ({
 
 vi.mock('@/hooks/conversations/useNewProjectChat', () => ({
   useNewProjectChat: () => ({
-    start: vi.fn(),
+    start: mocks.startNewProjectChat,
+  }),
+}));
+
+vi.mock('@/hooks/conversations/useTemporaryChatImport', () => ({
+  useTemporaryChatImport: () => ({
+    importChat: mocks.importChat,
   }),
 }));
 
@@ -160,9 +170,17 @@ afterEach(() => {
   mocks.contextMenuItems = [];
   mocks.commits = [];
   mocks.loadCommits.mockResolvedValue(mocks.commits);
+  mocks.importChat.mockResolvedValue({
+    conversation_id: 'conv_imported',
+    project_id: 'proj_import',
+    title: 'Temporary chat',
+    created_at: '2026-05-25T00:02:00.000Z',
+  });
+  mocks.startNewProjectChat.mockResolvedValue(null);
   mocks.pathname = '/chat/conv_a432e35d';
   mocks.chatState.activeConversationId = 'conv_a432e35d';
   mocks.chatState.activeProjectId = null;
+  mocks.chatState.activeBranch = 'main';
   mocks.chatState.expandedProjectIds = new Set<string>();
   mocks.chatState.refreshKey = 0;
 });
@@ -178,6 +196,74 @@ describe('ChatSidebar', () => {
     expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(chat.id, null);
     expect(mocks.chatState.setConversationTitle).toHaveBeenCalledWith('Temporary chat');
     expect(mocks.routerPush).toHaveBeenCalledWith(`/chat/${encodeURIComponent(chat.id)}`);
+  });
+
+  it('reuses an existing empty temporary chat instead of creating another blank draft', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New temporary chat' }));
+
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(1);
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith('temp_empty', null);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/temp_empty');
+  });
+
+  it('keeps only the latest empty temporary draft when reusing blank chats', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_old_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+        {
+          id: 'temp_chat_with_messages',
+          title: 'Existing work',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:01:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+        {
+          id: 'temp_latest_empty',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:02:00.000Z',
+          updatedAt: '2026-05-25T00:02:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New temporary chat' }));
+
+    expect(useTemporaryChatsStore.getState().chats.map((chat) => chat.id)).toEqual([
+      'temp_chat_with_messages',
+      'temp_latest_empty',
+    ]);
+    expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith('temp_latest_empty', null);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/temp_latest_empty');
   });
 
   it('uses the shared purple tint selected shell for active temporary chats', () => {
@@ -205,6 +291,144 @@ describe('ChatSidebar', () => {
     expect(row).toHaveClass('bg-[var(--accent-conversation-soft)]');
     expect(row).toHaveClass('border-[var(--accent-conversation)]/20');
     expect(row).not.toHaveClass('bg-[var(--sidebar-panel)]');
+  });
+
+  it('disables importing an empty temporary chat', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_empty_import',
+          title: 'Temporary chat',
+          messages: [],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    const importButton = screen.getByRole('button', { name: 'Import temporary chat' });
+    expect(importButton).toBeDisabled();
+    expect(importButton).toHaveAttribute('title', 'Send a message before importing');
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*0 messages/,
+      }).parentElement as HTMLElement
+    );
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Import to Project')).toBe(false);
+  });
+
+  it('enables importing a temporary chat after it has messages', () => {
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_ready_import',
+          title: 'Temporary chat',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    const importButton = screen.getByRole('button', { name: 'Import temporary chat' });
+    expect(importButton).toBeEnabled();
+    expect(importButton).toHaveAttribute('title', 'Import temporary chat');
+
+    fireEvent.contextMenu(
+      screen.getByRole('button', {
+        name: /Temporary chat\s*1 message/,
+      }).parentElement as HTMLElement
+    );
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Import to Project')).toBe(true);
+  });
+
+  it('imports a temporary chat on the selected project branch baseline', async () => {
+    const project = {
+      project_id: 'proj_import',
+      name: 'Import Project',
+      created_at: '2026-05-25T00:00:00.000Z',
+      conversations_count: 0,
+      commits_count: 2,
+    };
+    mocks.projects = [project];
+    mocks.loadCommits.mockImplementation(async (_projectId, branch, limit) => {
+      if (branch === undefined && limit === 100) {
+        return [
+          {
+            hash: 'sha256:mainabcdef',
+            message: 'Main baseline',
+            branch: 'main',
+            committed_at: '2026-05-25T00:00:00.000Z',
+          },
+          {
+            hash: 'sha256:feature1234',
+            message: 'Feature baseline',
+            branch: 'feature',
+            committed_at: '2026-05-25T00:01:00.000Z',
+          },
+        ];
+      }
+      return [];
+    });
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_ready_import',
+          title: 'Imported source',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+      ],
+    });
+    mocks.importChat.mockResolvedValue({
+      conversation_id: 'conv_imported',
+      project_id: 'proj_import',
+      title: 'Imported source',
+      created_at: '2026-05-25T00:02:00.000Z',
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import temporary chat' }));
+
+    await screen.findByText('Starts from main · mainabcd');
+    fireEvent.change(screen.getByLabelText('Branch baseline'), {
+      target: { value: 'feature' },
+    });
+    expect(screen.getByText('Starts from feature · feature1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() => {
+      expect(mocks.importChat).toHaveBeenCalledWith({
+        chat: expect.objectContaining({ id: 'temp_ready_import' }),
+        project,
+        parentCommitHash: 'sha256:feature1234',
+      });
+    });
+    expect(mocks.chatState.setActiveBranch).toHaveBeenCalledWith('feature');
+    expect(mocks.routerPush).toHaveBeenCalledWith('/chat/conv_imported');
+    expect(useTemporaryChatsStore.getState().chats).toHaveLength(0);
   });
 
   it('confirms before deleting a temporary chat', () => {
@@ -450,6 +674,36 @@ describe('ChatSidebar', () => {
     });
   });
 
+  it('routes project New Chat to the reusable project draft returned by the hook', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_draft',
+        name: 'Draft Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_draft: [{ conversation_id: 'conv_existing', title: 'Existing conversation' }],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_draft']);
+    mocks.startNewProjectChat.mockResolvedValue('conv_reusable_empty');
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /\+New Chat/ }));
+
+    await waitFor(() => {
+      expect(mocks.startNewProjectChat).toHaveBeenCalledWith('proj_draft');
+      expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(
+        'conv_reusable_empty',
+        'proj_draft'
+      );
+      expect(mocks.routerPush).toHaveBeenCalledWith('/chat/conv_reusable_empty');
+    });
+  });
+
   it('shows a new conversation commit hash immediately from commit-created events', async () => {
     mocks.projects = [
       {
@@ -606,6 +860,39 @@ describe('ChatSidebar', () => {
       expect(mocks.loadCommits).toHaveBeenCalledWith('proj_smoke', undefined, 40);
       expect(screen.getByText('Extract release decisions')).toBeInTheDocument();
     });
+  });
+
+  it('opens commit details from the canvas-scoped commit list', async () => {
+    mocks.pathname = '/chat/project/proj_smoke/canvas';
+    mocks.projects = [
+      {
+        project_id: 'proj_smoke',
+        name: 'Smoke English Extraction',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.commits = [
+      {
+        hash: 'sha256:abcdef123456',
+        message: 'Extract release decisions',
+        branch: 'main',
+        committed_at: '2026-05-08T00:00:00Z',
+      },
+    ];
+    mocks.loadCommits.mockResolvedValue(mocks.commits);
+
+    render(<ChatSidebar />);
+
+    const commitButton = await screen.findByRole('button', {
+      name: /Extract release decisions/i,
+    });
+    fireEvent.click(commitButton);
+
+    expect(mocks.routerPush).toHaveBeenCalledWith(
+      '/project/proj_smoke/commit/sha256%3Aabcdef123456?returnTo=%2Fchat%2Fproject%2Fproj_smoke%2Fcanvas'
+    );
   });
 
   it('shows leaf-scoped navigation below the Leaf tab', () => {

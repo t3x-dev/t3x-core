@@ -103,6 +103,7 @@ export function ChatWorkspace({
   const { selection, clearSelection } = useTextSelection(chatContainerRef);
   useUndo({ bindKeyboard: true });
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
@@ -114,7 +115,11 @@ export function ChatWorkspace({
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
   const showAddForm =
-    !isCommitted && selection && selection.turnRole !== 'user' && selection.text.length > 3;
+    !isCommitted &&
+    hasYopsContent &&
+    selection &&
+    selection.turnRole !== 'user' &&
+    selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -136,6 +141,7 @@ export function ChatWorkspace({
     isNewChat ? undefined : conversationId
   );
   const isTemporaryChat = !resolvedProjectId;
+  const showProjectContext = !isTemporaryChat;
   const chatInputDraftKey = resolvedConversationId
     ? isTemporaryChat
       ? `temporary:${resolvedConversationId}`
@@ -153,19 +159,25 @@ export function ChatWorkspace({
     loading: contextManifestLoading,
     error: contextManifestError,
     reload: reloadContextManifest,
-  } = useContextManifest(resolvedConversationId);
+  } = useContextManifest(showProjectContext ? resolvedConversationId : null);
   const { updateSelectedPins: updateContextSelectedPins } = useConversationContextPins();
   const {
     leaves: projectLeaves,
     loading: projectLeavesLoading,
     error: projectLeavesError,
-  } = useProjectLeaves(resolvedProjectId, contextManifestOpen && !isCommitted);
+  } = useProjectLeaves(
+    resolvedProjectId,
+    showProjectContext && contextManifestOpen && !isCommitted
+  );
   const {
     materials: projectMaterials,
     loading: projectMaterialsLoading,
     error: projectMaterialsError,
     refresh: refreshProjectMaterials,
-  } = useProjectMaterials(resolvedProjectId, contextManifestOpen && !isCommitted);
+  } = useProjectMaterials(
+    resolvedProjectId,
+    showProjectContext && contextManifestOpen && !isCommitted
+  );
   const { uploading: materialUploading, upload: uploadMaterial } = useMaterialUpload();
   const { archiveMaterial } = useMaterialArchive();
 
@@ -721,7 +733,7 @@ export function ChatWorkspace({
         modelsLoading={modelsLoading}
       />
 
-      {materialReaderSelection ? (
+      {showProjectContext && materialReaderSelection ? (
         <MaterialReader
           selection={materialReaderSelection}
           onBack={handleCloseMaterialReader}
@@ -731,39 +743,41 @@ export function ChatWorkspace({
         />
       ) : (
         <>
-          <ContextManifestBar
-            manifest={contextManifest}
-            loading={contextManifestLoading}
-            error={contextManifestError}
-            open={contextManifestOpen}
-            updating={contextManifestUpdating}
-            sourcePicker={
-              isCommitted
-                ? undefined
-                : {
-                    availableLeaves: projectLeaves,
-                    availableLeavesLoading: projectLeavesLoading,
-                    availableLeavesError: projectLeavesError,
-                    availableMaterials: projectMaterials,
-                    availableMaterialsLoading: projectMaterialsLoading,
-                    availableMaterialsError: projectMaterialsError,
-                    leafPinningIds: pinningLeafIds,
-                    materialPinningIds: pinningMaterialIds,
-                    materialArchivingIds: archivingMaterialIds,
-                    materialUploading,
-                    baseline: baselineForSourcePanel,
-                    onPinLeaf: handlePinLeafForContext,
-                    onPinMaterial: handlePinMaterialForContext,
-                    onArchiveMaterial: handleArchiveMaterial,
-                    onUploadMaterial: handleUploadMaterial,
-                    onOpenMaterial: handleOpenMaterialReader,
-                  }
-            }
-            onOpenChange={setContextManifestOpen}
-            onReload={reloadContextManifest}
-            onReferenceToggle={handleContextReferenceToggle}
-            onAssertionToggle={handleContextAssertionToggle}
-          />
+          {showProjectContext && (
+            <ContextManifestBar
+              manifest={contextManifest}
+              loading={contextManifestLoading}
+              error={contextManifestError}
+              open={contextManifestOpen}
+              updating={contextManifestUpdating}
+              sourcePicker={
+                isCommitted
+                  ? undefined
+                  : {
+                      availableLeaves: projectLeaves,
+                      availableLeavesLoading: projectLeavesLoading,
+                      availableLeavesError: projectLeavesError,
+                      availableMaterials: projectMaterials,
+                      availableMaterialsLoading: projectMaterialsLoading,
+                      availableMaterialsError: projectMaterialsError,
+                      leafPinningIds: pinningLeafIds,
+                      materialPinningIds: pinningMaterialIds,
+                      materialArchivingIds: archivingMaterialIds,
+                      materialUploading,
+                      baseline: baselineForSourcePanel,
+                      onPinLeaf: handlePinLeafForContext,
+                      onPinMaterial: handlePinMaterialForContext,
+                      onArchiveMaterial: handleArchiveMaterial,
+                      onUploadMaterial: handleUploadMaterial,
+                      onOpenMaterial: handleOpenMaterialReader,
+                    }
+              }
+              onOpenChange={setContextManifestOpen}
+              onReload={reloadContextManifest}
+              onReferenceToggle={handleContextReferenceToggle}
+              onAssertionToggle={handleContextAssertionToggle}
+            />
+          )}
 
           {/* Coverage toggle — visible after extraction */}
           {sourceMapByTurn.size > 0 && (
@@ -918,7 +932,7 @@ export function ChatWorkspace({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Inline source-text actions (visible whenever editable chat text is selected) */}
+          {/* Inline source-text actions require an extracted/applied YOps context. */}
           {showAddForm && selection && (
             <ChatSpanActions selection={selection} onDone={clearSelection} />
           )}
