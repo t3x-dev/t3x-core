@@ -149,6 +149,7 @@ export interface ListBranchesOptions extends ListOptions {
 
 export interface UpdateConversationInput {
   title?: string;
+  parent_commit_hash?: string | null;
   position_x?: number;
   position_y?: number;
   metadata?: Record<string, unknown>;

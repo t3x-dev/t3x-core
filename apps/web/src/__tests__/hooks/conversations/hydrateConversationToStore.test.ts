@@ -43,8 +43,10 @@ function snapshot(opts: {
   tree?: SemanticContent;
   committedAs?: string | null;
   committedAt?: string | null;
+  committedBranch?: string | null;
   parentCommitHash?: string | null;
   parentCommitBranch?: string | null;
+  targetBranch?: string | null;
   parentCommit?: { hash: string; trees: SemanticContent['trees']; message: string | null } | null;
 }): {
   turns: Array<{
@@ -57,8 +59,10 @@ function snapshot(opts: {
   sourceIndex: Map<string, Source>;
   committedAs?: string | null;
   committedAt?: string | null;
+  committedBranch?: string | null;
   parentCommitHash?: string | null;
   parentCommitBranch?: string | null;
+  targetBranch?: string | null;
   parentCommit?: { hash: string; trees: SemanticContent['trees']; message: string | null } | null;
 } {
   return {
@@ -68,8 +72,10 @@ function snapshot(opts: {
     sourceIndex: new Map<string, Source>(),
     committedAs: opts.committedAs,
     committedAt: opts.committedAt,
+    committedBranch: opts.committedBranch,
     parentCommitHash: opts.parentCommitHash,
     parentCommitBranch: opts.parentCommitBranch,
+    targetBranch: opts.targetBranch,
     parentCommit: opts.parentCommit,
   };
 }
@@ -175,11 +181,7 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
       draftsByConversation: {
         conv_Committed: {
           ops: SAMPLE_OPS,
-          scriptText: 'yops:\n- stale: true',
-          tree: SAMPLE_TREE,
-          dirty: true,
-          baseOpsCount: 0,
-          baseTurnCount: 1,
+          editorOverride: 'yops:\n- stale: true',
         },
       },
     });
@@ -189,6 +191,7 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
         tree: SAMPLE_TREE,
         committedAs: 'sha256:committed',
         committedAt: '2026-04-27T00:00:00.000Z',
+        committedBranch: 'release/final',
       })
     );
 
@@ -199,6 +202,8 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
     expect(workspace.hasDraft).toBe(false);
     expect(workspace.draftsByConversation.conv_Committed).toBeUndefined();
     expect(useCommitStore.getState().lastCommitHash).toBe('sha256:committed');
+    expect(useCommitStore.getState().commitBranch).toBe('release/final');
+    expect(useChatStore.getState().activeBranch).toBe('release/final');
   });
 
   it('keeps inherited child conversations unlocked and seeds the parent commit hash', async () => {
@@ -228,6 +233,22 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
     });
     expect(useCommitStore.getState().commitBranch).toBe('5');
     expect(useChatStore.getState().activeBranch).toBe('5');
+  });
+
+  it('uses the persisted target branch for uncommitted conversations', async () => {
+    fetchConversationSnapshotMock.mockResolvedValueOnce(
+      snapshot({
+        tree: SAMPLE_TREE,
+        parentCommitHash: 'sha256:parent_commit',
+        parentCommitBranch: 'old-parent-branch',
+        targetBranch: 'branch 111',
+      })
+    );
+
+    await hydrateConversationToStore('proj_Child', 'conv_Child');
+
+    expect(useCommitStore.getState().commitBranch).toBe('branch 111');
+    expect(useChatStore.getState().activeBranch).toBe('branch 111');
   });
 
   it('marks inherited children with applied YOps as having conversation changes', async () => {

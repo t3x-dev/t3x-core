@@ -14,9 +14,17 @@ interface BranchSwitcherProps {
   projectId: string;
   activeBranch: string;
   onBranchChange: (branch: string) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
-export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: BranchSwitcherProps) {
+export function BranchSwitcher({
+  projectId,
+  activeBranch,
+  onBranchChange,
+  disabled = false,
+  disabledReason,
+}: BranchSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -70,20 +78,22 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
 
   const handleSelect = useCallback(
     (branch: string) => {
+      if (disabled) return;
       onBranchChange(branch);
       setOpen(false);
       setCreating(false);
       setNewName('');
     },
-    [onBranchChange]
+    [disabled, onBranchChange]
   );
 
   const handleCreate = useCallback(async () => {
+    if (disabled) return;
     const name = newName.trim().replace(/\s+/g, '-');
     if (!name || !projectId || !/^[\w\-/.]+$/.test(name)) return;
     await create(name, activeBranch);
     handleSelect(name);
-  }, [newName, projectId, activeBranch, handleSelect, create]);
+  }, [disabled, newName, projectId, activeBranch, handleSelect, create]);
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -91,16 +101,23 @@ export function BranchSwitcher({ projectId, activeBranch, onBranchChange }: Bran
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (disabled) return;
+          setOpen(!open);
+        }}
+        disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Switch branch: ${activeBranch}`}
         className={cn(
-          'flex h-6 max-w-[128px] cursor-pointer items-center gap-1 rounded-full border px-2 text-[10px] font-medium',
+          'flex h-6 max-w-[128px] items-center gap-1 rounded-full border px-2 text-[10px] font-medium',
           'border-[var(--accent-commit)]/[0.18] bg-[color-mix(in_srgb,var(--surface-panel)_76%,var(--accent-commit)_7%)] text-[var(--accent-commit)]',
-          'transition-colors hover:bg-[var(--accent-commit)]/[0.08]'
+          'transition-colors',
+          disabled
+            ? 'cursor-default opacity-70'
+            : 'cursor-pointer hover:bg-[var(--accent-commit)]/[0.08]'
         )}
-        title={activeBranch}
+        title={disabled ? (disabledReason ?? activeBranch) : activeBranch}
       >
         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--accent-commit)]/10">
           <GitBranch className="h-2.5 w-2.5" />

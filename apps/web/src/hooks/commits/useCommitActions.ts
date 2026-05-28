@@ -6,7 +6,7 @@
  * `commitStore`:
  *   - commit(message)  → @/commands/commits.createCommit, enrich trees with source_ref,
  *                        sanitize slot values, write result via setters
- *   - init(projectId)  → fetchCommits (HEAD), seed lastCommitHash +
+ *   - init(projectId, branch) → fetchCommits (HEAD), seed lastCommitHash +
  *                        committedNodeIds/Snapshot for the chat-panel UI
  *
  * The store retains state + passive setters. Both methods call the
@@ -156,17 +156,27 @@ export function useCommitActions() {
     }
   }, []);
 
-  const init = useCallback(async (projectId: string): Promise<void> => {
+  const init = useCallback(async (projectId: string, branch = 'main'): Promise<string | null> => {
     try {
-      const recentCommits = await fetchCommits(projectId, 'main', 1).catch(() => []);
-      if (useCommitStore.getState().projectId !== projectId) return;
-      if (recentCommits.length === 0) return;
+      const recentCommits = await fetchCommits(projectId, branch, 1).catch(() => []);
+      if (useCommitStore.getState().projectId !== projectId) return null;
+      useCommitStore.getState().setCommitBranch(branch);
+      if (recentCommits.length === 0) {
+        useCommitStore.setState({
+          lastCommitHash: null,
+          beforeCommitHash: null,
+          committedNodeIds: {},
+          committedNodeSnapshot: {},
+        });
+        return null;
+      }
 
       const head = recentCommits[0];
       const trees = (head.content?.trees ?? []) as TreeNode[];
       if (trees.length === 0) {
         useCommitStore.getState().setInitialCommit(head.hash, {}, {});
-        return;
+        useCommitStore.getState().setBeforeCommitHash(head.hash);
+        return head.hash;
       }
 
       const flat = flattenTrees(trees);
@@ -179,8 +189,11 @@ export function useCommitActions() {
         snapshot[t.key] = t;
       }
       useCommitStore.getState().setInitialCommit(head.hash, ids, snapshot);
+      useCommitStore.getState().setBeforeCommitHash(head.hash);
+      return head.hash;
     } catch {
       // Silent fallback — treat as no prior commits
+      return null;
     }
   }, []);
 

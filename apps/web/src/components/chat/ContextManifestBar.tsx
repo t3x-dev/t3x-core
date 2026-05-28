@@ -12,6 +12,11 @@ interface ContextManifestBarProps {
   error: Error | string | null;
   open?: boolean;
   updating?: boolean;
+  baselineOverride?: {
+    commitHash: string | null;
+    branch: string | null;
+    parentConversationId?: string | null;
+  };
   sourcePicker?: ContextManifestSourcePicker;
   onOpenChange?: (open: boolean) => void;
   onReload: () => void | Promise<void>;
@@ -44,6 +49,7 @@ export function ContextManifestBar({
   error,
   open,
   updating = false,
+  baselineOverride,
   sourcePicker,
   onOpenChange,
   onReload,
@@ -58,8 +64,57 @@ export function ContextManifestBar({
     if (open === undefined) setUncontrolledOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
+  const displayManifest = useMemo(() => {
+    if (!manifest || !baselineOverride) return manifest;
+
+    const manifestHash = manifest.baseline.commit_hash ?? null;
+    const hashMatches = manifestHash === baselineOverride.commitHash;
+    const baseline = {
+      ...manifest.baseline,
+      commit_hash: baselineOverride.commitHash,
+      branch: baselineOverride.branch,
+      message: hashMatches ? manifest.baseline.message : null,
+      content: hashMatches ? manifest.baseline.content : null,
+      source: baselineOverride.commitHash ? ('parent_commit' as const) : ('none' as const),
+      source_conversation_id:
+        baselineOverride.parentConversationId ?? manifest.baseline.source_conversation_id,
+      node_count: hashMatches ? manifest.baseline.node_count : 0,
+      relation_count: hashMatches ? manifest.baseline.relation_count : 0,
+    };
+
+    const sourceItemsWithoutBaseline = manifest.source_items.filter(
+      (item) => item.role !== 'baseline'
+    );
+    const baselineItem = baselineOverride.commitHash
+      ? [
+          {
+            id: baselineOverride.commitHash,
+            kind: 'baseline' as const,
+            role: 'baseline' as const,
+            title: 'Baseline inherited',
+            pinned: false,
+            pinnable: false,
+            included: true,
+            readonly: true,
+            metadata: {
+              branch: baselineOverride.branch,
+              message: baseline.message,
+              nodes: baseline.node_count,
+              relations: baseline.relation_count,
+              source_conversation_id: baseline.source_conversation_id,
+            },
+          },
+        ]
+      : [];
+
+    return {
+      ...manifest,
+      baseline,
+      source_items: [...baselineItem, ...sourceItemsWithoutBaseline],
+    };
+  }, [baselineOverride, manifest]);
   const summary = useMemo(() => {
-    const sourceItems = manifest?.source_items ?? [];
+    const sourceItems = displayManifest?.source_items ?? [];
     const includedMaterials = sourceItems.filter(
       (item) => item.role === 'evidence' && item.pinned && item.included
     ).length;
@@ -68,13 +123,13 @@ export function ContextManifestBar({
     ).length;
 
     return {
-      baseline: shortHash(manifest?.baseline.commit_hash),
-      hasBaseline: Boolean(manifest?.baseline.commit_hash),
+      baseline: shortHash(displayManifest?.baseline.commit_hash),
+      hasBaseline: Boolean(displayManifest?.baseline.commit_hash),
       includedReferences: includedMaterials,
       includedLessons,
-      tokens: manifest?.token_estimate ?? 0,
+      tokens: displayManifest?.token_estimate ?? 0,
     };
-  }, [manifest]);
+  }, [displayManifest]);
 
   return (
     <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-3 py-1.5">
@@ -150,7 +205,7 @@ export function ContextManifestBar({
       {isOpen && (
         <ContextManifestPanel
           id={panelId}
-          manifest={manifest}
+          manifest={displayManifest}
           disabled={updating}
           sourcePicker={sourcePicker}
           onReferenceToggle={onReferenceToggle}

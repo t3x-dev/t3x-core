@@ -34,6 +34,7 @@ describe('fetchConversationSnapshot', () => {
       committedAs: null,
       committedAt: null,
       parentCommitHash: 'sha256:parent_commit',
+      metadata: { target_branch: 'feature/from-meta' },
     });
     fetchCommitForInheritanceMock.mockResolvedValueOnce({
       hash: 'sha256:parent_commit',
@@ -47,10 +48,33 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.tree).toEqual(PARENT_TREE);
     expect(snapshot.parentCommitHash).toBe('sha256:parent_commit');
     expect(snapshot.parentCommitBranch).toBe('5');
+    expect(snapshot.targetBranch).toBe('feature/from-meta');
     expect(snapshot.parentCommit).toEqual({
       hash: 'sha256:parent_commit',
       trees: PARENT_TREE.trees,
       message: null,
     });
+  });
+
+  it('loads the committed conversation branch from the committed hash', async () => {
+    loadConversationMock.mockResolvedValueOnce({
+      convId: 'conv_committed',
+      turns: [],
+      opsLog: [],
+      committedAs: 'sha256:committed_hash',
+      committedAt: '2026-05-28T00:00:00.000Z',
+      parentCommitHash: null,
+      metadata: null,
+    });
+    fetchCommitForInheritanceMock.mockResolvedValueOnce({
+      hash: 'sha256:committed_hash',
+      content: { trees: [], relations: [] },
+      branch: 'feature/final',
+    });
+
+    const snapshot = await fetchConversationSnapshot('proj_1', 'conv_committed');
+
+    expect(fetchCommitForInheritanceMock).toHaveBeenCalledWith('sha256:committed_hash');
+    expect(snapshot.committedBranch).toBe('feature/final');
   });
 });

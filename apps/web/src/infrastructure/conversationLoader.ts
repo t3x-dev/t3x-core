@@ -19,6 +19,7 @@ export interface LoadedConversation {
   committedAs: string | null;
   committedAt: string | null;
   parentCommitHash: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 export async function loadConversation(
@@ -38,5 +39,6 @@ export async function loadConversation(
     committedAs: conversation.committed_as ?? null,
     committedAt: conversation.committed_at ?? null,
     parentCommitHash: conversation.parent_commit_hash ?? null,
+    metadata: conversation.metadata ?? null,
   };
 }

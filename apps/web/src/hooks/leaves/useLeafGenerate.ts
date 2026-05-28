@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { ApiError, generateLeafOutput, getLeaf } from '@/infrastructure';
 import type { Leaf } from '@/types/api';
 
@@ -72,6 +73,12 @@ export function useLeafGenerate(
       await generateLeafOutput(leafId);
       const updatedLeaf = await getLeaf(leafId);
       setLeaf(updatedLeaf);
+      dispatchLeafChanged({
+        projectId: updatedLeaf.project_id,
+        commitHash: updatedLeaf.commit_hash,
+        leafId,
+        reason: 'generated',
+      });
       if (updatedLeaf.output) {
         const wordCount = updatedLeaf.output.trim().split(/\s+/).length;
         setGenerateSuccessBanner(`Output ready — ${wordCount} words`);

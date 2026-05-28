@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const replaceMock = vi.fn();
@@ -35,13 +35,28 @@ vi.mock('@/hooks/projects/useProjectCrud', () => ({
   useProjectCrud: () => ({ list: vi.fn() }),
 }));
 
+vi.mock('@/queries/project', () => ({
+  fetchProject: vi.fn(),
+}));
+
 import ProjectDetailPage from '@/app/project/[projectId]/page';
+import { fetchProject } from '@/queries/project';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(fetchProject).mockResolvedValue({
+    project_id: 'proj_test',
+    name: 'Test Project',
+    created_at: '2026-05-28T00:00:00.000Z',
+    conversations_count: 0,
+    commits_count: 0,
+    turns_count: 0,
+    branches_count: 0,
+    metadata: {},
+  } as never);
   useProjectStore.setState({
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
@@ -67,21 +82,45 @@ afterEach(() => {
   });
 });
 
-describe('ProjectDetailPage — empty-project redirect', () => {
-  it('redirects to a project-aware chat URL and primes activeProjectId', async () => {
+describe('ProjectDetailPage — empty canvas states', () => {
+  it('shows a no-conversations state and opens a project-aware chat URL', () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPage />);
 
-    expect(screen.getByText(/Opening chat workspace/i)).toBeInTheDocument();
-    // URL preserves project context so a refresh on the chat page still
-    // knows which project to write into.
-    expect(replaceMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
+    expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start a chat in this project, then commit it to see the canvas.')
+    ).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Go to Chat/i }));
+
+    // URL preserves project context so a refresh on the chat page still knows
+    // which project to write into.
+    expect(pushMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
     // Store is also primed synchronously so the next mount of ChatWorkspace
     // reads the right project even if the URL handling is lazy.
     expect(useChatStore.getState().activeProjectId).toBe('proj_test');
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
+  });
+
+  it('shows a no-commits state when the project has conversations but no canvas nodes', () => {
+    useProjectStore.setState({
+      projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
+      initialized: true,
+      loading: false,
+    });
+
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByText('No commits yet')).toBeInTheDocument();
+    expect(
+      screen.getByText('Commit a project chat to make it appear on Canvas.')
+    ).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it('does NOT redirect while canvas is still loading', () => {
@@ -127,5 +166,29 @@ describe('ProjectDetailPage — empty-project redirect', () => {
     render(<ProjectDetailPage />);
 
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('confirms a direct empty project before showing not found', async () => {
+    useProjectStore.setState({
+      projects: [],
+      initialized: true,
+      loading: false,
+    });
+    useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchProject).toHaveBeenCalledWith('proj_test');
+      expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Project not found/i)).toBeNull();
+    expect(replaceMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Go to Chat/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
+    expect(useChatStore.getState().activeProjectId).toBe('proj_test');
   });
 });

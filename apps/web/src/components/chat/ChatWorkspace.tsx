@@ -9,6 +9,10 @@ import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
 import { useContextManifest } from '@/hooks/conversations/useContextManifest';
+import {
+  CONVERSATION_BRANCH_CHANGED_EVENT,
+  type ConversationBranchChangedDetail,
+} from '@/hooks/conversations/useConversationBranchSwitch';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useConversationContextPins } from '@/hooks/conversations/useConversationContextPins';
 import { useExtraction } from '@/hooks/drafts/useExtraction';
@@ -24,7 +28,7 @@ import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { getTemporaryChat } from '@/store/temporaryChatsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { ChatHeader } from './ChatHeader';
@@ -106,6 +110,7 @@ export function ChatWorkspace({
   const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
   const invalidatePins = usePinsStore((s) => s.invalidatePins);
   const conversationTitle = useChatStore((s) => s.conversationTitle);
+  const activeBranch = useChatStore((s) => s.activeBranch);
   const { fetch: fetchPins, add: addPin, setAssertions } = usePinsCrud();
   const [contextManifestOpen, setContextManifestOpen] = useState(false);
   const [pinningLeafIds, setPinningLeafIds] = useState<Set<string>>(() => new Set());
@@ -114,12 +119,6 @@ export function ChatWorkspace({
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
-  const showAddForm =
-    !isCommitted &&
-    hasYopsContent &&
-    selection &&
-    selection.turnRole !== 'user' &&
-    selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -160,6 +159,18 @@ export function ChatWorkspace({
     error: contextManifestError,
     reload: reloadContextManifest,
   } = useContextManifest(showProjectContext ? resolvedConversationId : null);
+
+  useEffect(() => {
+    if (!showProjectContext || !resolvedConversationId) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<ConversationBranchChangedDetail>).detail;
+      if (!detail || detail.conversationId !== resolvedConversationId) return;
+      if (resolvedProjectId && detail.projectId !== resolvedProjectId) return;
+      void reloadContextManifest();
+    };
+    window.addEventListener(CONVERSATION_BRANCH_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(CONVERSATION_BRANCH_CHANGED_EVENT, handler);
+  }, [reloadContextManifest, resolvedConversationId, resolvedProjectId, showProjectContext]);
   const { updateSelectedPins: updateContextSelectedPins } = useConversationContextPins();
   const {
     leaves: projectLeaves,
@@ -277,11 +288,20 @@ export function ChatWorkspace({
   const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const baselineCommitHash = useWorkspaceStore((s) => s.baselineCommitHash);
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
   const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
   const workspaceLastError = useWorkspaceStore((s) => s.lastError);
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
+  const showAddForm =
+    !isCommitted &&
+    !hasDraft &&
+    !scriptDirty &&
+    hasYopsContent &&
+    selection &&
+    selection.turnRole !== 'user' &&
+    selection.text.length > 3;
 
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(
@@ -595,18 +615,27 @@ export function ChatWorkspace({
   }, [onMaterialReaderChange]);
 
   const baselineForSourcePanel = useMemo(() => {
+    const expectedBaselineHash = baselineCommitHash ?? inheritFromCommitHash ?? null;
     const manifestBaseline =
-      contextManifest?.baseline.source === 'parent_commit' ? contextManifest.baseline : null;
-    const commitHash =
-      manifestBaseline?.commit_hash ?? baselineCommitHash ?? inheritFromCommitHash ?? null;
+      contextManifest?.baseline.source === 'parent_commit' &&
+      contextManifest.baseline.commit_hash === expectedBaselineHash
+        ? contextManifest.baseline
+        : null;
+    const commitHash = expectedBaselineHash;
     if (!commitHash) return undefined;
 
     return {
       commitHash,
-      branch: manifestBaseline?.branch ?? null,
+      branch: manifestBaseline?.branch ?? activeBranch ?? null,
       parentConversationId,
     };
-  }, [baselineCommitHash, contextManifest, inheritFromCommitHash, parentConversationId]);
+  }, [
+    activeBranch,
+    baselineCommitHash,
+    contextManifest,
+    inheritFromCommitHash,
+    parentConversationId,
+  ]);
 
   // Send firstMessage on mount (once only)
   useEffect(() => {
@@ -750,6 +779,7 @@ export function ChatWorkspace({
               error={contextManifestError}
               open={contextManifestOpen}
               updating={contextManifestUpdating}
+              baselineOverride={baselineForSourcePanel}
               sourcePicker={
                 isCommitted
                   ? undefined

@@ -17,7 +17,7 @@ import {
 } from '@/infrastructure/sourceTextRevisions';
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 
 export type InlineTextAction = SourceTextAction;
 
@@ -102,6 +102,8 @@ function stageSourceEditOps(
 export function useSourceTextDraft() {
   const [pending, setPending] = useState(false);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const hasYopsContent = useWorkspaceStore((s) => s.draftOps.length > 0 || s.opsLog.length > 0);
 
   const applySourceTextEdit = useCallback(
@@ -111,6 +113,12 @@ export function useSourceTextDraft() {
         const store = useWorkspaceStore.getState();
         if (store.isCommitted) {
           throw new Error('Committed conversations are read-only.');
+        }
+        if (store.hasDraft) {
+          throw new Error('Apply or Discard the staged extraction before editing source text.');
+        }
+        if (selectScriptDirty(store)) {
+          throw new Error('Run or discard YOps changes before editing source text.');
         }
         if (store.draftOps.length === 0 && store.opsLog.length === 0) {
           throw new Error('Run Extract before editing source text.');
@@ -291,5 +299,9 @@ export function useSourceTextDraft() {
     []
   );
 
-  return { applySourceTextEdit, pending, enabled: !isCommitted && hasYopsContent };
+  return {
+    applySourceTextEdit,
+    pending,
+    enabled: !isCommitted && !hasDraft && !scriptDirty && hasYopsContent,
+  };
 }

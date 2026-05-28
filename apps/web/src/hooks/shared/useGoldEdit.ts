@@ -18,7 +18,7 @@ import { SourceValidationError, YOpsReplayError } from '@/commands/yops/errors';
 import { commitGoldEdit, resolveGoldEditSource } from '@/commands/yops/goldEditBuilder';
 import { replay } from '@/domain/replay';
 import { useSettingsStore } from '@/store/settingsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 
 function formatGoldEditError(err: unknown): string {
   if (err instanceof SourceValidationError) {
@@ -40,17 +40,30 @@ function rollbackGoldEdit(snapshot: GoldEditSnapshot) {
 export function useGoldEdit() {
   const convId = useWorkspaceStore((s) => s.conversationId);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
 
   const applyEdit = useCallback(
     async (op: YOp) => {
       if (!convId) return;
-      if (useWorkspaceStore.getState().isCommitted) {
+      const store = useWorkspaceStore.getState();
+      if (store.isCommitted) {
         const message = 'Committed conversations are read-only.';
-        useWorkspaceStore.getState().setError(message);
+        store.setError(message);
+        throw new Error(message);
+      }
+      if (store.hasDraft) {
+        const message = 'Apply or Discard the staged extraction before editing output.';
+        store.setError(message);
+        throw new Error(message);
+      }
+      if (selectScriptDirty(store)) {
+        const message = 'Run or discard YOps changes before editing output.';
+        store.setError(message);
         throw new Error(message);
       }
       // Snapshot pre-edit state for rollback
-      const pre = useWorkspaceStore.getState();
+      const pre = store;
       const snapshot: GoldEditSnapshot = {
         tree: pre.tree,
         sourceIndex: pre.sourceIndex,
@@ -104,5 +117,5 @@ export function useGoldEdit() {
     [convId]
   );
 
-  return { applyEdit, enabled: !!convId && !isCommitted };
+  return { applyEdit, enabled: !!convId && !isCommitted && !hasDraft && !scriptDirty };
 }

@@ -15,6 +15,7 @@
  */
 
 import type { Edge, Node } from '@xyflow/react';
+import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { getTerminology } from '@/hooks/shared/useTerminology';
 import {
   backflowEdgeStyle,
@@ -34,6 +35,36 @@ export interface ComposedCanvas {
   hasMainCommit: boolean;
   latestMainCommitId: string | undefined;
   hasDbPositions: boolean;
+}
+
+function getConversationTargetBranch(
+  conv: Conversation,
+  commitsByHash: Map<string, ApiCommit>
+): string | null {
+  const targetBranch =
+    (conv.metadata as { target_branch?: unknown } | null | undefined)?.target_branch ?? null;
+  if (typeof targetBranch === 'string' && targetBranch.trim()) {
+    return targetBranch.trim();
+  }
+
+  if (!conv.parent_commit_hash) return null;
+  return commitsByHash.get(conv.parent_commit_hash)?.branch ?? null;
+}
+
+function applyStagingBranchData(
+  node: Node<CanvasNodeData>,
+  conv: Conversation,
+  commitsByHash: Map<string, ApiCommit>
+) {
+  const branch = getConversationTargetBranch(conv, commitsByHash);
+  if (!branch) return;
+
+  node.data.sourceCommitHash = conv.parent_commit_hash;
+  node.data.inheritFromCommitHash = conv.parent_commit_hash;
+  node.data.pendingBranch = branch === 'main' ? 'main' : 'branch';
+  node.data.pendingBranchName = branch === 'main' ? '' : branch;
+  node.data.branchType = branch === 'main' ? 'main' : 'branch';
+  node.data.branchName = branch === 'main' ? undefined : branch;
 }
 
 export function composeCanvasFromFetches(
@@ -142,6 +173,7 @@ export function composeCanvasFromFetches(
   conversations.forEach((conv) => {
     if (!convsWithCommits.has(conv.conversation_id)) {
       const node = unitToNode(conv, null, nodeIndex++);
+      applyStagingBranchData(node, conv, nodeCommitMap);
       const existingPos = existingNodePositions.get(node.id);
       if (existingPos) node.position = existingPos;
       stagingUnitNodes.push(node);
@@ -154,12 +186,7 @@ export function composeCanvasFromFetches(
   if (projectLeaves.length > 0) {
     const leavesByCommit = new Map<string, EmbeddedLeaf[]>();
     for (const leaf of projectLeaves) {
-      const embedded: EmbeddedLeaf = {
-        id: leaf.id,
-        type: leaf.type,
-        title: leaf.title || leaf.type,
-        createdAt: leaf.created_at,
-      };
+      const embedded = toEmbeddedLeaf(leaf);
       const existing = leavesByCommit.get(leaf.commit_hash) || [];
       existing.push(embedded);
       leavesByCommit.set(leaf.commit_hash, existing);

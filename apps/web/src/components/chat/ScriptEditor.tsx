@@ -128,6 +128,7 @@ export function ScriptEditor() {
   const viewRef = useRef<EditorView | null>(null);
   const mode = useWorkspaceStore((s) => s.mode);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
+  const hasDraft = useWorkspaceStore((s) => s.hasDraft);
   const scriptText = useWorkspaceStore(selectScriptText);
   const canonicalScriptText = useWorkspaceStore(selectCanonicalScriptText);
   const scriptDirty = useWorkspaceStore(selectScriptDirty);
@@ -284,10 +285,10 @@ export function ScriptEditor() {
     if (!view) return;
     view.dispatch({
       effects: readOnlyCompartment.current.reconfigure(
-        EditorState.readOnly.of(mode === 'streaming' || isCommitted)
+        EditorState.readOnly.of(mode === 'streaming' || isCommitted || hasDraft)
       ),
     });
-  }, [mode, isCommitted]);
+  }, [mode, isCommitted, hasDraft]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -306,6 +307,12 @@ export function ScriptEditor() {
       {isCommitted && (
         <div className="border-t border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3 py-1.5 text-[10px] font-mono text-[var(--text-tertiary)]">
           Committed conversations are read-only.
+        </div>
+      )}
+
+      {!isCommitted && hasDraft && (
+        <div className="border-t border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-3 py-1.5 text-[10px] font-mono text-[var(--text-tertiary)]">
+          Apply or Discard the staged extraction before editing YOps.
         </div>
       )}
 

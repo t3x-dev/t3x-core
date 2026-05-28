@@ -808,7 +808,7 @@ describe('ChatSidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: /\+New Chat/ }));
 
     await waitFor(() => {
-      expect(mocks.startNewProjectChat).toHaveBeenCalledWith('proj_draft');
+      expect(mocks.startNewProjectChat).toHaveBeenCalledWith('proj_draft', 'main');
       expect(mocks.chatState.setActiveConversation).toHaveBeenCalledWith(
         'conv_reusable_empty',
         'proj_draft'

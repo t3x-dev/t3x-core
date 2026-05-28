@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import type { Leaf } from '@/types/api';
 
@@ -48,6 +49,19 @@ export function useProjectLeaves(
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!projectId || !enabled) return;
+
+    const handleLeafChanged = (event: Event) => {
+      const detail = (event as CustomEvent<LeafChangedDetail>).detail;
+      if (detail?.projectId !== projectId) return;
+      void refresh();
+    };
+
+    window.addEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
+    return () => window.removeEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
+  }, [enabled, projectId, refresh]);
 
   return { leaves, loading, error, refresh };
 }

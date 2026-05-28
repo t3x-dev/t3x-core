@@ -12,6 +12,16 @@ import {
   TREE_ROW_HEIGHT,
 } from '@/components/chat/treeRowMetrics';
 import { CommitCeremony } from '@/components/commit/CommitCeremony';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { computeTreeDiff, type TreeDiffResult } from '@/domain/diff/treeDiff';
 import {
   formatAppliedResultFailureRow,
@@ -50,6 +60,11 @@ const YAML_PUNCTUATION_CLASS = 'text-[color-mix(in_srgb,var(--yaml-punctuation)_
 const EMPTY_SEMANTIC_CONTENT: SemanticContent = { trees: [], relations: [] };
 const EMPTY_TREE_NODES: TreeNode[] = [];
 type TreeStatusKind = 'human' | 'new' | 'modified' | 'removed' | 'inherited';
+type TreeEditDialogState =
+  | { kind: 'add-child'; nodePath: string }
+  | { kind: 'add-field'; nodePath: string; existingSlots: Record<string, unknown> }
+  | null;
+type DeleteNodeDialogState = { nodePath: string; nodeKey: string } | null;
 
 function rowTone(input: {
   side: 'before' | 'after';
@@ -287,6 +302,10 @@ function slotPreviewToEditText(value: SlotPreviewValue | null): string {
 
 function testIdSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
+function normalizeTreeKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
 /**
@@ -901,6 +920,11 @@ export function AfterPanel({
   const [commitMessage, setCommitMessage] = useState('');
   const [ceremonyHash, setCeremonyHash] = useState<string | null>(null);
   const [resultScrollbarGutter, setResultScrollbarGutter] = useState(0);
+  const [treeEditDialog, setTreeEditDialog] = useState<TreeEditDialogState>(null);
+  const [treeEditName, setTreeEditName] = useState('');
+  const [treeEditValue, setTreeEditValue] = useState('');
+  const [treeEditError, setTreeEditError] = useState<string | null>(null);
+  const [deleteNodeDialog, setDeleteNodeDialog] = useState<DeleteNodeDialogState>(null);
 
   const trees = tree.trees as TreeNode[];
   const parentTrees = parent?.trees ?? EMPTY_TREE_NODES;
@@ -1052,44 +1076,91 @@ export function AfterPanel({
     [applyEdit, handleGoldEditFailure]
   );
 
-  const handleAddChild = useCallback(
-    (nodePath: string) => {
-      const childKey = window.prompt('New node name (snake_case):');
-      if (!childKey || !childKey.trim()) return;
-      const cleanKey = childKey.trim().toLowerCase().replace(/\s+/g, '_');
-      void applyEdit({ define: { path: `${nodePath}/${cleanKey}` } }).catch(handleGoldEditFailure);
-    },
-    [applyEdit, handleGoldEditFailure]
-  );
+  const handleAddChild = useCallback((nodePath: string) => {
+    setTreeEditName('');
+    setTreeEditValue('');
+    setTreeEditError(null);
+    setTreeEditDialog({ kind: 'add-child', nodePath });
+  }, []);
 
-  const handleAddField = useCallback(
-    (nodePath: string, existingSlots: Record<string, unknown>) => {
-      const fieldKey = window.prompt('New field name (snake_case):');
-      if (!fieldKey || !fieldKey.trim()) return;
-      const cleanKey = fieldKey.trim().toLowerCase().replace(/\s+/g, '_');
+  const handleAddField = useCallback((nodePath: string, existingSlots: Record<string, unknown>) => {
+    setTreeEditName('');
+    setTreeEditValue('');
+    setTreeEditError(null);
+    setTreeEditDialog({ kind: 'add-field', nodePath, existingSlots });
+  }, []);
+
+  const closeTreeEditDialog = useCallback(() => {
+    setTreeEditDialog(null);
+    setTreeEditName('');
+    setTreeEditValue('');
+    setTreeEditError(null);
+  }, []);
+
+  const handleTreeEditDialogSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!treeEditDialog) return;
+
+      const cleanKey = normalizeTreeKey(treeEditName);
+      if (!cleanKey) {
+        setTreeEditError(
+          treeEditDialog.kind === 'add-child' ? 'Node name is required.' : 'Field name is required.'
+        );
+        return;
+      }
       if (cleanKey.includes('/')) {
-        toast.error('Field name cannot contain "/".');
+        setTreeEditError('Name cannot contain "/".');
         return;
       }
-      if (Object.hasOwn(existingSlots, cleanKey)) {
-        toast.error(`Field "${cleanKey}" already exists.`);
+      if (
+        treeEditDialog.kind === 'add-field' &&
+        Object.hasOwn(treeEditDialog.existingSlots, cleanKey)
+      ) {
+        setTreeEditError(`Field "${cleanKey}" already exists.`);
         return;
       }
-      const value = window.prompt(`Value for "${cleanKey}":`);
-      if (value === null) return;
-      void applyEdit({ set: { path: `${nodePath}/${cleanKey}`, value } }).catch(
-        handleGoldEditFailure
-      );
+
+      if (treeEditDialog.kind === 'add-child') {
+        void applyEdit({ define: { path: `${treeEditDialog.nodePath}/${cleanKey}` } }).catch(
+          handleGoldEditFailure
+        );
+      } else {
+        void applyEdit({
+          set: { path: `${treeEditDialog.nodePath}/${cleanKey}`, value: treeEditValue },
+        }).catch(handleGoldEditFailure);
+      }
+      closeTreeEditDialog();
     },
-    [applyEdit, handleGoldEditFailure]
+    [
+      applyEdit,
+      closeTreeEditDialog,
+      handleGoldEditFailure,
+      treeEditDialog,
+      treeEditName,
+      treeEditValue,
+    ]
   );
 
-  const handleDeleteNode = useCallback(
-    (nodePath: string, nodeKey: string) => {
-      if (!window.confirm(`Remove "${nodeKey}" and all its children?`)) return;
-      void applyEdit({ drop: { path: nodePath } }).catch(handleGoldEditFailure);
+  const handleDeleteNode = useCallback((nodePath: string, nodeKey: string) => {
+    setDeleteNodeDialog({ nodePath, nodeKey });
+  }, []);
+
+  const closeDeleteNodeDialog = useCallback(() => {
+    setDeleteNodeDialog(null);
+  }, []);
+
+  const confirmDeleteNode = useCallback(() => {
+    if (!deleteNodeDialog) return;
+    void applyEdit({ drop: { path: deleteNodeDialog.nodePath } }).catch(handleGoldEditFailure);
+    closeDeleteNodeDialog();
+  }, [applyEdit, closeDeleteNodeDialog, deleteNodeDialog, handleGoldEditFailure]);
+
+  const handleDeleteNodeDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) closeDeleteNodeDialog();
     },
-    [applyEdit, handleGoldEditFailure]
+    [closeDeleteNodeDialog]
   );
 
   const getDefaultCommitName = useCallback(() => {
@@ -1356,14 +1427,14 @@ export function AfterPanel({
                   />
                 );
 
-              // While a draft is staged, this view is a *preview* of the
-              // un-applied script — not the live committed tree. Inline
+              // While a draft is staged or the YOps editor has un-run
+              // changes, this view is not the live committed tree. Inline
               // gold-edit handlers (`useGoldEdit.applyEdit`) write
               // straight to yops_log against the committed workspace,
-              // bypassing the script/Apply flow and leaving the staged
-              // script stale relative to what just changed. Disable them
-              // here; the user should edit the YAML or click Apply first.
-              const allowInlineEdit = !hasDraft && !isCommitted;
+              // bypassing the script/Apply flow and leaving the script
+              // stale relative to what just changed. Disable them here;
+              // the user should Run/Apply or discard the script first.
+              const allowInlineEdit = !hasDraft && !scriptDirty && !isCommitted;
               const afterCell =
                 row.kind === 'node' ? (
                   <NodeCell
@@ -1547,6 +1618,97 @@ export function AfterPanel({
           </div>
         </div>
       )}
+      <Dialog
+        open={treeEditDialog !== null}
+        onOpenChange={(open) => !open && closeTreeEditDialog()}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <form onSubmit={handleTreeEditDialogSubmit} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>
+                {treeEditDialog?.kind === 'add-child' ? 'Add Node' : 'Add Field'}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                {treeEditDialog?.kind === 'add-child'
+                  ? 'Enter a snake_case node name.'
+                  : 'Enter a field name and value.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="tree-edit-name"
+                className="text-sm font-medium text-[var(--text-primary)]"
+              >
+                {treeEditDialog?.kind === 'add-child' ? 'Node name' : 'Field name'}
+              </label>
+              <Input
+                id="tree-edit-name"
+                autoFocus
+                value={treeEditName}
+                onChange={(event) => {
+                  setTreeEditName(event.target.value);
+                  if (treeEditError) setTreeEditError(null);
+                }}
+                placeholder={treeEditDialog?.kind === 'add-child' ? 'new_node' : 'field_name'}
+                aria-invalid={treeEditError ? 'true' : undefined}
+                aria-describedby={treeEditError ? 'tree-edit-error' : undefined}
+              />
+            </div>
+
+            {treeEditDialog?.kind === 'add-field' && (
+              <div className="grid gap-2">
+                <label
+                  htmlFor="tree-edit-value"
+                  className="text-sm font-medium text-[var(--text-primary)]"
+                >
+                  Value
+                </label>
+                <Input
+                  id="tree-edit-value"
+                  value={treeEditValue}
+                  onChange={(event) => setTreeEditValue(event.target.value)}
+                  placeholder="Field value"
+                />
+              </div>
+            )}
+
+            {treeEditError && (
+              <p id="tree-edit-error" className="text-xs text-[var(--status-error)]">
+                {treeEditError}
+              </p>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeTreeEditDialog}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="commit">
+                {treeEditDialog?.kind === 'add-child' ? 'Add Node' : 'Add Field'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteNodeDialog !== null} onOpenChange={handleDeleteNodeDialogOpenChange}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Node</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{deleteNodeDialog?.nodeKey}&quot; and all its children? This cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteNodeDialog}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDeleteNode}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <CommitCeremony
         hash={ceremonyHash}
         open={ceremonyHash !== null}

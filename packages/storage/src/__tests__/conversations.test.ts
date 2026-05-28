@@ -335,6 +335,27 @@ describe('Conversations Storage', () => {
       expect(rows[0].title).toBe('New Title');
     });
 
+    it('updates the parent commit hash', async () => {
+      const created = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Branch Draft' })
+      );
+
+      const updated = await updateConversation(db, created.conversationId, {
+        parentCommitHash: 'sha256:branch_head',
+      });
+
+      expect(updated).toBeDefined();
+      expect(updated!.parentCommitHash).toBe('sha256:branch_head');
+
+      const cleared = await updateConversation(db, created.conversationId, {
+        parentCommitHash: null,
+      });
+
+      expect(cleared).toBeDefined();
+      expect(cleared!.parentCommitHash).toBeNull();
+    });
+
     it('returns null when conversation does not exist', async () => {
       const updated = await updateConversation(db, 'conv_nonexistent', { title: 'New' });
 

@@ -33,6 +33,9 @@ describe('fetchConversationSnapshot', () => {
       ],
       committedAs: 'sha256:commit',
       committedAt: '2026-04-12T00:00:01Z',
+      title: null,
+      parentCommitHash: null,
+      metadata: null,
       opsLog: [
         {
           id: 'yl_1',
@@ -79,6 +82,9 @@ describe('fetchConversationSnapshot', () => {
       opsLog: [],
       committedAs: null,
       committedAt: null,
+      title: null,
+      parentCommitHash: null,
+      metadata: null,
     });
     const snapshot = await fetchConversationSnapshot('p1', 'c1');
     expect(snapshot.turns).toEqual([]);
@@ -99,6 +105,9 @@ describe('fetchConversationSnapshot', () => {
       turns: [],
       committedAs: null,
       committedAt: null,
+      title: null,
+      parentCommitHash: null,
+      metadata: null,
       opsLog: [
         {
           id: 'yl_good',

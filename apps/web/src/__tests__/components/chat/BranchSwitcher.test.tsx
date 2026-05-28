@@ -57,4 +57,22 @@ describe('BranchSwitcher', () => {
       expect(menu?.style.left).toBe('1012px');
     });
   });
+
+  it('does not open the branch menu when disabled', () => {
+    const onBranchChange = vi.fn();
+    render(
+      <BranchSwitcher
+        projectId="proj_123"
+        activeBranch="main"
+        onBranchChange={onBranchChange}
+        disabled
+        disabledReason="Committed conversations keep their branch."
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /main/i }));
+
+    expect(document.body.querySelector('.fixed')).toBeNull();
+    expect(onBranchChange).not.toHaveBeenCalled();
+  });
 });
