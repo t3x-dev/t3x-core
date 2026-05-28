@@ -1,16 +1,18 @@
 'use client';
 
+import { ArrowRight, GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
+import { fetchProject } from '@/queries/project';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
-import { useProjectStore } from '@/store/projectStore';
+import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 export default function ProjectDetailPage() {
   return (
@@ -24,6 +26,12 @@ interface ProjectDetailPageContentProps {
   showChatSidebarToggle?: boolean;
 }
 
+function isNotFoundError(error: Error | null): boolean {
+  if (!error) return false;
+  const normalized = error.message.toLowerCase();
+  return normalized.includes('404') || normalized.includes('not found');
+}
+
 export function ProjectDetailPageContent({
   showChatSidebarToggle = false,
 }: ProjectDetailPageContentProps = {}) {
@@ -33,9 +41,15 @@ export function ProjectDetailPageContent({
 
   const searchParams = useSearchParams();
 
-  const project = useProjectStore((state) => state.projects.find((item) => item.id === projectId));
+  const projectFromStore = useProjectStore((state) =>
+    state.projects.find((item) => item.id === projectId)
+  );
   const projectsInitialized = useProjectStore((state) => state.initialized);
   const projectsLoading = useProjectStore((state) => state.loading);
+  const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
+  const [projectLookupLoading, setProjectLookupLoading] = useState(false);
+  const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
+  const project = projectFromStore ?? fetchedProject;
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
@@ -90,12 +104,49 @@ export function ProjectDetailPageContent({
     [router]
   );
 
+  const goToProjectChat = useCallback(() => {
+    useChatStore.getState().setActiveConversation(null, projectId);
+    router.push(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
+  }, [projectId, router]);
+
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
     if (!projectsInitialized && !projectsLoading) {
       void fetchProjects();
     }
   }, [projectsInitialized, projectsLoading, fetchProjects]);
+
+  useEffect(() => {
+    if (!projectsInitialized || projectsLoading || !projectId) return;
+    if (projectFromStore) {
+      setFetchedProject(null);
+      setProjectLookupError(null);
+      setProjectLookupLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setProjectLookupLoading(true);
+    setProjectLookupError(null);
+
+    fetchProject(projectId)
+      .then((detail) => {
+        if (cancelled) return;
+        setFetchedProject(apiProjectToSummary(detail));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setFetchedProject(null);
+        setProjectLookupError(err instanceof Error ? err : new Error(String(err)));
+      })
+      .finally(() => {
+        if (!cancelled) setProjectLookupLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
 
   // Load fresh project data whenever this page is entered. The canvas store
   // persists across routes, so returning from Chat after a commit must not
@@ -158,8 +209,16 @@ export function ProjectDetailPageContent({
     }
   }, [projectId, fetchPins]);
 
-  // Show loading while projects list is still loading
-  if (!projectsInitialized || projectsLoading) {
+  // Show loading while projects list is still loading, or while confirming a
+  // direct/new project URL that is not present in the list cache yet.
+  const projectLookupPending =
+    projectsInitialized &&
+    !projectsLoading &&
+    !projectFromStore &&
+    !fetchedProject &&
+    !projectLookupError;
+
+  if (!projectsInitialized || projectsLoading || projectLookupLoading || projectLookupPending) {
     return (
       <div className="flex h-full flex-col">
         <LoadingSpinner message="Loading project..." />
@@ -167,7 +226,28 @@ export function ProjectDetailPageContent({
     );
   }
 
-  // Show not-found page when projects loaded but this one doesn't exist
+  if (projectLookupError && !isNotFoundError(projectLookupError)) {
+    return (
+      <div className="flex h-full flex-col">
+        <ErrorMessage
+          error={projectLookupError}
+          onRetry={() => {
+            setProjectLookupLoading(true);
+            setProjectLookupError(null);
+            setFetchedProject(null);
+            void fetchProject(projectId)
+              .then((detail) => setFetchedProject(apiProjectToSummary(detail)))
+              .catch((err) =>
+                setProjectLookupError(err instanceof Error ? err : new Error(String(err)))
+              )
+              .finally(() => setProjectLookupLoading(false));
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Show not-found page only when a single-project lookup confirms it.
   if (!project) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
@@ -207,22 +287,32 @@ export function ProjectDetailPageContent({
     );
   }
 
-  // Empty-project redirect: chat is the producing layer. With no commits or
-  // leaves there is nothing for the canvas to visualise; surfacing an
-  // onboarding card here just duplicates the chat landing page. Hand the
-  // user back to chat so the working bench is the only entry point until
-  // they actually have committed meaning to view.
-  //
-  // Crucially we preserve the empty project as the *target* — both by
-  // priming `chatStore.activeProjectId` and by encoding it in the URL —
-  // so the user's first message in chat continues this project rather
-  // than spawning a new one. Direct loads of /project/[id] (no Zustand
-  // history) are exactly the case the URL param protects against.
+  // Chat is the producing layer. Canvas stays in place for empty projects,
+  // but its empty state should distinguish a project that has not started a
+  // conversation from one that has conversations but no committed meaning yet.
   const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
   if (isEmptyAfterLoad) {
+    const hasConversations = (project.drafts ?? 0) > 0;
     return (
-      <div className="flex h-full flex-col">
-        <RedirectToChat projectId={projectId} />
+      <div className="flex h-full flex-col bg-[var(--surface-app)]">
+        <CanvasEmptyState
+          actionLabel="Go to Chat"
+          description={
+            hasConversations
+              ? 'Commit a project chat to make it appear on Canvas.'
+              : 'Start a chat in this project, then commit it to see the canvas.'
+          }
+          icon={
+            hasConversations ? (
+              <GitCommitHorizontal className="h-5 w-5" />
+            ) : (
+              <MessageSquare className="h-5 w-5" />
+            )
+          }
+          onAction={goToProjectChat}
+          title={hasConversations ? 'No commits yet' : 'No conversations yet'}
+          tone={hasConversations ? 'commit' : 'conversation'}
+        />
       </div>
     );
   }
@@ -240,25 +330,45 @@ export function ProjectDetailPageContent({
   );
 }
 
-/**
- * Imperatively replaces the route with /chat/new, preserving the project
- * context two ways:
- *
- *   1. Primes `chatStore.activeProjectId` synchronously so the next mount
- *      of ChatWorkspace already knows which project this is — covers the
- *      same-tab navigation path.
- *   2. Encodes `?projectId=…` in the URL so a direct load / refresh / share
- *      of the chat page also picks the project up — covers the cold-start
- *      case where Zustand has no history yet.
- *
- * `router.replace` (not push) so the browser back button doesn't bring the
- * user back to the empty canvas they were just bounced out of.
- */
-function RedirectToChat({ projectId }: { projectId: string }) {
-  const router = useRouter();
-  useEffect(() => {
-    useChatStore.getState().setActiveConversation(null, projectId);
-    router.replace(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
-  }, [router, projectId]);
-  return <LoadingSpinner message="Opening chat workspace…" />;
+function CanvasEmptyState({
+  actionLabel,
+  description,
+  icon,
+  onAction,
+  title,
+  tone,
+}: {
+  actionLabel: string;
+  description: string;
+  icon: ReactNode;
+  onAction: () => void;
+  title: string;
+  tone: 'commit' | 'conversation';
+}) {
+  const toneClass =
+    tone === 'commit'
+      ? 'border-[var(--accent-commit)]/20 bg-[var(--status-info-muted)] text-[var(--accent-commit)]'
+      : 'border-[var(--accent-conversation)]/20 bg-[var(--status-info-muted)] text-[var(--accent-conversation)]';
+
+  return (
+    <main className="flex h-full items-center justify-center p-8">
+      <div className="max-w-sm p-6 text-center">
+        <div
+          className={`mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border ${toneClass}`}
+        >
+          {icon}
+        </div>
+        <h1 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h1>
+        <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">{description}</p>
+        <button
+          className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--accent-conversation)] px-3.5 text-sm font-semibold text-white transition-colors hover:bg-[color-mix(in_srgb,var(--accent-conversation)_88%,black)]"
+          onClick={onAction}
+          type="button"
+        >
+          <span>{actionLabel}</span>
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </main>
+  );
 }
