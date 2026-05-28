@@ -4,6 +4,8 @@ import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { CONVERSATION_BRANCH_CHANGED_EVENT } from '@/hooks/conversations/useConversationBranchSwitch';
+import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest, Material } from '@/types/api';
@@ -270,6 +272,7 @@ describe('ChatWorkspace', () => {
     workspace.setActiveProject('proj_123');
     workspace.setConversation('conv_123');
     workspace.setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }]);
+    useChatStore.setState({ activeBranch: 'main' });
     usePinsStore.setState({
       pins: [],
       loading: false,
@@ -309,6 +312,44 @@ describe('ChatWorkspace', () => {
     expect(screen.queryByText('Pin parent')).toBeNull();
     expect(screen.getAllByText('Baseline inherited').length).toBeGreaterThan(0);
     expect(messageScroll.contains(manifest)).toBe(false);
+  });
+
+  it('reloads Sources when the active conversation branch changes', async () => {
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(CONVERSATION_BRANCH_CHANGED_EVENT, {
+          detail: {
+            projectId: 'proj_123',
+            conversationId: 'conv_123',
+            branch: 'branch 111',
+            parentCommitHash: 'sha256:branch_head',
+          },
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(mocks.reloadContextManifest).toHaveBeenCalled();
+    });
+  });
+
+  it('shows the switched branch baseline before the Sources manifest reload finishes', () => {
+    mocks.contextManifest = makeContextManifest();
+    useChatStore.setState({ activeBranch: 'branch 111' });
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+      baselineCommitHash: 'sha256:branch_head',
+      hasConversationChanges: false,
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.getByText('Baseline branch_h')).toBeTruthy();
+    expect(screen.queryByText('Baseline parent')).toBeNull();
   });
 
   it('hides source text actions before YOps content exists', () => {

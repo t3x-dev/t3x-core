@@ -30,6 +30,7 @@ vi.mock('@/hooks/shared/useBranches', () => ({
 }));
 
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import { CONVERSATION_BRANCH_CHANGED_EVENT } from '@/hooks/conversations/useConversationBranchSwitch';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -89,6 +90,8 @@ describe('ChatHeader branch switching', () => {
   });
 
   it('persists target branch and parent commit before updating branch state', async () => {
+    const branchChanged = vi.fn();
+    window.addEventListener(CONVERSATION_BRANCH_CHANGED_EVENT, branchChanged);
     render(
       <ChatHeader conversationId="conv_1" selectedProvider="openai" selectedModel="gpt-5.4" />
     );
@@ -107,6 +110,17 @@ describe('ChatHeader branch switching', () => {
     expect(useCommitStore.getState().commitBranch).toBe('branch 111');
     expect(useWorkspaceStore.getState().baselineCommitHash).toBe('sha256:branch_head');
     expect(useWorkspaceStore.getState().tree.trees[0]?.key).toBe('branch_tree');
+    expect(branchChanged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: {
+          projectId: 'proj_1',
+          conversationId: 'conv_1',
+          branch: 'branch 111',
+          parentCommitHash: 'sha256:branch_head',
+        },
+      })
+    );
+    window.removeEventListener(CONVERSATION_BRANCH_CHANGED_EVENT, branchChanged);
   });
 
   it('locks branch switching after YOps have been materialized', async () => {

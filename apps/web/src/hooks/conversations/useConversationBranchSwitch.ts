@@ -14,6 +14,15 @@ interface SwitchConversationBranchInput {
   branch: string;
 }
 
+export const CONVERSATION_BRANCH_CHANGED_EVENT = 't3x:conversation-branch-changed';
+
+export interface ConversationBranchChangedDetail {
+  projectId: string;
+  conversationId: string;
+  branch: string;
+  parentCommitHash: string | null;
+}
+
 export function useConversationBranchSwitch() {
   const setActiveBranch = useChatStore((s) => s.setActiveBranch);
   const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
@@ -47,6 +56,13 @@ export function useConversationBranchSwitch() {
         baselineCommitHash: parentCommitHash,
         hasConversationChanges: false,
       });
+      if (typeof window !== 'undefined' && conversationId && conversationId !== 'new') {
+        window.dispatchEvent(
+          new CustomEvent<ConversationBranchChangedDetail>(CONVERSATION_BRANCH_CHANGED_EVENT, {
+            detail: { projectId, conversationId, branch, parentCommitHash },
+          })
+        );
+      }
       await initCommitState(projectId, branch);
     },
     [initCommitState, setActiveBranch, setCommitBranch]
