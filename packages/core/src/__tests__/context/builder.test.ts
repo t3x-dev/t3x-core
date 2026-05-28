@@ -14,7 +14,7 @@ import {
   filterActivePins,
 } from '../../context/builder';
 import type { SemanticContent } from '../../semantic/types';
-import type { ConversationContext, Leaf, Pin } from '../../types';
+import type { ConversationContext, Leaf, Material, Pin } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -279,6 +279,46 @@ describe('buildConversationContext', () => {
     expect(result.text).toContain('## Recent Discussions');
     expect(result.text).not.toContain('## Previous Outputs & Lessons');
     expect(result.sources).toHaveLength(2); // commit + 1 conversation
+  });
+
+  it('includes selected material text beyond the previous 4000 character cap', () => {
+    const materialText = `${'A'.repeat(4500)}deep material marker`;
+    const material: Material = {
+      id: 'mat_long',
+      project_id: 'proj_test',
+      source_type: 'document',
+      title: 'Long Notes',
+      filename: 'long-notes.txt',
+      mime_type: 'text/plain',
+      content_text: materialText,
+      content_hash: 'sha256:long-material',
+      metadata: {},
+      token_estimate: estimateTokens(materialText),
+      created_at: '2025-01-10T00:00:00Z',
+    };
+
+    const result = buildConversationContext({
+      knowledge: undefined,
+      projectPins: [
+        {
+          id: 'pin_material',
+          project_id: 'proj_test',
+          type: 'import',
+          ref_id: material.id,
+          pinned_at: '2025-01-10T00:00:00Z',
+        },
+      ],
+      contextConfig: {
+        conversation_id: 'conv_test',
+        selected_pin_ids: ['pin_material'],
+        updated_at: '2025-01-10T00:00:00Z',
+      },
+      conversations: new Map(),
+      leaves: new Map(),
+      materials: new Map([[material.id, material]]),
+    });
+
+    expect(result.text).toContain('deep material marker');
   });
 
   it('handles missing knowledge gracefully', () => {

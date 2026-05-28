@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHAT_MATERIAL_SOURCE_MAX_SIZE_MB,
+  CHAT_MATERIAL_SOURCE_TOO_LARGE_MESSAGE,
   DOCUMENT_SOURCE_ACCEPT_HINT,
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
   LEGACY_DOC_UNSUPPORTED_MESSAGE,
   LEGACY_XLS_UNSUPPORTED_MESSAGE,
+  unsupportedChatMaterialSourceMessage,
   unsupportedDocumentSourceMessage,
 } from '@/components/import/documentAcceptTypes';
 
@@ -51,5 +54,25 @@ describe('document source accepted types', () => {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       })
     ).toBeNull();
+  });
+
+  it('keeps shared document validation scoped to unsupported formats', () => {
+    expect(
+      unsupportedDocumentSourceMessage({
+        name: 'oversized.txt',
+        type: 'text/plain',
+      })
+    ).toBeNull();
+  });
+
+  it('rejects chat material files larger than the material limit before upload', () => {
+    expect(
+      unsupportedChatMaterialSourceMessage({
+        name: 'oversized.txt',
+        type: 'text/plain',
+        size: 5 * 1024 * 1024 + 1,
+      })
+    ).toBe(CHAT_MATERIAL_SOURCE_TOO_LARGE_MESSAGE);
+    expect(CHAT_MATERIAL_SOURCE_MAX_SIZE_MB).toBe(5);
   });
 });

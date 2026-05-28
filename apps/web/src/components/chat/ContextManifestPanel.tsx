@@ -20,7 +20,7 @@ import { useMemo, useRef, useState } from 'react';
 import { CommitYAMLDocument } from '@/components/commit/CommitYAMLDocument';
 import {
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
-  unsupportedDocumentSourceMessage,
+  unsupportedChatMaterialSourceMessage,
 } from '@/components/import/documentAcceptTypes';
 import type {
   ContextManifestSourceItem,
@@ -895,7 +895,7 @@ export function ContextManifestPanel({
                         onChange={(event) => {
                           const file = event.currentTarget.files?.[0];
                           if (file) {
-                            const unsupportedMessage = unsupportedDocumentSourceMessage(file);
+                            const unsupportedMessage = unsupportedChatMaterialSourceMessage(file);
                             if (unsupportedMessage) {
                               setMaterialUploadError(unsupportedMessage);
                             } else {

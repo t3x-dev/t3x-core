@@ -334,6 +334,36 @@ describe('ContextManifestBar', () => {
     expect(onUploadMaterial).toHaveBeenCalledWith(file);
   });
 
+  it('rejects uploaded materials larger than 5MB before calling upload', () => {
+    const onUploadMaterial = vi.fn();
+    render(
+      <ContextManifestBar
+        manifest={makeManifest()}
+        loading={false}
+        error={null}
+        onReload={vi.fn()}
+        onReferenceToggle={vi.fn()}
+        onAssertionToggle={vi.fn()}
+        sourcePicker={{
+          onUploadMaterial,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open sources/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /materials/i }));
+
+    const file = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'source.txt', {
+      type: 'text/plain',
+    });
+    fireEvent.change(screen.getByLabelText(/add material file/i), {
+      target: { files: [file] },
+    });
+
+    expect(onUploadMaterial).not.toHaveBeenCalled();
+    expect(screen.getByText(/files up to 5MB/i)).not.toBeNull();
+  });
+
   it('removes currently used materials without showing checkboxes or a preview panel', () => {
     const onReferenceToggle = vi.fn();
     const manifest = makeManifest();

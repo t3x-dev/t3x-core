@@ -126,6 +126,72 @@ describe('Materials Routes', () => {
     );
   });
 
+  it('rejects document material files larger than 5MB', async () => {
+    const form = new FormData();
+    form.append(
+      'file',
+      new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'too-large.txt', {
+        type: 'text/plain',
+      })
+    );
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(uploadRes.status).toBe(400);
+    const uploaded: ApiResponse = await uploadRes.json();
+    expect(uploaded.success).toBe(false);
+    expect(uploaded.error).toEqual(
+      expect.objectContaining({
+        code: 'FILE_TOO_LARGE',
+        message: 'File too large (max: 5MB)',
+      })
+    );
+  });
+
+  it('rejects document materials when no readable text is parsed', async () => {
+    const form = new FormData();
+    form.append('file', new File(['   \n\t  '], 'blank.txt', { type: 'text/plain' }));
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(uploadRes.status).toBe(400);
+    const uploaded: ApiResponse = await uploadRes.json();
+    expect(uploaded.success).toBe(false);
+    expect(uploaded.error).toEqual(
+      expect.objectContaining({
+        code: 'MATERIAL_UPLOAD_FAILED',
+        message: 'No readable text was extracted from this file.',
+      })
+    );
+  });
+
+  it('rejects document materials when parsed text exceeds 20,000 characters', async () => {
+    const form = new FormData();
+    form.append('file', new File(['A'.repeat(20_001)], 'long.txt', { type: 'text/plain' }));
+
+    const uploadRes = await app.request(`/v1/projects/${testProjectId}/materials/document`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(uploadRes.status).toBe(400);
+    const uploaded: ApiResponse = await uploadRes.json();
+    expect(uploaded.success).toBe(false);
+    expect(uploaded.error).toEqual(
+      expect.objectContaining({
+        code: 'MATERIAL_UPLOAD_FAILED',
+        message:
+          'Parsed text is too long for chat context. This file produced more than 20,000 characters.',
+      })
+    );
+  });
+
   it('does not return materials outside the requested project scope', async () => {
     const form = new FormData();
     form.append(

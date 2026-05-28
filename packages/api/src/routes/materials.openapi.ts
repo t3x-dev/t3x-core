@@ -19,7 +19,8 @@ import { zodErrorHook } from '../lib/errors';
 import { parseDocument } from '../lib/import';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_MATERIAL_TEXT_CHARS = 20_000;
 const EXCERPT_CHARS = 600;
 const SEGMENT_MAX_CHARS = 1200;
 
@@ -219,7 +220,7 @@ const uploadDocumentMaterialRoute = createRoute({
   tags: ['Materials'],
   summary: 'Upload a document as a source material',
   description:
-    'Upload and store a PDF, DOCX, Markdown, HTML, text, XLSX, or CSV file as a raw material.',
+    'Upload and store a PDF, DOCX, Markdown, HTML, text, XLSX, or CSV file as a raw material. Chat materials are limited to 5MB files and 20,000 parsed text characters.',
   request: {
     params: z.object({
       projectId: z.string(),
@@ -285,6 +286,15 @@ materialsRoutes.openapi(uploadDocumentMaterialRoute, async (c) => {
     const db = await getDB();
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseDocument(buffer, file.name, file.type);
+    const parsedTextLength = parsed.raw_text.trim().length;
+    if (parsedTextLength === 0) {
+      throw new Error('No readable text was extracted from this file.');
+    }
+    if (parsedTextLength > MAX_MATERIAL_TEXT_CHARS) {
+      throw new Error(
+        'Parsed text is too long for chat context. This file produced more than 20,000 characters.'
+      );
+    }
     const title = parsed.metadata.title ?? file.name;
     const existing = await findMaterialByProjectHash(db, projectId, parsed.metadata.content_hash);
     if (existing) {

@@ -925,6 +925,47 @@ describe('Conversation Context Routes', () => {
         ])
       );
     });
+
+    it('includes selected material text beyond the previous 4000 character cap', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Long Material Context Project' })
+      );
+      const conversation = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Long Material Context Conversation',
+      });
+      const materialText = `${'A'.repeat(4500)}deep material marker`;
+      const material = await createMaterial(mockDB, {
+        project_id: project.projectId,
+        source_type: 'document',
+        title: 'Long Notes',
+        filename: 'long-notes.txt',
+        mime_type: 'text/plain',
+        content_text: materialText,
+        content_hash: 'sha256:long-notes-material',
+        metadata: {
+          source_type: 'document',
+          source_filename: 'long-notes.txt',
+          content_hash: 'sha256:long-notes-material',
+          content_length: materialText.length,
+          imported_at: '2026-05-26T00:00:00.000Z',
+        },
+        token_estimate: 1200,
+      });
+      const materialPin = await createPin(mockDB, {
+        project_id: project.projectId,
+        type: 'import',
+        ref_id: material.id,
+      });
+
+      await setConversationContext(mockDB, conversation.conversationId, [materialPin.id]);
+
+      const manifest = await buildConversationContextManifest(mockDB, conversation.conversationId);
+
+      expect(manifest.chat_context_text).toContain('deep material marker');
+      expect(manifest.extraction_context_text).toContain('deep material marker');
+    });
   });
 
   describe('GET /v1/conversations/:id/context-manifest', () => {

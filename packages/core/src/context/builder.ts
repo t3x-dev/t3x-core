@@ -19,6 +19,8 @@ import type {
   Pin,
 } from '../types';
 
+const MAX_MATERIAL_CONTEXT_CHARS = 20_000;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Input Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -174,7 +176,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
 
       const title = material.title ?? material.filename ?? material.id;
       materialText += `### ${title}\n\n`;
-      materialText += `${truncateForContext(material.content_text, 4000)}\n\n`;
+      materialText += `${truncateForContext(material.content_text, MAX_MATERIAL_CONTEXT_CHARS)}\n\n`;
 
       materialSources.push({
         type: 'import',

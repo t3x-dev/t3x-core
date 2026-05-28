@@ -24,6 +24,8 @@ import {
   getLeavesByIds,
 } from '@t3x-dev/storage';
 
+const MAX_MATERIAL_CONTEXT_CHARS = 20_000;
+
 export type BaselineSource = 'parent_commit' | 'none';
 
 export interface ContextManifestBaseline {
@@ -466,7 +468,7 @@ function buildExtractionContextText(
       const material = materials.get(pin.ref_id);
       if (!material) continue;
       lines.push(`### ${materialTitle(material) ?? material.id}`, '');
-      lines.push(truncateForPrompt(material.content_text, 4000), '');
+      lines.push(truncateForPrompt(material.content_text, MAX_MATERIAL_CONTEXT_CHARS), '');
     }
   }
 
