@@ -22,6 +22,12 @@ import { useSourceTextDraft } from '@/hooks/shared/useSourceTextDraft';
 import { useChatStore } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
+function markExtracted() {
+  useWorkspaceStore.setState({
+    opsLog: [{ op: 'test.extracted' } as never],
+  });
+}
+
 describe('useSourceTextDraft', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -49,6 +55,7 @@ describe('useSourceTextDraft', () => {
   });
 
   it('persists the source draft without staging YOps when no patch is generated', async () => {
+    markExtracted();
     const { result } = renderHook(() => useSourceTextDraft());
 
     await act(async () => {
@@ -77,6 +84,7 @@ describe('useSourceTextDraft', () => {
   });
 
   it('can edit from selected turn text before workspace turns hydrate', async () => {
+    markExtracted();
     useWorkspaceStore.getState().setTurns([]);
     const { result } = renderHook(() => useSourceTextDraft());
 
@@ -99,6 +107,7 @@ describe('useSourceTextDraft', () => {
   });
 
   it('rejects edits to user questions', async () => {
+    markExtracted();
     useWorkspaceStore.getState().setTurns([
       {
         turn_hash: 'turn_user',
@@ -127,6 +136,33 @@ describe('useSourceTextDraft', () => {
 
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain('user questions are not editable');
+    expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
+  });
+
+  it('rejects source text edits before extraction creates YOps content', async () => {
+    const { result } = renderHook(() => useSourceTextDraft());
+
+    expect(result.current.enabled).toBe(false);
+
+    let error: unknown;
+    await act(async () => {
+      try {
+        await result.current.applySourceTextEdit({
+          action: 'edit',
+          turnHash: 'turn_1',
+          turnRole: 'assistant',
+          text: 'psychology',
+          start: 17,
+          end: 27,
+          replacementText: 'group identity',
+        });
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Run Extract before editing source text.');
     expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
   });
 
