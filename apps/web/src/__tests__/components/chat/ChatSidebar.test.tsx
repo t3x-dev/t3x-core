@@ -169,6 +169,7 @@ afterEach(() => {
   mocks.conversationsByProject = {};
   mocks.contextMenuItems = [];
   mocks.commits = [];
+  mocks.loadConversations.mockResolvedValue([]);
   mocks.loadCommits.mockResolvedValue(mocks.commits);
   mocks.importChat.mockResolvedValue({
     conversation_id: 'conv_imported',
@@ -363,6 +364,7 @@ describe('ChatSidebar', () => {
       commits_count: 2,
     };
     mocks.projects = [project];
+    mocks.conversationsByProject = { proj_import: [] };
     mocks.loadCommits.mockImplementation(async (_projectId, branch, limit) => {
       if (branch === undefined && limit === 100) {
         return [
@@ -429,6 +431,59 @@ describe('ChatSidebar', () => {
     expect(mocks.chatState.setActiveBranch).toHaveBeenCalledWith('feature');
     expect(mocks.routerPush).toHaveBeenCalledWith('/chat/conv_imported');
     expect(useTemporaryChatsStore.getState().chats).toHaveLength(0);
+  });
+
+  it('blocks importing a temporary chat into a project with an uncommitted conversation', async () => {
+    const blockedProject = {
+      project_id: 'proj_has_draft',
+      name: 'Has Draft',
+      created_at: '2026-05-25T00:00:00.000Z',
+      conversations_count: 1,
+      commits_count: 0,
+    };
+    const eligibleProject = {
+      project_id: 'proj_ready',
+      name: 'Ready Project',
+      created_at: '2026-05-25T00:00:00.000Z',
+      conversations_count: 0,
+      commits_count: 0,
+    };
+    mocks.projects = [blockedProject, eligibleProject];
+    mocks.conversationsByProject = {
+      proj_has_draft: [
+        {
+          conversation_id: 'conv_draft',
+          title: 'Draft conversation',
+          committed_as: null,
+        },
+      ],
+      proj_ready: [],
+    };
+    useTemporaryChatsStore.setState({
+      chats: [
+        {
+          id: 'temp_ready_import',
+          title: 'Temporary source',
+          messages: [
+            {
+              id: 'msg_1',
+              role: 'user',
+              content: 'hello',
+              createdAt: '2026-05-25T00:01:00.000Z',
+            },
+          ],
+          createdAt: '2026-05-25T00:00:00.000Z',
+          updatedAt: '2026-05-25T00:01:00.000Z',
+        },
+      ],
+    });
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import temporary chat' }));
+
+    expect(screen.getByRole('option', { name: /Has Draft · has uncommitted chat/ })).toBeDisabled();
+    expect(screen.getByRole('option', { name: 'Ready Project' })).toBeEnabled();
   });
 
   it('confirms before deleting a temporary chat', () => {
@@ -672,6 +727,64 @@ describe('ChatSidebar', () => {
       expect(mocks.loadCommits).toHaveBeenCalledWith('proj_branch', undefined, 100);
       expect(screen.getByText('· 12345678')).toBeInTheDocument();
     });
+  });
+
+  it('hides project conversation delete when the conversation has a committed hash', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_committed_conversation',
+        name: 'Committed Conversation Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_committed_conversation: [
+        {
+          conversation_id: 'conv_committed',
+          title: 'Committed source',
+          committed_as: 'sha256:abc1234567890def',
+        },
+      ],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_committed_conversation']);
+
+    render(<ChatSidebar />);
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Committed source/i }));
+
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Rename')).toBe(true);
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Delete Conversation')).toBe(false);
+  });
+
+  it('keeps project conversation delete for uncommitted conversations', () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_uncommitted_conversation',
+        name: 'Uncommitted Conversation Project',
+        created_at: '2026-05-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 0,
+      },
+    ];
+    mocks.conversationsByProject = {
+      proj_uncommitted_conversation: [
+        {
+          conversation_id: 'conv_uncommitted',
+          title: 'Uncommitted source',
+          committed_as: null,
+        },
+      ],
+    };
+    mocks.chatState.expandedProjectIds = new Set(['proj_uncommitted_conversation']);
+
+    render(<ChatSidebar />);
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: /Uncommitted source/i }));
+
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Rename')).toBe(true);
+    expect(mocks.contextMenuItems.some((item) => item.label === 'Delete Conversation')).toBe(true);
   });
 
   it('routes project New Chat to the reusable project draft returned by the hook', async () => {

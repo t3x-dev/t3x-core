@@ -65,7 +65,13 @@ export function useChatHistory(
     prevConversationIdRef.current = currentConversationId;
 
     const load = async () => {
-      if (!currentConversationId) return;
+      if (!currentConversationId) {
+        setMessages([]);
+        setOffset(0);
+        setHasMore(false);
+        setIsChatLoading(false);
+        return;
+      }
       if (!projectId && isTemporaryChatId(currentConversationId)) {
         const chat = getTemporaryChat(currentConversationId);
         setMessages(
@@ -80,7 +86,13 @@ export function useChatHistory(
         setIsChatLoading(false);
         return;
       }
-      if (!projectId) return;
+      if (!projectId) {
+        setMessages([]);
+        setOffset(0);
+        setHasMore(false);
+        setIsChatLoading(false);
+        return;
+      }
       if (prevConversationId === undefined && messagesRef.current.length > 0) return;
 
       loadMoreAbortRef.current?.abort();
