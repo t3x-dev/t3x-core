@@ -804,7 +804,7 @@ export function ChatSidebar() {
   }
 
   async function handleNewChatInProject(projectId: string) {
-    const convId = await startNewChat(projectId);
+    const convId = await startNewChat(projectId, activeBranch || 'main');
     if (!convId) {
       router.push('/chat');
       return;

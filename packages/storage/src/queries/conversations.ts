@@ -29,6 +29,7 @@ export interface ListConversationsOptions {
 
 export interface UpdateConversationInput {
   title?: string;
+  parentCommitHash?: string | null;
   positionX?: number;
   positionY?: number;
   metadata?: Record<string, unknown>;
@@ -291,6 +292,9 @@ export async function updateConversation(
   const updateData: Partial<NewConversation> = {};
   if (updates.title !== undefined) {
     updateData.title = updates.title;
+  }
+  if (updates.parentCommitHash !== undefined) {
+    updateData.parentCommitHash = updates.parentCommitHash;
   }
   if (updates.positionX !== undefined) {
     updateData.positionX = updates.positionX;

@@ -51,8 +51,10 @@ export interface ConversationSnapshot {
   sourceIndex: Map<string, Source>;
   committedAs: string | null;
   committedAt: string | null;
+  committedBranch: string | null;
   parentCommitHash: string | null;
   parentCommitBranch: string | null;
+  targetBranch: string | null;
   parentCommit: ParentCommit | null;
   partial?: SnapshotPartial;
 }
@@ -78,14 +80,24 @@ async function loadParentCommitInfo(parentCommitHash: string | null): Promise<{
   };
 }
 
+async function loadCommitBranch(commitHash: string | null): Promise<string | null> {
+  if (!commitHash) return null;
+  try {
+    const commit = await fetchCommitForInheritance(commitHash);
+    return commit.branch ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchConversationSnapshot(
   projectId: string,
   convId: string
 ): Promise<ConversationSnapshot> {
-  const { title, turns, opsLog, committedAs, committedAt, parentCommitHash } = await loadL1(
-    projectId,
-    convId
-  );
+  const loaded = await loadL1(projectId, convId);
+  const { title, turns, opsLog, committedAs, committedAt, parentCommitHash } = loaded;
+  const targetBranch =
+    typeof loaded.metadata?.target_branch === 'string' ? loaded.metadata.target_branch : null;
 
   const workspaceTurns: WorkspaceTurn[] = turns.map((t) => ({
     turn_hash: t.turn_hash,
@@ -119,7 +131,10 @@ export async function fetchConversationSnapshot(
   }
 
   const validationTurns: ValidationTurn[] = workspaceTurns;
-  const parentCommitInfo = await loadParentCommitInfo(parentCommitHash);
+  const [parentCommitInfo, committedBranch] = await Promise.all([
+    loadParentCommitInfo(parentCommitHash),
+    loadCommitBranch(committedAs),
+  ]);
   const parentBaseline = parentCommitInfo.content;
   const { tree, sourceIndex, partial } = replay(flatOps, validationTurns, parentBaseline);
 
@@ -133,8 +148,10 @@ export async function fetchConversationSnapshot(
     sourceIndex,
     committedAs,
     committedAt,
+    committedBranch,
     parentCommitHash,
     parentCommitBranch: parentCommitInfo.branch,
+    targetBranch,
     parentCommit: parentCommitInfo.parentCommit,
   };
 

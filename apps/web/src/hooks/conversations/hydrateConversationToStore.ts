@@ -120,15 +120,21 @@ export async function hydrateConversationToStore(projectId: string, convId: stri
     post.setCommitted(true);
     post.clearDraft();
     useCommitStore.getState().setInitialCommit(snapshot.committedAs, {}, {});
+    const branch = snapshot.committedBranch ?? snapshot.parentCommitBranch;
+    if (branch) {
+      commitStore.setCommitBranch(branch);
+      useChatStore.getState().setActiveBranch(branch);
+    }
   } else {
     post.setCommitted(false);
     if (snapshot.parentCommitHash) {
       commitStore.setInitialCommit(snapshot.parentCommitHash, {}, {});
       commitStore.setBeforeCommitHash(snapshot.parentCommitHash);
-      if (snapshot.parentCommitBranch) {
-        commitStore.setCommitBranch(snapshot.parentCommitBranch);
-        useChatStore.getState().setActiveBranch(snapshot.parentCommitBranch);
-      }
+    }
+    const branch = snapshot.targetBranch ?? snapshot.parentCommitBranch;
+    if (branch) {
+      commitStore.setCommitBranch(branch);
+      useChatStore.getState().setActiveBranch(branch);
     }
     // Layer any persisted draft for this conversation on top of the
     // freshly-hydrated server state. This is the F5 protection: if the

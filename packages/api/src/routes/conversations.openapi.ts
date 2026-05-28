@@ -106,6 +106,7 @@ const CreateConversationSchema = z.object({
 
 const UpdateConversationSchema = z.object({
   title: z.string().optional(),
+  parent_commit_hash: z.string().nullable().optional(),
   position_x: z.number().optional(),
   position_y: z.number().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
@@ -518,6 +519,7 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
     const db = await getDB();
     const conversation = await updateConversation(db, conversationId, {
       title: body.title,
+      parentCommitHash: body.parent_commit_hash,
       positionX: body.position_x,
       positionY: body.position_y,
       metadata: body.metadata,

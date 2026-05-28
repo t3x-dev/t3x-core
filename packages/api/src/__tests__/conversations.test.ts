@@ -229,6 +229,27 @@ describe('Conversations Routes', () => {
       expect(data.data.position_y).toBe(300);
     });
 
+    it('updates parent commit hash and metadata', async () => {
+      const conv = await insertConversation(mockDB, {
+        projectId: testProjectId,
+        title: 'Branch Update',
+      });
+
+      const res = await app.request(`/v1/conversations/${conv.conversationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parent_commit_hash: 'sha256:branch_head',
+          metadata: { target_branch: 'branch 111' },
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.data.parent_commit_hash).toBe('sha256:branch_head');
+      expect(data.data.metadata).toEqual({ target_branch: 'branch 111' });
+    });
+
     it('returns 404 for non-existent conversation', async () => {
       const res = await app.request('/v1/conversations/conv_nonexistent', {
         method: 'PUT',

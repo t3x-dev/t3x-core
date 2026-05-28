@@ -68,7 +68,7 @@ export function useChatInit({
     useCommitStore.getState().setBeforeCommitHash(null);
     // Inheritance sets its own lastCommitHash, so don't overwrite it with the branch head.
     if (resolvedProjectId && !inheritFromCommitHash) {
-      void initCommitState(resolvedProjectId);
+      void initCommitState(resolvedProjectId, chatStore.activeBranch || 'main');
     }
 
     // ── 2. Backfill the project id from the conversation when it's missing ──
@@ -78,7 +78,7 @@ export function useChatInit({
         setResolvedProjectId(conv.project_id);
         useCommitStore.getState().setProjectId(conv.project_id);
         if (!inheritFromCommitHash) {
-          void initCommitState(conv.project_id);
+          void initCommitState(conv.project_id, useChatStore.getState().activeBranch || 'main');
         }
         useChatStore.getState().setActiveConversation(convId, conv.project_id);
       });

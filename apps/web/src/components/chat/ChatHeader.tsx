@@ -3,12 +3,12 @@
 import { ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
-import { useCommitActions } from '@/hooks/commits/useCommitActions';
+import { useConversationBranchSwitch } from '@/hooks/conversations/useConversationBranchSwitch';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
-import { useCommitStore } from '@/store/commitStore';
-import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
+import { selectPanelExpanded, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import { cn } from '@/utils/cn';
 import { getFixedPopoverStyle } from '@/utils/popoverPosition';
 import { BranchSwitcher } from './BranchSwitcher';
@@ -45,19 +45,15 @@ export function ChatHeader({
   isChatStreaming = false,
   modelsLoading = false,
 }: ChatHeaderProps) {
-  const {
-    activeProjectId,
-    activeBranch,
-    setActiveBranch,
-    conversationTitle: storeTitle,
-  } = useChatStore();
-  const setCommitBranch = useCommitStore((s) => s.setCommitBranch);
-  const { init: initCommitState } = useCommitActions();
+  const { activeProjectId, activeBranch, conversationTitle: storeTitle } = useChatStore();
+  const switchConversationBranch = useConversationBranchSwitch();
   const panelExpanded = useWorkspaceStore(selectPanelExpanded);
   const isCommitted = useWorkspaceStore((s) => s.isCommitted);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const isExtracting = workspaceMode === 'streaming';
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const hasAppliedYops = useWorkspaceStore((s) => s.opsLog.length > 0);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const extractionPreset = useWorkspaceStore((s) => s.extractionPreset);
   const setExtractionPreset = useWorkspaceStore((s) => s.setExtractionPreset);
   const turnCount = useWorkspaceStore((s) => s.turns.length);
@@ -90,19 +86,37 @@ export function ChatHeader({
   const isExtractReady = extractDisabledReason === null;
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [branchSwitching, setBranchSwitching] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<HTMLButtonElement>(null);
   const dropdownMenuRef = useRef<HTMLDivElement>(null);
 
+  const branchDisabledReason = isCommitted
+    ? 'Committed conversations keep their branch.'
+    : hasDraft || scriptDirty || hasAppliedYops
+      ? 'Branch can be changed before extraction or YOps edits.'
+      : branchSwitching
+        ? 'Updating branch...'
+        : null;
+
   const handleBranchChange = useCallback(
-    (branch: string) => {
-      setActiveBranch(branch);
-      setCommitBranch(branch);
-      if (activeProjectId) {
-        initCommitState(activeProjectId);
+    async (branch: string) => {
+      if (branch === activeBranch) return;
+      if (branchDisabledReason) {
+        toast.message(branchDisabledReason, { id: 'branch-change-disabled' });
+        return;
+      }
+      if (!activeProjectId) return;
+      setBranchSwitching(true);
+      try {
+        await switchConversationBranch({ projectId: activeProjectId, conversationId, branch });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update branch');
+      } finally {
+        setBranchSwitching(false);
       }
     },
-    [setActiveBranch, setCommitBranch, initCommitState, activeProjectId]
+    [activeBranch, activeProjectId, branchDisabledReason, conversationId, switchConversationBranch]
   );
 
   useEffect(() => {
@@ -156,6 +170,8 @@ export function ChatHeader({
           projectId={activeProjectId}
           activeBranch={activeBranch}
           onBranchChange={handleBranchChange}
+          disabled={branchDisabledReason !== null}
+          disabledReason={branchDisabledReason ?? undefined}
         />
       )}
 

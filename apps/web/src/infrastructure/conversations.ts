@@ -62,6 +62,7 @@ export async function updateConversation(
   conversationId: string,
   updates: {
     title?: string;
+    parent_commit_hash?: string | null;
     position_x?: number;
     position_y?: number;
     provider?: string | null;

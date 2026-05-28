@@ -140,19 +140,52 @@ describe('useCommitActions.init', () => {
 
     const state = useCommitStore.getState();
     expect(state.lastCommitHash).toBe('sha256:head');
+    expect(state.beforeCommitHash).toBe('sha256:head');
     expect(state.committedNodeIds.a).toBe(true);
+    expect(fetchCommits).toHaveBeenCalledWith('proj_1', 'main', 1);
+  });
+
+  it('initializes from the requested branch head', async () => {
+    useCommitStore.getState().setProjectId('proj_1');
+    vi.mocked(fetchCommits).mockResolvedValueOnce([
+      {
+        hash: 'sha256:feature_head',
+        content: { trees: [tree('branch_node')] },
+      },
+    ] as never);
+
+    const { result } = renderHook(() => useCommitActions());
+    const head = await result.current.init('proj_1', 'feature/work');
+    await waitForHook();
+
+    const state = useCommitStore.getState();
+    expect(head).toBe('sha256:feature_head');
+    expect(fetchCommits).toHaveBeenCalledWith('proj_1', 'feature/work', 1);
+    expect(state.commitBranch).toBe('feature/work');
+    expect(state.lastCommitHash).toBe('sha256:feature_head');
+    expect(state.beforeCommitHash).toBe('sha256:feature_head');
   });
 
   it('is a silent no-op when there are no commits', async () => {
     useCommitStore.getState().setProjectId('proj_1');
+    useCommitStore.setState({
+      lastCommitHash: 'sha256:old',
+      beforeCommitHash: 'sha256:old',
+      committedNodeIds: { old: true },
+      committedNodeSnapshot: { old: tree('old') },
+    });
     vi.mocked(fetchCommits).mockResolvedValueOnce([] as never);
 
     const { result } = renderHook(() => useCommitActions());
-    await result.current.init('proj_1');
+    const head = await result.current.init('proj_1', 'empty');
     await waitForHook();
 
     const state = useCommitStore.getState();
+    expect(head).toBeNull();
     expect(state.lastCommitHash).toBeNull();
+    expect(state.beforeCommitHash).toBeNull();
+    expect(state.commitBranch).toBe('empty');
+    expect(state.committedNodeIds).toEqual({});
   });
 
   it('ignores an init response if the active project changed while it was loading', async () => {
