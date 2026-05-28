@@ -64,6 +64,7 @@ type TreeEditDialogState =
   | { kind: 'add-child'; nodePath: string }
   | { kind: 'add-field'; nodePath: string; existingSlots: Record<string, unknown> }
   | null;
+type DeleteNodeDialogState = { nodePath: string; nodeKey: string } | null;
 
 function rowTone(input: {
   side: 'before' | 'after';
@@ -923,6 +924,7 @@ export function AfterPanel({
   const [treeEditName, setTreeEditName] = useState('');
   const [treeEditValue, setTreeEditValue] = useState('');
   const [treeEditError, setTreeEditError] = useState<string | null>(null);
+  const [deleteNodeDialog, setDeleteNodeDialog] = useState<DeleteNodeDialogState>(null);
 
   const trees = tree.trees as TreeNode[];
   const parentTrees = parent?.trees ?? EMPTY_TREE_NODES;
@@ -1140,12 +1142,25 @@ export function AfterPanel({
     ]
   );
 
-  const handleDeleteNode = useCallback(
-    (nodePath: string, nodeKey: string) => {
-      if (!window.confirm(`Remove "${nodeKey}" and all its children?`)) return;
-      void applyEdit({ drop: { path: nodePath } }).catch(handleGoldEditFailure);
+  const handleDeleteNode = useCallback((nodePath: string, nodeKey: string) => {
+    setDeleteNodeDialog({ nodePath, nodeKey });
+  }, []);
+
+  const closeDeleteNodeDialog = useCallback(() => {
+    setDeleteNodeDialog(null);
+  }, []);
+
+  const confirmDeleteNode = useCallback(() => {
+    if (!deleteNodeDialog) return;
+    void applyEdit({ drop: { path: deleteNodeDialog.nodePath } }).catch(handleGoldEditFailure);
+    closeDeleteNodeDialog();
+  }, [applyEdit, closeDeleteNodeDialog, deleteNodeDialog, handleGoldEditFailure]);
+
+  const handleDeleteNodeDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) closeDeleteNodeDialog();
     },
-    [applyEdit, handleGoldEditFailure]
+    [closeDeleteNodeDialog]
   );
 
   const getDefaultCommitName = useCallback(() => {
@@ -1673,6 +1688,25 @@ export function AfterPanel({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteNodeDialog !== null} onOpenChange={handleDeleteNodeDialogOpenChange}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Delete Node</DialogTitle>
+            <DialogDescription>
+              Delete &quot;{deleteNodeDialog?.nodeKey}&quot; and all its children? This cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDeleteNodeDialog}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDeleteNode}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <CommitCeremony

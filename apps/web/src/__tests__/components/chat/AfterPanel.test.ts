@@ -290,6 +290,21 @@ describe('AfterPanel tree edit controls', () => {
     expect(mocks.applyEdit).not.toHaveBeenCalled();
   });
 
+  it('deletes nodes through the tree delete confirmation dialog', () => {
+    seedSingleSlot();
+    const confirm = vi.spyOn(window, 'confirm');
+
+    render(createElement(AfterPanel));
+    fireEvent.click(screen.getByTitle('Remove node and children'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(mocks.applyEdit).toHaveBeenCalledWith({
+      drop: { path: 'sports' },
+    });
+    confirm.mockRestore();
+  });
+
   it('marks human tree edits with the row highlight marker and keeps the label in the header legend', () => {
     seedSingleSlot(
       new Map([
