@@ -121,6 +121,39 @@ describe('useScriptExecution', () => {
     });
   });
 
+  it('treats empty manual YOps as a warning instead of a workspace error', async () => {
+    useWorkspaceStore.getState().setEditorOverride('yops: []');
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().lastError).toBeNull();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastWarningMock).toHaveBeenCalledWith('No YOps to apply.', {
+      description: 'Add at least one operation before running script.',
+    });
+  });
+
+  it('treats rejected manual YOps applies as warnings instead of workspace errors', async () => {
+    useWorkspaceStore.getState().setEditorOverride('- set:\n    path: trip/dest\n    value: HZ\n');
+    commitOpsMock.mockRejectedValueOnce(new Error('invalid tree update'));
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).toHaveBeenCalledTimes(1);
+    expect(useWorkspaceStore.getState().lastError).toBeNull();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastWarningMock).toHaveBeenCalledWith('Fix the YOps changes before applying.', {
+      description: 'invalid tree update',
+    });
+  });
+
   it('disables Apply and refuses execution after commit', async () => {
     useWorkspaceStore.getState().setCommitted(true);
     useWorkspaceStore.getState().setEditorOverride('yops:\n  - {set: {path: foo, value: bar}}');
@@ -1215,11 +1248,12 @@ describe('useScriptExecution', () => {
       });
     });
 
-    it('errors out when an op is missing source AND there is no session user', async () => {
+    it('warns when an op is missing source AND there is no session user', async () => {
       sessionUserMock.current = null;
       // Top-level array with no `source` field — manual-edit path,
       // genuinely needs a human author. Lazy build fires on the first
-      // missing-source op and surfaces a clear error.
+      // missing-source op and surfaces a clear warning without marking
+      // the Output panel as failed.
       useWorkspaceStore
         .getState()
         .setEditorOverride('- set:\n    path: trip/dest\n    value: HZ\n');
@@ -1230,9 +1264,11 @@ describe('useScriptExecution', () => {
       });
 
       expect(commitOpsMock).not.toHaveBeenCalled();
-      expect(toastErrorMock).toHaveBeenCalled();
-      const errorMsg = String(toastErrorMock.mock.calls[0]?.[0] ?? '');
-      expect(errorMsg.toLowerCase()).toContain('session user');
+      expect(useWorkspaceStore.getState().lastError).toBeNull();
+      expect(toastErrorMock).not.toHaveBeenCalled();
+      expect(toastWarningMock).toHaveBeenCalledWith('Cannot apply these YOps yet.', {
+        description: expect.stringMatching(/session user/i),
+      });
     });
   });
 });

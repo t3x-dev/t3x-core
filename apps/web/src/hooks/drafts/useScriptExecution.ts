@@ -80,6 +80,11 @@ function resolveScriptHumanSource() {
   });
 }
 
+function warnYOpsInputIssue(message: string, description?: string) {
+  useWorkspaceStore.getState().setError(null);
+  toast.warning(message, description ? { description } : undefined);
+}
+
 export function useScriptExecution() {
   const opsLog = useWorkspaceStore((s) => s.opsLog);
   const scriptDirty = useWorkspaceStore(selectScriptDirty);
@@ -150,9 +155,7 @@ export function useScriptExecution() {
 
     const parseResult = parseScript(selectScriptText(store));
     if (!parseResult.ok) {
-      toast.warning('Fix the YOps YAML before applying.', {
-        description: parseResult.error,
-      });
+      warnYOpsInputIssue('Fix the YOps YAML before applying.', parseResult.error);
       return;
     }
 
@@ -162,12 +165,21 @@ export function useScriptExecution() {
     // deterministic transform here so both LLM and human paths persist
     // canonical YOps. Mirror of the lift-time gate in providerDraft.ts;
     // see issue #964 for context.
-    const normalizedOps = normalizeEditedScriptOps(
-      parseResult.ops as ReadonlyArray<Record<string, unknown>>
-    );
-    const ops = canonicalizeYOps(normalizedOps) as SourcedYOp[];
+    let ops: SourcedYOp[];
+    try {
+      const normalizedOps = normalizeEditedScriptOps(
+        parseResult.ops as ReadonlyArray<Record<string, unknown>>
+      );
+      ops = canonicalizeYOps(normalizedOps) as SourcedYOp[];
+    } catch (err) {
+      warnYOpsInputIssue(
+        'Fix the YOps changes before applying.',
+        err instanceof Error ? err.message : String(err)
+      );
+      return;
+    }
     if (ops.length === 0) {
-      store.setError('No ops to execute');
+      warnYOpsInputIssue('No YOps to apply.', 'Add at least one operation before running script.');
       return;
     }
 
@@ -214,8 +226,12 @@ export function useScriptExecution() {
           : err instanceof Error
             ? err.message
             : 'Cannot apply: source validation failed.';
-      store.setError(msg);
-      toast.error(msg);
+      if (currentScriptDirty) {
+        warnYOpsInputIssue('Cannot apply these YOps yet.', msg);
+      } else {
+        store.setError(msg);
+        toast.error(msg);
+      }
       return;
     }
 
@@ -237,8 +253,12 @@ export function useScriptExecution() {
       // only path that preserves the draft.
       const msg = err instanceof Error ? err.message : 'Execution failed';
       useWorkspaceStore.getState().setMode('idle');
-      useWorkspaceStore.getState().setError(msg);
-      toast.error(msg);
+      if (currentScriptDirty) {
+        warnYOpsInputIssue('Fix the YOps changes before applying.', msg);
+      } else {
+        useWorkspaceStore.getState().setError(msg);
+        toast.error(msg);
+      }
       return;
     }
     await Promise.all(
