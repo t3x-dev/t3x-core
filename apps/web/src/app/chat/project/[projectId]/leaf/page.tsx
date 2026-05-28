@@ -291,7 +291,7 @@ function EmptyLeafState({
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
         <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">{description}</p>
         <button
-          className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--accent-conversation)] px-3.5 text-sm font-semibold text-white transition-colors hover:bg-[color-mix(in_srgb,var(--accent-conversation)_88%,black)]"
+          className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--accent-conversation)] px-3.5 text-sm font-semibold text-[var(--on-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent-conversation)_88%,black)]"
           onClick={onAction}
           type="button"
         >
