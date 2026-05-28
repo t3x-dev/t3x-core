@@ -40,7 +40,8 @@ import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
 import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryChatsStore';
-import type { ApiCommit, Leaf as ApiLeaf } from '@/types/api';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import type { ApiCommit, Leaf as ApiLeaf, Conversation } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
@@ -140,6 +141,28 @@ function getLeafStatus(leaf: ApiLeaf): 'generated' | 'draft' | 'review' {
   return 'draft';
 }
 
+function getConversationCommitHash(
+  projectId: string,
+  conversation: Conversation,
+  conversationCommitHashes: Record<string, Record<string, string>>
+): string | null {
+  return (
+    conversation.committed_as ??
+    conversationCommitHashes[projectId]?.[conversation.conversation_id] ??
+    null
+  );
+}
+
+function hasUncommittedConversation(
+  projectId: string,
+  conversations: Conversation[],
+  conversationCommitHashes: Record<string, Record<string, string>>
+): boolean {
+  return conversations.some(
+    (conversation) => !getConversationCommitHash(projectId, conversation, conversationCommitHashes)
+  );
+}
+
 export function ChatSidebar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -166,6 +189,7 @@ export function ChatSidebar() {
   const [importBranch, setImportBranch] = useState('main');
   const [importBranchBaselines, setImportBranchBaselines] = useState<ImportBranchBaseline[]>([]);
   const [importBranchesLoading, setImportBranchesLoading] = useState(false);
+  const [importEligibilityLoading, setImportEligibilityLoading] = useState(false);
   const [importBranchesError, setImportBranchesError] = useState<string | null>(null);
   const [importNewProjectName, setImportNewProjectName] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
@@ -228,6 +252,22 @@ export function ChatSidebar() {
       },
     [importBranch, importBranchBaselines]
   );
+
+  const clearActiveWorkspace = useCallback(() => {
+    const chatStore = useChatStore.getState();
+    chatStore.setActiveConversation(null, null);
+    chatStore.setConversationTitle(null);
+
+    const workspaceStore = useWorkspaceStore.getState();
+    workspaceStore.reset();
+    workspaceStore.setConversation(null);
+    workspaceStore.setActiveProject(null);
+
+    const commitStore = useCommitStore.getState();
+    commitStore.setProjectId(null);
+    commitStore.setConversationTitle(null);
+    commitStore.setBeforeCommitHash(null);
+  }, []);
   const temporaryDeleteTarget = useMemo(
     () => temporaryChats.find((chat) => chat.id === temporaryDeleteTargetId) ?? null,
     [temporaryDeleteTargetId, temporaryChats]
@@ -266,6 +306,21 @@ export function ChatSidebar() {
   }, [activeConversationId, effectiveProjectId, projectConversations, projects]);
 
   const currentProjectId = currentProject?.project_id ?? effectiveProjectId;
+  const projectHasUncommittedConversation = useCallback(
+    (projectId: string): boolean => {
+      const conversations = projectConversations[projectId];
+      if (!conversations) return true;
+      return hasUncommittedConversation(projectId, conversations, projectConversationCommitHashes);
+    },
+    [projectConversations, projectConversationCommitHashes]
+  );
+  const eligibleImportProjects = useMemo(
+    () => projects.filter((project) => !projectHasUncommittedConversation(project.project_id)),
+    [projectHasUncommittedConversation, projects]
+  );
+  const selectedImportProjectBlocked =
+    Boolean(importProjectId && importProjectId !== '__new__') &&
+    projectHasUncommittedConversation(importProjectId);
   const { leaves: projectLeaves, loading: projectLeavesLoading } = useProjectLeaves(
     currentProjectId,
     Boolean(currentProjectId && !collapsed && (isCanvasActive || isLeafActive))
@@ -396,6 +451,25 @@ export function ChatSidebar() {
     if (refreshKey === 0) return;
     void refreshProjects();
   }, [refreshKey, refreshProjects]);
+
+  useEffect(() => {
+    if (!importTarget) {
+      setImportEligibilityLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setImportEligibilityLoading(true);
+    void Promise.allSettled(
+      projects.map((project) => loadConversations(project.project_id))
+    ).finally(() => {
+      if (!cancelled) setImportEligibilityLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [importTarget, loadConversations, projects]);
 
   useEffect(() => {
     if (!importTarget || !importProjectId || importProjectId === '__new__') {
@@ -721,7 +795,11 @@ export function ChatSidebar() {
   }
 
   function openTemporaryImportDialog(chat: TemporaryChat) {
-    const defaultProjectId = currentProjectId ?? projects[0]?.project_id ?? '__new__';
+    const defaultProjectId =
+      eligibleImportProjects.find((project) => project.project_id === currentProjectId)
+        ?.project_id ??
+      eligibleImportProjects[0]?.project_id ??
+      '__new__';
     const defaultBranch = defaultProjectId === currentProjectId ? activeBranch || 'main' : 'main';
 
     setImportTargetId(chat.id);
@@ -743,6 +821,7 @@ export function ChatSidebar() {
       setImportBranchBaselines([]);
       setImportBranchesError(null);
       setImportBranchesLoading(false);
+      setImportEligibilityLoading(false);
       setImportNewProjectName('');
       setImportError(null);
     }
@@ -751,6 +830,30 @@ export function ChatSidebar() {
   async function handleImportTemporaryChat(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!importTarget || isImporting) return;
+
+    if (importProjectId && importProjectId !== '__new__') {
+      let conversations = projectConversations[importProjectId];
+      if (!conversations) {
+        setImportEligibilityLoading(true);
+        try {
+          conversations = await loadConversations(importProjectId);
+        } catch {
+          setImportError('Could not check whether this project has an uncommitted conversation.');
+          setImportEligibilityLoading(false);
+          return;
+        }
+        setImportEligibilityLoading(false);
+      }
+
+      if (
+        hasUncommittedConversation(importProjectId, conversations, projectConversationCommitHashes)
+      ) {
+        setImportError(
+          'This project already has an uncommitted conversation. Commit or delete it before importing.'
+        );
+        return;
+      }
+    }
 
     setIsImporting(true);
     setImportError(null);
@@ -788,11 +891,13 @@ export function ChatSidebar() {
       setImportBranchBaselines([]);
       setImportBranchesError(null);
       setImportBranchesLoading(false);
+      setImportEligibilityLoading(false);
       setImportNewProjectName('');
       router.push(`/chat/${conversation.conversation_id}`);
     } catch {
       setImportError('Failed to import temporary chat');
     } finally {
+      setImportEligibilityLoading(false);
       setIsImporting(false);
     }
   }
@@ -850,7 +955,7 @@ export function ChatSidebar() {
     removeTemporaryChat(deletedChatId);
     setTemporaryDeleteTargetId(null);
     if (activeConversationId === deletedChatId) {
-      setActiveConversation(null, null);
+      clearActiveWorkspace();
       router.push('/chat');
     }
   }
@@ -861,19 +966,35 @@ export function ChatSidebar() {
     }
     try {
       await removeProject(projectId);
-      window.location.reload();
+      if (activeProjectId === projectId) {
+        clearActiveWorkspace();
+        router.push('/chat');
+        return;
+      }
+      await refreshProjects();
     } catch {
       // silently fail
     }
   }
 
   async function handleDeleteConversation(projectId: string, convId: string) {
+    const conversation = (projectConversations[projectId] ?? []).find(
+      (item) => item.conversation_id === convId
+    );
+    if (conversation?.committed_as ?? projectConversationCommitHashes[projectId]?.[convId]) {
+      toast.error('Committed conversations cannot be deleted.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this conversation?')) {
       return;
     }
     try {
       await removeConversationFn(projectId, convId);
-      window.location.reload();
+      if (activeConversationId === convId) {
+        clearActiveWorkspace();
+        router.push('/chat');
+        return;
+      }
     } catch {
       // silently fail
     }
@@ -971,8 +1092,11 @@ export function ChatSidebar() {
       (item) => item.conversation_id === convId
     );
     const conversationName = conversation?.title?.trim() || 'Untitled Conversation';
+    const hasCommit = Boolean(
+      conversation?.committed_as ?? projectConversationCommitHashes[projectId]?.[convId]
+    );
 
-    openMenu(e, [
+    const items = [
       {
         label: 'Rename',
         icon: <Pencil className="h-3.5 w-3.5" />,
@@ -984,13 +1108,19 @@ export function ChatSidebar() {
             currentName: conversationName,
           }),
       },
-      {
-        label: 'Delete Conversation',
-        icon: <Trash2 className="h-3.5 w-3.5" />,
-        danger: true,
-        onClick: () => handleDeleteConversation(projectId, convId),
-      },
-    ]);
+      ...(!hasCommit
+        ? [
+            {
+              label: 'Delete Conversation',
+              icon: <Trash2 className="h-3.5 w-3.5" />,
+              danger: true,
+              onClick: () => handleDeleteConversation(projectId, convId),
+            },
+          ]
+        : []),
+    ];
+
+    openMenu(e, items);
   }
 
   function handleTemporaryChatContextMenu(e: React.MouseEvent, chat: TemporaryChat) {
@@ -1838,12 +1968,38 @@ export function ChatSidebar() {
                 className="h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-commit)]"
               >
                 <option value="__new__">New project</option>
-                {projects.map((project) => (
-                  <option key={project.project_id} value={project.project_id}>
-                    {project.name}
-                  </option>
-                ))}
+                {projects.map((project) => {
+                  const conversations = projectConversations[project.project_id];
+                  const isChecking = !conversations && importEligibilityLoading;
+                  const isBlocked =
+                    isChecking || projectHasUncommittedConversation(project.project_id);
+                  return (
+                    <option
+                      key={project.project_id}
+                      value={project.project_id}
+                      disabled={isBlocked}
+                    >
+                      {project.name}
+                      {isChecking
+                        ? ' · checking draft'
+                        : isBlocked
+                          ? ' · has uncommitted chat'
+                          : ''}
+                    </option>
+                  );
+                })}
               </select>
+              {importEligibilityLoading && (
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Checking projects for uncommitted conversations...
+                </p>
+              )}
+              {selectedImportProjectBlocked && (
+                <p className="text-xs text-[var(--status-warning)]">
+                  This project already has an uncommitted conversation. Commit or delete it before
+                  importing.
+                </p>
+              )}
             </div>
 
             {importProjectId && importProjectId !== '__new__' && (
@@ -1918,7 +2074,11 @@ export function ChatSidebar() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="commit" disabled={isImporting}>
+              <Button
+                type="submit"
+                variant="commit"
+                disabled={isImporting || selectedImportProjectBlocked}
+              >
                 {isImporting ? 'Importing...' : 'Import'}
               </Button>
             </DialogFooter>
