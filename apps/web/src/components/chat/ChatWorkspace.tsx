@@ -24,7 +24,7 @@ import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { getTemporaryChat } from '@/store/temporaryChatsStore';
-import { useWorkspaceStore } from '@/store/workspaceStore';
+import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { ChatHeader } from './ChatHeader';
@@ -114,12 +114,6 @@ export function ChatWorkspace({
   const [coverageMode, setCoverageMode] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
-  const showAddForm =
-    !isCommitted &&
-    hasYopsContent &&
-    selection &&
-    selection.turnRole !== 'user' &&
-    selection.text.length > 3;
   const firstMessageSentRef = useRef(false);
   const {
     loading: modelsLoading,
@@ -277,11 +271,20 @@ export function ChatWorkspace({
   const sourceTextDrafts = useWorkspaceStore((s) => s.sourceTextDrafts);
   const workspaceMode = useWorkspaceStore((s) => s.mode);
   const hasDraft = useWorkspaceStore((s) => s.hasDraft);
+  const scriptDirty = useWorkspaceStore(selectScriptDirty);
   const baselineCommitHash = useWorkspaceStore((s) => s.baselineCommitHash);
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
   const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
   const workspaceLastError = useWorkspaceStore((s) => s.lastError);
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
+  const showAddForm =
+    !isCommitted &&
+    !hasDraft &&
+    !scriptDirty &&
+    hasYopsContent &&
+    selection &&
+    selection.turnRole !== 'user' &&
+    selection.text.length > 3;
 
   // Load persistent committed highlights for this conversation
   const committedHighlightsByTurn = useCommittedHighlights(

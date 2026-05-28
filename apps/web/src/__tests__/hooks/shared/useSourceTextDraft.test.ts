@@ -166,6 +166,72 @@ describe('useSourceTextDraft', () => {
     expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
   });
 
+  it('rejects source text edits while an extraction draft is waiting for Apply', async () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [{ set: { path: 'concepts/name', value: 'draft' } } as never],
+      tree: { trees: [], relations: [] },
+    });
+    const { result } = renderHook(() => useSourceTextDraft());
+
+    expect(result.current.enabled).toBe(false);
+
+    let error: unknown;
+    await act(async () => {
+      try {
+        await result.current.applySourceTextEdit({
+          action: 'edit',
+          turnHash: 'turn_1',
+          turnRole: 'assistant',
+          text: 'psychology',
+          start: 17,
+          end: 27,
+          replacementText: 'group identity',
+        });
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      'Apply or Discard the staged extraction before editing source text.'
+    );
+    expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
+  });
+
+  it('rejects source text edits while manual YOps changes are waiting to run', async () => {
+    markExtracted();
+    useWorkspaceStore
+      .getState()
+      .setEditorOverride('yops:\n  - set:\n      path: x\n      value: y\n');
+    const { result } = renderHook(() => useSourceTextDraft());
+
+    expect(result.current.enabled).toBe(false);
+
+    let error: unknown;
+    await act(async () => {
+      try {
+        await result.current.applySourceTextEdit({
+          action: 'edit',
+          turnHash: 'turn_1',
+          turnRole: 'assistant',
+          text: 'psychology',
+          start: 17,
+          end: 27,
+          replacementText: 'group identity',
+        });
+      } catch (err) {
+        error = err;
+      }
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      'Run or discard YOps changes before editing source text.'
+    );
+    expect(mocks.createSourceTextRevision).not.toHaveBeenCalled();
+  });
+
   it('rejects source text edits after commit', async () => {
     useWorkspaceStore.getState().setCommitted(true);
     const { result } = renderHook(() => useSourceTextDraft());

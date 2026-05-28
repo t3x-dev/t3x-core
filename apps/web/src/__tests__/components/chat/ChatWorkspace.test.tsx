@@ -331,7 +331,32 @@ describe('ChatWorkspace', () => {
     expect(screen.queryByTestId('chat-span-actions')).toBeNull();
   });
 
-  it('shows source text actions for a valid selection after YOps content exists', () => {
+  it('shows source text actions for a valid selection after YOps content is applied', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'understand',
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        turnText: 'hello',
+        startChar: 10,
+        endChar: 20,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+    useWorkspaceStore.getState().setMode('idle');
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [extractedOp],
+    });
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
+  });
+
+  it('hides source text actions while an extraction draft is waiting for Apply', () => {
     mocks.textSelection.current = {
       selection: {
         text: 'understand',
@@ -352,7 +377,35 @@ describe('ChatWorkspace', () => {
 
     render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
 
-    expect(screen.getByTestId('chat-span-actions')).not.toBeNull();
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
+  });
+
+  it('hides source text actions while manual YOps changes are waiting to run', () => {
+    mocks.textSelection.current = {
+      selection: {
+        text: 'understand',
+        turnHash: 'sha256:t1',
+        turnRole: 'assistant',
+        turnText: 'hello',
+        startChar: 10,
+        endChar: 20,
+        rect: new DOMRect(),
+      },
+      clearSelection: vi.fn(),
+    };
+    useWorkspaceStore.getState().setMode('idle');
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [extractedOp],
+    });
+    useWorkspaceStore
+      .getState()
+      .setEditorOverride('yops:\n  - set:\n      path: x\n      value: y\n');
+
+    render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    expect(screen.queryByTestId('chat-span-actions')).toBeNull();
   });
 
   it('hides project context controls for temporary chats', () => {

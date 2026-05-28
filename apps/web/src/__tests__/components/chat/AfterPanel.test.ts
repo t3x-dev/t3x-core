@@ -219,33 +219,75 @@ describe('AfterPanel tree edit controls', () => {
     expect(screen.queryByTestId('add-field-button')).toBeNull();
   });
 
+  it('hides tree edit controls while an extraction draft is waiting for Apply', () => {
+    seedSingleSlot();
+    useWorkspaceStore.getState().setDraft({
+      ops: [{ set: { path: 'sports/teams', value: 'Three teams' } } as never],
+      tree: {
+        trees: [{ key: 'sports', slots: { teams: 'Three teams' }, children: [] }],
+        relations: [],
+      },
+    });
+
+    render(createElement(AfterPanel));
+
+    expect(screen.queryByTestId('slot-edit')).toBeNull();
+    expect(screen.queryByTestId('add-child-button')).toBeNull();
+    expect(screen.queryByTestId('add-field-button')).toBeNull();
+  });
+
+  it('hides tree edit controls while manual YOps changes are waiting to run', () => {
+    seedSingleSlot();
+    useWorkspaceStore
+      .getState()
+      .setEditorOverride('yops:\n  - set:\n      path: x\n      value: y\n');
+
+    render(createElement(AfterPanel));
+
+    expect(screen.queryByTestId('slot-edit')).toBeNull();
+    expect(screen.queryByTestId('add-child-button')).toBeNull();
+    expect(screen.queryByTestId('add-field-button')).toBeNull();
+  });
+
   it('adds child nodes from the node row add button', () => {
     seedSingleSlot();
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce('soccer facts');
 
     render(createElement(AfterPanel));
     fireEvent.click(screen.getByTestId('add-child-button'));
+    fireEvent.change(screen.getByLabelText('Node name'), { target: { value: 'soccer facts' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Node' }));
 
     expect(mocks.applyEdit).toHaveBeenCalledWith({
       define: { path: 'sports/soccer_facts' },
     });
-    prompt.mockRestore();
   });
 
-  it('adds fields by asking for a field name and then the field value', () => {
+  it('adds fields through the tree edit dialog', () => {
     seedSingleSlot();
-    const prompt = vi
-      .spyOn(window, 'prompt')
-      .mockReturnValueOnce('match length')
-      .mockReturnValueOnce('Two 45-minute halves');
 
     render(createElement(AfterPanel));
     fireEvent.click(screen.getByTestId('add-field-button'));
+    fireEvent.change(screen.getByLabelText('Field name'), { target: { value: 'match length' } });
+    fireEvent.change(screen.getByLabelText('Value'), {
+      target: { value: 'Two 45-minute halves' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Field' }));
 
     expect(mocks.applyEdit).toHaveBeenCalledWith({
       set: { path: 'sports/match_length', value: 'Two 45-minute halves' },
     });
-    prompt.mockRestore();
+  });
+
+  it('validates duplicate field names in the tree edit dialog', () => {
+    seedSingleSlot();
+
+    render(createElement(AfterPanel));
+    fireEvent.click(screen.getByTestId('add-field-button'));
+    fireEvent.change(screen.getByLabelText('Field name'), { target: { value: 'teams' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Field' }));
+
+    expect(screen.getByText('Field "teams" already exists.')).not.toBeNull();
+    expect(mocks.applyEdit).not.toHaveBeenCalled();
   });
 
   it('marks human tree edits with the row highlight marker and keeps the label in the header legend', () => {

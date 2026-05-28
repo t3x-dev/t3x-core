@@ -150,8 +150,9 @@ export function useScriptExecution() {
 
     const parseResult = parseScript(selectScriptText(store));
     if (!parseResult.ok) {
-      store.setError(`YAML parse error: ${parseResult.error}`);
-      toast.error(`YAML parse error: ${parseResult.error}`);
+      toast.warning('Fix the YOps YAML before applying.', {
+        description: parseResult.error,
+      });
       return;
     }
 

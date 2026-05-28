@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const commitOpsMock = vi.fn();
 const hydrateMock = vi.fn();
 const toastErrorMock = vi.fn();
+const toastWarningMock = vi.fn();
 const toastDismissMock = vi.fn();
 const getAuthMeMock = vi.fn();
 const updateSourceTextRevisionMock = vi.fn();
@@ -25,6 +26,7 @@ vi.mock('@/infrastructure/sourceTextRevisions', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastErrorMock(...args),
+    warning: (...args: unknown[]) => toastWarningMock(...args),
     dismiss: (...args: unknown[]) => toastDismissMock(...args),
   },
 }));
@@ -101,6 +103,22 @@ describe('useScriptExecution', () => {
     const { result } = renderHook(() => useScriptExecution());
     expect(result.current.canRun).toBe(true);
     expect(result.current.disabledReason).toBeNull();
+  });
+
+  it('treats invalid manual YOps as a warning instead of a workspace error', async () => {
+    useWorkspaceStore.getState().setEditorOverride('yops:\n  - set:\n      path: broken: value');
+
+    const { result } = renderHook(() => useScriptExecution());
+    await act(async () => {
+      await result.current.execute();
+    });
+
+    expect(commitOpsMock).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().lastError).toBeNull();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastWarningMock).toHaveBeenCalledWith('Fix the YOps YAML before applying.', {
+      description: expect.any(String),
+    });
   });
 
   it('disables Apply and refuses execution after commit', async () => {

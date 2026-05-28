@@ -170,4 +170,55 @@ describe('useGoldEdit.applyEdit', () => {
     expect(replayMock).not.toHaveBeenCalled();
     expect(commitGoldEditMock).not.toHaveBeenCalled();
   });
+
+  it('rejects output tree edits while an extraction draft is waiting for Apply', async () => {
+    useWorkspaceStore.getState().setDraft({
+      ops: [{ set: { path: 'x', value: 1 } } as never],
+      tree: { trees: [], relations: [] },
+    });
+    const { result } = renderHook(() => useGoldEdit());
+
+    expect(result.current.enabled).toBe(false);
+
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.applyEdit({ unset: { path: 'x' } });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe(
+      'Apply or Discard the staged extraction before editing output.'
+    );
+    expect(resolveGoldEditSourceMock).not.toHaveBeenCalled();
+    expect(replayMock).not.toHaveBeenCalled();
+    expect(commitGoldEditMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects output tree edits while manual YOps changes are waiting to run', async () => {
+    useWorkspaceStore
+      .getState()
+      .setEditorOverride('yops:\n  - set:\n      path: x\n      value: 1\n');
+    const { result } = renderHook(() => useGoldEdit());
+
+    expect(result.current.enabled).toBe(false);
+
+    let caught: unknown;
+    await act(async () => {
+      try {
+        await result.current.applyEdit({ unset: { path: 'x' } });
+      } catch (err) {
+        caught = err;
+      }
+    });
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('Run or discard YOps changes before editing output.');
+    expect(resolveGoldEditSourceMock).not.toHaveBeenCalled();
+    expect(replayMock).not.toHaveBeenCalled();
+    expect(commitGoldEditMock).not.toHaveBeenCalled();
+  });
 });
