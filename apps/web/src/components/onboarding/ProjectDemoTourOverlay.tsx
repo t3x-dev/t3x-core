@@ -208,6 +208,14 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function stopInteraction(event: Event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if ('stopImmediatePropagation' in event) {
+    event.stopImmediatePropagation();
+  }
+}
+
 interface ProjectDemoTourOverlayProps {
   open: boolean;
   onClose: () => void;
@@ -335,6 +343,30 @@ export function ProjectDemoTourOverlay({
     document.addEventListener('click', handleTargetClick, true);
     return () => document.removeEventListener('click', handleTargetClick, true);
   }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex]);
+
+  useEffect(() => {
+    if (!open || interactionMode !== 'guided') return;
+
+    const allowOnlyCoachOrTarget = (event: Event) => {
+      const eventTarget = event.target;
+      if (!(eventTarget instanceof Node)) return;
+      if (coachRef.current?.contains(eventTarget)) return;
+
+      const targetNode = findIntroTarget(step.target);
+      if (targetNode?.contains(eventTarget)) return;
+
+      stopInteraction(event);
+    };
+
+    document.addEventListener('pointerdown', allowOnlyCoachOrTarget, true);
+    document.addEventListener('mousedown', allowOnlyCoachOrTarget, true);
+    document.addEventListener('click', allowOnlyCoachOrTarget, true);
+    return () => {
+      document.removeEventListener('pointerdown', allowOnlyCoachOrTarget, true);
+      document.removeEventListener('mousedown', allowOnlyCoachOrTarget, true);
+      document.removeEventListener('click', allowOnlyCoachOrTarget, true);
+    };
+  }, [interactionMode, open, step.target]);
 
   if (!open) return null;
 
