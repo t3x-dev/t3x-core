@@ -378,6 +378,13 @@ const UnitNode = memo(function UnitNode(props: Props) {
         aria-selected={selected}
         data-node-type={isDraft ? 'draft' : isStaging ? 'conversation' : 'commit'}
         data-node-semantic-kind={semanticKind}
+        data-intro-target={
+          isCommitted
+            ? 'canvas-commit-node'
+            : isStaging || isDraft
+              ? 'canvas-pending-node'
+              : undefined
+        }
         tabIndex={0}
       >
         {/* Staging border — static dashed outline */}
@@ -549,6 +556,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             <button
               type="button"
               data-action="next-step"
+              data-intro-target={!isCommitted ? 'canvas-create-commit' : undefined}
               className={cn(
                 'w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-[var(--space-item)] rounded-md text-xs font-medium transition-colors nodrag',
                 nextStepToneClass
@@ -628,6 +636,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
             <span>No leaf yet</span>
             <button
               type="button"
+              data-intro-target="canvas-new-leaf"
               className="nodrag inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2 text-[11px] font-semibold text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15"
               onClick={(e) => {
                 e.stopPropagation();

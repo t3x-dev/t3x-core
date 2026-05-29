@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
@@ -29,11 +29,13 @@ export default function ConversationPage() {
 
 function ConversationRoute() {
   const { conversationId } = useParams<{ conversationId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const firstMessage = searchParams.get('firstMessage');
   const initialProvider = searchParams.get('provider');
   const initialModel = searchParams.get('model');
   const inheritFromParam = searchParams.get('inheritFrom');
+  const introDemoRequested = searchParams.get('introDemo') === '1';
   // Project context comes from two sources:
   //   - the in-memory chat store (filled by sidebar nav, post-extract, etc.)
   //   - a `projectId` query param (set by the empty-project redirect from
@@ -127,6 +129,11 @@ function ConversationRoute() {
     [setPanelExpanded]
   );
 
+  const continueIntroDemoToCanvas = useCallback(() => {
+    if (!resolvedProjectId) return;
+    router.push(`/chat/project/${encodeURIComponent(resolvedProjectId)}/canvas?introDemo=1`);
+  }, [resolvedProjectId, router]);
+
   useEffect(() => {
     setMaterialReader(null);
   }, [conversationId, resolvedProjectId]);
@@ -147,6 +154,9 @@ function ConversationRoute() {
         onInheritComplete={clearInherit}
         activeMaterialReader={materialReader}
         onMaterialReaderChange={handleMaterialReaderChange}
+        introDemo={introDemoRequested}
+        onIntroDemoDone={continueIntroDemoToCanvas}
+        introDemoDoneLabel="Open Canvas"
       />
 
       {/* Drag handle (only when panel is expanded) */}
@@ -168,11 +178,13 @@ function ConversationRoute() {
 
       {/* YOps workspace panel */}
       {showWorkspace && (
-        <YOpsWorkspace
-          customWidth={isExpanded ? panelWidth : undefined}
-          materialReader={materialReader}
-          onCloseMaterialReader={() => handleMaterialReaderChange(null)}
-        />
+        <div className="flex h-full min-w-0 shrink-0">
+          <YOpsWorkspace
+            customWidth={isExpanded ? panelWidth : undefined}
+            materialReader={materialReader}
+            onCloseMaterialReader={() => handleMaterialReaderChange(null)}
+          />
+        </div>
       )}
     </div>
   );

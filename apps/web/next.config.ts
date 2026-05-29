@@ -35,6 +35,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['postgres'],
   // Next.js 16: Enable Turbopack (default bundler)
   turbopack: {},
+  experimental: {
+    // Next 16.1 enables Turbopack filesystem cache for dev by default.
+    // It can corrupt the local .next/dev task DB during rapid rebuilds.
+    turbopackFileSystemCacheForDev: false,
+  },
   // Hide the dev indicator floating ball (N button) in development
   devIndicators: false,
 };

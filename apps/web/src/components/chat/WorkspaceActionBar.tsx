@@ -48,6 +48,14 @@ function buttonTone(action: WorkspaceActionState, primary: boolean): string {
   return 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]';
 }
 
+function introTargetForAction(id: WorkspaceActionId): string | undefined {
+  if (id === 'run_script') return 'chat-run-script-action';
+  if (id === 'apply_changes') return 'chat-apply-action';
+  if (id === 'discard_changes') return 'chat-discard-action';
+  if (id === 'commit') return 'chat-commit-action';
+  return undefined;
+}
+
 export function WorkspaceActionBar({
   state,
   onRunScript,
@@ -74,6 +82,7 @@ export function WorkspaceActionBar({
       title={action.reason ?? undefined}
       onClick={handlers[action.id]}
       data-testid={`workspace-action-${action.id}`}
+      data-intro-target={introTargetForAction(action.id)}
       className={cn(
         'inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-2.5 text-[11px] font-semibold transition',
         primary ? 'min-w-[120px]' : 'min-w-[92px]',

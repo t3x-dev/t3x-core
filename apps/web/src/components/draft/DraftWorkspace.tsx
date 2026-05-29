@@ -14,9 +14,21 @@
 
 import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import { motion } from 'framer-motion';
-import { AlertTriangle, FileCode2, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  FileCode2,
+  GitCommit,
+  ListChecks,
+  PanelBottom,
+  SlidersHorizontal,
+  Sparkles,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  FeatureTourOverlay,
+  type FeatureTourStep,
+} from '@/components/onboarding/FeatureTourOverlay';
 import { CollapsibleSection } from '@/components/shared/CollapsibleSection';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +39,7 @@ import {
 } from '@/domain/draft/llmMode';
 import { useDraftAutoPreview } from '@/hooks/drafts/useDraftAutoPreview';
 import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/shared/useSaveStatusAutoIdle';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
@@ -44,12 +57,107 @@ import { NodeList } from './NodeList';
 import { PreviewPanel } from './PreviewPanel';
 import { PromotePreviewDialog } from './PromotePreviewDialog';
 
+const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'actions',
+    label: 'Top Bar',
+    title: 'Use the draft top bar to save, extract, and commit',
+    description:
+      'The draft workspace is where seeded material becomes reviewed semantic meaning before it turns into a commit.',
+    target: 'draft-actions',
+    tone: 'pending',
+    icon: Sparkles,
+    details: [
+      'Back returns to the project canvas.',
+      'The title can be edited inline.',
+      'Commit is disabled until there is reviewable content.',
+    ],
+  },
+  {
+    id: 'fixture',
+    label: 'No API',
+    title: 'This demo replay uses prepared content only',
+    description:
+      'The fixture banner makes it explicit that the walkthrough is not calling a provider or requiring user API keys.',
+    target: 'draft-fixture-banner',
+    tone: 'commit',
+    icon: FileCode2,
+    details: [
+      'The seeded nodes, constraints, and preview are developer-provided.',
+      'Users can still click through the same review surfaces.',
+      'This is the play demo path for learning the workflow safely.',
+    ],
+  },
+  {
+    id: 'nodes',
+    label: 'Nodes',
+    title: 'Review which semantic points should survive',
+    description:
+      'The node area teaches include/exclude review before the project receives a new version.',
+    target: 'draft-nodes',
+    tone: 'extract',
+    icon: ListChecks,
+    details: [
+      'Included points become the candidate semantic content.',
+      'Users can edit source-backed meaning before committing.',
+      'This is the main habit the demo should teach: review before versioning.',
+    ],
+  },
+  {
+    id: 'rules',
+    label: 'Rules',
+    title: 'Use constraints and instructions to shape the output',
+    description:
+      'The output rules section teaches what the leaf must include, exclude, and how it should be generated.',
+    target: 'draft-constraints',
+    tone: 'leaf',
+    icon: SlidersHorizontal,
+    details: [
+      'Constraints become quality checks.',
+      'Instructions explain the desired artifact style.',
+      'The seeded replay already fills these without an API call.',
+    ],
+  },
+  {
+    id: 'preview',
+    label: 'Preview',
+    title: 'Preview shows the artifact before commit',
+    description:
+      'The bottom panel lets users inspect the prepared leaf output and understand what will be reused later.',
+    target: 'draft-preview',
+    tone: 'leaf',
+    icon: PanelBottom,
+    details: [
+      'The fixture preview is visible immediately.',
+      'Resize or collapse the preview panel to learn the workspace controls.',
+      'In live use, Generate Preview produces this area from a provider.',
+    ],
+  },
+  {
+    id: 'commit',
+    label: 'Commit',
+    title: 'Commit finalizes reviewed meaning',
+    description:
+      'The final action converts reviewed semantic points and output rules into a stable project version.',
+    target: 'draft-commit-button',
+    tone: 'commit',
+    icon: GitCommit,
+    details: [
+      'Click Commit to open the confirmation dialog.',
+      'The success state can route back to canvas or keep iterating.',
+      'After commit, users can inspect the version, diff it, and create leaves.',
+    ],
+  },
+];
+
 interface DraftWorkspaceProps {
   projectId: string;
   onClose: () => void;
+  onDemoDone?: () => void;
 }
 
-export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
+export function DraftWorkspace({ projectId, onClose, onDemoDone }: DraftWorkspaceProps) {
+  const introDemoRequested = useIntroDemoQueryFlag();
   const {
     draft,
     isDirty,
@@ -80,6 +188,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
   const [showCommitDialog, setShowCommitDialog] = useState(false);
   const [showExtractDialog, setShowExtractDialog] = useState(false);
   const [showPromoteDialog, setShowPromoteDialog] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
 
   // Auto-save when dirty (debounced 2s)
   useEffect(() => {
@@ -124,6 +233,10 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [saveDraft, getIncludedCount, onClose, showCommitDialog, generatePreview]);
+
+  useEffect(() => {
+    if (introDemoRequested) setTourOpen(true);
+  }, [introDemoRequested]);
 
   const handleConfirmCommit = useCallback(
     async (message?: string) => {
@@ -223,7 +336,10 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
 
       {/* Fixture replay banner */}
       {isFixtureReplay && (
-        <div className="flex items-center gap-2 border-b border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] px-6 py-2.5 text-sm text-[var(--accent-commit)]">
+        <div
+          className="flex items-center gap-2 border-b border-[var(--accent-commit)]/25 bg-[var(--accent-commit-soft)] px-6 py-2.5 text-sm text-[var(--accent-commit)]"
+          data-intro-target="draft-fixture-banner"
+        >
           <FileCode2 className="h-4 w-4 shrink-0" />
           <span className="font-medium">{DEMO_WORKSPACE_FIXTURE.replay.label}</span>
           <span className="text-[var(--accent-commit)]/55">&middot;</span>
@@ -271,14 +387,16 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
                 />
               </>
             ) : (
-              <NodeList />
+              <div className="space-y-6" data-intro-target="draft-nodes">
+                <NodeList />
+              </div>
             )}
             <CollapsibleSection
               title="Output & Constraints"
               badge={draft.constraints.length > 0 ? draft.constraints.length : undefined}
               defaultOpen={draft.constraints.length > 0 || !!draft.preview_type}
             >
-              <div className="space-y-6">
+              <div className="space-y-6" data-intro-target="draft-constraints">
                 <DraftConstraintEditor />
                 <InstructionEditor />
               </div>
@@ -287,6 +405,13 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
           </div>
         }
         bottom={<PreviewPanel />}
+      />
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="Draft walkthrough"
+        steps={DRAFT_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={onDemoDone}
       />
     </motion.div>
   );

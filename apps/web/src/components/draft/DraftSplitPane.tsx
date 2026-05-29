@@ -116,7 +116,7 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">
       {/* Top content */}
-      <div ref={topRef} className="flex-1 overflow-y-auto min-h-0">
+      <div ref={topRef} className="flex-1 overflow-y-auto min-h-0" data-intro-target="draft-body">
         {top}
       </div>
 
@@ -156,6 +156,7 @@ export function DraftSplitPane({ top, bottom }: DraftSplitPaneProps) {
         ref={bottomRef}
         style={{ height: effectiveHeight, minHeight: HEADER_HEIGHT }}
         className="overflow-hidden flex-shrink-0"
+        data-intro-target="draft-preview"
       >
         {bottom}
       </div>

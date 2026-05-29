@@ -108,6 +108,31 @@ describe('Projects Routes', () => {
     });
   });
 
+  describe('POST /v1/projects/demo-workspace', () => {
+    it('creates the demo workspace even when other projects exist', async () => {
+      await insertProject(mockDB, testData.project({ name: 'User Project' }));
+
+      const res = await app.request('/v1/projects/demo-workspace', { method: 'POST' });
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.name).toBe(DEMO_WORKSPACE_FIXTURE.project.name);
+      expect(data.data.metadata.is_demo).toBe(true);
+    });
+
+    it('returns an existing demo workspace instead of duplicating it', async () => {
+      const first = await app.request('/v1/projects/demo-workspace', { method: 'POST' });
+      const firstData: ApiResponse = await first.json();
+
+      const second = await app.request('/v1/projects/demo-workspace', { method: 'POST' });
+      const secondData: ApiResponse = await second.json();
+
+      expect(second.status).toBe(200);
+      expect(secondData.data.project_id).toBe(firstData.data.project_id);
+    });
+  });
+
   describe('POST /v1/projects', () => {
     it('creates a new project', async () => {
       const res = await app.request('/v1/projects', {

@@ -27,6 +27,7 @@ export function ZoomSlider({
         orientation === 'horizontal' ? 'flex-row' : 'flex-col',
         className
       )}
+      data-intro-target="canvas-viewport-controls"
       {...props}
     >
       <div

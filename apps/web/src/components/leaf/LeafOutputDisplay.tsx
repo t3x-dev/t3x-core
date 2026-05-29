@@ -411,7 +411,7 @@ export function LeafOutputDisplay({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[780px]">
+    <div className="mx-auto w-full max-w-[780px]" data-intro-target="leaf-output">
       {/* Output header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">

@@ -8,5 +8,6 @@
 
 export { createProject } from './createProject';
 export { type DeleteProjectResponse, deleteProject } from './deleteProject';
+export { ensureDemoProject } from './ensureDemoProject';
 export { ProjectPersistenceError } from './errors';
 export { type UpdateProjectPayload, updateProject } from './updateProject';

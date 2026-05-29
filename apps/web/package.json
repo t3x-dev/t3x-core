@@ -4,8 +4,8 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "node ../../tools/dev-package-runner.mjs webui sh -c 'rm -rf .next && next dev'",
-    "build": "next build",
+    "dev": "node ../../tools/dev-package-runner.mjs webui node ../../tools/web-next-guard.mjs dev",
+    "build": "node ../../tools/dev-package-runner.mjs webui node ../../tools/web-next-guard.mjs build",
     "start": "next start",
     "lint": "biome lint src",
     "check:boundaries": "bash scripts/check-v2-boundaries.sh",

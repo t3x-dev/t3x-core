@@ -113,6 +113,14 @@ function CanvasWorkspaceInner({
     () => buildReturnTo(pathname, searchParams),
     [pathname, searchParams]
   );
+  const introDemoActive = searchParams.get('introDemo') === '1';
+  const withIntroDemo = useCallback(
+    (href: string) => {
+      if (!introDemoActive) return href;
+      return href.includes('?') ? `${href}&introDemo=1` : `${href}?introDemo=1`;
+    },
+    [introDemoActive]
+  );
 
   // Map next-themes to xyflow colorMode
   const colorMode: ColorMode = resolvedTheme === 'dark' ? 'dark' : 'light';
@@ -402,7 +410,7 @@ function CanvasWorkspaceInner({
       actions: buildCommitActions({
         onViewDetails: () => {
           if (projectId && hash) {
-            router.push(`/project/${projectId}/commit/${encodeURIComponent(hash)}`);
+            router.push(withIntroDemo(`/project/${projectId}/commit/${encodeURIComponent(hash)}`));
           }
         },
         onViewDiff:
@@ -413,7 +421,9 @@ function CanvasWorkspaceInner({
                   target: hash,
                 });
                 router.push(
-                  withReturnTo(`/project/${projectId}/diff?${query.toString()}`, currentReturnTo)
+                  withIntroDemo(
+                    withReturnTo(`/project/${projectId}/diff?${query.toString()}`, currentReturnTo)
+                  )
                 );
               }
             : undefined,
@@ -421,9 +431,11 @@ function CanvasWorkspaceInner({
           firstLeaf?.id && projectId
             ? () => {
                 router.push(
-                  `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
-                    firstLeaf.id
-                  )}`
+                  withIntroDemo(
+                    `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
+                      firstLeaf.id
+                    )}`
+                  )
                 );
               }
             : undefined,
@@ -497,6 +509,7 @@ function CanvasWorkspaceInner({
       <div className="flex min-h-0 flex-1">
         <div
           ref={canvasRef}
+          data-intro-target="project-canvas"
           className={cn(
             'relative min-w-0 flex-1 transition-opacity duration-300',
             isPanMode && 'cursor-grab active:cursor-grabbing',

@@ -1,22 +1,14 @@
 import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/core';
 import { useCallback, useState } from 'react';
 import { createWorkbenchDraft, updateWorkbenchDraft } from '@/commands/drafts';
-import { fetchProjects } from '@/queries/projects';
-import type { DraftConstraint, DraftNode, Project } from '@/types/api';
+import { getOrCreateDemoProject } from '@/hooks/onboarding/useEnsureDemoProject';
+import type { DraftConstraint, DraftNode } from '@/types/api';
 
 export interface FixtureReplayResult {
   projectId: string;
   draftId: string;
   href: string;
   label: string;
-}
-
-function isDemoProject(project: Project): boolean {
-  const metadata = project.metadata ?? {};
-  return (
-    metadata.demo_fixture_id === DEMO_WORKSPACE_FIXTURE.id ||
-    (metadata.is_demo === true && project.name === DEMO_WORKSPACE_FIXTURE.project.name)
-  );
 }
 
 function buildDraftNodes(): DraftNode[] {
@@ -60,12 +52,7 @@ export function useFixtureReplay() {
     setError(null);
 
     try {
-      const { projects } = await fetchProjects(50, 0);
-      const project = projects.find(isDemoProject);
-
-      if (!project) {
-        throw new Error('Demo workspace is unavailable. Refresh projects or reset the demo seed.');
-      }
+      const project = await getOrCreateDemoProject();
 
       const title = `Fixture replay: ${DEMO_WORKSPACE_FIXTURE.project.name}`;
       const draft = await createWorkbenchDraft({

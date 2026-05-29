@@ -195,6 +195,7 @@ export function YOpsWorkspace({
     return (
       <div
         data-testid="yops-panel-collapsed"
+        data-intro-target="chat-yops-panel"
         className="flex h-full flex-col items-center gap-2 border-l border-[var(--stroke-divider)] bg-[var(--workspace-panel)] pt-3 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors"
         style={{ width: COLLAPSED_WIDTH }}
         onClick={() => setPanelExpanded(true)}
@@ -211,6 +212,7 @@ export function YOpsWorkspace({
   if (materialReader) {
     return (
       <div
+        data-intro-target="chat-yops-panel"
         className="flex h-full flex-col bg-[var(--workspace-panel)]"
         style={{ width, minWidth: WORKSPACE_PANEL_MIN_WIDTH }}
       >
@@ -225,6 +227,7 @@ export function YOpsWorkspace({
   return (
     <div
       ref={containerRef}
+      data-intro-target="chat-yops-panel"
       className="flex h-full flex-col bg-[var(--workspace-panel)]"
       style={{ width, minWidth: WORKSPACE_PANEL_MIN_WIDTH }}
     >

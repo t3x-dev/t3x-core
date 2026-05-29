@@ -54,6 +54,7 @@ export function CanvasToolbar({
 
   return (
     <header
+      data-intro-target="project-toolbar"
       className={cn(
         'relative flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] px-4',
         glass.panelBase,

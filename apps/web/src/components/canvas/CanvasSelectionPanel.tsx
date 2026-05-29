@@ -102,6 +102,15 @@ function panelActionClass(action: CommitAction): string {
   return action.label === 'New Leaf' || action.label === 'Merge' ? 'col-span-2' : '';
 }
 
+function introTargetForAction(action: CommitAction): string | undefined {
+  if (action.label === 'Details') return 'canvas-action-details';
+  if (action.label === 'View Diff') return 'canvas-action-diff';
+  if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
+  if (action.label === 'New Leaf') return 'canvas-action-new-leaf';
+  if (action.label === 'Merge') return 'canvas-action-merge';
+  return undefined;
+}
+
 function PanelBlock({
   children,
   meta,
@@ -249,6 +258,7 @@ export function CanvasSelectionPanel({
               <Button
                 key={action.label}
                 type="button"
+                data-intro-target={introTargetForAction(action)}
                 variant="canvas-outline"
                 size="sm"
                 className={cn(

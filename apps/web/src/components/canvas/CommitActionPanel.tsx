@@ -75,6 +75,7 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
         <button
           key={action.label}
           type="button"
+          data-intro-target={introTargetForAction(action)}
           title={action.label}
           className={cn(
             'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium',
@@ -98,6 +99,14 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
       ))}
     </div>
   );
+}
+
+function introTargetForAction(action: CommitAction): string | undefined {
+  if (action.label === 'Details') return 'canvas-floating-action-details';
+  if (action.label === 'Open Leaf') return 'canvas-floating-action-open-leaf';
+  if (action.label === 'New Leaf') return 'canvas-floating-action-new-leaf';
+  if (action.label === 'Merge') return 'canvas-floating-action-merge';
+  return undefined;
 }
 
 /** Build standard actions for a committed node */

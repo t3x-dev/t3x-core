@@ -48,6 +48,7 @@ export function LeafWorkspaceHeader({
         'backdrop-blur-[6px]',
         className
       )}
+      data-intro-target="leaf-header"
     >
       {showChatSidebarToggle && <ChatSidebarToggleButton className="absolute left-2.5 top-2" />}
       <div className={cn('min-w-0 flex-1', showChatSidebarToggle && 'pl-[34px]')}>
@@ -78,12 +79,13 @@ export function LeafWorkspaceHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5" data-intro-target="leaf-actions">
         {/* Mode toggle */}
         {mode && onModeChange && (
           <div className="mr-1 hidden overflow-hidden rounded-md border border-[var(--stroke-default)] sm:inline-flex md:mr-2">
             <button
               type="button"
+              data-intro-target="leaf-mode-generate"
               className={cn(
                 'px-3 py-1 text-[10px] font-medium transition-all',
                 mode === 'generate'
@@ -96,6 +98,7 @@ export function LeafWorkspaceHeader({
             </button>
             <button
               type="button"
+              data-intro-target="leaf-mode-display"
               className={cn(
                 'px-3 py-1 text-[10px] font-medium transition-all',
                 mode === 'display'

@@ -2,7 +2,7 @@
  * Projects Routes with OpenAPI
  */
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
+import { DEMO_WORKSPACE_FIXTURE, getCanonicalModelId, getModelInfo } from '@t3x-dev/core';
 import {
   branches,
   commits,
@@ -44,6 +44,29 @@ import {
 } from '../schemas/projects';
 
 export const projectRoutes = new OpenAPIHono();
+
+function isDemoProject(project: { name: string; metadataJson: string | null }) {
+  if (!project.metadataJson) return false;
+  const metadata = JSON.parse(project.metadataJson) as Record<string, unknown>;
+  return (
+    metadata.demo_fixture_id === DEMO_WORKSPACE_FIXTURE.id ||
+    (metadata.is_demo === true && project.name === DEMO_WORKSPACE_FIXTURE.project.name)
+  );
+}
+
+function toApiProject(project: {
+  projectId: string;
+  name: string;
+  createdAt: Date;
+  metadataJson: string | null;
+}) {
+  return {
+    project_id: project.projectId,
+    name: project.name,
+    created_at: project.createdAt.toISOString(),
+    metadata: project.metadataJson ? JSON.parse(project.metadataJson) : null,
+  };
+}
 
 // List projects route
 const listProjectsRoute = createRoute({
@@ -168,6 +191,64 @@ async function seedDemoWorkspaceIfEmpty(
     await seedDemoWorkspace(db, { ownerId: userId ?? null });
   }
 }
+
+const ensureDemoWorkspaceRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/demo-workspace',
+  tags: ['Projects'],
+  summary: 'Create or return the bundled demo workspace',
+  description:
+    'Explicitly creates or restores the bundled fixture demo workspace. This is used by the first-run walkthrough and does not run during ordinary project creation.',
+  responses: {
+    200: {
+      description: 'Demo workspace is available',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ProjectSchema),
+        },
+      },
+    },
+    500: {
+      description: 'Server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+projectRoutes.openapi(ensureDemoWorkspaceRoute, async (c) => {
+  try {
+    const db = await getDB();
+    const userId = getUserId(c);
+    const existingProjects = await findProjects(db, { limit: 100, owner_id: userId });
+    const existingDemo = existingProjects.find(isDemoProject);
+    if (existingDemo) {
+      return c.json({ success: true as const, data: toApiProject(existingDemo) }, 200);
+    }
+
+    const result = await seedDemoWorkspace(db, { ownerId: userId ?? null, resetDeleted: true });
+    if (result.project) {
+      return c.json({ success: true as const, data: toApiProject(result.project) }, 200);
+    }
+
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'DEMO_SEED_SKIPPED',
+          message: 'Demo workspace could not be created. Reset the local demo seed and try again.',
+        },
+      },
+      500
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ success: false as const, error: { code: 'DEMO_SEED_FAILED', message } }, 500);
+  }
+});
 
 // Create project route
 const createProjectRoute = createRoute({
