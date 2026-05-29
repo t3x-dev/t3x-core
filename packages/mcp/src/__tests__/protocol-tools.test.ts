@@ -131,6 +131,15 @@ vi.mock('@t3x-dev/core', () => ({
   })),
   getCanonicalModelId: vi.fn((model: string) => model),
   getModelInfo: vi.fn((model: string) => (model === 'gpt-5.4' ? { provider: 'openai' } : null)),
+  normalizeRuntimeProviderId: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
+  isGenerationRuntimeProviderId: vi.fn((providerId: string) =>
+    ['openai', 'anthropic', 'gemini'].includes(providerId)
+  ),
+  runtimeProviderIdForPublic: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
   extractAndApply: vi.fn(({ turns }: { turns: Array<{ content: string }> }) => {
     const text = turns.map((turn) => turn.content).join('\n');
     if (!/[A-Za-z0-9\u4e00-\u9fff]/.test(text)) {

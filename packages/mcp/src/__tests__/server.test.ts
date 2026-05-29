@@ -57,6 +57,15 @@ vi.mock('@t3x-dev/core', () => ({
   })),
   extractAndApply: vi.fn(),
   DEFAULT_STYLE: {},
+  normalizeRuntimeProviderId: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
+  isGenerationRuntimeProviderId: vi.fn((providerId: string) =>
+    ['openai', 'anthropic', 'gemini'].includes(providerId)
+  ),
+  runtimeProviderIdForPublic: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
   collectLessonsFromAssertions: vi.fn(() => []),
   generateLeafOutput: vi.fn(),
 }));

@@ -18,7 +18,6 @@ import {
   getLockedNodeIds,
   isUpstreamOfStagingUnit,
   nextEdgeId,
-  resetCounters,
   snapPosition,
 } from './canvasStoreUtils';
 
@@ -429,7 +428,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       return computeUnitTone(state.nodes, state.edges, state.latestMainCommitId, commitId);
     },
     resetToSingleConversation: () => {
-      resetCounters();
       // Don't create seed node with fake ID - user should use addNode to create real units
       set({
         nodes: [],

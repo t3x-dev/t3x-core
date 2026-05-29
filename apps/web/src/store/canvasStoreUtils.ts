@@ -29,12 +29,6 @@ export const canConnect = (source?: Node<CanvasNodeData>, target?: Node<CanvasNo
   return connectionMatrix[source.data.kind]?.includes(target.data.kind) ?? false;
 };
 
-// resetCounters / getNodeCounter are kept as no-ops / stubs for backward
-// compatibility with callers in canvasCommitSlice.ts.
-// nextNodeId/nextEdgeId now use timestamp + random suffix to avoid
-// collisions between multiple concurrent store instances or hot-reloads.
-export const resetCounters = () => {};
-
 // Returns a value that is unique enough for display-only entryId labels.
 export const getNodeCounter = () => Date.now();
 
