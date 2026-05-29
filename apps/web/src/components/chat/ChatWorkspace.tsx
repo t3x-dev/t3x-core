@@ -1,5 +1,12 @@
 'use client';
-import { AlertCircle, FileSearch, Loader2, MessageSquarePlus, PanelRight } from 'lucide-react';
+import {
+  AlertCircle,
+  FileSearch,
+  GitCommit,
+  Loader2,
+  MessageSquarePlus,
+  PanelRight,
+} from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
