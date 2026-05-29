@@ -603,6 +603,7 @@ export function LeafDetailWorkspace({
         steps={LEAF_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}
+        onSkip={() => void completeIntroDemo()}
         interactionMode={introDemoRequested ? 'guided' : 'coach'}
       />
     </div>

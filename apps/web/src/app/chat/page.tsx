@@ -18,6 +18,7 @@ import {
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
 import { useFirstRunDemo } from '@/hooks/onboarding/useFirstRunDemo';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useChatStore } from '@/store/chatStore';
 
@@ -84,6 +85,11 @@ function ChatLanding() {
     forceOpen: forceIntroDemo,
     forceOpenKey: introDemoForceKey,
   });
+  const { completeIntroDemo } = useIntroDemoCompletion(projectIdParam);
+  const handleIntroDemoSkip = useCallback(() => {
+    firstRunDemo.close();
+    void completeIntroDemo();
+  }, [completeIntroDemo, firstRunDemo.close]);
 
   const demoTourSteps = useMemo<FeatureTourStep[]>(() => {
     if (introDemoStage === 'compose' && projectIdParam) {
@@ -290,6 +296,7 @@ function ChatLanding() {
         steps={demoTourSteps}
         onClose={firstRunDemo.close}
         onDone={firstRunDemo.close}
+        onSkip={forceIntroDemo ? handleIntroDemoSkip : firstRunDemo.close}
         doneLabel={forceIntroDemo ? 'Skip' : 'Start using T3X'}
         interactionMode={forceIntroDemo ? 'guided' : 'coach'}
       />

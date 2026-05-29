@@ -59,6 +59,7 @@ interface ChatWorkspaceProps {
   onMaterialReaderChange?: (selection: MaterialReaderSelection | null) => void;
   introDemo?: boolean;
   onIntroDemoDone?: () => void;
+  onIntroDemoSkip?: () => void;
   introDemoDoneLabel?: string;
 }
 
@@ -186,6 +187,7 @@ export function ChatWorkspace({
   onMaterialReaderChange,
   introDemo = false,
   onIntroDemoDone,
+  onIntroDemoSkip,
   introDemoDoneLabel,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1170,6 +1172,7 @@ export function ChatWorkspace({
         steps={CHAT_WORKSPACE_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={onIntroDemoDone ?? (() => setTourOpen(false))}
+        onSkip={onIntroDemoSkip}
         doneLabel={introDemoDoneLabel}
         interactionMode={introDemo ? 'guided' : 'coach'}
       />

@@ -233,7 +233,7 @@ describe('ChatLandingPage', () => {
     expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^done$/i }));
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

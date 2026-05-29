@@ -135,6 +135,7 @@ interface FeatureTourOverlayProps {
   steps: FeatureTourStep[];
   onClose: () => void;
   onDone?: () => void;
+  onSkip?: () => void;
   doneLabel?: string;
   interactionMode?: 'coach' | 'guided';
 }
@@ -145,6 +146,7 @@ export function FeatureTourOverlay({
   steps,
   onClose,
   onDone,
+  onSkip,
   doneLabel = 'Done',
   interactionMode = 'coach',
 }: FeatureTourOverlayProps) {
@@ -157,7 +159,9 @@ export function FeatureTourOverlay({
   const atStart = stepIndex === 0;
   const atEnd = stepIndex === steps.length - 1;
   const StepIcon = step?.icon ?? Play;
-  const waitingForTargetClick = interactionMode === 'guided' && step?.advanceOnTargetClick;
+  const guided = interactionMode === 'guided';
+  const waitingForTargetClick = guided && step?.advanceOnTargetClick;
+  const actionLabel = guided ? 'Done' : doneLabel;
 
   const coachPosition = useMemo(() => {
     const width =
@@ -293,7 +297,7 @@ export function FeatureTourOverlay({
     <div
       className={cn(
         'fixed inset-0 z-[90] bg-[var(--overlay-scrim)]',
-        interactionMode === 'guided' && 'pointer-events-none'
+        guided && 'pointer-events-none'
       )}
       role="dialog"
       aria-modal="true"
@@ -343,50 +347,54 @@ export function FeatureTourOverlay({
               {step.description}
             </p>
           </div>
-          <button
-            type="button"
-            aria-label={`Close ${title}`}
-            onClick={onClose}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {!guided && (
+            <button
+              type="button"
+              aria-label={`Close ${title}`}
+              onClick={onClose}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </header>
 
         <div className="space-y-3 px-4 py-3">
-          <div
-            className="grid gap-1.5"
-            style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
-          >
-            {steps.map((item, index) => {
-              const selected = index === stepIndex;
-              const completed = index < stepIndex;
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setStepIndex(index)}
-                  aria-current={selected ? 'step' : undefined}
-                  aria-label={item.label}
-                  className={cn(
-                    'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
-                    selected
-                      ? cn('border-current', TONE_CLASSES[item.tone])
-                      : completed
-                        ? TONE_CLASSES.success
-                        : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
-                  )}
-                >
-                  {completed ? (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Icon className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {!guided && (
+            <div
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+            >
+              {steps.map((item, index) => {
+                const selected = index === stepIndex;
+                const completed = index < stepIndex;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setStepIndex(index)}
+                    aria-current={selected ? 'step' : undefined}
+                    aria-label={item.label}
+                    className={cn(
+                      'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                      selected
+                        ? cn('border-current', TONE_CLASSES[item.tone])
+                        : completed
+                          ? TONE_CLASSES.success
+                          : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+                    )}
+                  >
+                    {completed ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Icon className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0] text-[var(--text-tertiary)]">
@@ -415,34 +423,38 @@ export function FeatureTourOverlay({
             <span>{step.label}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="canvas-outline"
-              size="sm"
-              disabled={atStart}
-              onClick={() => setStepIndex((current) => Math.max(current - 1, 0))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <Button
-              variant="canvas-outline"
-              size="sm"
-              disabled={Boolean(waitingForTargetClick)}
-              onClick={() =>
-                setStepIndex((current) => (atEnd ? 0 : Math.min(current + 1, steps.length - 1)))
-              }
-            >
-              {advancingAfterTargetClick
-                ? 'Waiting for result...'
-                : waitingForTargetClick
-                  ? 'Click highlighted item'
-                  : atEnd
-                    ? 'Replay'
-                    : 'Next'}
-              {atEnd ? <Play className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onDone ?? onClose}>
-              {doneLabel}
+            {!guided && (
+              <>
+                <Button
+                  variant="canvas-outline"
+                  size="sm"
+                  disabled={atStart}
+                  onClick={() => setStepIndex((current) => Math.max(current - 1, 0))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  variant="canvas-outline"
+                  size="sm"
+                  disabled={Boolean(waitingForTargetClick)}
+                  onClick={() =>
+                    setStepIndex((current) => (atEnd ? 0 : Math.min(current + 1, steps.length - 1)))
+                  }
+                >
+                  {advancingAfterTargetClick
+                    ? 'Waiting for result...'
+                    : waitingForTargetClick
+                      ? 'Click highlighted item'
+                      : atEnd
+                        ? 'Replay'
+                        : 'Next'}
+                  {atEnd ? <Play className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+              </>
+            )}
+            <Button variant="ghost" size="sm" onClick={onSkip ?? onDone ?? onClose}>
+              {actionLabel}
             </Button>
           </div>
         </footer>

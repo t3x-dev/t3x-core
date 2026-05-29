@@ -6,6 +6,7 @@ import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import type { MaterialReaderSelection } from '@/components/chat/MaterialReader';
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useInheritFromCommit } from '@/hooks/conversations/useInheritFromCommit';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { isTemporaryChatId } from '@/store/temporaryChatsStore';
@@ -65,6 +66,7 @@ function ConversationRoute() {
 
   const { inheritFromCommitHash, clearInherit } = useInheritFromCommit(conversationId);
   const resolvedInheritFromCommitHash = inheritFromParam ?? inheritFromCommitHash;
+  const { completeIntroDemo } = useIntroDemoCompletion(resolvedProjectId);
 
   const [panelWidth, setPanelWidth] = useState(WORKSPACE_PANEL_FALLBACK_WIDTH);
   const isDragging = useRef(false);
@@ -156,6 +158,7 @@ function ConversationRoute() {
         onMaterialReaderChange={handleMaterialReaderChange}
         introDemo={introDemoRequested}
         onIntroDemoDone={continueIntroDemoToCanvas}
+        onIntroDemoSkip={() => void completeIntroDemo()}
         introDemoDoneLabel="Open Canvas"
       />
 
