@@ -9,10 +9,7 @@
  * a fetch call still live in `@/infrastructure`.
  */
 
-import {
-  type LocalGenerationProviderId,
-  normalizeLocalProviderId,
-} from '@t3x-dev/core';
+import { type LocalGenerationProviderId, normalizeLocalProviderId } from '@t3x-dev/core';
 
 // ────────────────────────────────────────────────────────────────────────────
 // LLM provider catalog (ids returned by the server)

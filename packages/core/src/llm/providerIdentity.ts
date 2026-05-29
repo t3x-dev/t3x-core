@@ -77,9 +77,7 @@ export function normalizeLocalProviderId(
   return LOCAL_PROVIDER_ID_BY_ALIAS[providerId.toLowerCase() as GenerationProviderAlias] ?? null;
 }
 
-export function runtimeProviderIdForPublic(
-  providerId: ProviderName
-): GenerationRuntimeProviderId {
+export function runtimeProviderIdForPublic(providerId: ProviderName): GenerationRuntimeProviderId {
   return GENERATION_RUNTIME_PROVIDER_ID_BY_PUBLIC_PROVIDER[providerId];
 }
 

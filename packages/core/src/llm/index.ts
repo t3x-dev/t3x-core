@@ -11,6 +11,7 @@ export {
   normalizeModelId,
 } from './catalog';
 export { normalizeLLMOutput } from './normalizer';
+export { createProviderForModel } from './providerFactory';
 export {
   GENERATION_RUNTIME_PROVIDER_ID_BY_PUBLIC_PROVIDER,
   GENERATION_RUNTIME_PROVIDER_IDS,
@@ -27,7 +28,6 @@ export {
   publicProviderIdForRuntime,
   runtimeProviderIdForPublic,
 } from './providerIdentity';
-export { createProviderForModel } from './providerFactory';
 export {
   type Capability,
   type LLMBasicGenerateOptions,
