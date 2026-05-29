@@ -4,8 +4,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  FileSearch,
-  GitCommit,
   Leaf,
   Map as MapIcon,
   MousePointerClick,
@@ -16,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'modes' | 'canvas' | 'actions' | 'zoom' | 'stats' | 'finish';
+type ProjectTourStepId = 'selectCommit' | 'zoom' | 'openLeaf';
 
 interface TargetRect {
   top: number;
@@ -39,95 +37,50 @@ interface ProjectTourStep {
 
 const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
   {
-    id: 'modes',
-    label: 'Modes',
-    title: 'Canvas is part of the same project workflow',
+    id: 'selectCommit',
+    label: 'Commit card',
+    title: 'Click the highlighted commit card',
     description:
-      'The sidebar keeps Chat, Canvas, and Leaf connected so users can move through the product without losing project context.',
-    target: 'shell-mode-tabs',
-    icon: MousePointerClick,
-    tone: 'conversation',
-    details: [
-      'Chat captures the request and source material.',
-      'Canvas turns committed meaning into a visible version path.',
-      'Leaf collects reusable output artifacts.',
-    ],
-  },
-  {
-    id: 'canvas',
-    label: 'Select',
-    title: 'Click a commit node to reveal Canvas actions',
-    description:
-      'This step advances only after the user clicks a real committed node on the graph.',
+      'This is the first Canvas action: select a committed version before inspecting or creating output from it.',
     target: 'canvas-commit-node',
     icon: MapIcon,
-    tone: 'conversation',
+    tone: 'commit',
     details: [
-      'Each committed node represents reviewed meaning.',
-      'Edges show how the project evolved.',
-      'Single-click a commit to open its action controls.',
+      'Click the commit card in the graph, not the sidebar.',
+      'The click selects the reviewed version created from Chat.',
+      'After the click, Canvas reveals the version actions for that commit.',
     ],
     advanceOnTargetClick: true,
   },
   {
-    id: 'actions',
-    label: 'Actions',
-    title: 'The action bar appears because of that click',
-    description:
-      'Users learn the core Canvas pattern here: select a version first, then choose details, diff, leaf, or new leaf actions.',
-    target: 'canvas-floating-action-open-leaf',
-    icon: GitCommit,
-    tone: 'commit',
-    details: [
-      'Details opens the reviewed commit.',
-      'Open Leaf jumps to artifacts generated from this version.',
-      'New Leaf creates another reusable output from the selected commit.',
-    ],
-  },
-  {
     id: 'zoom',
-    label: 'Zoom',
-    title: 'Click a zoom control to move the canvas',
+    label: 'Zoom controls',
+    title: 'Click one highlighted zoom control',
     description:
-      'The bottom controls are real graph navigation controls. The demo advances after the user clicks inside this control group.',
+      'Canvas is a graph, so users need to know the real controls for zooming and fitting the version path.',
     target: 'canvas-viewport-controls',
     icon: MapIcon,
     tone: 'conversation',
     details: [
-      'Minus and plus change graph scale.',
-      'The percentage resets to a readable zoom level.',
-      'Fit view brings scattered nodes back into frame.',
+      'Click plus, minus, the slider, or fit view inside the highlighted control group.',
+      'This changes how much of the version graph is visible.',
+      'Use this when a project has more commits or branches than fit on screen.',
     ],
     advanceOnTargetClick: true,
   },
   {
-    id: 'stats',
-    label: 'Stats',
-    title: 'Use the toolbar to orient the user',
+    id: 'openLeaf',
+    label: 'Leaf tab',
+    title: 'Click the highlighted Leaf tab',
     description:
-      'The toolbar summarizes how many commits, branches, and leaves exist after the Chat commit is complete.',
-    target: 'project-toolbar',
-    icon: FileSearch,
-    tone: 'commit',
-    details: [
-      'Main commits are stable semantic versions.',
-      'Leaf count tells the user whether reusable output already exists.',
-      'The latest hash anchors this project in an auditable version path.',
-    ],
-  },
-  {
-    id: 'finish',
-    label: 'Leaf',
-    title: 'Click the real Leaf tab to continue',
-    description:
-      'The Canvas section ends by using the same sidebar navigation users will use later.',
+      'The final Canvas action is to leave the graph and inspect the reusable artifact that was generated from this commit.',
     target: 'sidebar-leaf-tab',
     icon: Leaf,
     tone: 'success',
     details: [
-      'Click Leaf in the sidebar mode switcher.',
-      'The route changes to the project Leaf index.',
-      'The next step opens a real artifact card.',
+      'Click Leaf in the left mode switcher.',
+      'This opens the project Leaf index for the same demo project.',
+      'The next page asks the user to click the generated artifact row.',
     ],
     advanceOnTargetClick: true,
   },
@@ -513,7 +466,7 @@ export function ProjectDemoTourOverlay({
                 )
               }
             >
-              {waitingForTargetClick ? 'Click highlighted control' : atEnd ? 'Replay' : 'Next'}
+              {waitingForTargetClick ? 'Click highlighted item' : atEnd ? 'Replay' : 'Next'}
               {atEnd ? <Play className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </Button>
             <Button variant="ghost" size="sm" onClick={onDone ?? onClose}>

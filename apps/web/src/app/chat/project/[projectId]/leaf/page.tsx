@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   FileText,
   GitCommitHorizontal,
-  Layers3,
   Leaf as LeafIcon,
   MessageSquare,
 } from 'lucide-react';
@@ -33,65 +32,20 @@ function isNotFoundError(error: string | null): boolean {
 
 const LEAF_INDEX_TOUR_STEPS: FeatureTourStep[] = [
   {
-    id: 'modes',
-    label: 'Modes',
-    title: 'Leaf is the output surface for the same project',
-    description:
-      'Users can move from Chat to Canvas to Leaf without leaving the current project workflow.',
-    target: 'shell-mode-tabs',
-    tone: 'conversation',
-    icon: Layers3,
-    details: [
-      'Chat is for source conversations and instructions.',
-      'Canvas is for commits, diffs, branches, and leaf creation.',
-      'Leaf is the index of generated project artifacts.',
-    ],
-  },
-  {
-    id: 'index',
-    label: 'Index',
-    title: 'The Leaf index shows every reusable artifact in the project',
-    description:
-      'This page is intentionally quiet: it lets users scan generated outputs and their validation status.',
-    target: 'leaf-index-body',
-    tone: 'leaf',
-    icon: LeafIcon,
-    details: [
-      'The top count confirms how many leaves exist.',
-      'Sidebar filters show generated, draft, and review states.',
-      'Each row is an artifact, not a chat message.',
-    ],
-  },
-  {
     id: 'card',
-    label: 'Open',
-    title: 'Open a leaf to inspect output, constraints, and assertions',
+    label: 'Open leaf',
+    title: 'Click the highlighted leaf artifact row',
     description:
-      'The demo should take users through the leaf detail page so they understand what the artifact contains.',
+      'Leaf starts from an index. The row is the real entry point into the generated output workspace.',
     target: 'leaf-index-card',
     tone: 'leaf',
     icon: ClipboardCheck,
     details: [
-      'The title identifies the generated artifact.',
-      'The metadata shows type, generated state, and assertion coverage.',
-      'Clicking the row opens the full leaf workspace.',
+      'Click the artifact row in the center of the page.',
+      'The row opens the full Leaf workspace for this generated output.',
+      'The next page shows output, source coverage, quality, and export controls.',
     ],
     advanceOnTargetClick: true,
-  },
-  {
-    id: 'finish',
-    label: 'Done',
-    title: 'Done removes the demo project and returns to Chat',
-    description:
-      'The demo project is disposable. When the walkthrough ends, the seeded project is deleted and the user lands back on /chat.',
-    target: null,
-    tone: 'success',
-    icon: ClipboardCheck,
-    details: [
-      'This keeps the user workspace clean after a guided demo.',
-      'Production first-run behavior can reuse the same completion path.',
-      'The dev entry remains /chat?introDemo=1.',
-    ],
   },
 ];
 

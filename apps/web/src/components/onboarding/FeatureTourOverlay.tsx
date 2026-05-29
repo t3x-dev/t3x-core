@@ -435,7 +435,7 @@ export function FeatureTourOverlay({
               {advancingAfterTargetClick
                 ? 'Waiting for result...'
                 : waitingForTargetClick
-                  ? 'Click highlighted control'
+                  ? 'Click highlighted item'
                   : atEnd
                     ? 'Replay'
                     : 'Next'}
