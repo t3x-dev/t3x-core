@@ -11,6 +11,10 @@ import {
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import {
+  INTRO_DEMO_PROJECT_DELETED_EVENT,
+  type IntroDemoProjectDeletedDetail,
+} from '@/hooks/onboarding/introDemoEvents';
 import { deleteProject, listProjects } from '@/infrastructure/projects';
 import type { Project } from '@/infrastructure/types';
 
@@ -45,6 +49,19 @@ export function useProjects(limit = 50): UseProjectsResult {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const handleIntroDemoDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<IntroDemoProjectDeletedDetail>).detail;
+      if (!detail?.projectId) return;
+      setProjects((prev) => prev.filter((project) => project.project_id !== detail.projectId));
+    };
+
+    window.addEventListener(INTRO_DEMO_PROJECT_DELETED_EVENT, handleIntroDemoDeleted);
+    return () => {
+      window.removeEventListener(INTRO_DEMO_PROJECT_DELETED_EVENT, handleIntroDemoDeleted);
+    };
+  }, []);
 
   const remove = useCallback(async (projectId: string) => {
     await deleteProject(projectId);
