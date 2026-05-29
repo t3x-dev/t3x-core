@@ -12,9 +12,13 @@ function writeSeenFlag() {
 
 interface UseFirstRunDemoOptions {
   forceOpen?: boolean;
+  forceOpenKey?: string | null;
 }
 
-export function useFirstRunDemo({ forceOpen = false }: UseFirstRunDemoOptions = {}) {
+export function useFirstRunDemo({
+  forceOpen = false,
+  forceOpenKey = null,
+}: UseFirstRunDemoOptions = {}) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -32,7 +36,7 @@ export function useFirstRunDemo({ forceOpen = false }: UseFirstRunDemoOptions = 
       // Storage errors should not block the intro demo.
     }
     setOpen(true);
-  }, [forceOpen]);
+  }, [forceOpen, forceOpenKey]);
 
   const close = useCallback(() => {
     writeSeenFlag();

@@ -5,7 +5,6 @@ import {
   ArrowRight,
   FileText,
   FolderPlus,
-  Keyboard,
   Leaf as LeafIcon,
   SendHorizontal,
   Sparkles,
@@ -71,7 +70,6 @@ function ChatLanding() {
   const forceIntroDemo =
     process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
   const introDemoStage = searchParams.get('introDemoStage') ?? 'create';
-  const firstRunDemo = useFirstRunDemo({ forceOpen: forceIntroDemo });
   // Anchor this landing to a specific project when one was passed in the
   // URL (e.g. the "+ New Project" sidebar action lands here so the user can
   // type their first message). Priming the store keeps activeProjectId in
@@ -79,38 +77,30 @@ function ChatLanding() {
   // refresh and avoids relying solely on in-memory state.
   const projectIdParam = searchParams.get('projectId');
   const [starterDraft, setStarterDraft] = useState<{ text: string; revision: number } | null>(null);
+  const introDemoForceKey = forceIntroDemo
+    ? `${introDemoStage}:${projectIdParam ?? 'no-project'}`
+    : null;
+  const firstRunDemo = useFirstRunDemo({
+    forceOpen: forceIntroDemo,
+    forceOpenKey: introDemoForceKey,
+  });
 
   const demoTourSteps = useMemo<FeatureTourStep[]>(() => {
     if (introDemoStage === 'compose' && projectIdParam) {
       return [
         {
-          id: 'compose',
-          label: 'Input',
-          title: 'Review the prepared first message',
-          description:
-            'The demo fills a realistic prompt-review request. The user still starts from the real composer.',
-          target: 'composer',
-          tone: 'conversation',
-          icon: Keyboard,
-          details: [
-            'This text is developer-seeded demo material.',
-            'No model provider is required for the reply.',
-            'Click the send button to create the first conversation.',
-          ],
-        },
-        {
           id: 'send',
           label: 'Send',
-          title: 'Click Send to produce the preset LLM reply',
+          title: 'Click the highlighted Send button',
           description:
-            'The button is real. In the demo path, the response is replayed from fixture data instead of calling an LLM API.',
+            'The composer is already filled with developer-seeded demo material. This click creates the first conversation and replays the preset assistant reply.',
           target: 'landing-send-action',
           tone: 'conversation',
           icon: SendHorizontal,
           details: [
-            'The conversation is created inside the project.',
-            'The user message is saved as normal project context.',
-            'The assistant reply appears next, then Chat guides Extract and Apply.',
+            'Click the blue paper-plane button at the lower right of the composer.',
+            'No LLM API is called in this demo path.',
+            'After sending, Chat shows the preset reply and continues to Extract and Apply.',
           ],
           advanceOnTargetClick: true,
         },

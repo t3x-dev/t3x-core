@@ -106,6 +106,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
     onSend,
     onModelChange,
     prefillText,
+    sendIntroTarget,
   }: {
     disabled?: boolean;
     placeholder?: string;
@@ -113,6 +114,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
     onSend: (message: string) => void;
     onModelChange?: (provider: string, model: string) => void;
     prefillText?: string | null;
+    sendIntroTarget?: string;
   }) => (
     <div>
       <div data-testid="chat-disabled">{String(Boolean(disabled))}</div>
@@ -122,7 +124,11 @@ vi.mock('@/components/chat/ChatInput', () => ({
       <button type="button" onClick={() => onModelChange?.('openai', 'gpt-4.1')}>
         select openai
       </button>
-      <button type="button" onClick={() => onSend('hello world')}>
+      <button
+        type="button"
+        data-intro-target={sendIntroTarget}
+        onClick={() => onSend('hello world')}
+      >
         send chat
       </button>
     </div>
@@ -208,11 +214,43 @@ describe('ChatLandingPage', () => {
     });
 
     expect(
-      await screen.findByRole('dialog', { name: /review the prepared first message/i })
+      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
     ).toBeVisible();
+    expect(screen.getByRole('button', { name: /send chat/i })).toHaveAttribute(
+      'data-intro-target',
+      'landing-send-action'
+    );
     expect(screen.getByTestId('chat-prefill')).toHaveTextContent('Support escalation review');
     expect(screen.getByTestId('selected-model')).toHaveTextContent('fixture-replay');
     expect(screen.getByTestId('chat-disabled')).toHaveTextContent('false');
+  });
+
+  it('reopens the forced intro demo when the dev walkthrough stage changes', async () => {
+    searchParamsValue = new URLSearchParams({ introDemo: '1' });
+
+    const view = render(<ChatLandingPage />);
+
+    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /skip/i }));
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    searchParamsValue = new URLSearchParams({
+      projectId: 'proj_demo',
+      introDemo: '1',
+      introDemoStage: 'compose',
+    });
+
+    await act(async () => {
+      view.rerender(<ChatLandingPage />);
+    });
+
+    expect(
+      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
+    ).toBeVisible();
   });
 
   it('sends the intro demo message through the fixture replay path', async () => {
@@ -226,7 +264,7 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    await screen.findByRole('dialog', { name: /review the prepared first message/i });
+    await screen.findByRole('dialog', { name: /click the highlighted send button/i });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
     });
