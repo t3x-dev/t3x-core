@@ -54,32 +54,34 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'status',
     label: 'Status',
-    title: 'Read artifact status before editing',
+    title: 'Click the highlighted status strip',
     description:
-      'The status strip explains artifact type, semantic coverage, commit verification, and assertion results.',
+      'The status strip explains artifact type, semantic coverage, commit verification, and assertion results. Click it to continue.',
     target: 'leaf-status',
     tone: 'commit',
     icon: ListChecks,
     details: [
+      'Click anywhere inside the highlighted status strip.',
       'Semantic point coverage tells users whether the leaf reflects committed meaning.',
       'Commit verified ties the artifact back to a stable version.',
-      'Assertion count shows whether output quality has been checked.',
     ],
+    advanceOnTargetClick: true,
   },
   {
     id: 'source',
     label: 'Source',
-    title: 'Use source frames to connect output back to meaning',
+    title: 'Click the highlighted source panel',
     description:
-      'The left panel is where users inspect committed semantic points and add require/exclude constraints in Generate mode.',
+      'The left panel is where users inspect committed semantic points and add require/exclude constraints in Generate mode. Click it to continue.',
     target: 'leaf-source-panel',
     tone: 'source',
     icon: FileText,
     details: [
-      'Click source frames to understand what the leaf is allowed to use.',
+      'Click inside the highlighted source panel.',
+      'Source frames show what the leaf is allowed to use.',
       'Require and Exclude actions turn source meaning into output rules.',
-      'Hovering quality checks can highlight related source frames.',
     ],
+    advanceOnTargetClick: true,
   },
   {
     id: 'output',
@@ -100,17 +102,18 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'quality',
     label: 'Quality',
-    title: 'Review quality before publishing',
+    title: 'Click the highlighted quality panel',
     description:
-      'The right rail summarizes coverage, constraints, assertions, and publish actions.',
+      'The right rail summarizes coverage, constraints, assertions, and publish actions. Click it to finish the guided demo.',
     target: 'leaf-quality-panel',
     tone: 'success',
     icon: Gauge,
     details: [
+      'Click inside the highlighted quality panel.',
       'Coverage shows whether selected semantic points made it into the output.',
       'Assertions are pass/fail checks tied to constraints.',
-      'Publish buttons copy or export the reviewed artifact.',
     ],
+    advanceOnTargetClick: true,
   },
 ];
 
