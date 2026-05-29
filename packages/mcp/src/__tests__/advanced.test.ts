@@ -212,6 +212,15 @@ vi.mock('@t3x-dev/core', () => ({
     relationsInBoth: [],
   })),
   executeMerge: vi.fn(() => ({ trees: [], relations: [] })),
+  normalizeRuntimeProviderId: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
+  isGenerationRuntimeProviderId: vi.fn((providerId: string) =>
+    ['openai', 'anthropic', 'gemini'].includes(providerId)
+  ),
+  runtimeProviderIdForPublic: vi.fn((providerId: string | null | undefined) =>
+    providerId === 'claude' ? 'anthropic' : providerId
+  ),
 }));
 
 // -- Import handlers after mocks --

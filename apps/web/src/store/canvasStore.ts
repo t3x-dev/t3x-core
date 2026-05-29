@@ -18,7 +18,6 @@ import {
   getLockedNodeIds,
   isUpstreamOfStagingUnit,
   nextEdgeId,
-  resetCounters,
   snapPosition,
 } from './canvasStoreUtils';
 
@@ -429,7 +428,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
       return computeUnitTone(state.nodes, state.edges, state.latestMainCommitId, commitId);
     },
     resetToSingleConversation: () => {
-      resetCounters();
       // Don't create seed node with fake ID - user should use addNode to create real units
       set({
         nodes: [],
@@ -437,74 +435,6 @@ export const useCanvasStore = create<CanvasState>((...a) => {
         hasMainCommit: false,
         latestMainCommitId: undefined,
         hasDbPositions: false,
-      });
-    },
-
-    // DEV: Load demo data to showcase 3-section layout
-    loadDemoData: () => {
-      const demoNode: Node<CanvasNodeData> = {
-        id: 'demo-unit-1',
-        type: 'unit',
-        position: { x: 100, y: 100 },
-        data: {
-          entryId: 'demo_001',
-          title: 'Legal rewrite v2',
-          summary: 'Refined legal language for compliance review',
-          status: 'Active',
-          timestamp: '2h ago',
-          tags: ['legal', 'compliance'],
-          kind: 'unit',
-          commitStatus: 'committed',
-          commitHash: 'abc123def456789',
-          branchType: 'main',
-          // Sources section - 2 conversations
-          sources: [
-            {
-              id: 'src-1',
-              type: 'conversation',
-              label: 'conv#34',
-              title: 'Initial legal discussion',
-            },
-            { id: 'src-2', type: 'meeting', label: 'mtg#7', title: 'Compliance review meeting' },
-          ],
-          // Leaves section - 2 outputs
-          leaves: [
-            { id: 'leaf-1', type: 'tweet', title: 'Twitter Post' },
-            { id: 'leaf-2', type: 'article', title: 'Blog Article' },
-          ],
-        },
-      };
-
-      const demoNode2: Node<CanvasNodeData> = {
-        id: 'demo-unit-2',
-        type: 'unit',
-        position: { x: 500, y: 100 },
-        data: {
-          entryId: 'demo_002',
-          title: 'Marketing copy draft',
-          summary: '',
-          status: 'Draft',
-          timestamp: '1h ago',
-          tags: ['marketing'],
-          kind: 'unit',
-          commitStatus: 'staging',
-          branchType: 'branch',
-          branchName: 'feature/marketing',
-          mustHave: ['brand', 'value'],
-          mustntHave: ['competitor'],
-          // Sources - 1 file import
-          sources: [
-            { id: 'src-3', type: 'file', label: 'brief.pdf', title: 'Marketing brief document' },
-          ],
-          // No leaves yet (staging)
-        },
-      };
-
-      set({
-        nodes: [demoNode, demoNode2],
-        edges: [],
-        hasMainCommit: true,
-        latestMainCommitId: 'demo-unit-1',
       });
     },
 

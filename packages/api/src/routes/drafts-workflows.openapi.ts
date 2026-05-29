@@ -6,7 +6,7 @@
  * - POST /v1/drafts/:id/commit   - Commit draft to knowledge base
  * - POST /v1/drafts/:id/fork     - Fork a committed draft
  * - POST /v1/drafts/:id/extract  - Extract nodes from conversation
- * - POST /v1/drafts/:id/suggest  - Get node suggestions
+ * - POST /v1/drafts/:id/suggest  - Node suggestions, unavailable until tree-based search lands
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: workflow routes adapt heterogeneous draft and commit node payloads pending shared API types */
@@ -173,6 +173,8 @@ const suggestDraftRoute = createRoute({
   path: '/v1/drafts/{id}/suggest',
   tags: ['Drafts'],
   summary: 'Get node suggestions based on draft goal',
+  description:
+    'Returns an empty suggestion set when no goal is provided. Goal-based suggestions are unavailable until tree-based search is implemented.',
   request: {
     params: IdParamSchema,
     body: {
@@ -190,7 +192,7 @@ const suggestDraftRoute = createRoute({
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     501: {
-      description: 'Embedding service not configured',
+      description: 'Suggestion backend unavailable',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -732,23 +734,7 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       return errorResponse(c, 'NOT_FOUND', `Draft not found: ${id}`);
     }
 
-    // Check embedder is configured
-    const embedder = getEmbedder();
-    if (!embedder) {
-      return c.json(
-        {
-          success: false as const,
-          error: {
-            code: 'EMBEDDING_NOT_CONFIGURED',
-            message:
-              'Embedding service is not configured. Set GOOGLE_AI_STUDIO_KEY to enable suggestions.',
-          },
-        },
-        501
-      );
-    }
-
-    // No goal — return empty suggestions without calling embedder
+    // No goal means no retrieval intent, so an empty result is a valid response.
     if (!draft.goal) {
       return c.json(
         {
@@ -759,14 +745,10 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       );
     }
 
-    // Suggest feature requires tree-based search (node_vectors removed)
-    // Return empty suggestions for now
-    return c.json(
-      {
-        success: true as const,
-        data: { suggestions: [] },
-      },
-      200
+    return errorResponse(
+      c,
+      'SUGGESTIONS_NOT_IMPLEMENTED',
+      'Draft suggestions are pending tree-based search implementation.'
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -45,10 +45,3 @@ export interface NeighborNode {
   edge: KnowledgeEdge;
   direction: 'outgoing' | 'incoming';
 }
-
-export interface BuildResult {
-  total_nodes: number;
-  nodes_created: number;
-  edges_created: number;
-  build_time_ms: number;
-}

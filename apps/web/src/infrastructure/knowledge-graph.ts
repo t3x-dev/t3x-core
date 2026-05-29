@@ -3,7 +3,6 @@
  */
 
 import type {
-  BuildResult,
   EdgeEvidence,
   KnowledgeEdge,
   KnowledgeNode,
@@ -13,26 +12,11 @@ import type {
 import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './core';
 
 // Re-export types for backward compat. Canonical home: @/types/knowledgeGraph.
-export type { BuildResult, EdgeEvidence, KnowledgeEdge, KnowledgeNode, NeighborNode, NodeMember };
+export type { EdgeEvidence, KnowledgeEdge, KnowledgeNode, NeighborNode, NodeMember };
 
 // ============================================================================
 // Knowledge Graph Operations
 // ============================================================================
-
-/**
- * Build (or rebuild) the knowledge graph for a project.
- */
-export async function buildKnowledgeGraph(projectId: string): Promise<BuildResult> {
-  const res = await fetchWithTimeout(
-    `${API_V1}/projects/${encodeURIComponent(projectId)}/knowledge-graph/build`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    }
-  );
-  return handleResponse<BuildResult>(res);
-}
 
 /**
  * List knowledge nodes in a project.

@@ -143,7 +143,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <div className="flex flex-1 flex-col min-h-0">{children}</div>
           </main>
           <Toaster position="bottom-right" richColors closeButton />
-          <CommandPalette />
+          <CommandPalette projectId={projectId ?? undefined} />
           <KeyboardShortcutsDialog />
           <SettingsModal />
         </div>

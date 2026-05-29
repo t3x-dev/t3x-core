@@ -17,7 +17,6 @@ import {
   isUpstreamOfStagingUnit,
   nextEdgeId,
   nextNodeId,
-  resetCounters,
   resolveLatestMainUnitId,
   snapPosition,
 } from '../../store/canvasStoreUtils';
@@ -82,9 +81,8 @@ describe('getNumericId', () => {
   });
 });
 
-describe('resetCounters / nextNodeId / nextEdgeId', () => {
+describe('nextNodeId / nextEdgeId', () => {
   it('generates unique IDs with correct prefix', () => {
-    resetCounters();
     const n1 = nextNodeId();
     const n2 = nextNodeId();
     const e1 = nextEdgeId();

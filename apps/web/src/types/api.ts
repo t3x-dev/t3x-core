@@ -33,7 +33,6 @@ export type {
   DraftNode,
   LocatedEvidenceAPI,
   SemanticPointAPI,
-  SuggestResult,
   WorkbenchDraft,
 } from '@/infrastructure/drafts';
 export type { CommitExportFormat } from '@/infrastructure/export/commit';

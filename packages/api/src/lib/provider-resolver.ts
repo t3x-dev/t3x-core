@@ -1,34 +1,20 @@
 import {
   type AnyProvider,
   createProviderForModel,
+  GENERATION_RUNTIME_PROVIDER_IDS,
+  type GenerationRuntimeProviderId,
   getCanonicalModelId,
   getModelInfo,
   type LLMProvider,
+  normalizeRuntimeProviderId,
   type RegistryConfig,
+  runtimeProviderIdForPublic,
 } from '@t3x-dev/core';
 import { type AnyDB, findConversationById, findProjectById, findUserById } from '@t3x-dev/storage';
 import { loadResolvedProviderConfig } from './provider-config';
 import { getProviderRegistry } from './provider-registry';
 
-export type RuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
-
-const PROVIDER_ALIAS_TO_RUNTIME: Record<string, RuntimeProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  openai: 'openai',
-  gpt: 'openai',
-  gemini: 'google-ai',
-  google: 'google-ai',
-  'google-ai': 'google-ai',
-};
-
-const PROVIDER_RUNTIME_TO_PUBLIC: Record<RuntimeProviderId, 'anthropic' | 'openai' | 'google'> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  'google-ai': 'google',
-};
-
-const PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
+export type RuntimeProviderId = GenerationRuntimeProviderId;
 
 interface SelectionLayer {
   name: 'request' | 'conversation' | 'project' | 'user';
@@ -56,8 +42,7 @@ function isSupportedProvider(
 }
 
 export function normalizeProvider(provider: string | undefined): RuntimeProviderId | null {
-  if (!provider) return null;
-  return PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
+  return normalizeRuntimeProviderId(provider);
 }
 
 function stripProviderPrefixFromModel(model: string, providerId: RuntimeProviderId): string {
@@ -101,10 +86,7 @@ function findProviderForModel(
   const catalogProvider = getModelInfo(model)?.provider;
   if (!catalogProvider) return null;
 
-  const runtimeProvider =
-    (Object.entries(PROVIDER_RUNTIME_TO_PUBLIC).find(
-      ([, publicId]) => publicId === catalogProvider
-    )?.[0] as RuntimeProviderId | undefined) ?? null;
+  const runtimeProvider = runtimeProviderIdForPublic(catalogProvider);
 
   return runtimeProvider && candidateProviders.includes(runtimeProvider) ? runtimeProvider : null;
 }
@@ -214,7 +196,7 @@ export async function resolveProviderAndModel(
   input: ResolveProviderInput = {}
 ): Promise<ResolveProviderResult> {
   const registry = await getProviderRegistry();
-  const supportedProviders = input.supportedProviders ?? PROVIDER_RUNTIME_IDS;
+  const supportedProviders = input.supportedProviders ?? GENERATION_RUNTIME_PROVIDER_IDS;
   const { project, layers } = await buildSelectionLayers(input);
 
   for (const layer of layers) {

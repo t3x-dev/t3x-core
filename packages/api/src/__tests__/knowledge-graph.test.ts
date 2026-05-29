@@ -2,7 +2,7 @@
  * Knowledge Graph Route Tests
  *
  * Tests for /v1/projects/:projectId/knowledge-graph/* endpoints.
- * Build endpoint is stubbed (tree-based implementation pending).
+ * Build endpoint is unavailable until tree-based implementation lands.
  * All other endpoints work with regular tables.
  */
 
@@ -61,20 +61,18 @@ describe('Knowledge Graph Routes', () => {
     await cleanup();
   });
 
-  // ── Build endpoint (needs pgvector) ────────────────────────
+  // ── Build endpoint ─────────────────────────────────────────
 
   describe('POST /build', () => {
-    it('returns error when no embeddings exist', async () => {
+    it('returns 501 until tree-based build is implemented', async () => {
       const res = await app.request(`/v1/projects/${testProjectId}/knowledge-graph/build`, {
         method: 'POST',
       });
 
       const json: ApiResponse = await res.json();
+      expect(res.status).toBe(501);
       expect(json.success).toBe(false);
-      // If pgvector is available: 400 EMBEDDINGS_REQUIRED (empty table)
-      // If pgvector is not available: 500 GRAPH_BUILD_FAILED (table doesn't exist)
-      expect([400, 500]).toContain(res.status);
-      expect(['EMBEDDINGS_REQUIRED', 'GRAPH_BUILD_FAILED']).toContain(json.error.code);
+      expect(json.error.code).toBe('GRAPH_BUILD_NOT_IMPLEMENTED');
     });
   });
 

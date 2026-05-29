@@ -1,11 +1,15 @@
 import {
   createDefaultProviderRegistry,
+  type GenerationRuntimeProviderId,
   getCanonicalModelId,
   getModelInfo,
+  isGenerationRuntimeProviderId,
   type LLMProvider,
+  normalizeRuntimeProviderId,
   type ProviderRegistry,
   type RegistryConfig,
   type ResolvedConfig,
+  runtimeProviderIdForPublic,
 } from '@t3x-dev/core';
 import {
   type AnyDB,
@@ -21,24 +25,7 @@ import { getDB } from './db.js';
 
 const PROVIDER_CONFIG_KEY = 'provider_registry';
 
-export type RuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
-
-const PROVIDER_ALIAS_TO_RUNTIME: Record<string, RuntimeProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  openai: 'openai',
-  gpt: 'openai',
-  gemini: 'google-ai',
-  google: 'google-ai',
-  'google-ai': 'google-ai',
-};
-
-const PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
-const CATALOG_PROVIDER_TO_RUNTIME: Record<'anthropic' | 'openai' | 'google', RuntimeProviderId> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  google: 'google-ai',
-};
+export type RuntimeProviderId = GenerationRuntimeProviderId;
 
 let registry: ProviderRegistry | null = null;
 let registryInit: Promise<ProviderRegistry> | null = null;
@@ -90,8 +77,7 @@ async function initProviderRegistry(db?: AnyDB): Promise<ProviderRegistry> {
 }
 
 export function normalizeProvider(provider: string | null | undefined): RuntimeProviderId | null {
-  if (!provider) return null;
-  return PROVIDER_ALIAS_TO_RUNTIME[provider.toLowerCase()] ?? null;
+  return normalizeRuntimeProviderId(provider);
 }
 
 function stripProviderPrefixFromModel(model: string, providerId: RuntimeProviderId): string {
@@ -108,12 +94,12 @@ function stripProviderPrefixFromModel(model: string, providerId: RuntimeProvider
 
 function findProviderForModel(reg: ProviderRegistry, model: string): RuntimeProviderId | null {
   for (const provider of reg.listProviders()) {
-    if (!(PROVIDER_RUNTIME_IDS as readonly string[]).includes(provider.id)) {
+    if (!isGenerationRuntimeProviderId(provider.id)) {
       continue;
     }
 
     if (provider.defaultModel === model || provider.availableModels?.includes(model)) {
-      return provider.id as RuntimeProviderId;
+      return provider.id;
     }
   }
 
@@ -122,7 +108,7 @@ function findProviderForModel(reg: ProviderRegistry, model: string): RuntimeProv
     return null;
   }
 
-  return CATALOG_PROVIDER_TO_RUNTIME[catalogProvider] ?? null;
+  return runtimeProviderIdForPublic(catalogProvider);
 }
 
 function getProjectGenerationProviderIds(reg: ProviderRegistry, project: Project | null): string[] {
@@ -228,9 +214,7 @@ export async function resolveGenerationTarget(options: {
   }
 
   const defaultProvider = getProjectGenerationProviderIds(reg, project).find(
-    (providerId) =>
-      (PROVIDER_RUNTIME_IDS as readonly string[]).includes(providerId) &&
-      reg.isConfigured(providerId)
+    (providerId) => isGenerationRuntimeProviderId(providerId) && reg.isConfigured(providerId)
   ) as RuntimeProviderId | undefined;
 
   const scopedProviderId = explicitProvider ?? modelProvider ?? null;

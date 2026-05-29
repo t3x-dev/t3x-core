@@ -8,7 +8,6 @@ import { isExpectedConsoleError } from './fixtures/test-data-factory';
  * Tests for Workbench RFC V2 features:
  * - Draft creation and page load
  * - Node list display and toggles
- * - AutoSuggestPanel (goal-driven suggestions)
  * - PreviewPanel with model selector and auto-preview toggle
  * - Preview scroll sync infrastructure
  * - Commit flow
@@ -20,13 +19,12 @@ test.describe('Draft Workbench', () => {
   let projectId: string;
   let commitHash: string;
   let draftId: string;
-  let draftNoGoalId: string;
 
   test.beforeAll(async ({ request }) => {
     const { projectId: id } = await createTestProject(request, `Draft E2E ${Date.now()}`);
     projectId = id;
 
-    // Create a commit with frames (knowledge base for suggestions)
+    // Create a parent commit for draft diff context
     const commitResp = await request.post(`${API_BASE}/commits`, {
       data: {
         project_id: projectId,
@@ -97,32 +95,6 @@ test.describe('Draft Workbench', () => {
         if_revision: 1,
       },
     });
-
-    // Create draft WITHOUT goal
-    const draftResp2 = await request.post(`${API_BASE}/drafts`, {
-      data: {
-        project_id: projectId,
-        title: 'E2E Draft No Goal',
-      },
-    });
-    const d2 = await draftResp2.json();
-    draftNoGoalId = d2.data.id;
-
-    // Add a node to no-goal draft
-    await request.patch(`${API_BASE}/drafts/${draftNoGoalId}`, {
-      data: {
-        nodes: [
-          {
-            id: 's_dw_ng_1',
-            text: 'Test sentence without goal',
-            origin: { type: 'manual' },
-            position: 0,
-            included: true,
-          },
-        ],
-        if_revision: 1,
-      },
-    });
   });
 
   test.afterAll(async ({ request }) => {
@@ -162,22 +134,7 @@ test.describe('Draft Workbench', () => {
     await expect(page.locator('text=Competitor analysis shows market gap').first()).toBeVisible();
   });
 
-  test('DW-02: AutoSuggestPanel shows with goal', async ({ page }) => {
-    setupConsoleFilter(page);
-    await gotoDraft(page, draftId);
-
-    await expect(page.locator('text=E2E Draft With Goal').first()).toBeVisible({ timeout: 15000 });
-
-    // AutoSuggestPanel should be visible with "Suggestions" header
-    const suggestPanel = page.locator('text=Suggestions').first();
-    await expect(suggestPanel).toBeVisible({ timeout: 10000 });
-
-    // Should show goal-based content (suggestions, error, or empty state)
-    const panelSection = page.locator('section').filter({ hasText: 'Suggestions' }).first();
-    await expect(panelSection).toBeVisible();
-  });
-
-  test('DW-03: PreviewPanel shows model selector and auto toggle', async ({ page }) => {
+  test('DW-02: PreviewPanel shows model selector and auto toggle', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -196,7 +153,7 @@ test.describe('Draft Workbench', () => {
     await expect(generateBtn.first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('DW-04: Model selector dropdown has options', async ({ page }) => {
+  test('DW-03: Model selector dropdown has options', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -214,7 +171,7 @@ test.describe('Draft Workbench', () => {
     await expect(sonnetOption).toBeVisible({ timeout: 5000 });
   });
 
-  test('DW-05: Node include count updates', async ({ page }) => {
+  test('DW-04: Node include count updates', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -225,7 +182,7 @@ test.describe('Draft Workbench', () => {
     await expect(includeCount).toBeVisible({ timeout: 10000 });
   });
 
-  test('DW-06: Breadcrumb and action bar present', async ({ page }) => {
+  test('DW-05: Breadcrumb and action bar present', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -240,19 +197,7 @@ test.describe('Draft Workbench', () => {
     await expect(draftLabel).toBeVisible();
   });
 
-  test('DW-07: AutoSuggestPanel shows hint when no goal', async ({ page }) => {
-    setupConsoleFilter(page);
-    await gotoDraft(page, draftNoGoalId);
-
-    await expect(page.locator('text=E2E Draft No Goal').first()).toBeVisible({ timeout: 15000 });
-
-    // Without a goal, AutoSuggestPanel should show the dashed-border hint
-    await expect(page.locator('text=Set a goal to get node suggestions from your knowledge base.').first()).toBeVisible({
-      timeout: 10000,
-    });
-  });
-
-  test('DW-08: Preview split pane layout', async ({ page }) => {
+  test('DW-06: Preview split pane layout', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -271,7 +216,7 @@ test.describe('Draft Workbench', () => {
     await expect(resizer).toBeVisible({ timeout: 5000 });
   });
 
-  test('DW-09: Preview type selector available', async ({ page }) => {
+  test('DW-07: Preview type selector available', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 
@@ -282,7 +227,7 @@ test.describe('Draft Workbench', () => {
     await expect(typeSelector).toBeVisible({ timeout: 5000 });
   });
 
-  test('DW-10: Collapsible sections work', async ({ page }) => {
+  test('DW-08: Collapsible sections work', async ({ page }) => {
     setupConsoleFilter(page);
     await gotoDraft(page, draftId);
 

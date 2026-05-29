@@ -3,7 +3,7 @@
  *
  * Integration tests for Workbench features:
  * 1. Preview with model parameter (haiku/sonnet/opus)
- * 2. Suggest endpoint (returns suggestions based on draft goal)
+ * 2. Suggest endpoint boundary
  * 3. Commit populates node vectors (best-effort)
  * 4. Preview caching (same content returns cached result)
  * 5. Preview stale detection (after update, preview should be stale)
@@ -238,7 +238,22 @@ describe('Draft Workbench Features', () => {
   // ============================================================
 
   describe('POST /v1/drafts/:id/suggest', () => {
-    it('returns 501 when embedder is not configured', async () => {
+    it('returns empty suggestions when draft has no goal', async () => {
+      const draftId = await createDraftWithNodes('Suggest No Goal');
+
+      const res = await app.request(`/v1/drafts/${draftId}/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(200);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.suggestions).toEqual([]);
+    });
+
+    it('returns 501 while goal-based suggestions are unavailable', async () => {
       const draftId = await createDraftWithNodes('Suggest No Embedder', {
         goal: 'Find pricing info',
       });
@@ -254,7 +269,7 @@ describe('Draft Workbench Features', () => {
       expect(res.status).toBe(501);
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
-      expect(data.error.code).toBe('EMBEDDING_NOT_CONFIGURED');
+      expect(data.error.code).toBe('SUGGESTIONS_NOT_IMPLEMENTED');
     });
 
     it('returns 404 for non-existent draft', async () => {
@@ -267,10 +282,10 @@ describe('Draft Workbench Features', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns empty suggestions when draft has no goal', async () => {
-      const draftId = await createDraftWithNodes('Suggest No Goal');
-
-      // Provide a mock embedder that will not be called
+    it('returns 501 when goal-based suggestions are unavailable', async () => {
+      const draftId = await createDraftWithNodes('Suggest Tree Search Pending', {
+        goal: 'Find pricing info',
+      });
       const mockEmb = {
         id: 'mock-embedder',
         encode: vi.fn(),
@@ -284,11 +299,10 @@ describe('Draft Workbench Features', () => {
         body: JSON.stringify({}),
       });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(501);
       const data: ApiResponse = await res.json();
-      expect(data.success).toBe(true);
-      expect(data.data.suggestions).toEqual([]);
-      // embedder.encode should not be called when there is no goal
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('SUGGESTIONS_NOT_IMPLEMENTED');
       expect(mockEmb.encode).not.toHaveBeenCalled();
     });
   });

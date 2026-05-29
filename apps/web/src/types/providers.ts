@@ -9,6 +9,8 @@
  * a fetch call still live in `@/infrastructure`.
  */
 
+import { type LocalGenerationProviderId, normalizeLocalProviderId } from '@t3x-dev/core';
+
 // ────────────────────────────────────────────────────────────────────────────
 // LLM provider catalog (ids returned by the server)
 // ────────────────────────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ export interface LLMModelsResponse {
 // Local provider settings (keys stored on the user's machine)
 // ────────────────────────────────────────────────────────────────────────────
 
-export type LocalProviderId = 'anthropic' | 'openai' | 'google';
+export type LocalProviderId = LocalGenerationProviderId;
 export type LocalProviderAlias = 'claude' | 'gemini' | 'google-ai' | 'gpt';
 export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
 export type LocalProviderTestStatus = 'ok' | 'error';
@@ -94,17 +96,7 @@ export interface TestConnectionResult {
 // Pure helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-const LOCAL_PROVIDER_ID_ALIASES: Record<LocalProviderClientId, LocalProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  gemini: 'google',
-  gpt: 'openai',
-  openai: 'openai',
-  google: 'google',
-  'google-ai': 'google',
-};
-
 /** Normalise a (possibly-aliased) provider id to its canonical form. */
 export function toLocalProviderId(providerId: string): LocalProviderId | null {
-  return LOCAL_PROVIDER_ID_ALIASES[providerId as LocalProviderClientId] ?? null;
+  return normalizeLocalProviderId(providerId);
 }

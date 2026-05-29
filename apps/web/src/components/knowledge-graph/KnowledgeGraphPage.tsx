@@ -2,9 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
 import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
-import { cn } from '@/utils/cn';
 import { KGCanvas } from './KGCanvas';
 import { KGDetailPanel } from './KGDetailPanel';
 import { KGToolbar } from './KGToolbar';
@@ -14,7 +12,7 @@ interface KnowledgeGraphPageProps {
 }
 
 export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
-  const { nodes, loading, building, error, fetchNodes, buildGraph } = useKnowledgeGraph();
+  const { nodes, loading, error, fetchNodes } = useKnowledgeGraph();
 
   useEffect(() => {
     fetchNodes(projectId);
@@ -43,23 +41,15 @@ export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
 
         {/* Empty state */}
         {isEmpty && !error && (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
+          <div className="flex h-full flex-col items-center justify-center">
             <div className="text-center">
               <p className="text-lg font-medium text-[var(--text-primary)]">
-                No knowledge graph yet
+                No knowledge graph data
               </p>
               <p className="mt-1 text-sm text-[var(--text-tertiary)]">
-                Build a knowledge graph from your project's committed nodes.
+                Saved graph nodes will appear here when the graph backend is enabled.
               </p>
             </div>
-            <Button
-              onClick={() => buildGraph(projectId)}
-              disabled={building}
-              className={cn('gap-2', building && 'pointer-events-none')}
-            >
-              {building && <Loader2 className="h-4 w-4 animate-spin" />}
-              Build Knowledge Graph
-            </Button>
           </div>
         )}
 

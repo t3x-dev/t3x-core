@@ -159,10 +159,6 @@ test.describe('Open-source workbench visual smoke', () => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.addInitScript((mode: ThemeMode) => {
         localStorage.setItem('theme', mode);
-        localStorage.setItem('t3x-onboarding-seen', 'true');
-        localStorage.setItem('t3x-onboarding-experience-set', 'true');
-        localStorage.setItem('t3x-tour-completed', 'true');
-        localStorage.setItem('t3x-quickstart-dismissed', 'true');
         document.documentElement?.classList.toggle('dark', mode === 'dark');
       }, theme);
 

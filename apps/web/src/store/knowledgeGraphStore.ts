@@ -7,7 +7,7 @@
 
 import { create } from 'zustand';
 import type { NodeMember } from '@/types/api';
-import type { BuildResult, KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
+import type { KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
 
 interface KnowledgeGraphState {
   nodes: KnowledgeNode[];
@@ -16,9 +16,7 @@ interface KnowledgeGraphState {
   detailMembers: NodeMember[];
   neighbors: NeighborNode[];
   loading: boolean;
-  building: boolean;
   error: Error | null;
-  buildResult: BuildResult | null;
 
   setNodes: (nodes: KnowledgeNode[]) => void;
   setSelectedNodeId: (id: string | null) => void;
@@ -28,9 +26,7 @@ interface KnowledgeGraphState {
     neighbors: NeighborNode[];
   }) => void;
   setLoading: (loading: boolean) => void;
-  setBuilding: (building: boolean) => void;
   setError: (error: Error | null) => void;
-  setBuildResult: (result: BuildResult | null) => void;
   clearGraph: () => void;
   clearSelection: () => void;
 }
@@ -42,18 +38,14 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set) => ({
   detailMembers: [],
   neighbors: [],
   loading: false,
-  building: false,
   error: null,
-  buildResult: null,
 
   setNodes: (nodes) => set({ nodes }),
   setSelectedNodeId: (selectedNodeId) => set({ selectedNodeId }),
   setDetail: ({ detailNode, detailMembers, neighbors }) =>
     set({ detailNode, detailMembers, neighbors }),
   setLoading: (loading) => set({ loading }),
-  setBuilding: (building) => set({ building }),
   setError: (error) => set({ error }),
-  setBuildResult: (buildResult) => set({ buildResult }),
 
   clearGraph: () =>
     set({

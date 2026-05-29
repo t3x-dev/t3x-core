@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Hammer, Loader2, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ interface KGToolbarProps {
 }
 
 export function KGToolbar({ projectId }: KGToolbarProps) {
-  const { buildGraph, searchNodes, fetchNodes, deleteGraph, building } = useKnowledgeGraph();
+  const { searchNodes, fetchNodes, deleteGraph } = useKnowledgeGraph();
   const [query, setQuery] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,21 +80,6 @@ export function KGToolbar({ projectId }: KGToolbarProps) {
             className="h-8 w-48 pl-8 text-xs rounded-lg"
           />
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => buildGraph(projectId)}
-          disabled={building}
-          title="Build Graph"
-          className={cn(
-            'h-9 px-3 rounded-xl transition-all text-xs gap-1.5',
-            'text-[var(--text-secondary)] hover:text-foreground',
-            'hover:bg-primary/10 hover:text-primary'
-          )}
-        >
-          {building ? <Loader2 className="h-4 w-4 animate-spin" /> : <Hammer className="h-4 w-4" />}
-          Build
-        </Button>
         <Button
           variant="ghost"
           size="icon"
