@@ -113,7 +113,6 @@ export type CanvasState = MergeSlice &
     onConnect: (connection: Connection) => void;
     getCommitTone: (commitId: string) => CommitTone;
     resetToSingleConversation: () => void;
-    loadDemoData: () => void;
     // Conversation constraints management
     saveConversationConstraints: (
       conversationId: string,

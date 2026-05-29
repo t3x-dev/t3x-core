@@ -15,7 +15,14 @@
  */
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { getModelsByProvider, type ProviderName } from '@t3x-dev/core';
+import {
+  GENERATION_RUNTIME_PROVIDER_IDS,
+  getModelsByProvider,
+  normalizeLocalProviderId as normalizeSharedLocalProviderId,
+  publicProviderIdForRuntime,
+  runtimeProviderIdForPublic,
+  type ProviderName,
+} from '@t3x-dev/core';
 import {
   deleteProviderCredential,
   getProviderCredentialBundle,
@@ -47,22 +54,12 @@ export const providersRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
-const LOCAL_PROVIDER_ALIASES: Record<string, LocalProviderId> = {
-  anthropic: 'anthropic',
-  claude: 'anthropic',
-  openai: 'openai',
-  gpt: 'openai',
-  google: 'google',
-  'google-ai': 'google',
-  gemini: 'google',
-};
-
 function normalizeLocalProviderId(id: string): LocalProviderId | null {
-  return LOCAL_PROVIDER_ALIASES[id.toLowerCase()] ?? null;
+  return normalizeSharedLocalProviderId(id);
 }
 
 function getRuntimeProviderId(provider: LocalProviderId): 'anthropic' | 'openai' | 'google-ai' {
-  return provider === 'google' ? 'google-ai' : provider;
+  return runtimeProviderIdForPublic(provider as ProviderName);
 }
 
 const ENV_KEY_BY_LOCAL_PROVIDER: Record<LocalProviderId, string> = {
@@ -134,13 +131,7 @@ function normalizeDefaultModel(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-const SHARED_GENERATION_PROVIDER_CATALOG: Partial<Record<string, ProviderName>> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  'google-ai': 'google',
-};
-
-const VISIBLE_GENERATION_PROVIDER_IDS = new Set(['anthropic', 'openai', 'google-ai']);
+const VISIBLE_GENERATION_PROVIDER_IDS = new Set<string>(GENERATION_RUNTIME_PROVIDER_IDS);
 
 function isVisibleProvider(provider: { id: string; role: string }): boolean {
   return provider.role !== 'generation' || VISIBLE_GENERATION_PROVIDER_IDS.has(provider.id);
@@ -169,7 +160,7 @@ function getAvailableModelsForProvider(
     return fallback ?? null;
   }
 
-  const providerName = SHARED_GENERATION_PROVIDER_CATALOG[providerId];
+  const providerName = publicProviderIdForRuntime(providerId);
   if (!providerName) {
     return fallback ?? null;
   }

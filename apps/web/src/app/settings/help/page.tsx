@@ -72,7 +72,7 @@ export default function HelpPage() {
           icon={<Github className="h-5 w-5" />}
           title="GitHub Repository"
           description="Source code, issues, and discussions."
-          href="https://github.com/anthropics/t3x"
+          href="https://github.com/t3x-dev/t3x-core"
         />
         <ResourceRow
           icon={<FileText className="h-5 w-5" />}

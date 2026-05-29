@@ -7,7 +7,8 @@
  */
 
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
+import type { GenerationRuntimeProviderId, LLMPrompt, LLMProvider, LLMResult } from '@t3x-dev/core';
+import { GENERATION_RUNTIME_PROVIDER_IDS, isGenerationRuntimeProviderId } from '@t3x-dev/core';
 import { recordUsage } from '@t3x-dev/storage';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { getDB } from '../lib/db';
@@ -148,7 +149,7 @@ interface ChatResponse {
   finish_reason?: string;
 }
 
-type ChatRuntimeProviderId = 'anthropic' | 'openai' | 'google-ai';
+type ChatRuntimeProviderId = GenerationRuntimeProviderId;
 
 const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
   anthropic: 'claude',
@@ -156,8 +157,6 @@ const CHAT_PROVIDER_RUNTIME_TO_PUBLIC: Record<ChatRuntimeProviderId, string> = {
   'google-ai': 'google',
 };
 
-const CHAT_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
-const STREAM_PROVIDER_RUNTIME_IDS = ['anthropic', 'openai', 'google-ai'] as const;
 const DEFAULT_MAX_TOKENS = 4096;
 const MAX_CHAT_TOKENS = 16384;
 
@@ -180,11 +179,11 @@ const PROVIDER_CAPABILITY: Record<
 // ============================================================================
 
 function isSupportedChatProviderId(value: string): value is ChatRuntimeProviderId {
-  return (CHAT_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
+  return isGenerationRuntimeProviderId(value);
 }
 
 function isSupportedStreamProviderId(value: string): value is ChatRuntimeProviderId {
-  return (STREAM_PROVIDER_RUNTIME_IDS as readonly string[]).includes(value);
+  return isGenerationRuntimeProviderId(value);
 }
 
 async function resolveProviderApiKey(
@@ -264,7 +263,7 @@ async function resolveChatRequestTarget(options: {
     userId: options.userId,
     supportedProviders:
       (options.supportedProviders as readonly ChatRuntimeProviderId[] | undefined) ??
-      CHAT_PROVIDER_RUNTIME_IDS,
+      GENERATION_RUNTIME_PROVIDER_IDS,
     unavailableMessage: 'No configured chat provider is available',
   });
   if (!resolution.ok) {
@@ -711,7 +710,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     model: body.model,
     projectId: body.project_id,
     userId: getUserId(c),
-    supportedProviders: STREAM_PROVIDER_RUNTIME_IDS,
+    supportedProviders: GENERATION_RUNTIME_PROVIDER_IDS,
   });
   if ('error' in target) {
     return c.json({ success: false as const, error: target.error }, 400);
