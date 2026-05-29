@@ -43,14 +43,12 @@ describe('ErrorCodes', () => {
         "DEPRECATED": "DEPRECATED",
         "DRAFT_NOT_FOUND": "DRAFT_NOT_FOUND",
         "DUPLICATE_PIN": "DUPLICATE_PIN",
-        "EMBEDDER_NOT_CONFIGURED": "EMBEDDER_NOT_CONFIGURED",
-        "EMBEDDINGS_REQUIRED": "EMBEDDINGS_REQUIRED",
         "EXTRACTION_FAILED": "EXTRACTION_FAILED",
         "FORBIDDEN": "FORBIDDEN",
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
-        "GRAPH_BUILD_FAILED": "GRAPH_BUILD_FAILED",
+        "GRAPH_BUILD_NOT_IMPLEMENTED": "GRAPH_BUILD_NOT_IMPLEMENTED",
         "GRAPH_NODE_NOT_FOUND": "GRAPH_NODE_NOT_FOUND",
         "GRAPH_NOT_BUILT": "GRAPH_NOT_BUILT",
         "HASH_CONFLICT": "HASH_CONFLICT",
@@ -69,6 +67,7 @@ describe('ErrorCodes', () => {
         "MISSING_PROJECT_FOR_ALIAS": "MISSING_PROJECT_FOR_ALIAS",
         "MISSING_SOURCE": "MISSING_SOURCE",
         "NOT_FOUND": "NOT_FOUND",
+        "NOT_IMPLEMENTED": "NOT_IMPLEMENTED",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",
         "PIN_NOT_FOUND": "PIN_NOT_FOUND",
@@ -85,6 +84,7 @@ describe('ErrorCodes', () => {
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
+        "SUGGESTIONS_NOT_IMPLEMENTED": "SUGGESTIONS_NOT_IMPLEMENTED",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
@@ -147,7 +147,6 @@ describe('ErrorStatusCodes', () => {
       'RESTORE_FAILED',
       'COMPARE_FAILED',
       'MERGE_FAILED',
-      'GRAPH_BUILD_FAILED',
     ];
     for (const code of serverCodes) {
       expect(ErrorStatusCodes[code]).toBe(500);
@@ -156,6 +155,12 @@ describe('ErrorStatusCodes', () => {
 
   it('maps RATE_LIMITED to 429', () => {
     expect(ErrorStatusCodes.RATE_LIMITED).toBe(429);
+  });
+
+  it('maps unavailable feature codes to 501', () => {
+    expect(ErrorStatusCodes.NOT_IMPLEMENTED).toBe(501);
+    expect(ErrorStatusCodes.SUGGESTIONS_NOT_IMPLEMENTED).toBe(501);
+    expect(ErrorStatusCodes.GRAPH_BUILD_NOT_IMPLEMENTED).toBe(501);
   });
 
   it('maps AUTH_ERROR to 401', () => {

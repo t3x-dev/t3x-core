@@ -11,7 +11,7 @@ import type { SemanticPointAPI, WorkbenchDraft } from '@/types/api';
  * Tests for the DraftWorkspace LLM extraction mode integration.
  *
  * DraftWorkspace conditionally renders DraftWorkbenchLLM (LLM mode)
- * vs NodeList + AutoSuggestPanel (deterministic mode) based on
+ * vs NodeList (deterministic mode) based on
  * draft.extraction_mode and draft.semantic_points.
  */
 

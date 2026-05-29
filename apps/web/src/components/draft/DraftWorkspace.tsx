@@ -31,7 +31,6 @@ import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/shared/useSaveStatusAutoIdle';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { fullScreenEnter, reducedMotion } from '@/utils/motion';
-import { AutoSuggestPanel } from './AutoSuggestPanel';
 import { CommitDraftDialog } from './CommitDraftDialog';
 import { ConflictBanner } from './ConflictBanner';
 import { DraftActionBar } from './DraftActionBar';
@@ -272,10 +271,7 @@ export function DraftWorkspace({ projectId, onClose }: DraftWorkspaceProps) {
                 />
               </>
             ) : (
-              <>
-                <NodeList />
-                <AutoSuggestPanel />
-              </>
+              <NodeList />
             )}
             <CollapsibleSection
               title="Output & Constraints"

@@ -6,6 +6,5 @@
  * Error surface: KnowledgeGraphPersistenceError (extends CommandError).
  */
 
-export { type BuildResult, buildKnowledgeGraph } from './buildKnowledgeGraph';
 export { deleteKnowledgeGraph } from './deleteKnowledgeGraph';
 export { KnowledgeGraphPersistenceError } from './errors';

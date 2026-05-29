@@ -206,24 +206,6 @@ export async function previewWorkbenchDraft(
   }>(res);
 }
 
-export interface SuggestResult {
-  node_id: string;
-  text: string;
-  commit_hash: string;
-  similarity: number;
-  already_in_draft: boolean;
-}
-
-export async function suggestForDraft(draftId: string, limit?: number): Promise<SuggestResult[]> {
-  const res = await fetchWithTimeout(`${API_V1}/drafts/${encodeURIComponent(draftId)}/suggest`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ limit }),
-  });
-  const data = await handleResponse<{ suggestions: SuggestResult[] }>(res);
-  return data.suggestions;
-}
-
 export async function commitWorkbenchDraft(
   draftId: string,
   message?: string,

@@ -1,29 +1,20 @@
 'use client';
 
-import { ExternalLink, FileText, Github } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ExternalLink, Github } from 'lucide-react';
 
 interface ResourceRowProps {
   icon: React.ReactNode;
   title: string;
   description: string;
   href?: string;
-  badge?: string;
 }
 
-function ResourceRow({ icon, title, description, href, badge }: ResourceRowProps) {
+function ResourceRow({ icon, title, description, href }: ResourceRowProps) {
   const content = (
     <div className="flex items-center gap-4 rounded-lg border border-[var(--stroke-divider)] p-4 transition-colors hover:border-[var(--stroke-default)] hover:bg-[var(--hover-bg)]">
       <div className="shrink-0 text-[var(--text-tertiary)]">{icon}</div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
-          {badge && (
-            <Badge variant="outline" className="text-xs text-[var(--text-tertiary)]">
-              {badge}
-            </Badge>
-          )}
-        </div>
+        <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
         <p className="text-xs text-[var(--text-secondary)] mt-0.5">{description}</p>
       </div>
       {href && <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-tertiary)]" />}
@@ -55,12 +46,6 @@ export default function HelpPage() {
           title="GitHub Repository"
           description="Source code, issues, and discussions."
           href="https://github.com/t3x-dev/t3x-core"
-        />
-        <ResourceRow
-          icon={<FileText className="h-5 w-5" />}
-          title="Documentation"
-          description="Guides, API reference, and tutorials."
-          badge="Coming Soon"
         />
       </section>
     </div>

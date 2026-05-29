@@ -3,7 +3,7 @@
  *
  * Cross-conversation knowledge graph endpoints.
  *
- * - POST   /v1/projects/:projectId/knowledge-graph/build           — Build/rebuild graph
+ * - POST   /v1/projects/:projectId/knowledge-graph/build           — Unavailable until tree-based graph build lands
  * - GET    /v1/projects/:projectId/knowledge-graph/nodes           — List nodes
  * - GET    /v1/projects/:projectId/knowledge-graph/nodes/:nodeId   — Node detail
  * - GET    /v1/projects/:projectId/knowledge-graph/nodes/:nodeId/neighbors — 1-hop neighbors
@@ -15,25 +15,12 @@
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 
-// Note: buildKnowledgeGraph removed in tree-primary refactor — uses frame-based approach now
-function buildKnowledgeGraph(_input: any): any {
-  // Placeholder: returns empty graph
-  return {
-    nodes: [],
-    edges: [],
-    stats: { node_count: 0, edge_count: 0, node_count_input: 0 },
-  };
-}
-
 import {
   deleteKnowledgeGraphByProject,
   findKnowledgeNodeById,
   findKnowledgeNodesByProject,
   findMembersByNode,
   findNeighborNodes,
-  insertKnowledgeEdges,
-  insertKnowledgeNodes,
-  insertNodeMembers,
   searchKnowledgeNodes,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
@@ -95,113 +82,29 @@ const NeighborNodeSchema = z.object({
 
 // ── POST /v1/projects/:projectId/knowledge-graph/build ──────
 
-const BuildResponseSchema = z.object({
-  success: z.literal(true),
-  data: z.object({
-    total_nodes: z.number(),
-    nodes_created: z.number(),
-    edges_created: z.number(),
-    build_time_ms: z.number(),
-  }),
-});
-
 const buildRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/knowledge-graph/build',
   tags: ['Knowledge Graph'],
   summary: 'Build or rebuild knowledge graph for a project',
   description:
-    'Clusters node embeddings into topic nodes, promotes Inter-node Relations ' +
-    'and knowledge conflicts to typed edges. Replaces any existing graph.',
+    'Unavailable until the tree-based graph builder replaces the removed node-vector pipeline.',
   request: { params: ProjectIdParam },
   responses: {
-    200: {
-      description: 'Graph built successfully',
-      content: { 'application/json': { schema: BuildResponseSchema } },
-    },
-    400: {
-      description: 'Missing requirements (no embeddings)',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    500: {
-      description: 'Build failed',
+    501: {
+      description: 'Graph build is not implemented',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
 knowledgeGraphRoutes.openapi(buildRoute, async (c) => {
-  const { projectId } = c.req.valid('param');
-
-  try {
-    const db = await getDB();
-
-    // Build graph from tree-based content (stub — node_vectors removed)
-    const result = buildKnowledgeGraph({});
-
-    // Require at least some data to build from
-    if (result.nodes.length === 0) {
-      return errorResponse(
-        c,
-        'EMBEDDINGS_REQUIRED',
-        'No embeddings found for this project. Add content and generate embeddings first.'
-      );
-    }
-
-    // 5-8. Persist graph in a transaction (delete + insert atomically)
-    await db.transaction(async (tx) => {
-      // Delete existing graph (cascade deletes members + edges)
-      await deleteKnowledgeGraphByProject(tx, projectId);
-
-      // Insert nodes
-      const insertedNodes = await insertKnowledgeNodes(
-        tx,
-        result.nodes.map((n: any) => ({
-          project_id: projectId,
-          label: n.label,
-          type: n.type,
-          member_count: n.member_node_ids.length,
-        }))
-      );
-
-      // Insert members
-      const allMembers: Array<{ node_id: string; content_node_id: string; commit_hash: string }> =
-        [];
-      for (let i = 0; i < result.nodes.length; i++) {
-        for (const m of result.nodes[i].member_node_ids) {
-          allMembers.push({
-            node_id: insertedNodes[i].id,
-            content_node_id: m.content_node_id,
-            commit_hash: m.commit_hash,
-          });
-        }
-      }
-      if (allMembers.length > 0) {
-        await insertNodeMembers(tx, allMembers);
-      }
-
-      // Insert edges
-      if (result.edges.length > 0) {
-        await insertKnowledgeEdges(
-          tx,
-          result.edges.map((e: any) => ({
-            project_id: projectId,
-            source_node_id: insertedNodes[e.source_node_index].id,
-            target_node_id: insertedNodes[e.target_node_index].id,
-            type: e.type,
-            weight: e.weight,
-            evidence: e.evidence,
-          }))
-        );
-      }
-    });
-
-    // 9. Return stats
-    return c.json({ success: true as const, data: result.stats }, 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return errorResponse(c, 'GRAPH_BUILD_FAILED', message);
-  }
+  c.req.valid('param');
+  return errorResponse(
+    c,
+    'GRAPH_BUILD_NOT_IMPLEMENTED',
+    'Knowledge graph build is pending tree-based implementation.'
+  );
 });
 
 // ── GET /v1/projects/:projectId/knowledge-graph/nodes ───────

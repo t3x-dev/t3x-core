@@ -1,7 +1,7 @@
 /**
  * L3 — knowledge-graph readers (read-only per v2 §2.3).
  *
- * Writes (build, delete) live in @/commands/knowledgeGraph per v2 §2.4.
+ * Deletes live in @/commands/knowledgeGraph per v2 §2.4.
  */
 
 import {
@@ -10,7 +10,7 @@ import {
   listKnowledgeNodes,
   searchKnowledgeNodes,
 } from '@/infrastructure/knowledge-graph';
-import type { BuildResult, KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
+import type { KnowledgeNode, NeighborNode } from '@/types/knowledgeGraph';
 
 export function fetchKnowledgeNodes(projectId: string, limit = 50): Promise<KnowledgeNode[]> {
   return listKnowledgeNodes(projectId, limit);
@@ -31,4 +31,4 @@ export function searchKnowledgeNodesByQuery(
   return searchKnowledgeNodes(projectId, query);
 }
 
-export type { BuildResult, KnowledgeNode, NeighborNode };
+export type { KnowledgeNode, NeighborNode };

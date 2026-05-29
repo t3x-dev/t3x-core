@@ -1,14 +1,12 @@
 /**
  * Search Routes
  *
- * Search endpoint stub. Tree-based search pending implementation.
- * Search now operates on tree-based semantic content.
- *
- * Future: implement tree-based search using commit content.trees
+ * Search now operates on tree-based semantic content. The route is registered
+ * but intentionally unavailable until tree-based search is implemented.
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import { zodErrorHook } from '../lib/errors';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';
 
 export const searchRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
@@ -19,7 +17,7 @@ const SearchRequestSchema = z.object({
   project_id: z.string().min(1).openapi({ description: 'Project to search in' }),
   query: z.string().min(1).max(500).openapi({ description: 'Search query text' }),
   mode: z.enum(['hybrid', 'keyword', 'semantic']).default('hybrid').openapi({
-    description: 'Search mode (currently not implemented)',
+    description: 'Requested search mode',
   }),
   limit: z.coerce
     .number()
@@ -30,23 +28,13 @@ const SearchRequestSchema = z.object({
     .openapi({ description: 'Maximum results to return' }),
 });
 
-const SearchResponseSchema = z.object({
-  success: z.literal(true),
-  data: z.object({
-    results: z.array(z.unknown()),
-    total: z.number(),
-    mode: z.enum(['hybrid', 'keyword', 'semantic']),
-    query_time_ms: z.number(),
-  }),
-});
-
 // ── POST /v1/search ──────────────────────────────────────────
 
 const searchRoute = createRoute({
   method: 'post',
   path: '/v1/search',
   tags: ['Search'],
-  summary: 'Search nodes in a project (stub — pending tree-based implementation)',
+  summary: 'Search nodes in a project',
   request: {
     body: {
       content: {
@@ -55,29 +43,13 @@ const searchRoute = createRoute({
     },
   },
   responses: {
-    200: {
-      description: 'Search results',
-      content: { 'application/json': { schema: SearchResponseSchema } },
-    },
     501: {
-      description: 'Not implemented',
+      description: 'Tree-based search is not implemented yet',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
 searchRoutes.openapi(searchRoute, async (c) => {
-  // Return empty results — node_vectors table removed, tree-based search pending
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        results: [],
-        total: 0,
-        mode: 'keyword' as const,
-        query_time_ms: 0,
-      },
-    },
-    200
-  );
+  return errorResponse(c, 'NOT_IMPLEMENTED', 'Search is pending tree-based implementation.');
 });

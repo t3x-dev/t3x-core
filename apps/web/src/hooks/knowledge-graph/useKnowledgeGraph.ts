@@ -6,11 +6,7 @@
  */
 
 import { useCallback } from 'react';
-import {
-  type BuildResult,
-  buildKnowledgeGraph,
-  deleteKnowledgeGraph,
-} from '@/commands/knowledgeGraph';
+import { deleteKnowledgeGraph } from '@/commands/knowledgeGraph';
 import {
   fetchKnowledgeNode,
   fetchKnowledgeNodes,
@@ -29,9 +25,7 @@ export function useKnowledgeGraph() {
   const detailMembers = useKnowledgeGraphStore((s) => s.detailMembers);
   const neighbors = useKnowledgeGraphStore((s) => s.neighbors);
   const loading = useKnowledgeGraphStore((s) => s.loading);
-  const building = useKnowledgeGraphStore((s) => s.building);
   const error = useKnowledgeGraphStore((s) => s.error);
-  const buildResult = useKnowledgeGraphStore((s) => s.buildResult);
   const clearSelection = useKnowledgeGraphStore((s) => s.clearSelection);
 
   const fetchNodes = useCallback(async (projectId: string): Promise<void> => {
@@ -50,26 +44,6 @@ export function useKnowledgeGraph() {
       store.setLoading(false);
     }
   }, []);
-
-  const buildGraph = useCallback(
-    async (projectId: string): Promise<BuildResult | null> => {
-      const store = useKnowledgeGraphStore.getState();
-      store.setBuilding(true);
-      store.setError(null);
-      try {
-        const result = await buildKnowledgeGraph(projectId);
-        store.setBuildResult(result);
-        store.setBuilding(false);
-        await fetchNodes(projectId);
-        return result;
-      } catch (err) {
-        store.setError(err instanceof Error ? err : new Error(String(err)));
-        store.setBuilding(false);
-        return null;
-      }
-    },
-    [fetchNodes]
-  );
 
   const selectNode = useCallback(async (projectId: string, nodeId: string): Promise<void> => {
     const store = useKnowledgeGraphStore.getState();
@@ -124,11 +98,8 @@ export function useKnowledgeGraph() {
     detailMembers,
     neighbors,
     loading,
-    building,
     error,
-    buildResult,
     fetchNodes,
-    buildGraph,
     selectNode,
     searchNodes,
     deleteGraph,
