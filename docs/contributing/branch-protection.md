@@ -13,12 +13,14 @@ Recommended settings:
 - Require a pull request before merging.
 - Block direct pushes.
 - Require conversation resolution before merge.
-- Require approval from CODEOWNERS when protected files change.
-- Require the PR validation workflow once it exists on the target branch.
+- Require the PR validation workflow.
 
-Expected required status check after the PR validation workflow lands:
+Current required status check:
 
 - `PR Validation / Check, build, and test`
+
+During the bootstrap phase, approving reviews and CODEOWNERS review are
+recommended for protected files but are not enforced by the active ruleset.
 
 ## `main`
 
@@ -28,15 +30,16 @@ Recommended settings:
 
 - Require a pull request before merging.
 - Block direct pushes.
-- Require owner approval for release PRs.
 - Require conversation resolution before merge.
-- Require the PR validation workflow once it exists on the target branch.
-- Require the release smoke workflow for release candidate PRs when it applies.
+- Require the PR validation workflow.
+- Require the branch to be up to date before merge.
 
-Expected required status checks after the relevant workflows land:
+Current required status check:
 
 - `PR Validation / Check, build, and test`
-- `local-smoke / Clean install smoke`
+
+`local-smoke / Clean install smoke` is a target release guard for package and
+runtime-sensitive changes. It is not currently a required branch rule.
 
 ## Protected File Ownership
 
@@ -50,4 +53,5 @@ The CODEOWNERS rules should cover:
 - `docs/contributing/branch-protection.md`
 
 When those paths change, the PR should receive owner review even before GitHub
-branch protection is fully wired.
+branch protection requires it. Current bootstrap rules allow maintainers to
+self-merge once required checks pass.
