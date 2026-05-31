@@ -26,10 +26,9 @@ By submitting a pull request, you agree that your contributions will be licensed
 ### Setup
 
 ```bash
-git clone https://github.com/t3x-dev/t3x.git
-cd t3x
+git clone https://github.com/t3x-dev/t3x-core.git
+cd t3x-core
 pnpm install
-pnpm build
 ```
 
 ### Development
@@ -68,12 +67,17 @@ Open an issue describing:
 ### Submitting Code
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/your-feature`)
+2. Create a feature branch from `dev` (`git checkout -b feat/your-feature`)
 3. Make your changes
 4. Ensure tests pass (`pnpm test`)
 5. Ensure linting passes (`pnpm check`)
 6. Commit using [Conventional Commits](https://www.conventionalcommits.org/) format
-7. Push and open a pull request
+7. Push and open a pull request to `dev`
+
+During alpha, ordinary development PRs target `dev`; release candidate PRs move
+`dev` into `main`. See [PR and release guards](./docs/contributing/pr-and-release-guards.md)
+and [Alpha release flow](./docs/release/alpha-release-flow.md) for the current
+branching, changeset, and release rules.
 
 ### Commit Messages
 
@@ -103,4 +107,4 @@ See [CLAUDE.md](./CLAUDE.md) for detailed architecture documentation, including:
 
 ## Questions?
 
-Open a [Discussion](https://github.com/t3x-dev/t3x/discussions) or file an issue. We're happy to help you get started.
+Open a [Discussion](https://github.com/t3x-dev/t3x-core/discussions) or file an issue. We're happy to help you get started.
