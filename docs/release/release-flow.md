@@ -1,12 +1,13 @@
-# Alpha Release Flow
+# Release Flow
 
-This document defines the alpha branch, pull request, versioning, and publish
-flow for T3X. It is the human-facing release policy. Machine-readable release
-metadata can live under `release/` when needed.
+This document defines the branch, pull request, versioning, and publish flow for
+T3X. It is the human-facing release policy and should evolve as the project
+moves from alpha toward broader releases. Machine-readable release metadata can
+live under `release/` when needed.
 
 ## Branch Model
 
-T3X uses a lightweight `dev` to `main` release flow during alpha.
+T3X currently uses a lightweight `dev` to `main` release flow.
 
 - Feature branches are created from `dev`.
 - Ordinary development pull requests target `dev`.

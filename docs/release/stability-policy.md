@@ -1,7 +1,8 @@
-# Alpha Stability Policy
+# Stability Policy
 
-This document defines the minimum stability expectations for the T3X alpha
-public surface.
+This document defines the minimum stability expectations for the T3X public
+surface. It should evolve as packages move from alpha candidates into stable
+support.
 
 ## Public Alpha Surface
 
