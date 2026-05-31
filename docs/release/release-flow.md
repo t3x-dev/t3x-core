@@ -74,6 +74,28 @@ Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
 the first public alpha publish.
 
+Release PR checklist:
+
+1. Confirm `dev` is green and contains only changes intended for the release.
+2. Open a pull request from `dev` into `main` using the release PR template.
+3. List included PRs or the comparison range.
+4. Declare whether public packages are affected.
+5. Confirm changesets are present when public package behavior changed.
+6. Wait for PR validation and release surface checks.
+7. Request owner approval.
+8. Merge to `main` only after checks and review pass.
+
+After the release PR merges, the `Release` workflow runs on `main`.
+
+- If unconsumed changesets are present, Changesets creates a
+  `chore: version packages` pull request.
+- If the version packages PR merges, the same workflow publishes the package
+  artifacts.
+- If no changesets or version package commit are present, no package publish is
+  expected.
+
+Do not manually publish from `dev`. Publishing starts from `main` only.
+
 ## Versioning and Changesets
 
 Merging to `main` does not automatically mean a new public version is published.
