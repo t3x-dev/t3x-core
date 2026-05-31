@@ -1,5 +1,6 @@
 import type { Author, Provenance } from '../commit';
 import type { SemanticContent, SlotValue, TreeNode } from '../semantic/types';
+import { applyYOps } from '../t3x-yops/engine';
 import type { YOp } from '../t3x-yops/types';
 import type { Assertion, Constraint } from '../types';
 
@@ -507,6 +508,33 @@ export const DEMO_WORKSPACE_FIXTURE: DemoWorkspaceFixture = {
 };
 
 export const DEMO_WORKSPACE_REPLAY_GOAL = `fixture:${DEMO_WORKSPACE_FIXTURE.id}`;
+
+export function replayDemoWorkspaceFixture(fixture: DemoWorkspaceFixture): SemanticContent {
+  const result = applyYOps({ trees: [], relations: [] }, fixture.replay.yops);
+  if (!result.ok) {
+    const message = result.error?.message ?? 'unknown YOps replay error';
+    throw new Error(`Failed to replay demo fixture "${fixture.id}": ${message}`);
+  }
+
+  return {
+    trees: result.trees,
+    relations: result.relations,
+  };
+}
+
+export function verifyDemoWorkspaceFixture(fixture: DemoWorkspaceFixture): SemanticContent {
+  const replayed = replayDemoWorkspaceFixture(fixture);
+  const recorded = {
+    trees: fixture.replay.trees,
+    relations: fixture.replay.relations,
+  };
+
+  if (JSON.stringify(replayed) !== JSON.stringify(recorded)) {
+    throw new Error(`Demo fixture "${fixture.id}" replay output does not match recorded content`);
+  }
+
+  return replayed;
+}
 
 const MEETING_NOTES_LANDING_YOPS: YOp[] = [
   { define: { path: 'release_readiness' } },

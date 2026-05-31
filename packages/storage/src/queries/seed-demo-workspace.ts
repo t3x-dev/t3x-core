@@ -1,5 +1,5 @@
 import type { Commit, Leaf, SourcedYOp } from '@t3x-dev/core';
-import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
+import { DEMO_WORKSPACE_FIXTURE, verifyDemoWorkspaceFixture } from '@t3x-dev/core';
 import type { AnyDB } from '../adapters';
 import type { Conversation, Project, Turn } from '../schema';
 import { ensureMainBranch, updateBranchHead } from './branches';
@@ -86,6 +86,7 @@ async function createDemoWorkspaceRows(
   leaf: Leaf;
 }> {
   const seededAt = new Date().toISOString();
+  const replayedContent = verifyDemoWorkspaceFixture(DEMO_WORKSPACE_FIXTURE);
   const metadata = {
     ...DEMO_WORKSPACE_FIXTURE.project.metadata,
     demo_seeded_at: seededAt,
@@ -141,10 +142,7 @@ async function createDemoWorkspaceRows(
   const commit = await createCommit(db, {
     parents: [],
     author: DEMO_WORKSPACE_FIXTURE.commit.author,
-    content: {
-      trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
-      relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
-    },
+    content: replayedContent,
     project_id: project.projectId,
     message: DEMO_WORKSPACE_FIXTURE.commit.message,
     branch: 'main',

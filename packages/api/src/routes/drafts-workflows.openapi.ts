@@ -19,6 +19,7 @@ import {
   generateLeafOutput,
   generateNodeId,
   isGenerationConfigured,
+  verifyDemoWorkspaceFixture,
 } from '@t3x-dev/core';
 import {
   commitDraft,
@@ -411,14 +412,12 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
         targetBranch,
         draft.parent_commit_hash
       );
+      const replayedContent = verifyDemoWorkspaceFixture(DEMO_WORKSPACE_FIXTURE);
 
       const commit = await createCommit(db, {
         parents,
         author: DEMO_WORKSPACE_FIXTURE.commit.author,
-        content: {
-          trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
-          relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
-        },
+        content: replayedContent,
         project_id: draft.project_id,
         message: body?.message ?? DEMO_WORKSPACE_FIXTURE.commit.message,
         branch: targetBranch,

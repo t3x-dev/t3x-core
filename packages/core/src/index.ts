@@ -145,6 +145,8 @@ export {
   MEETING_NOTES_EXTRACTION_DEMO,
   MERGE_SEMANTIC_CHANGES_DEMO,
   PROMPT_DIFF_DEMO,
+  replayDemoWorkspaceFixture,
+  verifyDemoWorkspaceFixture,
 } from './fixtures/demo-workspace';
 // ═══════════════════════════════════════════════════════════════════════════
 // Leaf Module (Generation + Validation)
