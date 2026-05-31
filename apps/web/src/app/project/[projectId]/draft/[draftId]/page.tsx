@@ -11,6 +11,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { DraftWorkspace } from '@/components/draft/DraftWorkspace';
 import { useDraftWorkspaceActions } from '@/hooks/drafts/useDraftWorkspaceActions';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 
 export default function DraftPage() {
@@ -18,6 +19,7 @@ export default function DraftPage() {
   const router = useRouter();
   const projectId = params.projectId as string;
   const draftId = params.draftId as string;
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
   const { loading, error, reset } = useDraftWorkspaceStore();
   const { load: loadDraft } = useDraftWorkspaceActions();
@@ -39,6 +41,11 @@ export default function DraftPage() {
   const handleClose = () => {
     reset();
     router.push(`/project/${projectId}`);
+  };
+
+  const handleDemoDone = () => {
+    reset();
+    void completeIntroDemo();
   };
 
   if (loading) {
@@ -71,5 +78,5 @@ export default function DraftPage() {
     );
   }
 
-  return <DraftWorkspace projectId={projectId} onClose={handleClose} />;
+  return <DraftWorkspace projectId={projectId} onClose={handleClose} onDemoDone={handleDemoDone} />;
 }

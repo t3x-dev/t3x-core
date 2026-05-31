@@ -73,7 +73,10 @@ export function DraftActionBar({
   );
 
   return (
-    <div className="flex items-center gap-3 border-b border-border px-4 py-2 bg-[var(--surface-card)]">
+    <div
+      className="flex items-center gap-3 border-b border-border px-4 py-2 bg-[var(--surface-card)]"
+      data-intro-target="draft-actions"
+    >
       {/* Back + Breadcrumb */}
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5">
@@ -144,7 +147,12 @@ export function DraftActionBar({
       )}
 
       {/* Commit button */}
-      <Button size="sm" onClick={onCommit} disabled={!canCommit}>
+      <Button
+        size="sm"
+        onClick={onCommit}
+        disabled={!canCommit}
+        data-intro-target="draft-commit-button"
+      >
         {t('commitAction')}
       </Button>
     </div>

@@ -14,6 +14,7 @@ const workspaceMock = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ conversationId: routeConversationId }),
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => searchParamsValue,
 }));
 

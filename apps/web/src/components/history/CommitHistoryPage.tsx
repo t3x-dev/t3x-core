@@ -12,11 +12,17 @@
  * - Relative time + hover tooltip
  */
 
-import { ArrowLeft, GitBranch, History, Loader2 } from 'lucide-react';
+import { ArrowLeft, GitBranch, GitCommit, History, Keyboard, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FeatureTourOverlay,
+  type FeatureTourStep,
+} from '@/components/onboarding/FeatureTourOverlay';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useBranchesList } from '@/hooks/shared/useBranchesList';
 import { useDiffRaw } from '@/hooks/shared/useDiffRaw';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
@@ -41,12 +47,77 @@ interface CommitWithDiffStats {
   nodeCount?: number;
 }
 
+const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'header',
+    label: 'Tools',
+    title: 'Use history as the project timeline',
+    description:
+      'The header gives users navigation, keyboard hints, and the branch filter before they inspect individual commits.',
+    target: 'history-header',
+    tone: 'commit',
+    icon: History,
+    details: [
+      'Back returns to the canvas.',
+      'Keyboard hints teach fast scanning.',
+      'The branch dropdown narrows the timeline when a project grows.',
+    ],
+  },
+  {
+    id: 'filter',
+    label: 'Branch',
+    title: 'Filter by branch to focus the timeline',
+    description:
+      'The branch selector teaches that T3X projects can have multiple semantic paths, not only one linear chat.',
+    target: 'history-branch-filter',
+    tone: 'pending',
+    icon: GitBranch,
+    details: [
+      'All branches is the default full-project view.',
+      'Selecting a branch reloads commits for that version path.',
+      'This is the safe way to review project evolution before opening a commit.',
+    ],
+  },
+  {
+    id: 'timeline',
+    label: 'Rows',
+    title: 'Click a row to open the commit detail page',
+    description:
+      'Each row is a versioned snapshot with hash, message, author, branch, and diff stats.',
+    target: 'history-timeline',
+    tone: 'extract',
+    icon: GitCommit,
+    details: [
+      'Diff stats summarize what changed from the parent.',
+      'The timeline dot shows root, normal, or merge commits.',
+      'Opening a row continues the demo into commit inspection.',
+    ],
+  },
+  {
+    id: 'keyboard',
+    label: 'Keys',
+    title: 'Keyboard navigation is part of the product workflow',
+    description:
+      'History is designed for repeated review, so the demo should teach j/k, open, and deselect rather than only mouse clicks.',
+    target: 'history-keyboard',
+    tone: 'success',
+    icon: Keyboard,
+    details: [
+      'Use j/k to move through rows.',
+      'Use o or Enter to open the active commit.',
+      'Use Esc to clear the active row.',
+    ],
+  },
+];
+
 // ============================================================================
 // Component
 // ============================================================================
 
 export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const router = useRouter();
+  const introDemoRequested = useIntroDemoQueryFlag();
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
   // State
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -54,6 +125,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   const [commits, setCommits] = useState<CommitWithDiffStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const { loadBranches } = useBranchesList();
   const { loadCommits } = useCommitsList();
   const { loadDiff } = useDiffRaw();
@@ -136,10 +208,16 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
   const handleNavOpen = useCallback(
     (hash: string) => {
-      router.push(`/project/${projectId}/commit/${encodeURIComponent(hash)}`);
+      router.push(
+        `/project/${projectId}/commit/${encodeURIComponent(hash)}${introDemoRequested ? '?introDemo=1' : ''}`
+      );
     },
-    [router, projectId]
+    [router, projectId, introDemoRequested]
   );
+
+  useEffect(() => {
+    if (introDemoRequested) setTourOpen(true);
+  }, [introDemoRequested]);
 
   const { activeId: activeHash } = useKeyboardNavigation({
     ids: commitHashes,
@@ -160,7 +238,10 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
   return (
     <div className="flex h-screen flex-col bg-[var(--surface-app)]">
       {/* ═══════ HEADER ═══════ */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header
+        className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
+        data-intro-target="history-header"
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -177,16 +258,18 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
         <div className="flex items-center gap-3">
           {/* Keyboard hints */}
-          <KeyboardHintBar
-            hints={[
-              { key: 'j k', label: 'navigate' },
-              { key: 'o', label: 'open' },
-              { key: 'esc', label: 'deselect' },
-            ]}
-          />
+          <div data-intro-target="history-keyboard">
+            <KeyboardHintBar
+              hints={[
+                { key: 'j k', label: 'navigate' },
+                { key: 'o', label: 'open' },
+                { key: 'esc', label: 'deselect' },
+              ]}
+            />
+          </div>
           <span className="h-4 w-px bg-[var(--stroke-divider)]" />
           {/* Branch filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-intro-target="history-branch-filter">
             <GitBranch size={14} className="text-[var(--text-tertiary)]" />
             <select
               className="py-1 px-2 border border-[var(--stroke-default)] rounded-md text-xs bg-[var(--surface-card)] text-[var(--text-primary)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--status-info)]/30"
@@ -247,7 +330,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
           {/* Commit timeline */}
           {!loading && !error && commits.length > 0 && (
-            <div className="space-y-0">
+            <div className="space-y-0" data-intro-target="history-timeline">
               {commits.map((item, index) => (
                 <CommitHistoryRow
                   key={item.commit.hash}
@@ -263,12 +346,20 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
                   isFirst={index === 0}
                   isLast={index === commits.length - 1}
                   isActive={activeHash === item.commit.hash}
+                  introDemo={introDemoRequested}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="History walkthrough"
+        steps={HISTORY_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={() => void completeIntroDemo()}
+      />
     </div>
   );
 }

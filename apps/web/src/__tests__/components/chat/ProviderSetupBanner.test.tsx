@@ -24,7 +24,7 @@ describe('ProviderSetupBanner', () => {
       screen.getByText('Connect a provider in Settings to pick a model and start chatting.')
     ).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Try fixture demo' }).getAttribute('href')).toBe(
-      '/chat/demo'
+      '/chat?introDemo=1'
     );
   });
 });

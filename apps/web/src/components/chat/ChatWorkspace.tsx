@@ -1,6 +1,12 @@
 'use client';
-
-import { AlertCircle, GitCommit, Loader2, MessageSquarePlus } from 'lucide-react';
+import {
+  AlertCircle,
+  FileSearch,
+  GitCommit,
+  Loader2,
+  MessageSquarePlus,
+  PanelRight,
+} from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -20,6 +26,7 @@ import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
+import { useIntroDemoReplayActions } from '@/hooks/onboarding/useIntroDemoReplayActions';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useRealtimeSync } from '@/hooks/shared/useRealtimeSync';
@@ -31,6 +38,7 @@ import { getTemporaryChat } from '@/store/temporaryChatsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
+import { FeatureTourOverlay, type FeatureTourStep } from '../onboarding/FeatureTourOverlay';
 import { ChatHeader } from './ChatHeader';
 import type { AttachedImage } from './ChatInput';
 import { ChatInput } from './ChatInput';
@@ -56,7 +64,90 @@ interface ChatWorkspaceProps {
   onInheritComplete?: () => void;
   activeMaterialReader?: MaterialReaderSelection | null;
   onMaterialReaderChange?: (selection: MaterialReaderSelection | null) => void;
+  introDemo?: boolean;
+  onIntroDemoDone?: () => void;
+  onIntroDemoSkip?: () => void;
+  introDemoDoneLabel?: string;
 }
+
+const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'console',
+    label: 'Console',
+    title: 'Open the console after reading the LLM reply',
+    description:
+      'The reply is still plain conversation. The next step is opening the right-side console where T3X extracts reviewable meaning.',
+    target: 'chat-yops-panel',
+    tone: 'extract',
+    icon: PanelRight,
+    details: [
+      'Click the collapsed Workspace rail on the right.',
+      'This reveals the YOps editor and output area.',
+      'Extraction controls are intentionally inside this workbench surface.',
+    ],
+    advanceOnTargetClick: true,
+  },
+  {
+    id: 'extract',
+    label: 'Extract',
+    title: 'Click Extract to replay the preset meaning extraction',
+    description:
+      'In the demo this is the real Extract button, but it uses recorded fixture YOps instead of calling a model provider.',
+    target: 'chat-extract-action',
+    tone: 'extract',
+    icon: FileSearch,
+    details: [
+      'The button enters an extracting state.',
+      'A staged YOps proposal appears in the workspace.',
+      'The user can review the result before applying it.',
+    ],
+    advanceOnTargetClick: true,
+  },
+  {
+    id: 'apply',
+    label: 'Apply',
+    title: 'Click Apply changes to materialize the staged YOps',
+    description:
+      'Apply turns the staged proposal into the workspace output so the user sees the semantic tree update before commit.',
+    target: 'chat-apply-action',
+    tone: 'pending',
+    icon: PanelRight,
+    details: [
+      'The staged badge clears after Apply.',
+      'The output panel becomes the applied semantic state.',
+      'Commit stays separate so users learn the review checkpoint.',
+    ],
+    advanceOnTargetClick: true,
+  },
+  {
+    id: 'canvas',
+    label: 'Canvas',
+    title: 'Now go to Canvas',
+    description:
+      'Only after the reply has been extracted and applied does the demo move to the project graph.',
+    target: 'sidebar-canvas-tab',
+    tone: 'commit',
+    icon: PanelRight,
+    details: [
+      'Click Canvas in the sidebar mode switcher.',
+      'The route will change to the project graph.',
+      'The next step asks the user to click a real canvas node, then continue to Leaf.',
+    ],
+    advanceOnTargetClick: true,
+  },
+];
+
+const INTRO_DEMO_EMPTY_TREE = { trees: [], relations: [] };
+const INTRO_DEMO_ASSISTANT_REPLY = [
+  'I reviewed the prompt-review intake and found the core meaning to preserve:',
+  '',
+  '- Refunds above $100 should go to manual review.',
+  '- Replies need the order id, policy citation, and refund amount before deciding.',
+  '- Tone should stay calm, precise, and policy-grounded.',
+  '- The main risks are skipped citations and drift in the threshold copy.',
+  '',
+  'Next, open the console, extract these points into reviewable T3X meaning, then apply them before moving to Canvas.',
+].join('\n');
 
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {
   return (
@@ -101,6 +192,10 @@ export function ChatWorkspace({
   onInheritComplete,
   activeMaterialReader,
   onMaterialReaderChange,
+  introDemo = false,
+  onIntroDemoDone,
+  onIntroDemoSkip,
+  introDemoDoneLabel,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -117,9 +212,11 @@ export function ChatWorkspace({
   const [pinningMaterialIds, setPinningMaterialIds] = useState<Set<string>>(() => new Set());
   const [archivingMaterialIds, setArchivingMaterialIds] = useState<Set<string>>(() => new Set());
   const [coverageMode, setCoverageMode] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [contextManifestUpdating, setContextManifestUpdating] = useState(false);
   const contextManifestUpdatingRef = useRef(false);
   const firstMessageSentRef = useRef(false);
+  const introDemoPreparedConversationRef = useRef<string | null>(null);
   const {
     loading: modelsLoading,
     hasConfiguredGenerationProvider,
@@ -224,7 +321,10 @@ export function ChatWorkspace({
           onConversationCreatedProp(newConvId);
         } else {
           // Update URL without triggering Next.js navigation (avoids re-mount)
-          window.history.replaceState(null, '', `/chat/${newConvId}`);
+          const params = new URLSearchParams(window.location.search);
+          params.delete('firstMessage');
+          const suffix = params.toString() ? `?${params.toString()}` : '';
+          window.history.replaceState(null, '', `/chat/${newConvId}${suffix}`);
         }
       },
       [onConversationCreatedProp]
@@ -240,18 +340,35 @@ export function ChatWorkspace({
     if (!isNewChat) setResolvedConversationId(conversationId);
   }, [conversationId, isNewChat]);
 
+  useEffect(() => {
+    if (!introDemo) return;
+    if (isLoading || isStreaming) return;
+    if (messages.length < 2 && !firstMessageSentRef.current) return;
+    const timeout = window.setTimeout(() => setTourOpen(true), messages.length >= 2 ? 0 : 900);
+    return () => window.clearTimeout(timeout);
+  }, [introDemo, isLoading, isStreaming, messages.length]);
+
   // Flush pending message once projectId is resolved and sendMessage is recreated
   useEffect(() => {
     if (isCommitted) {
       pendingMessageRef.current = null;
       return;
     }
-    if ((resolvedProjectId || isTemporaryChat) && pendingMessageRef.current && isSelectionReady) {
+    if (
+      (resolvedProjectId || isTemporaryChat) &&
+      pendingMessageRef.current &&
+      (introDemo || isSelectionReady)
+    ) {
       const msg = pendingMessageRef.current;
       pendingMessageRef.current = null;
-      sendMessage(msg);
+      sendMessage(
+        msg,
+        introDemo
+          ? { fixtureAssistantResponse: INTRO_DEMO_ASSISTANT_REPLY, skipMemoryFetch: true }
+          : undefined
+      );
     }
-  }, [resolvedProjectId, sendMessage, isSelectionReady, isCommitted, isTemporaryChat]);
+  }, [resolvedProjectId, sendMessage, isSelectionReady, isCommitted, isTemporaryChat, introDemo]);
 
   // Store initialization, draft loading, inheritance hydration, topic loading
   const { parentConversationId } = useChatInit({
@@ -280,6 +397,7 @@ export function ChatWorkspace({
     selectedProvider,
     selectedModel,
   });
+  const { extract: replayIntroDemoExtract } = useIntroDemoReplayActions();
 
   // Precompute source map from sourceIndex — positions are already known
   // (every LLMSource carries turn_hash + start_char/end_char).
@@ -293,6 +411,40 @@ export function ChatWorkspace({
   const workspaceConversationId = useWorkspaceStore((s) => s.conversationId);
   const activeProjectId = useWorkspaceStore((s) => s.activeProjectId);
   const workspaceLastError = useWorkspaceStore((s) => s.lastError);
+
+  useEffect(() => {
+    if (!introDemo || !resolvedConversationId || isLoading) return;
+    if (workspaceConversationId !== resolvedConversationId || turns.length === 0) return;
+    if (introDemoPreparedConversationRef.current === resolvedConversationId) return;
+
+    const workspace = useWorkspaceStore.getState();
+    workspace.clearDraft();
+    workspace.clearEditorOverride();
+    workspace.setError(null);
+    workspace.setRetainedDraftFailure(null);
+    workspace.setReplayWarning(null);
+    workspace.setMode('idle');
+    workspace.setCommitted(false);
+    workspace.setDerived({
+      tree: INTRO_DEMO_EMPTY_TREE,
+      sourceIndex: new Map(),
+      opsLog: [],
+      rowsById: {},
+      opOrigins: [],
+      baselineCommitHash: null,
+      hasConversationChanges: false,
+    });
+    if (resolvedProjectId) workspace.setProjectPanelExpansion(resolvedProjectId, false);
+    introDemoPreparedConversationRef.current = resolvedConversationId;
+  }, [
+    introDemo,
+    isLoading,
+    resolvedConversationId,
+    resolvedProjectId,
+    turns.length,
+    workspaceConversationId,
+  ]);
+
   const sourceMapByTurn = useMemo(() => buildSourceMap(sourceIndex, turns), [sourceIndex, turns]);
   const showAddForm =
     !isCommitted &&
@@ -317,15 +469,15 @@ export function ChatWorkspace({
         activeProjectId: activeProjectId || resolvedProjectId,
         workspaceConversationId,
         routeConversationId: resolvedConversationId,
-        turnCount: turns.length,
+        turnCount: introDemo ? Math.max(turns.length, 1) : turns.length,
         workspaceMode,
         isCommitted,
         hasDraft,
         isChatLoading: isLoading,
         isChatStreaming: isStreaming,
         modelsLoading,
-        selectedProvider,
-        selectedModel,
+        selectedProvider: introDemo ? 'fixture-replay' : selectedProvider,
+        selectedModel: introDemo ? 'fixture-replay' : selectedModel,
         lastError: workspaceLastError,
       });
       if (disabledReason) {
@@ -335,12 +487,14 @@ export function ChatWorkspace({
 
       if (detail?.sourcePinIds) {
         // Came from source panel confirm — extract with selected pins
-        handleExtract(detail.sourcePinIds);
+        if (introDemo) void replayIntroDemoExtract();
+        else handleExtract(detail.sourcePinIds);
       } else if (detail?.chooseSources) {
         setContextManifestOpen(true);
       } else {
         // Default behavior: extract immediately, even when pins exist.
-        handleExtract();
+        if (introDemo) void replayIntroDemoExtract();
+        else handleExtract();
       }
     };
     window.addEventListener('t3x:extract-requested', handler);
@@ -349,12 +503,14 @@ export function ChatWorkspace({
     activeProjectId,
     handleExtract,
     hasDraft,
+    introDemo,
     isCommitted,
     isLoading,
     isStreaming,
     modelsLoading,
     resolvedConversationId,
     resolvedProjectId,
+    replayIntroDemoExtract,
     selectedModel,
     selectedProvider,
     turns.length,
@@ -643,12 +799,17 @@ export function ChatWorkspace({
       firstMessageSentRef.current = true;
       pendingMessageRef.current = firstMessage;
 
-      if (isSelectionReady) {
+      if (introDemo || isSelectionReady) {
         pendingMessageRef.current = null;
-        sendMessage(firstMessage);
+        sendMessage(
+          firstMessage,
+          introDemo
+            ? { fixtureAssistantResponse: INTRO_DEMO_ASSISTANT_REPLY, skipMemoryFetch: true }
+            : undefined
+        );
       }
     }
-  }, [firstMessage, isLoading, sendMessage, isSelectionReady]);
+  }, [firstMessage, introDemo, isLoading, sendMessage, isSelectionReady]);
 
   const handleSend = useCallback(
     async (message: string, images?: AttachedImage[]) => {
@@ -656,14 +817,21 @@ export function ChatWorkspace({
         pendingMessageRef.current = null;
         return;
       }
-      if (!isSelectionReady) {
+      if (!introDemo && !isSelectionReady) {
         pendingMessageRef.current = message;
         return;
       }
 
-      sendMessage(message, images ? { images } : undefined);
+      sendMessage(
+        message,
+        introDemo
+          ? { fixtureAssistantResponse: INTRO_DEMO_ASSISTANT_REPLY, skipMemoryFetch: true }
+          : images
+            ? { images }
+            : undefined
+      );
     },
-    [sendMessage, isSelectionReady, isCommitted]
+    [sendMessage, introDemo, isSelectionReady, isCommitted]
   );
 
   const handleContextReferenceToggle = useCallback(
@@ -750,17 +918,23 @@ export function ChatWorkspace({
   );
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0 relative', className)} style={style}>
+    <div
+      className={cn('flex flex-col h-full min-h-0 relative', className)}
+      style={style}
+      data-intro-target="chat-workspace"
+    >
       {/* Header */}
-      <ChatHeader
-        conversationId={resolvedConversationId ?? null}
-        selectedProvider={selectedProvider}
-        selectedModel={selectedModel ?? ''}
-        onModelChange={handleModelChange}
-        isChatLoading={isLoading}
-        isChatStreaming={isStreaming}
-        modelsLoading={modelsLoading}
-      />
+      <div data-intro-target="chat-header">
+        <ChatHeader
+          conversationId={resolvedConversationId ?? null}
+          selectedProvider={selectedProvider}
+          selectedModel={selectedModel ?? ''}
+          onModelChange={handleModelChange}
+          isChatLoading={isLoading}
+          isChatStreaming={isStreaming}
+          modelsLoading={modelsLoading}
+        />
+      </div>
 
       {showProjectContext && materialReaderSelection ? (
         <MaterialReader
@@ -773,40 +947,42 @@ export function ChatWorkspace({
       ) : (
         <>
           {showProjectContext && (
-            <ContextManifestBar
-              manifest={contextManifest}
-              loading={contextManifestLoading}
-              error={contextManifestError}
-              open={contextManifestOpen}
-              updating={contextManifestUpdating}
-              baselineOverride={baselineForSourcePanel}
-              sourcePicker={
-                isCommitted
-                  ? undefined
-                  : {
-                      availableLeaves: projectLeaves,
-                      availableLeavesLoading: projectLeavesLoading,
-                      availableLeavesError: projectLeavesError,
-                      availableMaterials: projectMaterials,
-                      availableMaterialsLoading: projectMaterialsLoading,
-                      availableMaterialsError: projectMaterialsError,
-                      leafPinningIds: pinningLeafIds,
-                      materialPinningIds: pinningMaterialIds,
-                      materialArchivingIds: archivingMaterialIds,
-                      materialUploading,
-                      baseline: baselineForSourcePanel,
-                      onPinLeaf: handlePinLeafForContext,
-                      onPinMaterial: handlePinMaterialForContext,
-                      onArchiveMaterial: handleArchiveMaterial,
-                      onUploadMaterial: handleUploadMaterial,
-                      onOpenMaterial: handleOpenMaterialReader,
-                    }
-              }
-              onOpenChange={setContextManifestOpen}
-              onReload={reloadContextManifest}
-              onReferenceToggle={handleContextReferenceToggle}
-              onAssertionToggle={handleContextAssertionToggle}
-            />
+            <div data-intro-target="chat-sources">
+              <ContextManifestBar
+                manifest={contextManifest}
+                loading={contextManifestLoading}
+                error={contextManifestError}
+                open={contextManifestOpen}
+                updating={contextManifestUpdating}
+                baselineOverride={baselineForSourcePanel}
+                sourcePicker={
+                  isCommitted
+                    ? undefined
+                    : {
+                        availableLeaves: projectLeaves,
+                        availableLeavesLoading: projectLeavesLoading,
+                        availableLeavesError: projectLeavesError,
+                        availableMaterials: projectMaterials,
+                        availableMaterialsLoading: projectMaterialsLoading,
+                        availableMaterialsError: projectMaterialsError,
+                        leafPinningIds: pinningLeafIds,
+                        materialPinningIds: pinningMaterialIds,
+                        materialArchivingIds: archivingMaterialIds,
+                        materialUploading,
+                        baseline: baselineForSourcePanel,
+                        onPinLeaf: handlePinLeafForContext,
+                        onPinMaterial: handlePinMaterialForContext,
+                        onArchiveMaterial: handleArchiveMaterial,
+                        onUploadMaterial: handleUploadMaterial,
+                        onOpenMaterial: handleOpenMaterialReader,
+                      }
+                }
+                onOpenChange={setContextManifestOpen}
+                onReload={reloadContextManifest}
+                onReferenceToggle={handleContextReferenceToggle}
+                onAssertionToggle={handleContextAssertionToggle}
+              />
+            </div>
           )}
 
           {/* Coverage toggle — visible after extraction */}
@@ -829,6 +1005,7 @@ export function ChatWorkspace({
           <div
             ref={chatContainerRef}
             data-testid="chat-message-scroll"
+            data-intro-target="chat-thread"
             className="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden bg-[var(--chat-panel)]"
           >
             {/* Parent conversation banner */}
@@ -969,7 +1146,10 @@ export function ChatWorkspace({
 
           {/* Input area — committed conversations are read-only after commit */}
           {!isCommitted && (
-            <div className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4">
+            <div
+              className="shrink-0 bg-[var(--chat-panel)] pb-3 pt-4"
+              data-intro-target="chat-composer"
+            >
               <div className="relative mx-auto max-w-[540px] px-5">
                 <ChatInput
                   onSend={handleSend}
@@ -979,21 +1159,30 @@ export function ChatWorkspace({
                   disabled={
                     isLoading ||
                     isExtracting ||
-                    modelsLoading ||
-                    !selectedProvider ||
-                    !selectedModel
+                    (!introDemo && (modelsLoading || !selectedProvider || !selectedModel))
                   }
                   placeholder="Reply..."
                   conversationId={resolvedConversationId}
                   selectedProvider={selectedProvider ?? ''}
                   selectedModel={selectedModel ?? ''}
                   onModelChange={handleModelChange}
+                  sendIntroTarget={introDemo ? 'chat-send-action' : undefined}
                 />
               </div>
             </div>
           )}
         </>
       )}
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="Chat walkthrough"
+        steps={CHAT_WORKSPACE_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={onIntroDemoDone ?? (() => setTourOpen(false))}
+        onSkip={onIntroDemoSkip}
+        doneLabel={introDemoDoneLabel}
+        interactionMode={introDemo ? 'guided' : 'coach'}
+      />
     </div>
   );
 }

@@ -114,7 +114,10 @@ export function CommitOperationsSidebar({ projectId, commit }: CommitOperationsS
   ].filter(Boolean);
 
   return (
-    <aside className="hidden w-[276px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:block">
+    <aside
+      className="hidden w-[276px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:block"
+      data-intro-target="commit-audit"
+    >
       <div className="flex min-h-[38px] items-center justify-between border-b border-[var(--stroke-divider)] px-3">
         <span className="text-[12px] font-semibold text-[var(--text-primary)]">Commit Audit</span>
         <span className="rounded-full border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] px-2 py-0.5 font-mono text-[10px] text-[var(--accent-commit)]">

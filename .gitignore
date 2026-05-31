@@ -83,6 +83,7 @@ coverage.xml
 
 # Next.js
 .next/
+apps/web/.next.t3x.lock
 next-env.d.ts
 .t3x/test-pg-data
 .worktrees/

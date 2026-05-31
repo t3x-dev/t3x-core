@@ -35,6 +35,7 @@ import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useTemporaryChatImport } from '@/hooks/conversations/useTemporaryChatImport';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import { useEnsureDemoProject } from '@/hooks/onboarding/useEnsureDemoProject';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
@@ -171,6 +172,8 @@ function hasUncommittedConversation(
 export function ChatSidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const [introDemoActive, setIntroDemoActive] = useState(false);
+  const introDemoSuffix = introDemoActive ? '?introDemo=1' : '';
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectError, setNewProjectError] = useState<string | null>(null);
@@ -188,6 +191,19 @@ export function ChatSidebar() {
   const [projectConversationCommitHashes, setProjectConversationCommitHashes] = useState<
     Record<string, Record<string, string>>
   >({});
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      setIntroDemoActive(false);
+      return;
+    }
+    const syncIntroDemoFlag = () => {
+      setIntroDemoActive(new URLSearchParams(window.location.search).get('introDemo') === '1');
+    };
+    syncIntroDemoFlag();
+    window.addEventListener('popstate', syncIntroDemoFlag);
+    return () => window.removeEventListener('popstate', syncIntroDemoFlag);
+  }, [pathname]);
   const [leafFilter, setLeafFilter] = useState<LeafFilter>('all');
   const [importTargetId, setImportTargetId] = useState<string | null>(null);
   const [importProjectId, setImportProjectId] = useState<string>('');
@@ -242,6 +258,7 @@ export function ChatSidebar() {
   const { start: startNewChat } = useNewProjectChat();
   const { importChat } = useTemporaryChatImport();
   const { loadCommits } = useCommitsList();
+  const ensureDemoProject = useEnsureDemoProject();
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu();
 
@@ -755,10 +772,10 @@ export function ChatSidebar() {
   }
 
   const openNewProjectDialog = useCallback(() => {
-    setNewProjectName('');
+    setNewProjectName(introDemoActive ? 'Prompt Review' : '');
     setNewProjectError(null);
     setNewProjectDialogOpen(true);
-  }, []);
+  }, [introDemoActive]);
 
   const handleNewProjectDialogOpenChange = useCallback(
     (open: boolean) => {
@@ -781,7 +798,7 @@ export function ChatSidebar() {
     setNewProjectError(null);
 
     try {
-      const project = await createProject(name);
+      const project = introDemoActive ? await ensureDemoProject() : await createProject(name);
       // Prime the store and URL so the first message on the landing route
       // becomes a project conversation instead of a temporary chat.
       setActiveConversation(null, project.project_id);
@@ -795,7 +812,12 @@ export function ChatSidebar() {
       store.refreshSidebar();
       setNewProjectDialogOpen(false);
       setNewProjectName('');
-      router.push(`/chat?projectId=${encodeURIComponent(project.project_id)}`);
+      const nextParams = new URLSearchParams({ projectId: project.project_id });
+      if (introDemoActive) {
+        nextParams.set('introDemo', '1');
+        nextParams.set('introDemoStage', 'compose');
+      }
+      router.push(`/chat?${nextParams.toString()}`);
     } catch {
       setNewProjectError('Failed to create project');
     } finally {
@@ -923,7 +945,7 @@ export function ChatSidebar() {
   }
 
   function handleCanvasClick(projectId: string) {
-    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas`);
+    router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas${introDemoSuffix}`);
   }
 
   function expandSidebarFromRail() {
@@ -935,14 +957,16 @@ export function ChatSidebar() {
   function handleChatTabClick() {
     expandSidebarFromRail();
     if (activeConversationId) {
-      router.push(`/chat/${activeConversationId}`);
+      router.push(`/chat/${activeConversationId}${introDemoSuffix}`);
       return;
     }
     if (currentProjectId) {
-      router.push(`/chat?projectId=${encodeURIComponent(currentProjectId)}`);
+      const params = new URLSearchParams({ projectId: currentProjectId });
+      if (introDemoSuffix) params.set('introDemo', '1');
+      router.push(`/chat?${params.toString()}`);
       return;
     }
-    router.push('/chat');
+    router.push(`/chat${introDemoSuffix}`);
   }
 
   function handleCanvasTabClick() {
@@ -954,7 +978,7 @@ export function ChatSidebar() {
   function handleLeafTabClick() {
     expandSidebarFromRail();
     if (!currentProjectId) return;
-    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf`);
+    router.push(`/chat/project/${encodeURIComponent(currentProjectId)}/leaf${introDemoSuffix}`);
   }
 
   function handleNewTemporaryChatClick() {
@@ -1328,6 +1352,7 @@ export function ChatSidebar() {
                 className="grid grid-cols-3 gap-0.5 rounded-xl border border-[var(--stroke-divider)] bg-[var(--hover-bg)] p-0.5"
                 role="tablist"
                 aria-label="Workspace mode"
+                data-intro-target="shell-mode-tabs"
               >
                 <button
                   type="button"
@@ -1335,6 +1360,7 @@ export function ChatSidebar() {
                   aria-selected={isChatActive}
                   aria-current={isChatActive ? 'page' : undefined}
                   onClick={handleChatTabClick}
+                  data-intro-target="sidebar-chat-tab"
                   className={cn(
                     'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors',
                     isChatActive
@@ -1351,6 +1377,7 @@ export function ChatSidebar() {
                   aria-selected={isCanvasActive}
                   onClick={handleCanvasTabClick}
                   disabled={!currentProjectId}
+                  data-intro-target="sidebar-canvas-tab"
                   className={cn(
                     'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
                     isCanvasActive
@@ -1368,6 +1395,7 @@ export function ChatSidebar() {
                   aria-selected={isLeafActive}
                   onClick={handleLeafTabClick}
                   disabled={!currentProjectId}
+                  data-intro-target="sidebar-leaf-tab"
                   className={cn(
                     'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[var(--text-secondary)]',
                     isLeafActive
@@ -1389,6 +1417,7 @@ export function ChatSidebar() {
                   onClick={openNewProjectDialog}
                   className="h-10 w-full justify-between rounded-lg bg-[var(--hover-bg-strong)] px-3 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                   aria-label="New project"
+                  data-intro-target="sidebar-new-project"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Plus className="h-4 w-4 shrink-0" />
@@ -1402,6 +1431,7 @@ export function ChatSidebar() {
                   disabled={!currentProjectId}
                   className="h-10 w-full justify-between rounded-lg bg-[var(--accent-commit-soft)] px-3 text-[13px] font-semibold text-[var(--accent-commit)] hover:bg-[var(--accent-commit)]/15 disabled:opacity-45"
                   aria-label="Open canvas"
+                  data-intro-target="sidebar-canvas-entry"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <GitBranch className="h-4 w-4 shrink-0" />
@@ -1416,6 +1446,7 @@ export function ChatSidebar() {
                   disabled={!currentProjectId}
                   className="h-10 w-full justify-between rounded-lg bg-[var(--accent-leaf-soft)] px-3 text-[13px] font-semibold text-[var(--accent-leaf)] hover:bg-[var(--accent-leaf)]/15 disabled:opacity-45"
                   aria-label="Leaf index"
+                  data-intro-target="sidebar-leaf-entry"
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Leaf className="h-4 w-4 shrink-0" />
@@ -2212,6 +2243,7 @@ export function ChatSidebar() {
                 disabled={isCreatingProject}
                 aria-invalid={newProjectError ? 'true' : undefined}
                 aria-describedby={newProjectError ? 'new-project-error' : undefined}
+                data-intro-target="new-project-name"
               />
               {newProjectError && (
                 <p id="new-project-error" className="text-xs text-[var(--status-error)]">
@@ -2229,7 +2261,12 @@ export function ChatSidebar() {
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="commit" disabled={isCreatingProject}>
+              <Button
+                type="submit"
+                variant="commit"
+                disabled={isCreatingProject}
+                data-intro-target="new-project-create"
+              >
                 {isCreatingProject ? 'Creating...' : 'Create'}
               </Button>
             </DialogFooter>

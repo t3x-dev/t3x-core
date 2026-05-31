@@ -2,6 +2,7 @@
 
 import {
   ArrowRight,
+  ClipboardCheck,
   FileText,
   GitCommitHorizontal,
   Leaf as LeafIcon,
@@ -11,8 +12,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import {
+  FeatureTourOverlay,
+  type FeatureTourStep,
+} from '@/components/onboarding/FeatureTourOverlay';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { fetchProject } from '@/queries/project';
 import { useChatStore } from '@/store/chatStore';
 import { cn } from '@/utils/cn';
@@ -23,11 +30,33 @@ function isNotFoundError(error: string | null): boolean {
   return normalized.includes('404') || normalized.includes('not found');
 }
 
+const LEAF_INDEX_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'card',
+    label: 'Open leaf',
+    title: 'Click the highlighted leaf artifact row',
+    description:
+      'Leaf starts from an index. The row is the real entry point into the generated output workspace.',
+    target: 'leaf-index-card',
+    tone: 'leaf',
+    icon: ClipboardCheck,
+    details: [
+      'Click the artifact row in the center of the page.',
+      'The row opens the full Leaf workspace for this generated output.',
+      'The next page shows output, source coverage, quality, and export controls.',
+    ],
+    advanceOnTargetClick: true,
+  },
+];
+
 export default function ChatProjectLeafIndexPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
+  const introDemoRequested = useIntroDemoQueryFlag();
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const { loadCommits } = useCommitsList();
   const { leaves, loading, error, refresh } = useProjectLeaves(projectId, true);
+  const [tourOpen, setTourOpen] = useState(introDemoRequested);
   const [commitCount, setCommitCount] = useState<number | null>(null);
   const [commitsLoading, setCommitsLoading] = useState(true);
   const [commitsError, setCommitsError] = useState<string | null>(null);
@@ -83,8 +112,27 @@ export default function ChatProjectLeafIndexPage() {
 
   const goToProjectChat = useCallback(() => {
     useChatStore.getState().setActiveConversation(null, projectId);
-    router.push(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
-  }, [projectId, router]);
+    const params = new URLSearchParams({ projectId });
+    if (introDemoRequested) params.set('introDemo', '1');
+    router.push(`/chat/new?${params.toString()}`);
+  }, [introDemoRequested, projectId, router]);
+
+  useEffect(() => {
+    if (introDemoRequested) setTourOpen(true);
+  }, [introDemoRequested]);
+
+  const continueIntroDemoToLeafDetail = useCallback(() => {
+    const firstLeaf = leaves[0];
+    if (!firstLeaf) {
+      void completeIntroDemo();
+      return;
+    }
+    router.push(
+      `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
+        firstLeaf.id
+      )}?introDemo=1`
+    );
+  }, [completeIntroDemo, leaves, projectId, router]);
 
   useEffect(() => {
     setCommitsLoading(true);
@@ -111,7 +159,7 @@ export default function ChatProjectLeafIndexPage() {
     return (
       <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-app)]">
         <LeafPageHeader leafCount={leaves.length} />
-        <main className="min-h-0 flex-1 overflow-y-auto p-5">
+        <main className="min-h-0 flex-1 overflow-y-auto p-5" data-intro-target="leaf-index-body">
           <EmptyLeafState
             actionLabel="Go to Chats"
             description="This project does not exist or was deleted."
@@ -144,7 +192,7 @@ export default function ChatProjectLeafIndexPage() {
     <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-app)]">
       <LeafPageHeader leafCount={leaves.length} />
 
-      <main className="min-h-0 flex-1 overflow-y-auto p-5">
+      <main className="min-h-0 flex-1 overflow-y-auto p-5" data-intro-target="leaf-index-body">
         {commitCount === 0 && (conversationCount ?? 0) === 0 ? (
           <EmptyLeafState
             actionLabel="Go to Chat"
@@ -168,7 +216,13 @@ export default function ChatProjectLeafIndexPage() {
             actionLabel="Go to Canvas"
             description="Create a leaf from a committed canvas node."
             icon={<LeafIcon className="h-5 w-5" />}
-            onAction={() => router.push(`/chat/project/${encodeURIComponent(projectId)}/canvas`)}
+            onAction={() =>
+              router.push(
+                `/chat/project/${encodeURIComponent(projectId)}/canvas${
+                  introDemoRequested ? '?introDemo=1' : ''
+                }`
+              )
+            }
             title="No leaves yet"
             tone="leaf"
           />
@@ -190,9 +244,10 @@ export default function ChatProjectLeafIndexPage() {
                     router.push(
                       `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(
                         leaf.id
-                      )}`
+                      )}${introDemoRequested ? '?introDemo=1' : ''}`
                     )
                   }
+                  data-intro-target="leaf-index-card"
                   className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-panel)] px-3 py-3 text-left transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)]"
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--accent-leaf)]/20 bg-[var(--accent-leaf-soft)] text-[var(--accent-leaf)]">
@@ -232,13 +287,26 @@ export default function ChatProjectLeafIndexPage() {
           </div>
         )}
       </main>
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="Leaf index walkthrough"
+        steps={LEAF_INDEX_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={continueIntroDemoToLeafDetail}
+        onSkip={() => void completeIntroDemo()}
+        doneLabel={leaves.length > 0 ? 'Open Leaf' : 'Done'}
+        interactionMode="guided"
+      />
     </div>
   );
 }
 
 function LeafPageHeader({ leafCount }: { leafCount: number }) {
   return (
-    <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-4">
+    <header
+      className="relative flex h-14 shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[color-mix(in_srgb,var(--surface-panel)_90%,transparent)] px-4"
+      data-intro-target="leaf-index-header"
+    >
       <ChatSidebarToggleButton className="absolute left-2.5 top-2" />
       <div className="min-w-0 pl-[34px]">
         <div className="min-w-0">

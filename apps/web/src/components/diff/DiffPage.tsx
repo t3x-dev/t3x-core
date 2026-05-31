@@ -10,15 +10,29 @@
  */
 
 import type { TreeDiff } from '@t3x-dev/core';
-import { ArrowLeft, GitBranch, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Columns3,
+  GitBranch,
+  GitCompareArrows,
+  ListTree,
+  Loader2,
+  PanelRight,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { relativeTime, shortHash } from '@/components/commit/CommitDetailHelpers';
+import {
+  FeatureTourOverlay,
+  type FeatureTourStep,
+} from '@/components/onboarding/FeatureTourOverlay';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, CommitMeta, DiffResponse } from '@/types/api';
@@ -40,6 +54,69 @@ interface DiffPageProps {
 }
 
 type TabId = 'diff' | 'graph' | 'json';
+
+const DIFF_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'header',
+    label: 'Range',
+    title: 'Start by checking which two commits are being compared',
+    description:
+      'The header shows the base and target hashes so users can trust the diff range before reading changes.',
+    target: 'diff-header',
+    tone: 'commit',
+    icon: GitCompareArrows,
+    details: [
+      'Click either hash pill to open the corresponding commit.',
+      'Use Back to return to the canvas or the page that opened this comparison.',
+      'The demo keeps this comparison inside the seeded project.',
+    ],
+  },
+  {
+    id: 'index',
+    label: 'Index',
+    title: 'Use the left index to jump between changed semantic trees',
+    description:
+      'The index groups modified, added, removed, and identical trees so users can scan before reading line-by-line detail.',
+    target: 'diff-index',
+    tone: 'extract',
+    icon: ListTree,
+    details: [
+      'Click a tree row to jump to its diff.',
+      'Use Show identical when the user needs full context.',
+      'The symbols and colors match the rest of the versioning UI.',
+    ],
+  },
+  {
+    id: 'tabs',
+    label: 'Views',
+    title: 'Switch between diff, graph, and JSON views',
+    description:
+      'The tabs let users inspect the same change as a text diff, visual structure, or raw data.',
+    target: 'diff-tabs',
+    tone: 'commit',
+    icon: Columns3,
+    details: [
+      'Diff is best for semantic review.',
+      'Graph is best for relationship shape.',
+      'JSON is best for debugging exact payloads.',
+    ],
+  },
+  {
+    id: 'side',
+    label: 'Merge',
+    title: 'Use the right rail for summary and merge entry',
+    description:
+      'The metadata rail summarizes base, target, tree changes, relation changes, and offers Start Merge when applicable.',
+    target: 'diff-sidebar',
+    tone: 'pending',
+    icon: PanelRight,
+    details: [
+      'Read tree stats before deciding whether a merge is needed.',
+      'Start Merge creates a merge workspace from the two selected versions.',
+      'In the seeded demo, this teaches where merge lives without requiring an API call.',
+    ],
+  },
+];
 
 // ============================================================================
 // CommitInfoBlock — metadata block for base/target in sidebar
@@ -193,6 +270,8 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const introDemoRequested = useIntroDemoQueryFlag();
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
   // State
   const [diffResponse, setDiffResponse] = useState<DiffResponse | null>(null);
@@ -204,6 +283,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
   const [showIdentical, setShowIdentical] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [baseCommit, setBaseCommit] = useState<ApiCommit | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const { loadCommit } = useCommitByHash();
   const { loadDiff } = useTreeDiff();
 
@@ -245,6 +325,10 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       cancelled = true;
     };
   }, [baseHash, targetHash, loadCommit, loadDiff]);
+
+  useEffect(() => {
+    if (introDemoRequested) setTourOpen(true);
+  }, [introDemoRequested]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -334,7 +418,10 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       <style>{PAGE_ANIMATION_STYLES}</style>
 
       {/* ═══════ HEADER ═══════ */}
-      <header className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header
+        className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
+        data-intro-target="diff-header"
+      >
         <div className="flex items-center gap-3">
           {/* Back button */}
           <button
@@ -388,7 +475,9 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
 
         {/* ── Center: Tabbed content ── */}
         <div className="flex flex-1 flex-col overflow-hidden bg-[var(--surface-panel)]">
-          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+          <div data-intro-target="diff-tabs">
+            <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+          </div>
 
           {/* Tab content */}
           <div className="flex-1 overflow-hidden bg-[var(--surface-panel)]">
@@ -455,7 +544,10 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
         </div>
 
         {/* ── Right sidebar: Metadata ── */}
-        <aside className="hidden w-[260px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block">
+        <aside
+          className="hidden w-[260px] shrink-0 overflow-y-auto border-l border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 lg:block"
+          data-intro-target="diff-sidebar"
+        >
           <div className="space-y-5">
             {/* Base commit info */}
             <CommitInfoBlock
@@ -515,6 +607,13 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
           </div>
         </aside>
       </div>
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="Diff walkthrough"
+        steps={DIFF_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={() => void completeIntroDemo()}
+      />
     </div>
   );
 }

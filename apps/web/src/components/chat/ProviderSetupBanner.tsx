@@ -43,7 +43,7 @@ export function ProviderSetupBanner({ className, variant = 'setup' }: ProviderSe
         {variant === 'setup' && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button asChild variant="canvas-outline" size="sm">
-              <Link href="/chat/demo">
+              <Link href="/chat?introDemo=1">
                 <PlayCircle className="h-3.5 w-3.5" />
                 Try fixture demo
               </Link>

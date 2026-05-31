@@ -4,6 +4,7 @@ import { DEMO_WORKSPACE_FIXTURE, DEMO_WORKSPACE_REPLAY_GOAL } from '@t3x-dev/cor
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkbenchDraft, updateWorkbenchDraft } from '@/commands/drafts';
+import { ensureDemoProject } from '@/commands/projects';
 import { useFixtureReplay } from '@/hooks/drafts/useFixtureReplay';
 import { fetchProjects } from '@/queries/projects';
 import type { WorkbenchDraft } from '@/types/api';
@@ -16,6 +17,10 @@ vi.mock('@/queries/projects', () => ({
 vi.mock('@/commands/drafts', () => ({
   createWorkbenchDraft: vi.fn(),
   updateWorkbenchDraft: vi.fn(),
+}));
+
+vi.mock('@/commands/projects', () => ({
+  ensureDemoProject: vi.fn(),
 }));
 
 function makeDraft(overrides: Partial<WorkbenchDraft> = {}): WorkbenchDraft {
@@ -107,5 +112,36 @@ describe('useFixtureReplay', () => {
     expect(replay?.label).toBe(DEMO_WORKSPACE_FIXTURE.replay.label);
     expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
+  });
+
+  it('creates the demo workspace before replay when it is missing', async () => {
+    vi.mocked(fetchProjects).mockResolvedValueOnce({
+      projects: [],
+      limit: 50,
+      offset: 0,
+    });
+    vi.mocked(ensureDemoProject).mockResolvedValueOnce({
+      project_id: 'proj_created_demo',
+      name: DEMO_WORKSPACE_FIXTURE.project.name,
+      created_at: '2026-05-19T00:00:00.000Z',
+      metadata: DEMO_WORKSPACE_FIXTURE.project.metadata,
+    });
+    vi.mocked(createWorkbenchDraft).mockResolvedValueOnce(
+      makeDraft({ project_id: 'proj_created_demo' })
+    );
+    vi.mocked(updateWorkbenchDraft).mockResolvedValueOnce(
+      makeDraft({ project_id: 'proj_created_demo', revision: 2 })
+    );
+
+    const { result } = renderHook(() => useFixtureReplay());
+    await act(async () => {
+      await result.current.start();
+    });
+    await waitForHook();
+
+    expect(ensureDemoProject).toHaveBeenCalled();
+    expect(createWorkbenchDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: 'proj_created_demo' })
+    );
   });
 });

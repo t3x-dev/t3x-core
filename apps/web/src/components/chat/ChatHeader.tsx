@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
 import { useConversationBranchSwitch } from '@/hooks/conversations/useConversationBranchSwitch';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useChatStore } from '@/store/chatStore';
 import { selectPanelExpanded, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
@@ -59,6 +60,7 @@ export function ChatHeader({
   const turnCount = useWorkspaceStore((s) => s.turns.length);
   const lastError = useWorkspaceStore((s) => s.lastError);
   const compactViewport = useChatCompactViewport();
+  const introDemoActive = useIntroDemoQueryFlag();
   // Extract requires both an active project and a resolved conversation in
   // the workspace store. On a direct load of /chat/[convId], `useChatInit`
   // backfills `activeProjectId` from `fetchConversationMeta` asynchronously;
@@ -72,15 +74,15 @@ export function ChatHeader({
     activeProjectId,
     workspaceConversationId,
     routeConversationId: conversationId,
-    turnCount,
+    turnCount: introDemoActive ? Math.max(turnCount, 1) : turnCount,
     workspaceMode,
     isCommitted,
     hasDraft,
     isChatLoading,
     isChatStreaming,
     modelsLoading,
-    selectedProvider,
-    selectedModel,
+    selectedProvider: introDemoActive ? 'fixture-replay' : selectedProvider,
+    selectedModel: introDemoActive ? 'fixture-replay' : selectedModel,
     lastError,
   });
   const isExtractReady = extractDisabledReason === null;
@@ -184,6 +186,7 @@ export function ChatHeader({
           <button
             type="button"
             data-testid="extract-button"
+            data-intro-target="chat-extract-action"
             onClick={() => window.dispatchEvent(new CustomEvent('t3x:extract-requested'))}
             disabled={isExtracting || !isExtractReady}
             title={extractDisabledReason ?? undefined}

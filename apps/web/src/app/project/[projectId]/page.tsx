@@ -5,8 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
+import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
@@ -40,6 +42,14 @@ export function ProjectDetailPageContent({
   const projectId = params.projectId as string;
 
   const searchParams = useSearchParams();
+  const showIntroDemo =
+    process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
+  const [projectTourOpen, setProjectTourOpen] = useState(showIntroDemo);
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
+
+  useEffect(() => {
+    if (showIntroDemo) setProjectTourOpen(true);
+  }, [showIntroDemo]);
 
   const projectFromStore = useProjectStore((state) =>
     state.projects.find((item) => item.id === projectId)
@@ -325,6 +335,16 @@ export function ProjectDetailPageContent({
         showChatSidebarToggle={showChatSidebarToggle}
         initialViewport={initialViewport}
         onViewportChange={handleViewportChange}
+      />
+      <ProjectDemoTourOverlay
+        open={projectTourOpen}
+        onClose={() => setProjectTourOpen(false)}
+        onDone={() =>
+          router.push(`/chat/project/${encodeURIComponent(projectId)}/leaf?introDemo=1`)
+        }
+        onSkip={() => void completeIntroDemo()}
+        doneLabel="Open Leaf index"
+        interactionMode="guided"
       />
     </div>
   );

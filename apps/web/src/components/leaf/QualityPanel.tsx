@@ -141,6 +141,7 @@ export function QualityPanel({
         'bg-[color-mix(in_srgb,var(--surface-panel)_88%,transparent)]',
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}
+      data-intro-target="leaf-quality-panel"
     >
       <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-4 py-3">
         <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--text-secondary)]">

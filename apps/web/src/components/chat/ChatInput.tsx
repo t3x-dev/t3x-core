@@ -80,6 +80,7 @@ interface ChatInputProps {
   onModelChange?: (provider: string, model: string) => void;
   prefillText?: string | null;
   prefillRevision?: number;
+  sendIntroTarget?: string;
 }
 
 const CHAT_INPUT_DRAFT_STORAGE_PREFIX = 't3x:chat-input-draft:';
@@ -122,6 +123,7 @@ export function ChatInput({
   onModelChange,
   prefillText,
   prefillRevision,
+  sendIntroTarget,
 }: ChatInputProps) {
   const [value, setValue] = useState('');
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
@@ -427,6 +429,7 @@ export function ChatInput({
               disabled={isEmpty || disabled}
               className="h-8 w-8 rounded-full bg-[var(--accent-commit)] text-[var(--on-accent)] shadow-[var(--fx-shadow-md)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Send message"
+              data-intro-target={sendIntroTarget}
             >
               <Send className="h-4 w-4" />
             </Button>

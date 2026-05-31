@@ -36,6 +36,10 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FeatureTourOverlay,
+  type FeatureTourStep,
+} from '@/components/onboarding/FeatureTourOverlay';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
@@ -44,6 +48,8 @@ import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
+import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
@@ -66,12 +72,92 @@ interface CommitDetailPageProps {
   commitHash: string;
 }
 
+const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'actions',
+    label: 'Actions',
+    title: 'Use the header buttons to move through the version workflow',
+    description:
+      'This row is where users leave the commit detail page, compare with a parent, share, or export the snapshot.',
+    target: 'commit-actions',
+    tone: 'commit',
+    icon: Eye,
+    details: [
+      'View Canvas returns to the project map.',
+      'View Diff appears when this commit has a single parent.',
+      'Share and Export are the stable output actions for a reviewed commit.',
+    ],
+  },
+  {
+    id: 'identity',
+    label: 'Snapshot',
+    title: 'Read the commit identity before drilling into content',
+    description:
+      'The identity strip explains who created the version, when it was committed, which branch it belongs to, and what changed.',
+    target: 'commit-identity',
+    tone: 'commit',
+    icon: GitCommit,
+    details: [
+      'The hash is copyable so the version can be referenced elsewhere.',
+      'Diff badges use fixed semantics: added, removed, modified, and identical.',
+      'Branch and author metadata help the user trust the snapshot.',
+    ],
+  },
+  {
+    id: 'content',
+    label: 'Tabs',
+    title: 'Switch tabs to inspect the same commit from different angles',
+    description:
+      'YAML is the readable semantic document, Graph shows structure, JSON is the raw payload, and Relations isolates links.',
+    target: 'commit-tabs',
+    tone: 'extract',
+    icon: Tag,
+    details: [
+      'Click YAML for the default audit view.',
+      'Click Graph when relationships are easier to understand visually.',
+      'Click JSON when debugging or verifying exact serialized data.',
+    ],
+  },
+  {
+    id: 'audit',
+    label: 'Audit',
+    title: 'The right rail proves where the commit came from',
+    description:
+      'Evidence, YOps operations, hash chain, and snapshot metadata teach users that a commit is auditable, not just generated text.',
+    target: 'commit-audit',
+    tone: 'source',
+    icon: Pin,
+    details: [
+      'Open evidence rows to revisit the source context.',
+      'Copy parent or current hashes from the hash chain.',
+      'Use this rail when explaining why the committed meaning is trustworthy.',
+    ],
+  },
+  {
+    id: 'provenance',
+    label: 'Graph',
+    title: 'Expand provenance to connect source, commit, and leaf',
+    description:
+      'The bottom graph makes the full path visible: source evidence becomes a stable commit and then reusable leaves.',
+    target: 'commit-provenance',
+    tone: 'leaf',
+    icon: LeafIcon,
+    details: [
+      'Click the provenance bar to expand or collapse it.',
+      'Source nodes show where the meaning originated.',
+      'Leaf nodes show what reusable artifacts were produced from this commit.',
+    ],
+  },
+];
+
 // ============================================================================
 // Component
 // ============================================================================
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
+  const introDemoRequested = useIntroDemoQueryFlag();
+  const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const _notify = useProjectStore((state) => state.notifyCallback);
 
   // ── Hook callbacks (queries via composition layer) ─
@@ -101,6 +187,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   const [bottomCollapsed, setBottomCollapsed] = useState(true);
   type CommitTab = 'yaml' | 'graph' | 'json' | 'relations';
   const [activeTab, setActiveTab] = useState<CommitTab>('yaml');
+  const [tourOpen, setTourOpen] = useState(false);
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -149,6 +236,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
     };
     load();
   }, [commitHash, projectId, storeSetCommit, loadCommit, loadLeaves, loadProject, loadHistory]);
+
+  useEffect(() => {
+    if (introDemoRequested) setTourOpen(true);
+  }, [introDemoRequested]);
 
   // ── Tree stats ─────────────────────────────────
   const frameStats = useMemo(
@@ -254,7 +345,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       <style>{PAGE_ANIMATION_STYLES}</style>
 
       {/* ═══════ HEADER ═══════ */}
-      <header className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4">
+      <header
+        className="flex h-[var(--h-header)] shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4"
+        data-intro-target="commit-header"
+      >
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -275,7 +369,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             ]}
           />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" data-intro-target="commit-actions">
           <Link
             href={canvasHref}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
@@ -320,7 +414,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         {/* CENTER: Tabbed Panel */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Commit identity */}
-          <div className="flex min-h-[70px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-3">
+          <div
+            className="flex min-h-[70px] shrink-0 items-center justify-between gap-4 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-[var(--space-page)] py-3"
+            data-intro-target="commit-identity"
+          >
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-[15px] font-semibold leading-tight text-[var(--text-primary)]">
                 {commit.message || 'No message'}
@@ -407,7 +504,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </div>
 
           {/* Lineage summary */}
-          <div className="flex min-h-[38px] shrink-0 items-center gap-4 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-[var(--space-page)] text-[11px]">
+          <div
+            className="flex min-h-[38px] shrink-0 items-center gap-4 overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-app)] px-[var(--space-page)] text-[11px]"
+            data-intro-target="commit-lineage"
+          >
             <div className="flex items-center gap-1.5 text-[var(--text-tertiary)]">
               <GitCommit size={11} className="text-[var(--accent-commit)]" />
               <span>
@@ -484,7 +584,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </div>
 
           {/* Tab Bar */}
-          <div className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0">
+          <div
+            className="flex gap-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 shrink-0"
+            data-intro-target="commit-tabs"
+          >
             {(['yaml', 'graph', 'json', 'relations'] as const).map((tab) => (
               <button
                 key={tab}
@@ -502,7 +605,10 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto p-[var(--space-page)]">
+          <div
+            className="flex-1 overflow-y-auto p-[var(--space-page)]"
+            data-intro-target="commit-content"
+          >
             {/* YAML Tab — Nested YAML document */}
             {activeTab === 'yaml' && (
               <div className="mx-auto w-full max-w-[760px]">
@@ -580,6 +686,13 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         projectId={projectId}
         collapsed={bottomCollapsed}
         onToggleCollapse={() => setBottomCollapsed(!bottomCollapsed)}
+      />
+      <FeatureTourOverlay
+        open={tourOpen}
+        title="Commit walkthrough"
+        steps={COMMIT_TOUR_STEPS}
+        onClose={() => setTourOpen(false)}
+        onDone={() => void completeIntroDemo()}
       />
     </div>
   );

@@ -39,6 +39,8 @@ export interface CommitHistoryRowProps {
   isLast: boolean;
   /** Whether this row is keyboard-active */
   isActive?: boolean;
+  /** Whether the demo tour should continue after opening this commit */
+  introDemo?: boolean;
 }
 
 // ============================================================================
@@ -58,10 +60,11 @@ export function CommitHistoryRow({
   isFirst,
   isLast,
   isActive,
+  introDemo = false,
 }: CommitHistoryRowProps) {
   return (
     <Link
-      href={`/project/${projectId}/commit/${encodeURIComponent(hash)}`}
+      href={`/project/${projectId}/commit/${encodeURIComponent(hash)}${introDemo ? '?introDemo=1' : ''}`}
       data-commit-hash={hash}
       className={cn(
         'group flex items-stretch hover:bg-[var(--hover-bg)] transition-colors rounded-md -mx-2 px-2',

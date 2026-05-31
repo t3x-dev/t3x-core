@@ -28,6 +28,13 @@ export async function createProject(
   return handleResponse<Project>(res);
 }
 
+export async function ensureDemoProject(): Promise<Project> {
+  const res = await fetchWithTimeout(`${API_V1}/projects/demo-workspace`, {
+    method: 'POST',
+  });
+  return handleResponse<Project>(res);
+}
+
 export interface DeleteProjectResponse {
   deleted: boolean;
   project_id: string;

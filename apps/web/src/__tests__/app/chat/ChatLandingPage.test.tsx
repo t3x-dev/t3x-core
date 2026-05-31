@@ -49,6 +49,30 @@ const modelSelectionFixture = vi.hoisted(() => ({
   },
 }));
 
+const projectQueryMocks = vi.hoisted(() => ({
+  fetchProjects: vi.fn(),
+}));
+
+const conversationQueryMocks = vi.hoisted(() => ({
+  fetchConversations: vi.fn(),
+}));
+
+const projectCommandMocks = vi.hoisted(() => ({
+  ensureDemoProject: vi.fn(),
+}));
+
+vi.mock('@/queries/projects', () => ({
+  fetchProjects: projectQueryMocks.fetchProjects,
+}));
+
+vi.mock('@/queries/conversations', () => ({
+  fetchConversations: conversationQueryMocks.fetchConversations,
+}));
+
+vi.mock('@/commands/projects', () => ({
+  ensureDemoProject: projectCommandMocks.ensureDemoProject,
+}));
+
 vi.mock('@/hooks/shared/useChatModelSelection', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
@@ -82,6 +106,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
     onSend,
     onModelChange,
     prefillText,
+    sendIntroTarget,
   }: {
     disabled?: boolean;
     placeholder?: string;
@@ -89,6 +114,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
     onSend: (message: string) => void;
     onModelChange?: (provider: string, model: string) => void;
     prefillText?: string | null;
+    sendIntroTarget?: string;
   }) => (
     <div>
       <div data-testid="chat-disabled">{String(Boolean(disabled))}</div>
@@ -98,7 +124,11 @@ vi.mock('@/components/chat/ChatInput', () => ({
       <button type="button" onClick={() => onModelChange?.('openai', 'gpt-4.1')}>
         select openai
       </button>
-      <button type="button" onClick={() => onSend('hello world')}>
+      <button
+        type="button"
+        data-intro-target={sendIntroTarget}
+        onClick={() => onSend('hello world')}
+      >
         send chat
       </button>
     </div>
@@ -106,6 +136,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
 }));
 
 import ChatLandingPage from '@/app/chat/page';
+import { FIRST_RUN_DEMO_SEEN_KEY } from '@/hooks/onboarding/useFirstRunDemo';
 import { useChatStore } from '@/store/chatStore';
 
 function setModelSelection(overrides: Partial<typeof modelSelectionFixture.value> = {}): void {
@@ -121,7 +152,13 @@ function setModelSelection(overrides: Partial<typeof modelSelectionFixture.value
 
 beforeEach(() => {
   localStorage.removeItem('t3x-chat-model-preferences');
+  localStorage.setItem(FIRST_RUN_DEMO_SEEN_KEY, 'true');
   setModelSelection();
+  conversationQueryMocks.fetchConversations.mockResolvedValue({
+    conversations: [],
+    limit: 20,
+    offset: 0,
+  });
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   searchParamsValue = new URLSearchParams();
 });
@@ -129,12 +166,119 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   localStorage.removeItem('t3x-chat-model-preferences');
+  localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
   setModelSelection();
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   searchParamsValue = new URLSearchParams();
 });
 
 describe('ChatLandingPage', () => {
+  it('opens the first-run demo when the user has not seen it yet', async () => {
+    localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+    expect(screen.getByText('Guided walkthrough')).toBeVisible();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /start using t3x/i }));
+    });
+
+    expect(localStorage.getItem(FIRST_RUN_DEMO_SEEN_KEY)).toBe('true');
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the first-run demo from the dev-only introDemo query even after it was seen', async () => {
+    searchParamsValue = new URLSearchParams({ introDemo: '1' });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+  });
+
+  it('prefills the intro demo composer after project creation', async () => {
+    searchParamsValue = new URLSearchParams({
+      projectId: 'proj_demo',
+      introDemo: '1',
+      introDemoStage: 'compose',
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(
+      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: /send chat/i })).toHaveAttribute(
+      'data-intro-target',
+      'landing-send-action'
+    );
+    expect(screen.getByTestId('chat-prefill')).toHaveTextContent('Support escalation review');
+    expect(screen.getByTestId('selected-model')).toHaveTextContent('fixture-replay');
+    expect(screen.getByTestId('chat-disabled')).toHaveTextContent('false');
+  });
+
+  it('reopens the forced intro demo when the dev walkthrough stage changes', async () => {
+    searchParamsValue = new URLSearchParams({ introDemo: '1' });
+
+    const view = render(<ChatLandingPage />);
+
+    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^done$/i }));
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    searchParamsValue = new URLSearchParams({
+      projectId: 'proj_demo',
+      introDemo: '1',
+      introDemoStage: 'compose',
+    });
+
+    await act(async () => {
+      view.rerender(<ChatLandingPage />);
+    });
+
+    expect(
+      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
+    ).toBeVisible();
+  });
+
+  it('sends the intro demo message through the fixture replay path', async () => {
+    searchParamsValue = new URLSearchParams({
+      projectId: 'proj_demo',
+      introDemo: '1',
+      introDemoStage: 'compose',
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    await screen.findByRole('dialog', { name: /click the highlighted send button/i });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
+    });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    const target = (push.mock.calls[0]?.[0] as string) ?? '';
+    expect(target.startsWith('/chat/new?')).toBe(true);
+    const params = new URLSearchParams(target.slice('/chat/new?'.length));
+    expect(params.get('firstMessage')).toBe('hello world');
+    expect(params.get('introDemo')).toBe('1');
+    expect(params.get('fixtureReply')).toBe('1');
+    expect(params.get('projectId')).toBe('proj_demo');
+  });
+
   it('renders the guided landing copy and starter actions', async () => {
     await act(async () => {
       render(<ChatLandingPage />);

@@ -103,6 +103,7 @@ export function YAMLTreePanel({
         'bg-[color-mix(in_srgb,var(--surface-panel)_88%,transparent)]',
         'backdrop-blur-[var(--fx-blur-panel)]'
       )}
+      data-intro-target="leaf-source-panel"
     >
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--stroke-divider)] px-4 py-3">

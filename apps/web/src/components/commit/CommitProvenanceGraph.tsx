@@ -135,6 +135,7 @@ export function ProvenanceGraph({
   return (
     <div
       className={`shrink-0 border-t border-[var(--stroke-divider)] bottom-glass transition-all duration-300 ${collapsed ? 'h-10' : ''}`}
+      data-intro-target="commit-provenance"
     >
       <button
         type="button"

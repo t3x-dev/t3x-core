@@ -25,6 +25,7 @@ interface SendMessageOptions {
   historyOverride?: Array<{ role: string; content: string }>;
   skipMemoryFetch?: boolean;
   images?: AttachedImage[];
+  fixtureAssistantResponse?: string;
 }
 
 export interface UseConversationChatOptions {
@@ -220,6 +221,8 @@ export function useConversationChat({
             content: msg.content,
           }));
       const messageTitle = deriveConversationTitleFromMessage(userMessage);
+      const fixtureAssistantResponse = options?.fixtureAssistantResponse;
+      const isFixtureReply = Boolean(fixtureAssistantResponse);
       const currentTitle = title ?? useChatStore.getState().conversationTitle;
       const hasExistingConversation = Boolean(conversationIdRef.current);
       const hasExplicitNonPlaceholderTitle =
@@ -230,7 +233,9 @@ export function useConversationChat({
           ? isPlaceholderConversationTitle(currentTitle)
           : !hasExplicitNonPlaceholderTitle);
       const generatedTitlePromise = shouldAutoGenerateTitle
-        ? generateConversationTitleFromFirstMessage(userMessage, { provider, model })
+        ? isFixtureReply
+          ? null
+          : generateConversationTitleFromFirstMessage(userMessage, { provider, model })
         : null;
 
       const applyGeneratedTitle = (targetConversationId: string, initialTitle: string) => {
@@ -369,6 +374,29 @@ export function useConversationChat({
         let addedFinalMessage = false;
         let localAssistantMessageId: string | null = null;
         stream.tokenBufferRef.current = '';
+
+        if (fixtureAssistantResponse) {
+          await delay(450);
+          fullResponse = fixtureAssistantResponse;
+          localAssistantMessageId = `msg-${Date.now()}-assistant`;
+          history.setMessages((prev) => [
+            ...prev,
+            {
+              id: localAssistantMessageId!,
+              role: 'assistant' as const,
+              content: fullResponse,
+            },
+          ]);
+          if (isTemporaryMode) {
+            useTemporaryChatsStore.getState().addMessage(currentConversationId, {
+              id: localAssistantMessageId,
+              role: 'assistant',
+              content: fullResponse,
+            });
+          }
+          if (!isTemporaryMode) await saveAssistantResponse(fullResponse, localAssistantMessageId);
+          return;
+        }
 
         const flushBuffer = () => {
           if (stream.tokenBufferRef.current) {

@@ -34,6 +34,8 @@ import { useCommitActions } from '@/hooks/commits/useCommitActions';
 import { useParentCommit } from '@/hooks/commits/useParentCommit';
 import { useDiscardDraft } from '@/hooks/drafts/useDiscardDraft';
 import { useScriptExecution } from '@/hooks/drafts/useScriptExecution';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
+import { useIntroDemoReplayActions } from '@/hooks/onboarding/useIntroDemoReplayActions';
 import { useGoldEdit } from '@/hooks/shared/useGoldEdit';
 import { useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
@@ -908,6 +910,9 @@ export function AfterPanel({
   const isCommitting = useCommitStore((s) => s.isCommitting);
   const { commit: commitTrees } = useCommitActions();
   const discardDraft = useDiscardDraft();
+  const introDemoActive = useIntroDemoQueryFlag();
+  const { apply: applyIntroDemoReplay, commit: commitIntroDemoReplay } =
+    useIntroDemoReplayActions();
   const {
     execute: executeScript,
     canRun: canRunScript,
@@ -1190,8 +1195,12 @@ export function AfterPanel({
   }, [discardDraft, hasDraft, retainedDraftFailure]);
 
   const handleRunOrApply = useCallback(() => {
+    if (introDemoActive && useWorkspaceStore.getState().hasDraft) {
+      void applyIntroDemoReplay();
+      return;
+    }
     void executeScript();
-  }, [executeScript]);
+  }, [applyIntroDemoReplay, executeScript, introDemoActive]);
 
   const handleContinueEditingAction = useCallback(() => {
     onContinueEditing?.();
@@ -1222,6 +1231,14 @@ export function AfterPanel({
       if (selectIsInheritedBaselineOnly(workspaceState)) {
         toast.error('Extract, edit, or Apply new YOps before committing this conversation.');
         setShowCommitDialog(false);
+        return;
+      }
+      if (introDemoActive) {
+        const hash = await commitIntroDemoReplay(message || 'Knowledge Extract');
+        if (hash) {
+          setCeremonyHash(hash);
+          setShowCommitDialog(false);
+        }
         return;
       }
       try {
@@ -1269,7 +1286,7 @@ export function AfterPanel({
         toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     },
-    [commitTrees]
+    [commitIntroDemoReplay, commitTrees, introDemoActive]
   );
 
   return (
@@ -1596,6 +1613,7 @@ export function AfterPanel({
                     <button
                       type="button"
                       data-testid="commit-dialog-confirm"
+                      data-intro-target="chat-commit-confirm"
                       onClick={() => handleCommit(commitMessage)}
                       disabled={dialogDisabled}
                       title={
