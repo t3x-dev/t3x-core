@@ -1,0 +1,104 @@
+version: 1
+notes: |
+  Source of truth for the T3X alpha release package surface.
+  Changes to public package entries require owner approval and a stability note.
+packages:
+  - name: "@t3x-dev/local"
+    path: apps/local
+    access: public
+    publish_state: pending
+    npm_publish: true
+    stability_tier: alpha
+    readme_required: true
+    api_extractor: false
+    why: First-door local installer and no-key demo entrypoint.
+
+  - name: "@t3x-dev/yops"
+    path: packages/yops
+    access: public
+    publish_state: pending
+    npm_publish: true
+    stability_tier: alpha
+    readme_required: true
+    api_extractor: true
+    why: Public deterministic YAML operation contract.
+
+  - name: "@t3x-dev/core"
+    path: packages/core
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Candidate engine package; not part of the alpha public surface.
+
+  - name: "@t3x-dev/yschema"
+    path: packages/yschema
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Candidate schema package; not part of the alpha public surface.
+
+  - name: "@t3x-dev/api-client"
+    path: packages/api-client
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Candidate client package; not part of the alpha public surface.
+
+  - name: "@t3x-dev/cli"
+    path: apps/cli
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Candidate CLI package; not part of the alpha public surface.
+
+  - name: "@t3x-dev/mcp"
+    path: apps/mcp
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Candidate MCP package; not part of the alpha public surface.
+
+  - name: "@t3x-dev/api"
+    path: packages/api
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Route library for self-hosted product deployments.
+
+  - name: "@t3x-dev/storage"
+    path: packages/storage
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Storage layer for self-hosted product deployments.
+
+  - name: "@t3x-dev/runner"
+    path: apps/runner
+    access: restricted
+    publish_state: applied
+    npm_publish: false
+    stability_tier: internal
+    readme_required: false
+    api_extractor: false
+    why: Evaluation runner; not part of the alpha public surface.
