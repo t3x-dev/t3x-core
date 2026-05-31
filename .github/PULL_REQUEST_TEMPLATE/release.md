@@ -27,12 +27,13 @@ Public packages affected:
 - [ ] Release surface check passed
 - [ ] Local/runtime smoke reviewed when `@t3x-dev/local` is affected
 - [ ] No-key demo smoke reviewed when demo/runtime behavior is affected
-- [ ] Owner approval requested
+- [ ] Owner review requested when protected release, workflow, or ownership files changed
 
 ## Packaging Notes
 
-- Runtime artifacts are required only when `@t3x-dev/local` is in the release set.
-- `@t3x-dev/yops`-only releases should not build or publish local runtime artifacts.
+- Runtime artifacts should be required only when `@t3x-dev/local` is in the release set.
+- `@t3x-dev/yops`-only releases should avoid local runtime artifacts once
+  release-set detection is automated.
 - Merging this PR to `main` does not publish by itself unless the follow-up
   Changesets version/publish flow determines a publish is required.
 

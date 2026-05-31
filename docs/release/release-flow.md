@@ -38,7 +38,7 @@ Required guards for `dev`:
 - Lint and format checks.
 - Affected package build and tests.
 - Release surface consistency checks when release metadata changes.
-- CODEOWNERS approval for protected release, workflow, and ownership files.
+- Clear release impact declaration.
 
 During bootstrap, these guards are being added incrementally. If a guard is not
 yet wired in GitHub Actions, the PR must state the local command or follow-up
@@ -46,8 +46,9 @@ issue that covers it.
 
 No AI reviewer is required today. If Copilot, Greptile, or a similar reviewer is
 enabled later, it should be treated as advisory unless branch protection makes a
-specific check required. GitHub Actions and required human ownership checks
-remain the hard gates.
+specific check required. GitHub Actions remain the hard gate. Owner review is
+recommended for protected release, workflow, and ownership files, but it is not
+required by the current bootstrap rulesets.
 
 ## Release PRs Into `main`
 
@@ -68,7 +69,7 @@ Target release PR guards:
 - Local install smoke when `@t3x-dev/local` is affected.
 - No-key demo smoke when demo/runtime behavior is affected.
 - Release surface and stability policy checks when public packages are affected.
-- Owner approval.
+- Owner review for protected release, workflow, and ownership changes.
 
 Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
@@ -82,8 +83,10 @@ Release PR checklist:
 4. Declare whether public packages are affected.
 5. Confirm changesets are present when public package behavior changed.
 6. Wait for PR validation and release surface checks.
-7. Request owner approval.
-8. Merge to `main` only after checks and review pass.
+7. Request owner review when protected release, workflow, or ownership files
+   changed.
+8. Merge to `main` only after required checks pass and review expectations are
+   satisfied.
 
 After the release PR merges, the `Release` workflow runs on `main`.
 
@@ -137,8 +140,9 @@ public packages changed.
 - Runtime artifacts are built only when `@t3x-dev/local` is in the release set.
 - Release review and dry-run packaging must not publish real artifacts.
 
-The release workflow should avoid building or publishing runtime artifacts for a
-`yops`-only release.
+The target release behavior is to avoid building or publishing runtime artifacts
+for a `yops`-only release. The current workflow still needs release-set
+detection before that behavior is fully automated.
 
 ## Ownership
 
