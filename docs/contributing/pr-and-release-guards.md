@@ -28,9 +28,9 @@ pnpm test
 ```
 
 The target baseline also includes `pnpm build`. It should become required once
-the existing WebUI dependency blocker is fixed in a separate PR. Large PRs may
-need more targeted smoke checks. Release PRs into `main` use the full release
-guard described in [Alpha release flow](../release/alpha-release-flow.md).
+it is wired into PR validation. Large PRs may need more targeted smoke checks.
+Release PRs into `main` use the full release guard described in
+[Release flow](../release/release-flow.md).
 
 ## Protected Files
 

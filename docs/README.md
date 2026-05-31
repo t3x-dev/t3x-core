@@ -14,8 +14,8 @@ repository.
 
 ## Current Public Docs
 
-- [Alpha release flow](release/alpha-release-flow.md)
-- [Alpha stability policy](release/stability-policy.md)
+- [Release flow](release/release-flow.md)
+- [Stability policy](release/stability-policy.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
 
 ## Related Root Files
