@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/release-surface.schema.json",
+  "title": "T3X release surface",
+  "type": "object",
+  "required": ["version", "packages"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "notes": {
+      "type": "string"
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "access",
+          "publish_state",
+          "npm_publish",
+          "stability_tier",
+          "readme_required",
+          "api_extractor",
+          "why"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^@t3x-dev/[a-z0-9-]+$"
+          },
+          "path": {
+            "type": "string"
+          },
+          "access": {
+            "enum": ["public", "restricted", "internal"]
+          },
+          "publish_state": {
+            "enum": ["pending", "applied"]
+          },
+          "npm_publish": {
+            "type": "boolean"
+          },
+          "stability_tier": {
+            "enum": ["alpha", "beta", "stable", "internal"]
+          },
+          "readme_required": {
+            "type": "boolean"
+          },
+          "api_extractor": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -30,7 +30,7 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
-For the alpha release, the intended public npm surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Other packages remain internal or restricted candidates until they are explicitly promoted through the alpha stability process.
+For the alpha release, the intended public npm surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Other packages remain restricted until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
 
 <br/>
 
@@ -44,15 +44,17 @@ Choose the shortest path for what you want to do:
 npm install @t3x-dev/yops
 ```
 
-Use this if you want the public alpha YAML operation contract inside your own app.
+Use this if you want the deterministic YAML operation engine inside your own app.
 
-### Run the local alpha
+### Use the local alpha package
 
 ```bash
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the no-key local entrypoint once the local alpha package is published.
+Use this if you want the packaged local T3X experience. During the publish flip,
+`@t3x-dev/local` is tracked as public in `release/surface.yaml` with
+`publish_state: pending`.
 
 ### Run the full stack locally
 
@@ -281,7 +283,7 @@ First-run auth defaults:
 
 tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. The MCP package is not part of the initial public alpha surface. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
 
-Initial public alpha packages:
+Alpha public packages:
 
 - `@t3x-dev/local` — local installer and no-key demo entrypoint
 - `@t3x-dev/yops` — declarative YAML operations
@@ -356,16 +358,20 @@ pnpm check           # Lint + format (Biome)
 
 <br/>
 
-## Packages
+## Release Surface
 
-| Package | Alpha status | Description |
-|:--------|:-------------|:------------|
-| [`@t3x-dev/local`](apps/local/) | public alpha | Local installer and no-key demo entrypoint |
-| [`@t3x-dev/yops`](packages/yops/) | public alpha | Declarative YAML operations |
+The alpha package surface is declared in [`RELEASE.md`](RELEASE.md) and
+[`release/surface.yaml`](release/surface.yaml). `release/surface.yaml` is the
+machine-readable source of truth used by release automation.
+
+| Package | Status | Description |
+|:--------|:----|:------------|
+| [`@t3x-dev/local`](apps/local/) | public alpha, publish pending | Local installer and no-key demo entrypoint |
+| [`@t3x-dev/yops`](packages/yops/) | public alpha, publish pending | Declarative YAML operations |
 | [`@t3x-dev/core`](packages/core/) | restricted candidate | Diff, merge, hash chains, extraction, ylint |
 | [`@t3x-dev/yschema`](packages/yschema/) | restricted candidate | Domain validation with YOps auto-fix |
 | [`@t3x-dev/api-client`](packages/api-client/) | restricted candidate | TypeScript client |
-| [`@t3x-dev/cli`](apps/cli/) | restricted candidate | Command line interface |
+| [`@t3x-dev/cli`](apps/cli/) | restricted candidate | Command-line interface |
 | [`@t3x-dev/mcp`](apps/mcp/) | restricted candidate | MCP server for AI agents |
 
 <br/>

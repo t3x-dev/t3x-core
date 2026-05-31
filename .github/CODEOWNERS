@@ -1,0 +1,11 @@
+# Release surface and public stability declarations.
+RELEASE.md @etht3x
+release/surface.yaml @etht3x
+release/surface.schema.json @etht3x
+docs/release/ @etht3x
+docs/contributing/branch-protection.md @etht3x
+docs/contributing/pr-and-release-guards.md @etht3x
+
+# GitHub review and release automation.
+.github/CODEOWNERS @etht3x
+.github/workflows/ @etht3x
