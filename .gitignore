@@ -95,7 +95,7 @@ next-env.d.ts
 scratchpad/
 preview/
 videos/
-docs/
+notes/
 specs/
 /scripts/
 .claude/

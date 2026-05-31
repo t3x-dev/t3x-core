@@ -68,12 +68,17 @@ Open an issue describing:
 ### Submitting Code
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/your-feature`)
+2. Create a feature branch from `dev` (`git checkout -b feat/your-feature`)
 3. Make your changes
 4. Ensure tests pass (`pnpm test`)
 5. Ensure linting passes (`pnpm check`)
 6. Commit using [Conventional Commits](https://www.conventionalcommits.org/) format
-7. Push and open a pull request
+7. Push and open a pull request to `dev`
+
+During alpha, ordinary development PRs target `dev`; release candidate PRs move
+`dev` into `main`. See [PR and release guards](./docs/contributing/pr-and-release-guards.md)
+and [Alpha release flow](./docs/release/alpha-release-flow.md) for the current
+branching, changeset, and release rules.
 
 ### Commit Messages
 
