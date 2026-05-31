@@ -20,33 +20,29 @@ or documented public contracts.
 
 ## Required Checks
 
-The current bootstrap baseline for PRs into `dev` is:
+The current baseline for PRs into `dev` and `main` is:
 
 ```bash
 pnpm check
+pnpm check:release-surface
+pnpm build
 pnpm test
 ```
 
-The target baseline also includes `pnpm build`. It should become required once
-it is wired into PR validation. Large PRs may need more targeted smoke checks.
-Release PRs into `main` use the full release guard described in
-[Release flow](../release/release-flow.md).
+Large PRs may need more targeted smoke checks. Release PRs into `main` use the
+full release guard described in [Release flow](../release/release-flow.md).
 
 ## Protected Files
 
-Changes to these areas require owner review by convention today:
-
-- `.github/`
-- `docs/release/`
-
-The following protected files are planned or handled in follow-up release
-bootstrap PRs. Once present, they should be covered by CODEOWNERS and branch
-protection:
+Changes to these areas require owner review:
 
 - `.github/CODEOWNERS`
+- `.github/workflows/`
 - `RELEASE.md`
-- `STABILITY.md`
 - `release/`
+- `docs/release/`
+- `docs/contributing/branch-protection.md`
+- `docs/contributing/pr-and-release-guards.md`
 
 ## Review Tools
 
