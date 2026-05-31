@@ -39,8 +39,14 @@ Required guards for `dev`:
 - Release surface consistency checks when release metadata changes.
 - CODEOWNERS approval for protected release, workflow, and ownership files.
 
-AI review tools such as Copilot or Greptile may be used as advisory reviewers,
-but GitHub Actions and required human ownership checks remain the hard gates.
+During bootstrap, these guards are being added incrementally. If a guard is not
+yet wired in GitHub Actions, the PR must state the local command or follow-up
+issue that covers it.
+
+No AI reviewer is required today. If Copilot, Greptile, or a similar reviewer is
+enabled later, it should be treated as advisory unless branch protection makes a
+specific check required. GitHub Actions and required human ownership checks
+remain the hard gates.
 
 ## Release PRs Into `main`
 
@@ -52,7 +58,7 @@ Cadence:
 - Slower cadence is acceptable when `dev` contains risky changes.
 - Emergency hotfixes use the hotfix exception above.
 
-Required release PR guards:
+Target release PR guards:
 
 - Clean install.
 - Full build.
@@ -62,6 +68,10 @@ Required release PR guards:
 - No-key demo smoke when demo/runtime behavior is affected.
 - Release surface and stability policy checks when public packages are affected.
 - Owner approval.
+
+Some target release guards are not fully automated yet. They are part of the
+alpha release-readiness workstreams and should become required checks before
+the first public alpha publish.
 
 ## Versioning and Changesets
 

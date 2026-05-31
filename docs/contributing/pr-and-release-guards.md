@@ -20,32 +20,39 @@ or documented public contracts.
 
 ## Required Checks
 
-The expected baseline for PRs into `dev` is:
+The current bootstrap baseline for PRs into `dev` is:
 
 ```bash
 pnpm check
 pnpm test
-pnpm build
 ```
 
-Large PRs may need more targeted smoke checks. Release PRs into `main` use the
-full release guard described in [Alpha release flow](../release/alpha-release-flow.md).
+The target baseline also includes `pnpm build`. It should become required once
+the existing WebUI dependency blocker is fixed in a separate PR. Large PRs may
+need more targeted smoke checks. Release PRs into `main` use the full release
+guard described in [Alpha release flow](../release/alpha-release-flow.md).
 
 ## Protected Files
 
-Changes to these areas require owner review:
+Changes to these areas require owner review by convention today:
 
 - `.github/`
 - `docs/release/`
-- `release/`
+
+The following protected files are planned or handled in follow-up release
+bootstrap PRs. Once present, they should be covered by CODEOWNERS and branch
+protection:
+
+- `.github/CODEOWNERS`
 - `RELEASE.md`
 - `STABILITY.md`
-- `CODEOWNERS`
+- `release/`
 
 ## Review Tools
 
-AI review tools can help catch mistakes, but they are not the source of truth.
-Hard merge decisions should be based on:
+No AI reviewer is required today. AI review tools can help catch mistakes once
+configured, but they are not the source of truth. Hard merge decisions should be
+based on:
 
 - Required GitHub Actions.
 - Owner review for protected files.

@@ -26,10 +26,9 @@ By submitting a pull request, you agree that your contributions will be licensed
 ### Setup
 
 ```bash
-git clone https://github.com/t3x-dev/t3x.git
-cd t3x
+git clone https://github.com/t3x-dev/t3x-core.git
+cd t3x-core
 pnpm install
-pnpm build
 ```
 
 ### Development
@@ -108,4 +107,4 @@ See [CLAUDE.md](./CLAUDE.md) for detailed architecture documentation, including:
 
 ## Questions?
 
-Open a [Discussion](https://github.com/t3x-dev/t3x/discussions) or file an issue. We're happy to help you get started.
+Open a [Discussion](https://github.com/t3x-dev/t3x-core/discussions) or file an issue. We're happy to help you get started.

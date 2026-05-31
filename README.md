@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <a href="https://www.npmjs.com/package/@t3x-dev/core"><img src="https://img.shields.io/npm/v/@t3x-dev/core" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/@t3x-dev/yops"><img src="https://img.shields.io/npm/v/@t3x-dev/yops" alt="npm" /></a>
   <a href="https://github.com/t3x-dev/t3x-core/actions"><img src="https://img.shields.io/github/actions/workflow/status/t3x-dev/t3x-core/ci.yml?branch=main" alt="CI" /></a>
 </p>
 
@@ -30,7 +30,7 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
-At release, the public npm surface is centered on `@t3x-dev/core`, `@t3x-dev/yops`, `@t3x-dev/yschema`, `@t3x-dev/api-client`, `@t3x-dev/cli`, and `@t3x-dev/mcp`. The WebUI, API server, storage layer, and runner remain source-first for self-hosting and product deployments.
+For the alpha release, the intended public npm surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Other packages remain internal or restricted candidates until they are explicitly promoted through the alpha stability process.
 
 <br/>
 
@@ -38,21 +38,21 @@ At release, the public npm surface is centered on `@t3x-dev/core`, `@t3x-dev/yop
 
 Choose the shortest path for what you want to do:
 
-### Use T3X as a library
+### Use YOps as a library
 
 ```bash
-npm install @t3x-dev/core @t3x-dev/yops @t3x-dev/yschema @t3x-dev/api-client
+npm install @t3x-dev/yops
 ```
 
-Use this if you want the deterministic engine, YAML operations, schema validation, or the TypeScript API client inside your own app.
+Use this if you want the public alpha YAML operation contract inside your own app.
 
-### Use the CLI
+### Run the local alpha
 
 ```bash
-npx @t3x-dev/cli init
+npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the simplest terminal-first way to create a project and work with commits, diffs, merges, and extraction.
+Use this if you want the no-key local entrypoint once the local alpha package is published.
 
 ### Run the full stack locally
 
@@ -69,7 +69,7 @@ Docker and self-hosted runs keep auth on by default, so the first WebUI visit go
 
 ```bash
 git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
-pnpm install && pnpm build
+pnpm install
 pnpm dev:api     # API at localhost:8000
 pnpm dev:webui   # WebUI at localhost:3000
 ```
@@ -266,7 +266,7 @@ First-run auth defaults:
 
 ## Use T3X
 
-### MCP Server &mdash; for AI agents
+### MCP Server &mdash; candidate package for AI agents
 
 ```json
 {
@@ -279,12 +279,16 @@ First-run auth defaults:
 }
 ```
 
-tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
+tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. The MCP package is not part of the initial public alpha surface. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
 
-Published release packages:
+Initial public alpha packages:
+
+- `@t3x-dev/local` — local installer and no-key demo entrypoint
+- `@t3x-dev/yops` — declarative YAML operations
+
+Restricted candidate packages:
 
 - `@t3x-dev/core` — deterministic semantic engine
-- `@t3x-dev/yops` — declarative YAML operations
 - `@t3x-dev/yschema` — schema validation with YOps auto-fix
 - `@t3x-dev/api-client` — TypeScript API client
 - `@t3x-dev/cli` — command line interface
@@ -354,15 +358,15 @@ pnpm check           # Lint + format (Biome)
 
 ## Packages
 
-| Package | npm | Description |
-|:--------|:----|:------------|
-| [`@t3x-dev/yops`](packages/yops/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/yops)](https://www.npmjs.com/package/@t3x-dev/yops) | Declarative YAML operations |
-| [`@t3x-dev/yschema`](packages/yschema/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/yschema)](https://www.npmjs.com/package/@t3x-dev/yschema) | Domain validation with YOps auto-fix |
-| [`@t3x-dev/core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/core)](https://www.npmjs.com/package/@t3x-dev/core) | Diff, merge, hash chains, extraction, ylint |
-| [`@t3x-dev/storage`](packages/storage/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/storage)](https://www.npmjs.com/package/@t3x-dev/storage) | PostgreSQL persistence |
-| [`@t3x-dev/api`](packages/api/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/api)](https://www.npmjs.com/package/@t3x-dev/api) | API server library |
-| [`@t3x-dev/api-client`](packages/api-client/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/api-client)](https://www.npmjs.com/package/@t3x-dev/api-client) | TypeScript client |
-| [`@t3x-dev/mcp`](apps/mcp/) | [![npm](https://img.shields.io/npm/v/@t3x-dev/mcp)](https://www.npmjs.com/package/@t3x-dev/mcp) | MCP server for AI agents |
+| Package | Alpha status | Description |
+|:--------|:-------------|:------------|
+| [`@t3x-dev/local`](apps/local/) | public alpha | Local installer and no-key demo entrypoint |
+| [`@t3x-dev/yops`](packages/yops/) | public alpha | Declarative YAML operations |
+| [`@t3x-dev/core`](packages/core/) | restricted candidate | Diff, merge, hash chains, extraction, ylint |
+| [`@t3x-dev/yschema`](packages/yschema/) | restricted candidate | Domain validation with YOps auto-fix |
+| [`@t3x-dev/api-client`](packages/api-client/) | restricted candidate | TypeScript client |
+| [`@t3x-dev/cli`](apps/cli/) | restricted candidate | Command line interface |
+| [`@t3x-dev/mcp`](apps/mcp/) | restricted candidate | MCP server for AI agents |
 
 <br/>
 
