@@ -33,12 +33,6 @@ const FIXED_VERSION_PACKAGES = [
   '@t3x-dev/mcp',
   '@t3x-dev/local',
 ];
-const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
-  '@t3x-dev/api',
-  '@t3x-dev/cli',
-  '@t3x-dev/mcp',
-  '@t3x-dev/storage',
-];
 const GITHUB_TOKEN_ENV_NAMES = ['T3X_LOCAL_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
 const DOWNLOAD_MAX_ATTEMPTS = parsePositiveInt(process.env.T3X_LOCAL_DOWNLOAD_ATTEMPTS, 3);
 const DOWNLOAD_RETRY_DELAY_MS = parsePositiveInt(
@@ -390,16 +384,6 @@ async function verifyInstalledVersionLock(packageDir, manifest) {
   const packageJson = await readJson(path.join(packageDir, 'package.json'));
   const expectedVersion = packageJson.version;
   const problems = [];
-
-  for (const dependencyName of LOCAL_DIRECT_FIXED_DEPENDENCIES) {
-    const actual = packageJson.dependencies?.[dependencyName];
-
-    if (actual !== expectedVersion && actual !== `workspace:${expectedVersion}`) {
-      problems.push(
-        `package.json dependency ${dependencyName} must pin ${expectedVersion}, found ${actual ?? 'missing'}`
-      );
-    }
-  }
 
   if (manifest.packageVersion !== expectedVersion) {
     problems.push(

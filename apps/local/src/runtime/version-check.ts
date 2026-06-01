@@ -29,13 +29,6 @@ const FIXED_PACKAGE_WORKSPACE_PATHS: Record<(typeof FIXED_VERSION_PACKAGES)[numb
   '@t3x-dev/local': path.join('apps', 'local', 'package.json'),
 };
 
-const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
-  '@t3x-dev/api',
-  '@t3x-dev/cli',
-  '@t3x-dev/mcp',
-  '@t3x-dev/storage',
-] as const;
-
 export interface VersionSnapshot {
   node: string;
   platform: string;
@@ -80,15 +73,6 @@ export function getVersionLockReport(paths: LocalPaths): VersionLockReport {
   const expectedVersion = localPackageJson.version ?? 'unknown';
   const problems: string[] = [];
   const resolvedVersions: Record<string, string> = {};
-
-  for (const dependencyName of LOCAL_DIRECT_FIXED_DEPENDENCIES) {
-    const actual = localPackageJson.dependencies?.[dependencyName];
-    if (actual !== expectedVersion && actual !== `workspace:${expectedVersion}`) {
-      problems.push(
-        `Local package dependency ${dependencyName} must pin ${expectedVersion}, found ${actual ?? 'missing'}`
-      );
-    }
-  }
 
   if (manifest) {
     if (manifest.packageVersion !== expectedVersion) {

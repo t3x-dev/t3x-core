@@ -27,13 +27,6 @@ const FIXED_PACKAGE_PATHS = {
   '@t3x-dev/local': path.join('apps', 'local', 'package.json'),
 };
 
-const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
-  '@t3x-dev/api',
-  '@t3x-dev/cli',
-  '@t3x-dev/mcp',
-  '@t3x-dev/storage',
-];
-
 export async function verifyVersions(options = {}) {
   const repoRoot = options.repoRoot ?? (await findRepoRoot(options.cwd ?? process.cwd()));
   const packages = await readFixedPackages(repoRoot);
@@ -50,24 +43,6 @@ export async function verifyVersions(options = {}) {
   }
 
   if (expectedVersion) {
-    const localPackage = packages.find((pkg) => pkg.name === '@t3x-dev/local');
-
-    if (!localPackage) {
-      problems.push('Could not locate @t3x-dev/local in the fixed package set');
-    } else {
-      const localDependencies = localPackage.packageJson.dependencies ?? {};
-
-      for (const dependencyName of LOCAL_DIRECT_FIXED_DEPENDENCIES) {
-        const actual = localDependencies[dependencyName];
-
-        if (actual !== expectedVersion && actual !== `workspace:${expectedVersion}`) {
-          problems.push(
-            `apps/local dependency ${dependencyName} must pin ${expectedVersion}, found ${actual ?? 'missing'}`
-          );
-        }
-      }
-    }
-
     if (options.verifyManifest ?? true) {
       const manifestPath = path.join(repoRoot, 'apps', 'local', 'runtime-manifest.json');
       const manifest = await tryReadJson(manifestPath);

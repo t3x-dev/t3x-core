@@ -186,15 +186,6 @@ export async function validateYOps(
 
   const parsedYOps = parseResult.yops;
 
-  try {
-    const yschema = await import('@t3x-dev/yschema');
-    if (yschema.validateSchema && yschema.buildFixPlan) {
-      // Reserved for future schema-aware validation.
-    }
-  } catch {
-    // Optional dependency unavailable.
-  }
-
   let resultDoc: SemanticContent | undefined;
   try {
     const engineResult = applyYOps(currentContent, parsedYOps as never);

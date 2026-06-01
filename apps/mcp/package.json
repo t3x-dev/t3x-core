@@ -32,7 +32,7 @@
     "access": "restricted"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",

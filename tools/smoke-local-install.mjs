@@ -16,19 +16,7 @@ const apiPort = process.env.T3X_LOCAL_SMOKE_API_PORT ?? '8041';
 const webPort = process.env.T3X_LOCAL_SMOKE_WEB_PORT ?? '3041';
 const runtimeMirror = path.join(repoRoot, 'apps', 'local', 'runtime-artifacts');
 
-const packageDirs = [
-  path.join('packages', 'yops'),
-  path.join('packages', 'yschema'),
-  path.join('packages', 'core'),
-  path.join('packages', 'api-client'),
-  path.join('apps', 'runner'),
-  path.join('packages', 'storage'),
-  path.join('packages', 'api'),
-  path.join('packages', 'mcp'),
-  path.join('apps', 'cli'),
-  path.join('apps', 'mcp'),
-  path.join('apps', 'local'),
-];
+const packageDirs = [path.join('packages', 'yops'), path.join('apps', 'local')];
 
 try {
   await fs.mkdir(packDir, { recursive: true });
@@ -47,15 +35,17 @@ try {
     .map((name) => path.join(packDir, name));
 
   const localTarball = tarballs.find((filePath) => filePath.includes('t3x-dev-local-'));
-  const supportTarballs = tarballs.filter((filePath) => filePath !== localTarball);
+  const yopsTarball = tarballs.find((filePath) => filePath.includes('t3x-dev-yops-'));
 
   if (!localTarball) {
     throw new Error(`Could not find @t3x-dev/local tarball in ${packDir}`);
   }
+  if (!yopsTarball) {
+    throw new Error(`Could not find @t3x-dev/yops tarball in ${packDir}`);
+  }
 
   run('npm', ['init', '-y'], { cwd: installDir });
-  run('npm', ['install', ...supportTarballs], { cwd: installDir });
-  run('npm', ['install', localTarball], {
+  run('npm', ['install', yopsTarball, localTarball], {
     cwd: installDir,
     env: {
       ...process.env,

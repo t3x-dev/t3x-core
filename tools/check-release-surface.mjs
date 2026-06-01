@@ -14,4 +14,4 @@ if (result.errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`release surface ok: ${result.publicPackages.join(', ')}`);
+console.log(`release surface ok: ${result.npmPublishPackages.join(', ')}`);
