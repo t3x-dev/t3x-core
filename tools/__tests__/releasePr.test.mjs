@@ -48,10 +48,6 @@ T3X product release version: \`0.4.1\`
 ## Release Notes
 
 - T3X 0.4.1 tightens release PR policy checks.
-
-Package releases:
-
-- None
 `;
 
 test('allows a product release PR with matching release branch and package release entry', () => {

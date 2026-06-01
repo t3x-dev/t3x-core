@@ -19,9 +19,9 @@ T3X product release version: \`0.4.0\`
 
 - T3X 0.4.0 improves local runtime startup.
 
-Package releases:
+## Package Releases
 
-- @t3x-dev/local 0.3.1
+- \`@t3x-dev/local\`: patch
 
 ## Known Risks
 
@@ -68,6 +68,8 @@ test('builds product release notes from release PR sections', () => {
 
   assert.match(notes, /^# T3X v0\.4\.0/);
   assert.match(notes, /## Release Notes/);
+  assert.match(notes, /## Package Releases/);
+  assert.match(notes, /`@t3x-dev\/local`: patch/);
   assert.match(notes, /## Included Changes/);
   assert.match(notes, /PR: #12 https:\/\/github.com\/t3x-dev\/t3x-core\/pull\/12/);
 });

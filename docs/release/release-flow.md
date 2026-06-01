@@ -210,7 +210,7 @@ that npm packages changed.
 - Runtime artifacts are built only when `@t3x-dev/local` is in the release set.
 - Release review and dry-run packaging must not publish real artifacts.
 - A product release may publish zero packages. In that case the release notes
-  must say `Package releases: None`.
+  must include `Package Releases` with `- None`.
 
 The target release behavior is to avoid building or publishing runtime artifacts
 for a `yops`-only release. The current workflow still needs release-set

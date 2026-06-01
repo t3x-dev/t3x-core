@@ -27,11 +27,16 @@ export function findProductReleasePull(pulls) {
 
 export function buildProductReleaseNotes({ pull, version }) {
   const includedChanges = extractSection(pull.body ?? '', 'Included Changes');
+  const packageReleases = extractSection(pull.body ?? '', 'Package Releases');
   const releaseNotes = extractSection(pull.body ?? '', 'Release Notes');
   const lines = [`# T3X v${version}`, ''];
 
   if (releaseNotes) {
     lines.push('## Release Notes', '', releaseNotes, '');
+  }
+
+  if (packageReleases) {
+    lines.push('## Package Releases', '', packageReleases, '');
   }
 
   if (includedChanges) {

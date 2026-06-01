@@ -58,8 +58,7 @@ The release PR policy check also validates changeset files:
 - Public packages in changeset frontmatter must appear in `Package Releases`.
 
 The product release version is independent from npm package versions. If the
-release publishes no packages, write `Package releases: None` in the release
-notes.
+release publishes no packages, write `- None` in `Package Releases`.
 
 Hotfix PRs may target `main` from `hotfix/*`, but they still need product
 release metadata and release notes. Changesets version package PRs are exempt

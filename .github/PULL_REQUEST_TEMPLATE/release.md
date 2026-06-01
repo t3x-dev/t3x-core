@@ -54,10 +54,6 @@ User-facing release notes:
 
 -
 
-Package releases:
-
-- None
-
 ## Known Risks
 
 -
