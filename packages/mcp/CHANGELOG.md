@@ -1,5 +1,14 @@
 # @t3x-dev/mcp-lib
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/core@0.3.1
+  - @t3x-dev/storage@0.3.1
+  - @t3x-dev/api-client@0.3.1
+
 ## 0.1.7
 
 ### Patch Changes

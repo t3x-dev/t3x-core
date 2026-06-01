@@ -1,5 +1,12 @@
 # @t3x-dev/storage
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/core@0.3.1
+
 ## 0.3.0
 
 ### Patch Changes
