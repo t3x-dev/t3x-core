@@ -23,14 +23,41 @@ or documented public contracts.
 The current baseline for PRs into `dev` and `main` is:
 
 ```bash
+pnpm check:release-pr
 pnpm check
 pnpm check:release-surface
 pnpm build
 pnpm test
 ```
 
-Large PRs may need more targeted smoke checks. Release PRs into `main` use the
-full release guard described in [Release flow](../release/release-flow.md).
+`pnpm check:release-pr` is only meaningful when CI passes pull request metadata
+through environment variables. Locally, use it with explicit metadata when
+testing a release PR guard.
+
+Large PRs may need more targeted smoke checks. Product release PRs into `main`
+use the full release guard described in [Release flow](../release/release-flow.md).
+
+## Product Release PRs
+
+Normal releases into `main` use `release/x.y.z` branches, where `x.y.z` is the
+T3X product release version.
+
+Release PRs must include:
+
+- `T3X product release version: \`x.y.z\`` in the PR body.
+- Included changes or a comparison range.
+- User-facing release notes.
+- Exactly one package intent: `No package publish intended` or
+  `Changesets included for public package changes`.
+- Public package impact: `@t3x-dev/local`, `@t3x-dev/yops`, or `None`.
+
+The product release version is independent from npm package versions. If the
+release publishes no packages, write `Package releases: None` in the release
+notes.
+
+Hotfix PRs may target `main` from `hotfix/*`, but they still need product
+release metadata and release notes. Changesets version package PRs are exempt
+from the product release branch naming rule.
 
 ## Protected Files
 
@@ -67,3 +94,7 @@ Use this decision table when filling out a PR.
 | CI-only change | No |
 | Contributor-only docs | No |
 | Internal package refactor | Usually no |
+
+Product release version bumps are separate from this table. Every merge to
+`main` gets a product release version even when this table says no changeset is
+required.

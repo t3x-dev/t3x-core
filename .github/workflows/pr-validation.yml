@@ -47,6 +47,14 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Check release PR policy
+        if: github.event_name == 'pull_request'
+        env:
+          T3X_PR_BASE: ${{ github.base_ref }}
+          T3X_PR_HEAD: ${{ github.head_ref }}
+          T3X_PR_BODY: ${{ github.event.pull_request.body }}
+        run: node tools/check-release-pr.mjs
+
       - name: Cache Turbo
         uses: actions/cache@v4
         with:
