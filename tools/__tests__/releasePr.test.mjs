@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseChangesetPackages, validateReleasePr } from '../lib/releasePr.mjs';
+import {
+  parseChangesetPackages,
+  parsePackageReleaseSection,
+  validateReleasePr,
+} from '../lib/releasePr.mjs';
 
 const localChangeset = {
   name: 'fresh-local-runtime.md',
@@ -20,18 +24,9 @@ T3X product release version: \`0.4.0\`
 
 - Promote reviewed dev changes into the product release.
 
-## Release Impact
+## Package Releases
 
-- [x] Changesets included for public package changes
-- [ ] No package publish intended
-- [x] Version/package PR expected after this merges to \`main\`
-- [x] Publish expected after the version/package PR merges
-
-Public packages affected:
-
-- [x] \`@t3x-dev/local\`
-- [ ] \`@t3x-dev/yops\`
-- [ ] None
+- \`@t3x-dev/local\`: patch
 
 ## Release Notes
 
@@ -46,16 +41,9 @@ T3X product release version: \`0.4.1\`
 
 - Tighten release PR policy checks.
 
-## Release Impact
+## Package Releases
 
-- [ ] Changesets included for public package changes
-- [x] No package publish intended
-
-Public packages affected:
-
-- [ ] \`@t3x-dev/local\`
-- [ ] \`@t3x-dev/yops\`
-- [x] None
+- None
 
 ## Release Notes
 
@@ -66,7 +54,7 @@ Package releases:
 - None
 `;
 
-test('allows a product release PR with matching release branch and package intent', () => {
+test('allows a product release PR with matching release branch and package release entry', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
@@ -120,37 +108,32 @@ test('rejects release branch and body version mismatch', () => {
   assert.match(result.errors.join('\n'), /does not match PR body product release version/);
 });
 
-test('rejects missing package intent', () => {
+test('rejects missing package release entries', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: validReleaseBody.replace(
-      '- [x] Changesets included for public package changes',
-      '- [ ] Changesets included for public package changes'
-    ),
+    body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '-'),
     changesetFiles: [localChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /must check exactly one package intent/);
+  assert.match(
+    result.errors.join('\n'),
+    /Package Releases section with "- None" or package entries/
+  );
 });
 
-test('rejects public package changes without changesets', () => {
+test('rejects package releases none when changesets exist', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: validReleaseBody
-      .replace(
-        '- [x] Changesets included for public package changes',
-        '- [ ] Changesets included for public package changes'
-      )
-      .replace('- [ ] No package publish intended', '- [x] No package publish intended'),
+    body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '- None'),
     changesetFiles: [localChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /public package changes require changesets/);
+  assert.match(result.errors.join('\n'), /Package Releases is "None"/);
 });
 
-test('rejects package publish intent without changeset files', () => {
+test('rejects package release entries without changeset files', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
@@ -158,10 +141,10 @@ test('rejects package publish intent without changeset files', () => {
     changesetFiles: [],
   });
 
-  assert.match(result.errors.join('\n'), /no \.changeset\/\*\.md files were found/);
+  assert.match(result.errors.join('\n'), /Package Releases lists packages/);
 });
 
-test('rejects code-only package intent when changeset files exist', () => {
+test('rejects code-only release when changeset files exist', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
@@ -169,10 +152,10 @@ test('rejects code-only package intent when changeset files exist', () => {
     changesetFiles: [localChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /No package publish intended is checked/);
+  assert.match(result.errors.join('\n'), /Package Releases is "None"/);
 });
 
-test('rejects affected public package without matching changeset target', () => {
+test('rejects package release entry without matching changeset target', () => {
   const result = validateReleasePr({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
@@ -180,7 +163,8 @@ test('rejects affected public package without matching changeset target', () => 
     changesetFiles: [yopsChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /no changeset targets it/);
+  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/local/);
+  assert.match(result.errors.join('\n'), /changeset targets @t3x-dev\/yops/);
 });
 
 test('allows changesets version package PRs into main', () => {
@@ -204,4 +188,35 @@ Release package changes.
 `),
     ['@t3x-dev/local', '@t3x-dev/yops']
   );
+});
+
+test('parses package release section', () => {
+  assert.deepEqual(
+    parsePackageReleaseSection(`- \`@t3x-dev/local\`: patch
+- \`@t3x-dev/yops\`: minor`),
+    {
+      none: false,
+      packages: ['@t3x-dev/local', '@t3x-dev/yops'],
+      hasEntries: true,
+    }
+  );
+  assert.deepEqual(parsePackageReleaseSection('- None'), {
+    none: true,
+    packages: [],
+    hasEntries: true,
+  });
+});
+
+test('validates multi-line package release sections against changesets', () => {
+  const result = validateReleasePr({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: validReleaseBody.replace(
+      '- `@t3x-dev/local`: patch',
+      '- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch'
+    ),
+    changesetFiles: [localChangeset, yopsChangeset],
+  });
+
+  assert.deepEqual(result.errors, []);
 });

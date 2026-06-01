@@ -112,12 +112,11 @@ Changeset 只负责 package publish intent。
 6. 填 `T3X product release version: \`0.4.0\``。
 7. 列 included PRs 或 compare range。
 8. 写 `Release Notes`。
-9. 选择 package intent：
-   - 没有 package publish：勾 `No package publish intended`，release notes 写
-     `Package releases: None`。
-   - 有 public package 变化：勾
-     `Changesets included for public package changes`，确认 `.changeset/*.md`
-     已经在 release branch。
+9. 填 `Package Releases`：
+   - 没有 package publish：写 `- None`。
+   - 有 public package 变化：一行一个 package，例如
+     `- \`@t3x-dev/local\`: patch`，并确认 `.changeset/*.md` 已经在
+     release branch。
 10. 等 `PR Validation / Check, build, and test` 通过。
 11. merge 到 `main`。
 
@@ -146,22 +145,11 @@ release PR 要写：
 ```md
 T3X product release version: `0.4.1`
 
-## Release Impact
-
-- [x] No package publish intended
-- [ ] Changesets included for public package changes
-
-Public packages affected:
-
-- [ ] `@t3x-dev/local`
-- [ ] `@t3x-dev/yops`
-- [x] None
-
 ## Release Notes
 
 - Tighten release PR policy checks.
 
-Package releases:
+## Package Releases
 
 - None
 ```
@@ -169,8 +157,8 @@ Package releases:
 这类 release merge 到 `main` 后不会 publish npm package。
 
 CI 会检查 code-only release branch 里不能存在 `.changeset/*.md`。如果存在，
-说明这次 release 实际包含 package publish intent，不能勾
-`No package publish intended`。
+说明这次 release 实际包含 package publish intent，不能写 `Package Releases:
+- None`。
 
 ## 6. Package Release
 
@@ -187,16 +175,16 @@ CI 会检查 code-only release branch 里不能存在 `.changeset/*.md`。如果
    pnpm changeset
    ```
 
-2. release PR 勾：
+2. release PR 填：
 
    ```md
-   - [x] Changesets included for public package changes
-   - [x] Version/package PR expected after this merges to `main`
-   - [x] Publish expected after the version/package PR merges
+   ## Package Releases
+
+   - `@t3x-dev/local`: patch
    ```
 
-3. 确认 release PR 勾选的 package 和 `.changeset/*.md` frontmatter 一致。
-   例如勾了 `@t3x-dev/local`，changeset 里必须有：
+3. 确认 `Package Releases` 和 `.changeset/*.md` frontmatter 一致。例如列了
+   `@t3x-dev/local`，changeset 里必须有：
 
    ```md
    ---

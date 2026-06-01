@@ -1,7 +1,7 @@
 export function extractSection(markdown, heading) {
   return (
     markdown
-      .match(new RegExp(`^## ${heading}\\s*\\n([\\s\\S]*?)(?:\\n## |\\n?$)`, 'm'))?.[1]
+      .match(new RegExp(`(?:^|\\n)## ${heading}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`))?.[1]
       ?.trim() ?? ''
   );
 }

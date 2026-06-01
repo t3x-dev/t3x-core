@@ -47,15 +47,15 @@ Release PRs must include:
 - `T3X product release version: \`x.y.z\`` in the PR body.
 - Included changes or a comparison range.
 - User-facing release notes.
-- Exactly one package intent: `No package publish intended` or
-  `Changesets included for public package changes`.
-- Public package impact: `@t3x-dev/local`, `@t3x-dev/yops`, or `None`.
+- A `Package Releases` section containing either `- None` or one line per
+  package, for example `- \`@t3x-dev/local\`: patch`.
 
 The release PR policy check also validates changeset files:
 
-- Package publish intent requires at least one `.changeset/*.md`.
-- Code-only release intent rejects checked-in `.changeset/*.md` files.
-- Checked public packages must appear in changeset frontmatter.
+- `Package Releases: - None` rejects checked-in `.changeset/*.md` files.
+- Package release entries require at least one `.changeset/*.md`.
+- Listed public packages must appear in changeset frontmatter.
+- Public packages in changeset frontmatter must appear in `Package Releases`.
 
 The product release version is independent from npm package versions. If the
 release publishes no packages, write `Package releases: None` in the release

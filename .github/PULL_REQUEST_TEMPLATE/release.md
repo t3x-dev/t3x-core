@@ -6,11 +6,6 @@ Promotes a reviewed product release into `main`.
 
 T3X product release version: `0.0.0`
 
-Release branch:
-
-- [ ] `release/x.y.z`
-- [ ] `hotfix/*`
-
 Expected product tag after merge:
 
 - `t3x-v0.0.0`
@@ -21,24 +16,23 @@ List merged PRs or the comparison range:
 
 -
 
-## Release Impact
+## Package Releases
 
-- [ ] Changesets included for public package changes
-- [ ] No package publish intended
-- [ ] Version/package PR expected after this merges to `main`
-- [ ] Publish expected after the version/package PR merges
+- None
 
-Public packages affected:
+<!--
+If this product release publishes packages, replace None with one line per package:
 
-- [ ] `@t3x-dev/local`
-- [ ] `@t3x-dev/yops`
-- [ ] None
+- `@t3x-dev/local`: patch
+- `@t3x-dev/yops`: patch
+
+CI validates this section against .changeset/*.md.
+-->
 
 ## Required Checks
 
 - [ ] PR Validation passed
 - [ ] Release surface check passed
-- [ ] Changeset files match package impact
 - [ ] Local/runtime smoke reviewed when `@t3x-dev/local` is affected
 - [ ] No-key demo smoke reviewed when demo/runtime behavior is affected
 - [ ] Owner review requested when protected release, workflow, or ownership files changed

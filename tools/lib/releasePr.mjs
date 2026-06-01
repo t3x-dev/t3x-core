@@ -11,20 +11,39 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function isChecked(body, label) {
-  return new RegExp(`^- \\[[xX]\\] ${escapeRegex(label)}\\s*$`, 'm').test(body);
-}
-
 function sectionText(body, heading) {
   return (
     body.match(
-      new RegExp(`^## ${escapeRegex(heading)}\\s*\\n([\\s\\S]*?)(?:\\n## |\\n?$)`, 'm')
+      new RegExp(`(?:^|\\n)## ${escapeRegex(heading)}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`)
     )?.[1] ?? ''
   );
 }
 
 function hasNonEmptyBullet(section) {
   return section.split('\n').some((line) => /^-\s+\S/.test(line.trim()) && line.trim() !== '-');
+}
+
+function normalizePackageName(value) {
+  return value.replace(/^`|`$/g, '').trim();
+}
+
+export function parsePackageReleaseSection(section) {
+  const lines = section
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '));
+
+  const none = lines.some((line) => /^-\s+None\s*$/i.test(line));
+  const packages = lines
+    .map((line) => line.match(/^-\s+(`?@t3x-dev\/(?:local|yops)`?)\s*:/)?.[1])
+    .filter(Boolean)
+    .map(normalizePackageName);
+
+  return {
+    none,
+    packages: [...new Set(packages)],
+    hasEntries: none || packages.length > 0,
+  };
 }
 
 function parseProductReleaseVersion(body) {
@@ -59,29 +78,43 @@ export function readChangesetFiles({ rootDir = process.cwd() } = {}) {
     });
 }
 
-function validateChangesets({
-  errors,
-  changesetFiles,
-  changesetsIncluded,
-  noPackagePublish,
-  affectedPackages,
-}) {
-  if (changesetsIncluded && changesetFiles.length === 0) {
-    errors.push('package publish intent is checked, but no .changeset/*.md files were found.');
+function validatePackageReleases({ errors, packageReleases, changesetFiles }) {
+  if (!packageReleases.hasEntries) {
+    errors.push(
+      'main release PRs must include a Package Releases section with "- None" or package entries.'
+    );
+    return;
   }
 
-  if (noPackagePublish && changesetFiles.length > 0) {
+  if (packageReleases.none && packageReleases.packages.length > 0) {
+    errors.push('Package Releases cannot include "None" together with package entries.');
+  }
+
+  if (packageReleases.none && changesetFiles.length > 0) {
     errors.push(
-      `No package publish intended is checked, but changeset files exist: ${changesetFiles
+      `Package Releases is "None", but changeset files exist: ${changesetFiles
         .map((file) => file.name)
         .join(', ')}.`
     );
   }
 
+  if (packageReleases.packages.length > 0 && changesetFiles.length === 0) {
+    errors.push('Package Releases lists packages, but no .changeset/*.md files were found.');
+  }
+
   const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
-  for (const packageName of affectedPackages) {
-    if (changesetsIncluded && !changesetPackages.has(packageName)) {
-      errors.push(`public package ${packageName} is checked, but no changeset targets it.`);
+  for (const packageName of packageReleases.packages) {
+    if (!changesetPackages.has(packageName)) {
+      errors.push(`Package Releases lists ${packageName}, but no changeset targets it.`);
+    }
+  }
+
+  for (const packageName of changesetPackages) {
+    if (
+      (packageName === '@t3x-dev/local' || packageName === '@t3x-dev/yops') &&
+      !packageReleases.packages.includes(packageName)
+    ) {
+      errors.push(`changeset targets ${packageName}, but Package Releases does not list it.`);
     }
   }
 }
@@ -114,48 +147,13 @@ function validateProductReleaseBody({ body, branchVersion = null, changesetFiles
     errors.push('main release PRs must include user-facing release notes.');
   }
 
-  const noPackagePublish = isChecked(body, 'No package publish intended');
-  const changesetsIncluded = isChecked(body, 'Changesets included for public package changes');
-
-  if (noPackagePublish === changesetsIncluded) {
-    errors.push(
-      'main release PRs must check exactly one package intent: "No package publish intended" or "Changesets included for public package changes".'
-    );
+  if (!body.includes('## Package Releases')) {
+    errors.push('main release PRs must include a Package Releases section.');
   }
-
-  const localAffected = isChecked(body, '`@t3x-dev/local`');
-  const yopsAffected = isChecked(body, '`@t3x-dev/yops`');
-  const noneAffected = isChecked(body, 'None');
-  const affectedPackages = [
-    localAffected ? '@t3x-dev/local' : null,
-    yopsAffected ? '@t3x-dev/yops' : null,
-  ].filter(Boolean);
-  const affectedCount = [localAffected, yopsAffected, noneAffected].filter(Boolean).length;
-
-  if (affectedCount === 0) {
-    errors.push('main release PRs must declare public packages affected, or check "None".');
-  }
-
-  if (noneAffected && (localAffected || yopsAffected)) {
-    errors.push('public package impact cannot check "None" together with a package name.');
-  }
-
-  if ((localAffected || yopsAffected) && noPackagePublish) {
-    errors.push(
-      'public package changes require changesets; do not check "No package publish intended".'
-    );
-  }
-
-  if (noneAffected && changesetsIncluded) {
-    errors.push('package changesets are checked, but public packages affected is "None".');
-  }
-
-  validateChangesets({
+  validatePackageReleases({
     errors,
+    packageReleases: parsePackageReleaseSection(sectionText(body, 'Package Releases')),
     changesetFiles,
-    changesetsIncluded,
-    noPackagePublish,
-    affectedPackages,
   });
 
   return errors;

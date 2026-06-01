@@ -112,9 +112,10 @@ Release PR checklist:
 4. Fill in the T3X product release version. It must match the release branch
    name.
 5. List included PRs or the comparison range.
-6. Add user-facing release notes. Use `Package releases: None` when no package
+6. Add user-facing release notes. Use `Package Releases: - None` when no package
    publish is intended.
-7. Declare whether public packages are affected.
+7. Fill in the `Package Releases` section. List each package that should publish
+   or use `- None`.
 8. Confirm changesets are present when public package behavior changed.
 9. Wait for PR validation and release surface checks.
 10. Request owner review when protected release, workflow, or ownership files
@@ -189,13 +190,15 @@ When an ordinary PR into `dev` has no package or product release impact, mark it
 as `no-release-impact` in the PR body or label. A product release PR into
 `main` must still include the product release version and release notes.
 
-PR validation checks the release PR body against the checked-in changeset files:
+PR validation checks the structured `Package Releases` section against the
+checked-in changeset files:
 
-- `Changesets included for public package changes` requires at least one
-  `.changeset/*.md` file.
-- `No package publish intended` requires no `.changeset/*.md` files in the
-  release branch.
-- Each checked public package must appear in a changeset frontmatter entry.
+- `Package Releases: - None` requires no `.changeset/*.md` files in the release
+  branch.
+- Package entries require at least one `.changeset/*.md` file.
+- Each listed public package must appear in a changeset frontmatter entry.
+- Each public package in changeset frontmatter must appear in `Package
+  Releases`.
 
 ## Publish Rules
 
