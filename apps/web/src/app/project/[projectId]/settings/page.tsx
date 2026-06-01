@@ -25,13 +25,13 @@ import { AutopilotSettings } from '@/components/autopilot/AutopilotSettings';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
-import type { ProviderInfo, RoleAssignment } from '@/infrastructure';
 import {
   fetchProjectProviderConfig,
   fetchProviderRoles,
   fetchProviders,
 } from '@/queries/providers';
 import { useProjectStore } from '@/store/projectStore';
+import type { ProviderInfo, RoleAssignment } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 type RoleGroup = 'generation' | 'embedding' | 'extraction' | 'merge';

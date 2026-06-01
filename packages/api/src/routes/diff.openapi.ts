@@ -7,103 +7,12 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import {
-  collectResult,
-  createCachedEmbeddingProvider,
-  createGoogleAIEmbeddingProvider,
-  diffCommits,
-  EmbeddingProviderError,
-  runOperation,
-  type TreeDiff,
-} from '@t3x-dev/core';
-import { findSegmentEmbeddingsByTurn, findTurnByHash, getCommitUnified } from '@t3x-dev/storage';
+import { collectResult, diffCommits, runOperation, type TreeDiff } from '@t3x-dev/core';
+import { getCommitUnified } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { buildPipelineContext } from '../ops/context';
 import { diffOp } from '../ops/diff';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type DBType = Awaited<ReturnType<typeof getDB>>;
-
-/** Local segment type for legacy node-level diffs */
-interface DiffSegment {
-  segmentId: string;
-  text: string;
-}
-
-type ExtractResult =
-  | { ok: true; id: string; segments: DiffSegment[] }
-  | { ok: false; error: 'not_found' | 'no_rings' | 'corrupted'; message: string };
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Extract segments from turn — tries Ring 3 first, falls back to text splitting.
- *
- * Strategy 1: Ring 3 segments (legacy path, when rings_json exists)
- * Strategy 2: Punctuation-based text splitting (when Ring data unavailable)
- */
-async function extractSegmentsFromTurn(db: DBType, turnHash: string): Promise<ExtractResult> {
-  const turn = await findTurnByHash(db, turnHash);
-  if (!turn) {
-    return { ok: false, error: 'not_found', message: `Turn ${turnHash} not found` };
-  }
-
-  // Strategy 1: Ring 3 segments (legacy data that may still exist in DB)
-  if (turn.ringsJson) {
-    try {
-      const rings = JSON.parse(turn.ringsJson) as {
-        ring3?: { segments?: Array<{ segmentId: string; text: string }> };
-      };
-      if (rings.ring3 && Array.isArray(rings.ring3.segments) && rings.ring3.segments.length > 0) {
-        const segments: DiffSegment[] = rings.ring3.segments.map((seg) => ({
-          segmentId: seg.segmentId,
-          text: seg.text,
-        }));
-        return { ok: true, id: turnHash, segments };
-      }
-    } catch {
-      // Fall through to text splitting
-    }
-  }
-
-  // Strategy 2: Punctuation-based text splitting
-  if (turn.content) {
-    const segments = turn.content
-      .split(/(?<=[.!?。！？])\s+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (segments.length > 0) {
-      return {
-        ok: true,
-        id: turnHash,
-        segments: segments.map((text, i) => ({
-          segmentId: `s_fallback_${i}`,
-          text,
-        })),
-      };
-    }
-  }
-
-  return { ok: false, error: 'no_rings', message: `Turn ${turnHash} has no extractable content` };
-}
-
-function getErrorStatus(error: 'not_found' | 'no_rings' | 'corrupted'): 400 | 404 | 500 {
-  if (error === 'corrupted') return 500;
-  if (error === 'not_found') return 404;
-  return 400;
-}
-
-function getErrorCode(error: 'not_found' | 'no_rings' | 'corrupted'): string {
-  if (error === 'corrupted') return 'DATA_CORRUPTED';
-  if (error === 'no_rings') return 'NO_RINGS';
-  return 'NOT_FOUND';
-}
 
 // ============================================================================
 // Schemas
@@ -336,19 +245,9 @@ diffRoutes.onError((err, c) => {
 diffRoutes.openapi(twoWayRoute, async (c) => {
   const body = c.req.valid('json');
 
-  const _threshold = body.threshold ?? 0.7;
-  let baseId = '';
-  let baseSegments: DiffSegment[] = [];
-  let targetId = '';
-  let targetSegments: DiffSegment[] = [];
-  let usedCache = false;
-  let baseTurnHashForCache: string | undefined;
-  let targetTurnHashForCache: string | undefined;
-
-  const db = await getDB();
-
   // Mode 1: commit_hash mode (unified, fallback to V4/V3)
   if (body.base_commit_hash && body.target_commit_hash) {
+    const db = await getDB();
     const baseCommit = await getCommitUnified(db, body.base_commit_hash);
     const targetCommit = await getCommitUnified(db, body.target_commit_hash);
 
@@ -379,42 +278,14 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
       }
     }
   }
-  // Mode 2: turn_hash mode
-  else if (body.baseTurnHash && body.targetTurnHash) {
-    const baseResult = await extractSegmentsFromTurn(db, body.baseTurnHash);
-    const targetResult = await extractSegmentsFromTurn(db, body.targetTurnHash);
-
-    if (!baseResult.ok) {
-      const code = getErrorCode(baseResult.error);
-      const status = getErrorStatus(baseResult.error);
-      return c.json(
-        { success: false as const, error: { code, message: baseResult.message } },
-        status
-      );
-    }
-    if (!targetResult.ok) {
-      const code = getErrorCode(targetResult.error);
-      const status = getErrorStatus(targetResult.error);
-      return c.json(
-        { success: false as const, error: { code, message: targetResult.message } },
-        status
-      );
-    }
-
-    baseId = baseResult.id;
-    baseSegments = baseResult.segments;
-    targetId = targetResult.id;
-    targetSegments = targetResult.segments;
-    baseTurnHashForCache = body.baseTurnHash;
-    targetTurnHashForCache = body.targetTurnHash;
-    usedCache = true;
-  }
-  // Mode 3: direct segments (legacy)
-  else if (body.baseId && body.targetId) {
-    baseId = body.baseId;
-    baseSegments = body.baseSegments ?? [];
-    targetId = body.targetId;
-    targetSegments = body.targetSegments ?? [];
+  // Removed legacy sentence/segment diff modes. Returning success with a
+  // placeholder made callers believe they had a real semantic diff.
+  else if ((body.baseTurnHash && body.targetTurnHash) || (body.baseId && body.targetId)) {
+    return errorResponse(
+      c,
+      'DEPRECATED',
+      'Legacy turn/segment diff modes were removed. Use base_commit_hash and target_commit_hash with /v1/diff/two-way or /v1/diff/frame.'
+    );
   } else {
     return errorResponse(
       c,
@@ -423,77 +294,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     );
   }
 
-  // Check API key
-  const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
-  if (!googleApiKey) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
-      },
-      500
-    );
-  }
-
-  try {
-    // Create base provider
-    const baseProvider = createGoogleAIEmbeddingProvider({
-      apiKey: googleApiKey,
-    });
-
-    // Wrap with cached provider if using turn_hash mode
-    let _embeddingProvider;
-    let cacheStats = null;
-
-    if (usedCache && baseTurnHashForCache && targetTurnHashForCache) {
-      const cachedProvider = createCachedEmbeddingProvider(baseProvider);
-
-      // Load cached embeddings
-      const baseEmbeddings = await findSegmentEmbeddingsByTurn(db, baseTurnHashForCache);
-      const targetEmbeddings = await findSegmentEmbeddingsByTurn(db, targetTurnHashForCache);
-
-      const loaded = cachedProvider.setCacheFromRecords([...baseEmbeddings, ...targetEmbeddings]);
-
-      _embeddingProvider = cachedProvider;
-      cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };
-    } else {
-      _embeddingProvider = baseProvider;
-    }
-
-    // Legacy node-level diff removed — use /v1/diff/frame endpoint instead
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          baseId,
-          targetId,
-          baseCount: baseSegments.length,
-          targetCount: targetSegments.length,
-          method: 'placeholder',
-          usedCache,
-          cacheStats,
-        },
-      },
-      200
-    );
-  } catch (error) {
-    if (error instanceof EmbeddingProviderError) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
-        },
-        500
-      );
-    }
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'DIFF_FAILED', message: (error as Error).message },
-      },
-      500
-    );
-  }
+  return errorResponse(c, 'INVALID_REQUEST', 'Unsupported two-way diff request.');
 });
 
 /**
@@ -502,137 +303,22 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
 diffRoutes.openapi(threeWayRoute, async (c) => {
   const body = c.req.valid('json');
 
-  const _threshold = body.threshold ?? 0.7;
-  let baseId: string;
-  let _baseSegments: DiffSegment[];
-  let sourceId: string;
-  let _sourceSegments: DiffSegment[];
-  let targetId: string;
-  let _targetSegments: DiffSegment[];
-  let usedCache = false;
-
-  const db = await getDB();
-
-  // Mode 1: turn_hash mode
-  if (body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) {
-    const baseResult = await extractSegmentsFromTurn(db, body.baseTurnHash);
-    const sourceResult = await extractSegmentsFromTurn(db, body.sourceTurnHash);
-    const targetResult = await extractSegmentsFromTurn(db, body.targetTurnHash);
-
-    for (const [name, result] of [
-      ['base', baseResult],
-      ['source', sourceResult],
-      ['target', targetResult],
-    ] as const) {
-      if (!result.ok) {
-        const code = getErrorCode(result.error);
-        const status = getErrorStatus(result.error);
-        return c.json(
-          { success: false as const, error: { code, message: `${name}: ${result.message}` } },
-          status
-        );
-      }
-    }
-
-    baseId = (baseResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    _baseSegments = (baseResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
-    sourceId = (sourceResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    _sourceSegments = (sourceResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
-    targetId = (targetResult as { ok: true; id: string; segments: DiffSegment[] }).id;
-    _targetSegments = (targetResult as { ok: true; id: string; segments: DiffSegment[] }).segments;
-    usedCache = true;
-  }
-  // Mode 2: direct segments (legacy)
-  else if (body.baseId && body.sourceId && body.targetId) {
-    baseId = body.baseId;
-    _baseSegments = body.baseSegments ?? [];
-    sourceId = body.sourceId;
-    _sourceSegments = body.sourceSegments ?? [];
-    targetId = body.targetId;
-    _targetSegments = body.targetSegments ?? [];
-  } else {
+  if (
+    (body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) ||
+    (body.baseId && body.sourceId && body.targetId)
+  ) {
     return errorResponse(
       c,
-      'INVALID_REQUEST',
-      'Provide either (baseTurnHash, sourceTurnHash, targetTurnHash) or (baseId, sourceId, targetId with segments)'
+      'DEPRECATED',
+      'Legacy three-way segment diff was removed. Use merge preparation for conflict resolution or commit-hash diff endpoints for version comparison.'
     );
   }
 
-  // Check API key
-  const googleApiKey = process.env.GOOGLE_AI_STUDIO_KEY;
-  if (!googleApiKey) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'EMBEDDING_UNAVAILABLE', message: 'GOOGLE_AI_STUDIO_KEY not configured' },
-      },
-      500
-    );
-  }
-
-  try {
-    // Create base provider
-    const baseProvider = createGoogleAIEmbeddingProvider({
-      apiKey: googleApiKey,
-    });
-
-    // Wrap with cached provider if using turn_hash mode
-    let _embeddingProvider;
-    let cacheStats = null;
-
-    if (usedCache && body.baseTurnHash && body.sourceTurnHash && body.targetTurnHash) {
-      const cachedProvider = createCachedEmbeddingProvider(baseProvider);
-
-      // Load cached embeddings
-      const baseEmbeddings = await findSegmentEmbeddingsByTurn(db, body.baseTurnHash);
-      const sourceEmbeddings = await findSegmentEmbeddingsByTurn(db, body.sourceTurnHash);
-      const targetEmbeddings = await findSegmentEmbeddingsByTurn(db, body.targetTurnHash);
-
-      const loaded = cachedProvider.setCacheFromRecords([
-        ...baseEmbeddings,
-        ...sourceEmbeddings,
-        ...targetEmbeddings,
-      ]);
-
-      _embeddingProvider = cachedProvider;
-      cacheStats = { preloaded: loaded, ...cachedProvider.getCacheStats() };
-    } else {
-      _embeddingProvider = baseProvider;
-    }
-
-    // Legacy node-level diff removed — use /v1/diff/frame endpoint instead
-    return c.json(
-      {
-        success: true as const,
-        data: {
-          baseId,
-          sourceId,
-          targetId,
-          method: 'placeholder',
-          usedCache,
-          cacheStats,
-        },
-      },
-      200
-    );
-  } catch (error) {
-    if (error instanceof EmbeddingProviderError) {
-      return c.json(
-        {
-          success: false as const,
-          error: { code: 'EMBEDDING_UNAVAILABLE', message: (error as Error).message },
-        },
-        500
-      );
-    }
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'DIFF_FAILED', message: (error as Error).message },
-      },
-      500
-    );
-  }
+  return errorResponse(
+    c,
+    'INVALID_REQUEST',
+    'Provide either (baseTurnHash, sourceTurnHash, targetTurnHash) or (baseId, sourceId, targetId with segments)'
+  );
 });
 
 /**

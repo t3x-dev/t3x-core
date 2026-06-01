@@ -62,7 +62,6 @@ export const ErrorCodes = {
   DELETE_FAILED: 'DELETE_FAILED',
   GET_FAILED: 'GET_FAILED',
   LIST_FAILED: 'LIST_FAILED',
-  NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
 
   // Server errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -103,7 +102,6 @@ export const ErrorCodes = {
   // Operation-specific errors
   HISTORY_FAILED: 'HISTORY_FAILED',
   SUGGEST_FAILED: 'SUGGEST_FAILED',
-  SUGGESTIONS_NOT_IMPLEMENTED: 'SUGGESTIONS_NOT_IMPLEMENTED',
   PROMOTE_FAILED: 'PROMOTE_FAILED',
   REVIEW_ACTION_FAILED: 'REVIEW_ACTION_FAILED',
   RESTORE_FAILED: 'RESTORE_FAILED',
@@ -127,7 +125,7 @@ export const ErrorCodes = {
   LLM_NOT_CONFIGURED: 'LLM_NOT_CONFIGURED',
 
   // Knowledge Graph errors
-  GRAPH_BUILD_NOT_IMPLEMENTED: 'GRAPH_BUILD_NOT_IMPLEMENTED',
+  GRAPH_BUILD_FAILED: 'GRAPH_BUILD_FAILED',
   GRAPH_NODE_NOT_FOUND: 'GRAPH_NODE_NOT_FOUND',
   GRAPH_NOT_BUILT: 'GRAPH_NOT_BUILT',
 
@@ -207,7 +205,6 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   DELETE_FAILED: 500,
   GET_FAILED: 500,
   LIST_FAILED: 500,
-  NOT_IMPLEMENTED: 501,
   INTERNAL_ERROR: 500,
   DATABASE_ERROR: 500,
 
@@ -246,7 +243,6 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   // Operation-specific errors
   HISTORY_FAILED: 500,
   SUGGEST_FAILED: 500,
-  SUGGESTIONS_NOT_IMPLEMENTED: 501,
   PROMOTE_FAILED: 500,
   REVIEW_ACTION_FAILED: 500,
   RESTORE_FAILED: 500,
@@ -264,7 +260,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   LLM_NOT_CONFIGURED: 400,
 
   // Knowledge Graph errors
-  GRAPH_BUILD_NOT_IMPLEMENTED: 501,
+  GRAPH_BUILD_FAILED: 500,
   GRAPH_NODE_NOT_FOUND: 404,
   GRAPH_NOT_BUILT: 400,
 
@@ -330,7 +326,7 @@ export function errorResponse(
   const statusCode = ErrorStatusCodes[code];
   return c.json(
     createError(code, message, details),
-    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500 | 501
+    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500
   );
 }
 
@@ -369,14 +365,14 @@ export function errorJson(
   c: Context,
   code: ErrorCode,
   message: string,
-  status?: 400 | 401 | 403 | 404 | 409 | 429 | 500 | 501,
+  status?: 400 | 401 | 403 | 404 | 409 | 429 | 500,
   details?: Record<string, unknown>
   // biome-ignore lint/suspicious/noExplicitAny: generic error handler
 ): any {
   const statusCode = status ?? ErrorStatusCodes[code];
   return c.json(
     createError(code, message, details),
-    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500 | 501
+    statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500
   );
 }
 

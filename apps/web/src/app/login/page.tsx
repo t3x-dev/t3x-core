@@ -9,14 +9,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { postLogin, postRegister } from '@/infrastructure/auth';
-import { ApiError } from '@/infrastructure/core';
-import { setSessionKey, setSessionUser } from '@/infrastructure/session';
+import { useLocalAuth } from '@/hooks/shared/useLocalAuth';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const { authenticate, persistSession, getErrorMessage } = useLocalAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -31,10 +30,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const session =
-        mode === 'login'
-          ? await postLogin({ username, password })
-          : await postRegister({ username, password, ...(name ? { name } : {}) });
+      const session = await authenticate({ mode, username, password, name });
 
       // MCP callback: redirect token to local MCP server instead of storing cookie
       const mcpCallback = searchParams.get('mcp_callback');
@@ -57,19 +53,10 @@ function LoginForm() {
       }
 
       // Normal flow: store session and redirect
-      setSessionKey(session.api_key);
-      setSessionUser({
-        id: session.id,
-        name: session.name ?? null,
-        username: session.username ?? null,
-      });
+      persistSession(session);
       router.push(callbackUrl);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message || 'Something went wrong');
-      } else {
-        setError('Failed to connect to server');
-      }
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

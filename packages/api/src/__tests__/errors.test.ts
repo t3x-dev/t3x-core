@@ -9,8 +9,8 @@ import {
 } from '../lib/errors';
 
 describe('ErrorCodes', () => {
-  it('has 73 error codes', () => {
-    expect(Object.keys(ErrorCodes)).toHaveLength(73);
+  it('has 71 error codes', () => {
+    expect(Object.keys(ErrorCodes)).toHaveLength(71);
   });
 
   it('key equals value for every code', () => {
@@ -48,7 +48,7 @@ describe('ErrorCodes', () => {
         "GENERATION_FAILED": "GENERATION_FAILED",
         "GENERATION_NOT_CONFIGURED": "GENERATION_NOT_CONFIGURED",
         "GET_FAILED": "GET_FAILED",
-        "GRAPH_BUILD_NOT_IMPLEMENTED": "GRAPH_BUILD_NOT_IMPLEMENTED",
+        "GRAPH_BUILD_FAILED": "GRAPH_BUILD_FAILED",
         "GRAPH_NODE_NOT_FOUND": "GRAPH_NODE_NOT_FOUND",
         "GRAPH_NOT_BUILT": "GRAPH_NOT_BUILT",
         "HASH_CONFLICT": "HASH_CONFLICT",
@@ -67,7 +67,6 @@ describe('ErrorCodes', () => {
         "MISSING_PROJECT_FOR_ALIAS": "MISSING_PROJECT_FOR_ALIAS",
         "MISSING_SOURCE": "MISSING_SOURCE",
         "NOT_FOUND": "NOT_FOUND",
-        "NOT_IMPLEMENTED": "NOT_IMPLEMENTED",
         "NO_OUTPUT": "NO_OUTPUT",
         "PARENT_NOT_FOUND": "PARENT_NOT_FOUND",
         "PIN_NOT_FOUND": "PIN_NOT_FOUND",
@@ -84,7 +83,6 @@ describe('ErrorCodes', () => {
         "SEMANTIC_NOT_SUPPORTED": "SEMANTIC_NOT_SUPPORTED",
         "SHARE_ENTITY_NOT_FOUND": "SHARE_ENTITY_NOT_FOUND",
         "SHARE_TOKEN_NOT_FOUND": "SHARE_TOKEN_NOT_FOUND",
-        "SUGGESTIONS_NOT_IMPLEMENTED": "SUGGESTIONS_NOT_IMPLEMENTED",
         "SUGGEST_FAILED": "SUGGEST_FAILED",
         "TOO_MANY_REQUESTS": "TOO_MANY_REQUESTS",
         "UNAUTHORIZED": "UNAUTHORIZED",
@@ -140,6 +138,7 @@ describe('ErrorStatusCodes', () => {
       'INTERNAL_ERROR',
       'DATABASE_ERROR',
       'GENERATION_FAILED',
+      'GRAPH_BUILD_FAILED',
       'HISTORY_FAILED',
       'SUGGEST_FAILED',
       'PROMOTE_FAILED',
@@ -157,10 +156,8 @@ describe('ErrorStatusCodes', () => {
     expect(ErrorStatusCodes.RATE_LIMITED).toBe(429);
   });
 
-  it('maps unavailable feature codes to 501', () => {
-    expect(ErrorStatusCodes.NOT_IMPLEMENTED).toBe(501);
-    expect(ErrorStatusCodes.SUGGESTIONS_NOT_IMPLEMENTED).toBe(501);
-    expect(ErrorStatusCodes.GRAPH_BUILD_NOT_IMPLEMENTED).toBe(501);
+  it('does not expose placeholder 501 feature codes', () => {
+    expect(Object.values(ErrorStatusCodes)).not.toContain(501);
   });
 
   it('maps AUTH_ERROR to 401', () => {

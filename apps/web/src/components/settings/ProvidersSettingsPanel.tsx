@@ -21,6 +21,7 @@ import { ProviderCredentialDialog } from '@/components/settings/ProviderCredenti
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import { useProvidersSettingsData } from '@/hooks/providers/useProvidersSettingsData';
 import {
+  GENERATION_PROVIDER_ORDER,
   type LocalProviderCredentialInput,
   type LocalProviderId,
   type LocalProviderKeySource,
@@ -30,9 +31,6 @@ import {
   toLocalProviderId,
 } from '@/types/providers';
 import { cn } from '@/utils/cn';
-
-/** Only these three provider ids are shown in the settings UI. */
-const GENERATION_PROVIDER_ORDER: readonly string[] = ['anthropic', 'openai', 'google-ai'];
 
 const SOURCE_LABEL: Record<LocalProviderKeySource, string> = {
   env: 'from .env',

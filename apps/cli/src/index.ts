@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
 /**
  * T3X CLI
  *
@@ -54,6 +55,9 @@ import { registerStatusCommands } from './commands/status.js';
 import { registerValidateCommands } from './commands/validate.js';
 import { registerYopsCommands } from './commands/yops.js';
 
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json') as { version?: string };
+
 type HiddenCommand = Command & { _hidden?: boolean };
 
 function hideCommand(command: Command | undefined): void {
@@ -76,7 +80,7 @@ const program = new Command();
 program
   .name('t3x')
   .description('T3X CLI - Semantic version control for AI conversations')
-  .version('0.1.1')
+  .version(packageJson.version ?? '0.0.0')
   .addOption(
     new Option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)').hideHelp()
   )

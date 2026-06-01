@@ -9,7 +9,14 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertDraft, insertProject, updateAutopilotConfig, updateDraft } from '@t3x-dev/storage';
+import {
+  createCommit,
+  findDraftById,
+  insertDraft,
+  insertProject,
+  updateAutopilotConfig,
+  updateDraft,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -293,6 +300,61 @@ describe('Autopilot Routes', () => {
       //  now depends on zone/staged/status only.)
       expect(json.data.nodes_committed).toBe(1);
       expect(json.data.nodes_skipped).toBeGreaterThanOrEqual(1);
+    });
+
+    it('keeps the draft editable when commit creation fails after claiming', async () => {
+      const isolatedProject = await insertProject(
+        mockDB,
+        testData.project({ name: 'Autopilot Rollback Test' })
+      );
+      await updateAutopilotConfig(mockDB, isolatedProject.projectId, {
+        enabled: true,
+        min_nodes: 1,
+        target_branch: 'main',
+      });
+
+      await createCommit(mockDB, {
+        parents: [],
+        author: { type: 'human', name: 'setup' },
+        content: { trees: [{ key: 'existing', slots: {}, children: [] }], relations: [] },
+        project_id: isolatedProject.projectId,
+        branch: 'main',
+        message: 'Existing root',
+      });
+
+      const draft = await insertDraft(mockDB, {
+        project_id: isolatedProject.projectId,
+        title: 'Auto-Commit Should Roll Back',
+      });
+      await updateDraft(
+        mockDB,
+        draft.id,
+        {
+          extraction_mode: 'llm',
+          semantic_points: [
+            {
+              id: 'sp_rollback',
+              text: 'Qualifying sentence',
+              zone: 'ready',
+              status: 'auto_landed',
+              staged: true,
+              extraction_mode: 'llm_extracted',
+              evidence: [],
+              position: 0,
+            },
+          ],
+        },
+        1
+      );
+
+      const res = await app.request(`/v1/drafts/${draft.id}/auto-commit`, {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(409);
+      const reloaded = await findDraftById(mockDB, draft.id);
+      expect(reloaded?.status).toBe('editing');
+      expect(reloaded?.committed_as).toBeUndefined();
     });
   });
 });

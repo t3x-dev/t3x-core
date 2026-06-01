@@ -1,11 +1,12 @@
 /**
  * Search Routes
  *
- * Search now operates on tree-based semantic content. The route is registered
- * but intentionally unavailable until tree-based search is implemented.
+ * Search operates on tree-based semantic content via the knowledge graph.
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { searchKnowledgeNodes } from '@t3x-dev/storage';
+import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema } from '../schemas/common';
 
@@ -28,6 +29,26 @@ const SearchRequestSchema = z.object({
     .openapi({ description: 'Maximum results to return' }),
 });
 
+const SearchNodeSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  label: z.string(),
+  type: z.string(),
+  summary: z.string().nullable(),
+  member_count: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const SearchResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    mode: z.enum(['hybrid', 'keyword', 'semantic']),
+    nodes: z.array(SearchNodeSchema),
+    count: z.number(),
+  }),
+});
+
 // ── POST /v1/search ──────────────────────────────────────────
 
 const searchRoute = createRoute({
@@ -43,13 +64,41 @@ const searchRoute = createRoute({
     },
   },
   responses: {
-    501: {
-      description: 'Tree-based search is not implemented yet',
+    200: {
+      description: 'Tree-based search results',
+      content: { 'application/json': { schema: SearchResponseSchema } },
+    },
+    400: {
+      description: 'Invalid request',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Search failed',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
 searchRoutes.openapi(searchRoute, async (c) => {
-  return errorResponse(c, 'NOT_IMPLEMENTED', 'Search is pending tree-based implementation.');
+  const { project_id, query, mode, limit } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const nodes = await searchKnowledgeNodes(db, project_id, query, { limit });
+
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          mode,
+          nodes,
+          count: nodes.length,
+        },
+      },
+      200
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return errorResponse(c, 'SEARCH_FAILED', message);
+  }
 });

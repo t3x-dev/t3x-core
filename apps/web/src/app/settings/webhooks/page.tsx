@@ -30,16 +30,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
-import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/infrastructure';
-import {
-  createWebhook,
-  deleteWebhook,
-  listWebhooks,
-  testWebhook,
-  updateWebhook,
-} from '@/infrastructure';
+import { useWebhookCommands } from '@/hooks/webhooks/useWebhookCommands';
+import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
 
 export default function WebhooksPage() {
+  const { listWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook } =
+    useWebhookCommands();
   const [webhooks, setWebhooks] = useState<WebhookData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +64,7 @@ export default function WebhooksPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listWebhooks]);
 
   useEffect(() => {
     fetchWebhooks();
@@ -102,7 +98,7 @@ export default function WebhooksPage() {
         setFormLoading(false);
       }
     },
-    [editingWebhook]
+    [editingWebhook, createWebhook, updateWebhook]
   );
 
   // Delete handler
@@ -120,25 +116,28 @@ export default function WebhooksPage() {
     } finally {
       setDeleteLoading(false);
     }
-  }, [deleteTarget]);
+  }, [deleteTarget, deleteWebhook]);
 
   // Test handler
-  const handleTest = useCallback(async (webhook: WebhookData) => {
-    setTestingId(webhook.webhook_id);
-    try {
-      const result = await testWebhook(webhook.webhook_id);
-      if (result.ok) {
-        toast.success(`Test successful (HTTP ${result.status})`);
-      } else {
-        toast.error(`Test failed (HTTP ${result.status})`);
+  const handleTest = useCallback(
+    async (webhook: WebhookData) => {
+      setTestingId(webhook.webhook_id);
+      try {
+        const result = await testWebhook(webhook.webhook_id);
+        if (result.ok) {
+          toast.success(`Test successful (HTTP ${result.status})`);
+        } else {
+          toast.error(`Test failed (HTTP ${result.status})`);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Test request failed';
+        toast.error(message);
+      } finally {
+        setTestingId(null);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Test request failed';
-      toast.error(message);
-    } finally {
-      setTestingId(null);
-    }
-  }, []);
+    },
+    [testWebhook]
+  );
 
   // Open create dialog
   const openCreate = useCallback(() => {

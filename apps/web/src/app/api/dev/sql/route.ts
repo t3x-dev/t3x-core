@@ -1,22 +1,32 @@
 /**
  * Dev SQL Execution Route
  *
- * POST /api/dev/sql - Execute raw SQL (development only)
+ * POST /api/dev/sql - Execute raw SQL (development + explicit opt-in only)
  *
- * SECURITY: This route only works in development mode.
+ * SECURITY: This route only works in development mode when
+ * T3X_ENABLE_DEV_SQL=true is set.
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { executeRawSQL } from '@/infrastructure/db';
 
-export async function POST(request: NextRequest) {
-  // Only allow in development
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'This endpoint is only available in development mode' },
-      { status: 403 }
-    );
+function devSqlDisabledResponse() {
+  if (process.env.NODE_ENV === 'development' && process.env.T3X_ENABLE_DEV_SQL === 'true') {
+    return null;
   }
+
+  return NextResponse.json(
+    {
+      error:
+        'This endpoint is only available when NODE_ENV=development and T3X_ENABLE_DEV_SQL=true',
+    },
+    { status: 403 }
+  );
+}
+
+export async function POST(request: NextRequest) {
+  const disabled = devSqlDisabledResponse();
+  if (disabled) return disabled;
 
   try {
     const { sql } = await request.json();
@@ -40,12 +50,8 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint for table info
 export async function GET() {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'This endpoint is only available in development mode' },
-      { status: 403 }
-    );
-  }
+  const disabled = devSqlDisabledResponse();
+  if (disabled) return disabled;
 
   try {
     const tables = await executeRawSQL(`
