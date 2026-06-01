@@ -4,6 +4,12 @@ T3X MCP server for AI agents.
 
 This package is the runnable stdio wrapper around `@t3x-dev/mcp-lib`.
 
+## Preview status
+
+The MCP server is a preview/internal surface. It is not part of the current
+public alpha release surface; the public alpha packages are `@t3x-dev/local`
+and `@t3x-dev/yops`.
+
 ## Current Surface
 
 The current MCP server exposes three protocol surfaces:
@@ -54,7 +60,8 @@ Prompts are user-facing workflow entries for MCP hosts. Agent guidance still mai
 
 ## Installation
 
-Add the server to your MCP host using the published binary:
+After this package is promoted and published, it can be added to an MCP host
+with the package binary:
 
 ```json
 {

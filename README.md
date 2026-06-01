@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://t3x.dev/docs">Docs</a> &middot;
+  <a href="https://t3x-docs.vercel.app">Docs</a> &middot;
   <a href="https://t3x.dev">Website</a> &middot;
   <a href="https://discord.gg/t3x">Community</a>
 </p>
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <a href="https://www.npmjs.com/package/@t3x-dev/yops"><img src="https://img.shields.io/npm/v/@t3x-dev/yops" alt="npm" /></a>
+  <img src="https://img.shields.io/badge/alpha-v0.3.0%20pending-orange" alt="alpha v0.3.0 pending" />
   <a href="https://github.com/t3x-dev/t3x-core/actions/workflows/pr-validation.yml"><img src="https://img.shields.io/github/actions/workflow/status/t3x-dev/t3x-core/pr-validation.yml?branch=main" alt="CI" /></a>
 </p>
 
@@ -30,7 +30,7 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
-For the alpha release, the npm release surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. These packages are currently published with restricted access; other packages remain internal until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
+For the v0.3.0 alpha release, the npm release surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Public availability is still moving through the publish flow; other packages remain internal until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
 
 <br/>
 
@@ -44,7 +44,7 @@ Choose the shortest path for what you want to do:
 npm install @t3x-dev/yops
 ```
 
-Use this if you want the deterministic YAML operation engine inside your own app.
+Use this if you want the deterministic YAML operation engine inside your own app. This command becomes available after the v0.3.0 npm publish completes.
 
 ### Use the local alpha package
 
@@ -52,9 +52,10 @@ Use this if you want the deterministic YAML operation engine inside your own app
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the packaged local T3X experience. `@t3x-dev/local`
-downloads its runtime artifact during install instead of depending on the
-internal workspace packages being published to npm.
+Use this if you want the packaged local T3X experience. The npm command becomes
+available after the v0.3.0 publish completes. `@t3x-dev/local` downloads its
+runtime artifact during install instead of depending on the internal workspace
+packages being published to npm.
 
 ### Run the full stack locally
 
@@ -87,17 +88,12 @@ Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you
 ## WebUI preview
 
 <p align="center">
-  <img src="apps/web/public/screenshots/chat-light.png" alt="T3X WebUI chat first-commit preview" width="760" />
+  <img src="https://t3x-docs.vercel.app/img/screenshots/chat-light.png" alt="T3X WebUI chat preview" width="760" />
 </p>
 
-The fresh `/chat` view shows a provider-independent `source -> YOps -> commit`
-preview before the first extraction run. Regenerate the committed screenshots
-from a running WebUI dev server:
-
-```bash
-pnpm dev:webui
-pnpm screenshots:demo
-```
+The fresh `/chat` view shows a provider-independent `Source -> Meaning -> Commit`
+preview before the first extraction run. Screenshot assets are maintained in the
+docs site, not committed into this repository.
 
 <br/>
 
@@ -268,50 +264,32 @@ First-run auth defaults:
 
 ## Use T3X
 
-### MCP Server &mdash; candidate package for AI agents
-
-```json
-{
-  "mcpServers": {
-    "t3x": {
-      "command": "npx",
-      "args": ["@t3x-dev/mcp"]
-    }
-  }
-}
-```
-
-tools for Claude Code, Cursor, Windsurf, and other MCP-compatible agents. The MCP package is not part of the initial public alpha surface. &rarr; [MCP docs](https://t3x.dev/docs/mcp)
-
-Alpha public packages:
-
-- `@t3x-dev/local` — local installer and no-key demo entrypoint
-- `@t3x-dev/yops` — declarative YAML operations
-
-Restricted candidate packages:
-
-- `@t3x-dev/core` — deterministic semantic engine
-- `@t3x-dev/yschema` — schema validation with YOps auto-fix
-- `@t3x-dev/api-client` — TypeScript API client
-- `@t3x-dev/cli` — command line interface
-- `@t3x-dev/mcp` — MCP server for agents
-
-### CLI
+### Local alpha
 
 ```bash
-t3x extract     # Build YAML from text
-t3x commit      # Commit a snapshot
-t3x diff        # Compare two commits
-t3x merge       # Three-way merge
+npx -p @t3x-dev/local t3x-local start
 ```
 
-### API
+Use this for the packaged local experience and no-key demo entrypoint.
 
-RESTful with OpenAPI spec. Self-host or use the managed cloud. &rarr; [API reference](https://t3x.dev/docs/api)
+### YOps library
 
-### Runner &mdash; for evaluation
+```bash
+npm install @t3x-dev/yops
+```
 
-Trace-based CI/CD for AI agent behavior. Capture I/O traces, run assertions, gate deployments. &rarr; [Runner docs](https://t3x.dev/docs/runner)
+Use this for the deterministic YAML operation engine inside your own app.
+
+### WebUI from source
+
+Run `pnpm dev:api` and `pnpm dev:webui` from a source checkout when you want to
+work on the full self-hostable product.
+
+### Preview surfaces
+
+CLI, MCP, API, and runner surfaces are available for preview and internal
+integration work, but they are not part of the current public alpha release
+surface. Their commands and contracts may change before promotion.
 
 <br/>
 
@@ -368,17 +346,14 @@ machine-readable source of truth used by release automation.
 |:--------|:----|:------------|
 | [`@t3x-dev/local`](apps/local/) | public alpha, publish pending | Local installer and no-key demo entrypoint |
 | [`@t3x-dev/yops`](packages/yops/) | public alpha, publish pending | Declarative YAML operations |
-| [`@t3x-dev/core`](packages/core/) | restricted candidate | Diff, merge, hash chains, extraction, ylint |
-| [`@t3x-dev/yschema`](packages/yschema/) | restricted candidate | Domain validation with YOps auto-fix |
-| [`@t3x-dev/api-client`](packages/api-client/) | restricted candidate | TypeScript client |
-| [`@t3x-dev/cli`](apps/cli/) | restricted candidate | Command-line interface |
-| [`@t3x-dev/mcp`](apps/mcp/) | restricted candidate | MCP server for AI agents |
+
+Other packages remain restricted candidates until they are explicitly promoted.
 
 <br/>
 
 ## Documentation
 
-[t3x.dev/docs](https://t3x.dev/docs) &mdash; Quickstart, YOps reference, API reference, architecture, self-hosting.
+[t3x-docs.vercel.app](https://t3x-docs.vercel.app) &mdash; Quickstart, Local alpha, YOps reference, WebUI guide, and preview surfaces.
 
 <br/>
 
