@@ -38,6 +38,7 @@ Public packages affected:
 
 - [ ] PR Validation passed
 - [ ] Release surface check passed
+- [ ] Changeset files match package impact
 - [ ] Local/runtime smoke reviewed when `@t3x-dev/local` is affected
 - [ ] No-key demo smoke reviewed when demo/runtime behavior is affected
 - [ ] Owner review requested when protected release, workflow, or ownership files changed

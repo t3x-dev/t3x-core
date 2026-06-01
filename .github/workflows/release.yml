@@ -59,6 +59,24 @@ jobs:
           echo "should_release=$should_release"
           echo "should_publish=$is_version_packages"
 
+  product-release-record:
+    name: Product Release Record
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create product release tag and notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/create-product-release.mjs
+
   build-runtime:
     name: Build Runtime (${{ matrix.platform }})
     needs: changeset-state

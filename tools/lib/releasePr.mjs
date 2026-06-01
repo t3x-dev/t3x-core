@@ -1,3 +1,6 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 const releaseBranchPattern = /^release\/v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 const hotfixBranchPattern = /^hotfix\/.+/;
 const changesetsBranchPattern = /^changesets?-release\/main$/;
@@ -28,7 +31,62 @@ function parseProductReleaseVersion(body) {
   return body.match(productVersionPattern)?.[1] ?? null;
 }
 
-function validateProductReleaseBody({ body, branchVersion = null }) {
+export function parseChangesetPackages(markdown) {
+  const frontmatter = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/)?.[1] ?? '';
+  return frontmatter
+    .split('\n')
+    .map((line) => line.match(/^\s*["']?(@[^"':\s]+\/[^"':\s]+|[^"':\s]+)["']?\s*:/)?.[1])
+    .filter(Boolean);
+}
+
+export function readChangesetFiles({ rootDir = process.cwd() } = {}) {
+  const changesetDir = join(rootDir, '.changeset');
+  if (!existsSync(changesetDir)) {
+    return [];
+  }
+
+  return readdirSync(changesetDir)
+    .filter((name) => name.endsWith('.md') && name !== 'README.md')
+    .sort()
+    .map((name) => {
+      const path = join(changesetDir, name);
+      const content = readFileSync(path, 'utf8');
+      return {
+        name,
+        path,
+        packages: parseChangesetPackages(content),
+      };
+    });
+}
+
+function validateChangesets({
+  errors,
+  changesetFiles,
+  changesetsIncluded,
+  noPackagePublish,
+  affectedPackages,
+}) {
+  if (changesetsIncluded && changesetFiles.length === 0) {
+    errors.push('package publish intent is checked, but no .changeset/*.md files were found.');
+  }
+
+  if (noPackagePublish && changesetFiles.length > 0) {
+    errors.push(
+      `No package publish intended is checked, but changeset files exist: ${changesetFiles
+        .map((file) => file.name)
+        .join(', ')}.`
+    );
+  }
+
+  const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
+  for (const packageName of affectedPackages) {
+    if (changesetsIncluded && !changesetPackages.has(packageName)) {
+      errors.push(`public package ${packageName} is checked, but no changeset targets it.`);
+    }
+  }
+}
+
+function validateProductReleaseBody({ body, branchVersion = null, changesetFiles = [] }) {
   const errors = [];
   const version = parseProductReleaseVersion(body);
 
@@ -68,6 +126,10 @@ function validateProductReleaseBody({ body, branchVersion = null }) {
   const localAffected = isChecked(body, '`@t3x-dev/local`');
   const yopsAffected = isChecked(body, '`@t3x-dev/yops`');
   const noneAffected = isChecked(body, 'None');
+  const affectedPackages = [
+    localAffected ? '@t3x-dev/local' : null,
+    yopsAffected ? '@t3x-dev/yops' : null,
+  ].filter(Boolean);
   const affectedCount = [localAffected, yopsAffected, noneAffected].filter(Boolean).length;
 
   if (affectedCount === 0) {
@@ -88,10 +150,18 @@ function validateProductReleaseBody({ body, branchVersion = null }) {
     errors.push('package changesets are checked, but public packages affected is "None".');
   }
 
+  validateChangesets({
+    errors,
+    changesetFiles,
+    changesetsIncluded,
+    noPackagePublish,
+    affectedPackages,
+  });
+
   return errors;
 }
 
-export function validateReleasePr({ baseBranch, headBranch, body = '' }) {
+export function validateReleasePr({ baseBranch, headBranch, body = '', changesetFiles = [] }) {
   const errors = [];
 
   if (!baseBranch || baseBranch !== 'main') {
@@ -116,6 +186,7 @@ export function validateReleasePr({ baseBranch, headBranch, body = '' }) {
     ...validateProductReleaseBody({
       body,
       branchVersion: releaseMatch?.[1] ?? null,
+      changesetFiles,
     })
   );
 

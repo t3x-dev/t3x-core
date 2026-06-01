@@ -51,6 +51,12 @@ Release PRs must include:
   `Changesets included for public package changes`.
 - Public package impact: `@t3x-dev/local`, `@t3x-dev/yops`, or `None`.
 
+The release PR policy check also validates changeset files:
+
+- Package publish intent requires at least one `.changeset/*.md`.
+- Code-only release intent rejects checked-in `.changeset/*.md` files.
+- Checked public packages must appear in changeset frontmatter.
+
 The product release version is independent from npm package versions. If the
 release publishes no packages, write `Package releases: None` in the release
 notes.

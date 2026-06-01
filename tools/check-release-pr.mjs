@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { validateReleasePr } from './lib/releasePr.mjs';
+import { readChangesetFiles, validateReleasePr } from './lib/releasePr.mjs';
 
 const result = validateReleasePr({
   baseBranch: process.env.T3X_PR_BASE ?? '',
   headBranch: process.env.T3X_PR_HEAD ?? '',
   body: process.env.T3X_PR_BODY ?? '',
+  changesetFiles: readChangesetFiles(),
 });
 
 if (result.errors.length > 0) {

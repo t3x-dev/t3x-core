@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validateReleasePr } from '../lib/releasePr.mjs';
+import { parseChangesetPackages, validateReleasePr } from '../lib/releasePr.mjs';
+
+const localChangeset = {
+  name: 'fresh-local-runtime.md',
+  packages: ['@t3x-dev/local'],
+};
+
+const yopsChangeset = {
+  name: 'refresh-yops-package.md',
+  packages: ['@t3x-dev/yops'],
+};
 
 const validReleaseBody = `## Product Release
 
@@ -61,6 +71,7 @@ test('allows a product release PR with matching release branch and package inten
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
+    changesetFiles: [localChangeset],
   });
 
   assert.deepEqual(result.errors, []);
@@ -71,6 +82,7 @@ test('allows a code-only product release with no package publish', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validCodeOnlyReleaseBody,
+    changesetFiles: [],
   });
 
   assert.deepEqual(result.errors, []);
@@ -91,6 +103,7 @@ test('rejects ordinary feature branches targeting main', () => {
     baseBranch: 'main',
     headBranch: 'feature/example',
     body: validReleaseBody,
+    changesetFiles: [localChangeset],
   });
 
   assert.match(result.errors.join('\n'), /must come from release\/x\.y\.z/);
@@ -101,6 +114,7 @@ test('rejects release branch and body version mismatch', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validReleaseBody,
+    changesetFiles: [localChangeset],
   });
 
   assert.match(result.errors.join('\n'), /does not match PR body product release version/);
@@ -114,6 +128,7 @@ test('rejects missing package intent', () => {
       '- [x] Changesets included for public package changes',
       '- [ ] Changesets included for public package changes'
     ),
+    changesetFiles: [localChangeset],
   });
 
   assert.match(result.errors.join('\n'), /must check exactly one package intent/);
@@ -129,9 +144,43 @@ test('rejects public package changes without changesets', () => {
         '- [ ] Changesets included for public package changes'
       )
       .replace('- [ ] No package publish intended', '- [x] No package publish intended'),
+    changesetFiles: [localChangeset],
   });
 
   assert.match(result.errors.join('\n'), /public package changes require changesets/);
+});
+
+test('rejects package publish intent without changeset files', () => {
+  const result = validateReleasePr({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: validReleaseBody,
+    changesetFiles: [],
+  });
+
+  assert.match(result.errors.join('\n'), /no \.changeset\/\*\.md files were found/);
+});
+
+test('rejects code-only package intent when changeset files exist', () => {
+  const result = validateReleasePr({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.1',
+    body: validCodeOnlyReleaseBody,
+    changesetFiles: [localChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /No package publish intended is checked/);
+});
+
+test('rejects affected public package without matching changeset target', () => {
+  const result = validateReleasePr({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: validReleaseBody,
+    changesetFiles: [yopsChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /no changeset targets it/);
 });
 
 test('allows changesets version package PRs into main', () => {
@@ -142,4 +191,17 @@ test('allows changesets version package PRs into main', () => {
   });
 
   assert.deepEqual(result.errors, []);
+});
+
+test('parses package names from changeset frontmatter', () => {
+  assert.deepEqual(
+    parseChangesetPackages(`---
+"@t3x-dev/local": patch
+'@t3x-dev/yops': minor
+---
+
+Release package changes.
+`),
+    ['@t3x-dev/local', '@t3x-dev/yops']
+  );
 });

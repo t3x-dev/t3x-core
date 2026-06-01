@@ -130,6 +130,9 @@ After the product release PR merges, the `Release` workflow runs on `main`.
   artifacts.
 - If no changesets or version package commit are present, the product release is
   code-only and no package publish is expected.
+- The workflow records product releases by creating a `t3x-vx.y.z` GitHub
+  Release from the merged release PR notes. Changesets version package PRs do
+  not create product release records.
 
 The `Release` workflow must create the `chore: version packages` pull request
 with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
@@ -185,6 +188,14 @@ Examples that usually do not require a changeset:
 When an ordinary PR into `dev` has no package or product release impact, mark it
 as `no-release-impact` in the PR body or label. A product release PR into
 `main` must still include the product release version and release notes.
+
+PR validation checks the release PR body against the checked-in changeset files:
+
+- `Changesets included for public package changes` requires at least one
+  `.changeset/*.md` file.
+- `No package publish intended` requires no `.changeset/*.md` files in the
+  release branch.
+- Each checked public package must appear in a changeset frontmatter entry.
 
 ## Publish Rules
 

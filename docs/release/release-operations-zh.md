@@ -124,6 +124,14 @@ Changeset 只负责 package publish intent。
 merge 后如果有 changeset，Release workflow 会开 `chore: version packages` PR。
 review 这个 version PR，确认 package version 和 changelog 合理，再 merge。
 
+merge 后 Release workflow 也会根据 release PR body 创建 product release 记录：
+
+```text
+t3x-v0.4.0
+```
+
+这个 GitHub Release 记录的是 T3X product release，不是 npm package release。
+
 ## 5. Code-only Release
 
 适用场景：
@@ -160,6 +168,10 @@ Package releases:
 
 这类 release merge 到 `main` 后不会 publish npm package。
 
+CI 会检查 code-only release branch 里不能存在 `.changeset/*.md`。如果存在，
+说明这次 release 实际包含 package publish intent，不能勾
+`No package publish intended`。
+
 ## 6. Package Release
 
 适用场景：
@@ -183,14 +195,24 @@ Package releases:
    - [x] Publish expected after the version/package PR merges
    ```
 
-3. merge release PR 到 `main`。
-4. Release workflow 开 `chore: version packages` PR。
-5. review version PR：
+3. 确认 release PR 勾选的 package 和 `.changeset/*.md` frontmatter 一致。
+   例如勾了 `@t3x-dev/local`，changeset 里必须有：
+
+   ```md
+   ---
+   "@t3x-dev/local": patch
+   ---
+   ```
+
+4. merge release PR 到 `main`。
+5. Release workflow 创建 `t3x-vx.y.z` product release 记录，并开
+   `chore: version packages` PR。
+6. review version PR：
    - package version 是否合理。
    - changelog 是否准确。
    - lockfile/version manifest 是否合理。
-6. merge version PR。
-7. Release workflow publish package/runtime artifacts。
+7. merge version PR。
+8. Release workflow publish package/runtime artifacts。
 
 ## 7. 常见错误
 
