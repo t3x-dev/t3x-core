@@ -47,13 +47,13 @@ function extractImports(body: string): string[] {
 }
 
 function layer(rel: string): string {
-  if (rel.startsWith('domain/')) return 'domain';
-  if (rel.startsWith('components/')) return 'components';
-  if (rel.startsWith('hooks/')) return 'hooks';
-  if (rel.startsWith('store/')) return 'store';
-  if (rel.startsWith('queries/')) return 'queries';
-  if (rel.startsWith('commands/')) return 'commands';
-  if (rel.startsWith('infrastructure/')) return 'infrastructure';
+  if (rel === 'domain' || rel.startsWith('domain/')) return 'domain';
+  if (rel === 'components' || rel.startsWith('components/')) return 'components';
+  if (rel === 'hooks' || rel.startsWith('hooks/')) return 'hooks';
+  if (rel === 'store' || rel.startsWith('store/')) return 'store';
+  if (rel === 'queries' || rel.startsWith('queries/')) return 'queries';
+  if (rel === 'commands' || rel.startsWith('commands/')) return 'commands';
+  if (rel === 'infrastructure' || rel.startsWith('infrastructure/')) return 'infrastructure';
   return 'other';
 }
 
@@ -128,5 +128,44 @@ describe('L1-L4 import boundaries', () => {
     expect(offenders, `Non-infrastructure files calling fetch():\n${offenders.join('\n')}`).toEqual(
       []
     );
+  });
+
+  it('keeps app-layer direct data access limited to the reviewed allowlist', () => {
+    const stripComments = (s: string): string =>
+      s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+    const allowed = [
+      'app/chat/project/[projectId]/leaf/page.tsx:import @/queries/project',
+      'app/deploy/compare/page.tsx:import @/infrastructure',
+      'app/deploy/eval/[runId]/page.tsx:import @/infrastructure',
+      'app/deploy/eval/[runId]/page.tsx:import @/infrastructure/export/report',
+      'app/deploy/layout.tsx:import @/infrastructure',
+      'app/deploy/page.tsx:import @/infrastructure',
+      'app/dev/db/page.tsx:literal fetch',
+      'app/insights/page.tsx:import @/infrastructure',
+      'app/insights/page.tsx:import @/infrastructure/commits',
+      'app/project/[projectId]/page.tsx:import @/queries/project',
+      'app/project/[projectId]/settings/page.tsx:import @/queries/providers',
+      'app/share/[token]/page.tsx:import @/infrastructure',
+    ];
+
+    const offenders = new Set<string>();
+    for (const f of files) {
+      const rel = relative(SRC, f).replace(/\\/g, '/');
+      if (!rel.startsWith('app/')) continue;
+      if (rel.startsWith('app/api/')) continue;
+      if (rel.endsWith('/route.ts')) continue;
+      const body = stripComments(readFileSync(f, 'utf8'));
+      for (const imp of extractImports(body)) {
+        if (imp.startsWith('@/infrastructure') || imp.startsWith('@/queries')) {
+          offenders.add(`${rel}:import ${imp}`);
+        }
+      }
+      if (/\bfetch\s*\(/.test(body)) {
+        offenders.add(`${rel}:literal fetch`);
+      }
+    }
+
+    expect([...offenders].sort()).toEqual(allowed.sort());
   });
 });

@@ -29,8 +29,8 @@ import { useLeafPageData } from '@/hooks/leaves/useLeafPageData';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
-import type { Constraint, SuggestedConstraint } from '@/infrastructure';
 import { useProjectStore } from '@/store/projectStore';
+import type { Constraint, SuggestedConstraint } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 

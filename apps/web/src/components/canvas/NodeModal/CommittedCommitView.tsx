@@ -35,7 +35,7 @@ import { useExportCommit } from '@/hooks/commits/useExportCommit';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import type { ApiCommit, CommitExportFormat } from '@/types/api';
-import type { CanvasNodeData, CommitDisplay } from '@/types/nodes';
+import type { CanvasNodeData, CommitDisplay, CommitSourceRef } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import { glass, toneAccent } from '@/utils/theme';
 import { CommitHistoryPanel } from '../CommitHistoryPanel';
@@ -384,7 +384,7 @@ export function CommittedCommitView({
                     {/* Pinned Sources */}
                     {commit.sources && commit.sources.length > 0 && (
                       <PinnedSourcesSection
-                        sourceRefs={commit.sources as import('@/infrastructure').CommitSourceRef[]}
+                        sourceRefs={commit.sources as CommitSourceRef[]}
                         projectId={commitProjectId}
                       />
                     )}

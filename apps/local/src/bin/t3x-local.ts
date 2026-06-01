@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { runDoctorCommand } from '../commands/doctor.js';
 import { runResetCommand } from '../commands/reset.js';
 import { runStartCommand } from '../commands/start.js';
 import { runStopCommand } from '../commands/stop.js';
 
+const require = createRequire(import.meta.url);
+const packageJson = require('../../package.json') as { version?: string };
+
 const program = new Command();
 
-program.name('t3x-local').description('T3X local runtime entrypoint').version('0.1.1');
+program
+  .name('t3x-local')
+  .description('T3X local runtime entrypoint')
+  .version(packageJson.version ?? '0.0.0');
 
 program
   .command('start')

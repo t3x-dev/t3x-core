@@ -9,6 +9,7 @@
  *   t3x_diff, t3x_merge, t3x_admin
  */
 
+import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -32,6 +33,9 @@ import { extractDef, extractHandler } from './tools/core/extract.js';
 import { generateDef, generateHandler } from './tools/core/generate.js';
 import { queryDef, queryHandler } from './tools/core/query.js';
 import type { ToolDef, ToolHandler } from './tools/types.js';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json') as { version?: string };
 
 // ── Toolset registry ──
 
@@ -108,7 +112,7 @@ export function createMcpServer(options: McpServerOptions) {
 
   // 3. Create the MCP server
   const server = new Server(
-    { name: 't3x-mcp', version: '0.1.1' },
+    { name: 't3x-mcp', version: packageJson.version ?? '0.0.0' },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
       instructions: SERVER_INSTRUCTIONS,

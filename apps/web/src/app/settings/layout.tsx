@@ -15,7 +15,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { clearSession, getSessionKey } from '@/infrastructure/session';
+import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
 
 interface SettingsNavItem {
@@ -72,11 +72,12 @@ interface SettingsLayoutProps {
 export default function SettingsLayout({ children }: SettingsLayoutProps) {
   const pathname = usePathname();
   const currentPath = pathname ?? '';
+  const { clear, getKey } = useSession();
   const [isAuthEnabled, setIsAuthEnabled] = useState(false);
 
   useEffect(() => {
-    setIsAuthEnabled(!!getSessionKey());
-  }, []);
+    setIsAuthEnabled(!!getKey());
+  }, [getKey]);
 
   return (
     <div className="flex h-full bg-[var(--surface-app)]">
@@ -130,7 +131,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
           <div className="mt-4 border-t border-[var(--stroke-divider)] pt-3">
             <button
               type="button"
-              onClick={() => clearSession()}
+              onClick={() => clear()}
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors duration-150"
             >
               <LogOut className="h-4 w-4" />

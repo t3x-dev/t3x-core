@@ -95,12 +95,36 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+async function parseAgentResponse(response: globalThis.Response): Promise<unknown> {
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      payload && typeof payload === 'object'
+        ? `: ${JSON.stringify(payload).slice(0, 500)}`
+        : payload != null
+          ? `: ${String(payload).slice(0, 500)}`
+          : response.statusText
+            ? `: ${response.statusText}`
+            : '';
+    throw new Error(`Agent request failed with ${response.status}${detail}`);
+  }
+
+  return payload;
+}
+
 // Root route - service info
 app.get('/', (_req, res) => {
   const endpoints: Record<string, string> = {
     health: 'GET /health',
     agents: 'POST /agents',
     run: 'POST /run',
+    webhook_run: 'POST /webhook/run',
     runs: 'POST /runs (Engine → n8n flow)',
     callbacks: 'POST /callbacks/n8n',
   };
@@ -284,7 +308,7 @@ app.post('/run', async (req, res) => {
         signal: AbortSignal.timeout(input.config?.timeout_ms ?? 30000),
       });
 
-      const output = await response.json();
+      const output = await parseAgentResponse(response);
       const latencyMs = Date.now() - startTime;
 
       // Complete the run
@@ -819,32 +843,84 @@ function buildRunRecordFromCallback(
 }
 
 // ============================================
-// Webhook Run (Reserved for Future Use)
+// Webhook Run
 // ============================================
 
 /**
- * POST /webhook/run - Run agent with auto-eval (webhook mode)
+ * POST /webhook/run - Run agent with optional auto-eval (webhook mode)
  *
- * RESERVED: This endpoint is planned for future implementation.
- * It will provide a combined run + eval flow for webhook integrations.
- *
- * Planned functionality:
- * - Receive agent_id, input, and test_steps in one request
- * - Execute agent run via observer (SDK proxy mode)
- * - Automatically run evaluation after completion
- * - Return combined results: { run_id, output, trace, eval_result }
- *
- * See RUNNER_PLAN.md for implementation roadmap.
+ * This is the standalone Runner counterpart to the API package's
+ * /runner/webhook/run route. It executes a registered HTTP agent through the
+ * observer, records a minimal trace, and can immediately run deterministic
+ * evaluation with default or rules_ref-backed rules.
  */
-app.post('/webhook/run', (_req, res) => {
-  res.status(501).json({
-    success: false,
-    error: {
-      code: 'NOT_IMPLEMENTED',
-      message:
-        'POST /webhook/run is reserved for future implementation. See RUNNER_PLAN.md for roadmap.',
-    },
-  });
+app.post('/webhook/run', async (req, res) => {
+  try {
+    const input = AgentInputSchema.parse({
+      agent_id: req.body.agent_id,
+      input: req.body.input,
+      config: req.body.config,
+    });
+    const agent = observer.getAgent(input.agent_id);
+
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Agent not found: ${input.agent_id}` },
+      });
+    }
+
+    const runId = observer.startRun(input.agent_id, input);
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch(agent.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(agent.auth?.type === 'bearer' && agent.auth.token
+            ? { Authorization: `Bearer ${agent.auth.token}` }
+            : {}),
+          ...(agent.auth?.type === 'api_key' && agent.auth.token && agent.auth.header
+            ? { [agent.auth.header]: agent.auth.token }
+            : {}),
+        },
+        body: JSON.stringify(input.input),
+        signal: AbortSignal.timeout(input.config?.timeout_ms ?? 30000),
+      });
+
+      const output = await parseAgentResponse(response);
+      const latencyMs = Date.now() - startTime;
+      observer.recordToolCall(runId, 'agent_http_request', input.input, output, latencyMs);
+      const record = observer.completeRun(runId, output, 'completed');
+      const evalResult =
+        req.body.auto_eval === true
+          ? evalEngine.evaluateWithLeaf(
+              record,
+              req.body.rules_ref ? { rules_ref: String(req.body.rules_ref) } : undefined
+            )
+          : null;
+
+      res.json({
+        success: true,
+        data: { run_id: runId, output, trace: record, eval_result: evalResult },
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      observer.recordError(runId, errorMsg);
+      const record = observer.completeRun(runId, null, 'failed');
+
+      res.status(500).json({
+        success: false,
+        error: { code: 'RUN_FAILED', message: errorMsg },
+        data: { run_id: runId, trace: record, eval_result: null },
+      });
+    }
+  } catch (error) {
+    res
+      .status(400)
+      .json({ success: false, error: { code: 'INVALID_REQUEST', message: String(error) } });
+  }
 });
 
 // ============================================
@@ -915,6 +991,7 @@ export function startServer(port: number | string = process.env.PORT || 8080) {
     logger.info('  GET  /ready         - Readiness check');
     logger.info('  POST /agents        - Register agent');
     logger.info('  POST /run           - Execute agent run (SDK proxy)');
+    logger.info('  POST /webhook/run   - Execute agent run with optional eval');
     logger.info('  POST /run/:id/step  - Add step to running run');
     logger.info('  POST /runs          - Engine triggers n8n workflow');
     logger.info('  POST /callbacks/n8n - n8n callback');

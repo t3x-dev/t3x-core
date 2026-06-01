@@ -2,12 +2,13 @@
  * Knowledge Graph Route Tests
  *
  * Tests for /v1/projects/:projectId/knowledge-graph/* endpoints.
- * Build endpoint is unavailable until tree-based implementation lands.
- * All other endpoints work with regular tables.
+ * Build endpoint deterministically rebuilds the graph from commit tree content.
+ * Other endpoints work with regular graph tables.
  */
 
+import type { Commit } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -39,7 +40,7 @@ import {
   insertKnowledgeNodes,
   insertNodeMembers,
 } from '@t3x-dev/storage';
-import { knowledgeGraphRoutes } from '../routes/knowledge-graph.openapi';
+import { knowledgeGraphRoutes, listProjectGraphCommits } from '../routes/knowledge-graph.openapi';
 
 describe('Knowledge Graph Routes', () => {
   let cleanup: () => Promise<void>;
@@ -64,15 +65,76 @@ describe('Knowledge Graph Routes', () => {
   // ── Build endpoint ─────────────────────────────────────────
 
   describe('POST /build', () => {
-    it('returns 501 until tree-based build is implemented', async () => {
-      const res = await app.request(`/v1/projects/${testProjectId}/knowledge-graph/build`, {
+    it('paginates all commits used for graph rebuilds', async () => {
+      const commitA = { hash: 'sha256:a' } as Commit;
+      const commitB = { hash: 'sha256:b' } as Commit;
+      const commitC = { hash: 'sha256:c' } as Commit;
+      const fetchCommits = vi
+        .fn()
+        .mockResolvedValueOnce([commitA, commitB])
+        .mockResolvedValueOnce([commitC]);
+
+      const commits = await listProjectGraphCommits(
+        {} as AnyDB,
+        'proj_paginated_graph',
+        2,
+        fetchCommits
+      );
+
+      expect(commits.map((commit) => commit.hash)).toEqual(['sha256:a', 'sha256:b', 'sha256:c']);
+      expect(fetchCommits).toHaveBeenNthCalledWith(1, {} as AnyDB, {
+        projectId: 'proj_paginated_graph',
+        includeSuperseded: true,
+        limit: 2,
+        offset: 0,
+      });
+      expect(fetchCommits).toHaveBeenNthCalledWith(2, {} as AnyDB, {
+        projectId: 'proj_paginated_graph',
+        includeSuperseded: true,
+        limit: 2,
+        offset: 2,
+      });
+    });
+
+    it('rebuilds graph nodes and edges from committed tree content', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'KG Build Test' }));
+      await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', name: 'Tester' },
+        message: 'Add release readiness knowledge',
+        content: {
+          trees: [
+            {
+              key: 'release_readiness',
+              slots: { status: 'ready' },
+              children: [{ key: 'risks', slots: { level: 'low' }, children: [] }],
+            },
+          ],
+          relations: [
+            { from: 'release_readiness', to: 'release_readiness/risks', type: 'depends' },
+          ],
+        },
+      });
+
+      const res = await app.request(`/v1/projects/${project.projectId}/knowledge-graph/build`, {
         method: 'POST',
       });
 
       const json: ApiResponse = await res.json();
-      expect(res.status).toBe(501);
-      expect(json.success).toBe(false);
-      expect(json.error.code).toBe('GRAPH_BUILD_NOT_IMPLEMENTED');
+      expect(res.status).toBe(200);
+      expect(json.success).toBe(true);
+      expect(json.data.nodes_created).toBe(2);
+      expect(json.data.edges_created).toBe(1);
+      expect(json.data.members_created).toBe(2);
+
+      const listRes = await app.request(`/v1/projects/${project.projectId}/knowledge-graph/nodes`, {
+        method: 'GET',
+      });
+      const listJson: ApiResponse = await listRes.json();
+      expect(listJson.data.nodes.map((node: { label: string }) => node.label).sort()).toEqual([
+        'release_readiness',
+        'risks',
+      ]);
     });
   });
 

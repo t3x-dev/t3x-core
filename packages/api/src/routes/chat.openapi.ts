@@ -750,7 +750,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
     return c.json(
       {
         success: false as const,
-        error: { code: 'PROVIDER_ERROR', message: `Provider ${providerId} not implemented` },
+        error: { code: 'PROVIDER_ERROR', message: `Provider ${providerId} is not supported` },
       },
       400
     );
@@ -893,7 +893,7 @@ chatRoutes.post('/v1/chat/stream', async (c) => {
             }
           )) as unknown as Response;
         } else {
-          throw new Error(`Provider ${providerId} not implemented`);
+          throw new Error(`Provider ${providerId} is not supported`);
         }
 
         if (!upstreamResponse.ok) {

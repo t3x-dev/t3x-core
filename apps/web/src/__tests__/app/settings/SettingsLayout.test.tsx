@@ -24,9 +24,11 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/infrastructure/session', () => ({
-  clearSession: vi.fn(),
-  getSessionKey: vi.fn(() => null),
+vi.mock('@/hooks/shared/useSession', () => ({
+  useSession: () => ({
+    clear: vi.fn(),
+    getKey: vi.fn(() => null),
+  }),
 }));
 
 describe('SettingsLayout', () => {
