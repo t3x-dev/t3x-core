@@ -29,6 +29,8 @@ const stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), 't3x-local-runtime-')
 
 const sources = {
   apiDist: path.join(repoRoot, 'apps', 'api', 'dist'),
+  cliDist: path.join(repoRoot, 'apps', 'cli', 'dist'),
+  mcpDist: path.join(repoRoot, 'apps', 'mcp', 'dist'),
   webStandalone: path.join(repoRoot, 'apps', 'web', '.next', 'standalone'),
   webStatic: path.join(repoRoot, 'apps', 'web', '.next', 'static'),
   webPublic: path.join(repoRoot, 'apps', 'web', 'public'),
@@ -50,10 +52,14 @@ if (missingSources.length > 0) {
 
 try {
   await ensureDir(path.join(stagingDir, 'api'));
+  await ensureDir(path.join(stagingDir, 'cli'));
+  await ensureDir(path.join(stagingDir, 'mcp'));
   await ensureDir(path.join(stagingDir, 'web'));
   await ensureDir(artifactDir);
 
   await fs.cp(sources.apiDist, path.join(stagingDir, 'api', 'dist'), { recursive: true });
+  await fs.cp(sources.cliDist, path.join(stagingDir, 'cli', 'dist'), { recursive: true });
+  await fs.cp(sources.mcpDist, path.join(stagingDir, 'mcp', 'dist'), { recursive: true });
   await fs.cp(sources.webStandalone, path.join(stagingDir, 'web', 'standalone'), {
     recursive: true,
     verbatimSymlinks: true,

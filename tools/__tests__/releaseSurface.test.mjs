@@ -9,20 +9,20 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
-test('release surface declares local and yops as the initial public packages', () => {
+test('release surface declares local and yops as the initial npm release packages', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.publicPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
-  assert.deepEqual(result.releaseMarkdownPublicPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
+  assert.deepEqual(result.npmPublishPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
+  assert.deepEqual(result.releaseMarkdownNpmPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
   assert.ok(
     result.warnings.some((warning) =>
-      warning.includes('@t3x-dev/local is public but publish_state is pending')
+      warning.includes('@t3x-dev/local is npm-published but publish_state is pending')
     )
   );
   assert.ok(
     result.warnings.some((warning) =>
-      warning.includes('@t3x-dev/yops is public but publish_state is pending')
+      warning.includes('@t3x-dev/yops is npm-published but publish_state is pending')
     )
   );
 });
@@ -31,6 +31,8 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
+  assert.equal(result.packagesByName.get('@t3x-dev/local')?.access, 'restricted');
+  assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/core')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/api-client')?.access, 'restricted');
@@ -41,7 +43,7 @@ test('release surface keeps candidate packages restricted until promoted', () =>
 test('README mirrors the alpha public surface instead of the old broad package list', () => {
   const readme = readText('README.md');
 
-  assert.match(readme, /public npm surface is limited to `@t3x-dev\/local` and `@t3x-dev\/yops`/);
+  assert.match(readme, /npm release surface is limited to `@t3x-dev\/local` and `@t3x-dev\/yops`/);
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);
 });

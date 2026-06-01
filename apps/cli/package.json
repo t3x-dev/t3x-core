@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run --passWithNoTests",
@@ -24,9 +24,13 @@
     "@t3x-dev/yschema": "workspace:*",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
+    "js-yaml": "^4.1.1",
+    "json-canonicalize": "^2.0.0",
+    "nanoid": "^5.1.6",
     "ora": "^8.1.1",
     "table": "^6.9.0",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.3",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

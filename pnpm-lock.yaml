@@ -51,15 +51,90 @@ importers:
 
   apps/api:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.71.2
+        version: 0.71.2(zod@4.2.1)
       '@hono/node-server':
         specifier: ^1.15.2
         version: 1.19.7(hono@4.12.9)
+      '@hono/node-ws':
+        specifier: ^1.3.0
+        version: 1.3.0(@hono/node-server@1.19.7(hono@4.12.9))(hono@4.12.9)
+      '@hono/zod-openapi':
+        specifier: ^1.2.0
+        version: 1.2.0(hono@4.12.9)(zod@4.2.1)
+      '@hono/zod-validator':
+        specifier: ^0.7.6
+        version: 0.7.6(hono@4.12.9)(zod@4.2.1)
+      '@mozilla/readability':
+        specifier: ^0.6.0
+        version: 0.6.0
+      '@scalar/hono-api-reference':
+        specifier: ^0.9.30
+        version: 0.9.30(hono@4.12.9)
       '@t3x-dev/api':
         specifier: workspace:*
         version: link:../../packages/api
       '@t3x-dev/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.9)(react@19.2.3)
+      embedded-postgres:
+        specifier: 18.3.0-beta.17
+        version: 18.3.0-beta.17
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      hono:
+        specifier: ^4.12.9
+        version: 4.12.9
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      jsdom:
+        specifier: ^28.0.0
+        version: 28.0.0
+      json-canonicalize:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mammoth:
+        specifier: ^1.11.0
+        version: 1.11.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
+      pdf-parse:
+        specifier: ^1.1.4
+        version: 1.1.4
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
+      pino:
+        specifier: ^9.14.0
+        version: 9.14.0
+      pino-pretty:
+        specifier: ^11.3.0
+        version: 11.3.0
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      turndown:
+        specifier: ^7.2.2
+        version: 7.2.2
+      turndown-plugin-gfm:
+        specifier: ^1.0.2
+        version: 1.0.2
+      undici:
+        specifier: ^7.20.0
+        version: 7.20.0
+      zod:
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
@@ -100,6 +175,15 @@ importers:
       commander:
         specifier: ^13.1.0
         version: 13.1.0
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      json-canonicalize:
+        specifier: ^2.0.0
+        version: 2.0.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
       ora:
         specifier: ^8.1.1
         version: 8.2.0
@@ -109,6 +193,9 @@ importers:
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
+      zod:
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
@@ -128,24 +215,102 @@ importers:
 
   apps/local:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.71.2
+        version: 0.71.2(zod@4.2.1)
       '@hono/node-server':
         specifier: ^1.15.2
         version: 1.19.11(hono@4.12.9)
-      '@t3x-dev/api':
-        specifier: workspace:0.3.0
-        version: link:../../packages/api
-      '@t3x-dev/cli':
-        specifier: workspace:0.3.0
-        version: link:../cli
-      '@t3x-dev/mcp':
-        specifier: workspace:0.3.0
-        version: link:../mcp
-      '@t3x-dev/storage':
-        specifier: workspace:0.3.0
-        version: link:../../packages/storage
+      '@hono/node-ws':
+        specifier: ^1.3.0
+        version: 1.3.0(@hono/node-server@1.19.11(hono@4.12.9))(hono@4.12.9)
+      '@hono/zod-openapi':
+        specifier: ^1.2.0
+        version: 1.2.0(hono@4.12.9)(zod@4.2.1)
+      '@hono/zod-validator':
+        specifier: ^0.7.6
+        version: 0.7.6(hono@4.12.9)(zod@4.2.1)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.0.0
+        version: 1.28.0(zod@4.2.1)
+      '@mozilla/readability':
+        specifier: ^0.6.0
+        version: 0.6.0
+      '@scalar/hono-api-reference':
+        specifier: ^0.9.30
+        version: 0.9.30(hono@4.12.9)
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
+      chalk:
+        specifier: ^5.4.1
+        version: 5.6.2
       commander:
         specifier: ^13.1.0
         version: 13.1.0
+      drizzle-orm:
+        specifier: ^0.38.3
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.8)(react@19.2.3)
+      embedded-postgres:
+        specifier: ^18.3.0-beta.16
+        version: 18.3.0-beta.16
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      hono:
+        specifier: ^4.7.10
+        version: 4.12.9
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      jsdom:
+        specifier: ^28.0.0
+        version: 28.0.0
+      json-canonicalize:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mammoth:
+        specifier: ^1.8.0
+        version: 1.11.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
+      ora:
+        specifier: ^8.1.1
+        version: 8.2.0
+      pdf-parse:
+        specifier: ^1.1.1
+        version: 1.1.4
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
+      pino:
+        specifier: ^9.14.0
+        version: 9.14.0
+      pino-pretty:
+        specifier: ^11.3.0
+        version: 11.3.0
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      table:
+        specifier: ^6.9.0
+        version: 6.9.0
+      turndown:
+        specifier: ^7.2.2
+        version: 7.2.2
+      turndown-plugin-gfm:
+        specifier: ^1.0.2
+        version: 1.0.2
+      undici:
+        specifier: ^7.16.0
+        version: 7.20.0
+      yaml:
+        specifier: ^2.8.3
+        version: 2.8.3
+      zod:
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
@@ -171,6 +336,30 @@ importers:
       '@t3x-dev/mcp-lib':
         specifier: workspace:*
         version: link:../../packages/mcp
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.9)(react@19.2.3)
+      embedded-postgres:
+        specifier: 18.3.0-beta.17
+        version: 18.3.0-beta.17
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      json-canonicalize:
+        specifier: ^2.0.0
+        version: 2.0.0
+      nanoid:
+        specifier: ^5.1.6
+        version: 5.1.6
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -413,7 +602,7 @@ importers:
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.3)(jsdom@28.0.0)(lightningcss@1.30.2))
       drizzle-orm:
         specifier: ^0.38.3
-        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3)
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.8)(react@19.2.3)
       jsdom:
         specifier: ^28.0.0
         version: 28.0.0
@@ -473,7 +662,7 @@ importers:
         version: 3.0.3
       drizzle-orm:
         specifier: ^0.38.3
-        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3)
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.8)(react@19.2.3)
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -657,7 +846,7 @@ importers:
         version: link:../core
       drizzle-orm:
         specifier: ^0.38.3
-        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.7)(react@19.2.3)
+        version: 0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.7)(react@19.2.3)
       embedded-postgres:
         specifier: ^18.3.0-beta.16
         version: 18.3.0-beta.16
@@ -1006,8 +1195,20 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@embedded-postgres/darwin-arm64@18.3.0-beta.17':
+    resolution: {integrity: sha512-Pvrej3Xz5flfyVc9mchVfekrKoTJyvPtM3U0vjuXamZkRKmi+inP2zRmnmzYecIVbr7Zhu82xbsCENMXrwMp9Q==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [darwin]
+
   '@embedded-postgres/darwin-x64@18.3.0-beta.16':
     resolution: {integrity: sha512-ZoS5GpvPWMtijusa+znxT7nMjz535LHi+8VX7CSCPhDi3IyPE5jcebedboyW6fHjUdtnpkTpfCBMwBRYXJL5tA==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@embedded-postgres/darwin-x64@18.3.0-beta.17':
+    resolution: {integrity: sha512-MVWe+C47pPoMD9LlIWGQkvZ5Xsu3IBo54CYqnIps/Z1byMIUBNc7y/dZ3mfqEwiCbVDVqirG0CU462xnrSEfKA==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [darwin]
@@ -1018,8 +1219,20 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@embedded-postgres/linux-arm64@18.3.0-beta.17':
+    resolution: {integrity: sha512-hXp7yHJHYWkdjkgF6As8whEHbdYxhBdmXeLpLTw0aiac0O6+0Cbqk3cOR9U+e49oyIpElHVwZUo6OewquSRhSg==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [linux]
+
   '@embedded-postgres/linux-arm@18.3.0-beta.16':
     resolution: {integrity: sha512-9DlgGPcSq6IrfZoUK8n0omG2HPFTSeWaF2FBrs8RG6Mjs4dMZcWKsViWFKHbZIHH3ikbZAc3pu3c6lHa4cyuDw==}
+    engines: {node: '>=16'}
+    cpu: [arm]
+    os: [linux]
+
+  '@embedded-postgres/linux-arm@18.3.0-beta.17':
+    resolution: {integrity: sha512-Y2vw7p80PO/Ko7CDm8CCpStnNfMe+oc11e0WZtqAVRjxO6H0oic/ehULhUsWU3mZm5jq7wQAv37VMzf4JN+SFQ==}
     engines: {node: '>=16'}
     cpu: [arm]
     os: [linux]
@@ -1030,8 +1243,20 @@ packages:
     cpu: [ia32]
     os: [linux]
 
+  '@embedded-postgres/linux-ia32@18.3.0-beta.17':
+    resolution: {integrity: sha512-hVUOM+7QxkzAIdN3gewfVwL1EpJIx+0qUiNTD8cMqRtaZyU87e4AFIvBS0UiDJ9xzMTVWr/X24wePtbvIbkopg==}
+    engines: {node: '>=16'}
+    cpu: [ia32]
+    os: [linux]
+
   '@embedded-postgres/linux-ppc64@18.3.0-beta.16':
     resolution: {integrity: sha512-VndcTVmzhEsGWDiJza0j8FiifnX9/lYUEizDB/+/r8BBz45f02XxdLJwaUc+9Y72kLgnfUGYbN9+fyNMQoMPyg==}
+    engines: {node: '>=16'}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@embedded-postgres/linux-ppc64@18.3.0-beta.17':
+    resolution: {integrity: sha512-p3/u4YUqSdE2CKUBlC84JGZCi6RnE1fyeLPIIVy2DJUiKtExR5rE3OpDJcVoN40uecYGL+nR4qFocGzDwG1TBw==}
     engines: {node: '>=16'}
     cpu: [ppc64]
     os: [linux]
@@ -1042,8 +1267,20 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@embedded-postgres/linux-x64@18.3.0-beta.17':
+    resolution: {integrity: sha512-8orSD6NNopSLtjqir4dWQBrj+g8j1eJjWd9mB60A3xbWMzIBIPQpzT7XzbacW9YFSl/DejOLnRXfff+Wr13Tgw==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [linux]
+
   '@embedded-postgres/windows-x64@18.3.0-beta.16':
     resolution: {integrity: sha512-REupF2FhJMEsXqdeUG+wVWSKpykbruh9Ro5bHG/7RCBuSa/ncJ/8qhtVSI71RTJn1Cb9Shqa/gbnorz+8hat9Q==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [win32]
+
+  '@embedded-postgres/windows-x64@18.3.0-beta.17':
+    resolution: {integrity: sha512-kDC5aBsmhWDjeQjj2V4g+Bk+pMeDU27b7l0rBbaKgtt2gsNmCB34ULg/5cqs2kqUKSk/tiGMHKCNE+zQZ+s4rg==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
@@ -3564,6 +3801,10 @@ packages:
     resolution: {integrity: sha512-iCe14miQhWUr1MqER2NUnFlylXk2+8cILCqTCo7gvi2tKq4jZM0Mofy+e7ZXOy5mILh+8EdvJ1USobFK33SJow==}
     engines: {node: '>=16'}
 
+  embedded-postgres@18.3.0-beta.17:
+    resolution: {integrity: sha512-1biFWyuPVtAV5S9RBgcr4PGuAdNL9WhnNZVQ5Arp3gsB24Ci9X9s/8Z7RFYFSc6tJWcj9kzF55YcDAcr3jLUbQ==}
+    engines: {node: '>=16'}
+
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
@@ -4654,30 +4895,30 @@ packages:
     resolution: {integrity: sha512-XRIRcLgk6ZnUbsHsYXExMw+krrPE81hJ6FQPLdBNhhBefqIQKXu/WeTgNBGSwPrfU0v+UCEwn7AoAUOsVKHFvQ==}
     engines: {node: '>=6.8.1'}
 
-  pg-cloudflare@1.3.0:
-    resolution: {integrity: sha512-6lswVVSztmHiRtD6I8hw4qP/nDm1EJbKMRhf3HCYaqud7frGysPv7FYJ5noZQdhQtN2xJnimfMtvQq21pdbzyQ==}
+  pg-cloudflare@1.4.0:
+    resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
-  pg-connection-string@2.12.0:
-    resolution: {integrity: sha512-U7qg+bpswf3Cs5xLzRqbXbQl85ng0mfSV/J0nnA31MCLgvEaAo7CIhmeyrmJpOr7o+zm0rXK+hNnT5l9RHkCkQ==}
+  pg-connection-string@2.13.0:
+    resolution: {integrity: sha512-EMnU9E2fSULdsbErBbMaXJvFeD9B4+nPcM3f+4lsiCR0BHLPrLVjv3DbyM2hgQQviKJaTWIRRTjKjWlHg3p2ig==}
 
   pg-int8@1.0.1:
     resolution: {integrity: sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==}
     engines: {node: '>=4.0.0'}
 
-  pg-pool@3.13.0:
-    resolution: {integrity: sha512-gB+R+Xud1gLFuRD/QgOIgGOBE2KCQPaPwkzBBGC9oG69pHTkhQeIuejVIk3/cnDyX39av2AxomQiyPT13WKHQA==}
+  pg-pool@3.14.0:
+    resolution: {integrity: sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==}
     peerDependencies:
       pg: '>=8.0'
 
-  pg-protocol@1.13.0:
-    resolution: {integrity: sha512-zzdvXfS6v89r6v7OcFCHfHlyG/wvry1ALxZo4LqgUoy7W9xhBDMaqOuMiF3qEV45VqsN6rdlcehHrfDtlCPc8w==}
+  pg-protocol@1.14.0:
+    resolution: {integrity: sha512-n5taZ1kO3s9ngDTVxsEznOqCyToTgz0FLuPq0B33COy5pPpuWJpY3/2oRBVETuOgzdqRXfWpM9HIhp2LBBT1BA==}
 
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
 
-  pg@8.20.0:
-    resolution: {integrity: sha512-ldhMxz2r8fl/6QkXnBD3CR9/xg694oT6DZQ2s6c/RI28OjtSOpxnPrUCGOBJ46RCUxcWdx3p6kw/xnDHjKvaRA==}
+  pg@8.21.0:
+    resolution: {integrity: sha512-AUP1EYJuHraQGsVoCQVIcM7TEJVGtDzxWtGFZd8rds9d+CCXlU5Js1rYgfLNvxy9iJrpHjGrRjoi/3BT9fRyiA==}
     engines: {node: '>= 16.0.0'}
     peerDependencies:
       pg-native: '>=3.0.1'
@@ -4786,6 +5027,10 @@ packages:
 
   postgres@3.4.8:
     resolution: {integrity: sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg==}
+    engines: {node: '>=12'}
+
+  postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
     engines: {node: '>=12'}
 
   prettier@2.8.8:
@@ -6113,25 +6358,49 @@ snapshots:
   '@embedded-postgres/darwin-arm64@18.3.0-beta.16':
     optional: true
 
+  '@embedded-postgres/darwin-arm64@18.3.0-beta.17':
+    optional: true
+
   '@embedded-postgres/darwin-x64@18.3.0-beta.16':
+    optional: true
+
+  '@embedded-postgres/darwin-x64@18.3.0-beta.17':
     optional: true
 
   '@embedded-postgres/linux-arm64@18.3.0-beta.16':
     optional: true
 
+  '@embedded-postgres/linux-arm64@18.3.0-beta.17':
+    optional: true
+
   '@embedded-postgres/linux-arm@18.3.0-beta.16':
+    optional: true
+
+  '@embedded-postgres/linux-arm@18.3.0-beta.17':
     optional: true
 
   '@embedded-postgres/linux-ia32@18.3.0-beta.16':
     optional: true
 
+  '@embedded-postgres/linux-ia32@18.3.0-beta.17':
+    optional: true
+
   '@embedded-postgres/linux-ppc64@18.3.0-beta.16':
+    optional: true
+
+  '@embedded-postgres/linux-ppc64@18.3.0-beta.17':
     optional: true
 
   '@embedded-postgres/linux-x64@18.3.0-beta.16':
     optional: true
 
+  '@embedded-postgres/linux-x64@18.3.0-beta.17':
+    optional: true
+
   '@embedded-postgres/windows-x64@18.3.0-beta.16':
+    optional: true
+
+  '@embedded-postgres/windows-x64@18.3.0-beta.17':
     optional: true
 
   '@emnapi/runtime@1.7.1':
@@ -6461,6 +6730,15 @@ snapshots:
   '@hono/node-ws@1.3.0(@hono/node-server@1.19.11(hono@4.12.9))(hono@4.12.9)':
     dependencies:
       '@hono/node-server': 1.19.11(hono@4.12.9)
+      hono: 4.12.9
+      ws: 8.20.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@hono/node-ws@1.3.0(@hono/node-server@1.19.7(hono@4.12.9))(hono@4.12.9)':
+    dependencies:
+      '@hono/node-server': 1.19.7(hono@4.12.9)
       hono: 4.12.9
       ws: 8.20.0
     transitivePeerDependencies:
@@ -8167,20 +8445,28 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.7)(react@19.2.3):
+  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.7)(react@19.2.3):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.14
       '@types/react': 19.2.7
-      pg: 8.20.0
+      pg: 8.21.0
       postgres: 3.4.7
       react: 19.2.3
 
-  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.20.0)(postgres@3.4.8)(react@19.2.3):
+  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.8)(react@19.2.3):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.14
       '@types/react': 19.2.7
-      pg: 8.20.0
+      pg: 8.21.0
       postgres: 3.4.8
+      react: 19.2.3
+
+  drizzle-orm@0.38.4(@electric-sql/pglite@0.3.14)(@types/react@19.2.7)(pg@8.21.0)(postgres@3.4.9)(react@19.2.3):
+    optionalDependencies:
+      '@electric-sql/pglite': 0.3.14
+      '@types/react': 19.2.7
+      pg: 8.21.0
+      postgres: 3.4.9
       react: 19.2.3
 
   duck@0.1.12:
@@ -8202,7 +8488,7 @@ snapshots:
   embedded-postgres@18.3.0-beta.16:
     dependencies:
       async-exit-hook: 2.0.1
-      pg: 8.20.0
+      pg: 8.21.0
     optionalDependencies:
       '@embedded-postgres/darwin-arm64': 18.3.0-beta.16
       '@embedded-postgres/darwin-x64': 18.3.0-beta.16
@@ -8212,6 +8498,22 @@ snapshots:
       '@embedded-postgres/linux-ppc64': 18.3.0-beta.16
       '@embedded-postgres/linux-x64': 18.3.0-beta.16
       '@embedded-postgres/windows-x64': 18.3.0-beta.16
+    transitivePeerDependencies:
+      - pg-native
+
+  embedded-postgres@18.3.0-beta.17:
+    dependencies:
+      async-exit-hook: 2.0.1
+      pg: 8.21.0
+    optionalDependencies:
+      '@embedded-postgres/darwin-arm64': 18.3.0-beta.17
+      '@embedded-postgres/darwin-x64': 18.3.0-beta.17
+      '@embedded-postgres/linux-arm': 18.3.0-beta.17
+      '@embedded-postgres/linux-arm64': 18.3.0-beta.17
+      '@embedded-postgres/linux-ia32': 18.3.0-beta.17
+      '@embedded-postgres/linux-ppc64': 18.3.0-beta.17
+      '@embedded-postgres/linux-x64': 18.3.0-beta.17
+      '@embedded-postgres/windows-x64': 18.3.0-beta.17
     transitivePeerDependencies:
       - pg-native
 
@@ -8459,7 +8761,7 @@ snapshots:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.14.0
+      qs: 6.15.0
       range-parser: 1.2.1
       router: 2.2.0
       send: 1.2.1
@@ -9595,18 +9897,18 @@ snapshots:
     dependencies:
       node-ensure: 0.0.0
 
-  pg-cloudflare@1.3.0:
+  pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.12.0: {}
+  pg-connection-string@2.13.0: {}
 
   pg-int8@1.0.1: {}
 
-  pg-pool@3.13.0(pg@8.20.0):
+  pg-pool@3.14.0(pg@8.21.0):
     dependencies:
-      pg: 8.20.0
+      pg: 8.21.0
 
-  pg-protocol@1.13.0: {}
+  pg-protocol@1.14.0: {}
 
   pg-types@2.2.0:
     dependencies:
@@ -9616,15 +9918,15 @@ snapshots:
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
 
-  pg@8.20.0:
+  pg@8.21.0:
     dependencies:
-      pg-connection-string: 2.12.0
-      pg-pool: 3.13.0(pg@8.20.0)
-      pg-protocol: 1.13.0
+      pg-connection-string: 2.13.0
+      pg-pool: 3.14.0(pg@8.21.0)
+      pg-protocol: 1.14.0
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
-      pg-cloudflare: 1.3.0
+      pg-cloudflare: 1.4.0
 
   pgpass@1.0.5:
     dependencies:
@@ -9727,6 +10029,8 @@ snapshots:
   postgres@3.4.7: {}
 
   postgres@3.4.8: {}
+
+  postgres@3.4.9: {}
 
   prettier@2.8.8: {}
 

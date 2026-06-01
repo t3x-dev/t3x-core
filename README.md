@@ -30,7 +30,7 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
-For the alpha release, the intended public npm surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Other packages remain restricted until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
+For the alpha release, the npm release surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. These packages are currently published with restricted access; other packages remain internal until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
 
 <br/>
 
@@ -52,9 +52,9 @@ Use this if you want the deterministic YAML operation engine inside your own app
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the packaged local T3X experience. During the publish flip,
-`@t3x-dev/local` is tracked as public in `release/surface.yaml` with
-`publish_state: pending`.
+Use this if you want the packaged local T3X experience. `@t3x-dev/local`
+downloads its runtime artifact during install instead of depending on the
+internal workspace packages being published to npm.
 
 ### Run the full stack locally
 

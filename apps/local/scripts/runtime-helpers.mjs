@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 export const SUPPORTED_RUNTIME_PATHS = [
   path.join('api', 'dist', 'index.js'),
+  path.join('cli', 'dist', 'index.js'),
+  path.join('mcp', 'dist', 'index.js'),
   path.join('web', 'standalone', 'apps', 'web', 'server.js'),
   path.join('web', 'static'),
   path.join('web', 'public'),

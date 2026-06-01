@@ -4,20 +4,20 @@ This document declares the package surface for the current T3X alpha. The
 machine-readable source of truth is [`release/surface.yaml`](release/surface.yaml);
 this file is the human-readable mirror.
 
-## Public Packages
+## NPM Release Packages
 
-| Package | Path | Tier | Publish State | Why Public |
-|---|---|---|---|---|
-| `@t3x-dev/local` | `apps/local` | alpha | pending | First-door local installer and no-key demo entrypoint. |
-| `@t3x-dev/yops` | `packages/yops` | alpha | pending | Public deterministic YAML operation contract. |
+| Package | Path | Access | Tier | Publish State | Why Published |
+|---|---|---|---|---|---|
+| `@t3x-dev/local` | `apps/local` | restricted | alpha | pending | First-door local installer and no-key demo entrypoint. |
+| `@t3x-dev/yops` | `packages/yops` | restricted | alpha | pending | Deterministic YAML operation contract. |
 
-`publish_state: pending` means the package is in the intended alpha public
-surface, but its `package.json` still has `publishConfig.access: restricted`.
-The publish flip is handled separately by the local publish workstream.
+`npm_publish: true` means the package is part of the alpha npm release surface.
+`access: restricted` means the current package is not open-source/public on npm.
+The future public access flip is handled separately from the package release.
 
 ## Restricted Packages
 
-These packages exist in the repository but are not part of the alpha public
+These packages exist in the repository but are not part of the alpha npm release
 surface. They may be promoted later after API stability review:
 
 - `@t3x-dev/core`
@@ -32,13 +32,14 @@ surface. They may be promoted later after API stability review:
 ## Rules
 
 - `release/surface.yaml` is the source of truth for automation.
-- `RELEASE.md` must list the same public packages as `release/surface.yaml`.
-- Public packages must have a README before the publish flip.
-- Public package additions, removals, or downgrades require owner approval and
+- `RELEASE.md` must list the same npm-published packages as `release/surface.yaml`.
+- NPM-published packages must have a README before the publish flip.
+- NPM package additions, removals, or downgrades require owner approval and
   a stability note.
-- Removing a package from the public surface is a breaking change.
+- Removing a package from the npm release surface is a breaking change.
 
 ## Changelog
 
-- 2026-05-31: Initial alpha declaration. `@t3x-dev/local` and `@t3x-dev/yops`
-  are marked public with pending publish flips.
+- 2026-06-01: Kept the npm release surface to `@t3x-dev/local` and
+  `@t3x-dev/yops`, with restricted npm access for the closed alpha.
+- 2026-05-31: Initial alpha declaration.
