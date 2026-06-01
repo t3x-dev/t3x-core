@@ -83,6 +83,12 @@ export async function verifyVersions(options = {}) {
           );
         }
 
+        if (manifest.fixedVersion !== expectedVersion) {
+          problems.push(
+            `apps/local/runtime-manifest.json fixedVersion must be ${expectedVersion}, found ${manifest.fixedVersion ?? 'missing'}`
+          );
+        }
+
         const manifestDependencies = manifest.dependencies ?? {};
         for (const packageName of FIXED_VERSION_PACKAGES) {
           const actual = manifestDependencies[packageName];
@@ -90,6 +96,29 @@ export async function verifyVersions(options = {}) {
           if (actual !== expectedVersion) {
             problems.push(
               `apps/local/runtime-manifest.json dependency ${packageName} must be ${expectedVersion}, found ${actual ?? 'missing'}`
+            );
+          }
+        }
+
+        const platformEntries = Object.entries(manifest.platforms ?? {});
+        if (platformEntries.length === 0) {
+          problems.push(
+            'apps/local/runtime-manifest.json must declare at least one runtime platform artifact'
+          );
+        }
+
+        for (const [platformKey, platform] of platformEntries) {
+          const expectedFileNamePrefix = `t3x-local-runtime-${expectedVersion}-`;
+          if (!platform?.fileName?.startsWith(expectedFileNamePrefix)) {
+            problems.push(
+              `apps/local/runtime-manifest.json platform ${platformKey} fileName must include ${expectedVersion}, found ${platform?.fileName ?? 'missing'}`
+            );
+          }
+
+          const expectedReleaseTag = `t3x-local-v${expectedVersion}`;
+          if (!platform?.url?.includes(expectedReleaseTag)) {
+            problems.push(
+              `apps/local/runtime-manifest.json platform ${platformKey} url must reference ${expectedReleaseTag}, found ${platform?.url ?? 'missing'}`
             );
           }
         }

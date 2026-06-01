@@ -17,6 +17,7 @@ import {
   mergeAutopilotConfig,
 } from '@t3x-dev/core';
 import {
+  type AnyDB,
   commitDraft,
   createCommit,
   drafts,
@@ -35,6 +36,8 @@ import { ErrorResponseSchema } from '../schemas/common';
 import { pushNotification } from './notifications.openapi';
 
 export const autopilotRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
+
+type TxRunner = { transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown> };
 
 // ── Shared Schemas ──────────────────────────────────────────
 
@@ -379,12 +382,57 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const qualifyingIds = new Set(plan.nodes.map((s) => s.id));
     const qualifyingSPs = sps.filter((sp) => qualifyingIds.has(sp.id));
 
-    // 8. Atomically claim the draft (status WHERE guard prevents double-commit)
-    //    Must run BEFORE createCommit to avoid orphan commits on race.
-    //    We pass a placeholder hash; it will be updated after commit creation.
-    const PLACEHOLDER_HASH = 'pending';
-    const claimed = await commitDraft(db, draftId, PLACEHOLDER_HASH);
-    if (!claimed) {
+    // 7. Prepare commit content.
+    const autoTrees = qualifyingSPs.map((sp) => ({
+      key: sp.id || 'legacy_node',
+      slots: { text: sp.text } as Record<string, string>,
+      children: [] as import('@t3x-dev/core').TreeNode[],
+    }));
+
+    // 8. Claim, commit, and replace the provisional hash in one DB
+    // transaction. If commit creation fails, the claim rolls back and the
+    // draft remains editable instead of getting stuck at committed/pending.
+    const runner = db as unknown as Partial<TxRunner>;
+    const writeAutoCommit = async (tx: AnyDB) => {
+      const provisionalHash = 'pending';
+      const claimed = await commitDraft(tx, draftId, provisionalHash);
+      if (!claimed) {
+        return { claimed: false as const, commit: null };
+      }
+
+      const autoConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
+      const yopsLogIds = autoConversationId
+        ? await findUncommittedYOpsIds(tx, autoConversationId, draft.project_id)
+        : [];
+
+      const commit = await createCommit(tx, {
+        parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
+        author: { type: 'agent' as const, name: 'autopilot' },
+        content: { trees: autoTrees, relations: [] },
+        project_id: draft.project_id,
+        message: `Auto-commit: ${qualifyingSPs.length} node(s)`,
+        branch: config.target_branch,
+        provenance: { method: 'human_curation' },
+        yops_log_ids: yopsLogIds,
+        enforceBranchLinearity: true,
+      });
+
+      await tx
+        .update(drafts)
+        .set({ committedAs: commit.hash, updatedAt: new Date() })
+        .where(eq(drafts.id, draftId));
+
+      return { claimed: true as const, commit };
+    };
+
+    const writeResult =
+      typeof runner.transaction === 'function'
+        ? ((await runner.transaction((tx) => writeAutoCommit(tx as AnyDB))) as Awaited<
+            ReturnType<typeof writeAutoCommit>
+          >)
+        : await writeAutoCommit(db);
+
+    if (!writeResult.claimed || !writeResult.commit) {
       return errorResponse(
         c,
         'ALREADY_COMMITTED',
@@ -392,38 +440,9 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       );
     }
 
-    // 9. Create commit (only the winner of step 8 reaches here)
-    const autoTrees = qualifyingSPs.map((sp) => ({
-      key: sp.id || 'legacy_node',
-      slots: { text: sp.text } as Record<string, string>,
-      children: [] as import('@t3x-dev/core').TreeNode[],
-    }));
+    const { commit } = writeResult;
 
-    // Find uncommitted yops for this conversation
-    const autoConversationId = draft.goal?.startsWith('auto:') ? draft.goal.slice(5) : undefined;
-    const yopsLogIds = autoConversationId
-      ? await findUncommittedYOpsIds(db, autoConversationId, draft.project_id)
-      : [];
-
-    const commit = await createCommit(db, {
-      parents: draft.parent_commit_hash ? [draft.parent_commit_hash] : [],
-      author: { type: 'agent' as const, name: 'autopilot' },
-      content: { trees: autoTrees, relations: [] },
-      project_id: draft.project_id,
-      message: `Auto-commit: ${qualifyingSPs.length} node(s)`,
-      branch: config.target_branch,
-      provenance: { method: 'human_curation' },
-      yops_log_ids: yopsLogIds,
-      enforceBranchLinearity: true,
-    });
-
-    // 10. Update draft with the real commit hash
-    await db
-      .update(drafts)
-      .set({ committedAs: commit.hash, updatedAt: new Date() })
-      .where(eq(drafts.id, draftId));
-
-    // 11. Push notification (fire-and-forget)
+    // 9. Push notification (fire-and-forget)
     pushNotification({
       project_id: draft.project_id,
       type: 'commit.created',
@@ -432,7 +451,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
       ref_id: commit.hash,
     });
 
-    // 12. Dispatch webhook (fire-and-forget)
+    // 10. Dispatch webhook (fire-and-forget)
     webhookDispatcher.dispatch(
       'commit.created',
       {

@@ -74,6 +74,7 @@ export type {
   PlatformImportResult,
   PlatformPreviewResult,
   ProviderInfo,
+  RoleAssignment,
   ShareLink,
   Template,
   TemplateVariable,

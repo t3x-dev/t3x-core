@@ -14,23 +14,11 @@ vi.mock('../lib/db', () => ({
 }));
 
 vi.mock('@t3x-dev/storage', () => ({
-  findTurnByHash: vi.fn(),
   getCommitUnified: vi.fn(),
-  findSegmentEmbeddingsByTurn: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@t3x-dev/core', () => ({
-  createDiffEngine: vi.fn(),
-  createGoogleAIEmbeddingProvider: vi.fn(),
-  createCachedEmbeddingProvider: vi.fn(),
   diffCommits: vi.fn(),
-  flattenTrees: vi.fn((trees: unknown[]) => trees),
-  EmbeddingProviderError: class extends Error {
-    constructor(msg: string) {
-      super(msg);
-      this.name = 'EmbeddingProviderError';
-    }
-  },
 }));
 
 import { diffRoutes } from '../routes/diff.openapi';
@@ -134,56 +122,21 @@ describe('Diff Routes', () => {
       expect(data.data.target.hash).toBe('sha256:target');
     });
 
-    it('returns placeholder response for turn hash mode', async () => {
-      const origGoogleKey = process.env.GOOGLE_AI_STUDIO_KEY;
-      try {
-        const { findTurnByHash } = await import('@t3x-dev/storage');
+    it('returns DEPRECATED instead of fake success for turn hash mode', async () => {
+      const res = await app.request('/v1/diff/two-way', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseTurnHash: 'sha256:base_turn',
+          targetTurnHash: 'sha256:target_turn',
+        }),
+      });
 
-        (findTurnByHash as ReturnType<typeof vi.fn>)
-          .mockResolvedValueOnce({
-            turnHash: 'sha256:base_turn',
-            content: 'I want a window seat. Budget is 3000 dollars.',
-            ringsJson: null,
-          })
-          .mockResolvedValueOnce({
-            turnHash: 'sha256:target_turn',
-            content: 'Prefer aisle seat. Budget is flexible.',
-            ringsJson: null,
-          });
-
-        // Turn hash mode needs embedding API — mock it
-        process.env.GOOGLE_AI_STUDIO_KEY = 'test-key';
-        const { createGoogleAIEmbeddingProvider, createCachedEmbeddingProvider } = await import(
-          '@t3x-dev/core'
-        );
-
-        (createGoogleAIEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({});
-        (createCachedEmbeddingProvider as ReturnType<typeof vi.fn>).mockReturnValue({
-          setCacheFromRecords: vi.fn().mockReturnValue(0),
-          getCacheStats: vi.fn().mockReturnValue({ hits: 0, misses: 0 }),
-        });
-
-        const res = await app.request('/v1/diff/two-way', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            baseTurnHash: 'sha256:base_turn',
-            targetTurnHash: 'sha256:target_turn',
-          }),
-        });
-
-        expect(res.status).toBe(200);
-        const data = await res.json();
-        expect(data.success).toBe(true);
-        // Legacy sentence DiffEngine removed; turn hash mode now returns placeholder
-        expect(data.data.method).toBe('placeholder');
-      } finally {
-        if (origGoogleKey === undefined) {
-          delete process.env.GOOGLE_AI_STUDIO_KEY;
-        } else {
-          process.env.GOOGLE_AI_STUDIO_KEY = origGoogleKey;
-        }
-      }
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('DEPRECATED');
+      expect(data.error.message).toContain('base_commit_hash');
     });
 
     it('returns 404 for non-existent commit', async () => {
@@ -234,6 +187,27 @@ describe('Diff Routes', () => {
         body: JSON.stringify(null),
       });
       expect(res.status).toBe(400);
+    });
+
+    it('returns DEPRECATED instead of fake success for legacy three-way mode', async () => {
+      const res = await app.request('/v1/diff/three-way', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseId: 'base',
+          sourceId: 'source',
+          targetId: 'target',
+          baseSegments: [{ segmentId: 'base-1', text: 'Base' }],
+          sourceSegments: [{ segmentId: 'source-1', text: 'Source' }],
+          targetSegments: [{ segmentId: 'target-1', text: 'Target' }],
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('DEPRECATED');
+      expect(data.error.message).toContain('merge');
     });
   });
 });

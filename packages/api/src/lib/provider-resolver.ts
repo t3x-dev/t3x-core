@@ -212,7 +212,7 @@ export async function resolveProviderAndModel(
 
     if (normalizedProvider && !supportedProviders.includes(normalizedProvider)) {
       return (
-        getLayerError(layer, 'unavailable', `Provider ${normalizedProvider} not implemented`) ??
+        getLayerError(layer, 'unavailable', `Provider ${normalizedProvider} is not supported`) ??
         unavailable(input.unavailableMessage, 'No configured generation provider is available')
       );
     }
