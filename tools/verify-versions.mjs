@@ -34,6 +34,24 @@ const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
   '@t3x-dev/storage',
 ];
 
+const SOURCE_VERSION_LITERAL_CHECKS = [
+  {
+    filePath: path.join('apps', 'cli', 'src', 'index.ts'),
+    packageName: '@t3x-dev/cli',
+    patterns: [/\.version\(\s*['"](\d+\.\d+\.\d+)['"]\s*\)/g],
+  },
+  {
+    filePath: path.join('apps', 'local', 'src', 'bin', 't3x-local.ts'),
+    packageName: '@t3x-dev/local',
+    patterns: [/\.version\(\s*['"](\d+\.\d+\.\d+)['"]\s*\)/g],
+  },
+  {
+    filePath: path.join('packages', 'mcp', 'src', 'server.ts'),
+    packageName: '@t3x-dev/mcp-lib',
+    patterns: [/version:\s*['"](\d+\.\d+\.\d+)['"]/g],
+  },
+];
+
 export async function verifyVersions(options = {}) {
   const repoRoot = options.repoRoot ?? (await findRepoRoot(options.cwd ?? process.cwd()));
   const packages = await readFixedPackages(repoRoot);
@@ -126,6 +144,10 @@ export async function verifyVersions(options = {}) {
     }
   }
 
+  if (options.verifySourceVersions ?? true) {
+    await verifySourceVersionLiterals(repoRoot, problems);
+  }
+
   return {
     expectedVersion,
     problems,
@@ -142,6 +164,24 @@ export async function verifyVersionsOrThrow(options = {}) {
   }
 
   return result;
+}
+
+async function verifySourceVersionLiterals(repoRoot, problems) {
+  for (const check of SOURCE_VERSION_LITERAL_CHECKS) {
+    const sourcePath = path.join(repoRoot, check.filePath);
+    const source = await tryReadText(sourcePath);
+    if (!source) continue;
+
+    for (const pattern of check.patterns) {
+      pattern.lastIndex = 0;
+      const matches = source.matchAll(pattern);
+      for (const match of matches) {
+        problems.push(
+          `${check.filePath} must read ${check.packageName} version from package.json, found hard-coded ${match[1]}`
+        );
+      }
+    }
+  }
 }
 
 async function readFixedPackages(repoRoot) {
@@ -184,6 +224,14 @@ async function readJson(filePath) {
 async function tryReadJson(filePath) {
   try {
     return await readJson(filePath);
+  } catch {
+    return null;
+  }
+}
+
+async function tryReadText(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
   } catch {
     return null;
   }

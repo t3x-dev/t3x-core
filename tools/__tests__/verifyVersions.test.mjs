@@ -99,6 +99,54 @@ test('verifyVersions rejects runtime manifests without platform artifacts', asyn
   );
 });
 
+test('verifyVersions rejects hard-coded source version literals', async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 't3x-verify-versions-source-literals-'));
+  writeFixedPackageJsons(repoRoot);
+
+  mkdirSync(join(repoRoot, 'apps', 'cli', 'src'), { recursive: true });
+  writeFileSync(
+    join(repoRoot, 'apps', 'cli', 'src', 'index.ts'),
+    "program.version('0.1.1');\n",
+    'utf8'
+  );
+
+  mkdirSync(join(repoRoot, 'apps', 'local', 'src', 'bin'), { recursive: true });
+  writeFileSync(
+    join(repoRoot, 'apps', 'local', 'src', 'bin', 't3x-local.ts'),
+    "program.version('0.1.1');\n",
+    'utf8'
+  );
+
+  mkdirSync(join(repoRoot, 'packages', 'mcp', 'src'), { recursive: true });
+  writeJson(join(repoRoot, 'packages', 'mcp', 'package.json'), {
+    name: '@t3x-dev/mcp-lib',
+    version: '0.1.7',
+  });
+  writeFileSync(
+    join(repoRoot, 'packages', 'mcp', 'src', 'server.ts'),
+    "new Server({ name: 't3x-mcp', version: '0.1.1' });\n",
+    'utf8'
+  );
+
+  const result = await verifyVersions({ repoRoot, verifyManifest: false });
+
+  assert.ok(
+    result.problems.includes(
+      'apps/cli/src/index.ts must read @t3x-dev/cli version from package.json, found hard-coded 0.1.1'
+    )
+  );
+  assert.ok(
+    result.problems.includes(
+      'apps/local/src/bin/t3x-local.ts must read @t3x-dev/local version from package.json, found hard-coded 0.1.1'
+    )
+  );
+  assert.ok(
+    result.problems.includes(
+      'packages/mcp/src/server.ts must read @t3x-dev/mcp-lib version from package.json, found hard-coded 0.1.1'
+    )
+  );
+});
+
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
