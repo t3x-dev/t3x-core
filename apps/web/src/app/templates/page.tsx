@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { useTemplates } from '@/hooks/templates/useTemplates';
-import type { Template } from '@/infrastructure';
+import type { Template } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 const CATEGORIES = [

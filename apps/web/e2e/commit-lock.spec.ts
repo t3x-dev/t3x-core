@@ -22,16 +22,13 @@ import { expect, test } from './fixtures/test';
  *   trigger the commit dialog but mock the commit endpoint so we can verify
  *   the post-commit UI state without a live DB.
  *
- * LOCK-02: Store-level lock (no server round-trip needed)
- *   Uses page.evaluate() to inject the committed state directly into the
- *   Zustand store. Verifies the extract button disappears and commit button
- *   becomes disabled, without touching the server.
+ * LOCK-02: Pre-commit editable state
+ *   Verifies the control baseline before LOCK-01 commits the conversation.
  *
  * LOCK-03: Refresh preserves lock (localStorage / server state)
- *   Skipped — verifying that the committed flag survives a full page reload
- *   requires the real API to return isCommitted=true on GET /yops-log.
- *   TODO(follow-up): implement once GET /api/v1/conversations/:id/yops returns
- *   a committed_at timestamp we can use to re-derive isCommitted on hydration.
+ *   Skipped — LOCK-01 mocks the commit endpoint, so the server-side
+ *   conversation committed_at value is not persisted for a reload assertion.
+ *   API and query-level tests cover committed_at hydration separately.
  */
 
 const EXTRACT_URL = '**/api/v1/extract-yops';
@@ -188,9 +185,9 @@ test.describe('Commit-lock flow', () => {
     await expect(page.getByTestId('workspace-action-commit')).toBeDisabled({ timeout: 3_000 });
   });
 
-  // ── LOCK-02: Store injection — no server round-trip ───────────────────────
+  // ── LOCK-02: Pre-commit editable baseline ─────────────────────────────────
 
-  test('LOCK-02: inject isCommitted=true into store → extract button hidden', async ({ page }) => {
+  test('LOCK-02: pre-commit state keeps extract and commit actions enabled', async ({ page }) => {
     await page.route(EXTRACT_URL, async (route: Route) => {
       await route.fulfill({
         status: 200,
@@ -213,38 +210,8 @@ test.describe('Commit-lock flow', () => {
     // Extract button should be visible now (panelExpanded && !isCommitted)
     await expect(page.getByTestId('extract-button')).toBeVisible({ timeout: 3_000 });
 
-    // Directly set isCommitted in the Zustand store via the window global.
-    // useWorkspaceStore is accessible in the browser bundle as part of the module graph.
-    // We use page.evaluate to call setCommitted(true) on the running store instance.
-    await page.evaluate(() => {
-      // The store is a module-level singleton; we access it via a custom window property
-      // set in the test fixture, or we call it indirectly through the store's zustand subscribe.
-      // Strategy: find the store via window.__ZUSTAND_STORES__ or dispatch a custom event.
-      // Since the store isn't globally exposed by default, we dispatch a custom event that
-      // the app can optionally listen to — but that's not wired up.
-      //
-      // Fallback: use the public workspaceStore.setState directly if the module is accessible.
-      // In Next.js dev/test builds the module registry is accessible via __webpack_require__
-      // or similar. This is fragile, so we use the event-based approach instead.
-      //
-      // We set a localStorage sentinel that useChatInit reads on mount to force committed mode.
-      // However that's not implemented in the current build.
-      //
-      // The simplest reliable approach: trigger the same effect by dispatching a DOM event
-      // that the store subscriber picks up. Since no such event exists, we skip this approach.
-      //
-      // NOTE: This evaluate block intentionally does nothing — see LOCK-02 assertion below.
-    });
-
-    // ── Verified approach: use the commit dialog flow with mocked commit endpoint ──
-    // The store injection via page.evaluate requires the store to be globally exposed.
-    // In the current architecture, useWorkspaceStore is a module-scoped Zustand singleton
-    // not attached to window. A clean test requires either:
-    //   a) window.__t3xStore__ = useWorkspaceStore (add to app entry point — deferred)
-    //   b) Full commit via mocked endpoint (covered by LOCK-01 above)
-    //
-    // For now, verify the pre-commit state is correct (not locked) — confirming the
-    // lock logic relies on isCommitted flag that LOCK-01 covers end-to-end.
+    // LOCK-01 covers the post-commit locked state. This test keeps the
+    // pre-commit baseline explicit so regressions do not hide behind LOCK-01.
     await expect(page.getByTestId('extract-button')).toBeVisible();
     await expect(page.getByTestId('workspace-action-commit')).toBeEnabled();
   });
@@ -254,10 +221,9 @@ test.describe('Commit-lock flow', () => {
   test.skip(
     'LOCK-03: refresh after commit → lock state persists across reload',
     async ({ page: _page }) => {
-      // TODO(follow-up): implement once the GET /api/v1/conversations/:id/yops endpoint
-      // returns a `committed_at` timestamp that useChatInit uses to re-derive isCommitted.
-      // Currently, isCommitted is ephemeral Zustand state that resets on page reload.
-      // Once the server tracks committed state, hydration will restore the lock on reload.
+      // Requires a real server-side commit, not the mocked commit endpoint
+      // used in LOCK-01. Conversation committed_at hydration is covered by
+      // API and query-level tests.
     }
   );
 });

@@ -12,6 +12,10 @@ let db: AnyDB | null = null;
 let initPromise: Promise<AnyDB> | null = null;
 let closeFunction: (() => Promise<void>) | null = null;
 
+function unwrapStorageModule<T extends Record<string, unknown>>(mod: T): T {
+  return ((mod as { default?: T }).default ?? mod) as T;
+}
+
 export async function getDB(): Promise<AnyDB> {
   if (db) return db;
   if (initPromise) return initPromise;
@@ -24,15 +28,17 @@ async function initializeDB(): Promise<AnyDB> {
 
   if (databaseUrl) {
     pinoLogger.info({ url: databaseUrl.replace(/:[^:@]+@/, ':****@') }, 'using PostgreSQL');
-    const { createPostgresStorage, closePostgresStorage } = await import('@t3x-dev/storage');
+    const { createPostgresStorage, closePostgresStorage } = unwrapStorageModule(
+      await import('@t3x-dev/storage')
+    );
     db = await createPostgresStorage({ connectionString: databaseUrl });
     closeFunction = closePostgresStorage;
   } else {
     const dataDir = process.env.T3X_DATA_DIR || '.t3x/pg-data';
     const port = parseInt(process.env.T3X_PG_PORT || '', 10) || 5445;
     pinoLogger.info({ data_dir: dataDir, port }, 'using embedded PostgreSQL');
-    const { createEmbeddedStorage, closeEmbeddedStorage } = await import(
-      '@t3x-dev/storage/embedded'
+    const { createEmbeddedStorage, closeEmbeddedStorage } = unwrapStorageModule(
+      await import('@t3x-dev/storage/embedded')
     );
     db = await createEmbeddedStorage({ dataDir, port });
     closeFunction = closeEmbeddedStorage;

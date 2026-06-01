@@ -6,6 +6,12 @@ Declarative YAML operations. 18 atomic ops for any YAML document.
 YAML in  →  YOps  →  YAML out
 ```
 
+## Release status
+
+`@t3x-dev/yops@0.3.0` is part of the intended T3X public alpha release surface.
+The npm publish is still in progress; the install command below becomes
+available after the publish workflow completes.
+
 ## Architecture
 
 YOps has three layers, like OpenAPI / Zod / Hono:

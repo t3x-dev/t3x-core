@@ -3,14 +3,14 @@
  *
  * Integration tests for Workbench features:
  * 1. Preview with model parameter (haiku/sonnet/opus)
- * 2. Suggest endpoint boundary
+ * 2. Suggest endpoint tree-search results
  * 3. Commit populates node vectors (best-effort)
  * 4. Preview caching (same content returns cached result)
  * 5. Preview stale detection (after update, preview should be stale)
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertProject } from '@t3x-dev/storage';
+import { insertKnowledgeNode, insertNodeMembers, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -253,9 +253,9 @@ describe('Draft Workbench Features', () => {
       expect(data.data.suggestions).toEqual([]);
     });
 
-    it('returns 501 while goal-based suggestions are unavailable', async () => {
-      const draftId = await createDraftWithNodes('Suggest No Embedder', {
-        goal: 'Find pricing info',
+    it('returns empty suggestions when no graph nodes match the draft goal', async () => {
+      const draftId = await createDraftWithNodes('Suggest No Matches', {
+        goal: 'no_match_goal_z7',
       });
 
       mockGetEmbedder.mockReturnValue(null);
@@ -266,10 +266,10 @@ describe('Draft Workbench Features', () => {
         body: JSON.stringify({}),
       });
 
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
-      expect(data.success).toBe(false);
-      expect(data.error.code).toBe('SUGGESTIONS_NOT_IMPLEMENTED');
+      expect(data.success).toBe(true);
+      expect(data.data.suggestions).toEqual([]);
     });
 
     it('returns 404 for non-existent draft', async () => {
@@ -282,9 +282,23 @@ describe('Draft Workbench Features', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns 501 when goal-based suggestions are unavailable', async () => {
-      const draftId = await createDraftWithNodes('Suggest Tree Search Pending', {
-        goal: 'Find pricing info',
+    it('returns goal-based suggestions from the tree-backed knowledge graph', async () => {
+      const node = await insertKnowledgeNode(mockDB, {
+        project_id: testProjectId,
+        label: 'pricing_anchor',
+        summary: 'Pricing is $99 with a 14 day trial',
+        member_count: 1,
+      });
+      await insertNodeMembers(mockDB, [
+        {
+          node_id: node.id,
+          content_node_id: 'sha256:pricing_anchor:pricing_anchor',
+          commit_hash: 'sha256:pricing_anchor',
+        },
+      ]);
+
+      const draftId = await createDraftWithNodes('Suggest Tree Search', {
+        goal: 'pricing_anchor',
       });
       const mockEmb = {
         id: 'mock-embedder',
@@ -299,10 +313,18 @@ describe('Draft Workbench Features', () => {
         body: JSON.stringify({}),
       });
 
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
-      expect(data.success).toBe(false);
-      expect(data.error.code).toBe('SUGGESTIONS_NOT_IMPLEMENTED');
+      expect(data.success).toBe(true);
+      expect(data.data.suggestions).toEqual([
+        {
+          node_id: node.id,
+          text: 'pricing_anchor: Pricing is $99 with a 14 day trial',
+          commit_hash: 'sha256:pricing_anchor',
+          similarity: 1,
+          already_in_draft: false,
+        },
+      ]);
       expect(mockEmb.encode).not.toHaveBeenCalled();
     });
   });

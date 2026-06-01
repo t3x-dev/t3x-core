@@ -11,8 +11,8 @@ function loadSurface(rootDir) {
   return yaml.load(readText(rootDir, 'release/surface.yaml'));
 }
 
-function extractReleaseMarkdownPublicPackages(markdown) {
-  const section = markdown.match(/## Public Packages\n([\s\S]*?)(?:\n## |\n$)/)?.[1] ?? '';
+function extractReleaseMarkdownNpmPackages(markdown) {
+  const section = markdown.match(/## NPM Release Packages\n([\s\S]*?)(?:\n## |\n$)/)?.[1] ?? '';
   return section
     .split('\n')
     .map((line) => line.match(/^\|\s*`([^`]+)`\s*\|/)?.[1])
@@ -87,8 +87,8 @@ function validatePackageEntry(rootDir, entry, index, errors, warnings) {
     }
   }
 
-  if (entry.access === 'public' && entry.publish_state === 'pending') {
-    warnings.push(`${entry.name} is public but publish_state is pending`);
+  if (entry.npm_publish === true && entry.publish_state === 'pending') {
+    warnings.push(`${entry.name} is npm-published but publish_state is pending`);
   }
 
   if (entry.readme_required && !existsSync(join(packagePath, 'README.md'))) {
@@ -112,18 +112,18 @@ export function validateReleaseSurface({ rootDir = new URL('../..', import.meta.
     validatePackageEntry(rootDir, entry, index, errors, warnings);
   }
 
-  const publicPackages = packages
-    .filter((entry) => entry.access === 'public')
+  const npmPublishPackages = packages
+    .filter((entry) => entry.npm_publish === true)
     .map((entry) => entry.name);
-  const releaseMarkdownPublicPackages = extractReleaseMarkdownPublicPackages(
+  const releaseMarkdownNpmPackages = extractReleaseMarkdownNpmPackages(
     readText(rootDir, 'RELEASE.md')
   );
 
-  if (!sameList(publicPackages, releaseMarkdownPublicPackages)) {
+  if (!sameList(npmPublishPackages, releaseMarkdownNpmPackages)) {
     errors.push(
-      `RELEASE.md public packages [${releaseMarkdownPublicPackages.join(
+      `RELEASE.md npm release packages [${releaseMarkdownNpmPackages.join(
         ', '
-      )}] do not match release/surface.yaml [${publicPackages.join(', ')}]`
+      )}] do not match release/surface.yaml [${npmPublishPackages.join(', ')}]`
     );
   }
 
@@ -132,8 +132,8 @@ export function validateReleaseSurface({ rootDir = new URL('../..', import.meta.
     warnings,
     packages,
     packagesByName: new Map(packages.map((entry) => [entry.name, entry])),
-    publicPackages,
-    releaseMarkdownPublicPackages,
+    npmPublishPackages,
+    releaseMarkdownNpmPackages,
   };
 }
 

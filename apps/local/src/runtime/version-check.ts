@@ -29,13 +29,6 @@ const FIXED_PACKAGE_WORKSPACE_PATHS: Record<(typeof FIXED_VERSION_PACKAGES)[numb
   '@t3x-dev/local': path.join('apps', 'local', 'package.json'),
 };
 
-const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
-  '@t3x-dev/api',
-  '@t3x-dev/cli',
-  '@t3x-dev/mcp',
-  '@t3x-dev/storage',
-] as const;
-
 export interface VersionSnapshot {
   node: string;
   platform: string;
@@ -81,19 +74,16 @@ export function getVersionLockReport(paths: LocalPaths): VersionLockReport {
   const problems: string[] = [];
   const resolvedVersions: Record<string, string> = {};
 
-  for (const dependencyName of LOCAL_DIRECT_FIXED_DEPENDENCIES) {
-    const actual = localPackageJson.dependencies?.[dependencyName];
-    if (actual !== expectedVersion && actual !== `workspace:${expectedVersion}`) {
-      problems.push(
-        `Local package dependency ${dependencyName} must pin ${expectedVersion}, found ${actual ?? 'missing'}`
-      );
-    }
-  }
-
   if (manifest) {
     if (manifest.packageVersion !== expectedVersion) {
       problems.push(
         `runtime-manifest.json packageVersion must be ${expectedVersion}, found ${manifest.packageVersion ?? 'missing'}`
+      );
+    }
+
+    if (manifest.fixedVersion !== expectedVersion) {
+      problems.push(
+        `runtime-manifest.json fixedVersion must be ${expectedVersion}, found ${manifest.fixedVersion ?? 'missing'}`
       );
     }
 
@@ -102,6 +92,27 @@ export function getVersionLockReport(paths: LocalPaths): VersionLockReport {
       if (manifestVersion !== expectedVersion) {
         problems.push(
           `runtime-manifest.json dependency ${packageName} must be ${expectedVersion}, found ${manifestVersion ?? 'missing'}`
+        );
+      }
+    }
+
+    const platformEntries = Object.entries(manifest.platforms ?? {});
+    if (platformEntries.length === 0) {
+      problems.push('runtime-manifest.json must declare at least one runtime platform artifact');
+    }
+
+    for (const [platformKey, platform] of platformEntries) {
+      const expectedFileNamePrefix = `t3x-local-runtime-${expectedVersion}-`;
+      if (!platform.fileName?.startsWith(expectedFileNamePrefix)) {
+        problems.push(
+          `runtime-manifest.json platform ${platformKey} fileName must include ${expectedVersion}, found ${platform.fileName ?? 'missing'}`
+        );
+      }
+
+      const expectedReleaseTag = `t3x-local-v${expectedVersion}`;
+      if (!platform.url?.includes(expectedReleaseTag)) {
+        problems.push(
+          `runtime-manifest.json platform ${platformKey} url must reference ${expectedReleaseTag}, found ${platform.url ?? 'missing'}`
         );
       }
     }
@@ -219,5 +230,7 @@ function readPackageVersion(packageJsonPath: string): string {
 
 interface RuntimeManifest {
   packageVersion?: string;
+  fixedVersion?: string;
   dependencies?: Record<string, string>;
+  platforms?: Record<string, { fileName?: string; url?: string }>;
 }

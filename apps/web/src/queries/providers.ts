@@ -10,8 +10,9 @@ import {
   type ProviderInfo,
   type RoleAssignment,
 } from '@/infrastructure/misc';
+import { GENERATION_PROVIDER_ORDER } from '@/types/providers';
 
-const VISIBLE_GENERATION_PROVIDER_IDS = new Set(['anthropic', 'openai', 'google-ai']);
+const VISIBLE_GENERATION_PROVIDER_IDS = new Set<string>(GENERATION_PROVIDER_ORDER);
 
 function filterVisibleProviderIds(role: string, providerIds: string[]): string[] {
   if (role !== 'generation') return providerIds;

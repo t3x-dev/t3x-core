@@ -27,16 +27,22 @@ function getPort(server: Server): number {
 async function requestJson(
   server: Server,
   path: string,
-  options?: { headers?: Record<string, string> }
+  options?: { headers?: Record<string, string>; method?: string; body?: unknown }
 ): Promise<JsonResponse> {
   return await new Promise((resolve, reject) => {
+    const rawBody = options?.body === undefined ? undefined : JSON.stringify(options.body);
     const req = http.request(
       {
         hostname: '127.0.0.1',
         port: getPort(server),
         path,
-        method: 'GET',
-        headers: options?.headers,
+        method: options?.method ?? 'GET',
+        headers: {
+          ...options?.headers,
+          ...(rawBody
+            ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(rawBody) }
+            : {}),
+        },
       },
       (res) => {
         let raw = '';
@@ -55,6 +61,9 @@ async function requestJson(
     );
 
     req.on('error', reject);
+    if (rawBody) {
+      req.write(rawBody);
+    }
     req.end();
   });
 }
@@ -220,5 +229,139 @@ describe('runner server routes', () => {
 
     expect(res.status).toBe(503);
     expect(body.error.code).toBe('DEBUG_AUTH_NOT_CONFIGURED');
+  });
+
+  it('POST /webhook/run executes a registered agent and returns an eval result', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        id: 'webhook-agent',
+        name: 'Webhook Agent',
+        endpoint: 'http://agent.example/run',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: 'ok' }),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/webhook/run', {
+      method: 'POST',
+      body: {
+        agent_id: 'webhook-agent',
+        input: { prompt: 'hello' },
+        auto_eval: true,
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      data: {
+        run_id: string;
+        output: unknown;
+        trace: { status: string };
+        eval_result: unknown;
+      };
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.run_id).toMatch(/^run_/);
+    expect(body.data.output).toEqual({ answer: 'ok' });
+    expect(body.data.trace.status).toBe('completed');
+    expect(body.data.eval_result).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://agent.example/run',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ prompt: 'hello' }),
+      })
+    );
+  });
+
+  it('POST /run fails the trace when the registered agent returns a non-2xx response', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        id: 'failing-proxy-agent',
+        name: 'Failing Proxy Agent',
+        endpoint: 'http://agent.example/fail',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      statusText: 'Bad Gateway',
+      json: async () => ({ error: 'upstream failed' }),
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/run', {
+      method: 'POST',
+      body: {
+        agent_id: 'failing-proxy-agent',
+        input: { prompt: 'hello' },
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      error: { code: string; message: string };
+      data: { record: { status: string; error: { message: string } } };
+    };
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('RUN_FAILED');
+    expect(body.error.message).toContain('Agent request failed with 502');
+    expect(body.data.record.status).toBe('failed');
+    expect(body.data.record.error.message).toContain('Agent request failed with 502');
+  });
+
+  it('POST /webhook/run fails the trace when the registered agent returns a non-2xx response', async () => {
+    const registerRes = await requestJson(server, '/agents', {
+      method: 'POST',
+      body: {
+        id: 'failing-webhook-agent',
+        name: 'Failing Webhook Agent',
+        endpoint: 'http://agent.example/fail-webhook',
+        type: 'http',
+      },
+    });
+    expect(registerRes.status).toBe(200);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: async () => ({ error: 'agent unavailable' }),
+    }) as unknown as typeof globalThis.fetch;
+
+    const res = await requestJson(server, '/webhook/run', {
+      method: 'POST',
+      body: {
+        agent_id: 'failing-webhook-agent',
+        input: { prompt: 'hello' },
+        auto_eval: true,
+      },
+    });
+    const body = res.body as {
+      success: boolean;
+      error: { code: string; message: string };
+      data: { trace: { status: string; error: { message: string } }; eval_result: unknown };
+    };
+
+    expect(res.status).toBe(500);
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('RUN_FAILED');
+    expect(body.error.message).toContain('Agent request failed with 503');
+    expect(body.data.trace.status).toBe('failed');
+    expect(body.data.trace.error.message).toContain('Agent request failed with 503');
+    expect(body.data.eval_result).toBeNull();
   });
 });

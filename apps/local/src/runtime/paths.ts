@@ -77,18 +77,24 @@ export function getLocalPaths(): LocalPaths {
       runtimeSource === 'installed'
         ? path.join(installedRuntimeDir, 'web', 'public')
         : path.join(assertRepoRoot(repoRoot), 'apps', 'web', 'public'),
-    cliEntryPath: resolvePackageBinEntry({
-      packageName: '@t3x-dev/cli',
-      binName: 't3x',
-      repoRoot,
-      workspaceRelativeDir: path.join('apps', 'cli'),
-    }),
-    mcpEntryPath: resolvePackageBinEntry({
-      packageName: '@t3x-dev/mcp',
-      binName: 't3x-mcp',
-      repoRoot,
-      workspaceRelativeDir: path.join('apps', 'mcp'),
-    }),
+    cliEntryPath:
+      runtimeSource === 'installed'
+        ? path.join(installedRuntimeDir, 'cli', 'dist', 'index.js')
+        : resolvePackageBinEntry({
+            packageName: '@t3x-dev/cli',
+            binName: 't3x',
+            repoRoot,
+            workspaceRelativeDir: path.join('apps', 'cli'),
+          }),
+    mcpEntryPath:
+      runtimeSource === 'installed'
+        ? path.join(installedRuntimeDir, 'mcp', 'dist', 'index.js')
+        : resolvePackageBinEntry({
+            packageName: '@t3x-dev/mcp',
+            binName: 't3x-mcp',
+            repoRoot,
+            workspaceRelativeDir: path.join('apps', 'mcp'),
+          }),
   };
 }
 

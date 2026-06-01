@@ -32,7 +32,7 @@
     "access": "restricted"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup",
     "dev": "tsx src/index.ts",
     "test": "vitest run --passWithNoTests",
     "prepack": "node ../../tools/rewrite-workspace-package-json.mjs",
@@ -40,7 +40,15 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@t3x-dev/mcp-lib": "workspace:*"
+    "@t3x-dev/mcp-lib": "workspace:*",
+    "drizzle-orm": "^0.38.4",
+    "embedded-postgres": "18.3.0-beta.17",
+    "js-yaml": "^4.1.1",
+    "json-canonicalize": "^2.0.0",
+    "nanoid": "^5.1.6",
+    "pg": "^8.21.0",
+    "postgres": "^3.4.9",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

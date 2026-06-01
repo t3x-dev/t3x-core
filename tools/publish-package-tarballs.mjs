@@ -22,19 +22,7 @@ const otp = getArgValue('--otp') ?? process.env.NPM_OTP;
 const maxPublishAttempts = parsePositiveInt(process.env.T3X_PUBLISH_MAX_ATTEMPTS, 6);
 const publishRetryDelayMs = parsePositiveInt(process.env.T3X_PUBLISH_RETRY_DELAY_MS, 15000);
 
-const packageDirs = [
-  path.join('packages', 'yops'),
-  path.join('packages', 'yschema'),
-  path.join('packages', 'core'),
-  path.join('packages', 'api-client'),
-  path.join('apps', 'runner'),
-  path.join('packages', 'storage'),
-  path.join('packages', 'api'),
-  path.join('packages', 'mcp'),
-  path.join('apps', 'cli'),
-  path.join('apps', 'mcp'),
-  path.join('apps', 'local'),
-];
+const packageDirs = await getPublishPackageDirs();
 
 try {
   for (const relativeDir of packageDirs) {
@@ -42,6 +30,12 @@ try {
     const packageJson = JSON.parse(
       await fs.readFile(path.join(packageDir, 'package.json'), 'utf8')
     );
+
+    if (packageJson.private === true) {
+      throw new Error(
+        `[publish-package-tarballs] Refusing to publish private package ${packageJson.name} from ${relativeDir}`
+      );
+    }
 
     if (isPackageVersionPublished(packageJson.name, packageJson.version)) {
       console.log(
@@ -94,6 +88,25 @@ try {
   } else {
     await fs.rm(packDir, { recursive: true, force: true });
   }
+}
+
+async function getPublishPackageDirs() {
+  const { validateReleaseSurfaceOrThrow } = await import('./lib/releaseSurface.mjs');
+  const surface = validateReleaseSurfaceOrThrow({ rootDir: new URL('..', import.meta.url) });
+  const publishEntries = surface.packages.filter((entry) => entry.npm_publish === true);
+
+  if (publishEntries.length === 0) {
+    throw new Error('release/surface.yaml does not declare any packages with npm_publish: true');
+  }
+
+  const publishDirs = publishEntries.map((entry) => entry.path);
+  console.log(
+    `[publish-package-tarballs] Publishing npm surface: ${publishEntries
+      .map((entry) => entry.name)
+      .join(', ')}`
+  );
+
+  return publishDirs;
 }
 
 function parsePackFilename(output, packageDir) {

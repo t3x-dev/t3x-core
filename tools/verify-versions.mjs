@@ -27,11 +27,22 @@ const FIXED_PACKAGE_PATHS = {
   '@t3x-dev/local': path.join('apps', 'local', 'package.json'),
 };
 
-const LOCAL_DIRECT_FIXED_DEPENDENCIES = [
-  '@t3x-dev/api',
-  '@t3x-dev/cli',
-  '@t3x-dev/mcp',
-  '@t3x-dev/storage',
+const SOURCE_VERSION_LITERAL_CHECKS = [
+  {
+    filePath: path.join('apps', 'cli', 'src', 'index.ts'),
+    packageName: '@t3x-dev/cli',
+    patterns: [/\.version\(\s*['"](\d+\.\d+\.\d+)['"]\s*\)/g],
+  },
+  {
+    filePath: path.join('apps', 'local', 'src', 'bin', 't3x-local.ts'),
+    packageName: '@t3x-dev/local',
+    patterns: [/\.version\(\s*['"](\d+\.\d+\.\d+)['"]\s*\)/g],
+  },
+  {
+    filePath: path.join('packages', 'mcp', 'src', 'server.ts'),
+    packageName: '@t3x-dev/mcp-lib',
+    patterns: [/version:\s*['"](\d+\.\d+\.\d+)['"]/g],
+  },
 ];
 
 export async function verifyVersions(options = {}) {
@@ -50,24 +61,6 @@ export async function verifyVersions(options = {}) {
   }
 
   if (expectedVersion) {
-    const localPackage = packages.find((pkg) => pkg.name === '@t3x-dev/local');
-
-    if (!localPackage) {
-      problems.push('Could not locate @t3x-dev/local in the fixed package set');
-    } else {
-      const localDependencies = localPackage.packageJson.dependencies ?? {};
-
-      for (const dependencyName of LOCAL_DIRECT_FIXED_DEPENDENCIES) {
-        const actual = localDependencies[dependencyName];
-
-        if (actual !== expectedVersion && actual !== `workspace:${expectedVersion}`) {
-          problems.push(
-            `apps/local dependency ${dependencyName} must pin ${expectedVersion}, found ${actual ?? 'missing'}`
-          );
-        }
-      }
-    }
-
     if (options.verifyManifest ?? true) {
       const manifestPath = path.join(repoRoot, 'apps', 'local', 'runtime-manifest.json');
       const manifest = await tryReadJson(manifestPath);
@@ -83,6 +76,12 @@ export async function verifyVersions(options = {}) {
           );
         }
 
+        if (manifest.fixedVersion !== expectedVersion) {
+          problems.push(
+            `apps/local/runtime-manifest.json fixedVersion must be ${expectedVersion}, found ${manifest.fixedVersion ?? 'missing'}`
+          );
+        }
+
         const manifestDependencies = manifest.dependencies ?? {};
         for (const packageName of FIXED_VERSION_PACKAGES) {
           const actual = manifestDependencies[packageName];
@@ -93,8 +92,35 @@ export async function verifyVersions(options = {}) {
             );
           }
         }
+
+        const platformEntries = Object.entries(manifest.platforms ?? {});
+        if (platformEntries.length === 0) {
+          problems.push(
+            'apps/local/runtime-manifest.json must declare at least one runtime platform artifact'
+          );
+        }
+
+        for (const [platformKey, platform] of platformEntries) {
+          const expectedFileNamePrefix = `t3x-local-runtime-${expectedVersion}-`;
+          if (!platform?.fileName?.startsWith(expectedFileNamePrefix)) {
+            problems.push(
+              `apps/local/runtime-manifest.json platform ${platformKey} fileName must include ${expectedVersion}, found ${platform?.fileName ?? 'missing'}`
+            );
+          }
+
+          const expectedReleaseTag = `t3x-local-v${expectedVersion}`;
+          if (!platform?.url?.includes(expectedReleaseTag)) {
+            problems.push(
+              `apps/local/runtime-manifest.json platform ${platformKey} url must reference ${expectedReleaseTag}, found ${platform?.url ?? 'missing'}`
+            );
+          }
+        }
       }
     }
+  }
+
+  if (options.verifySourceVersions ?? true) {
+    await verifySourceVersionLiterals(repoRoot, problems);
   }
 
   return {
@@ -113,6 +139,24 @@ export async function verifyVersionsOrThrow(options = {}) {
   }
 
   return result;
+}
+
+async function verifySourceVersionLiterals(repoRoot, problems) {
+  for (const check of SOURCE_VERSION_LITERAL_CHECKS) {
+    const sourcePath = path.join(repoRoot, check.filePath);
+    const source = await tryReadText(sourcePath);
+    if (!source) continue;
+
+    for (const pattern of check.patterns) {
+      pattern.lastIndex = 0;
+      const matches = source.matchAll(pattern);
+      for (const match of matches) {
+        problems.push(
+          `${check.filePath} must read ${check.packageName} version from package.json, found hard-coded ${match[1]}`
+        );
+      }
+    }
+  }
 }
 
 async function readFixedPackages(repoRoot) {
@@ -155,6 +199,14 @@ async function readJson(filePath) {
 async function tryReadJson(filePath) {
   try {
     return await readJson(filePath);
+  } catch {
+    return null;
+  }
+}
+
+async function tryReadText(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
   } catch {
     return null;
   }

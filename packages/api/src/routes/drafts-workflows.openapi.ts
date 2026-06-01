@@ -6,7 +6,7 @@
  * - POST /v1/drafts/:id/commit   - Commit draft to knowledge base
  * - POST /v1/drafts/:id/fork     - Fork a committed draft
  * - POST /v1/drafts/:id/extract  - Extract nodes from conversation
- * - POST /v1/drafts/:id/suggest  - Node suggestions, unavailable until tree-based search lands
+ * - POST /v1/drafts/:id/suggest  - Node suggestions from tree-backed graph search
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: workflow routes adapt heterogeneous draft and commit node payloads pending shared API types */
@@ -25,7 +25,9 @@ import {
   createCommit,
   createLeaf,
   findDraftById,
+  findMembersByNode,
   forkDraft,
+  searchKnowledgeNodes,
   updateDraftPreview,
   updateLeafAtomic,
 } from '@t3x-dev/storage';
@@ -174,7 +176,7 @@ const suggestDraftRoute = createRoute({
   tags: ['Drafts'],
   summary: 'Get node suggestions based on draft goal',
   description:
-    'Returns an empty suggestion set when no goal is provided. Goal-based suggestions are unavailable until tree-based search is implemented.',
+    'Returns graph-backed node suggestions when a draft goal is provided. Empty goal or no graph matches returns an empty suggestion set.',
   request: {
     params: IdParamSchema,
     body: {
@@ -189,10 +191,6 @@ const suggestDraftRoute = createRoute({
     },
     404: {
       description: 'Draft not found',
-      content: { 'application/json': { schema: ErrorResponseSchema } },
-    },
-    501: {
-      description: 'Suggestion backend unavailable',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
@@ -723,7 +721,7 @@ draftsWorkflowRoutes.openapi(forkDraftRoute, async (c) => {
 // POST /v1/drafts/:id/suggest
 draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
   const { id } = c.req.valid('param');
-  const _body = c.req.valid('json');
+  const body = c.req.valid('json');
 
   try {
     const db = await getDB();
@@ -745,13 +743,59 @@ draftsWorkflowRoutes.openapi(suggestDraftRoute, async (c) => {
       );
     }
 
-    return errorResponse(
-      c,
-      'SUGGESTIONS_NOT_IMPLEMENTED',
-      'Draft suggestions are pending tree-based search implementation.'
+    const limit = body?.limit ?? 10;
+    const nodes = await searchKnowledgeNodes(db, draft.project_id, draft.goal, { limit });
+    const draftNodeKeys = collectDraftNodeKeys(draft.nodes);
+    const suggestions = await Promise.all(
+      nodes.map(async (node) => {
+        const members = await findMembersByNode(db, node.id);
+        const primaryMember = members[0];
+        return {
+          node_id: node.id,
+          text: node.summary ? `${node.label}: ${node.summary}` : node.label,
+          commit_hash: primaryMember?.commit_hash ?? '',
+          similarity: scoreNodeSuggestion(draft.goal ?? '', node.label),
+          already_in_draft: draftNodeKeys.has(node.id) || draftNodeKeys.has(node.label),
+        };
+      })
+    );
+
+    return c.json(
+      {
+        success: true as const,
+        data: { suggestions },
+      },
+      200
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return errorResponse(c, 'SUGGEST_FAILED', message);
   }
 });
+
+function collectDraftNodeKeys(nodes: unknown[]): Set<string> {
+  const keys = new Set<string>();
+
+  for (const node of nodes) {
+    if (!node || typeof node !== 'object') continue;
+    const record = node as Record<string, unknown>;
+    for (const field of ['id', 'key', 'path', 'node_id']) {
+      const value = record[field];
+      if (typeof value === 'string' && value.trim()) {
+        keys.add(value.trim());
+      }
+    }
+  }
+
+  return keys;
+}
+
+function scoreNodeSuggestion(goal: string, label: string): number {
+  const normalizedGoal = goal.trim().toLowerCase();
+  const normalizedLabel = label.trim().toLowerCase();
+  if (!normalizedGoal || !normalizedLabel) return 0;
+  if (normalizedGoal === normalizedLabel) return 1;
+  if (normalizedLabel.includes(normalizedGoal)) return 0.9;
+  if (normalizedGoal.includes(normalizedLabel)) return 0.8;
+  return 0.5;
+}

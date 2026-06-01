@@ -23,14 +23,15 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
-import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/infrastructure';
-import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from '@/infrastructure';
+import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
 import { useProjectStore } from '@/store/projectStore';
+import type { CreateRecipeInput, Recipe, UpdateRecipeInput } from '@/types/api';
 
 export default function RecipesPage() {
   const projects = useProjectStore((s) => s.projects);
   const initialized = useProjectStore((s) => s.initialized);
   const { list: fetchProjects } = useProjectCrud();
+  const { listRecipes, createRecipe, updateRecipe, deleteRecipe } = useRecipeCommands();
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +81,7 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  }, [projects]);
+  }, [projects, listRecipes]);
 
   useEffect(() => {
     if (initialized) {
@@ -116,7 +117,7 @@ export default function RecipesPage() {
         setFormLoading(false);
       }
     },
-    [editingRecipe, selectedProjectId]
+    [editingRecipe, selectedProjectId, createRecipe, updateRecipe]
   );
 
   // Delete handler
@@ -134,23 +135,26 @@ export default function RecipesPage() {
     } finally {
       setDeleteLoading(false);
     }
-  }, [deleteTarget]);
+  }, [deleteTarget, deleteRecipe]);
 
   // Toggle enabled/disabled
-  const handleToggleEnabled = useCallback(async (recipe: Recipe) => {
-    setTogglingId(recipe.id);
-    try {
-      const updated = await updateRecipe(recipe.project_id, recipe.id, {
-        enabled: !recipe.enabled,
-      });
-      setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to toggle recipe';
-      toast.error(message);
-    } finally {
-      setTogglingId(null);
-    }
-  }, []);
+  const handleToggleEnabled = useCallback(
+    async (recipe: Recipe) => {
+      setTogglingId(recipe.id);
+      try {
+        const updated = await updateRecipe(recipe.project_id, recipe.id, {
+          enabled: !recipe.enabled,
+        });
+        setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to toggle recipe';
+        toast.error(message);
+      } finally {
+        setTogglingId(null);
+      }
+    },
+    [updateRecipe]
+  );
 
   // Open create dialog
   const openCreate = useCallback(() => {
