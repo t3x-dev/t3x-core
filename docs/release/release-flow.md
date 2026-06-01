@@ -97,6 +97,16 @@ After the release PR merges, the `Release` workflow runs on `main`.
 - If no changesets or version package commit are present, no package publish is
   expected.
 
+The `Release` workflow must create the `chore: version packages` pull request
+with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
+personal access token from a human or bot account with permission to create pull
+requests. Do not rely on the default `GITHUB_TOKEN` for this step: pull requests
+created by `GITHUB_TOKEN` do not recursively run GitHub Actions, so required
+checks can stay stuck as `Expected - Waiting to be reported`.
+
+When the workflow needs to create the version packages pull request and
+`CHANGESETS_TOKEN` is missing, it should fail before opening the pull request.
+
 Do not manually publish from `dev`. Publishing starts from `main` only.
 
 ## Versioning and Changesets
