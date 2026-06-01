@@ -4,12 +4,16 @@
  * can depend on it without violating the v2 layer rule that forbids
  * `components/ -> infrastructure/`.
  *
- * Pure types + `toLocalProviderId` (a string-to-string normaliser
- * with no I/O). The actual API client functions and DTOs that wrap
- * a fetch call still live in `@/infrastructure`.
+ * Pure types + provider identity helpers with no I/O. The actual API
+ * client functions and DTOs that wrap a fetch call still live in
+ * `@/infrastructure`.
  */
 
-import { type LocalGenerationProviderId, normalizeLocalProviderId } from '@t3x-dev/core';
+import {
+  GENERATION_RUNTIME_PROVIDER_IDS,
+  type LocalGenerationProviderId,
+  normalizeLocalProviderId,
+} from '@t3x-dev/core';
 
 // ────────────────────────────────────────────────────────────────────────────
 // LLM provider catalog (ids returned by the server)
@@ -45,6 +49,8 @@ export type LocalProviderClientId = LocalProviderId | LocalProviderAlias;
 export type LocalProviderTestStatus = 'ok' | 'error';
 
 export type LocalProviderKeySource = 'env' | 'file' | 'none';
+
+export const GENERATION_PROVIDER_ORDER = [...GENERATION_RUNTIME_PROVIDER_IDS] as const;
 
 export interface LocalProviderStatus {
   provider: LocalProviderId;
