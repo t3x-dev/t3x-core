@@ -44,18 +44,24 @@ jobs:
 
           if git merge-base --is-ancestor origin/main HEAD; then
             echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo "dev already contains main."
+            echo "dev already contains main by ancestry."
             exit 0
-          fi
-
-          if [ -z "${CHANGESETS_TOKEN}" ]; then
-            echo "::error::CHANGESETS_TOKEN is required to create a back-merge PR that triggers required checks."
-            exit 1
           fi
 
           if ! git merge --no-ff --no-edit origin/main; then
             git merge --abort || true
             echo "::error::main could not be merged into dev automatically. Resolve the back-merge manually."
+            exit 1
+          fi
+
+          if git diff --quiet origin/dev HEAD; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "dev already contains main content."
+            exit 0
+          fi
+
+          if [ -z "${CHANGESETS_TOKEN}" ]; then
+            echo "::error::CHANGESETS_TOKEN is required to create a back-merge PR that triggers required checks."
             exit 1
           fi
 
@@ -72,8 +78,8 @@ jobs:
           cat > /tmp/sync-main-into-dev-pr.md <<'EOF'
           ## Summary
 
-          - Sync release-line commits from `main` back into `dev`.
-          - Generated after a push to `main`, including Changesets `chore: version packages` commits and hotfix merges.
+          - Sync main-only content from `main` back into `dev`.
+          - Generated after a push to `main` when Changesets `chore: version packages` commits, changelog updates, or hotfixes are not already present in `dev`.
 
           ## Release Impact
 
