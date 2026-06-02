@@ -145,6 +145,19 @@ checks can stay stuck as `Expected - Waiting to be reported`.
 When the workflow needs to create the version packages pull request and
 `CHANGESETS_TOKEN` is missing, it should fail before opening the pull request.
 
+After every push to `main`, the `Sync Main Into Dev` workflow checks whether
+`dev` already contains `main`. If not, it creates or updates an
+`automation/sync-main-into-dev` branch from the current `dev`, merges `main`
+into it, and opens a pull request back to `dev`. This covers package version
+commits, removed changesets, changelog updates, and hotfix commits that only
+landed on `main`.
+
+The back-merge pull request also uses `CHANGESETS_TOKEN`. This keeps the PR on
+the normal `dev` validation path instead of relying on the default
+`GITHUB_TOKEN`, whose generated pull requests do not trigger required
+`pull_request` workflows. If `main` cannot merge into `dev` cleanly, the sync
+workflow fails and maintainers must resolve the back-merge manually.
+
 Do not manually publish from `dev`. Publishing starts from `main` only.
 
 ## Product Versioning and Changesets
