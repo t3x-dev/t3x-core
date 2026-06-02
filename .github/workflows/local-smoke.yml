@@ -6,6 +6,7 @@ on:
       - '.changeset/**'
       - '.github/workflows/local-smoke.yml'
       - '.github/workflows/release.yml'
+      - '.github/workflows/sync-main-into-dev.yml'
       - 'apps/cli/**'
       - 'apps/api/**'
       - 'apps/agent-demo/**'
