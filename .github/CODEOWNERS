@@ -8,4 +8,5 @@ docs/contributing/pr-and-release-guards.md @etht3x
 
 # GitHub review and release automation.
 .github/CODEOWNERS @etht3x
+.github/release-flow.md @etht3x
 .github/workflows/ @etht3x

@@ -35,7 +35,8 @@ through environment variables. Locally, use it with explicit metadata when
 testing a release PR guard.
 
 Large PRs may need more targeted smoke checks. Product release PRs into `main`
-use the full release guard described in [Release flow](../release/release-flow.md).
+use the full release guard described in
+[Maintainer Release Flow](../../.github/release-flow.md).
 
 ## Product Release PRs
 
@@ -69,6 +70,7 @@ from the product release branch naming rule.
 Changes to these areas require owner review:
 
 - `.github/CODEOWNERS`
+- `.github/release-flow.md`
 - `.github/workflows/`
 - `RELEASE.md`
 - `release/`

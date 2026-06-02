@@ -54,6 +54,7 @@ runtime-sensitive changes. It is not currently a required branch rule.
 The CODEOWNERS rules should cover:
 
 - `.github/CODEOWNERS`
+- `.github/release-flow.md`
 - `.github/workflows/`
 - `RELEASE.md`
 - `release/`

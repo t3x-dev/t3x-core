@@ -76,8 +76,8 @@ Open an issue describing:
 
 During alpha, ordinary development PRs target `dev`; release candidate PRs move
 `dev` into `main`. See [PR and release guards](./docs/contributing/pr-and-release-guards.md)
-and [Release flow](./docs/release/release-flow.md) for the current
-branching, changeset, and release rules.
+for contributor-facing release impact rules. Maintainer release train details
+live in [Maintainer Release Flow](./.github/release-flow.md).
 
 ### Commit Messages
 

@@ -14,8 +14,6 @@ repository.
 
 ## Current Public Docs
 
-- [Release flow](release/release-flow.md)
-- [Release operations (Chinese)](release/release-operations-zh.md)
 - [Stability policy](release/stability-policy.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
@@ -24,4 +22,5 @@ repository.
 
 - [`README.md`](../README.md) is the first-stop product overview and quickstart.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) covers contributor basics.
-- `.github/` contains issue templates, workflows, and ownership rules.
+- `.github/` contains issue templates, workflows, ownership rules, and
+  maintainer-facing release policy.

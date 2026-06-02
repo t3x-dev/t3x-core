@@ -1,9 +1,9 @@
-# Release Flow
+# Maintainer Release Flow
 
-This document defines the branch, pull request, versioning, and publish flow for
-T3X. It is the human-facing release policy and should evolve as the project
-moves from alpha toward broader releases. Machine-readable release metadata can
-live under `release/` when needed.
+This maintainer-facing document defines the branch, pull request, versioning,
+and publish flow for T3X. It is kept next to GitHub workflow configuration
+because CI enforces parts of this policy. It is not product user documentation.
+Machine-readable release metadata can live under `release/` when needed.
 
 ## Branch Model
 
