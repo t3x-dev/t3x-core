@@ -24,7 +24,7 @@ recommended for protected files but are not enforced by the active ruleset.
 
 ## `main`
 
-`main` is the release line.
+`main` is the T3X product release line.
 
 Recommended settings:
 
@@ -33,10 +33,18 @@ Recommended settings:
 - Require conversation resolution before merge.
 - Require the PR validation workflow.
 - Require the branch to be up to date before merge.
+- Accept normal release PRs only from `release/x.y.z`.
+- Accept urgent hotfix PRs only from `hotfix/*`.
+- Accept Changesets version package PRs from the Changesets automation branch.
 
 Current required status check:
 
 - `PR Validation / Check, build, and test`
+
+`PR Validation` runs `tools/check-release-pr.mjs` for pull requests. For PRs
+targeting `main`, it blocks ordinary feature branches and requires product
+release metadata in the PR body unless the PR is the Changesets version package
+PR.
 
 `local-smoke / Clean install smoke` is a target release guard for package and
 runtime-sensitive changes. It is not currently a required branch rule.
@@ -46,6 +54,7 @@ runtime-sensitive changes. It is not currently a required branch rule.
 The CODEOWNERS rules should cover:
 
 - `.github/CODEOWNERS`
+- `.github/release-flow.md`
 - `.github/workflows/`
 - `RELEASE.md`
 - `release/`
