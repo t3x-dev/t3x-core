@@ -146,11 +146,13 @@ When the workflow needs to create the version packages pull request and
 `CHANGESETS_TOKEN` is missing, it should fail before opening the pull request.
 
 After every push to `main`, the `Sync Main Into Dev` workflow checks whether
-`dev` already contains `main`. If not, it creates or updates an
-`automation/sync-main-into-dev` branch from the current `dev`, merges `main`
-into it, and opens a pull request back to `dev`. This covers package version
-commits, removed changesets, changelog updates, and hotfix commits that only
-landed on `main`.
+merging `main` into `dev` would introduce file changes. If main-only content is
+present, it creates or updates an `automation/sync-main-into-dev` branch from
+the current `dev`, merges `main` into it, and opens a pull request back to
+`dev`. This covers package version commits, removed changesets, changelog
+updates, and hotfix commits that only landed on `main`. Normal product release
+squash commits usually do not create a back-merge pull request because their
+content already came from `dev`.
 
 The back-merge pull request also uses `CHANGESETS_TOKEN`. This keeps the PR on
 the normal `dev` validation path instead of relying on the default
