@@ -1,5 +1,11 @@
 # @t3x-dev/local
 
+## 0.3.1
+
+### Patch Changes
+
+- [#1048](https://github.com/t3x-dev/t3x-core/pull/1048) [`0dfa136`](https://github.com/t3x-dev/t3x-core/commit/0dfa136b32e604d8af49240f304af5dcf8c58b7a) Thanks [@lqw905](https://github.com/lqw905)! - Publish a new local package release that refreshes the bundled WebUI and API runtime used by `t3x-local start`.
+
 ## 0.3.0
 
 ### Patch Changes
