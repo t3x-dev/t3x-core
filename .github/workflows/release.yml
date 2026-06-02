@@ -95,6 +95,12 @@ jobs:
       - name: Build API server
         run: pnpm build:api-server
 
+      - name: Build CLI runtime
+        run: pnpm --filter @t3x-dev/cli build
+
+      - name: Build MCP runtime
+        run: pnpm --filter @t3x-dev/mcp build
+
       - name: Build Web UI
         run: pnpm build:webui
 
