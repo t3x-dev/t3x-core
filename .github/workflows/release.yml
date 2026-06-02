@@ -107,14 +107,8 @@ jobs:
       - name: Verify fixed versions
         run: pnpm verify:versions:no-manifest
 
-      - name: Build local package
-        run: pnpm build:local
-
-      - name: Build API server
-        run: pnpm build:api-server
-
-      - name: Build Web UI
-        run: pnpm build:webui
+      - name: Build workspace
+        run: pnpm build
 
       - name: Prepare runtime tarball
         env:
