@@ -4,10 +4,10 @@ Minimal local entry package for T3X.
 
 ## Release status
 
-`@t3x-dev/local@0.3.0` is part of the intended T3X public alpha release surface.
-The npm publish is still in progress.
+`@t3x-dev/local@0.3.0` is part of the restricted T3X alpha release surface.
+Package visibility may be limited to accounts with alpha access.
 
-After publish completes, the intended public entrypoint is:
+Alpha entrypoint:
 
 ```bash
 npx -p @t3x-dev/local t3x-local start

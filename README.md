@@ -5,7 +5,7 @@
 <h1 align="center">T3X</h1>
 
 <p align="center">
-  <strong>Git for meaning.</strong>
+  <strong>GitHub for structured meaning.</strong>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/alpha-v0.3.0%20pending-orange" alt="alpha v0.3.0 pending" />
+  <img src="https://img.shields.io/badge/alpha-v0.3.0%20restricted-purple" alt="restricted alpha v0.3.0" />
   <a href="https://github.com/t3x-dev/t3x-core/actions/workflows/pr-validation.yml"><img src="https://img.shields.io/github/actions/workflow/status/t3x-dev/t3x-core/pr-validation.yml?branch=main" alt="CI" /></a>
 </p>
 
@@ -30,7 +30,10 @@
 
 T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
 
-For the v0.3.0 alpha release, the npm release surface is limited to `@t3x-dev/local` and `@t3x-dev/yops`. Public availability is still moving through the publish flow; other packages remain internal until they are promoted through the release surface process in [`RELEASE.md`](RELEASE.md).
+The current restricted alpha npm release surface is limited to `@t3x-dev/local`
+and `@t3x-dev/yops`. Restricted package or runtime-asset visibility is expected
+during this alpha; other packages remain internal or preview until promoted
+through the release surface process in [`RELEASE.md`](RELEASE.md).
 
 <br/>
 
@@ -44,7 +47,9 @@ Choose the shortest path for what you want to do:
 npm install @t3x-dev/yops
 ```
 
-Use this if you want the deterministic YAML operation engine inside your own app. This command becomes available after the v0.3.0 npm publish completes.
+Use this if you want the deterministic YAML operation engine inside your own app.
+If npm returns a not-found or access error, your account likely does not have
+restricted alpha access.
 
 ### Use the local alpha package
 
@@ -52,10 +57,10 @@ Use this if you want the deterministic YAML operation engine inside your own app
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the packaged local T3X experience. The npm command becomes
-available after the v0.3.0 publish completes. `@t3x-dev/local` downloads its
-runtime artifact during install instead of depending on the internal workspace
-packages being published to npm.
+Use this if you want the packaged local T3X experience. `@t3x-dev/local`
+downloads its runtime artifact during install instead of depending on the
+internal workspace packages being published to npm. If the package or runtime
+asset is not visible, check restricted alpha access.
 
 ### Run the full stack locally
 
@@ -92,8 +97,8 @@ Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you
 </p>
 
 The fresh `/chat` view shows a provider-independent `Source -> Meaning -> Commit`
-preview before the first extraction run. Screenshot assets are maintained in the
-docs site, not committed into this repository.
+preview before the first extraction run. Screenshot assets live in the docs site
+so the core repository does not need to carry generated image files.
 
 <br/>
 
@@ -107,7 +112,7 @@ T3X turns unstructured text into versioned, structured knowledge through five st
 <td width="20%" align="center"><strong>Extract</strong></td>
 <td width="20%" align="center"><strong>Transform</strong></td>
 <td width="20%" align="center"><strong>Commit</strong></td>
-<td width="20%" align="center"><strong>Apply</strong></td>
+<td width="20%" align="center"><strong>Generate</strong></td>
 </tr>
 <tr>
 <td align="center"><sub>Conversations, docs, specs, notes, transcripts</sub></td>
@@ -125,7 +130,7 @@ T3X turns unstructured text into versioned, structured knowledge through five st
 </tr>
 </table>
 
-> Extract and Apply can use LLM. Transform, Commit, and validation are fully deterministic.
+> Extract and Generate can use LLMs. YOps Apply, Transform, Commit, diff, merge, and validation are fully deterministic.
 
 Between extraction and commit, the tree goes through a **validate &rarr; fix &rarr; re-validate** loop powered by the Y-family tools. This is where the quality happens &mdash; deterministic checks catch issues, emit YOps fixes, and the user approves or adjusts before committing.
 
@@ -288,7 +293,7 @@ work on the full self-hostable product.
 ### Preview surfaces
 
 CLI, MCP, API, and runner surfaces are available for preview and internal
-integration work, but they are not part of the current public alpha release
+integration work, but they are not part of the current restricted alpha package
 surface. Their commands and contracts may change before promotion.
 
 <br/>
@@ -344,10 +349,10 @@ machine-readable source of truth used by release automation.
 
 | Package | Status | Description |
 |:--------|:----|:------------|
-| [`@t3x-dev/local`](apps/local/) | public alpha, publish pending | Local installer and no-key demo entrypoint |
-| [`@t3x-dev/yops`](packages/yops/) | public alpha, publish pending | Declarative YAML operations |
+| [`@t3x-dev/local`](apps/local/) | restricted alpha | Local installer and no-key demo entrypoint |
+| [`@t3x-dev/yops`](packages/yops/) | restricted alpha | Declarative YAML operations |
 
-Other packages remain restricted candidates until they are explicitly promoted.
+Other packages remain internal or preview candidates until explicitly promoted.
 
 <br/>
 

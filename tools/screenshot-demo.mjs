@@ -71,7 +71,9 @@ export async function captureDemoScreenshots(env = process.env) {
       await page.evaluate((theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark');
       }, target.theme);
-      await page.getByText('source -> YOps -> commit').waitFor({ timeout: 15_000 });
+      await page
+        .getByRole('heading', { name: 'What should T3X make sense of?' })
+        .waitFor({ timeout: 15_000 });
       if (target.waitForCollapsedSidebar) {
         await page.waitForFunction(
           (collapsedWidth) => {

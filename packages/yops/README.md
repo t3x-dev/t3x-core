@@ -8,9 +8,8 @@ YAML in  →  YOps  →  YAML out
 
 ## Release status
 
-`@t3x-dev/yops@0.3.0` is part of the intended T3X public alpha release surface.
-The npm publish is still in progress; the install command below becomes
-available after the publish workflow completes.
+`@t3x-dev/yops@0.3.0` is part of the restricted T3X alpha release surface.
+Package visibility may be limited to accounts with alpha access.
 
 ## Architecture
 
