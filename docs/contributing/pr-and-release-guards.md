@@ -23,20 +23,54 @@ or documented public contracts.
 The current baseline for PRs into `dev` and `main` is:
 
 ```bash
+pnpm check:release-pr
 pnpm check
 pnpm check:release-surface
 pnpm build
 pnpm test
 ```
 
-Large PRs may need more targeted smoke checks. Release PRs into `main` use the
-full release guard described in [Release flow](../release/release-flow.md).
+`pnpm check:release-pr` is only meaningful when CI passes pull request metadata
+through environment variables. Locally, use it with explicit metadata when
+testing a release PR guard.
+
+Large PRs may need more targeted smoke checks. Product release PRs into `main`
+use the full release guard described in
+[Maintainer Release Flow](../../.github/release-flow.md).
+
+## Product Release PRs
+
+Normal releases into `main` use `release/x.y.z` branches, where `x.y.z` is the
+T3X product release version.
+
+Release PRs must include:
+
+- `T3X product release version: \`x.y.z\`` in the PR body.
+- Included changes or a comparison range.
+- User-facing release notes.
+- A `Package Releases` section containing either `- None` or one line per
+  package, for example `- \`@t3x-dev/local\`: patch`.
+
+The release PR policy check also validates changeset files:
+
+- `Package Releases: - None` rejects checked-in `.changeset/*.md` files.
+- Package release entries require at least one `.changeset/*.md`.
+- Listed public packages must appear in changeset frontmatter.
+- Public packages in changeset frontmatter must appear in `Package Releases`.
+
+The product release version is independent from npm package versions. If the
+release publishes no packages, write `- None` in `Package Releases`.
+
+Hotfix PRs may target `main` from `hotfix/*`, but they still need product
+release metadata and release notes. Changesets version package PRs are exempt
+from the product release branch naming rule.
 
 ## Protected Files
 
 Changes to these areas require owner review:
 
 - `.github/CODEOWNERS`
+- `.github/release-flow.md`
 - `.github/workflows/`
 - `RELEASE.md`
 - `release/`
@@ -67,3 +101,7 @@ Use this decision table when filling out a PR.
 | CI-only change | No |
 | Contributor-only docs | No |
 | Internal package refactor | Usually no |
+
+Product release version bumps are separate from this table. Every merge to
+`main` gets a product release version even when this table says no changeset is
+required.

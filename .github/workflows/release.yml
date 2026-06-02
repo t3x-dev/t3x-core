@@ -59,6 +59,24 @@ jobs:
           echo "should_release=$should_release"
           echo "should_publish=$is_version_packages"
 
+  product-release-record:
+    name: Product Release Record
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create product release tag and notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/create-product-release.mjs
+
   build-runtime:
     name: Build Runtime (${{ matrix.platform }})
     needs: changeset-state
@@ -153,6 +171,16 @@ jobs:
         if: needs.changeset-state.outputs.should_publish != 'true'
         run: pnpm verify:versions:no-manifest
 
+      - name: Require Changesets token for release PRs
+        if: needs.changeset-state.outputs.should_publish != 'true'
+        env:
+          CHANGESETS_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+        run: |
+          if [ -z "$CHANGESETS_TOKEN" ]; then
+            echo "::error::CHANGESETS_TOKEN is required to create version packages PRs that trigger required checks."
+            exit 1
+          fi
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
@@ -163,6 +191,9 @@ jobs:
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT is required here so the generated version-packages PR can
+          # trigger pull_request workflows. PRs created with the default
+          # GITHUB_TOKEN do not recursively run GitHub Actions.
+          GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
