@@ -1,0 +1,111 @@
+name: Sync Main Into Dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Open back-merge PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge main into sync branch
+        id: merge
+        shell: bash
+        env:
+          CHANGESETS_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+          SYNC_TOKEN: ${{ secrets.CHANGESETS_TOKEN || secrets.GITHUB_TOKEN }}
+          SYNC_BRANCH: automation/sync-main-into-dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${SYNC_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git fetch origin main dev
+          git fetch origin "+refs/heads/${SYNC_BRANCH}:refs/remotes/origin/${SYNC_BRANCH}" || true
+          git checkout -B "${SYNC_BRANCH}" origin/dev
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "dev already contains main."
+            exit 0
+          fi
+
+          if [ -z "${CHANGESETS_TOKEN}" ]; then
+            echo "::error::CHANGESETS_TOKEN is required to create a back-merge PR that triggers required checks."
+            exit 1
+          fi
+
+          if ! git merge --no-ff --no-edit origin/main; then
+            git merge --abort || true
+            echo "::error::main could not be merged into dev automatically. Resolve the back-merge manually."
+            exit 1
+          fi
+
+          git push --force-with-lease origin "HEAD:refs/heads/${SYNC_BRANCH}"
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update PR
+        if: steps.merge.outputs.needed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
+          SYNC_BRANCH: automation/sync-main-into-dev
+        run: |
+          cat > /tmp/sync-main-into-dev-pr.md <<'EOF'
+          ## Summary
+
+          - Sync release-line commits from `main` back into `dev`.
+          - Generated after a push to `main`, including Changesets `chore: version packages` commits and hotfix merges.
+
+          ## Release Impact
+
+          - [x] Changes release, packaging, or publish behavior
+
+          Changeset:
+
+          - [x] Not needed
+
+          ## Verification
+
+          - PR Validation is expected to run on this generated PR.
+          - local-smoke may run when package, runtime, workflow, or tool paths changed.
+          EOF
+
+          pr_number="$(
+            gh pr list \
+              --base dev \
+              --head "${SYNC_BRANCH}" \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          if [ -n "${pr_number}" ]; then
+            gh pr edit "${pr_number}" \
+              --title "chore: sync main into dev" \
+              --body-file /tmp/sync-main-into-dev-pr.md
+          else
+            gh pr create \
+              --base dev \
+              --head "${SYNC_BRANCH}" \
+              --title "chore: sync main into dev" \
+              --body-file /tmp/sync-main-into-dev-pr.md
+          fi
