@@ -1,5 +1,11 @@
 # @t3x-dev/yops
 
+## 0.3.1
+
+### Patch Changes
+
+- [#1048](https://github.com/t3x-dev/t3x-core/pull/1048) [`d1fe2a8`](https://github.com/t3x-dev/t3x-core/commit/d1fe2a8bd0e455221059a6e5dba4bc7d9a8eba0d) Thanks [@lqw905](https://github.com/lqw905)! - Publish a refreshed YOps package with the current operation engine and schema artifacts.
+
 ## 0.3.0
 
 ### Minor Changes
