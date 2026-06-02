@@ -6,7 +6,7 @@ packages:
   - name: "@t3x-dev/local"
     path: apps/local
     access: restricted
-    publish_state: pending
+    publish_state: applied
     npm_publish: true
     stability_tier: alpha
     readme_required: true
@@ -16,7 +16,7 @@ packages:
   - name: "@t3x-dev/yops"
     path: packages/yops
     access: restricted
-    publish_state: pending
+    publish_state: applied
     npm_publish: true
     stability_tier: alpha
     readme_required: true

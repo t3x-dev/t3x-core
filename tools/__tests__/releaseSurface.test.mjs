@@ -9,22 +9,14 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
-test('release surface declares local and yops as the initial npm release packages', () => {
+test('release surface declares local and yops as the restricted alpha npm packages', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.npmPublishPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
   assert.deepEqual(result.releaseMarkdownNpmPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
-  assert.ok(
-    result.warnings.some((warning) =>
-      warning.includes('@t3x-dev/local is npm-published but publish_state is pending')
-    )
-  );
-  assert.ok(
-    result.warnings.some((warning) =>
-      warning.includes('@t3x-dev/yops is npm-published but publish_state is pending')
-    )
-  );
+  assert.equal(result.packagesByName.get('@t3x-dev/local')?.publish_state, 'applied');
+  assert.equal(result.packagesByName.get('@t3x-dev/yops')?.publish_state, 'applied');
 });
 
 test('release surface keeps candidate packages restricted until promoted', () => {
@@ -40,10 +32,13 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   assert.equal(result.packagesByName.get('@t3x-dev/mcp')?.access, 'restricted');
 });
 
-test('README mirrors the alpha public surface instead of the old broad package list', () => {
+test('README mirrors the restricted alpha surface instead of the old broad package list', () => {
   const readme = readText('README.md');
 
-  assert.match(readme, /npm release surface is limited to `@t3x-dev\/local` and `@t3x-dev\/yops`/);
+  assert.match(
+    readme,
+    /restricted alpha npm release surface is limited to `@t3x-dev\/local`\s+and `@t3x-dev\/yops`/
+  );
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);
 });

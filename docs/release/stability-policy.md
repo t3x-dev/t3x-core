@@ -1,12 +1,12 @@
 # Stability Policy
 
-This document defines the minimum stability expectations for the T3X public
+This document defines the minimum stability expectations for the T3X release
 surface. It should evolve as packages move from alpha candidates into stable
 support.
 
-## Public Alpha Surface
+## Restricted Alpha Surface
 
-The initial public alpha surface is limited to:
+The restricted alpha surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
