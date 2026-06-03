@@ -6,7 +6,8 @@ contract.
 
 ## Reporting a Vulnerability
 
-Do not open a public issue for a vulnerability or suspected credential leak.
+Do not disclose vulnerability details, credential material, exploit steps, or
+sensitive logs in a public issue.
 
 Preferred reporting path:
 
