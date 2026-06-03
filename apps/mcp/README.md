@@ -7,8 +7,8 @@ This package is the runnable stdio wrapper around `@t3x-dev/mcp-lib`.
 ## Preview status
 
 The MCP server is a preview/internal surface. It is not part of the current
-public alpha release surface; the public alpha packages are `@t3x-dev/local`
-and `@t3x-dev/yops`.
+restricted alpha package surface; the restricted alpha packages are
+`@t3x-dev/local` and `@t3x-dev/yops`.
 
 ## Current Surface
 
