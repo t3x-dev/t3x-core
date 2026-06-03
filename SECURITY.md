@@ -10,11 +10,12 @@ Do not open a public issue for a vulnerability or suspected credential leak.
 
 Preferred reporting path:
 
-1. Use GitHub's private security reporting flow for this repository, if it is
-   available to you.
-2. If private security reporting is unavailable, contact a repository maintainer
-   privately through GitHub and include only enough detail to establish the
-   affected area. Share exploit details after a private channel is confirmed.
+1. Use GitHub's private security reporting or Security Advisory flow for this
+   repository, if it is available to you.
+2. If no private reporting flow is available, open a normal issue that asks for
+   a private security contact channel. Do not include exploit steps, secrets,
+   payloads, or sensitive logs in that public issue.
+3. Share technical details only after a maintainer confirms a private channel.
 
 Please include:
 
