@@ -4,8 +4,8 @@ Command-line interface for T3X — semantic version control for AI conversations
 
 ## Preview status
 
-The CLI is a preview/internal surface. It is not part of the current public
-alpha release surface; the public alpha packages are `@t3x-dev/local` and
+The CLI is a preview/internal surface. It is not part of the current restricted
+alpha package surface; the restricted alpha packages are `@t3x-dev/local` and
 `@t3x-dev/yops`.
 
 ## First-Stage Scope

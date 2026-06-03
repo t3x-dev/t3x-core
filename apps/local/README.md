@@ -4,7 +4,7 @@ Minimal local entry package for T3X.
 
 ## Release status
 
-`@t3x-dev/local@0.3.0` is part of the restricted T3X alpha release surface.
+`@t3x-dev/local@0.3.1` is part of the restricted T3X alpha release surface.
 Package visibility may be limited to accounts with alpha access.
 
 Alpha entrypoint:

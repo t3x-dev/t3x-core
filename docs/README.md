@@ -22,5 +22,10 @@ repository.
 
 - [`README.md`](../README.md) is the first-stop product overview and quickstart.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) covers contributor basics.
+- [`SECURITY.md`](../SECURITY.md) covers security reporting expectations.
+- [`LIMITATIONS.md`](../LIMITATIONS.md) covers restricted alpha limitations.
+- [`DEPLOYMENT.md`](../DEPLOYMENT.md) covers self-hosted and source deployment
+  expectations.
+- [`STABILITY.md`](../STABILITY.md) summarizes the alpha contract surface.
 - `.github/` contains issue templates, workflows, ownership rules, and
   maintainer-facing release policy.
