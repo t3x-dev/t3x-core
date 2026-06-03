@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/standards-matrix.schema.json",
+  "title": "T3X alpha standards matrix",
+  "type": "object",
+  "required": ["version", "source_doc", "rows"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "source_doc": {
+      "type": "string",
+      "const": "notes/docs/hlq_docs/alpha/open-source-product-standard.md"
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-1"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-2a"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-2b"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-2c"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-3"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-4"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-5"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-6"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-7"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "const": "row-8"
+              }
+            }
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "acceptance"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "row-1",
+              "row-2a",
+              "row-2b",
+              "row-2c",
+              "row-3",
+              "row-4",
+              "row-5",
+              "row-6",
+              "row-7",
+              "row-8"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptance": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

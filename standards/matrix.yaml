@@ -1,0 +1,75 @@
+# Seed doc lives at notes/docs/hlq_docs/alpha/open-source-product-standard.md.
+# This file is the machine-readable source of truth; on mismatch, YAML wins.
+version: 1
+source_doc: notes/docs/hlq_docs/alpha/open-source-product-standard.md
+rows:
+  - id: row-1
+    title: One-sentence pitch a stranger gets in 30s
+    acceptance: |
+      Three outside developers paraphrase T3X's purpose consistently after
+      reading only the README intro.
+
+  - id: row-2a
+    title: "@t3x-dev/local is publicly installable from npm"
+    acceptance: |
+      `npm install -g @t3x-dev/local` succeeds on a clean machine with no auth
+      configured, and package metadata on npm shows `public` access.
+
+  - id: row-2b
+    title: Cross-platform runtime download works without a token
+    acceptance: |
+      Postinstall on each supported platform downloads from public release
+      assets and verifies checksum, with no GitHub token and no proxy
+      workaround. Unsupported platforms show a clear, actionable error.
+
+  - id: row-2c
+    title: No-key seeded demo produces an inspectable commit in <=10 min
+    acceptance: |
+      `t3x-local start` boots WebUI/API on Node.js 20+, replays a bundled
+      fixture extraction for a seeded conversation, and surfaces an inspectable
+      semantic commit within 10 minutes, with auto-upgrade to live extraction
+      when `ANTHROPIC_API_KEY` is set.
+
+  - id: row-3
+    title: Honest versioning and YOps stability policy
+    acceptance: |
+      README banner declares alpha, and `STABILITY.md` or an equivalent policy
+      lists which YOps fields are frozen versus evolving and documents the
+      deprecation window.
+
+  - id: row-4
+    title: Each package this release claims as public stands on its own
+    acceptance: |
+      The release declares its public-package surface in one place; every
+      package on that list has a README with what, why, install, and one working
+      sample; CI fails if a release-public package lacks a README; packages not
+      on the list are explicitly internal and exempt.
+
+  - id: row-5
+    title: Self-host without us
+    acceptance: |
+      A clean-machine smoke job in CI boots compose end-to-end, and
+      `DEPLOYMENT.md` covers backup, upgrade, and the five most common failure
+      modes.
+
+  - id: row-6
+    title: First-time contributor experience
+    acceptance: |
+      `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, and `LIMITATIONS.md`
+      exist; the PR template references Changesets, issue-ref, and English-only
+      rules; an outside contributor can land a non-trivial PR without DMs.
+
+  - id: row-7
+    title: A narrative outsiders can retell consistently
+    acceptance: |
+      The three outside testers from the readiness exercise paraphrase T3X's
+      purpose using mutually consistent wording after reading only the README.
+      Unprompted external mentions are a post-release health metric, not a
+      pre-release blocker.
+
+  - id: row-8
+    title: Evidence the team uses it
+    acceptance: |
+      A team-built demo project lives in `/examples` or is linked from the
+      README, and `LIMITATIONS.md` enumerates current rough edges in plain
+      English.
