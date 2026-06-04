@@ -4,17 +4,17 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Leaf,
   Map as MapIcon,
   MousePointerClick,
   Play,
+  Plus,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'zoom' | 'openLeaf';
+type ProjectTourStepId = 'selectCommit' | 'createLeaf';
 
 interface TargetRect {
   top: number;
@@ -53,34 +53,18 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     advanceOnTargetClick: true,
   },
   {
-    id: 'zoom',
-    label: 'Zoom controls',
-    title: 'Click one highlighted zoom control',
+    id: 'createLeaf',
+    label: '+ New Leaf',
+    title: 'Click the highlighted + New Leaf action',
     description:
-      'Canvas is a graph, so users need to know the real controls for zooming and fitting the version path.',
-    target: 'canvas-viewport-controls',
-    icon: MapIcon,
-    tone: 'conversation',
+      'A Leaf should be created from a selected committed version. The demo only enters Leaf after this real Canvas action.',
+    target: 'canvas-floating-action-new-leaf',
+    icon: Plus,
+    tone: 'leaf',
     details: [
-      'Click plus, minus, the slider, or fit view inside the highlighted control group.',
-      'This changes how much of the version graph is visible.',
-      'Use this when a project has more commits or branches than fit on screen.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'openLeaf',
-    label: 'Leaf tab',
-    title: 'Click the highlighted Leaf tab',
-    description:
-      'The final Canvas action is to leave the graph and inspect the reusable artifact that was generated from this commit.',
-    target: 'sidebar-leaf-tab',
-    icon: Leaf,
-    tone: 'success',
-    details: [
-      'Click Leaf in the left mode switcher.',
-      'This opens the project Leaf index for the same demo project.',
-      'The next page asks the user to click the generated artifact row.',
+      'Click + New Leaf in the floating version action bar.',
+      'This starts the output artifact flow from the selected commit.',
+      'After the click, the demo opens the project Leaf index for the generated artifact.',
     ],
     advanceOnTargetClick: true,
   },

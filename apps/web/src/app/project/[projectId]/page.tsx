@@ -8,6 +8,10 @@ import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import {
+  applyIntroDemoCommitToCanvasGraph,
+  readIntroDemoLocalCommit,
+} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
@@ -166,6 +170,29 @@ export function ProjectDetailPageContent({
       void loadCanvas(projectId);
     }
   }, [projectId, loadCanvas]);
+
+  useEffect(() => {
+    if (!showIntroDemo || canvasLoading || canvasError || loadedProjectId !== projectId) return;
+    const localCommit = readIntroDemoLocalCommit(projectId);
+    if (!localCommit) return;
+
+    useCanvasStore.setState((state) => {
+      if (state.projectId !== projectId) return {};
+      const patched = applyIntroDemoCommitToCanvasGraph({
+        nodes: state.nodes,
+        edges: state.edges,
+        commit: localCommit,
+      });
+      if (!patched) return {};
+      return {
+        nodes: patched.nodes,
+        edges: patched.edges,
+        hasMainCommit: true,
+        latestMainCommitId:
+          localCommit.branch === 'main' ? localCommit.hash : state.latestMainCommitId,
+      };
+    });
+  }, [canvasError, canvasLoading, canvasNodeCount, loadedProjectId, projectId, showIntroDemo]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.

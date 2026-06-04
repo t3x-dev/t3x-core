@@ -20,7 +20,11 @@ import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchTurn } from '@/queries/turns';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
-import { snapPosition } from '@/store/canvasStoreUtils';
+import {
+  hasPendingUnitNode,
+  PENDING_UNIT_LIMIT_MESSAGE,
+  snapPosition,
+} from '@/store/canvasStoreUtils';
 import type { Leaf } from '@/types/api';
 import type { CanvasNodeData, EmbeddedLeaf, NodeKind } from '@/types/nodes';
 
@@ -154,6 +158,10 @@ export function useCanvasNodeActions() {
       if (kind === 'unit') {
         if (!store.projectId) {
           throw new Error('Cannot create unit: no project selected');
+        }
+        if (hasPendingUnitNode(store.nodes)) {
+          store.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+          return;
         }
         const conversation = await createConversation(store.projectId, 'Untitled Unit', undefined, {
           x: snappedPosition.x,

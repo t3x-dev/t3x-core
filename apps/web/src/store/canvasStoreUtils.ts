@@ -36,6 +36,8 @@ export const nextNodeId = () => `node-${Date.now()}-${Math.random().toString(36)
 export const nextEdgeId = () => `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const edgeStyle = { stroke: '#8a8c92', strokeWidth: 3.6 };
 export const edgeType: Edge['type'] = 'animated';
+export const PENDING_UNIT_LIMIT_MESSAGE =
+  'Canvas can only have one pending unit. Commit or delete the existing pending unit first.';
 /** Backflow edge: Leaf → Commit feedback (dashed violet) */
 export const backflowEdgeStyle = { stroke: '#a78bfa', strokeWidth: 2, strokeDasharray: '6 3' };
 export const conversationCommitOffset = 300;
@@ -94,6 +96,43 @@ export const buildOutgoingMap = (edges: Edge[]) => {
     outgoing.set(edge.source, list);
   });
   return outgoing;
+};
+
+export const isPendingUnitNode = (node: Node<CanvasNodeData>) =>
+  node.data.kind === 'unit' && node.data.commitStatus === 'staging';
+
+export const hasPendingUnitNode = (nodes: Node<CanvasNodeData>[], exceptNodeId?: string) =>
+  nodes.some((node) => node.id !== exceptNodeId && isPendingUnitNode(node));
+
+export const limitPendingUnitNodes = (
+  nodes: Node<CanvasNodeData>[],
+  strategy: 'first' | 'latest' = 'first'
+) => {
+  const pending = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => isPendingUnitNode(node));
+
+  if (pending.length <= 1) {
+    return nodes;
+  }
+
+  const keepIndex =
+    strategy === 'latest'
+      ? pending.reduce((latest, current) => {
+          const latestTime = Date.parse(latest.node.data.timestamp ?? '');
+          const currentTime = Date.parse(current.node.data.timestamp ?? '');
+          const latestValue = Number.isFinite(latestTime) ? latestTime : latest.index;
+          const currentValue = Number.isFinite(currentTime) ? currentTime : current.index;
+          return currentValue > latestValue ? current : latest;
+        }).index
+      : pending[0].index;
+
+  return nodes.filter((node, index) => !isPendingUnitNode(node) || index === keepIndex);
+};
+
+export const filterEdgesForNodes = (edges: Edge[], nodes: Node<CanvasNodeData>[]) => {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  return edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
 };
 
 export const getLockedNodeIds = (nodes: Node<CanvasNodeData>[], edges: Edge[]) => {
