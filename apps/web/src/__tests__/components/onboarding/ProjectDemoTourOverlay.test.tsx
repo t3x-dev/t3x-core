@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 
@@ -35,6 +35,10 @@ describe('ProjectDemoTourOverlay', () => {
       screen.getByText('Click + New Leaf in the floating version action bar.')
     ).toBeInTheDocument();
     expect(screen.queryByText('Click the highlighted Leaf tab')).toBeNull();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
 
