@@ -420,6 +420,79 @@ describe('Canvas Store - Unit Node Model', () => {
       expect(state.nodes.map((node) => node.id).sort()).toEqual(['sha256:new', 'unit_local']);
       expect(state.edges.map((edge) => edge.id)).toEqual(['edge-local']);
     });
+
+    it('keeps only one pending unit after incremental refresh', () => {
+      const committedUnit = createCommittedUnitNode('sha256:main', 'sha256:main');
+      const localPending = createStagingUnitNode('unit_local', {
+        conversationId: undefined,
+      });
+      const incomingPending = createStagingUnitNode('conv_new', {
+        conversationId: 'conv_new',
+      });
+
+      useCanvasStore.setState({
+        nodes: [committedUnit, localPending],
+        edges: [{ id: 'edge-local', source: 'sha256:main', target: 'unit_local' }],
+      });
+
+      useCanvasStore.getState().mergeProjectData({
+        nodes: [committedUnit, incomingPending],
+        edges: [
+          { id: 'edge-new', source: 'sha256:main', target: 'conv_new' },
+          { id: 'edge-orphan', source: 'sha256:main', target: 'missing' },
+        ],
+        hasMainCommit: true,
+        latestMainCommitId: 'sha256:main',
+        hasDbPositions: false,
+      });
+
+      const state = useCanvasStore.getState();
+      const pendingNodes = state.nodes.filter(
+        (node) => node.data.kind === 'unit' && node.data.commitStatus === 'staging'
+      );
+      expect(pendingNodes.map((node) => node.id)).toEqual(['unit_local']);
+      expect(state.edges.map((edge) => edge.id)).toEqual(['edge-local']);
+    });
+  });
+
+  describe('single pending unit guard', () => {
+    it('does not append a second pending unit via addToNodes', () => {
+      const notify = vi.fn();
+      useCanvasStore.setState({
+        nodes: [createStagingUnitNode('unit-1')],
+        notifyCallback: notify,
+      });
+
+      useCanvasStore.getState().addToNodes(createStagingUnitNode('unit-2'));
+
+      expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual(['unit-1']);
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('one pending unit'), 'warning');
+    });
+
+    it('does not append a second pending unit via appendNodeAndEdge', () => {
+      const notify = vi.fn();
+      useCanvasStore.setState({
+        nodes: [
+          createCommittedUnitNode('sha256:main', 'sha256:main'),
+          createStagingUnitNode('unit-1'),
+        ],
+        edges: [],
+        notifyCallback: notify,
+      });
+
+      useCanvasStore.getState().appendNodeAndEdge(createStagingUnitNode('unit-2'), {
+        id: 'edge-2',
+        source: 'sha256:main',
+        target: 'unit-2',
+      });
+
+      expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual([
+        'sha256:main',
+        'unit-1',
+      ]);
+      expect(useCanvasStore.getState().edges).toEqual([]);
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining('one pending unit'), 'warning');
+    });
   });
 
   // ===========================================================================

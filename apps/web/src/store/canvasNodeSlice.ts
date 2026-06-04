@@ -2,6 +2,13 @@ import type { Edge, Node } from '@xyflow/react';
 import type { StateCreator } from 'zustand';
 import type { CanvasNodeData, EmbeddedLeaf } from '../types/nodes';
 import type { CanvasState, NodeSlice } from './canvasStoreTypes';
+import {
+  filterEdgesForNodes,
+  hasPendingUnitNode,
+  isPendingUnitNode,
+  limitPendingUnitNodes,
+  PENDING_UNIT_LIMIT_MESSAGE,
+} from './canvasStoreUtils';
 
 /**
  * Node slice — canvas node/edge state + pure setters.
@@ -45,14 +52,17 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
   setLoadError: (loadError) => set({ loadError }),
 
   setProjectData: ({ nodes, edges, hasMainCommit, latestMainCommitId, hasDbPositions }) =>
-    set({
-      nodes,
-      edges,
-      hasMainCommit,
-      latestMainCommitId,
-      hasDbPositions,
-      loading: false,
-      loadError: null,
+    set(() => {
+      const nextNodes = limitPendingUnitNodes(nodes, 'latest');
+      return {
+        nodes: nextNodes,
+        edges: filterEdgesForNodes(edges, nextNodes),
+        hasMainCommit,
+        latestMainCommitId,
+        hasDbPositions,
+        loading: false,
+        loadError: null,
+      };
     }),
 
   /**
@@ -98,9 +108,11 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
         };
       }
 
+      const nextNodes = limitPendingUnitNodes([...retainedNodes, ...newNodes], 'first');
+
       return {
-        nodes: [...retainedNodes, ...newNodes],
-        edges: [...retainedEdges, ...newEdges],
+        nodes: nextNodes,
+        edges: filterEdgesForNodes([...retainedEdges, ...newEdges], nextNodes),
         hasMainCommit,
         latestMainCommitId,
         hasDbPositions: state.hasDbPositions || hasDbPositions,
@@ -121,7 +133,14 @@ export const createNodeSlice: StateCreator<CanvasState, [], [], NodeSlice> = (se
       }),
     })),
 
-  addToNodes: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
+  addToNodes: (node) =>
+    set((state) => {
+      if (isPendingUnitNode(node) && hasPendingUnitNode(state.nodes)) {
+        state.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+        return {};
+      }
+      return { nodes: [...state.nodes, node] };
+    }),
 
   clearCanvas: () => {
     set({

@@ -21,6 +21,7 @@ import {
   backflowEdgeStyle,
   edgeStyle,
   edgeType,
+  limitPendingUnitNodes,
   resolveLatestMainUnitId,
   snapPosition,
   unitToNode,
@@ -180,7 +181,7 @@ export function composeCanvasFromFetches(
     }
   });
 
-  const nodes = [...commitedUnitNodes, ...stagingUnitNodes];
+  const nodes = [...commitedUnitNodes, ...limitPendingUnitNodes(stagingUnitNodes, 'latest')];
 
   // Embed leaves
   if (projectLeaves.length > 0) {

@@ -70,7 +70,7 @@ interface ChatWorkspaceProps {
   introDemoDoneLabel?: string;
 }
 
-const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
+export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'console',
     label: 'Console',
@@ -120,11 +120,46 @@ const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     advanceOnTargetClick: true,
   },
   {
+    id: 'commit',
+    label: 'Commit',
+    title: 'Click Commit to save the applied meaning',
+    description:
+      'Commit creates the stable semantic version. Canvas should only come after this review checkpoint.',
+    target: 'chat-commit-action',
+    tone: 'commit',
+    icon: GitCommit,
+    details: [
+      'Click the real Commit button in the workspace action bar.',
+      'This opens the commit confirmation dialog.',
+      'The applied output is not on Canvas until it is committed.',
+    ],
+    advanceOnTargetClick: true,
+  },
+  {
+    id: 'commit-confirm',
+    label: 'Confirm',
+    title: 'Confirm the commit',
+    description:
+      'This seals the applied YAML as the version that Canvas can show in the project graph.',
+    target: 'chat-commit-confirm',
+    positionTarget: 'chat-commit-dialog',
+    placement: 'above',
+    tone: 'commit',
+    icon: GitCommit,
+    details: [
+      'Keep the generated commit name or edit it.',
+      'Click Commit in the confirmation dialog.',
+      'After the commit finishes, the walkthrough moves to Canvas.',
+    ],
+    advanceOnTargetClick: true,
+    advanceDelayMs: 520,
+  },
+  {
     id: 'canvas',
     label: 'Canvas',
     title: 'Now go to Canvas',
     description:
-      'Only after the reply has been extracted and applied does the demo move to the project graph.',
+      'Only after the reply has been extracted, applied, and committed does the demo move to the project graph.',
     target: 'sidebar-canvas-tab',
     tone: 'commit',
     icon: PanelRight,

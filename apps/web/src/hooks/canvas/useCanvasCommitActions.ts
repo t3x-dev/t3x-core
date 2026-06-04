@@ -27,8 +27,10 @@ import {
   edgeStyle,
   edgeType,
   getNodeCounter,
+  hasPendingUnitNode,
   nextEdgeId,
   nextNodeId,
+  PENDING_UNIT_LIMIT_MESSAGE,
   resolveLatestMainUnitId,
 } from '@/store/canvasStoreUtils';
 import type { CanvasNodeData, SourceTextBlock, TurnBoundary } from '@/types/nodes';
@@ -42,6 +44,10 @@ export function useCanvasCommitActions() {
     const source = state.nodes.find((node) => node.id === conversationId);
     if (!source || source.data.kind !== 'unit') {
       notify?.('Unit not found', 'error');
+      return;
+    }
+    if (hasPendingUnitNode(state.nodes)) {
+      notify?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
       return;
     }
     const canSeed = canCreateStagingUnitFromUnit(
@@ -141,6 +147,10 @@ export function useCanvasCommitActions() {
     }
     if (!state.projectId) {
       throw new Error('Cannot create unit: no project selected');
+    }
+    if (hasPendingUnitNode(state.nodes)) {
+      state.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+      return;
     }
 
     const title = 'Untitled Unit';
