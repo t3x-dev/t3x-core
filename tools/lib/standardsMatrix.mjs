@@ -17,7 +17,20 @@ export const STANDARDS_MATRIX_ROW_IDS = [
   'row-8',
 ];
 
+export const STANDARDS_ACCEPTANCE_TYPES = ['manual', 'automated', 'mixed'];
+
 const STANDARDS_MATRIX_ROW_ID_SET = new Set(STANDARDS_MATRIX_ROW_IDS);
+const STANDARDS_ACCEPTANCE_TYPE_SET = new Set(STANDARDS_ACCEPTANCE_TYPES);
+const STANDARDS_MATRIX_ROW_KEYS = new Set([
+  'id',
+  'title',
+  'acceptance',
+  'acceptance_type',
+  'acceptance_command',
+  'pr_filter_paths',
+  'pr_runs_always',
+  'owner_workstream',
+]);
 
 function readText(rootDir, relativePath) {
   return readFileSync(new URL(relativePath, rootDir), 'utf8');
@@ -29,6 +42,10 @@ function loadMatrix(rootDir) {
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasPrRouting(row) {
+  return row.pr_runs_always === true || row.pr_filter_paths?.length > 0;
 }
 
 export function validateStandardsMatrix({ rootDir = new URL('../..', import.meta.url) } = {}) {
@@ -66,6 +83,12 @@ export function validateStandardsMatrix({ rootDir = new URL('../..', import.meta
       continue;
     }
 
+    for (const key of Object.keys(row)) {
+      if (!STANDARDS_MATRIX_ROW_KEYS.has(key)) {
+        errors.push(`standards/matrix.yaml rows[${index}] has unknown field: ${key}`);
+      }
+    }
+
     if (!isNonEmptyString(row.id)) {
       errors.push(`standards/matrix.yaml rows[${index}] id must be a non-empty string`);
     } else if (!STANDARDS_MATRIX_ROW_ID_SET.has(row.id)) {
@@ -83,6 +106,59 @@ export function validateStandardsMatrix({ rootDir = new URL('../..', import.meta
 
     if (!isNonEmptyString(row.acceptance)) {
       errors.push(`standards/matrix.yaml rows[${index}] acceptance must be a non-empty string`);
+    }
+
+    if (!isNonEmptyString(row.acceptance_type)) {
+      errors.push(
+        `standards/matrix.yaml rows[${index}] acceptance_type must be a non-empty string`
+      );
+    } else if (!STANDARDS_ACCEPTANCE_TYPE_SET.has(row.acceptance_type)) {
+      errors.push(
+        `standards/matrix.yaml rows[${index}] acceptance_type must be one of ${STANDARDS_ACCEPTANCE_TYPES.join(
+          ', '
+        )}`
+      );
+    }
+
+    if (row.acceptance_command !== undefined && !isNonEmptyString(row.acceptance_command)) {
+      errors.push(
+        `standards/matrix.yaml rows[${index}] acceptance_command must be a non-empty string`
+      );
+    }
+
+    if (row.pr_filter_paths !== undefined) {
+      if (!Array.isArray(row.pr_filter_paths)) {
+        errors.push(`standards/matrix.yaml rows[${index}] pr_filter_paths must be an array`);
+      } else {
+        for (const [pathIndex, path] of row.pr_filter_paths.entries()) {
+          if (!isNonEmptyString(path)) {
+            errors.push(
+              `standards/matrix.yaml rows[${index}] pr_filter_paths[${pathIndex}] must be a non-empty string`
+            );
+          }
+        }
+      }
+    }
+
+    if (row.pr_runs_always !== undefined && typeof row.pr_runs_always !== 'boolean') {
+      errors.push(`standards/matrix.yaml rows[${index}] pr_runs_always must be a boolean`);
+    }
+
+    if (!isNonEmptyString(row.owner_workstream)) {
+      errors.push(
+        `standards/matrix.yaml rows[${index}] owner_workstream must be a non-empty string`
+      );
+    }
+
+    if (row.acceptance_type === 'automated' || row.acceptance_type === 'mixed') {
+      if (!isNonEmptyString(row.acceptance_command)) {
+        errors.push(`standards/matrix.yaml row ${row.id} must define acceptance_command`);
+      }
+      if (!hasPrRouting(row)) {
+        errors.push(
+          `standards/matrix.yaml row ${row.id} must define pr_filter_paths or set pr_runs_always: true`
+        );
+      }
     }
   }
 

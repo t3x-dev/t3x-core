@@ -132,7 +132,7 @@
       ],
       "items": {
         "type": "object",
-        "required": ["id", "title", "acceptance"],
+        "required": ["id", "title", "acceptance", "acceptance_type", "owner_workstream"],
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -156,8 +156,59 @@
           "acceptance": {
             "type": "string",
             "minLength": 1
+          },
+          "acceptance_type": {
+            "type": "string",
+            "enum": ["manual", "automated", "mixed"]
+          },
+          "acceptance_command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pr_filter_paths": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "pr_runs_always": {
+            "type": "boolean"
+          },
+          "owner_workstream": {
+            "type": "string",
+            "minLength": 1
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "acceptance_type": {
+                  "enum": ["automated", "mixed"]
+                }
+              },
+              "required": ["acceptance_type"]
+            },
+            "then": {
+              "required": ["acceptance_command"],
+              "anyOf": [
+                {
+                  "required": ["pr_filter_paths"]
+                },
+                {
+                  "properties": {
+                    "pr_runs_always": {
+                      "const": true
+                    }
+                  },
+                  "required": ["pr_runs_always"]
+                }
+              ]
+            }
+          }
+        ]
       }
     }
   }
