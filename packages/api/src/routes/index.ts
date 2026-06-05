@@ -56,4 +56,5 @@ export { turnRoutes } from './turns.openapi';
 export { usageRoutes } from './usage.openapi';
 export { webhooksRoutes } from './webhooks.openapi';
 export { yopsLogRoutes } from './yops-log.openapi';
+export { yopsReviseRoutes } from './yops-revise.openapi';
 export { yopsValidateRoutes } from './yops-validate.openapi';

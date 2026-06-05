@@ -81,6 +81,7 @@ import {
   usageRoutes,
   webhooksRoutes,
   yopsLogRoutes,
+  yopsReviseRoutes,
   yopsValidateRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
@@ -175,6 +176,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', treeCompressRoutes); // /v1/conversations/:conversationId/compress
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
+  api.route('/', yopsReviseRoutes); // /v1/conversations/:conversationId/yops/revise
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
   api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);
