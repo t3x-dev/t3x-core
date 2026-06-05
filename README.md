@@ -65,16 +65,21 @@ downloads its runtime artifact during install instead of depending on the
 internal workspace packages being published to npm. If the package or runtime
 asset is not visible, check restricted alpha access.
 
-### Run the full stack locally
+### Preview the self-hosted stack with Docker
 
 ```bash
-docker compose up -d
+cp .env.example .env
+docker compose up -d --build
 ```
 
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
-Use this if you want the self-hosted product experience with WebUI + API.
-Docker and self-hosted runs keep auth on by default, so the first WebUI visit goes through the built-in username/password login at `/login`.
+Use this if you want the self-hosted alpha evaluation path with WebUI + API +
+Postgres. Docker Compose is a preview path for local/self-hosted evaluation, not
+a production-readiness claim. Review the [deployment guide](DEPLOYMENT.md)
+before exposing it beyond localhost. Docker and self-hosted runs keep auth on by
+default, so the first WebUI visit goes through the built-in username/password
+login at `/login`.
 
 ### Develop from source
 
@@ -102,6 +107,10 @@ Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you
 The fresh `/chat` view shows a provider-independent `Source -> Meaning -> Commit`
 preview before the first extraction run. Screenshot assets live in the docs site
 so the core repository does not need to carry generated image files.
+
+When the source-dev WebUI is running, open the
+[intro demo preview](http://localhost:3000/chat?introDemo=1) to load the guided
+intro demo. The `introDemo` flag is development-only.
 
 <br/>
 
@@ -142,6 +151,10 @@ Between extraction and commit, the tree goes through a **validate &rarr; fix &ra
 ## The Y-Family
 
 T3X provides three spec-driven tools for working with YAML trees. Together they form a validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
+Within this Y-family, only YOps is part of the restricted alpha npm release
+surface. YSchema and YLint are in-repository validation surfaces used by T3X and
+may change before promotion; treat their examples as source-level documentation,
+not published-package install guidance.
 
 <table>
 <tr>
@@ -278,7 +291,8 @@ First-run auth defaults:
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this for the packaged local experience and no-key demo entrypoint.
+Use this for packaged local alpha evaluation. Some local alpha flows may depend
+on restricted runtime assets during alpha.
 
 ### YOps library
 
@@ -287,6 +301,16 @@ npm install @t3x-dev/yops
 ```
 
 Use this for the deterministic YAML operation engine inside your own app.
+
+### Docker self-host preview
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Use this to preview the self-hosted WebUI + API + Postgres stack. See the
+[deployment guide](DEPLOYMENT.md) for auth, environment, and production caveats.
 
 ### WebUI from source
 
@@ -321,7 +345,7 @@ surface. Their commands and contracts may change before promotion.
 
 ```
 packages/yops        # YOps — Declarative YAML operations
-packages/yschema     # YSchema — domain validation with auto-fix
+packages/yschema     # YSchema — internal validation candidate with auto-fix
 packages/core        # T3X engine — diff, merge, hash chains, extraction, ylint
 packages/storage     # PostgreSQL persistence (Drizzle ORM)
 packages/api-client  # TypeScript API client
