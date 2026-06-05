@@ -48,6 +48,9 @@ jobs:
 
       - name: Run affected standards rows
         run: pnpm standards:run -- --mode pr --changed-paths .standards-changed-files.txt --summary-file .standards-summary.md
+        env:
+          YOPS_STABILITY_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          T3X_PR_BODY: ${{ github.event.pull_request.body }}
 
       - name: Publish standards summary
         if: always()

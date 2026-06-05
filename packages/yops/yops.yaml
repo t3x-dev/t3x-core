@@ -169,6 +169,7 @@ operations:
 
   define:
     category: ddl
+    status: frozen
     path_fields:
       primary: path
     description: Create an empty mapping at a path
@@ -176,6 +177,7 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: >
           Path to create. Parent must exist and be a mapping.
           Creates the final segment as an empty mapping {}.
@@ -218,6 +220,7 @@ operations:
 
   drop:
     category: ddl
+    status: frozen
     path_fields:
       primary: path
     description: Remove a key and its entire subtree from a mapping
@@ -225,6 +228,7 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the key to remove. Must exist.
     rules:
       - path must exist
@@ -246,6 +250,7 @@ operations:
 
   rename:
     category: ddl
+    status: frozen
     path_fields:
       primary: path
     description: Change a key name without moving its value
@@ -253,10 +258,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the key to rename
       to:
         type: string
         required: true
+        status: frozen
         description: New key name
     rules:
       - path must exist
@@ -294,6 +301,7 @@ operations:
 
   set:
     category: dml
+    status: frozen
     path_fields:
       primary: path
     description: Set a value at a path, creating intermediate mappings as needed
@@ -301,10 +309,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Target path (e.g., config/database/host)
       value:
         type: any
         required: true
+        status: frozen
         description: Value to set (any YValue)
     rules:
       - creates intermediate mapping keys if they don't exist
@@ -331,6 +341,7 @@ operations:
 
   unset:
     category: dml
+    status: frozen
     path_fields:
       primary: path
     description: Remove a key from a mapping
@@ -338,6 +349,7 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the key to remove
     rules:
       - idempotent — no error if key is already absent
@@ -366,6 +378,7 @@ operations:
 
   populate:
     category: dml
+    status: frozen
     path_fields:
       primary: path
     description: Set multiple keys on a mapping at once
@@ -373,10 +386,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the target mapping
       values:
         type: mapping
         required: true
+        status: frozen
         description: "Key-value pairs to set: {key: value, ...}"
     rules:
       - target must exist and be a mapping
@@ -412,6 +427,7 @@ operations:
 
   append:
     category: dml
+    status: frozen
     path_fields:
       primary: path
     description: Add a value to the end of a sequence
@@ -419,10 +435,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the target sequence
       value:
         type: any
         required: true
+        status: frozen
         description: Value to append
     rules:
       - target must exist and be a sequence
@@ -453,6 +471,7 @@ operations:
 
   move:
     category: dtl
+    status: frozen
     path_fields:
       source: from
       destination: to
@@ -461,10 +480,12 @@ operations:
       from:
         type: string
         required: true
+        status: frozen
         description: Source path
       to:
         type: string
         required: true
+        status: frozen
         description: Destination path
     rules:
       - source must exist
@@ -499,6 +520,7 @@ operations:
 
   clone:
     category: dtl
+    status: frozen
     path_fields:
       source: from
       destination: to
@@ -507,10 +529,12 @@ operations:
       from:
         type: string
         required: true
+        status: frozen
         description: Source path to copy
       to:
         type: string
         required: true
+        status: frozen
         description: Destination path for the copy
     rules:
       - source must exist
@@ -539,6 +563,7 @@ operations:
 
   nest:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Group sibling keys under a new parent mapping
@@ -546,15 +571,18 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the parent mapping containing the siblings
       keys:
         type: sequence
         item_type: string
         required: true
+        status: frozen
         description: Keys to group (must be siblings in the parent)
       under:
         type: string
         required: true
+        status: frozen
         description: New key name for the wrapper mapping
     rules:
       - all keys must exist in the parent mapping
@@ -594,6 +622,7 @@ operations:
 
   split:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Distribute a mapping's keys into new child mappings
@@ -601,10 +630,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the mapping to split
       into:
         type: mapping
         required: true
+        status: frozen
         description: "{new_child_key: [key_names]} — which keys go into which child"
     rules:
       - path must exist and be a mapping
@@ -646,6 +677,7 @@ operations:
 
   fold:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: >
@@ -655,6 +687,7 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the wrapper mapping (must have exactly one child key)
     rules:
       - path must exist and be a mapping
@@ -682,6 +715,7 @@ operations:
 
   merge:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Combine sibling keys into one mapping
@@ -689,15 +723,18 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the parent mapping
       keys:
         type: sequence
         item_type: string
         required: true
+        status: frozen
         description: Sibling keys to combine
       into:
         type: string
         required: true
+        status: frozen
         description: Key name for the merged result
     rules:
       - all keys must exist as siblings in the parent
@@ -732,6 +769,7 @@ operations:
 
   sort:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Sort a sequence in place
@@ -739,16 +777,19 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the sequence to sort
       by:
         type: string
         required: false
+        status: frozen
         description: >
           Key to sort by (for sequences of mappings).
           Omit for sequences of scalars.
       order:
         type: string
         required: false
+        status: frozen
         default: asc
         enum: [asc, desc]
         description: Sort direction
@@ -803,6 +844,7 @@ operations:
 
   unique:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Deduplicate a sequence, keeping first occurrence
@@ -810,10 +852,12 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the sequence to deduplicate
       by:
         type: string
         required: false
+        status: frozen
         description: >
           Key to deduplicate by (for sequences of mappings).
           Omit for sequences of scalars.
@@ -863,6 +907,7 @@ operations:
 
   pick:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Keep only specified keys in a mapping, remove the rest
@@ -870,11 +915,13 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the mapping to filter
       keys:
         type: sequence
         item_type: string
         required: true
+        status: frozen
         description: Keys to keep
     rules:
       - target must exist and be a mapping
@@ -903,6 +950,7 @@ operations:
 
   omit:
     category: dtl
+    status: frozen
     path_fields:
       primary: path
     description: Remove specified keys from a mapping, keep the rest
@@ -910,11 +958,13 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to the mapping to filter
       keys:
         type: sequence
         item_type: string
         required: true
+        status: frozen
         description: Keys to remove
     rules:
       - target must exist and be a mapping
@@ -947,6 +997,7 @@ operations:
 
   assert:
     category: dcl
+    status: frozen
     path_fields:
       primary: path
     description: >
@@ -956,18 +1007,22 @@ operations:
       path:
         type: string
         required: true
+        status: frozen
         description: Path to check
       equals:
         type: any
         required: false
+        status: frozen
         description: Expected value (deep equality check)
       exists:
         type: boolean
         required: false
+        status: frozen
         description: "true: path must exist. false: path must NOT exist."
       type:
         type: string
         required: false
+        status: frozen
         enum: [mapping, sequence, scalar]
         description: Expected type of the value at path
     rules:

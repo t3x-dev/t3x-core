@@ -15,7 +15,7 @@ export type { OpHandler, OpResult } from './registry';
 export { OpRegistry } from './registry';
 export type { ValidationResult } from './schema';
 export { validateOps, YOpSchema } from './schema';
-export type { FieldSpec, OpSpec, PathFields, TestCase, YOpsSpec } from './spec';
+export type { FieldSpec, OpSpec, PathFields, StabilityStatus, TestCase, YOpsSpec } from './spec';
 export { parseSpec } from './spec';
 export type {
   AppendOp,
@@ -40,6 +40,7 @@ export type {
   YOp,
   YOpsError,
   YOpsResult,
+  YOpsWarning,
   YValue,
 } from './types';
 export type { YOpsDiagnostic, YOpsDiagnosticCode } from './validator';

@@ -8,10 +8,13 @@ import { z } from 'zod';
 interface FieldSpec {
     type: string;
     required: boolean;
+    status: StabilityStatus;
     description: string;
     enum?: string[];
     default?: unknown;
     item_type?: string;
+    deprecated_in?: string;
+    replacement_field?: string;
 }
 interface TestCase {
     name: string;
@@ -42,6 +45,7 @@ interface PathFields {
 interface OpSpec {
     name: string;
     category: string;
+    status: StabilityStatus;
     description: string;
     path_fields: PathFields;
     fields: Record<string, FieldSpec>;
@@ -66,6 +70,8 @@ interface YOpsSpec {
         readonly_ops: string[];
     };
 }
+type StabilityStatus = (typeof STABILITY_STATUSES)[number];
+declare const STABILITY_STATUSES: readonly ["frozen", "evolving", "experimental"];
 declare function parseSpec(yamlStr: string): YOpsSpec;
 
 /**
@@ -198,11 +204,21 @@ interface YOpsError {
     message: string;
     op_index: number;
 }
+interface YOpsWarning {
+    code: 'DEPRECATED_FIELD';
+    message: string;
+    op_index: number;
+    op: string;
+    field: string;
+    deprecated_in: string;
+    replacement_field?: string;
+}
 interface YOpsResult {
     ok: boolean;
     doc: YValue;
     applied: number;
     error?: YOpsError;
+    warnings?: YOpsWarning[];
 }
 
 /**
@@ -951,5 +967,5 @@ declare const spec: YOpsSpec;
 /** The initialized op registry. */
 declare const registry: OpRegistry;
 
-export { type AppendOp, type AssertOp, type CloneOp, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, type YOp, type YOpCategory, YOpSchema, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsResult, type YOpsSpec, type YValue, applyYOps, classifyYOp, createEngine, formatYOps, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
+export { type AppendOp, type AssertOp, type CloneOp, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, type YOp, type YOpCategory, YOpSchema, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsResult, type YOpsSpec, type YOpsWarning, type YValue, applyYOps, classifyYOp, createEngine, formatYOps, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
 ```

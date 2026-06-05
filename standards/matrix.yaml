@@ -62,15 +62,23 @@ rows:
   - id: row-3
     title: Honest versioning and YOps stability policy
     acceptance: |
-      README banner declares alpha, and `STABILITY.md` or an equivalent policy
-      lists which YOps fields are frozen versus evolving and documents the
-      deprecation window.
-    acceptance_type: manual
+      README banner declares alpha; `packages/yops/yops.yaml` declares
+      operation and field stability status; `packages/yops/README.md` documents
+      the policy; CI fails when YOps stability metadata is missing, invalid, or
+      when breaking YOps API changes lack a breaking declaration.
+    acceptance_type: automated
+    acceptance_command: node tools/standards/check-row-3-yops-stability.mjs
     pr_filter_paths:
       - README.md
       - STABILITY.md
       - packages/yops/**
       - standards/**
+      - tools/api-diff/**
+      - tools/api-surface/**
+      - tools/lib/apiSurface.mjs
+      - tools/lib/yopsStability.mjs
+      - tools/standards/check-row-3-yops-stability.mjs
+      - tools/__tests__/standardsRow3.test.mjs
     owner_workstream: workstream-04-yops-stability
 
   - id: row-4

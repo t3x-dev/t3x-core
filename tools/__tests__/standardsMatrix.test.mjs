@@ -36,7 +36,7 @@ test('standards matrix declares the alpha readiness rows from the notes source',
     result.rowsById.get('row-2c')?.title,
     'No-key seeded demo produces an inspectable commit in <=10 min'
   );
-  assert.match(result.rowsById.get('row-3')?.acceptance ?? '', /STABILITY\.md/);
+  assert.match(result.rowsById.get('row-3')?.acceptance ?? '', /YOps stability metadata/);
 });
 
 test('standards matrix declares execution metadata for every row', () => {
@@ -48,11 +48,21 @@ test('standards matrix declares execution metadata for every row', () => {
     assert.equal(typeof row.owner_workstream, 'string');
     assert.notEqual(row.owner_workstream.trim(), '');
   }
+  assert.equal(
+    result.rowsById.get('row-3')?.acceptance_command,
+    'node tools/standards/check-row-3-yops-stability.mjs'
+  );
   assert.deepEqual(result.rowsById.get('row-3')?.pr_filter_paths, [
     'README.md',
     'STABILITY.md',
     'packages/yops/**',
     'standards/**',
+    'tools/api-diff/**',
+    'tools/api-surface/**',
+    'tools/lib/apiSurface.mjs',
+    'tools/lib/yopsStability.mjs',
+    'tools/standards/check-row-3-yops-stability.mjs',
+    'tools/__tests__/standardsRow3.test.mjs',
   ]);
 });
 
