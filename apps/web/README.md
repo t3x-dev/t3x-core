@@ -100,12 +100,12 @@ repository carry generated image assets.
 pnpm screenshots:demo
 ```
 
-The stable landing-only script writes local review copies to
-`apps/web/public/screenshots/`:
+The stable landing-only script writes ignored local review copies to
+`tmp/screenshots/demo/`:
 
-- `apps/web/public/screenshots/chat-light.png`
-- `apps/web/public/screenshots/chat-dark.png`
-- `apps/web/public/screenshots/chat-mobile.png`
+- `tmp/screenshots/demo/chat-light.png`
+- `tmp/screenshots/demo/chat-dark.png`
+- `tmp/screenshots/demo/chat-mobile.png`
 
 The broader workflow screenshot set lives in the docs repository under
 `static/img/screenshots/`.

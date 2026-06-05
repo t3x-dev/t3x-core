@@ -21,7 +21,7 @@
     "test:api": "turbo run test --filter=@t3x-dev/api",
     "test:yschema": "turbo run test --filter=@t3x-dev/yschema",
     "clean": "turbo run clean",
-    "test": "node --test tools/__tests__/sourceDevAuthDefaults.test.mjs tools/__tests__/releaseSurface.test.mjs tools/__tests__/standardsMatrix.test.mjs tools/__tests__/releasePr.test.mjs tools/__tests__/productRelease.test.mjs tools/__tests__/issueTemplates.test.mjs && turbo run test",
+    "test": "node --test tools/__tests__/sourceDevAuthDefaults.test.mjs tools/__tests__/releaseSurface.test.mjs tools/__tests__/standardsMatrix.test.mjs tools/__tests__/releasePr.test.mjs tools/__tests__/productRelease.test.mjs tools/__tests__/issueTemplates.test.mjs tools/__tests__/screenshotDemoConfig.test.mjs && turbo run test",
     "test:core": "turbo run test --filter=@t3x-dev/core",
     "test:storage": "turbo run test --filter=@t3x-dev/storage",
     "test:webui": "turbo run test --filter=t3x-webui",

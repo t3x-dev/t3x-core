@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUTPUT_DIR = 'apps/web/public/screenshots';
+const OUTPUT_DIR = 'tmp/screenshots/demo';
 const CHAT_SIDEBAR_COLLAPSED_WIDTH = 64;
 const requireFromWeb = createRequire(path.join(REPO_ROOT, 'apps/web/package.json'));
 
