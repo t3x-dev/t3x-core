@@ -1,5 +1,10 @@
 # T3X Documentation
 
+T3X is a structured source of truth for AI-produced work. It captures meaning
+from conversations, documents, transcripts, specs, and notes into reviewable
+knowledge, mutates that knowledge through deterministic YOps, and versions it
+with commits, diffs, merges, and leaves.
+
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source
 repository.

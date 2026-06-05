@@ -28,7 +28,10 @@
 
 <br/>
 
-T3X is a standalone engine for YAML-structured context. It extracts structured meaning from any text &mdash; conversations, documents, transcripts, specs, notes &mdash; transforms it with declarative operations, and versions it with commits, diffs, and three-way merges.
+T3X is a structured source of truth for AI-produced work. It captures meaning
+from conversations, documents, transcripts, specs, and notes into reviewable
+knowledge, mutates that knowledge through deterministic YOps, and versions it
+with commits, diffs, merges, and leaves.
 
 The current restricted alpha npm release surface is limited to `@t3x-dev/local`
 and `@t3x-dev/yops`. Restricted package or runtime-asset visibility is expected
