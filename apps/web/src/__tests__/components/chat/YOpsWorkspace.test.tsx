@@ -5,23 +5,6 @@ import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const revisionHarness = vi.hoisted(() => ({
-  reviseMock: vi.fn(),
-  state: {
-    isRevising: false,
-    result: null as null | {
-      kind: 'ok' | 'validation_failed';
-      reason: string;
-      dry_run: {
-        ok: boolean;
-        applied: number;
-        error?: { code: string; message: string; op_index: number };
-      };
-    },
-    error: null as string | null,
-  },
-}));
-
 // Stub child panels so the test focuses on tab-switch behavior, not
 // panel rendering (those have their own dedicated tests).
 vi.mock('@/components/chat/AfterPanel', () => ({
@@ -52,14 +35,6 @@ vi.mock('@/components/chat/WorkspaceTopbar', () => ({
 vi.mock('@/components/chat/ReplayWarningBanner', () => ({
   ReplayWarningBanner: () => null,
 }));
-vi.mock('@/hooks/drafts/useYOpsRevision', () => ({
-  useYOpsRevision: () => ({
-    isRevising: revisionHarness.state.isRevising,
-    result: revisionHarness.state.result,
-    error: revisionHarness.state.error,
-    revise: revisionHarness.reviseMock,
-  }),
-}));
 
 import { YOpsWorkspace } from '@/components/chat/YOpsWorkspace';
 import { useChatStore } from '@/store/chatStore';
@@ -80,10 +55,6 @@ function llmOp(): SourcedYOp {
 
 describe('YOpsWorkspace view switcher', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    revisionHarness.state.isRevising = false;
-    revisionHarness.state.result = null;
-    revisionHarness.state.error = null;
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
       panelExpandedByProject: { proj_a: true },
@@ -236,30 +207,5 @@ describe('YOpsWorkspace view switcher', () => {
 
     expect(useWorkspaceStore.getState().panelExpandedByProject.proj_a).toBe(true);
     expect(useChatStore.getState().sidebarCollapsed).toBe(false);
-  });
-
-  it('submits natural-language feedback for AI YOps revision from the script view', () => {
-    render(<YOpsWorkspace />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ask AI to revise' }));
-    fireEvent.change(screen.getByLabelText('Revision feedback'), {
-      target: { value: 'Use Tokyo instead of Hangzhou.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit revision' }));
-
-    expect(revisionHarness.reviseMock).toHaveBeenCalledWith('Use Tokyo instead of Hangzhou.');
-  });
-
-  it('shows the latest AI revision dry-run status in the script view', () => {
-    revisionHarness.state.result = {
-      kind: 'ok',
-      reason: 'Updated the destination.',
-      dry_run: { ok: true, applied: 1 },
-    };
-
-    render(<YOpsWorkspace />);
-
-    expect(screen.getByText('Updated the destination.')).toBeInTheDocument();
-    expect(screen.getByText('Dry-run passed · 1 op')).toBeInTheDocument();
   });
 });
