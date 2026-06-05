@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-05T00:00:00.000Z",
+  "status": "ready",
+  "release": {
+    "pr_number": 1087,
+    "base_ref": "main",
+    "head_ref": "release/0.4.0",
+    "product_version": "0.4.0"
+  },
+  "hard_gates": [
+    {
+      "id": "row-3",
+      "title": "YOps stability",
+      "status": "pass",
+      "summary": "YOps stability passed.",
+      "details": []
+    },
+    {
+      "id": "row-4",
+      "title": "API surface",
+      "status": "pass",
+      "summary": "API surface passed.",
+      "details": []
+    },
+    {
+      "id": "release-surface",
+      "title": "Release surface metadata",
+      "status": "pass",
+      "summary": "Release surface metadata passed.",
+      "details": []
+    },
+    {
+      "id": "external-tester-evidence",
+      "title": "External tester evidence",
+      "status": "pass",
+      "summary": "1 external tester evidence item(s) passed.",
+      "details": []
+    }
+  ],
+  "manual_gates": [
+    {
+      "id": "row-6",
+      "title": "External release review",
+      "status": "approved",
+      "summary": "Manual review required.",
+      "owner_decision": {
+        "row_id": "row-6",
+        "decision": "approve",
+        "author": "etht3x",
+        "reason": "Reviewed external tester evidence.",
+        "decided_at": "2026-06-05T00:01:00.000Z"
+      }
+    }
+  ],
+  "soft_warnings": [],
+  "outstanding_blockers": [],
+  "external_tester_evidence": [
+    {
+      "id": "external-alpha-smoke",
+      "tester": "external-reviewer",
+      "status": "pass",
+      "summary": "Installer and local smoke paths passed.",
+      "url": "https://github.com/t3x-dev/t3x-core/actions/runs/1"
+    }
+  ],
+  "owner_decisions": [
+    {
+      "row_id": "row-6",
+      "decision": "approve",
+      "author": "etht3x",
+      "reason": "Reviewed external tester evidence.",
+      "decided_at": "2026-06-05T00:01:00.000Z"
+    }
+  ],
+  "release_surface": {
+    "package_count": 2,
+    "npm_publish_packages": ["@t3x-dev/local", "@t3x-dev/yops"],
+    "warnings": []
+  }
+}
