@@ -1,12 +1,9 @@
-name: "❓ Question"
-description: "Ask a question; consider using Discussions"
+name: "Question"
+description: "Ask a question about T3X"
 title: "[Question]: "
 labels:
-  - "type:question"
+  - "question"
 body:
-  - type: markdown
-    attributes:
-      value: "For open-ended topics, please use Discussions:"
   - type: textarea
     id: question
     attributes:

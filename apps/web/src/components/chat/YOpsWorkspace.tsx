@@ -1,7 +1,8 @@
 'use client';
 
-import { PanelRightOpen } from 'lucide-react';
+import { Loader2, PanelRightOpen, Send, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useYOpsRevision } from '@/hooks/drafts/useYOpsRevision';
 import { selectPanelExpanded, useWorkspaceStore } from '@/store/workspaceStore';
 import {
   WORKSPACE_PANEL_FALLBACK_WIDTH,
@@ -39,6 +40,16 @@ const LOG_VIEW_META: Record<LogView, { label: string; desc: string }> = {
 const COLLAPSED_WIDTH = 48;
 const DEFAULT_SPLIT_RATIO = 0.5;
 
+function revisionStatusText(result: ReturnType<typeof useYOpsRevision>['result']): string | null {
+  if (!result) return null;
+  if (result.kind === 'parse_failed') return result.message;
+  if (result.dry_run.ok) {
+    const label = result.dry_run.applied === 1 ? 'op' : 'ops';
+    return `Dry-run passed · ${result.dry_run.applied} ${label}`;
+  }
+  return `Dry-run failed · ${result.dry_run.error?.code ?? 'UNKNOWN'}`;
+}
+
 export function YOpsWorkspace({
   customWidth,
   materialReader,
@@ -59,9 +70,14 @@ export function YOpsWorkspace({
   const opOrigins = useWorkspaceStore((s) => s.opOrigins);
   const rowsById = useWorkspaceStore((s) => s.rowsById);
   const [topView, setTopViewState] = useState<TopView>('script');
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionFeedback, setRevisionFeedback] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const logsMenuRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  const { isRevising, result: revisionResult, error: revisionError, revise } = useYOpsRevision();
+
+  const revisionStatus = revisionStatusText(revisionResult);
 
   const materializedLogs = useMemo(() => {
     const { applied, committed } = splitOpsByCommittedness(opsLog, opOrigins, rowsById);
@@ -99,6 +115,14 @@ export function YOpsWorkspace({
   const handleContinueEditing = useCallback(() => {
     setTopView('script');
   }, [setTopView]);
+
+  const handleSubmitRevision = useCallback(async () => {
+    const feedback = revisionFeedback.trim();
+    if (!feedback) return;
+    await revise(feedback);
+    setRevisionFeedback('');
+    setRevisionOpen(false);
+  }, [revise, revisionFeedback]);
 
   const handleSplitDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -250,6 +274,27 @@ export function YOpsWorkspace({
             </span>
           )}
           <div className="ml-auto mr-2 flex items-center gap-2">
+            {topView === 'script' && (
+              <button
+                type="button"
+                disabled={isRevising}
+                onClick={() => setRevisionOpen((open) => !open)}
+                className={cn(
+                  'inline-flex h-6 items-center justify-center gap-1.5 rounded border px-2 text-[10px] font-bold leading-none transition-colors',
+                  revisionOpen
+                    ? 'border-[var(--accent-pending)]/35 bg-[var(--accent-pending)]/10 text-[var(--accent-pending)]'
+                    : 'border-[var(--stroke-default)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]',
+                  isRevising && 'cursor-wait opacity-70'
+                )}
+              >
+                {isRevising ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                Ask AI to revise
+              </button>
+            )}
             {logsMenu}
             <button
               type="button"
@@ -269,7 +314,74 @@ export function YOpsWorkspace({
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           {topView === 'script' ? (
-            <ScriptEditor />
+            <div className="flex h-full min-h-0 flex-col">
+              {(revisionOpen || revisionResult || revisionError) && (
+                <div className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2">
+                  {revisionOpen && (
+                    <div className="flex items-start gap-2">
+                      <label htmlFor="yops-revision-feedback" className="sr-only">
+                        Revision feedback
+                      </label>
+                      <textarea
+                        id="yops-revision-feedback"
+                        value={revisionFeedback}
+                        onChange={(e) => setRevisionFeedback(e.target.value)}
+                        placeholder="Tell the AI what to change in this YOps proposal."
+                        className="min-h-16 flex-1 resize-none rounded-md border border-[var(--stroke-default)] bg-[var(--surface-input)] px-2.5 py-2 text-[12px] leading-5 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--source)]"
+                      />
+                      <div className="flex shrink-0 flex-col gap-1.5">
+                        <button
+                          type="button"
+                          disabled={isRevising || revisionFeedback.trim().length === 0}
+                          onClick={handleSubmitRevision}
+                          className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-[var(--accent-pending)] bg-[var(--accent-pending)] px-2 text-[10px] font-bold text-[var(--on-accent)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {isRevising ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Send className="h-3 w-3" />
+                          )}
+                          Submit revision
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRevisionOpen(false);
+                            setRevisionFeedback('');
+                          }}
+                          className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-[var(--stroke-default)] px-2 text-[10px] font-bold text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                        >
+                          <X className="h-3 w-3" />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {(revisionStatus || revisionError) && (
+                    <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px]">
+                      <span
+                        className={cn(
+                          'inline-flex h-5 items-center rounded border px-2 font-semibold',
+                          revisionResult?.kind === 'validation_failed' || revisionError
+                            ? 'border-[var(--status-warning)]/25 bg-[var(--status-warning-muted)] text-[var(--status-warning)]'
+                            : 'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]'
+                        )}
+                      >
+                        {revisionError ?? revisionStatus}
+                      </span>
+                      {revisionResult && 'reason' in revisionResult && (
+                        <span className="min-w-0 truncate text-[var(--text-secondary)]">
+                          {revisionResult.reason}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="min-h-0 flex-1">
+                <ScriptEditor />
+              </div>
+            </div>
           ) : topView === 'archived' ? (
             <ArchivedOpsPanel conversationId={conversationId} />
           ) : (

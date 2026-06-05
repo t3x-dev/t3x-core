@@ -1,9 +1,8 @@
-name: "🐛 Bug"
+name: "Bug"
 description: "Report a reproducible bug in T3X"
 title: "[Bug]: "
 labels:
-  - "type:bug"
-  - "status:triage"
+  - "bug"
 assignees: []
 body:
   - type: dropdown

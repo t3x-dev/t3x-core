@@ -1,9 +1,8 @@
-name: "🛠 Engineering Task"
+name: "Engineering Task"
 description: "Refactor, tests, CI, perf, dependency upgrades, chores"
 title: "[Task]: "
 labels:
-  - "type:task"
-  - "status:triage"
+  - "enhancement"
 body:
   - type: dropdown
     id: scope

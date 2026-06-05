@@ -1,8 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: T3X Discussions
-    url: https://github.com/t3x/t3x/discussions
-    about: "Use Discussions for brainstorming or support threads."
-  - name: T3X Docs
-    url: https://t3x.dev/docs
-    about: "Reference architecture notes, schema specs, and user guides."
+  - name: T3X README
+    url: https://github.com/t3x-dev/t3x-core#readme
+    about: "Read the current repository overview, setup notes, and release status."

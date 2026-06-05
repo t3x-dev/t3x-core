@@ -101,7 +101,7 @@ Target release PR guards:
 
 Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
-the first public alpha publish.
+the first restricted alpha publish.
 
 Release PR checklist:
 
@@ -180,7 +180,7 @@ no packages, or it may publish `@t3x-dev/yops@0.2.1` while leaving
 `@t3x-dev/local` unchanged.
 
 A changeset is required when a pull request changes user-visible behavior for a
-public alpha package:
+restricted alpha package:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
