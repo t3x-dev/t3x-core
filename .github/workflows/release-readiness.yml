@@ -1,0 +1,107 @@
+name: Release Readiness
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  readiness:
+    name: Generate release readiness report
+    if: >
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.event.pull_request.head.ref, 'release/') ||
+      startsWith(github.event.pull_request.head.ref, 'hotfix/') ||
+      startsWith(github.event.pull_request.head.ref, 'changeset-release/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run full standards matrix
+        continue-on-error: true
+        run: >
+          node tools/standards/run-all.mjs
+          --mode full
+          --json
+          --summary-file .release-readiness-standards.md
+          > .release-readiness-standards.json
+        env:
+          YOPS_STABILITY_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          T3X_PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Fetch existing readiness comments
+        run: >
+          gh api
+          "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          --paginate
+          > .release-readiness-comments.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release readiness report
+        run: >
+          node tools/release-readiness/generate.mjs
+          --standards .release-readiness-standards.json
+          --comments .release-readiness-comments.json
+          --tester-evidence-dir release/readiness/tester-evidence
+          --out-json release-readiness.json
+          --out-markdown release-readiness.md
+          --pr-number "${{ github.event.pull_request.number }}"
+          --base-ref "${{ github.event.pull_request.base.ref }}"
+          --head-ref "${{ github.event.pull_request.head.ref }}"
+
+      - name: Add release readiness summary
+        if: always()
+        run: cat release-readiness.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post release readiness report
+        run: >
+          node tools/release-readiness/upsert-comment.mjs
+          --comments .release-readiness-comments.json
+          --marker "<!-- t3x-release-readiness-report:v1 -->"
+          --body release-readiness.md
+          --repository "${{ github.repository }}"
+          --issue-number "${{ github.event.pull_request.number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release readiness artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness
+          path: |
+            release-readiness.json
+            release-readiness.md
+            .release-readiness-standards.json

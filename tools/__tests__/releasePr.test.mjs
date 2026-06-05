@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   parseChangesetPackages,
   parsePackageReleaseSection,
+  validateProtectedSurfaceChange,
   validateReleasePr,
 } from '../lib/releasePr.mjs';
 
@@ -15,6 +16,15 @@ const yopsChangeset = {
   name: 'refresh-yops-package.md',
   packages: ['@t3x-dev/yops'],
 };
+
+const releaseSurfacePackages = ['@t3x-dev/local', '@t3x-dev/yops'];
+
+function validateReleasePrWithSurface(options) {
+  return validateReleasePr({
+    releaseSurfacePackages,
+    ...options,
+  });
+}
 
 const validReleaseBody = `## Product Release
 
@@ -51,7 +61,7 @@ T3X product release version: \`0.4.1\`
 `;
 
 test('allows a product release PR with matching release branch and package release entry', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
@@ -62,7 +72,7 @@ test('allows a product release PR with matching release branch and package relea
 });
 
 test('allows a code-only product release with no package publish', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validCodeOnlyReleaseBody,
@@ -73,7 +83,7 @@ test('allows a code-only product release with no package publish', () => {
 });
 
 test('ignores ordinary development PRs into dev', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'dev',
     headBranch: 'feature/example',
     body: '',
@@ -83,7 +93,7 @@ test('ignores ordinary development PRs into dev', () => {
 });
 
 test('rejects ordinary feature branches targeting main', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'feature/example',
     body: validReleaseBody,
@@ -94,7 +104,7 @@ test('rejects ordinary feature branches targeting main', () => {
 });
 
 test('rejects release branch and body version mismatch', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validReleaseBody,
@@ -105,7 +115,7 @@ test('rejects release branch and body version mismatch', () => {
 });
 
 test('rejects missing package release entries', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '-'),
@@ -119,7 +129,7 @@ test('rejects missing package release entries', () => {
 });
 
 test('rejects package releases none when changesets exist', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '- None'),
@@ -130,7 +140,7 @@ test('rejects package releases none when changesets exist', () => {
 });
 
 test('rejects package release entries without changeset files', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
@@ -141,7 +151,7 @@ test('rejects package release entries without changeset files', () => {
 });
 
 test('rejects code-only release when changeset files exist', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validCodeOnlyReleaseBody,
@@ -152,7 +162,7 @@ test('rejects code-only release when changeset files exist', () => {
 });
 
 test('rejects package release entry without matching changeset target', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
@@ -164,7 +174,7 @@ test('rejects package release entry without matching changeset target', () => {
 });
 
 test('allows changesets version package PRs into main', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'changeset-release/main',
     body: '',
@@ -204,7 +214,7 @@ test('parses package release section', () => {
 });
 
 test('validates multi-line package release sections against changesets', () => {
-  const result = validateReleasePr({
+  const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody.replace(
@@ -215,4 +225,48 @@ test('validates multi-line package release sections against changesets', () => {
   });
 
   assert.deepEqual(result.errors, []);
+});
+
+test('requires release surface explanation when protected surface files change', () => {
+  const result = validateProtectedSurfaceChange({
+    changedFiles: ['release/surface.yaml'],
+    body: `## Summary
+
+- Adjust package surface.
+`,
+  });
+
+  assert.deepEqual(result.errors, [
+    'surface changes to release/surface.yaml require a Stability or Release Surface explanation in the PR body.',
+  ]);
+});
+
+test('allows protected surface changes with an explicit release surface explanation', () => {
+  const result = validateProtectedSurfaceChange({
+    changedFiles: ['STABILITY.md'],
+    body: `## Summary
+
+- Adjust stability wording.
+
+## Release Surface
+
+- Explains why the protected surface changed.
+`,
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
+test('rejects placeholder release surface explanations', () => {
+  const result = validateProtectedSurfaceChange({
+    changedFiles: ['release/surface.yaml'],
+    body: `## Release Surface
+
+-
+`,
+  });
+
+  assert.deepEqual(result.errors, [
+    'surface changes to release/surface.yaml require a Stability or Release Surface explanation in the PR body.',
+  ]);
 });

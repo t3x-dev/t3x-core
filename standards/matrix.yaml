@@ -8,12 +8,26 @@ rows:
     acceptance: |
       Three outside developers paraphrase T3X's purpose consistently after
       reading only the README intro.
+    acceptance_type: manual
+    pr_filter_paths:
+      - README.md
+      - docs/**
+    owner_workstream: workstream-01-positioning
 
   - id: row-2a
     title: "@t3x-dev/local is publicly installable from npm"
     acceptance: |
       `npm install -g @t3x-dev/local` succeeds on a clean machine with no auth
       configured, and package metadata on npm shows `public` access.
+    acceptance_type: manual
+    pr_filter_paths:
+      - .changeset/**
+      - .github/workflows/release.yml
+      - apps/local/**
+      - package.json
+      - pnpm-lock.yaml
+      - tools/publish-package-tarballs.mjs
+    owner_workstream: workstream-02-distribution
 
   - id: row-2b
     title: Cross-platform runtime download works without a token
@@ -21,6 +35,13 @@ rows:
       Postinstall on each supported platform downloads from public release
       assets and verifies checksum, with no GitHub token and no proxy
       workaround. Unsupported platforms show a clear, actionable error.
+    acceptance_type: manual
+    pr_filter_paths:
+      - .github/workflows/release.yml
+      - apps/local/**
+      - tools/publish-runtime-release.mjs
+      - tools/verify-versions.mjs
+    owner_workstream: workstream-02-runtime
 
   - id: row-2c
     title: No-key seeded demo produces an inspectable commit in <=10 min
@@ -29,13 +50,36 @@ rows:
       fixture extraction for a seeded conversation, and surfaces an inspectable
       semantic commit within 10 minutes, with auto-upgrade to live extraction
       when `ANTHROPIC_API_KEY` is set.
+    acceptance_type: manual
+    pr_filter_paths:
+      - apps/local/**
+      - apps/web/**
+      - examples/**
+      - README.md
+      - tools/screenshot-demo.mjs
+    owner_workstream: workstream-03-demo
 
   - id: row-3
     title: Honest versioning and YOps stability policy
     acceptance: |
-      README banner declares alpha, and `STABILITY.md` or an equivalent policy
-      lists which YOps fields are frozen versus evolving and documents the
-      deprecation window.
+      README banner declares alpha; `packages/yops/yops.yaml` declares
+      operation and field stability status; `packages/yops/README.md` documents
+      the policy; CI fails when YOps stability metadata is missing, invalid, or
+      when breaking YOps API changes lack a breaking declaration.
+    acceptance_type: automated
+    acceptance_command: node tools/standards/check-row-3-yops-stability.mjs
+    pr_filter_paths:
+      - README.md
+      - STABILITY.md
+      - packages/yops/**
+      - standards/**
+      - tools/api-diff/**
+      - tools/api-surface/**
+      - tools/lib/apiSurface.mjs
+      - tools/lib/yopsStability.mjs
+      - tools/standards/check-row-3-yops-stability.mjs
+      - tools/__tests__/standardsRow3.test.mjs
+    owner_workstream: workstream-04-yops-stability
 
   - id: row-4
     title: Each package this release claims as public stands on its own
@@ -44,6 +88,24 @@ rows:
       package on that list has a README with what, why, install, and one working
       sample; CI fails if a release-public package lacks a README; packages not
       on the list are explicitly internal and exempt.
+    acceptance_type: automated
+    acceptance_command: node tools/standards/check-row-4-release-surface.mjs
+    pr_filter_paths:
+      - .github/release-flow.md
+      - .github/workflows/pr-validation.yml
+      - package.json
+      - RELEASE.md
+      - packages/**/README.md
+      - apps/**/README.md
+      - release/surface.yaml
+      - release/surface.schema.json
+      - standards/**
+      - tools/check-release-surface.mjs
+      - tools/check-release-pr.mjs
+      - tools/lib/releasePr.mjs
+      - tools/lib/releaseSurface.mjs
+      - tools/standards/check-row-4-release-surface.mjs
+    owner_workstream: workstream-05-release-surface
 
   - id: row-5
     title: Self-host without us
@@ -51,6 +113,13 @@ rows:
       A clean-machine smoke job in CI boots compose end-to-end, and
       `DEPLOYMENT.md` covers backup, upgrade, and the five most common failure
       modes.
+    acceptance_type: manual
+    pr_filter_paths:
+      - .github/workflows/docker-smoke.yml
+      - DEPLOYMENT.md
+      - docker-compose.yml
+      - docs/**
+    owner_workstream: workstream-06-self-host
 
   - id: row-6
     title: First-time contributor experience
@@ -58,6 +127,19 @@ rows:
       `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, and `LIMITATIONS.md`
       exist; the PR template references Changesets, issue-ref, and English-only
       rules; an outside contributor can land a non-trivial PR without DMs.
+    acceptance_type: manual
+    pr_filter_paths:
+      - .github/workflows/standards-*.yml
+      - .github/ISSUE_TEMPLATE/**
+      - .github/PULL_REQUEST_TEMPLATE.md
+      - CODE_OF_CONDUCT.md
+      - LIMITATIONS.md
+      - SECURITY.md
+      - tools/__tests__/standards*.test.mjs
+      - tools/lib/standardsMatrix.mjs
+      - tools/lib/standardsRunner.mjs
+      - tools/standards/**
+    owner_workstream: workstream-07-contributors
 
   - id: row-7
     title: A narrative outsiders can retell consistently
@@ -66,6 +148,11 @@ rows:
       purpose using mutually consistent wording after reading only the README.
       Unprompted external mentions are a post-release health metric, not a
       pre-release blocker.
+    acceptance_type: manual
+    pr_filter_paths:
+      - README.md
+      - docs/**
+    owner_workstream: workstream-08-narrative
 
   - id: row-8
     title: Evidence the team uses it
@@ -73,3 +160,9 @@ rows:
       A team-built demo project lives in `/examples` or is linked from the
       README, and `LIMITATIONS.md` enumerates current rough edges in plain
       English.
+    acceptance_type: manual
+    pr_filter_paths:
+      - LIMITATIONS.md
+      - README.md
+      - examples/**
+    owner_workstream: workstream-09-team-evidence

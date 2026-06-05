@@ -13,7 +13,7 @@ import { deepClone } from './paths';
 import type { OpRegistry } from './registry';
 import { YOpSchema } from './schema';
 import type { OpSpec } from './spec';
-import type { YOp, YOpsResult, YValue } from './types';
+import type { YOp, YOpsResult, YOpsWarning, YValue } from './types';
 
 // ── Field Validation ──
 
@@ -54,11 +54,43 @@ function validateFields(
   return null;
 }
 
+function deprecatedFieldWarnings(
+  opName: string,
+  fields: Record<string, unknown>,
+  spec: OpSpec,
+  index: number
+): YOpsWarning[] {
+  const warnings: YOpsWarning[] = [];
+  for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
+    if (!(fieldName in fields) || fieldSpec.deprecated_in === undefined) continue;
+    const replacement = fieldSpec.replacement_field
+      ? `; use ${fieldSpec.replacement_field} instead`
+      : '';
+    warnings.push({
+      code: 'DEPRECATED_FIELD',
+      message: `${opName}.${fieldName} is deprecated since ${fieldSpec.deprecated_in}${replacement}.`,
+      op_index: index,
+      op: opName,
+      field: fieldName,
+      deprecated_in: fieldSpec.deprecated_in,
+      ...(fieldSpec.replacement_field !== undefined && {
+        replacement_field: fieldSpec.replacement_field,
+      }),
+    });
+  }
+  return warnings;
+}
+
 // ── Engine Factory ──
 
 export function createEngine(registry: OpRegistry) {
   function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
     let current = deepClone(doc);
+    const warnings: YOpsWarning[] = [];
+
+    function finish(result: Omit<YOpsResult, 'warnings'>): YOpsResult {
+      return warnings.length > 0 ? { ...result, warnings } : result;
+    }
 
     for (let i = 0; i < ops.length; i++) {
       const rawOp = ops[i] as unknown;
@@ -68,7 +100,7 @@ export function createEngine(registry: OpRegistry) {
       //    them as a typed INVALID_OP rather than letting downstream
       //    code throw a TypeError on `Object.keys(null)` or `'x' in 'x'`.
       if (!isMappingObject(rawOp)) {
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
@@ -77,19 +109,19 @@ export function createEngine(registry: OpRegistry) {
             `Op at index ${i} must be a mapping, got ${rawOp === null ? 'null' : typeof rawOp}`,
             i
           ),
-        };
+        });
       }
       const op = rawOp;
 
       // 2. Resolve the op key (first non-metadata key).
       const opName = resolveOpName(op);
       if (opName === null) {
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
           error: yopsError(YOPS_ERRORS.INVALID_OP, `Op at index ${i} has no operation key`, i),
-        };
+        });
       }
 
       // 3. Registry lookup. Distinguishes "no such op" from any later
@@ -97,12 +129,12 @@ export function createEngine(registry: OpRegistry) {
       //    a generic INVALID_OP.
       const handler = registry.getHandler(opName);
       if (!handler) {
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
           error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation: ${opName}`, i),
-        };
+        });
       }
 
       // 4. Inner-shape guard for the op payload before any contract
@@ -112,7 +144,7 @@ export function createEngine(registry: OpRegistry) {
       //    defenses.
       const payload = op[opName];
       if (!isMappingObject(payload)) {
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
@@ -123,7 +155,7 @@ export function createEngine(registry: OpRegistry) {
             }`,
             i
           ),
-        };
+        });
       }
       const fields = payload;
 
@@ -134,15 +166,16 @@ export function createEngine(registry: OpRegistry) {
       const opSpec = registry.getOpSpec(opName) as OpSpec;
       const fieldError = validateFields(opName, fields, opSpec, i);
       if (fieldError) {
-        return { ok: false, doc: current, applied: i, error: fieldError };
+        return finish({ ok: false, doc: current, applied: i, error: fieldError });
       }
+      warnings.push(...deprecatedFieldWarnings(opName, fields, opSpec, i));
 
       // 6. Schema validation against the same public Zod contract a
       //    consumer sees — type mismatches in field values, etc.
       const schemaResult = YOpSchema.safeParse(op);
       if (!schemaResult.success) {
         const issue = schemaResult.error.issues[0];
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
@@ -151,23 +184,23 @@ export function createEngine(registry: OpRegistry) {
             issue?.message ?? `${opName}: invalid operation shape`,
             i
           ),
-        };
+        });
       }
 
       // 7. Execute handler.
       const result = handler(current, fields, i);
       if (result.error) {
-        return {
+        return finish({
           ok: false,
           doc: current,
           applied: i,
           error: result.error,
-        };
+        });
       }
       current = result.doc;
     }
 
-    return { ok: true, doc: current, applied: ops.length };
+    return finish({ ok: true, doc: current, applied: ops.length });
   }
 
   return { applyYOps };

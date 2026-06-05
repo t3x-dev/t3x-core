@@ -6,10 +6,40 @@ Declarative YAML operations. 18 atomic ops for any YAML document.
 YAML in  →  YOps  →  YAML out
 ```
 
+## What
+
+`@t3x-dev/yops` validates and applies deterministic YAML operations to YAML-like
+documents.
+
+## Why
+
+T3X uses YOps as the only mutation path for semantic tree content, so LLMs can
+propose changes while deterministic code validates and applies them.
+
 ## Release status
 
 `@t3x-dev/yops@0.3.1` is part of the restricted T3X alpha release surface.
 Package visibility may be limited to accounts with alpha access.
+
+## Stability policy
+
+`yops.yaml` is the source of truth for operation and field stability. Every
+operation and every field must declare one of these statuses:
+
+| Status | Meaning | Maintainer rule |
+|--------|---------|-----------------|
+| `frozen` | Public contract. Removing it, changing its type, changing its meaning, or making it stricter is breaking. | Add a breaking-change declaration before changing it. |
+| `evolving` | Public but still being refined during alpha. Compatible additions are allowed; removals or semantic changes still need a breaking-change declaration. | Prefer additive changes and document migration paths. |
+| `experimental` | Not a stable contract yet. Consumers should expect change. | Promote to `evolving` or `frozen` before relying on it in public examples. |
+
+Deprecated fields stay in the spec during their migration window and may declare:
+
+- `deprecated_in`: the YOps spec/package version where deprecation began.
+- `replacement_field`: the preferred field to use instead.
+
+The engine returns a structured `DEPRECATED_FIELD` warning when an operation uses
+a deprecated field. Warnings never change the deterministic document mutation
+result; they are metadata for callers and migration tooling.
 
 ## Architecture
 
@@ -35,7 +65,7 @@ The spec is the source of truth. The registry enforces it. The engine executes i
 npm install @t3x-dev/yops
 ```
 
-## Quick Start
+## Sample
 
 ```typescript
 import { applyYOps } from '@t3x-dev/yops';

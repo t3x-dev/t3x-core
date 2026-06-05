@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t3x.dev/schemas/release-readiness-report.schema.json",
+  "title": "T3X release readiness report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "status",
+    "release",
+    "hard_gates",
+    "manual_gates",
+    "soft_warnings",
+    "outstanding_blockers",
+    "external_tester_evidence",
+    "owner_decisions"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["ready", "blocked", "manual_pending"]
+    },
+    "release": {
+      "type": "object",
+      "required": ["pr_number", "base_ref", "head_ref", "product_version"],
+      "additionalProperties": false,
+      "properties": {
+        "pr_number": {
+          "type": ["integer", "null"]
+        },
+        "base_ref": {
+          "type": ["string", "null"]
+        },
+        "head_ref": {
+          "type": ["string", "null"]
+        },
+        "product_version": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "hard_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hard_gate"
+      }
+    },
+    "manual_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/manual_gate"
+      }
+    },
+    "soft_warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "outstanding_blockers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/blocker"
+      }
+    },
+    "external_tester_evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tester_evidence"
+      }
+    },
+    "owner_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/owner_decision"
+      }
+    },
+    "release_surface": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "hard_gate": {
+      "type": "object",
+      "required": ["id", "title", "status", "summary", "details"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["pass", "fail", "skipped"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "manual_gate": {
+      "type": "object",
+      "required": ["id", "title", "status", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["pending", "approved", "blocked"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "owner_decision": {
+          "$ref": "#/$defs/owner_decision"
+        }
+      }
+    },
+    "message": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "required": ["code", "source", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "tester_evidence": {
+      "type": "object",
+      "required": ["id", "tester", "status", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tester": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["pass", "fail", "missing"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "owner_decision": {
+      "type": "object",
+      "required": ["row_id", "decision", "author", "reason", "decided_at"],
+      "additionalProperties": false,
+      "properties": {
+        "row_id": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": ["approve", "block"]
+        },
+        "author": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

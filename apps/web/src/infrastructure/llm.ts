@@ -30,26 +30,3 @@ export async function postExtractYops(body: Record<string, unknown>): Promise<{
     body: JSON.stringify(body),
   });
 }
-
-/**
- * Raw POST to /api/v1/conversations/:conversationId/yops/revise.
- *
- * L1 infrastructure surface for commands/yops/reviseAdapter.ts — the command
- * layer owns envelope parsing and must not call `fetch()` directly.
- */
-export async function postReviseYops(
-  conversationId: string,
-  body: Record<string, unknown>
-): Promise<{
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-}> {
-  const base = API_BASE || (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000');
-  return fetch(`${base}/api/v1/conversations/${encodeURIComponent(conversationId)}/yops/revise`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}

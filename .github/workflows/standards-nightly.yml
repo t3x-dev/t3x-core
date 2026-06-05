@@ -1,0 +1,79 @@
+name: Standards Nightly
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  standards:
+    name: Full standards drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run full standards suite
+        id: standards
+        continue-on-error: true
+        run: pnpm standards:run -- --mode full --summary-file .standards-summary.md
+
+      - name: Publish standards summary
+        if: always()
+        run: |
+          if [ -f .standards-summary.md ]; then
+            cat .standards-summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Standards runner failed before writing a summary." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open or update drift issue
+        if: steps.standards.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: '[standards drift] Alpha standards runner failure'
+        run: |
+          {
+            echo "## Standards drift"
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            if [ -f .standards-summary.md ]; then
+              cat .standards-summary.md
+            else
+              echo "Standards runner failed before writing a summary."
+            fi
+          } > .standards-drift-issue.md
+
+          issue_number="$(gh issue list --state open --search "in:title \"$TITLE\" repo:${{ github.repository }}" --json number --jq '.[0].number // ""')"
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body-file .standards-drift-issue.md
+          else
+            gh issue create --title "$TITLE" --body-file .standards-drift-issue.md --label ci-cd
+          fi
+
+      - name: Fail workflow on drift
+        if: steps.standards.outcome == 'failure'
+        run: exit 1

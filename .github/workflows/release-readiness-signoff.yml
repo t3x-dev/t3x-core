@@ -1,0 +1,144 @@
+name: Release Readiness Signoff
+
+on:
+  issue_comment:
+    types:
+      - created
+      - edited
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  signoff:
+    name: Apply owner readiness signoff
+    if: >
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/t3x readiness')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch pull request metadata
+        run: >
+          gh api
+          "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}"
+          > "$RUNNER_TEMP/release-readiness-pr.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release readiness PR context
+        id: pr
+        run: >
+          node tools/release-readiness/pr-context.mjs
+          --pr-json "$RUNNER_TEMP/release-readiness-pr.json"
+          --repository "${{ github.repository }}"
+
+      - name: Fetch existing readiness comments
+        if: steps.pr.outputs.release_bound == 'true'
+        run: >
+          gh api
+          "repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments"
+          --paginate
+          > "$RUNNER_TEMP/release-readiness-comments.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write readiness command
+        if: steps.pr.outputs.release_bound == 'true'
+        run: node -e "require('fs').writeFileSync(process.env.T3X_COMMAND_FILE, process.env.T3X_COMMENT_BODY || '')"
+        env:
+          T3X_COMMAND_FILE: ${{ runner.temp }}/release-readiness-command.txt
+          T3X_COMMENT_BODY: ${{ github.event.comment.body }}
+
+      - name: Apply owner signoff command
+        if: steps.pr.outputs.release_bound == 'true'
+        run: >
+          node tools/release-readiness/signoff.mjs
+          --comment-body-file "$RUNNER_TEMP/release-readiness-command.txt"
+          --comment-author "${{ github.event.comment.user.login }}"
+          --comments "$RUNNER_TEMP/release-readiness-comments.json"
+          --out "$RUNNER_TEMP/release-readiness-signoff.md"
+
+      - name: Post release readiness signoff
+        if: steps.pr.outputs.release_bound == 'true'
+        run: >
+          node tools/release-readiness/upsert-comment.mjs
+          --comments "$RUNNER_TEMP/release-readiness-comments.json"
+          --marker "<!-- t3x-release-readiness-signoff:v1 -->"
+          --body "$RUNNER_TEMP/release-readiness-signoff.md"
+          --repository "${{ github.repository }}"
+          --issue-number "${{ github.event.issue.number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout release branch
+        if: steps.pr.outputs.release_bound == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Install release branch dependencies
+        if: steps.pr.outputs.release_bound == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run full standards matrix
+        if: steps.pr.outputs.release_bound == 'true'
+        continue-on-error: true
+        run: >
+          node tools/standards/run-all.mjs
+          --mode full
+          --json
+          --summary-file "$RUNNER_TEMP/release-readiness-standards.md"
+          > "$RUNNER_TEMP/release-readiness-standards.json"
+        env:
+          YOPS_STABILITY_BASE_REF: ${{ steps.pr.outputs.base_sha }}
+          T3X_PR_BODY: ${{ steps.pr.outputs.pr_body }}
+
+      - name: Generate release readiness report
+        if: steps.pr.outputs.release_bound == 'true'
+        run: >
+          node tools/release-readiness/generate.mjs
+          --standards "$RUNNER_TEMP/release-readiness-standards.json"
+          --comments "$RUNNER_TEMP/release-readiness-comments.json"
+          --signoff-state-comment "$RUNNER_TEMP/release-readiness-signoff.md"
+          --tester-evidence-dir release/readiness/tester-evidence
+          --out-json "$RUNNER_TEMP/release-readiness.json"
+          --out-markdown "$RUNNER_TEMP/release-readiness.md"
+          --pr-json "$RUNNER_TEMP/release-readiness-pr.json"
+
+      - name: Post release readiness report
+        if: steps.pr.outputs.release_bound == 'true'
+        run: >
+          node tools/release-readiness/upsert-comment.mjs
+          --comments "$RUNNER_TEMP/release-readiness-comments.json"
+          --marker "<!-- t3x-release-readiness-report:v1 -->"
+          --body "$RUNNER_TEMP/release-readiness.md"
+          --repository "${{ github.repository }}"
+          --issue-number "${{ github.event.issue.number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

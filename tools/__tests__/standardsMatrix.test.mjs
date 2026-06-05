@@ -36,7 +36,34 @@ test('standards matrix declares the alpha readiness rows from the notes source',
     result.rowsById.get('row-2c')?.title,
     'No-key seeded demo produces an inspectable commit in <=10 min'
   );
-  assert.match(result.rowsById.get('row-3')?.acceptance ?? '', /STABILITY\.md/);
+  assert.match(result.rowsById.get('row-3')?.acceptance ?? '', /YOps stability metadata/);
+});
+
+test('standards matrix declares execution metadata for every row', () => {
+  const result = validateStandardsMatrix({ rootDir: root });
+
+  assert.deepEqual(result.errors, []);
+  for (const row of result.rows) {
+    assert.match(row.acceptance_type, /^(manual|automated|mixed)$/);
+    assert.equal(typeof row.owner_workstream, 'string');
+    assert.notEqual(row.owner_workstream.trim(), '');
+  }
+  assert.equal(
+    result.rowsById.get('row-3')?.acceptance_command,
+    'node tools/standards/check-row-3-yops-stability.mjs'
+  );
+  assert.deepEqual(result.rowsById.get('row-3')?.pr_filter_paths, [
+    'README.md',
+    'STABILITY.md',
+    'packages/yops/**',
+    'standards/**',
+    'tools/api-diff/**',
+    'tools/api-surface/**',
+    'tools/lib/apiSurface.mjs',
+    'tools/lib/yopsStability.mjs',
+    'tools/standards/check-row-3-yops-stability.mjs',
+    'tools/__tests__/standardsRow3.test.mjs',
+  ]);
 });
 
 test('standards matrix JSON schema encodes the canonical row set', () => {
@@ -46,7 +73,19 @@ test('standards matrix JSON schema encodes the canonical row set', () => {
 
   assert.equal(rowsSchema.minItems, STANDARDS_ROW_IDS.length);
   assert.equal(rowsSchema.maxItems, STANDARDS_ROW_IDS.length);
+  assert.deepEqual(rowsSchema.items.required, [
+    'id',
+    'title',
+    'acceptance',
+    'acceptance_type',
+    'owner_workstream',
+  ]);
   assert.deepEqual(rowsSchema.items.properties.id.enum, STANDARDS_ROW_IDS);
+  assert.deepEqual(rowsSchema.items.properties.acceptance_type.enum, [
+    'manual',
+    'automated',
+    'mixed',
+  ]);
   assert.deepEqual(requiredRowIds, STANDARDS_ROW_IDS);
 });
 
@@ -57,6 +96,8 @@ rows:
   - id: row-1
     title: One row only
     acceptance: Not enough.
+    acceptance_type: manual
+    owner_workstream: test
 `);
 
   const result = validateStandardsMatrix({ rootDir });
@@ -81,12 +122,18 @@ rows:
   - id: row-1
     title: First
     acceptance: Valid text
+    acceptance_type: manual
+    owner_workstream: test
   - id: row-1
     title: Second
     acceptance: Valid text
+    acceptance_type: manual
+    owner_workstream: test
   - id: row-2a
     title: ""
     acceptance: ""
+    acceptance_type: manual
+    owner_workstream: test
 `);
 
   const result = validateStandardsMatrix({ rootDir });
@@ -112,7 +159,9 @@ test('standards matrix rejects unknown row ids', () => {
     .map(
       (id) => `  - id: ${id}
     title: ${id}
-    acceptance: ${id} acceptance`
+    acceptance: ${id} acceptance
+    acceptance_type: manual
+    owner_workstream: test`
     )
     .join('\n');
   const rootDir = makeTempRoot(`version: 1
@@ -124,6 +173,23 @@ ${rows}
   const result = validateStandardsMatrix({ rootDir });
 
   assert.deepEqual(result.errors, ['standards/matrix.yaml rows[10] has unknown id: row-9']);
+});
+
+test('standards matrix rejects automated rows without PR routing metadata', () => {
+  const rootDir = makeTempRoot(
+    makeMatrixYaml({
+      'row-1': {
+        acceptance_type: 'automated',
+        acceptance_command: 'node tools/standards/check-row-1.mjs',
+      },
+    })
+  );
+
+  const result = validateStandardsMatrix({ rootDir });
+
+  assert.deepEqual(result.errors, [
+    'standards/matrix.yaml row row-1 must define pr_filter_paths or set pr_runs_always: true',
+  ]);
 });
 
 test('PR template asks authors to declare matrix row ids', () => {
@@ -140,4 +206,39 @@ function makeTempRoot(matrixYaml) {
   mkdirSync(join(dir, 'standards'), { recursive: true });
   writeFileSync(join(dir, 'standards/matrix.yaml'), matrixYaml);
   return pathToFileURL(`${dir}/`);
+}
+
+function makeMatrixYaml(overrides = {}) {
+  const rows = STANDARDS_ROW_IDS.map((id) => {
+    const row = {
+      id,
+      title: `${id} title`,
+      acceptance: `${id} acceptance`,
+      acceptance_type: 'manual',
+      owner_workstream: 'test',
+      ...(overrides[id] ?? {}),
+    };
+    return [
+      `  - id: ${row.id}`,
+      `    title: ${row.title}`,
+      `    acceptance: ${row.acceptance}`,
+      `    acceptance_type: ${row.acceptance_type}`,
+      row.acceptance_command ? `    acceptance_command: ${row.acceptance_command}` : null,
+      Array.isArray(row.pr_filter_paths)
+        ? ['    pr_filter_paths:', ...row.pr_filter_paths.map((path) => `      - ${path}`)].join(
+            '\n'
+          )
+        : null,
+      typeof row.pr_runs_always === 'boolean' ? `    pr_runs_always: ${row.pr_runs_always}` : null,
+      `    owner_workstream: ${row.owner_workstream}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }).join('\n');
+
+  return `version: 1
+source_doc: notes/docs/hlq_docs/alpha/open-source-product-standard.md
+rows:
+${rows}
+`;
 }
