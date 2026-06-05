@@ -1,5 +1,11 @@
 # @t3x-dev/yops
 
+## 0.4.0
+
+### Minor Changes
+
+- [#1091](https://github.com/t3x-dev/t3x-core/pull/1091) [`917f01f`](https://github.com/t3x-dev/t3x-core/commit/917f01f918a2066cd8755008aa4c4b4372532df9) Thanks [@lqw905](https://github.com/lqw905)! - Release 0.4.0 local runtime and YOps alpha surface updates.
+
 ## 0.3.1
 
 ### Patch Changes
