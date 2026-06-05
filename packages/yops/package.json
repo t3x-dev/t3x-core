@@ -13,6 +13,8 @@
     "generate:spec": "tsx scripts/generate-spec-data.ts",
     "generate:schema": "tsx scripts/generate-json-schema.ts",
     "build": "tsx scripts/generate-spec-data.ts && tsup && tsx scripts/generate-json-schema.ts",
+    "api-extract": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --write",
+    "api-extract:verify": "node ../../tools/api-surface/extract.mjs --package @t3x-dev/yops --verify",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

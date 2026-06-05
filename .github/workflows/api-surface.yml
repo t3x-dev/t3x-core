@@ -1,0 +1,83 @@
+name: API Surface
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - release/surface.yaml
+      - packages/*/src/**
+      - packages/*/etc/**
+      - packages/*/api-extractor.json
+      - packages/*/package.json
+      - packages/*/tsconfig.json
+      - packages/*/tsup.config.*
+      - packages/*/scripts/**
+      - packages/*/*.yaml
+      - packages/*/*.yml
+      - tools/api-diff/**
+      - tools/api-surface/**
+      - tools/lib/apiSurface.mjs
+      - tools/__tests__/api*.test.mjs
+      - package.json
+      - pnpm-lock.yaml
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api-surface:
+    name: Verify API snapshots and report diffs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify committed API snapshots
+        run: pnpm api:verify
+
+      - name: Fetch base ref
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
+      - name: Compare API snapshots
+        if: github.event_name == 'pull_request'
+        run: >
+          node tools/api-diff/diff.mjs
+          --base-ref FETCH_HEAD
+          --json api-surface-diff.json
+          --markdown api-surface-diff.md
+          --allow-breaking
+
+      - name: Add API diff summary
+        if: github.event_name == 'pull_request'
+        run: cat api-surface-diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload API diff artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-surface-diff
+          path: api-surface-diff.json
