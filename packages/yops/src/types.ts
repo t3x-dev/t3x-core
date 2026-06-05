@@ -141,9 +141,20 @@ export interface YOpsError {
   op_index: number;
 }
 
+export interface YOpsWarning {
+  code: 'DEPRECATED_FIELD';
+  message: string;
+  op_index: number;
+  op: string;
+  field: string;
+  deprecated_in: string;
+  replacement_field?: string;
+}
+
 export interface YOpsResult {
   ok: boolean;
   doc: YValue;
   applied: number;
   error?: YOpsError;
+  warnings?: YOpsWarning[];
 }

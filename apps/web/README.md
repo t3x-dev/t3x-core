@@ -2,7 +2,7 @@
 
 Web frontend for T3X, a canvas-based semantic version control interface built with Next.js.
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-06-02
 
 ## Tech Stack
 
@@ -19,7 +19,7 @@ Web frontend for T3X, a canvas-based semantic version control interface built wi
 
 The source tree follows a four-layer v2 architecture (L1 infrastructure /
 L2 domain / L3 composition / L4 view) enforced by Biome. See the
-**"WebUI Architecture"** section of the repo root `CLAUDE.md` for the
+**"WebUI Architecture"** section of the repo root `AGENTS.md` for the
 canonical folder map and import rules — that is the single source of truth.
 
 Top-level layout under `src/`:
@@ -91,19 +91,24 @@ pnpm dev:webui   # Terminal 2 - WebUI (port 3000)
 
 ## Demo Screenshots
 
-The `/chat` first-commit preview screenshots are committed under
-`public/screenshots/` so README imagery can be checked against the product.
+The WebUI documentation screenshots are maintained in the docs repository. The
+local screenshot script is for review/regeneration and should not make the core
+repository carry generated image assets.
 
 ```bash
-# From the repo root, with pnpm dev:webui already running
+# From the repo root, with pnpm dev:api and pnpm dev:webui already running
 pnpm screenshots:demo
 ```
 
-Outputs:
+The stable landing-only script writes ignored local review copies to
+`tmp/screenshots/demo/`:
 
-- `apps/web/public/screenshots/chat-light.png`
-- `apps/web/public/screenshots/chat-dark.png`
-- `apps/web/public/screenshots/chat-mobile.png`
+- `tmp/screenshots/demo/chat-light.png`
+- `tmp/screenshots/demo/chat-dark.png`
+- `tmp/screenshots/demo/chat-mobile.png`
+
+The broader workflow screenshot set lives in the docs repository under
+`static/img/screenshots/`.
 
 ## Testing
 
@@ -115,7 +120,7 @@ pnpm --filter t3x-webui test
 
 This app follows the v2 four-layer architecture (L1 infrastructure /
 L2 domain / L3 composition / L4 view) enforced by Biome
-`noRestrictedImports`. See repo-root `CLAUDE.md` → "WebUI Architecture"
+`noRestrictedImports`. See repo-root `AGENTS.md` -> "WebUI Architecture"
 for the canonical rules.
 
 Sources of truth for stable interfaces (don't change casually):

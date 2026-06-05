@@ -5,6 +5,7 @@
  * Validates that async I/O lives in the hook while the slice exposes only
  * passive setters (setProjectData/mergeProjectData/setLeavesByCommit/addToNodes).
  */
+import type { Node } from '@xyflow/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupRoots, renderHook, waitForHook } from './renderHook';
 
@@ -42,6 +43,27 @@ import { fetchConversations } from '@/queries/conversations';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import { fetchWorkbenchDrafts } from '@/queries/workbenchDrafts';
 import { useCanvasStore } from '@/store/canvasStore';
+import { PENDING_UNIT_LIMIT_MESSAGE } from '@/store/canvasStoreUtils';
+import type { CanvasNodeData } from '@/types/nodes';
+
+function stagingNode(id: string): Node<CanvasNodeData> {
+  return {
+    id,
+    type: 'unit',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'unit',
+      entryId: id,
+      title: 'Pending',
+      summary: '0 turns',
+      status: 'staging',
+      timestamp: '2026-04-12T00:00:00Z',
+      tags: ['unit'],
+      commitStatus: 'staging',
+      conversationId: id,
+    },
+  };
+}
 
 function resetStore() {
   useCanvasStore.setState({
@@ -125,6 +147,23 @@ describe('useCanvasNodeActions.add', () => {
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('Leaf'), 'warning');
     expect(useCanvasStore.getState().nodes).toHaveLength(0);
     expect(createConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not create a second pending unit', async () => {
+    const notify = vi.fn();
+    useCanvasStore.setState({
+      projectId: 'proj_1',
+      nodes: [stagingNode('conv_pending')],
+      notifyCallback: notify,
+    });
+
+    const { result } = renderHook(() => useCanvasNodeActions());
+    await result.current.add('unit');
+    await waitForHook();
+
+    expect(notify).toHaveBeenCalledWith(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual(['conv_pending']);
   });
 });
 

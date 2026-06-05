@@ -15,8 +15,11 @@ import {
   edgeType,
   getNodeCounter,
   getNumericId,
+  hasPendingUnitNode,
+  isPendingUnitNode,
   nextEdgeId,
   nextNodeId,
+  PENDING_UNIT_LIMIT_MESSAGE,
   resolveLatestMainUnitId,
 } from './canvasStoreUtils';
 
@@ -118,6 +121,10 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
       if (!source) {
         return {};
       }
+      if (hasPendingUnitNode(state.nodes)) {
+        state.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+        return {};
+      }
 
       const sourceExcerptArray = source.data.sourceExcerpt || [];
       const sourceExcerptText = sourceExcerptArray.join('\n');
@@ -200,10 +207,16 @@ export const createCommitSlice: StateCreator<CanvasState, [], [], CommitSlice> =
   addUnitFromUnit: (unitId) => get().addPendingCommitFromCommit(unitId),
 
   appendNodeAndEdge: (node, edge) =>
-    set((state) => ({
-      nodes: [...state.nodes, node],
-      edges: [...state.edges, edge],
-    })),
+    set((state) => {
+      if (isPendingUnitNode(node) && hasPendingUnitNode(state.nodes)) {
+        state.notifyCallback?.(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+        return {};
+      }
+      return {
+        nodes: [...state.nodes, node],
+        edges: [...state.edges, edge],
+      };
+    }),
 
   getPendingCommitBranchMode: (commitId) => determineStagingUnitBranchMode(get(), commitId),
   canCreatePendingCommitFromConversation: (unitId) => {

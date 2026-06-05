@@ -101,7 +101,58 @@ Target release PR guards:
 
 Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
-the first public alpha publish.
+the first restricted alpha publish.
+
+## Release Readiness Report Schema
+
+Release-bound pull requests use a durable readiness report so reviewers can see
+the automated result, manual decisions, tester evidence, and blockers in one
+place. The report is emitted as both Markdown and JSON. The machine-readable
+contract is `release/readiness-report.schema.json`.
+
+Hard gates:
+
+- Automated standards matrix rows with `pass`, `fail`, or `skipped` status.
+- Release surface metadata validation.
+- External tester evidence aggregate status.
+
+Manual gates:
+
+- Standards matrix rows whose acceptance type is manual.
+- Owner decisions can mark a manual gate `approved` or `blocked`.
+- A manual gate with no trusted owner decision stays `pending`.
+
+Soft warnings:
+
+- Non-blocking release surface warnings.
+- Skipped automated rows.
+- Missing future-facing tester evidence files.
+
+Outstanding blockers:
+
+- Failed automated standards rows.
+- Release surface errors.
+- Failed or missing external tester evidence entries.
+- Owner `block` decisions.
+
+External tester evidence:
+
+- Future external validation files live at
+  `release/readiness/tester-evidence/*.json`.
+- Each file declares `id`, `tester`, `status`, and `summary`, with an optional
+  `url`.
+- `status` is one of `pass`, `fail`, or `missing`.
+- Demo, public npm access flips, and runtime artifact publishing are not
+  required by this readiness report.
+
+Owner decisions:
+
+- Commands use `/t3x readiness approve <row-id> <reason>`,
+  `/t3x readiness block <row-id> <reason>`, or
+  `/t3x readiness clear <row-id>`.
+- The command author must be a release owner from CODEOWNERS.
+- The durable signoff state is stored in a bot-owned marker comment.
+- User-authored copies of the signoff marker are ignored.
 
 Release PR checklist:
 
@@ -180,7 +231,7 @@ no packages, or it may publish `@t3x-dev/yops@0.2.1` while leaving
 `@t3x-dev/local` unchanged.
 
 A changeset is required when a pull request changes user-visible behavior for a
-public alpha package:
+restricted alpha package:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`

@@ -28,10 +28,13 @@ export interface FeatureTourStep {
   title: string;
   description: string;
   target: string | null;
+  positionTarget?: string | null;
+  placement?: 'above';
   tone: FeatureTourTone;
   icon: LucideIcon;
   details: string[];
   advanceOnTargetClick?: boolean;
+  advanceDelayMs?: number;
 }
 
 interface TargetRect {
@@ -152,6 +155,7 @@ export function FeatureTourOverlay({
 }: FeatureTourOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const [positionRect, setPositionRect] = useState<TargetRect | null>(null);
   const [advancingAfterTargetClick, setAdvancingAfterTargetClick] = useState(false);
   const coachRef = useRef<HTMLDivElement>(null);
   const [coachHeight, setCoachHeight] = useState(360);
@@ -170,7 +174,8 @@ export function FeatureTourOverlay({
       typeof window === 'undefined' ? coachHeight : Math.min(coachHeight, window.innerHeight - 32);
     const maxTop =
       typeof window === 'undefined' ? 16 : Math.max(16, window.innerHeight - height - 16);
-    if (!targetRect) {
+    const anchorRect = positionRect ?? targetRect;
+    if (!anchorRect) {
       return {
         width,
         top:
@@ -178,21 +183,38 @@ export function FeatureTourOverlay({
             ? 120
             : clamp(window.innerHeight / 2 - height / 2, 16, maxTop),
         left: typeof window === 'undefined' ? 16 : Math.max(16, window.innerWidth / 2 - width / 2),
+        maxHeight: undefined,
       };
     }
 
     const gap = 16;
-    const rightCandidate = targetRect.left + targetRect.width + gap;
-    const leftCandidate = targetRect.left - width - gap;
+    if (step?.placement === 'above') {
+      const tightGap = 8;
+      const top = Math.max(16, anchorRect.top - height - tightGap);
+      const availableHeight = Math.max(160, anchorRect.top - tightGap - top);
+      return {
+        width,
+        top,
+        left: clamp(
+          anchorRect.left + anchorRect.width / 2 - width / 2,
+          16,
+          window.innerWidth - width - 16
+        ),
+        maxHeight: availableHeight,
+      };
+    }
+
+    const rightCandidate = anchorRect.left + anchorRect.width + gap;
+    const leftCandidate = anchorRect.left - width - gap;
     const left =
       rightCandidate + width <= window.innerWidth - 16
         ? rightCandidate
         : leftCandidate >= 16
           ? leftCandidate
-          : clamp(targetRect.left, 16, window.innerWidth - width - 16);
-    const top = clamp(targetRect.top, 16, maxTop);
-    return { width, top, left };
-  }, [coachHeight, targetRect]);
+          : clamp(anchorRect.left, 16, window.innerWidth - width - 16);
+    const top = clamp(anchorRect.top, 16, maxTop);
+    return { width, top, left, maxHeight: undefined };
+  }, [coachHeight, positionRect, step?.placement, targetRect]);
 
   useEffect(() => {
     if (!open || !coachRef.current) return;
@@ -218,6 +240,7 @@ export function FeatureTourOverlay({
     if (!open || !step) {
       setStepIndex(0);
       setTargetRect(null);
+      setPositionRect(null);
       setAdvancingAfterTargetClick(false);
       return;
     }
@@ -226,7 +249,9 @@ export function FeatureTourOverlay({
     const update = () => {
       cancelAnimationFrame(animationFrame);
       animationFrame = requestAnimationFrame(() => {
-        setTargetRect(readTargetRect(step.target));
+        const nextTargetRect = readTargetRect(step.target);
+        setTargetRect(nextTargetRect);
+        setPositionRect(step.positionTarget ? readTargetRect(step.positionTarget) : nextTargetRect);
       });
     };
 
@@ -261,7 +286,7 @@ export function FeatureTourOverlay({
         await waitForReadyTarget(nextStep?.target ?? null);
         setStepIndex((current) => Math.min(current + 1, steps.length - 1));
         setAdvancingAfterTargetClick(false);
-      }, 0);
+      }, step.advanceDelayMs ?? 0);
     };
     document.addEventListener('click', handleTargetClick, true);
     return () => document.removeEventListener('click', handleTargetClick, true);
@@ -323,7 +348,7 @@ export function FeatureTourOverlay({
           top: coachPosition.top,
           left: coachPosition.left,
           width: coachPosition.width,
-          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: coachPosition.maxHeight ?? 'calc(100vh - 32px)',
         }}
       >
         <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">

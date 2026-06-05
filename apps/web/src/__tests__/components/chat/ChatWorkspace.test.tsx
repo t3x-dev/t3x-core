@@ -3,7 +3,7 @@
 import type { SourcedYOp } from '@t3x-dev/core';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+import { CHAT_WORKSPACE_TOUR_STEPS, ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { CONVERSATION_BRANCH_CHANGED_EVENT } from '@/hooks/conversations/useConversationBranchSwitch';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -280,6 +280,25 @@ describe('ChatWorkspace', () => {
       initialized: true,
       currentProjectId: 'proj_123',
     });
+  });
+
+  it('guides the demo through commit before moving to canvas', () => {
+    const stepIds = CHAT_WORKSPACE_TOUR_STEPS.map((step) => step.id);
+
+    expect(stepIds.slice(stepIds.indexOf('apply') + 1)).toEqual([
+      'commit',
+      'commit-confirm',
+      'canvas',
+    ]);
+    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'commit')?.target).toBe(
+      'chat-commit-action'
+    );
+    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'commit-confirm')?.target).toBe(
+      'chat-commit-confirm'
+    );
+    expect(CHAT_WORKSPACE_TOUR_STEPS.find((step) => step.id === 'canvas')?.target).toBe(
+      'sidebar-canvas-tab'
+    );
   });
 
   it('opens source chooser inside Sources instead of the composer or message stream', () => {

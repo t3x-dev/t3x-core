@@ -82,4 +82,36 @@ describe('composeCanvasFromFetches', () => {
     expect(pending?.data.pendingBranch).toBe('branch');
     expect(pending?.data.pendingBranchName).toBe('draft/root');
   });
+
+  it('keeps only the latest staging conversation on the canvas', () => {
+    const result = composeCanvasFromFetches(
+      'proj_1',
+      [
+        conversation({
+          conversation_id: 'conv_older',
+          created_at: '2026-05-28T00:01:00.000Z',
+        }),
+        conversation({
+          conversation_id: 'conv_latest',
+          created_at: '2026-05-28T00:03:00.000Z',
+        }),
+        conversation({
+          conversation_id: 'conv_middle',
+          created_at: '2026-05-28T00:02:00.000Z',
+        }),
+      ],
+      [],
+      [],
+      [],
+      new Map(),
+      new Map()
+    );
+
+    const pendingNodes = result.nodes.filter(
+      (node) => node.data.kind === 'unit' && node.data.commitStatus === 'staging'
+    );
+
+    expect(pendingNodes).toHaveLength(1);
+    expect(pendingNodes[0].id).toBe('conv_latest');
+  });
 });

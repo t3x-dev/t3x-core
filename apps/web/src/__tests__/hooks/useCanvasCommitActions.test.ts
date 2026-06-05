@@ -25,6 +25,7 @@ import { createMergeDraft } from '@/commands/merge';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
+import { PENDING_UNIT_LIMIT_MESSAGE } from '@/store/canvasStoreUtils';
 import type { CanvasNodeData } from '@/types/nodes';
 
 function committedMainUnit(id: string, commitHash: string): Node<CanvasNodeData> {
@@ -64,6 +65,25 @@ function committedBranchUnit(id: string, commitHash: string): Node<CanvasNodeDat
       commitHash,
       branchType: 'branch',
       branchName: 'branch-1',
+    },
+  };
+}
+
+function stagingUnit(id: string): Node<CanvasNodeData> {
+  return {
+    id,
+    type: 'unit',
+    position: { x: 0, y: 0 },
+    data: {
+      kind: 'unit',
+      entryId: id,
+      title: 'Pending',
+      summary: '',
+      status: 'staging',
+      timestamp: 'now',
+      tags: [],
+      commitStatus: 'staging',
+      conversationId: id,
     },
   };
 }
@@ -126,6 +146,26 @@ describe('useCanvasCommitActions.addConversationFromCommit', () => {
     await expect(result.current.addConversationFromCommit('unit-1')).rejects.toThrow(
       'no project selected'
     );
+  });
+
+  it('does not create another conversation while a pending unit exists', async () => {
+    const notify = vi.fn();
+    useCanvasStore.setState({
+      projectId: 'proj_1',
+      nodes: [committedMainUnit('unit-1', 'sha256:abc'), stagingUnit('conv_pending')],
+      notifyCallback: notify,
+    });
+
+    const { result } = renderHook(() => useCanvasCommitActions());
+    await result.current.addConversationFromCommit('unit-1');
+    await waitForHook();
+
+    expect(notify).toHaveBeenCalledWith(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual([
+      'unit-1',
+      'conv_pending',
+    ]);
   });
 });
 
@@ -202,5 +242,28 @@ describe('useCanvasCommitActions.addFromConversation', () => {
     expect(state.nodes[1].data.commitStatus).toBe('staging');
     expect(state.nodes[1].data.baselineSummary).toBe('hello world');
     expect(state.edges).toHaveLength(1);
+  });
+
+  it('does not fetch turns or append when a pending unit already exists', async () => {
+    const notify = vi.fn();
+    const source = committedMainUnit('unit-1', 'sha256:abc');
+    source.data.conversationId = 'conv_1';
+    useCanvasStore.setState({
+      projectId: 'proj_1',
+      nodes: [source, stagingUnit('conv_pending')],
+      hasMainCommit: false,
+      notifyCallback: notify,
+    });
+
+    const { result } = renderHook(() => useCanvasCommitActions());
+    await result.current.addFromConversation('unit-1');
+    await waitForHook();
+
+    expect(notify).toHaveBeenCalledWith(PENDING_UNIT_LIMIT_MESSAGE, 'warning');
+    expect(fetchTurns).not.toHaveBeenCalled();
+    expect(useCanvasStore.getState().nodes.map((node) => node.id)).toEqual([
+      'unit-1',
+      'conv_pending',
+    ]);
   });
 });

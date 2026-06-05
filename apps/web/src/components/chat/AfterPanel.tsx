@@ -61,6 +61,7 @@ const YAML_VALUE_CLASS = 'text-[color-mix(in_srgb,var(--yaml-string)_82%,var(--t
 const YAML_PUNCTUATION_CLASS = 'text-[color-mix(in_srgb,var(--yaml-punctuation)_70%,transparent)]';
 const EMPTY_SEMANTIC_CONTENT: SemanticContent = { trees: [], relations: [] };
 const EMPTY_TREE_NODES: TreeNode[] = [];
+const INTRO_DEMO_HIDDEN_ROOT_KEYS = new Set(['support_escalation_review']);
 type TreeStatusKind = 'human' | 'new' | 'modified' | 'removed' | 'inherited';
 type TreeEditDialogState =
   | { kind: 'add-child'; nodePath: string }
@@ -367,6 +368,11 @@ function summarizeVisibleDiff(diff: TreeDiffResult | null): {
       Object.values(diff.removedSlots).reduce((n, slots) => n + slots.length, 0) +
       diff.removed.length,
   };
+}
+
+function filterIntroDemoVisibleRoots(nodes: TreeNode[], introDemoActive: boolean): TreeNode[] {
+  if (!introDemoActive) return nodes;
+  return nodes.filter((node) => !INTRO_DEMO_HIDDEN_ROOT_KEYS.has(node.key));
 }
 
 interface RenderRowBase {
@@ -931,8 +937,14 @@ export function AfterPanel({
   const [treeEditError, setTreeEditError] = useState<string | null>(null);
   const [deleteNodeDialog, setDeleteNodeDialog] = useState<DeleteNodeDialogState>(null);
 
-  const trees = tree.trees as TreeNode[];
-  const parentTrees = parent?.trees ?? EMPTY_TREE_NODES;
+  const trees = useMemo(
+    () => filterIntroDemoVisibleRoots(tree.trees as TreeNode[], introDemoActive),
+    [introDemoActive, tree.trees]
+  );
+  const parentTrees = useMemo(
+    () => filterIntroDemoVisibleRoots(parent?.trees ?? EMPTY_TREE_NODES, introDemoActive),
+    [introDemoActive, parent?.trees]
+  );
   const comparisonParentTrees = isInheritedBaselineOnly ? EMPTY_TREE_NODES : parentTrees;
   const hasResult = trees.length > 0;
   const hasParent = !!parent;
@@ -949,8 +961,8 @@ export function AfterPanel({
 
   const diff = useMemo<TreeDiffResult | null>(() => {
     if (!parent || isInheritedBaselineOnly) return null;
-    return computeTreeDiff(comparisonParentTrees, tree.trees);
-  }, [comparisonParentTrees, isInheritedBaselineOnly, parent, tree.trees]);
+    return computeTreeDiff(comparisonParentTrees, trees);
+  }, [comparisonParentTrees, isInheritedBaselineOnly, parent, trees]);
 
   const summary = useMemo(() => summarizeVisibleDiff(diff), [diff]);
   const parentMessage = parent?.message ?? null;
@@ -1565,7 +1577,10 @@ export function AfterPanel({
           data-testid="commit-dialog"
           className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-[var(--overlay-scrim)] backdrop-blur-[var(--fx-blur-panel)]"
         >
-          <div className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]">
+          <div
+            data-intro-target="chat-commit-dialog"
+            className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]"
+          >
             <label
               htmlFor="after-panel-commit-message"
               className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"

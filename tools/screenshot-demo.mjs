@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUTPUT_DIR = 'apps/web/public/screenshots';
+const OUTPUT_DIR = 'tmp/screenshots/demo';
 const CHAT_SIDEBAR_COLLAPSED_WIDTH = 64;
 const requireFromWeb = createRequire(path.join(REPO_ROOT, 'apps/web/package.json'));
 
@@ -71,7 +71,9 @@ export async function captureDemoScreenshots(env = process.env) {
       await page.evaluate((theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark');
       }, target.theme);
-      await page.getByText('source -> YOps -> commit').waitFor({ timeout: 15_000 });
+      await page
+        .getByRole('heading', { name: 'What should T3X make sense of?' })
+        .waitFor({ timeout: 15_000 });
       if (target.waitForCollapsedSidebar) {
         await page.waitForFunction(
           (collapsedWidth) => {

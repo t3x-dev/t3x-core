@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -57,6 +57,7 @@ beforeEach(() => {
   mocks.scriptCanRun = false;
   mocks.scriptDisabledReason = 'No runnable script';
   mocks.parentCommit.current = null;
+  window.history.pushState(null, '', '/chat');
   useWorkspaceStore.getState().reset();
 });
 
@@ -357,6 +358,34 @@ describe('AfterPanel tree edit controls', () => {
     expect(screen.queryByText('concepts')).toBeNull();
     expect(screen.queryByText('A parent baseline concept')).toBeNull();
     expect(screen.queryByText('Removed node')).toBeNull();
+  });
+
+  it('hides the old bundled demo root row while the intro demo is active', async () => {
+    const parentTrees = [
+      {
+        key: 'support_escalation_review',
+        slots: {},
+        children: [],
+      },
+    ];
+    window.history.pushState(null, '', '/chat/conv_demo?introDemo=1');
+    mocks.parentCommit.current = {
+      message: 'Old demo fixture',
+      trees: parentTrees,
+    };
+    useWorkspaceStore.getState().setConversation('conv_demo');
+    useWorkspaceStore.getState().setDerived({
+      tree: { trees: [], relations: [] },
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+
+    render(createElement(AfterPanel));
+
+    await waitFor(() => {
+      expect(screen.queryByText('support_escalation_review')).toBeNull();
+    });
+    expect(screen.getByText('No knowledge extracted yet')).not.toBeNull();
   });
 
   it('renders draft apply and discard through the unified action bar', () => {

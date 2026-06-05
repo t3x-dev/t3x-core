@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
+const REQUIRED_README_SECTIONS = ['what', 'why', 'install', 'sample'];
+
 function readText(rootDir, relativePath) {
   return readFileSync(new URL(relativePath, rootDir), 'utf8');
 }
@@ -35,6 +37,35 @@ function validateSurfaceShape(surface, errors) {
 
   if (!Array.isArray(surface.packages)) {
     errors.push('release/surface.yaml packages must be an array');
+  }
+}
+
+function extractMarkdownHeadings(markdown) {
+  return markdown
+    .split('\n')
+    .map((line) =>
+      line
+        .match(/^#{2,6}\s+(.+?)\s*#*\s*$/)?.[1]
+        ?.trim()
+        .toLowerCase()
+    )
+    .filter(Boolean);
+}
+
+function validatePackageReadme({ entry, readmePath, errors }) {
+  if (!entry.readme_required) {
+    return;
+  }
+
+  if (!existsSync(readmePath)) {
+    errors.push(`${entry.name} requires a README at ${entry.path}/README.md`);
+    return;
+  }
+
+  const headings = new Set(extractMarkdownHeadings(readFileSync(readmePath, 'utf8')));
+  const missingSections = REQUIRED_README_SECTIONS.filter((section) => !headings.has(section));
+  if (missingSections.length > 0) {
+    errors.push(`${entry.name} README missing required sections: ${missingSections.join(', ')}`);
   }
 }
 
@@ -78,22 +109,29 @@ function validatePackageEntry(rootDir, entry, index, errors, warnings) {
     errors.push(`${entry.name} entry points to package named ${packageJson.name}`);
   }
 
-  if (entry.publish_state === 'applied' && entry.access !== 'internal') {
+  if (entry.access !== 'internal') {
     const manifestAccess = packageJson.publishConfig?.access;
     if (manifestAccess !== entry.access) {
-      errors.push(
-        `${entry.name} publishConfig.access is ${manifestAccess ?? 'unset'}, expected ${entry.access}`
-      );
+      const message = `${entry.name} publishConfig.access is ${manifestAccess ?? 'unset'}, expected ${
+        entry.access
+      }`;
+      if (entry.publish_state === 'pending') {
+        warnings.push(
+          `${entry.name} publishConfig.access is ${
+            manifestAccess ?? 'unset'
+          }, pending target is ${entry.access}`
+        );
+      } else {
+        errors.push(`${message} because publish_state is applied`);
+      }
     }
   }
 
-  if (entry.npm_publish === true && entry.publish_state === 'pending') {
-    warnings.push(`${entry.name} is npm-published but publish_state is pending`);
-  }
-
-  if (entry.readme_required && !existsSync(join(packagePath, 'README.md'))) {
-    errors.push(`${entry.name} requires a README at ${entry.path}/README.md`);
-  }
+  validatePackageReadme({
+    entry,
+    readmePath: join(packagePath, 'README.md'),
+    errors,
+  });
 }
 
 export function validateReleaseSurface({ rootDir = new URL('../..', import.meta.url) } = {}) {
