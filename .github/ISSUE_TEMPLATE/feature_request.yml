@@ -1,9 +1,8 @@
-name: "✨ Feature Request"
+name: "Feature Request"
 description: "Propose a new capability or improvement"
 title: "[Feature]: "
 labels:
-  - "type:feature"
-  - "status:needs-design"
+  - "enhancement"
 body:
   - type: dropdown
     id: scope
