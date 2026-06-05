@@ -6,6 +6,12 @@ const hotfixBranchPattern = /^hotfix\/.+/;
 const changesetsBranchPattern = /^changesets?-release\/main$/;
 const productVersionPattern =
   /^T3X product release version:\s*`?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)`?\s*$/im;
+const protectedSurfaceFiles = new Set([
+  'RELEASE.md',
+  'STABILITY.md',
+  'release/surface.yaml',
+  'release/surface.schema.json',
+]);
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -23,6 +29,13 @@ function hasNonEmptyBullet(section) {
   return section.split('\n').some((line) => /^-\s+\S/.test(line.trim()) && line.trim() !== '-');
 }
 
+function hasNonEmptyText(section) {
+  return section
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line.length > 0 && line !== '-' && !line.startsWith('<!--'));
+}
+
 function normalizePackageName(value) {
   return value.replace(/^`|`$/g, '').trim();
 }
@@ -35,7 +48,7 @@ export function parsePackageReleaseSection(section) {
 
   const none = lines.some((line) => /^-\s+None\s*$/i.test(line));
   const packages = lines
-    .map((line) => line.match(/^-\s+(`?@t3x-dev\/(?:local|yops)`?)\s*:/)?.[1])
+    .map((line) => line.match(/^-\s+(`?@t3x-dev\/[a-z0-9-]+`?)\s*:/)?.[1])
     .filter(Boolean)
     .map(normalizePackageName);
 
@@ -78,7 +91,33 @@ export function readChangesetFiles({ rootDir = process.cwd() } = {}) {
     });
 }
 
-function validatePackageReleases({ errors, packageReleases, changesetFiles }) {
+export function validateProtectedSurfaceChange({ changedFiles = [], body = '' }) {
+  const changedSurfaceFiles = changedFiles.filter((file) => protectedSurfaceFiles.has(file));
+  if (changedSurfaceFiles.length === 0) {
+    return { errors: [] };
+  }
+
+  const hasReleaseSurfaceExplanation = hasNonEmptyText(sectionText(body, 'Release Surface'));
+  const hasStabilityExplanation = hasNonEmptyText(sectionText(body, 'Stability'));
+  if (hasReleaseSurfaceExplanation || hasStabilityExplanation) {
+    return { errors: [] };
+  }
+
+  return {
+    errors: [
+      `surface changes to ${changedSurfaceFiles.join(
+        ', '
+      )} require a Stability or Release Surface explanation in the PR body.`,
+    ],
+  };
+}
+
+function validatePackageReleases({
+  errors,
+  packageReleases,
+  changesetFiles,
+  releaseSurfacePackages,
+}) {
   if (!packageReleases.hasEntries) {
     errors.push(
       'main release PRs must include a Package Releases section with "- None" or package entries.'
@@ -103,6 +142,7 @@ function validatePackageReleases({ errors, packageReleases, changesetFiles }) {
   }
 
   const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
+  const releaseSurfacePackageSet = new Set(releaseSurfacePackages);
   for (const packageName of packageReleases.packages) {
     if (!changesetPackages.has(packageName)) {
       errors.push(`Package Releases lists ${packageName}, but no changeset targets it.`);
@@ -111,7 +151,7 @@ function validatePackageReleases({ errors, packageReleases, changesetFiles }) {
 
   for (const packageName of changesetPackages) {
     if (
-      (packageName === '@t3x-dev/local' || packageName === '@t3x-dev/yops') &&
+      releaseSurfacePackageSet.has(packageName) &&
       !packageReleases.packages.includes(packageName)
     ) {
       errors.push(`changeset targets ${packageName}, but Package Releases does not list it.`);
@@ -119,7 +159,12 @@ function validatePackageReleases({ errors, packageReleases, changesetFiles }) {
   }
 }
 
-function validateProductReleaseBody({ body, branchVersion = null, changesetFiles = [] }) {
+function validateProductReleaseBody({
+  body,
+  branchVersion = null,
+  changesetFiles = [],
+  releaseSurfacePackages,
+}) {
   const errors = [];
   const version = parseProductReleaseVersion(body);
 
@@ -154,13 +199,22 @@ function validateProductReleaseBody({ body, branchVersion = null, changesetFiles
     errors,
     packageReleases: parsePackageReleaseSection(sectionText(body, 'Package Releases')),
     changesetFiles,
+    releaseSurfacePackages,
   });
 
   return errors;
 }
 
-export function validateReleasePr({ baseBranch, headBranch, body = '', changesetFiles = [] }) {
+export function validateReleasePr({
+  baseBranch,
+  headBranch,
+  body = '',
+  changesetFiles = [],
+  changedFiles = [],
+  releaseSurfacePackages = [],
+}) {
   const errors = [];
+  errors.push(...validateProtectedSurfaceChange({ changedFiles, body }).errors);
 
   if (!baseBranch || baseBranch !== 'main') {
     return { errors };
@@ -185,6 +239,7 @@ export function validateReleasePr({ baseBranch, headBranch, body = '', changeset
       body,
       branchVersion: releaseMatch?.[1] ?? null,
       changesetFiles,
+      releaseSurfacePackages,
     })
   );
 

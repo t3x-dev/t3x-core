@@ -6,6 +6,16 @@ Declarative YAML operations. 18 atomic ops for any YAML document.
 YAML in  →  YOps  →  YAML out
 ```
 
+## What
+
+`@t3x-dev/yops` validates and applies deterministic YAML operations to YAML-like
+documents.
+
+## Why
+
+T3X uses YOps as the only mutation path for semantic tree content, so LLMs can
+propose changes while deterministic code validates and applies them.
+
 ## Release status
 
 `@t3x-dev/yops@0.3.1` is part of the restricted T3X alpha release surface.
@@ -35,7 +45,7 @@ The spec is the source of truth. The registry enforces it. The engine executes i
 npm install @t3x-dev/yops
 ```
 
-## Quick Start
+## Sample
 
 ```typescript
 import { applyYOps } from '@t3x-dev/yops';

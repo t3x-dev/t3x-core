@@ -37,6 +37,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -46,14 +48,6 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-
-      - name: Check release PR policy
-        if: github.event_name == 'pull_request'
-        env:
-          T3X_PR_BASE: ${{ github.base_ref }}
-          T3X_PR_HEAD: ${{ github.head_ref }}
-          T3X_PR_BODY: ${{ github.event.pull_request.body }}
-        run: node tools/check-release-pr.mjs
 
       - name: Cache Turbo
         uses: actions/cache@v4
@@ -68,6 +62,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Check release PR policy
+        if: github.event_name == 'pull_request'
+        env:
+          T3X_PR_BASE: ${{ github.base_ref }}
+          T3X_PR_HEAD: ${{ github.head_ref }}
+          T3X_PR_BODY: ${{ github.event.pull_request.body }}
+          T3X_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          T3X_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node tools/check-release-pr.mjs
 
       - name: Lint and format check
         run: pnpm check

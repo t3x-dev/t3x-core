@@ -1,5 +1,6 @@
 # Release surface and public stability declarations.
 RELEASE.md @etht3x
+STABILITY.md @etht3x
 release/surface.yaml @etht3x
 release/surface.schema.json @etht3x
 docs/release/ @etht3x

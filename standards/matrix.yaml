@@ -80,14 +80,23 @@ rows:
       package on that list has a README with what, why, install, and one working
       sample; CI fails if a release-public package lacks a README; packages not
       on the list are explicitly internal and exempt.
-    acceptance_type: manual
+    acceptance_type: automated
+    acceptance_command: node tools/standards/check-row-4-release-surface.mjs
     pr_filter_paths:
       - .github/release-flow.md
+      - .github/workflows/pr-validation.yml
       - package.json
+      - RELEASE.md
       - packages/**/README.md
+      - apps/**/README.md
+      - release/surface.yaml
+      - release/surface.schema.json
       - standards/**
       - tools/check-release-surface.mjs
+      - tools/check-release-pr.mjs
+      - tools/lib/releasePr.mjs
       - tools/lib/releaseSurface.mjs
+      - tools/standards/check-row-4-release-surface.mjs
     owner_workstream: workstream-05-release-surface
 
   - id: row-5
