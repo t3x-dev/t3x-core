@@ -100,6 +100,9 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
     });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
     await waitFor(() => {
