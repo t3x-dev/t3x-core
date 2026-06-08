@@ -126,8 +126,8 @@ function isTargetReady(target: string | null): boolean {
   return true;
 }
 
-function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<void> {
-  if (!target || isTargetReady(target)) return Promise.resolve();
+function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<boolean> {
+  if (!target || isTargetReady(target)) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const startedAt = Date.now();
@@ -142,9 +142,14 @@ function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<vo
     };
 
     const check = () => {
-      if (isTargetReady(target) || Date.now() - startedAt >= timeoutMs) {
+      if (isTargetReady(target)) {
         cleanup();
-        resolve();
+        resolve(true);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        cleanup();
+        resolve(false);
         return;
       }
       animationFrame = requestAnimationFrame(check);
@@ -208,7 +213,7 @@ export function ProjectDemoTourOverlay({
   const StepIcon = step.icon;
   const guided = interactionMode === 'guided';
   const waitingForTargetClick = guided && step.advanceOnTargetClick;
-  const actionLabel = guided ? 'Done' : doneLabel;
+  const actionLabel = guided && onSkip ? 'Skip demo' : doneLabel;
 
   const coachPosition = useMemo(() => {
     const width =
@@ -317,7 +322,11 @@ export function ProjectDemoTourOverlay({
           return;
         }
         const nextStep = PROJECT_TOUR_STEPS[stepIndex + 1];
-        await waitForReadyTarget(nextStep?.target ?? null);
+        const targetReady = await waitForReadyTarget(nextStep?.target ?? null);
+        if (!targetReady) {
+          setAdvancingAfterTargetClick(false);
+          return;
+        }
         setStepIndex((current) => Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1));
         setAdvancingAfterTargetClick(false);
       }, 0);

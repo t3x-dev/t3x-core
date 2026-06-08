@@ -6,6 +6,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 
 describe('ProjectDemoTourOverlay', () => {
+  it('labels the guided escape action as skipping the demo', () => {
+    const onSkip = vi.fn();
+
+    render(
+      <>
+        <button type="button" data-intro-target="canvas-commit-node">
+          Commit card
+        </button>
+        <ProjectDemoTourOverlay open onClose={vi.fn()} onSkip={onSkip} interactionMode="guided" />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip demo' }));
+
+    expect(onSkip).toHaveBeenCalledTimes(1);
+  });
+
   it('moves from the commit card to the + New Leaf action instead of the sidebar Leaf tab', async () => {
     const onDone = vi.fn();
 
@@ -59,5 +76,42 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('stays on the current step when the next guided target never appears', async () => {
+    vi.useFakeTimers();
+    const onDone = vi.fn();
+
+    try {
+      render(
+        <>
+          <button type="button" data-intro-target="canvas-commit-node">
+            Commit card
+          </button>
+          <button type="button" data-intro-target="canvas-floating-action-new-leaf">
+            New Leaf
+          </button>
+          <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+        </>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3100);
+      });
+
+      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+      expect(screen.queryByText('Choose an output type')).toBeNull();
+      expect(onDone).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
