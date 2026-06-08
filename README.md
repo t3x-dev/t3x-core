@@ -39,6 +39,15 @@ generated outputs.
 
 ## Quickstart
 
+### Try the local package <sup>preview</sup>
+
+```bash
+npx -p @t3x-dev/local t3x-local start
+```
+
+Use this for the packaged local T3X experience, including the preview WebUI.
+Package or runtime asset access may be restricted; see [Availability](#availability).
+
 ### Use YOps as a library
 
 ```bash
@@ -48,16 +57,22 @@ npm install @t3x-dev/yops
 Use this when you want the deterministic YAML operation engine inside your own
 app.
 
-### Use the local package
+### Develop from source
 
 ```bash
-npx -p @t3x-dev/local t3x-local start
+git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
+pnpm install
+pnpm dev:api     # API at localhost:8000
+pnpm dev:webui   # WebUI preview at localhost:3000
 ```
 
-Use this for the packaged local T3X experience.
-Package or runtime asset access may be restricted; see [Availability](#availability).
+Requires Node.js 20+ and pnpm 10+.
 
-### Run the self-hosted stack
+Use this to contribute to T3X or run the source-first apps locally. Source
+development opens straight into the app by default; set `AUTH_DISABLED=false`
+before starting both processes if you want to exercise the login flow.
+
+### Validate the self-hosted stack <sup>validation</sup>
 
 ```bash
 cp .env.example .env
@@ -66,25 +81,10 @@ docker compose up -d --build
 
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
-Docker Compose starts WebUI, API, and Postgres. Review the
-[deployment guide](DEPLOYMENT.md) before exposing it beyond localhost. Docker
-and self-hosted runs keep auth on by default, so the first WebUI visit goes
-through the built-in username/password login at `/login`.
-
-### Develop from source
-
-```bash
-git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
-pnpm install
-pnpm dev:api     # API at localhost:8000
-pnpm dev:webui   # WebUI at localhost:3000
-```
-
-Requires Node.js 20+ and pnpm 10+.
-
-Use this to contribute to T3X or run the source-first apps locally. Source
-development opens straight into the app by default; set `AUTH_DISABLED=false`
-before starting both processes if you want to exercise the login flow.
+Docker Compose starts WebUI, API, and Postgres for local deployment validation.
+Review the [deployment guide](DEPLOYMENT.md) before exposing it beyond
+localhost. Docker and self-hosted runs keep auth on by default, so the first
+WebUI visit goes through the built-in username/password login at `/login`.
 
 <br/>
 
