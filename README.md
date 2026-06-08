@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/alpha-v0.3.1%20restricted-purple" alt="restricted alpha v0.3.1" />
+  <img src="https://img.shields.io/badge/alpha-v0.4.0%20restricted-purple" alt="restricted alpha v0.4.0" />
   <a href="https://github.com/t3x-dev/t3x-core/actions/workflows/pr-validation.yml"><img src="https://img.shields.io/github/actions/workflow/status/t3x-dev/t3x-core/pr-validation.yml?branch=main" alt="CI" /></a>
 </p>
 
