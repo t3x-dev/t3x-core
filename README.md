@@ -39,7 +39,7 @@ generated outputs.
 
 ## Quickstart
 
-### Try the local package <sup>preview</sup>
+### Try the local package
 
 ```bash
 npx -p @t3x-dev/local t3x-local start
@@ -72,7 +72,7 @@ Use this to contribute to T3X or run the source-first apps locally. Source
 development opens straight into the app by default; set `AUTH_DISABLED=false`
 before starting both processes if you want to exercise the login flow.
 
-### Validate the self-hosted stack <sup>validation</sup>
+### Validate the self-hosted stack <sup>evaluation</sup>
 
 ```bash
 cp .env.example .env
@@ -81,7 +81,7 @@ docker compose up -d --build
 
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
-Docker Compose starts WebUI, API, and Postgres for local deployment validation.
+Docker Compose starts WebUI, API, and Postgres for self-hosted evaluation.
 Review the [deployment guide](DEPLOYMENT.md) before exposing it beyond
 localhost. Docker and self-hosted runs keep auth on by default, so the first
 WebUI visit goes through the built-in username/password login at `/login`.
@@ -128,8 +128,8 @@ result with parents, operation logs, and provenance.
 </tr>
 </table>
 
-> Extract and Generate can use LLMs. YOps Apply, validation, commit hashing,
-> diff, and merge are deterministic.
+> Extraction and generation can use LLMs. YOps Apply, validation, commit
+> hashing, diff, and merge are deterministic.
 
 Diff and merge compare committed structured states. Fixes, extraction edits, and
 merge resolutions are applied back through YOps before a new commit is written.
