@@ -284,7 +284,7 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    expect(screen.getByRole('heading', { name: 'What should T3X make sense of?' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'What should T3X structure?' })).toBeVisible();
     expect(screen.getByText('Source')).toBeVisible();
     expect(screen.getByText('YOps')).toBeVisible();
     expect(screen.getByText('Commit')).toBeVisible();

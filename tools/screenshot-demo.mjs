@@ -72,7 +72,7 @@ export async function captureDemoScreenshots(env = process.env) {
         document.documentElement.classList.toggle('dark', theme === 'dark');
       }, target.theme);
       await page
-        .getByRole('heading', { name: 'What should T3X make sense of?' })
+        .getByRole('heading', { name: 'What should T3X structure?' })
         .waitFor({ timeout: 15_000 });
       if (target.waitForCollapsedSidebar) {
         await page.waitForFunction(

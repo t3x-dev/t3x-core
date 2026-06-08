@@ -27,6 +27,36 @@ test('docs README starts from the same product frame as the root README', () => 
   assert.match(docsReadme, /commits, diffs, merges, provenance, and generated outputs/);
 });
 
+test('public first-impression surfaces avoid the retired meaning-first frame', () => {
+  const surfaces = [
+    'README.md',
+    'docs/README.md',
+    'apps/web/src/app/chat/page.tsx',
+    'apps/web/src/components/onboarding/FirstRunDemoOverlay.tsx',
+    'apps/web/src/components/chat/ChatWorkspace.tsx',
+    'apps/web/src/components/draft/DraftWorkspace.tsx',
+    'tools/screenshot-demo.mjs',
+  ];
+  const oldPhrases = [
+    /GitHub for structured meaning/i,
+    /Git for Meaning/i,
+    /structured meaning/i,
+    /Source -> Meaning -> Commit/i,
+    /source becomes meaning/i,
+    /applied meaning/i,
+    /reviewed meaning/i,
+    /What should T3X make sense of\?/i,
+    /semantic version control system/i,
+  ];
+
+  for (const surface of surfaces) {
+    const text = readText(surface);
+    for (const phrase of oldPhrases) {
+      assert.doesNotMatch(text, phrase, `${surface} still contains ${phrase}`);
+    }
+  }
+});
+
 test('release policy avoids public-alpha wording during restricted alpha', () => {
   const releaseFlow = readText('.github/release-flow.md');
 

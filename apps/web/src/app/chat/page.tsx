@@ -209,7 +209,7 @@ function ChatLanding() {
         <div className="w-full max-w-2xl px-4 py-8">
           <div className="mb-7 text-center" data-intro-target="landing-copy">
             <h1 className="text-2xl font-bold tracking-[0] text-[var(--text-primary)]">
-              What should T3X make sense of?
+              What should T3X structure?
             </h1>
             <p className="mx-auto mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
               Paste a prompt, chat transcript, release note, or design discussion. T3X keeps the

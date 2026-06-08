@@ -136,9 +136,9 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'commit',
     label: 'Commit',
-    title: 'Commit finalizes reviewed meaning',
+    title: 'Commit finalizes reviewed state',
     description:
-      'The final action converts reviewed semantic points and output rules into a stable project version.',
+      'The final action converts reviewed state points and output rules into a stable project version.',
     target: 'draft-commit-button',
     tone: 'commit',
     icon: GitCommit,
