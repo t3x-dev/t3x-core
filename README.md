@@ -116,26 +116,27 @@ intro demo. The `introDemo` flag is development-only.
 
 ## How it works
 
-T3X turns messy AI context into structured state, then versions that state.
+T3X turns messy AI context into structured state by expressing changes as
+deterministic YOps.
 
 <table>
 <tr>
-<td width="25%" align="center"><strong>Source</strong></td>
-<td width="25%" align="center"><strong>Structure</strong></td>
-<td width="25%" align="center"><strong>Change</strong></td>
-<td width="25%" align="center"><strong>Version</strong></td>
+<td width="25%" align="center"><strong>Inputs</strong></td>
+<td width="25%" align="center"><strong>Operation</strong></td>
+<td width="25%" align="center"><strong>State</strong></td>
+<td width="25%" align="center"><strong>Versioned as</strong></td>
 </tr>
 <tr>
-<td align="center"><sub>Conversations, docs, specs, notes, transcripts</sub></td>
-<td align="center"><sub>Extract reviewable YAML trees</sub></td>
-<td align="center"><sub>Apply deterministic YOps</sub></td>
-<td align="center"><sub>Commit, diff, branch, merge, generate</sub></td>
+<td align="center"><sub>Source evidence + current YAML tree</sub></td>
+<td align="center"><sub>Apply or review a YOps patch</sub></td>
+<td align="center"><sub>New reviewable YAML tree</sub></td>
+<td align="center"><sub>Commit with parents, YOps log, provenance</sub></td>
 </tr>
 <tr>
-<td align="center"><code>raw text</code></td>
-<td align="center"><code>structured tree</code></td>
+<td align="center"><code>source + old tree</code></td>
 <td align="center"><code>old tree + YOps -> new tree</code></td>
-<td align="center"><code>committed state</code></td>
+<td align="center"><code>new tree</code></td>
+<td align="center"><code>commit / diff / merge</code></td>
 </tr>
 </table>
 

@@ -1,35 +1,38 @@
-<svg width="760" height="96" viewBox="0 0 760 96" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+<svg width="760" height="170" viewBox="0 0 760 170" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
       <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#475569"/>
     </marker>
   </defs>
 
-  <rect width="760" height="96" rx="18" fill="#020617"/>
+  <rect width="760" height="170" rx="18" fill="#020617"/>
 
-  <!-- Source -->
-  <rect x="28" y="18" width="126" height="60" rx="12" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
-  <text x="91" y="43" fill="#cbd5e1" font-size="15" font-weight="700" text-anchor="middle">Source</text>
-  <text x="91" y="62" fill="#94a3b8" font-size="11" font-weight="500" text-anchor="middle">AI context</text>
+  <!-- Version-control boundary -->
+  <rect x="18" y="18" width="724" height="134" rx="15" fill="none" stroke="#334155" stroke-width="1.5"/>
 
-  <line x1="168" y1="48" x2="200" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Source evidence -->
+  <rect x="48" y="34" width="150" height="46" rx="11" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+  <text x="123" y="55" fill="#cbd5e1" font-size="13.5" font-weight="700" text-anchor="middle">Source evidence</text>
+  <text x="123" y="70" fill="#94a3b8" font-size="10" font-weight="500" text-anchor="middle">conversation, doc, spec</text>
 
-  <!-- Structure -->
-  <rect x="214" y="18" width="150" height="60" rx="12" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
-  <text x="289" y="43" fill="#6ee7b7" font-size="15" font-weight="700" text-anchor="middle">Structure</text>
-  <text x="289" y="62" fill="#a7f3d0" font-size="11" font-weight="500" text-anchor="middle">YAML tree</text>
+  <!-- Existing structured state -->
+  <rect x="48" y="94" width="150" height="46" rx="11" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="123" y="115" fill="#6ee7b7" font-size="13.5" font-weight="700" text-anchor="middle">Old YAML state</text>
+  <text x="123" y="130" fill="#a7f3d0" font-size="10" font-weight="500" text-anchor="middle">current committed tree</text>
 
-  <line x1="378" y1="48" x2="410" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- Input arrows -->
+  <path d="M 210 57 C 252 57, 282 72, 318 82" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M 210 117 C 252 117, 282 102, 318 92" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Change -->
-  <rect x="424" y="18" width="146" height="60" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
-  <text x="497" y="43" fill="#fb923c" font-size="15" font-weight="700" text-anchor="middle">Change</text>
-  <text x="497" y="62" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">YOps patch</text>
+  <!-- YOps patch -->
+  <rect x="332" y="62" width="132" height="58" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
+  <text x="398" y="86" fill="#fb923c" font-size="15" font-weight="700" text-anchor="middle">YOps</text>
+  <text x="398" y="104" fill="#fdba74" font-size="10.5" font-weight="500" text-anchor="middle">deterministic patch</text>
 
-  <line x1="584" y1="48" x2="608" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="478" y1="91" x2="526" y2="91" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Version -->
-  <rect x="622" y="18" width="110" height="60" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
-  <text x="677" y="43" fill="#fb923c" font-size="15" font-weight="700" text-anchor="middle">Version</text>
-  <text x="677" y="62" fill="#fdba74" font-size="10.5" font-weight="500" text-anchor="middle">Commit / diff</text>
+  <!-- New structured state -->
+  <rect x="540" y="62" width="176" height="58" rx="12" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="628" y="86" fill="#6ee7b7" font-size="15" font-weight="700" text-anchor="middle">New YAML state</text>
+  <text x="628" y="104" fill="#a7f3d0" font-size="10.5" font-weight="500" text-anchor="middle">next committed tree</text>
 </svg>
