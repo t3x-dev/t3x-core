@@ -8,13 +8,14 @@ import {
   MousePointerClick,
   Play,
   Plus,
+  Send,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'createLeaf';
+type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
 
 interface TargetRect {
   top: number;
@@ -56,15 +57,30 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     id: 'createLeaf',
     label: '+ New Leaf',
     title: 'Click the highlighted + New Leaf action',
-    description:
-      'A Leaf should be created from a selected committed version. The demo only enters Leaf after this real Canvas action.',
+    description: 'This opens the Leaf creation panel from the selected committed version.',
     target: 'canvas-floating-action-new-leaf',
     icon: Plus,
     tone: 'leaf',
     details: [
       'Click + New Leaf in the floating version action bar.',
       'This starts the output artifact flow from the selected commit.',
-      'After the click, the demo opens the project Leaf index for the generated artifact.',
+      'After the click, choose the output destination type in the side panel.',
+    ],
+    advanceOnTargetClick: true,
+  },
+  {
+    id: 'chooseLeafType',
+    label: 'Leaf type',
+    title: 'Choose an output type',
+    description:
+      'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
+    target: 'canvas-leaf-type-options',
+    icon: Send,
+    tone: 'leaf',
+    details: [
+      'Choose one of the output destination buttons in the panel.',
+      'The selection creates the Leaf from the highlighted committed version.',
+      'After creation, the demo continues in the generated Leaf workspace.',
     ],
     advanceOnTargetClick: true,
   },

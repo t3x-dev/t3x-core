@@ -20,6 +20,9 @@ describe('ProjectDemoTourOverlay', () => {
         <button type="button" data-intro-target="sidebar-leaf-tab">
           Leaf tab
         </button>
+        <div data-intro-target="canvas-leaf-type-options">
+          <button type="button">Twitter</button>
+        </div>
         <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
       </>
     );
@@ -41,6 +44,17 @@ describe('ProjectDemoTourOverlay', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Leaf type')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose one of the output destination buttons in the panel.')
+    ).toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);

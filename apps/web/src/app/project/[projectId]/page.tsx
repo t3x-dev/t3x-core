@@ -366,11 +366,8 @@ export function ProjectDetailPageContent({
       <ProjectDemoTourOverlay
         open={projectTourOpen}
         onClose={() => setProjectTourOpen(false)}
-        onDone={() =>
-          router.push(`/chat/project/${encodeURIComponent(projectId)}/leaf?introDemo=1`)
-        }
+        onDone={() => setProjectTourOpen(false)}
         onSkip={() => void completeIntroDemo()}
-        doneLabel="Open Leaf index"
         interactionMode="guided"
       />
     </div>

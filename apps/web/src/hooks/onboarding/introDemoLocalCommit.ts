@@ -1,5 +1,6 @@
 import type { SemanticContent } from '@t3x-dev/core';
 import type { Edge, Node } from '@xyflow/react';
+import type { ApiCommit } from '@/types/api';
 import type { CanvasNodeData } from '@/types/nodes';
 
 export const INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY = 't3x:intro-demo-local-commit';
@@ -45,6 +46,22 @@ export function readIntroDemoLocalCommit(
   } catch {
     return null;
   }
+}
+
+export function toIntroDemoApiCommit(commit: IntroDemoLocalCommit): ApiCommit {
+  return {
+    hash: commit.hash,
+    schema: 't3x/commit',
+    parents: [],
+    author: { type: 'system', name: 'Intro demo' },
+    committed_at: commit.committedAt,
+    content: commit.content,
+    project_id: commit.projectId,
+    message: commit.message,
+    branch: commit.branch,
+    sources: [{ type: 'conversation', id: commit.conversationId }],
+    provenance: { method: 'intro-demo-replay' },
+  };
 }
 
 export function applyIntroDemoCommitToCanvasGraph({

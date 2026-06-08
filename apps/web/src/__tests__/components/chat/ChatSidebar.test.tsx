@@ -159,6 +159,7 @@ vi.mock('@/components/chat/sidebar/ContextMenu', () => ({
 }));
 
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { saveIntroDemoLocalCommit } from '@/hooks/onboarding/introDemoLocalCommit';
 import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 
 afterEach(() => {
@@ -184,6 +185,7 @@ afterEach(() => {
   mocks.chatState.activeBranch = 'main';
   mocks.chatState.expandedProjectIds = new Set<string>();
   mocks.chatState.refreshKey = 0;
+  window.sessionStorage.clear();
 });
 
 describe('ChatSidebar', () => {
@@ -972,6 +974,45 @@ describe('ChatSidebar', () => {
     await waitFor(() => {
       expect(mocks.loadCommits).toHaveBeenCalledWith('proj_smoke', undefined, 40);
       expect(screen.getByText('Extract release decisions')).toBeInTheDocument();
+    });
+  });
+
+  it('includes the intro demo local commit in the canvas-scoped commit list', async () => {
+    mocks.pathname = '/chat/project/proj_demo/canvas';
+    mocks.projects = [
+      {
+        project_id: 'proj_demo',
+        name: 'Prompt Review',
+        created_at: '2026-06-08T00:00:00Z',
+        conversations_count: 1,
+        commits_count: 1,
+      },
+    ];
+    mocks.commits = [
+      {
+        hash: 'sha256:seed123456',
+        message: 'Seed prompt review demo workspace',
+        branch: 'main',
+        committed_at: '2026-06-08T00:00:00Z',
+      },
+    ];
+    mocks.loadCommits.mockResolvedValue(mocks.commits);
+    saveIntroDemoLocalCommit({
+      projectId: 'proj_demo',
+      conversationId: 'conv_demo',
+      hash: 'sha256:intro-demo-replay',
+      branch: 'main',
+      message: 'Prompt review demo',
+      committedAt: '2026-06-08T00:01:00Z',
+      content: { relations: [], trees: [] },
+    });
+
+    render(<ChatSidebar />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Seed prompt review demo workspace')).toBeInTheDocument();
+      expect(screen.getByText('Prompt review demo')).toBeInTheDocument();
+      expect(screen.getAllByText('2').length).toBeGreaterThan(0);
     });
   });
 
