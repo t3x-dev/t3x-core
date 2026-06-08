@@ -1,30 +1,35 @@
-<svg width="560" height="70" viewBox="0 0 560 70" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+<svg width="760" height="96" viewBox="0 0 760 96" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
   <defs>
-    <marker id="a" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto">
       <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#475569"/>
     </marker>
   </defs>
 
-  <rect width="560" height="70" rx="12" fill="#020617"/>
+  <rect width="760" height="96" rx="18" fill="#020617"/>
 
-  <!-- YAML -->
-  <rect x="14" y="15" width="76" height="40" rx="8" fill="#065f46" stroke="#10b981" stroke-width="1"/>
-  <text x="52" y="40" fill="#6ee7b7" font-size="14" font-weight="700" text-anchor="middle">YAML</text>
+  <!-- Source -->
+  <rect x="28" y="18" width="126" height="60" rx="12" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+  <text x="91" y="43" fill="#cbd5e1" font-size="15" font-weight="700" text-anchor="middle">Source</text>
+  <text x="91" y="62" fill="#94a3b8" font-size="11" font-weight="500" text-anchor="middle">AI context</text>
 
-  <line x1="96" y1="35" x2="122" y2="35" stroke="#475569" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="168" y1="48" x2="200" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- YOps -->
-  <rect x="132" y="15" width="76" height="40" rx="8" fill="#1e293b" stroke="#f97316" stroke-width="1"/>
-  <text x="170" y="40" fill="#fb923c" font-size="14" font-weight="600" text-anchor="middle">YOps</text>
+  <!-- Structure -->
+  <rect x="214" y="18" width="150" height="60" rx="12" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="289" y="43" fill="#6ee7b7" font-size="15" font-weight="700" text-anchor="middle">Structure</text>
+  <text x="289" y="62" fill="#a7f3d0" font-size="11" font-weight="500" text-anchor="middle">YAML tree</text>
 
-  <line x1="214" y1="35" x2="240" y2="35" stroke="#475569" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="378" y1="48" x2="410" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Version Control -->
-  <rect x="250" y="15" width="296" height="40" rx="8" fill="#1e293b" stroke="#f97316" stroke-width="1"/>
-  <text x="302" y="40" fill="#fb923c" font-size="13" font-weight="600" text-anchor="middle">Commit</text>
-  <text x="348" y="40" fill="#475569" font-size="13">·</text>
-  <text x="383" y="40" fill="#fb923c" font-size="13" font-weight="600" text-anchor="middle">Diff</text>
-  <text x="418" y="40" fill="#475569" font-size="13">·</text>
-  <text x="470" y="40" fill="#fb923c" font-size="13" font-weight="600" text-anchor="middle">Merge</text>
+  <!-- Change -->
+  <rect x="424" y="18" width="146" height="60" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
+  <text x="497" y="43" fill="#fb923c" font-size="15" font-weight="700" text-anchor="middle">Change</text>
+  <text x="497" y="62" fill="#fdba74" font-size="11" font-weight="500" text-anchor="middle">YOps patch</text>
 
+  <line x1="584" y1="48" x2="608" y2="48" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Version -->
+  <rect x="622" y="18" width="110" height="60" rx="12" fill="#1e293b" stroke="#f97316" stroke-width="1.5"/>
+  <text x="677" y="43" fill="#fb923c" font-size="15" font-weight="700" text-anchor="middle">Version</text>
+  <text x="677" y="62" fill="#fdba74" font-size="10.5" font-weight="500" text-anchor="middle">Commit / diff</text>
 </svg>
