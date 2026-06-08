@@ -26,6 +26,7 @@ import {
   updatePinAssertions,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
 import { CreatePinRequest, PinResponse, UpdatePinAssertionsRequest } from '../schemas/contracts';
@@ -299,7 +300,7 @@ pinsRoutes.openapi(createPinRoute, async (c) => {
     return c.json({ success: true as const, data: toApiPin(pin) }, 201);
   } catch (err) {
     // Handle PostgreSQL unique constraint violation (duplicate pin)
-    if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23505') {
+    if (hasDbErrorCode(err, '23505')) {
       return errorResponse(
         c,
         'DUPLICATE_PIN',
@@ -307,7 +308,7 @@ pinsRoutes.openapi(createPinRoute, async (c) => {
       );
     }
     // Handle PostgreSQL foreign key violation (project not found)
-    if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
+    if (hasDbErrorCode(err, '23503')) {
       return errorResponse(c, 'PROJECT_NOT_FOUND', 'Project not found');
     }
     const message = err instanceof Error ? err.message : 'Unknown error';

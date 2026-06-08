@@ -17,6 +17,16 @@ vi.mock('pino', () => {
 // Save and clear API key
 const savedApiKey = process.env.ANTHROPIC_API_KEY;
 
+function mockAnthropic(create = vi.fn()) {
+  vi.doMock('@anthropic-ai/sdk', () => ({
+    default: vi.fn(function MockAnthropic() {
+      return {
+        messages: { create },
+      };
+    }),
+  }));
+}
+
 describe('LLMAsserter', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -73,11 +83,7 @@ describe('LLMAsserter', () => {
     it('isAvailable returns true when key is set', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
       // Mock Anthropic to avoid real API calls
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: vi.fn() },
-        })),
-      }));
+      mockAnthropic();
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
       expect(asserter.isAvailable()).toBe(true);
@@ -86,11 +92,7 @@ describe('LLMAsserter', () => {
 
     it('returns skipped when no violations and passed', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: vi.fn() },
-        })),
-      }));
+      mockAnthropic();
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
 
@@ -120,13 +122,7 @@ describe('LLMAsserter', () => {
 
     it('returns error when LLM call fails', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: {
-            create: vi.fn().mockRejectedValue(new Error('API rate limited')),
-          },
-        })),
-      }));
+      mockAnthropic(vi.fn().mockRejectedValue(new Error('API rate limited')));
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
 
@@ -156,32 +152,28 @@ describe('LLMAsserter', () => {
 
     it('returns success with parsed assertions', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: {
-            create: vi.fn().mockResolvedValue({
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    assertions: [
-                      {
-                        type: 'fail',
-                        category: 'correctness',
-                        message: 'Output was empty',
-                        evidence_refs: ['output'],
-                        confidence: 0.9,
-                      },
-                    ],
-                    suggestions: [],
-                    summary: 'The run failed due to empty output',
-                  }),
-                },
-              ],
-            }),
-          },
-        })),
-      }));
+      mockAnthropic(
+        vi.fn().mockResolvedValue({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                assertions: [
+                  {
+                    type: 'fail',
+                    category: 'correctness',
+                    message: 'Output was empty',
+                    evidence_refs: ['output'],
+                    confidence: 0.9,
+                  },
+                ],
+                suggestions: [],
+                summary: 'The run failed due to empty output',
+              }),
+            },
+          ],
+        })
+      );
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
 
@@ -223,20 +215,16 @@ describe('LLMAsserter', () => {
 
     it('handles JSON wrapped in markdown code block', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: {
-            create: vi.fn().mockResolvedValue({
-              content: [
-                {
-                  type: 'text',
-                  text: '```json\n{"assertions": [], "suggestions": [], "summary": "All good"}\n```',
-                },
-              ],
-            }),
-          },
-        })),
-      }));
+      mockAnthropic(
+        vi.fn().mockResolvedValue({
+          content: [
+            {
+              type: 'text',
+              text: '```json\n{"assertions": [], "suggestions": [], "summary": "All good"}\n```',
+            },
+          ],
+        })
+      );
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
 
@@ -266,15 +254,11 @@ describe('LLMAsserter', () => {
 
     it('handles unparseable LLM response gracefully', async () => {
       process.env.ANTHROPIC_API_KEY = 'test-key-123';
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: {
-            create: vi.fn().mockResolvedValue({
-              content: [{ type: 'text', text: 'This is not JSON at all' }],
-            }),
-          },
-        })),
-      }));
+      mockAnthropic(
+        vi.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'This is not JSON at all' }],
+        })
+      );
       const { LLMAsserter } = await import('../asserter.js');
       const asserter = new LLMAsserter();
 

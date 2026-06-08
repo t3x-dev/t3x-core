@@ -25,6 +25,7 @@ import {
   updateLeafAtomic,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
@@ -352,7 +353,7 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 201);
   } catch (err) {
     // Handle PostgreSQL foreign key violation (commit or project not found)
-    if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
+    if (hasDbErrorCode(err, '23503')) {
       return errorResponse(c, 'REFERENCE_NOT_FOUND', 'Referenced commit or project not found');
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
