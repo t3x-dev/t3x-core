@@ -148,8 +148,8 @@ describe('hydrateConversationToStore — discoverability auto-expand (PR-C P2)',
 
   it('does NOT auto-expand an empty conversation (no ops, no tree, no relations, no draft)', async () => {
     // The auto-expand is content-conditional — a brand-new chat with
-    // no extracted knowledge yet has nothing to reveal, so opening the
-    // panel automatically would just show "No knowledge extracted yet"
+    // no extracted state yet has nothing to reveal, so opening the
+    // panel automatically would just show "No state extracted yet"
     // and steal screen real estate. Wait until the user clicks Extract.
     fetchConversationSnapshotMock.mockResolvedValueOnce(snapshot({}));
 

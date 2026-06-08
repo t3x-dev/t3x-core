@@ -3,8 +3,8 @@ import './globals.css';
 import ClientLayout from './ClientLayout';
 
 export const metadata: Metadata = {
-  title: 'T3X - Git for Meaning',
-  description: 'Semantic version control for AI conversations',
+  title: 'T3X - Version control for structured state',
+  description: 'Version control for schema-backed YAML state',
   icons: {
     icon: '/favicon.svg',
   },

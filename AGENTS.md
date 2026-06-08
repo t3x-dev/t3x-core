@@ -6,7 +6,7 @@ file is the short cross-agent source for day-to-day development behavior.
 
 ## Project Frame
 
-T3X is Git for structured AI work.
+T3X is version control for structured state.
 
 The core loop is:
 
@@ -14,12 +14,13 @@ The core loop is:
 Source -> YOps -> Commit
 ```
 
-Source evidence comes from chats, docs, specs, and prompt runs. YOps applies
-deterministic YAML operations to structured state. Commits version the result
-with parents, operation logs, diffs, merges, and provenance.
+Source evidence comes from chats, docs, specs, prompt runs, and other
+structured inputs. YOps applies deterministic YAML operations to
+schema-backed state. Commits version the result with parents, operation logs,
+diffs, merges, and provenance.
 
-Do not reintroduce the old graph/meaning positioning unless the README changes
-first.
+Do not reintroduce the old graph, meaning, knowledge, or AI-first positioning
+unless the README changes first.
 
 ## Repository Shape
 

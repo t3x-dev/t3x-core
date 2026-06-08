@@ -27,11 +27,11 @@ export function CanvasOnboarding({ onAddNode, onDismiss, isAdding }: CanvasOnboa
     {
       icon: MessageSquare,
       title: 'Add Conversation',
-      desc: 'Start by adding a conversation to extract knowledge from',
+      desc: 'Start by adding a conversation to extract structured state from',
     },
     {
       icon: GitCommitHorizontal,
-      title: 'Extract Knowledge',
+      title: 'Extract State',
       desc: `${t('commitAction')} semantic content from your conversations`,
     },
     {

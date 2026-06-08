@@ -286,7 +286,7 @@ describe('ChatLandingPage', () => {
 
     expect(screen.getByRole('heading', { name: 'What should T3X make sense of?' })).toBeVisible();
     expect(screen.getByText('Source')).toBeVisible();
-    expect(screen.getByText('Meaning')).toBeVisible();
+    expect(screen.getByText('YOps')).toBeVisible();
     expect(screen.getByText('Commit')).toBeVisible();
     expect(screen.getByRole('button', { name: /compare prompt versions/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /extract decisions from notes/i })).toBeEnabled();
@@ -325,7 +325,7 @@ describe('ChatLandingPage', () => {
     const starters = [
       {
         name: /compare prompt versions/i,
-        prefill: 'Compare these prompt versions and extract the meaningful changes:',
+        prefill: 'Compare these prompt versions and extract the structured changes:',
       },
       {
         name: /extract decisions from notes/i,
@@ -333,7 +333,7 @@ describe('ChatLandingPage', () => {
       },
       {
         name: /create reusable output/i,
-        prefill: 'Create a reusable output from this committed knowledge:',
+        prefill: 'Create a reusable output from this committed state:',
       },
     ];
 

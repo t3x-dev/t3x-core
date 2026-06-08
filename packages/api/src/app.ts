@@ -232,7 +232,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
     info: {
       title: 'T3X API',
       version: '1.0.0',
-      description: 'Semantic version control for AI conversations. Git for meaning.',
+      description: 'Version control for schema-backed YAML state.',
       license: {
         name: 'Apache-2.0',
         url: 'https://www.apache.org/licenses/LICENSE-2.0',

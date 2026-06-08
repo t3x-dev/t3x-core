@@ -7,9 +7,10 @@ historical architecture. Verify before adding claims; delete when they go stale.
 
 ## Project Overview
 
-T3X is **Git for structured AI work**. Source evidence from chats, docs, specs,
-and prompt runs becomes structured YAML state; deterministic YOps change that
-state; commits, diffs, and merges version the result.
+T3X is **version control for structured state**. Source evidence from chats,
+docs, specs, prompt runs, and other structured inputs becomes schema-backed
+YAML state; deterministic YOps change that state; commits, diffs, and merges
+version the result.
 
 **Core principle.** The mutation layer is deterministic and never depends on an
 LLM. LLMs can propose changes as YOps YAML; a deterministic engine validates and

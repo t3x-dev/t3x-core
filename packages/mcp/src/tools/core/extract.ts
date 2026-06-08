@@ -1,5 +1,5 @@
 /**
- * t3x_extract — extract structured knowledge from raw text using server-side LLM.
+ * t3x_extract — extract structured YAML state from raw text using server-side LLM.
  *
  * The calling agent passes text; T3X handles:
  *   1. Conversation + turn creation (persisting the raw input)
@@ -41,13 +41,13 @@ import { fail, ok, type ToolDef, type ToolHandler } from '../types.js';
 export const extractDef: ToolDef = {
   name: 't3x_extract',
   description: [
-    'Extract structured knowledge from raw text using server-side LLM.',
+    'Extract structured YAML state from raw text using server-side LLM.',
     '',
     'Pass raw text (conversation transcript, notes, document content) and T3X will:',
     '  1. Create a conversation record with the text as turns',
     '  2. Run LLM-based semantic extraction (requires a configured generation provider)',
     '  3. Compile the extraction into YOps and materialize the resulting trees',
-    '  4. Create a draft containing the extracted knowledge tree',
+    '  4. Create a draft containing the extracted state tree',
     '',
     'Returns a draft_id that you can then:',
     '  - Inspect with t3x_query { "target": "draft", "id": "<draft_id>" }',
@@ -68,7 +68,7 @@ export const extractDef: ToolDef = {
       text: {
         type: 'string',
         description:
-          'Raw text to extract knowledge from. Can be a conversation transcript, ' +
+          'Raw text to extract structured state from. Can be a conversation transcript, ' +
           'notes, document content, or any unstructured text.',
       },
       conversation_id: {
@@ -153,7 +153,7 @@ export const extractHandler: ToolHandler = async (args) => {
     return fail('"project_id" is required.\nProvide the project ID to extract into.');
   }
   if (!text) {
-    return fail('"text" is required.\nProvide the raw text to extract knowledge from.');
+    return fail('"text" is required.\nProvide the raw text to extract structured state from.');
   }
 
   if (isApiBackend()) {
@@ -248,7 +248,7 @@ export const extractHandler: ToolHandler = async (args) => {
   if (result.snapshot.trees.length === 0) {
     return fail(
       'No extractable content found in the provided text.\n' +
-        'The text may be too short, too vague, or not contain structured knowledge.'
+        'The text may be too short, too vague, or not contain structured state.'
     );
   }
 

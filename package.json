@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
-  "description": "Git for structured AI work.",
+  "description": "Version control for structured state.",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
     "prepare": "sh tools/hooks/install-hooks.sh",

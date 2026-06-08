@@ -1,9 +1,8 @@
 # T3X Documentation
 
-AI work is easy to generate and hard to govern. T3X turns chats, docs, specs,
-and prompt runs into structured YAML state; changes that state through
-deterministic YOps; and versions the result with commits, diffs, merges, and
-generated outputs.
+Structured YAML is easy to change and hard to govern. T3X records
+schema-backed YAML changes as deterministic YOps patches, then versions the
+result with commits, diffs, merges, provenance, and generated outputs.
 
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source

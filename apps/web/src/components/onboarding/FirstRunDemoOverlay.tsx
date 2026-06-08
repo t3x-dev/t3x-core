@@ -78,7 +78,7 @@ const DEMO_STEPS: DemoStep[] = [
     details: [
       'Compare prompt versions: use this when the user has V1/V2 text and wants semantic changes preserved.',
       'Extract decisions from notes: use this for meetings, research, and design discussions.',
-      'Create reusable output: use this when committed meaning should become a leaf artifact.',
+      'Create reusable output: use this when committed state should become a leaf artifact.',
     ],
   },
   {

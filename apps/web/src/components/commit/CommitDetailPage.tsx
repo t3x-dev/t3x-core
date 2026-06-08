@@ -130,7 +130,7 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     details: [
       'Open evidence rows to revisit the source context.',
       'Copy parent or current hashes from the hash chain.',
-      'Use this rail when explaining why the committed meaning is trustworthy.',
+      'Use this rail when explaining why the committed state is trustworthy.',
     ],
   },
   {

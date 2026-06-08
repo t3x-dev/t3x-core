@@ -5,7 +5,7 @@
 <h1 align="center">T3X</h1>
 
 <p align="center">
-  <strong>Git for structured AI work.</strong>
+  <strong>Version control for structured state.</strong>
 </p>
 
 <p align="center">
@@ -28,12 +28,12 @@
 
 <br/>
 
-AI work is easy to generate and hard to govern. Decisions, requirements, and
-evidence disappear into chats, docs, specs, and prompt runs.
+Structured YAML is easy to change and hard to govern. Decisions, requirements,
+infrastructure, and plans drift across chats, docs, specs, and prompt runs.
 
-T3X turns that context into structured YAML state, changes it through
-deterministic YOps, and versions the result with commits, diffs, merges, and
-generated outputs.
+T3X records schema-backed YAML changes as deterministic YOps patches, then
+versions the result with commits, diffs, merges, provenance, and generated
+outputs.
 
 <br/>
 
