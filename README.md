@@ -28,21 +28,16 @@
 
 <br/>
 
-T3X is an early-stage system for turning AI context into structured, versioned
-work. It extracts meaning from conversations, documents, transcripts, specs, and
-notes into YAML trees; changes those trees through deterministic YOps; then
-tracks the resulting structure with commits, diffs, merges, and leaves.
+AI work is easy to generate and hard to govern. Decisions, requirements, and
+evidence disappear into chats, docs, specs, and prompt runs.
 
-The current restricted alpha npm release surface is limited to `@t3x-dev/local`
-and `@t3x-dev/yops`. Restricted package or runtime-asset visibility is expected
-during this alpha; other packages remain internal or preview until promoted
-through the release surface process in [`RELEASE.md`](RELEASE.md).
+T3X turns that context into structured YAML state, changes it through
+deterministic YOps, and versions the result with commits, diffs, merges, and
+leaves.
 
 <br/>
 
 ## Quickstart
-
-Choose the shortest path for what you want to do:
 
 ### Use YOps as a library
 
@@ -50,22 +45,18 @@ Choose the shortest path for what you want to do:
 npm install @t3x-dev/yops
 ```
 
-Use this if you want the deterministic YAML operation engine inside your own app.
-If npm returns a not-found or access error, your account likely does not have
-restricted alpha access.
+Use this when you want the deterministic YAML operation engine inside your own
+app.
 
-### Use the local alpha package
+### Use the local package
 
 ```bash
 npx -p @t3x-dev/local t3x-local start
 ```
 
-Use this if you want the packaged local T3X experience. `@t3x-dev/local`
-downloads its runtime artifact during install instead of depending on the
-internal workspace packages being published to npm. If the package or runtime
-asset is not visible, check restricted alpha access.
+Use this for the packaged local T3X experience.
 
-### Preview the self-hosted stack with Docker
+### Run the self-hosted stack
 
 ```bash
 cp .env.example .env
@@ -74,12 +65,10 @@ docker compose up -d --build
 
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
-Use this if you want the self-hosted alpha evaluation path with WebUI + API +
-Postgres. Docker Compose is a preview path for local/self-hosted evaluation, not
-a production-readiness claim. Review the [deployment guide](DEPLOYMENT.md)
-before exposing it beyond localhost. Docker and self-hosted runs keep auth on by
-default, so the first WebUI visit goes through the built-in username/password
-login at `/login`.
+Docker Compose starts WebUI, API, and Postgres. Review the
+[deployment guide](DEPLOYMENT.md) before exposing it beyond localhost. Docker
+and self-hosted runs keep auth on by default, so the first WebUI visit goes
+through the built-in username/password login at `/login`.
 
 ### Develop from source
 
@@ -92,9 +81,9 @@ pnpm dev:webui   # WebUI at localhost:3000
 
 Requires Node.js 20+ and pnpm 10+.
 
-Use this if you want to contribute to T3X itself or run the source-first apps locally.
-When `AUTH_DISABLED` is unset, `pnpm dev:api` and `pnpm dev:webui` default to source-dev mode and open straight into the app on `localhost`.
-Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you want to exercise the login flow during local source development.
+Use this to contribute to T3X or run the source-first apps locally. Source
+development opens straight into the app by default; set `AUTH_DISABLED=false`
+before starting both processes if you want to exercise the login flow.
 
 <br/>
 
@@ -104,9 +93,9 @@ Set `AUTH_DISABLED=false` in the shell where you start both dev processes if you
   <img src="https://t3x-docs.vercel.app/img/screenshots/chat-light.png" alt="T3X WebUI chat preview" width="760" />
 </p>
 
-The fresh `/chat` view shows a provider-independent `Source -> Meaning -> Commit`
-preview before the first extraction run. Screenshot assets live in the docs site
-so the core repository does not need to carry generated image files.
+The `/chat` view shows the `Source -> Meaning -> Commit` workflow before the
+first extraction run. Screenshot assets live in the docs site so the core
+repository does not need to carry generated image files.
 
 When the source-dev WebUI is running, open the
 [intro demo preview](http://localhost:3000/chat?introDemo=1) to load the guided
@@ -116,8 +105,9 @@ intro demo. The `introDemo` flag is development-only.
 
 ## How it works
 
-T3X turns messy AI context into structured state by expressing changes as
-deterministic YOps.
+T3X treats structure as the durable artifact. Source evidence proposes or
+explains a YOps patch; the patch transforms the current YAML state into the next
+state; commits preserve the state, operation log, parents, and provenance.
 
 <table>
 <tr>
@@ -140,27 +130,18 @@ deterministic YOps.
 </tr>
 </table>
 
-> Extract and Generate can use LLMs. YOps Apply, validation, commit hashing, diff, and merge are deterministic.
+> Extract and Generate can use LLMs. YOps Apply, validation, commit hashing,
+> diff, and merge are deterministic.
 
-The key idea: commits store structured tree state, while YOps records the
-deterministic change from one valid state to the next. Diff and merge compare
-committed structured states; fixes and merges are applied back through YOps
-before a new commit is written.
-
-Between extraction and commit, the tree goes through a **validate &rarr; fix
-&rarr; re-validate** loop powered by the Y-family tools. This is where the
-quality happens &mdash; deterministic checks catch issues, emit YOps fixes, and the
-user approves or adjusts before committing.
+Diff and merge compare committed structured states. Fixes, extraction edits, and
+merge resolutions are applied back through YOps before a new commit is written.
 
 <br/>
 
 ## The Y-Family
 
-T3X provides three spec-driven tools for working with YAML trees. Together they form a validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
-Within this Y-family, only YOps is part of the restricted alpha npm release
-surface. YSchema and YLint are in-repository validation surfaces used by T3X and
-may change before promotion; treat their examples as source-level documentation,
-not published-package install guidance.
+T3X uses three spec-driven tools for structured YAML state. Together they form a
+validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
 
 <table>
 <tr>
@@ -185,14 +166,16 @@ not published-package install guidance.
 </tr>
 </table>
 
-From the user's perspective, two functions cover the whole system:
+Two functions cover the core loop:
 
 ```typescript
 applyYOps(doc, ops)              // mutate: apply operations to a YAML tree
 validateTree(content, { schema }) // validate: check structure + domain, get fixes
 ```
 
-`validateTree` runs ylint and yschema internally, collects all warnings, and returns a ready-to-apply fix plan. Auto-fixable issues are resolved via `applyYOps()`. What can't be auto-fixed is surfaced for human review.
+`validateTree` runs ylint and yschema internally, collects warnings, and returns
+a ready-to-apply fix plan. Auto-fixable issues resolve through `applyYOps()`.
+Everything else is surfaced for review.
 
 ### YOps &mdash; Declarative YAML Operations
 
@@ -220,41 +203,18 @@ yops:
 
 The full spec &mdash; including a decision guide, type contracts, composition recipes, and error reference &mdash; lives in [`yops.yaml`](packages/yops/yops.yaml). Any language can implement a conformant engine from this single file.
 
-### YSchema &mdash; Domain Validation
+### Validation
 
-Define what a valid tree looks like for your use case. Violations emit YOps fix operations.
+YSchema defines domain-specific shape: required nodes, slot types, enums, ranges,
+and cross-node rules. YLint checks structural hygiene: key naming, value quality,
+list hygiene, and tree depth. Both can emit YOps fixes.
 
-```yaml
-name: customer-profile
-nodes:
-  preferences:
-    required: true
-    slots:
-      theme: [dark, light, system]
-      language: scalar
-  decisions:
-    required: true
-    children: any
-    each_child:
-      slots:
-        choice: scalar
-        reason: scalar
-rules:
-  - id: decisions-need-reason
-    if: "decisions/*"
-    must_have: [choice, reason]
-    severity: error
-```
-
-`validateSchema()` checks the tree. `buildFixPlan()` collects fixable violations into YOps operations. `applyYOps()` applies them. &rarr; [YSchema spec](packages/yschema/yschema.yaml)
-
-### YLint &mdash; Structural Checks
-
-Built-in structural rules that run without a schema &mdash; checks key naming, value quality, list hygiene, and tree depth. When issues are auto-fixable, ylint emits YOps operations directly.
+Specs: [`yschema.yaml`](packages/yschema/yschema.yaml), YLint in
+[`@t3x-dev/core`](packages/core/).
 
 <br/>
 
-### Configuration
+## Configuration
 
 ```
 ~/.t3x/config.json          # API keys, default server URL
@@ -286,50 +246,6 @@ First-run auth defaults:
 - Source development (`pnpm dev:api`, `pnpm dev:webui`) opens directly into the app by default.
 - To exercise the login flow in source development, set `AUTH_DISABLED=false` in the shell before starting both dev processes.
 - Docker and self-host keep auth on by default and use the built-in username/password login.
-
-<br/>
-
-## Use T3X
-
-### Local alpha
-
-```bash
-npx -p @t3x-dev/local t3x-local start
-```
-
-Use this for packaged local alpha evaluation. Some local alpha flows may depend
-on restricted runtime assets during alpha.
-
-### YOps library
-
-```bash
-npm install @t3x-dev/yops
-```
-
-Use this for the deterministic YAML operation engine inside your own app.
-
-### Docker self-host preview
-
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-Use this to preview the self-hosted WebUI + API + Postgres stack. See the
-[deployment guide](DEPLOYMENT.md) for auth, environment, and production caveats.
-
-### WebUI from source
-
-Run `pnpm dev:api` and `pnpm dev:webui` from a source checkout when you want to
-work on the full self-hostable product.
-
-### Preview surfaces
-
-CLI, MCP, API, and runner surfaces are available for preview and internal
-integration work, but they are not part of the current restricted alpha package
-surface. Their commands and contracts may change before promotion.
-
-<br/>
 
 ## Architecture
 
@@ -374,24 +290,25 @@ pnpm check           # Lint + format (Biome)
 
 <br/>
 
-## Release Surface
+## Availability
 
-The alpha package surface is declared in [`RELEASE.md`](RELEASE.md) and
-[`release/surface.yaml`](release/surface.yaml). `release/surface.yaml` is the
-machine-readable source of truth used by release automation.
+The current npm release surface is intentionally narrow and declared in
+[`RELEASE.md`](RELEASE.md) and [`release/surface.yaml`](release/surface.yaml).
 
 | Package | Status | Description |
 |:--------|:----|:------------|
 | [`@t3x-dev/local`](apps/local/) | restricted alpha | Local installer and no-key demo entrypoint |
 | [`@t3x-dev/yops`](packages/yops/) | restricted alpha | Declarative YAML operations |
 
-Other packages remain internal or preview candidates until explicitly promoted.
+Other packages and runtime assets may be restricted until they are promoted into
+the release surface.
 
 <br/>
 
 ## Documentation
 
-[t3x-docs.vercel.app](https://t3x-docs.vercel.app) &mdash; Quickstart, Local alpha, YOps reference, WebUI guide, and preview surfaces.
+[t3x-docs.vercel.app](https://t3x-docs.vercel.app) &mdash; Quickstart, YOps
+reference, WebUI guide, and release notes.
 
 Release governance:
 

@@ -1,9 +1,9 @@
 # T3X Documentation
 
-T3X is an early-stage system for turning AI context into structured, versioned
-work. It extracts meaning from conversations, documents, transcripts, specs, and
-notes into YAML trees; changes those trees through deterministic YOps; then
-tracks the resulting structure with commits, diffs, merges, and leaves.
+AI work is easy to generate and hard to govern. T3X turns chats, docs, specs,
+and prompt runs into structured YAML state; changes that state through
+deterministic YOps; and versions the result with commits, diffs, merges, and
+leaves.
 
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source
