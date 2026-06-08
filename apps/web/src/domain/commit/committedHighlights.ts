@@ -9,7 +9,7 @@ export interface CommittedHighlight {
   start: number;
   /** Character end position */
   end: number;
-  /** The extracted knowledge text (slot value) */
+  /** The extracted state text (slot value) */
   nodeText: string;
   /** Branch this commit belongs to */
   branch: string;

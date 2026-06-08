@@ -38,10 +38,9 @@ test('release surface keeps candidate packages restricted until promoted', () =>
 test('README mirrors the restricted alpha surface instead of the old broad package list', () => {
   const readme = readText('README.md');
 
-  assert.match(
-    readme,
-    /restricted alpha npm release surface is limited to `@t3x-dev\/local`\s+and `@t3x-dev\/yops`/
-  );
+  assert.match(readme, /The current npm release surface is intentionally narrow/);
+  assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| restricted alpha \|/);
+  assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| restricted alpha \|/);
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);
 });
@@ -50,7 +49,7 @@ test('CODEOWNERS protects release surface files', () => {
   const codeowners = readText('.github/CODEOWNERS');
 
   assert.match(codeowners, /^RELEASE\.md\s+@etht3x$/m);
-  assert.match(codeowners, /^STABILITY\.md\s+@etht3x$/m);
+  assert.match(codeowners, /^docs\/stability\.md\s+@etht3x$/m);
   assert.match(codeowners, /^release\/surface\.yaml\s+@etht3x$/m);
   assert.match(codeowners, /^release\/surface\.schema\.json\s+@etht3x$/m);
   assert.match(codeowners, /^docs\/release\/\s+@etht3x$/m);

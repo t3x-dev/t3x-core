@@ -65,21 +65,21 @@ const TOOLSET_MAP: Record<'core' | 'advanced', ToolEntry[]> = {
 
 // ── Server instructions ──
 
-const SERVER_INSTRUCTIONS = `T3X is a version control system for AI knowledge — like Git, but for structured
-knowledge extracted from conversations.
+const SERVER_INSTRUCTIONS = `T3X is version control for structured state — like Git, but for
+schema-backed YAML changed through deterministic YOps.
 
 Core workflow:
-1. t3x_extract — turn text into structured knowledge (creates a draft)
+1. t3x_extract — turn text into structured YAML state (creates a draft)
 2. t3x_query — inspect what was extracted (or any other resource)
 3. t3x_edit — refine the draft with YOps (YAML operations)
 4. t3x_commit — save a snapshot
 
 Additional capabilities (if advanced toolset enabled):
 5. t3x_diff — compare two commits
-6. t3x_merge — branch and merge knowledge
+6. t3x_merge — branch and merge structured state
 7. t3x_admin — manage projects, branches, pins
 
-t3x_generate creates validated outputs from committed knowledge.`;
+t3x_generate creates validated outputs from committed state.`;
 
 // ── Factory ──
 

@@ -3,8 +3,8 @@
 /**
  * Draft Workspace Page
  *
- * Full-screen draft editing workspace for composing knowledge
- * before committing to the semantic version control system.
+ * Full-screen draft editing workspace for composing structured state
+ * before committing a stable project version.
  */
 
 import { useParams, useRouter } from 'next/navigation';

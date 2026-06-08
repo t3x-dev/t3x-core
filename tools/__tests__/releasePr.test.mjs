@@ -243,7 +243,7 @@ test('requires release surface explanation when protected surface files change',
 
 test('allows protected surface changes with an explicit release surface explanation', () => {
   const result = validateProtectedSurfaceChange({
-    changedFiles: ['STABILITY.md'],
+    changedFiles: ['docs/stability.md'],
     body: `## Summary
 
 - Adjust stability wording.

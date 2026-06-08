@@ -13,7 +13,7 @@ The current release-facing npm package surface is limited to:
 
 Package access may be restricted to alpha users. Other packages in this
 repository are preview or internal until promoted through the release process in
-[`RELEASE.md`](RELEASE.md) and [`release/surface.yaml`](release/surface.yaml).
+[`RELEASE.md`](../RELEASE.md) and [`release/surface.yaml`](../release/surface.yaml).
 
 ## Product Limitations
 

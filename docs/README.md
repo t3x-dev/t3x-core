@@ -1,9 +1,8 @@
 # T3X Documentation
 
-T3X is a structured source of truth for AI-produced work. It captures meaning
-from conversations, documents, transcripts, specs, and notes into reviewable
-knowledge, mutates that knowledge through deterministic YOps, and versions it
-with commits, diffs, merges, and leaves.
+Structured YAML is easy to change and hard to govern. T3X records
+schema-backed YAML changes as deterministic YOps patches, then versions the
+result with commits, diffs, merges, provenance, and generated outputs.
 
 This directory contains curated project documentation that is intended to be
 tracked in git, reviewed in pull requests, and published with the open source
@@ -19,6 +18,9 @@ repository.
 
 ## Current Public Docs
 
+- [Deployment guide](deployment.md)
+- [Alpha limitations](limitations.md)
+- [Stability summary](stability.md)
 - [Stability policy](release/stability-policy.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
@@ -26,11 +28,9 @@ repository.
 ## Related Root Files
 
 - [`README.md`](../README.md) is the first-stop product overview and quickstart.
+- [`AGENTS.md`](../AGENTS.md) gives cross-agent development guidance.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) covers contributor basics.
 - [`SECURITY.md`](../SECURITY.md) covers security reporting expectations.
-- [`LIMITATIONS.md`](../LIMITATIONS.md) covers restricted alpha limitations.
-- [`DEPLOYMENT.md`](../DEPLOYMENT.md) covers self-hosted and source deployment
-  expectations.
-- [`STABILITY.md`](../STABILITY.md) summarizes the alpha contract surface.
+- [`RELEASE.md`](../RELEASE.md) declares the current npm release surface.
 - `.github/` contains issue templates, workflows, ownership rules, and
   maintainer-facing release policy.

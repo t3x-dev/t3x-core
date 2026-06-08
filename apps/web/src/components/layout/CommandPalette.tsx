@@ -106,7 +106,9 @@ export function CommandPalette({ projectId, onCreateConversation }: CommandPalet
               <Command.List className="max-h-80 overflow-y-auto p-2">
                 <Command.Empty className="py-6 text-center">
                   <p className="text-sm text-[var(--text-tertiary)]">No results found.</p>
-                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">T3X — Git for Meaning</p>
+                  <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                    T3X — Version control for structured state
+                  </p>
                 </Command.Empty>
 
                 {commandGroups.map((group) => (

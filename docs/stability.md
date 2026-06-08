@@ -10,8 +10,8 @@ The restricted alpha release surface is:
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
 
-The source of truth is [`RELEASE.md`](RELEASE.md) and
-[`release/surface.yaml`](release/surface.yaml). Other packages remain internal
+The source of truth is [`RELEASE.md`](../RELEASE.md) and
+[`release/surface.yaml`](../release/surface.yaml). Other packages remain internal
 or preview until explicitly promoted.
 
 ## What Alpha Means
@@ -32,7 +32,7 @@ Contract-bearing YOps changes include operation names, operation families,
 fields, field types, enum values, path syntax, runtime error codes, validator
 diagnostic codes, conformance cases, recipes, and examples.
 
-See [`docs/release/stability-policy.md`](docs/release/stability-policy.md) for
+See [`docs/release/stability-policy.md`](release/stability-policy.md) for
 the full policy, including the gate for future YOps spec-tightening PRs.
 
 ## Preview and Internal Surfaces

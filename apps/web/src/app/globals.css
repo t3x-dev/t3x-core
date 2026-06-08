@@ -1235,7 +1235,7 @@ h3,
 
 /* ═══ 2. COMMIT DETAIL — White YAML Document ═══ */
 /* Intentional: Commit YAML always renders on a white "paper" surface regardless of theme.
-   This is a deliberate design choice — the committed knowledge is presented as a clean,
+   This is a deliberate design choice — the committed state is presented as a clean,
    print-ready document. Colors reference the :root (light-mode) YAML tokens. */
 .commit-yaml-doc {
   --cyd-bg: #fefefe;
