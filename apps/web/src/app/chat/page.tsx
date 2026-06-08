@@ -137,6 +137,7 @@ function ChatLanding() {
         description:
           'The dialog is the normal project creation flow. The demo only preserves the walkthrough state after creation.',
         target: 'new-project-create',
+        placement: 'side-center',
         tone: 'commit',
         icon: ArrowRight,
         details: [
