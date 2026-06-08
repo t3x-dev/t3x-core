@@ -118,8 +118,17 @@ const ALIAS_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_COLLISION_SUFFIX = 99;
 
 function isUniqueViolation(err: unknown): boolean {
-  // postgres.js wraps Postgres errors with a `code` property; 23505 = unique_violation
-  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+  // postgres.js exposes `code`; Drizzle 0.45 wraps that error as `cause`.
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
+    seen.add(current);
+    if ((current as { code?: unknown }).code === '23505') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+
+  return false;
 }
 
 /**

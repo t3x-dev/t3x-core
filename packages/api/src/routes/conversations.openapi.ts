@@ -30,6 +30,7 @@ import {
 import { formatContextForExport } from '../lib/context-formatter';
 import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
+import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import {
   CursorPageResponseSchema,
@@ -978,7 +979,7 @@ conversationRoutes.openapi(renameRoute, async (c) => {
     if (message.includes('Invalid alias format')) {
       return errorResponse(c, 'INVALID_REQUEST', message);
     }
-    if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
+    if (hasDbErrorCode(err, '23505')) {
       return c.json(
         {
           success: false as const,

@@ -80,7 +80,12 @@
       "@embedded-postgres/linux-arm64",
       "@embedded-postgres/linux-x64",
       "@swc/core"
-    ]
+    ],
+    "overrides": {
+      "fast-uri@3.1.0": "3.1.2",
+      "picomatch@2.3.1": "2.3.2",
+      "picomatch@4.0.3": "4.0.4"
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",

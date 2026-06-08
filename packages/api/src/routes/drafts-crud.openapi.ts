@@ -20,6 +20,7 @@ import {
   updateDraft,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { hasDbErrorCode } from '../lib/db-errors';
 import { previewCache, previewDebounce } from '../lib/drafts-preview';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, IdParamSchema, SuccessResponseSchema } from '../schemas/common';
@@ -228,7 +229,7 @@ draftsCrudRoutes.openapi(createDraftRoute, async (c) => {
 
     return c.json({ success: true as const, data: toApiDraft(draft) }, 201);
   } catch (err) {
-    if (err instanceof Error && 'code' in err && (err as { code: string }).code === '23503') {
+    if (hasDbErrorCode(err, '23503')) {
       return errorResponse(c, 'REFERENCE_NOT_FOUND', 'Referenced project not found');
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
