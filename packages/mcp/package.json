@@ -16,16 +16,16 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/storage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "vitest": "^2.1.0",
     "tsup": "^8.5.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   },
   "publishConfig": {
     "access": "restricted"

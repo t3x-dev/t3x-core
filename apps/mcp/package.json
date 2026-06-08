@@ -39,9 +39,9 @@
     "postpack": "node ../../tools/restore-package-json.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@t3x-dev/mcp-lib": "workspace:*",
-    "drizzle-orm": "^0.38.4",
+    "drizzle-orm": "^0.45.2",
     "embedded-postgres": "18.3.0-beta.17",
     "js-yaml": "^4.1.1",
     "json-canonicalize": "^2.0.0",
