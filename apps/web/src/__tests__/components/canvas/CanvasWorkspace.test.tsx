@@ -271,6 +271,7 @@ describe('CanvasWorkspace initial fit view', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     globalThis.requestAnimationFrame = requestAnimationFrame;
     globalThis.ResizeObserver = ResizeObserver;
     useCanvasStore.setState({
@@ -365,6 +366,7 @@ describe('CanvasWorkspace initial fit view', () => {
   it('reanchors an open commit action panel after dragging the selected node', async () => {
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
     render(<CanvasWorkspace projectName="Trust Gate" />);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 
     const node = useCanvasStore.getState().nodes[0];
     const clickTarget = document.createElement('div');
@@ -389,9 +391,10 @@ describe('CanvasWorkspace initial fit view', () => {
       );
     });
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(260);
     });
+    expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
 
     const firstPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
     expect(firstPanel).toHaveStyle({ left: '200px', top: '308px' });
