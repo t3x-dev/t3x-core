@@ -33,7 +33,7 @@ evidence disappear into chats, docs, specs, and prompt runs.
 
 T3X turns that context into structured YAML state, changes it through
 deterministic YOps, and versions the result with commits, diffs, merges, and
-leaves.
+generated outputs.
 
 <br/>
 
@@ -55,6 +55,7 @@ npx -p @t3x-dev/local t3x-local start
 ```
 
 Use this for the packaged local T3X experience.
+Package or runtime asset access may be restricted; see [Availability](#availability).
 
 ### Run the self-hosted stack
 
@@ -93,7 +94,7 @@ before starting both processes if you want to exercise the login flow.
   <img src="https://t3x-docs.vercel.app/img/screenshots/chat-light.png" alt="T3X WebUI chat preview" width="760" />
 </p>
 
-The `/chat` view shows the `Source -> Meaning -> Commit` workflow before the
+The `/chat` view shows the `Source -> YOps -> Commit` workflow before the
 first extraction run. Screenshot assets live in the docs site so the core
 repository does not need to carry generated image files.
 
