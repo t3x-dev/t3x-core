@@ -145,6 +145,17 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function rectsEqual(current: TargetRect | null, next: TargetRect | null) {
+  if (current === next) return true;
+  if (!current || !next) return false;
+  return (
+    Math.abs(current.top - next.top) < 0.5 &&
+    Math.abs(current.left - next.left) < 0.5 &&
+    Math.abs(current.width - next.width) < 0.5 &&
+    Math.abs(current.height - next.height) < 0.5
+  );
+}
+
 function stopInteraction(event: Event) {
   event.preventDefault();
   event.stopPropagation();
@@ -242,23 +253,37 @@ export function ProjectDemoTourOverlay({
     }
 
     let animationFrame = 0;
-    const update = () => {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = requestAnimationFrame(() => {
-        setTargetRect(readTargetRect(step.target));
-      });
+    let settleFrames = 0;
+
+    const measure = () => {
+      const nextTargetRect = readTargetRect(step.target);
+      setTargetRect((current) => (rectsEqual(current, nextTargetRect) ? current : nextTargetRect));
     };
 
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    const observer = new MutationObserver(update);
+    const update = (framesToSettle = 0) => {
+      settleFrames = Math.max(settleFrames, framesToSettle);
+      cancelAnimationFrame(animationFrame);
+      const tick = () => {
+        measure();
+        if (settleFrames <= 0) return;
+        settleFrames -= 1;
+        animationFrame = requestAnimationFrame(tick);
+      };
+      animationFrame = requestAnimationFrame(tick);
+    };
+    const updateOnce = () => update();
+    const updateWhileSettling = () => update(18);
+
+    updateWhileSettling();
+    window.addEventListener('resize', updateOnce);
+    window.addEventListener('scroll', updateOnce, true);
+    const observer = new MutationObserver(updateWhileSettling);
     observer.observe(document.body, { attributes: true, childList: true, subtree: true });
     return () => {
       cancelAnimationFrame(animationFrame);
       observer.disconnect();
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', updateOnce);
+      window.removeEventListener('scroll', updateOnce, true);
     };
   }, [open, step.target]);
 
