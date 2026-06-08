@@ -78,6 +78,46 @@ describe('ProjectDemoTourOverlay', () => {
     });
   });
 
+  it('does not finish the leaf type step from a non-button click inside the target area', async () => {
+    const onDone = vi.fn();
+
+    render(
+      <>
+        <button type="button" data-intro-target="canvas-commit-node">
+          Commit card
+        </button>
+        <button type="button" data-intro-target="canvas-floating-action-new-leaf">
+          New Leaf
+        </button>
+        <div data-testid="leaf-type-options" data-intro-target="canvas-leaf-type-options">
+          <button type="button">Twitter</button>
+        </div>
+        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
+    await waitFor(() => {
+      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
+    await waitFor(() => {
+      expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('leaf-type-options'));
+
+    expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));
+
+    await waitFor(() => {
+      expect(onDone).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('stays on the current step when the next guided target never appears', async () => {
     vi.useFakeTimers();
     const onDone = vi.fn();

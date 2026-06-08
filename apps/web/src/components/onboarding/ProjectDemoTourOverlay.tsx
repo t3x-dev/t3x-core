@@ -34,6 +34,7 @@ interface ProjectTourStep {
   tone: 'conversation' | 'commit' | 'leaf' | 'success';
   details: string[];
   advanceOnTargetClick?: boolean;
+  advanceClickSelector?: string;
 }
 
 const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
@@ -83,6 +84,7 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
       'After creation, the demo continues in the generated Leaf workspace.',
     ],
     advanceOnTargetClick: true,
+    advanceClickSelector: 'button:not(:disabled)',
   },
 ];
 
@@ -314,6 +316,12 @@ export function ProjectDemoTourOverlay({
       if (advancingAfterTargetClick) return;
       const node = findIntroTarget(step.target);
       if (!node || !node.contains(event.target as Node)) return;
+      if (step.advanceClickSelector) {
+        const eventTarget = event.target;
+        const actionTarget =
+          eventTarget instanceof Element ? eventTarget.closest(step.advanceClickSelector) : null;
+        if (!actionTarget || !node.contains(actionTarget)) return;
+      }
       setAdvancingAfterTargetClick(true);
       window.setTimeout(async () => {
         if (atEnd) {
