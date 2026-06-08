@@ -5,7 +5,7 @@
 <h1 align="center">T3X</h1>
 
 <p align="center">
-  <strong>GitHub for structured meaning.</strong>
+  <strong>Git for structured AI work.</strong>
 </p>
 
 <p align="center">
@@ -28,10 +28,10 @@
 
 <br/>
 
-T3X is a structured source of truth for AI-produced work. It captures meaning
-from conversations, documents, transcripts, specs, and notes into reviewable
-knowledge, mutates that knowledge through deterministic YOps, and versions it
-with commits, diffs, merges, and leaves.
+T3X is an early-stage system for turning AI context into structured, versioned
+work. It extracts meaning from conversations, documents, transcripts, specs, and
+notes into YAML trees; changes those trees through deterministic YOps; then
+tracks the resulting structure with commits, diffs, merges, and leaves.
 
 The current restricted alpha npm release surface is limited to `@t3x-dev/local`
 and `@t3x-dev/yops`. Restricted package or runtime-asset visibility is expected
@@ -116,35 +116,40 @@ intro demo. The `introDemo` flag is development-only.
 
 ## How it works
 
-T3X turns unstructured text into versioned, structured knowledge through five stages:
+T3X turns messy AI context into structured state, then versions that state.
 
 <table>
 <tr>
-<td width="20%" align="center"><strong>Input</strong></td>
-<td width="20%" align="center"><strong>Extract</strong></td>
-<td width="20%" align="center"><strong>Transform</strong></td>
-<td width="20%" align="center"><strong>Commit</strong></td>
-<td width="20%" align="center"><strong>Generate</strong></td>
+<td width="25%" align="center"><strong>Source</strong></td>
+<td width="25%" align="center"><strong>Structure</strong></td>
+<td width="25%" align="center"><strong>Change</strong></td>
+<td width="25%" align="center"><strong>Version</strong></td>
 </tr>
 <tr>
 <td align="center"><sub>Conversations, docs, specs, notes, transcripts</sub></td>
-<td align="center"><sub>Build YAML tree from text (LLM-assisted or manual)</sub></td>
-<td align="center"><sub>YOps: declarative ops on YAML</sub></td>
-<td align="center"><sub>SHA-256 hash chain, branch, diff, merge</sub></td>
-<td align="center"><sub>Leaf output: agents, content, assertions</sub></td>
+<td align="center"><sub>Extract reviewable YAML trees</sub></td>
+<td align="center"><sub>Apply deterministic YOps</sub></td>
+<td align="center"><sub>Commit, diff, branch, merge, generate</sub></td>
 </tr>
 <tr>
 <td align="center"><code>raw text</code></td>
-<td align="center"><code>YAML tree</code></td>
-<td align="center"><code>validated tree</code></td>
-<td align="center"><code>immutable commit</code></td>
-<td align="center"><code>generated output</code></td>
+<td align="center"><code>structured tree</code></td>
+<td align="center"><code>old tree + YOps -> new tree</code></td>
+<td align="center"><code>committed state</code></td>
 </tr>
 </table>
 
-> Extract and Generate can use LLMs. YOps Apply, Transform, Commit, diff, merge, and validation are fully deterministic.
+> Extract and Generate can use LLMs. YOps Apply, validation, commit hashing, diff, and merge are deterministic.
 
-Between extraction and commit, the tree goes through a **validate &rarr; fix &rarr; re-validate** loop powered by the Y-family tools. This is where the quality happens &mdash; deterministic checks catch issues, emit YOps fixes, and the user approves or adjusts before committing.
+The key idea: commits store structured tree state, while YOps records the
+deterministic change from one valid state to the next. Diff and merge compare
+committed structured states; fixes and merges are applied back through YOps
+before a new commit is written.
+
+Between extraction and commit, the tree goes through a **validate &rarr; fix
+&rarr; re-validate** loop powered by the Y-family tools. This is where the
+quality happens &mdash; deterministic checks catch issues, emit YOps fixes, and the
+user approves or adjusts before committing.
 
 <br/>
 
