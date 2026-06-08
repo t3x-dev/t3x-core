@@ -29,6 +29,7 @@ repository.
 ## Related Root Files
 
 - [`README.md`](../README.md) is the first-stop product overview and quickstart.
+- [`AGENTS.md`](../AGENTS.md) gives cross-agent development guidance.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) covers contributor basics.
 - [`SECURITY.md`](../SECURITY.md) covers security reporting expectations.
 - [`RELEASE.md`](../RELEASE.md) declares the current npm release surface.

@@ -1,12 +1,20 @@
 # CLAUDE.md
 
-This file instructs Claude Code (claude.ai/code) when working in this repository. Keep it short, truthful, and grounded in what's actually on disk — not in historical architecture. Verify before adding claims; delete when they go stale.
+This file instructs Claude Code (claude.ai/code) when working in this
+repository. For cross-agent guidance, start with [`AGENTS.md`](AGENTS.md).
+Keep both files truthful and grounded in what's actually on disk — not in
+historical architecture. Verify before adding claims; delete when they go stale.
 
 ## Project Overview
 
-T3X is **"Git for Meaning"** — semantic version control for AI conversations. Commits, branches, merges, and diffs operate over meaning (extracted into a knowledge tree) rather than raw text.
+T3X is **Git for structured AI work**. Source evidence from chats, docs, specs,
+and prompt runs becomes structured YAML state; deterministic YOps change that
+state; commits, diffs, and merges version the result.
 
-**Core principle.** The mutation layer is 100% deterministic and never depends on an LLM. LLMs propose changes as YOps YAML; a deterministic engine validates and applies them. All tree mutation goes through YOps — this is the single rule the whole architecture rests on.
+**Core principle.** The mutation layer is deterministic and never depends on an
+LLM. LLMs can propose changes as YOps YAML; a deterministic engine validates and
+applies them. All structured-state mutation goes through YOps — this is the
+single rule the whole architecture rests on.
 
 ## Open-Core
 
@@ -173,7 +181,10 @@ interface Commit {
 }
 ```
 
-**There is one commit format.** No versioned variants. `content` is a YOps-mutated knowledge tree + relations. Leaves own constraints (see below), never commits. Hashing uses SHA-256 over JCS-canonicalized first-class fields (`packages/core/src/commit/hash.ts`).
+**There is one commit format.** No versioned variants. `content` is
+YOps-mutated structured state + relations. Leaves own constraints (see below),
+never commits. Hashing uses SHA-256 over JCS-canonicalized first-class fields
+(`packages/core/src/commit/hash.ts`).
 
 ### Hash chains
 
