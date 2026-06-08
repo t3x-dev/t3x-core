@@ -8,7 +8,7 @@ const productVersionPattern =
   /^T3X product release version:\s*`?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)`?\s*$/im;
 const protectedSurfaceFiles = new Set([
   'RELEASE.md',
-  'STABILITY.md',
+  'docs/stability.md',
   'release/surface.yaml',
   'release/surface.schema.json',
 ]);

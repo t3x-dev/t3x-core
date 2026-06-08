@@ -82,7 +82,7 @@ docker compose up -d --build
 > **WebUI** &rarr; [localhost:3000](http://localhost:3000) &nbsp;|&nbsp; **API** &rarr; [localhost:8000](http://localhost:8000)
 
 Docker Compose starts WebUI, API, and Postgres for self-hosted evaluation.
-Review the [deployment guide](DEPLOYMENT.md) before exposing it beyond
+Review the [deployment guide](docs/deployment.md) before exposing it beyond
 localhost. Docker and self-hosted runs keep auth on by default, so the first
 WebUI visit goes through the built-in username/password login at `/login`.
 
@@ -308,12 +308,8 @@ the release surface.
 [t3x-docs.vercel.app](https://t3x-docs.vercel.app) &mdash; Quickstart, YOps
 reference, WebUI guide, and release notes.
 
-Release governance:
-
-- [Security policy](SECURITY.md)
-- [Alpha limitations](LIMITATIONS.md)
-- [Deployment guide](DEPLOYMENT.md)
-- [Stability summary](STABILITY.md)
+Policies: [Security](SECURITY.md) &middot; [Alpha limitations](docs/limitations.md) &middot;
+[Deployment](docs/deployment.md) &middot; [Stability](docs/stability.md)
 
 <br/>
 
