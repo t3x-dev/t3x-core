@@ -11,7 +11,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
@@ -310,7 +310,7 @@ export function ProjectDemoTourOverlay({
     };
   }, [open, step.target]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !step.advanceOnTargetClick || !step.target) return;
     const handleTargetClick = (event: MouseEvent) => {
       if (advancingAfterTargetClick) return;
