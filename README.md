@@ -146,7 +146,7 @@ validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
 <table>
 <tr>
 <th width="33%">YOps</th>
-<th width="33%">YSchema</th>
+<th width="33%">YSchema <sup>WIP</sup></th>
 <th width="33%">YLint</th>
 </tr>
 <tr>
@@ -250,10 +250,10 @@ First-run auth defaults:
 ## Architecture
 
 <table>
-<tr><td align="center"><strong>Product</strong><br/><sub>WebUI (Next.js) &middot; API (Hono) &middot; CLI &middot; MCP</sub></td></tr>
+<tr><td align="center"><strong>Product</strong><br/><sub>WebUI (Next.js) &middot; API (Hono) &middot; CLI (preview) &middot; MCP (preview)</sub></td></tr>
 <tr><td align="center"><strong>Storage</strong><br/><sub>PostgreSQL (Drizzle ORM) &middot; Embedded PG (dev)</sub></td></tr>
 <tr><td align="center"><strong>Core</strong><br/><sub>Hash chains &middot; Diff engine &middot; Merge &middot; YLint &middot; Extract</sub></td></tr>
-<tr><td align="center"><strong>Y-Family</strong><br/><sub>YOps (mutate) &middot; YSchema (validate) &middot; YLint (hygiene)</sub></td></tr>
+<tr><td align="center"><strong>Y-Family</strong><br/><sub>YOps (mutate) &middot; YSchema (validate, WIP) &middot; YLint (hygiene)</sub></td></tr>
 </table>
 
 **Design principles:**
@@ -267,14 +267,14 @@ First-run auth defaults:
 
 ```
 packages/yops        # YOps — Declarative YAML operations
-packages/yschema     # YSchema — internal validation candidate with auto-fix
+packages/yschema     # YSchema — WIP validation candidate with auto-fix
 packages/core        # T3X engine — diff, merge, hash chains, extraction, ylint
 packages/storage     # PostgreSQL persistence (Drizzle ORM)
 packages/api-client  # TypeScript API client
 apps/web             # WebUI (Next.js 16 + App Router)
 apps/api             # Hono API server with OpenAPI
-apps/cli             # Command-line interface
-apps/mcp             # MCP server (tools)
+apps/cli             # Command-line interface (preview)
+apps/mcp             # MCP server (preview)
 apps/runner          # Grey-box agent evaluation engine
 ```
 
