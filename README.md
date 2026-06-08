@@ -106,27 +106,24 @@ intro demo. The `introDemo` flag is development-only.
 
 ## How it works
 
-T3X treats structure as the durable artifact. Source evidence proposes or
-explains a YOps patch; the patch transforms the current YAML state into the next
-state; commits preserve the state, operation log, parents, and provenance.
+T3X follows a `Source -> YOps -> Commit` loop. Source evidence proposes a
+structured change; YOps applies that change to YAML state; commits preserve the
+result with parents, operation logs, and provenance.
 
 <table>
 <tr>
-<td width="25%" align="center"><strong>Inputs</strong></td>
-<td width="25%" align="center"><strong>Operation</strong></td>
-<td width="25%" align="center"><strong>State</strong></td>
-<td width="25%" align="center"><strong>Versioned as</strong></td>
+<td width="33%" align="center"><strong>Source</strong></td>
+<td width="34%" align="center"><strong>YOps</strong></td>
+<td width="33%" align="center"><strong>Commit</strong></td>
 </tr>
 <tr>
-<td align="center"><sub>Source evidence + current YAML tree</sub></td>
-<td align="center"><sub>Apply or review a YOps patch</sub></td>
-<td align="center"><sub>New reviewable YAML tree</sub></td>
-<td align="center"><sub>Commit with parents, YOps log, provenance</sub></td>
+<td align="center"><sub>Chat, doc, spec, prompt run</sub></td>
+<td align="center"><sub>Review and apply deterministic YAML operations</sub></td>
+<td align="center"><sub>Version the new state with parents and provenance</sub></td>
 </tr>
 <tr>
-<td align="center"><code>source + old tree</code></td>
-<td align="center"><code>old tree + YOps -> new tree</code></td>
-<td align="center"><code>new tree</code></td>
+<td align="center"><code>source evidence</code></td>
+<td align="center"><code>old YAML + YOps -> new YAML</code></td>
 <td align="center"><code>commit / diff / merge</code></td>
 </tr>
 </table>
