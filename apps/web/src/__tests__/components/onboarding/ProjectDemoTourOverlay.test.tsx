@@ -23,7 +23,39 @@ describe('ProjectDemoTourOverlay', () => {
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
 
-  it('moves from the commit card to the + New Leaf action instead of the sidebar Leaf tab', async () => {
+  it('moves from the commit card to Details in the default canvas stage', async () => {
+    const onDone = vi.fn();
+
+    render(
+      <>
+        <button type="button" data-intro-target="canvas-commit-node">
+          Commit card
+        </button>
+        <button type="button" data-intro-target="canvas-floating-action-details">
+          Details
+        </button>
+        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+      </>
+    );
+
+    expect(screen.getByText('Click the highlighted commit card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Click Details to inspect this commit')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.queryByText('Click the highlighted + New Leaf action')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+
+    await waitFor(() => {
+      expect(onDone).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('moves from the commit card to the + New Leaf action in the leaf stage', async () => {
     const onDone = vi.fn();
 
     render(
@@ -40,11 +72,17 @@ describe('ProjectDemoTourOverlay', () => {
         <div data-intro-target="canvas-leaf-type-options">
           <button type="button">Twitter</button>
         </div>
-        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+        <ProjectDemoTourOverlay
+          open
+          onClose={vi.fn()}
+          onDone={onDone}
+          interactionMode="guided"
+          stage="leaf"
+        />
       </>
     );
 
-    expect(screen.getByText('Click the highlighted commit card')).toBeInTheDocument();
+    expect(screen.getByText('Click the highlighted commit card again')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
 
@@ -88,7 +126,13 @@ describe('ProjectDemoTourOverlay', () => {
         <div data-testid="leaf-type-options" data-intro-target="canvas-leaf-type-options">
           <button type="button">Twitter</button>
         </div>
-        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+        <ProjectDemoTourOverlay
+          open
+          onClose={vi.fn()}
+          onDone={onDone}
+          interactionMode="guided"
+          stage="leaf"
+        />
       </>
     );
 
@@ -130,7 +174,13 @@ describe('ProjectDemoTourOverlay', () => {
           <button type="button" data-intro-target="canvas-floating-action-new-leaf">
             New Leaf
           </button>
-          <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+          <ProjectDemoTourOverlay
+            open
+            onClose={vi.fn()}
+            onDone={onDone}
+            interactionMode="guided"
+            stage="leaf"
+          />
         </>
       );
 

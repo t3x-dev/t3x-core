@@ -229,6 +229,7 @@ export function LeafComposerDock({
             className="h-7 gap-1.5 rounded-lg bg-[var(--accent-leaf)] text-[var(--on-accent)] text-xs font-semibold hover:brightness-110"
             onClick={onGenerate}
             disabled={isGenerating}
+            data-intro-target="leaf-generate-action"
           >
             {isGenerating ? (
               <>

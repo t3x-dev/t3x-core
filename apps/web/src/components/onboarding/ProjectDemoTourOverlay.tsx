@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Eye,
   Map as MapIcon,
   Play,
   Plus,
@@ -14,7 +15,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
+type ProjectTourStepId = 'selectCommit' | 'openDetails' | 'createLeaf' | 'chooseLeafType';
+type ProjectTourStage = 'details' | 'leaf';
 
 interface TargetRect {
   top: number;
@@ -35,41 +37,64 @@ interface ProjectTourStep {
   advanceClickSelector?: string;
 }
 
-const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
-  {
-    id: 'selectCommit',
-    label: 'Commit card',
-    title: 'Click the highlighted commit card',
-    description:
-      'This is the first Canvas action: select a committed version before inspecting or creating output from it.',
-    target: 'canvas-commit-node',
-    icon: MapIcon,
-    tone: 'commit',
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'createLeaf',
-    label: '+ New Leaf',
-    title: 'Click the highlighted + New Leaf action',
-    description: 'This opens the Leaf creation panel from the selected committed version.',
-    target: 'canvas-floating-action-new-leaf',
-    icon: Plus,
-    tone: 'leaf',
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'chooseLeafType',
-    label: 'Leaf type',
-    title: 'Choose an output type',
-    description:
-      'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
-    target: 'canvas-leaf-type-options',
-    icon: Send,
-    tone: 'leaf',
-    advanceOnTargetClick: true,
-    advanceClickSelector: 'button:not(:disabled)',
-  },
-];
+const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> = {
+  details: [
+    {
+      id: 'selectCommit',
+      label: 'Commit card',
+      title: 'Click the highlighted commit card',
+      description: 'Select a committed version to reveal its Details and Leaf actions.',
+      target: 'canvas-commit-node',
+      icon: MapIcon,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'openDetails',
+      label: 'Details',
+      title: 'Click Details to inspect this commit',
+      description: 'Details opens the commit page with identity, content, and audit context.',
+      target: 'canvas-floating-action-details',
+      icon: Eye,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+  ],
+  leaf: [
+    {
+      id: 'selectCommit',
+      label: 'Commit card',
+      title: 'Click the highlighted commit card again',
+      description: 'Select the committed version so Canvas can create a Leaf from it.',
+      target: 'canvas-commit-node',
+      icon: MapIcon,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'createLeaf',
+      label: '+ New Leaf',
+      title: 'Click the highlighted + New Leaf action',
+      description: 'This opens the Leaf creation panel from the selected committed version.',
+      target: 'canvas-floating-action-new-leaf',
+      icon: Plus,
+      tone: 'leaf',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'chooseLeafType',
+      label: 'Leaf type',
+      title: 'Choose an output type',
+      description:
+        'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
+      target: 'canvas-leaf-type-options',
+      icon: Send,
+      tone: 'leaf',
+      advanceOnTargetClick: true,
+      advanceClickSelector: 'button:not(:disabled)',
+    },
+  ],
+};
 
 const TONE_CLASSES: Record<ProjectTourStep['tone'], string> = {
   conversation:
@@ -177,6 +202,7 @@ interface ProjectDemoTourOverlayProps {
   onSkip?: () => void;
   doneLabel?: string;
   interactionMode?: 'coach' | 'guided';
+  stage?: ProjectTourStage;
 }
 
 export function ProjectDemoTourOverlay({
@@ -186,20 +212,29 @@ export function ProjectDemoTourOverlay({
   onSkip,
   doneLabel = 'Skip demo',
   interactionMode = 'coach',
+  stage = 'details',
 }: ProjectDemoTourOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const [advancingAfterTargetClick, setAdvancingAfterTargetClick] = useState(false);
   const coachRef = useRef<HTMLDivElement>(null);
   const [coachHeight, setCoachHeight] = useState(360);
-  const step = PROJECT_TOUR_STEPS[stepIndex] ?? PROJECT_TOUR_STEPS[0];
+  const steps = PROJECT_TOUR_STEPS_BY_STAGE[stage] ?? PROJECT_TOUR_STEPS_BY_STAGE.details;
+  const step = steps[stepIndex] ?? steps[0];
   const atStart = stepIndex === 0;
-  const atEnd = stepIndex === PROJECT_TOUR_STEPS.length - 1;
+  const atEnd = stepIndex === steps.length - 1;
   const StepIcon = step.icon;
   const guided = interactionMode === 'guided';
   const showStepNav = !guided;
   const waitingForTargetClick = guided && step.advanceOnTargetClick;
   const actionLabel = guided ? 'Skip demo' : doneLabel;
+
+  useEffect(() => {
+    if (!open) return;
+    setStepIndex(0);
+    setTargetRect(null);
+    setAdvancingAfterTargetClick(false);
+  }, [open, stage]);
 
   const coachPosition = useMemo(() => {
     const width =
@@ -313,19 +348,19 @@ export function ProjectDemoTourOverlay({
           onDone?.();
           return;
         }
-        const nextStep = PROJECT_TOUR_STEPS[stepIndex + 1];
+        const nextStep = steps[stepIndex + 1];
         const targetReady = await waitForReadyTarget(nextStep?.target ?? null);
         if (!targetReady) {
           setAdvancingAfterTargetClick(false);
           return;
         }
-        setStepIndex((current) => Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1));
+        setStepIndex((current) => Math.min(current + 1, steps.length - 1));
         setAdvancingAfterTargetClick(false);
       }, 0);
     };
     document.addEventListener('click', handleTargetClick, true);
     return () => document.removeEventListener('click', handleTargetClick, true);
-  }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex]);
+  }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex, steps]);
 
   useEffect(() => {
     if (!open || interactionMode !== 'guided') return;
@@ -427,7 +462,7 @@ export function ProjectDemoTourOverlay({
         {showStepNav ? (
           <div className="space-y-3 px-4 py-3">
             <div className="grid grid-cols-[repeat(auto-fit,minmax(36px,1fr))] gap-1.5">
-              {PROJECT_TOUR_STEPS.map((item, index) => {
+              {steps.map((item, index) => {
                 const selected = index === stepIndex;
                 const completed = index < stepIndex;
                 const Icon = item.icon;
@@ -467,8 +502,7 @@ export function ProjectDemoTourOverlay({
         >
           <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
             <span className="font-mono">
-              {String(stepIndex + 1).padStart(2, '0')} /{' '}
-              {String(PROJECT_TOUR_STEPS.length).padStart(2, '0')}
+              {String(stepIndex + 1).padStart(2, '0')} / {String(steps.length).padStart(2, '0')}
             </span>
             <span>{step.label}</span>
           </div>
@@ -489,9 +523,7 @@ export function ProjectDemoTourOverlay({
                   size="sm"
                   disabled={Boolean(waitingForTargetClick)}
                   onClick={() =>
-                    setStepIndex((current) =>
-                      atEnd ? 0 : Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1)
-                    )
+                    setStepIndex((current) => (atEnd ? 0 : Math.min(current + 1, steps.length - 1)))
                   }
                 >
                   {waitingForTargetClick ? 'Click highlighted item' : atEnd ? 'Replay' : 'Next'}

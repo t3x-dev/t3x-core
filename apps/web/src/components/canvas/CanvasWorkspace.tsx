@@ -114,6 +114,12 @@ function CanvasWorkspaceInner({
     [pathname, searchParams]
   );
   const introDemoActive = searchParams.get('introDemo') === '1';
+  const introDemoLeafReturnTo = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('introDemo', '1');
+    params.set('introDemoStage', 'leaf');
+    return buildReturnTo(pathname, params);
+  }, [pathname, searchParams]);
   const withIntroDemo = useCallback(
     (href: string) => {
       if (!introDemoActive) return href;
@@ -410,7 +416,15 @@ function CanvasWorkspaceInner({
       actions: buildCommitActions({
         onViewDetails: () => {
           if (projectId && hash) {
-            router.push(withIntroDemo(`/project/${projectId}/commit/${encodeURIComponent(hash)}`));
+            const detailHref = `/project/${projectId}/commit/${encodeURIComponent(hash)}`;
+            router.push(
+              introDemoActive
+                ? withReturnTo(
+                    `${detailHref}?introDemo=1&introDemoStage=commitDetails`,
+                    introDemoLeafReturnTo
+                  )
+                : detailHref
+            );
           }
         },
         onViewDiff:
@@ -572,8 +586,16 @@ function CanvasWorkspaceInner({
                 clickTimerRef.current = null;
                 setActionPanel(null);
                 if (data.commitHash && projectId) {
+                  const detailHref = `/project/${projectId}/commit/${encodeURIComponent(
+                    data.commitHash
+                  )}`;
                   router.push(
-                    `/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`
+                    introDemoActive
+                      ? withReturnTo(
+                          `${detailHref}?introDemo=1&introDemoStage=commitDetails`,
+                          introDemoLeafReturnTo
+                        )
+                      : detailHref
                   );
                 }
               } else {

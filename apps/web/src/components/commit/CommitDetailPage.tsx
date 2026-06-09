@@ -34,7 +34,7 @@ import {
   Tag,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FeatureTourOverlay,
@@ -55,6 +55,7 @@ import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, Leaf } from '@/types/api';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
@@ -125,13 +126,29 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   },
 ];
 
+const INTRO_COMMIT_DETAIL_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'returnToCanvas',
+    label: 'View Canvas',
+    title: 'Click View Canvas to continue',
+    description: 'Commit details show the selected version before you create a Leaf.',
+    target: 'commit-view-canvas',
+    tone: 'commit',
+    icon: Eye,
+    advanceOnTargetClick: true,
+  },
+];
+
 // ============================================================================
 // Component
 // ============================================================================
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const introDemoRequested = useIntroDemoQueryFlag();
+  const introDemoStage = searchParams.get('introDemoStage');
+  const isIntroCommitDetailsStage = introDemoRequested && introDemoStage === 'commitDetails';
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const _notify = useProjectStore((state) => state.notifyCallback);
 
@@ -166,7 +183,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const canvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const baseCanvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const fallbackIntroDemoReturnTo = `${baseCanvasHref}?introDemo=1&introDemoStage=leaf`;
+  const introDemoReturnTo = useMemo(
+    () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackIntroDemoReturnTo),
+    [fallbackIntroDemoReturnTo, searchParams]
+  );
+  const canvasHref = isIntroCommitDetailsStage ? introDemoReturnTo : baseCanvasHref;
+  const commitTourSteps = isIntroCommitDetailsStage
+    ? INTRO_COMMIT_DETAIL_TOUR_STEPS
+    : COMMIT_TOUR_STEPS;
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
@@ -256,12 +282,24 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   );
 
   const handleBack = useCallback(() => {
+    if (isIntroCommitDetailsStage) {
+      router.push(introDemoReturnTo);
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push(canvasHref);
-  }, [canvasHref, router]);
+  }, [canvasHref, introDemoReturnTo, isIntroCommitDetailsStage, router]);
+
+  const handleTourDone = useCallback(() => {
+    if (isIntroCommitDetailsStage) {
+      router.push(introDemoReturnTo);
+      return;
+    }
+    void completeIntroDemo();
+  }, [completeIntroDemo, introDemoReturnTo, isIntroCommitDetailsStage, router]);
 
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
@@ -347,6 +385,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         <div className="flex items-center gap-1.5" data-intro-target="commit-actions">
           <Link
             href={canvasHref}
+            data-intro-target="commit-view-canvas"
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
             <Eye size={13} /> View Canvas
@@ -665,9 +704,11 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       <FeatureTourOverlay
         open={tourOpen}
         title="Commit walkthrough"
-        steps={COMMIT_TOUR_STEPS}
+        steps={commitTourSteps}
         onClose={() => setTourOpen(false)}
-        onDone={() => void completeIntroDemo()}
+        onDone={handleTourDone}
+        onSkip={() => void completeIntroDemo()}
+        interactionMode={isIntroCommitDetailsStage ? 'guided' : 'coach'}
       />
     </div>
   );

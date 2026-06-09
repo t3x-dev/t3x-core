@@ -1,6 +1,6 @@
 'use client';
 
-import { ClipboardCheck, FileText, Gauge, Leaf as LeafIcon, ListChecks } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
@@ -36,58 +36,14 @@ import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 
 const LEAF_TOUR_STEPS: FeatureTourStep[] = [
   {
-    id: 'header',
-    label: 'Actions',
-    title: 'Click Generate to expose editing controls',
-    description:
-      'The leaf page has two real modes. Generate mode shows controls for editing constraints and regenerating the artifact.',
-    target: 'leaf-mode-generate',
-    tone: 'leaf',
-    icon: LeafIcon,
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'status',
-    label: 'Status',
-    title: 'Click the highlighted status strip',
-    description:
-      'The status strip explains artifact type, semantic coverage, commit verification, and assertion results. Click it to continue.',
-    target: 'leaf-status',
-    tone: 'commit',
-    icon: ListChecks,
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'source',
-    label: 'Source',
-    title: 'Click the highlighted source panel',
-    description:
-      'The left panel is where users inspect committed semantic points and add require/exclude constraints in Generate mode. Click it to continue.',
-    target: 'leaf-source-panel',
-    tone: 'source',
-    icon: FileText,
-    advanceOnTargetClick: true,
-  },
-  {
     id: 'output',
-    label: 'Output',
-    title: 'Click Display to return to the final reusable output',
+    label: 'Generate',
+    title: 'Click Generate to finish',
     description:
-      'Display mode focuses the page on reading, validation, sharing, and export after the artifact has been reviewed.',
-    target: 'leaf-mode-display',
+      'Generate runs this Leaf once; after the click, the demo cleans up and returns to chat.',
+    target: 'leaf-generate-action',
     tone: 'leaf',
     icon: ClipboardCheck,
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'quality',
-    label: 'Quality',
-    title: 'Click the highlighted quality panel',
-    description:
-      'The right rail summarizes coverage, constraints, assertions, and publish actions. Click it to finish the guided demo.',
-    target: 'leaf-quality-panel',
-    tone: 'success',
-    icon: Gauge,
     advanceOnTargetClick: true,
   },
 ];
