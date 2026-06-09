@@ -48,8 +48,9 @@ Release PRs must include:
 - `T3X product release version: \`x.y.z\`` in the PR body.
 - Included changes or a comparison range.
 - User-facing release notes.
-- A `Package Releases` section containing either `- None` or one line per
-  package, for example `- \`@t3x-dev/local\`: patch`.
+- A `Package Releases` section containing either `- None` or the complete
+  current npm publish surface:
+  `- \`@t3x-dev/local\`: patch` and `- \`@t3x-dev/yops\`: patch`.
 
 The release PR policy check also validates changeset files:
 
@@ -57,9 +58,12 @@ The release PR policy check also validates changeset files:
 - Package release entries require at least one `.changeset/*.md`.
 - Listed public packages must appear in changeset frontmatter.
 - Public packages in changeset frontmatter must appear in `Package Releases`.
+- Package releases currently require both restricted alpha npm packages:
+  `@t3x-dev/local` and `@t3x-dev/yops`.
 
 The product release version is independent from npm package versions. If the
-release publishes no packages, write `- None` in `Package Releases`.
+release publishes no packages, write `- None` in `Package Releases`; final
+GitHub Release notes omit package information for code-only releases.
 
 Hotfix PRs may target `main` from `hotfix/*`, but they still need product
 release metadata and release notes. Changesets version package PRs are exempt

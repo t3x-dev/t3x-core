@@ -141,6 +141,22 @@ function validatePackageReleases({
     errors.push('Package Releases lists packages, but no .changeset/*.md files were found.');
   }
 
+  if (packageReleases.packages.length > 0 && releaseSurfacePackages.length > 0) {
+    const expectedPackages = [...new Set(releaseSurfacePackages)].sort();
+    const actualPackages = [...new Set(packageReleases.packages)].sort();
+    const hasCompleteReleaseSet =
+      actualPackages.length === expectedPackages.length &&
+      actualPackages.every((packageName, index) => packageName === expectedPackages[index]);
+
+    if (!hasCompleteReleaseSet) {
+      errors.push(
+        `Package Releases must list the complete current public package release set: ${expectedPackages.join(
+          ', '
+        )}.`
+      );
+    }
+  }
+
   const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));
   const releaseSurfacePackageSet = new Set(releaseSurfacePackages);
   for (const packageName of packageReleases.packages) {
