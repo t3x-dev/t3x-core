@@ -42,7 +42,7 @@ describe('SettingsLayout', () => {
     );
 
     expect(screen.getByText('OVERVIEW')).toBeInTheDocument();
-    expect(screen.getByText('WORKSPACE')).toBeInTheDocument();
+    expect(screen.getByText('LOCAL')).toBeInTheDocument();
     expect(screen.getByText('AI')).toBeInTheDocument();
     expect(screen.getByText('ACCESS')).toBeInTheDocument();
     expect(screen.getByText('AUTOMATION')).toBeInTheDocument();

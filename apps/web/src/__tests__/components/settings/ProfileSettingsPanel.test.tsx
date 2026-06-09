@@ -55,7 +55,7 @@ describe('ProfileSettingsPanel', () => {
     vi.unstubAllEnvs();
     act(() => {
       useSettingsStore.setState({
-        localWorkspaceName: 'Local Workspace',
+        localWorkspaceName: 'Local user',
         localWorkspaceAvatarColor: 'blue',
       });
     });
@@ -63,34 +63,49 @@ describe('ProfileSettingsPanel', () => {
     sessionState.getUser.mockReturnValue(null);
   });
 
-  it('renders a local workspace account surface when auth is disabled', () => {
+  it('renders a local profile surface when auth is disabled', () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<ProfileSettingsPanel />);
 
-    expect(screen.getByLabelText('Workspace name')).toHaveValue('Local Workspace');
+    expect(screen.getByLabelText('Display name')).toHaveValue('Local user');
     expect(
-      screen.getByText('Customize how this local workspace appears in the app.')
+      screen.getByText('Set the local identity used in the sidebar and edit history.')
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Settings stay local to this browser. Manage model providers from the Providers tab when you need API-backed features.'
+        'Settings stay local to this browser. The display name is used as the author for local edits.'
       )
     ).toBeInTheDocument();
     expect(loadAuthMe).not.toHaveBeenCalled();
   });
 
-  it('updates the local workspace name from the profile editor', () => {
+  it('updates the local display name from the profile editor', () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<ProfileSettingsPanel />);
 
-    fireEvent.change(screen.getByLabelText('Workspace name'), {
+    fireEvent.change(screen.getByLabelText('Display name'), {
       target: { value: 'Meaning Studio' },
     });
 
     expect(useSettingsStore.getState().localWorkspaceName).toBe('Meaning Studio');
     expect(screen.getByDisplayValue('Meaning Studio')).toBeInTheDocument();
+  });
+
+  it('restores the default display name when the profile editor is left blank', () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+
+    render(<ProfileSettingsPanel />);
+
+    const input = screen.getByLabelText('Display name');
+    fireEvent.change(input, {
+      target: { value: '   ' },
+    });
+    fireEvent.blur(input);
+
+    expect(useSettingsStore.getState().localWorkspaceName).toBe('Local user');
+    expect(screen.getByDisplayValue('Local user')).toBeInTheDocument();
   });
 
   it('renders cached account info and refreshes it when auth is enabled', async () => {

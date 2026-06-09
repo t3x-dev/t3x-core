@@ -4,7 +4,6 @@ import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserMenu } from '@/components/layout/UserMenu';
-import { useSettingsModalStore } from '@/store/settingsModalStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
 vi.hoisted(() => {
@@ -55,9 +54,8 @@ describe('UserMenu', () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     act(() => {
-      useSettingsModalStore.setState(useSettingsModalStore.getInitialState());
       useSettingsStore.setState({
-        localWorkspaceName: 'Local Workspace',
+        localWorkspaceName: 'Local user',
         localWorkspaceAvatarColor: 'blue',
       });
     });
@@ -65,12 +63,12 @@ describe('UserMenu', () => {
     sessionState.getUser.mockReturnValue(null);
   });
 
-  it('shows a local workspace menu when auth is disabled', async () => {
+  it('shows a local profile menu when auth is disabled', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
 
     expect(await screen.findByText('Profile')).toBeTruthy();
     expect(screen.getByText('Settings')).toBeTruthy();
@@ -78,7 +76,7 @@ describe('UserMenu', () => {
     expect(loadAuthMe).not.toHaveBeenCalled();
   });
 
-  it('reflects the edited local workspace name in the menu trigger', async () => {
+  it('reflects the edited local profile name in the menu trigger', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
     act(() => {
       useSettingsStore.getState().setLocalWorkspaceName('Meaning Studio');
@@ -89,38 +87,40 @@ describe('UserMenu', () => {
     expect(await screen.findByRole('button', { name: 'Meaning Studio' })).toBeInTheDocument();
   });
 
-  it('uses the deeper sidebar surface for the default local workspace trigger', async () => {
+  it('uses the deeper sidebar surface for the default local profile trigger', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<UserMenu collapsed={false} />);
 
-    expect(await screen.findByRole('button', { name: 'Local Workspace' })).toHaveClass(
+    expect(await screen.findByRole('button', { name: 'Local profile' })).toHaveClass(
       'bg-[var(--sidebar-panel)]'
     );
   });
 
-  it('opens the profile tab from the local workspace menu', async () => {
+  it('links to profile settings from the local profile menu', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
-    fireEvent.click(await screen.findByText('Profile'));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
 
-    expect(useSettingsModalStore.getState().isOpen).toBe(true);
-    expect(useSettingsModalStore.getState().activeTab).toBe('profile');
+    expect(await screen.findByRole('menuitem', { name: 'Profile' })).toHaveAttribute(
+      'href',
+      '/settings/profile'
+    );
   });
 
-  it('opens the preferences tab from the local workspace menu', async () => {
+  it('links to preferences settings from the local profile menu', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
-    fireEvent.click(await screen.findByText('Settings'));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
 
-    expect(useSettingsModalStore.getState().isOpen).toBe(true);
-    expect(useSettingsModalStore.getState().activeTab).toBe('preferences');
+    expect(await screen.findByRole('menuitem', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings/preferences'
+    );
   });
 
   it('opens upward in expanded mode instead of popping out to the right', async () => {
@@ -128,7 +128,7 @@ describe('UserMenu', () => {
 
     render(<UserMenu collapsed={false} />);
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local Workspace' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
 
     const menu = await screen.findByRole('menu');
     expect(menu.dataset.side).toBe('top');

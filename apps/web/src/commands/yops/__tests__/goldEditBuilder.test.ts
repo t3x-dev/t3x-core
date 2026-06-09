@@ -123,7 +123,7 @@ describe('sourceGoldEdit', () => {
 });
 
 describe('resolveGoldEditSource', () => {
-  it('uses the local workspace author for auth-disabled tree edits', async () => {
+  it('uses the local author for auth-disabled tree edits', async () => {
     process.env.NEXT_PUBLIC_AUTH_DISABLED = 'true';
     vi.spyOn(session, 'getSessionUser').mockReturnValue(null);
     const commitSpy = vi.spyOn(yopsService, 'commitOps');

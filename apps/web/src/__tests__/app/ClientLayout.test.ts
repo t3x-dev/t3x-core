@@ -3,6 +3,7 @@ import {
   isCommitDetailRoute,
   isProjectDiffRoute,
   isProjectMergeRoute,
+  isSettingsRoute,
   isShelllessDetailRoute,
 } from '@/app/ClientLayout';
 
@@ -55,5 +56,18 @@ describe('isShelllessDetailRoute', () => {
   it('does not match normal project workspace routes', () => {
     expect(isShelllessDetailRoute('/project/proj_123')).toBe(false);
     expect(isShelllessDetailRoute('/chat/project/proj_123/canvas')).toBe(false);
+  });
+});
+
+describe('isSettingsRoute', () => {
+  it('matches settings routes that should not render the global sidebar', () => {
+    expect(isSettingsRoute('/settings')).toBe(true);
+    expect(isSettingsRoute('/settings/profile')).toBe(true);
+    expect(isSettingsRoute('/settings/preferences')).toBe(true);
+  });
+
+  it('does not match project-scoped settings routes', () => {
+    expect(isSettingsRoute('/project/proj_123/settings')).toBe(false);
+    expect(isSettingsRoute('/chat')).toBe(false);
   });
 });

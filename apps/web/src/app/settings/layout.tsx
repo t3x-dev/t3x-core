@@ -37,7 +37,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
     items: [{ href: '/settings', label: 'Health', icon: Activity, exact: true }],
   },
   {
-    label: 'WORKSPACE',
+    label: 'LOCAL',
     items: [
       { href: '/settings/profile', label: 'Profile', icon: User },
       { href: '/settings/preferences', label: 'Preferences', icon: SlidersHorizontal },
