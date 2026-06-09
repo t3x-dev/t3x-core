@@ -34,7 +34,11 @@ vi.hoisted(() => {
   });
 });
 
-import { useSettingsStore } from '@/store/settingsStore';
+import {
+  DEFAULT_LOCAL_WORKSPACE_NAME,
+  resolveLocalWorkspaceName,
+  useSettingsStore,
+} from '@/store/settingsStore';
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -47,7 +51,7 @@ beforeEach(() => {
     userExperience: 'general',
     defaultView: 'timeline',
     density: 'comfortable',
-    localWorkspaceName: 'Local Workspace',
+    localWorkspaceName: 'Local user',
     localWorkspaceAvatarColor: 'blue',
   });
   localStorage.removeItem('t3x-settings');
@@ -66,7 +70,7 @@ describe('settingsStore', () => {
   it('has developerMode = false by default', () => {
     const state = useSettingsStore.getState();
     expect(state.developerMode).toBe(false);
-    expect(state.localWorkspaceName).toBe('Local Workspace');
+    expect(state.localWorkspaceName).toBe('Local user');
     expect(state.localWorkspaceAvatarColor).toBe('blue');
   });
 
@@ -149,6 +153,13 @@ describe('settingsStore', () => {
     const persisted = JSON.parse(raw!);
     expect(persisted.state.localWorkspaceName).toBe('Meaning Studio');
     expect(persisted.state.localWorkspaceAvatarColor).toBe('teal');
+  });
+
+  it('resolves blank local workspace names to the default author', () => {
+    expect(resolveLocalWorkspaceName('')).toBe(DEFAULT_LOCAL_WORKSPACE_NAME);
+    expect(resolveLocalWorkspaceName('   ')).toBe(DEFAULT_LOCAL_WORKSPACE_NAME);
+    expect(resolveLocalWorkspaceName('Local Workspace')).toBe(DEFAULT_LOCAL_WORKSPACE_NAME);
+    expect(resolveLocalWorkspaceName('  Local Tester  ')).toBe('Local Tester');
   });
 
   it('restores persisted state from localStorage', () => {

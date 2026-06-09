@@ -16,7 +16,7 @@ import {
   updateSourceTextRevision,
 } from '@/infrastructure/sourceTextRevisions';
 import { useChatStore } from '@/store/chatStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 
 export type InlineTextAction = SourceTextAction;
@@ -69,7 +69,7 @@ function shiftPatchOffsets(op: SourcedYOp, turnHash: string, startOffset: number
 }
 
 function inlineSource(): HumanSource {
-  const author = useSettingsStore.getState().localWorkspaceName.trim() || 'Local Workspace';
+  const author = resolveLocalWorkspaceName(useSettingsStore.getState().localWorkspaceName);
   return {
     type: 'human',
     author,
