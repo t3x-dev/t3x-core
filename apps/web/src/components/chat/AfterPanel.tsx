@@ -924,11 +924,10 @@ export function AfterPanel({
     canRun: canRunScript,
     disabledReason: scriptDisabledReason,
   } = useScriptExecution();
-  const commitInputRef = useRef<HTMLInputElement | null>(null);
   const resultScrollRef = useRef<HTMLDivElement | null>(null);
+  const commitDialogRef = useRef<HTMLDivElement | null>(null);
 
   const [showCommitDialog, setShowCommitDialog] = useState(false);
-  const [commitMessage, setCommitMessage] = useState('');
   const [ceremonyHash, setCeremonyHash] = useState<string | null>(null);
   const [resultScrollbarGutter, setResultScrollbarGutter] = useState(0);
   const [treeEditDialog, setTreeEditDialog] = useState<TreeEditDialogState>(null);
@@ -1015,8 +1014,7 @@ export function AfterPanel({
 
   useEffect(() => {
     if (!showCommitDialog) return;
-    commitInputRef.current?.focus();
-    commitInputRef.current?.select();
+    commitDialogRef.current?.focus();
   }, [showCommitDialog]);
 
   // Auto-close the commit dialog when a draft arrives. The dialog
@@ -1189,9 +1187,8 @@ export function AfterPanel({
   }, [trees]);
 
   const openCommitDialog = useCallback(() => {
-    setCommitMessage(getDefaultCommitName());
     setShowCommitDialog(true);
-  }, [getDefaultCommitName]);
+  }, []);
 
   const handleDiscardChanges = useCallback(() => {
     if (hasDraft || retainedDraftFailure) {
@@ -1222,84 +1219,79 @@ export function AfterPanel({
     setCeremonyHash(null);
   }, []);
 
-  const handleCommit = useCallback(
-    async (message: string) => {
-      // Defense in depth: the main Commit button and the dialog confirm
-      // both gate on shouldDisableCommit, but a keypress-in-flight can
-      // race a state update — handler reads stale React state and fires
-      // anyway. Re-check directly off the store so a draft that arrived
-      // mid-keystroke can't slip through and commit the pre-draft tree.
-      const workspaceState = useWorkspaceStore.getState();
-      if (workspaceState.hasDraft) {
-        toast.error('Apply or Discard the staged draft before committing.');
+  const handleCommit = useCallback(async () => {
+    // Defense in depth: the main Commit button and the dialog confirm
+    // both gate on shouldDisableCommit, but a keypress-in-flight can
+    // race a state update — handler reads stale React state and fires
+    // anyway. Re-check directly off the store so a draft that arrived
+    // mid-keystroke can't slip through and commit the pre-draft tree.
+    const workspaceState = useWorkspaceStore.getState();
+    if (workspaceState.hasDraft) {
+      toast.error('Apply or Discard the staged draft before committing.');
+      setShowCommitDialog(false);
+      return;
+    }
+    if (selectScriptDirty(workspaceState)) {
+      toast.error('Run or discard script changes before committing.');
+      setShowCommitDialog(false);
+      return;
+    }
+    if (selectIsInheritedBaselineOnly(workspaceState)) {
+      toast.error('Extract, edit, or Apply new YOps before committing this conversation.');
+      setShowCommitDialog(false);
+      return;
+    }
+    if (introDemoActive) {
+      const hash = await commitIntroDemoReplay(getDefaultCommitName());
+      if (hash) {
+        setCeremonyHash(hash);
         setShowCommitDialog(false);
-        return;
       }
-      if (selectScriptDirty(workspaceState)) {
-        toast.error('Run or discard script changes before committing.');
-        setShowCommitDialog(false);
-        return;
+      return;
+    }
+    try {
+      workspaceState.setMode('committing');
+      const result = await commitTrees(getDefaultCommitName());
+      useWorkspaceStore.getState().setMode('idle');
+      useWorkspaceStore.getState().setCommitted(true);
+      useWorkspaceStore.getState().clearDraft();
+      setCeremonyHash(result.hash);
+      setShowCommitDialog(false);
+      toast.success('Committed successfully');
+      const commitProjectId = result.projectId ?? useCommitStore.getState().projectId;
+      const commitConversationId =
+        result.conversationId ?? useWorkspaceStore.getState().conversationId;
+      const commitBranch = result.branch ?? useCommitStore.getState().commitBranch;
+      const sourceConversationIds =
+        result.sourceConversationIds && result.sourceConversationIds.length > 0
+          ? result.sourceConversationIds
+          : commitConversationId
+            ? [commitConversationId]
+            : [];
+      const commitCreatedEvent = {
+        type: 'commit.created',
+        projectId: commitProjectId ?? undefined,
+        conversationId: commitConversationId ?? undefined,
+        conversationIds: sourceConversationIds,
+        branch: commitBranch,
+        payload: { hash: result.hash, branch: commitBranch },
+      };
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('t3x:commit-created', { detail: commitCreatedEvent }));
       }
-      if (selectIsInheritedBaselineOnly(workspaceState)) {
-        toast.error('Extract, edit, or Apply new YOps before committing this conversation.');
-        setShowCommitDialog(false);
-        return;
-      }
-      if (introDemoActive) {
-        const hash = await commitIntroDemoReplay(message || 'Knowledge Extract');
-        if (hash) {
-          setCeremonyHash(hash);
-          setShowCommitDialog(false);
-        }
-        return;
-      }
+      useChatStore.getState().refreshSidebar();
       try {
-        workspaceState.setMode('committing');
-        const result = await commitTrees(message || 'Knowledge Extract');
-        useWorkspaceStore.getState().setMode('idle');
-        useWorkspaceStore.getState().setCommitted(true);
-        useWorkspaceStore.getState().clearDraft();
-        setCeremonyHash(result.hash);
-        setShowCommitDialog(false);
-        toast.success('Committed successfully');
-        const commitProjectId = result.projectId ?? useCommitStore.getState().projectId;
-        const commitConversationId =
-          result.conversationId ?? useWorkspaceStore.getState().conversationId;
-        const commitBranch = result.branch ?? useCommitStore.getState().commitBranch;
-        const sourceConversationIds =
-          result.sourceConversationIds && result.sourceConversationIds.length > 0
-            ? result.sourceConversationIds
-            : commitConversationId
-              ? [commitConversationId]
-              : [];
-        const commitCreatedEvent = {
-          type: 'commit.created',
-          projectId: commitProjectId ?? undefined,
-          conversationId: commitConversationId ?? undefined,
-          conversationIds: sourceConversationIds,
-          branch: commitBranch,
-          payload: { hash: result.hash, branch: commitBranch },
-        };
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('t3x:commit-created', { detail: commitCreatedEvent })
-          );
-        }
-        useChatStore.getState().refreshSidebar();
-        try {
-          const channel = new BroadcastChannel('t3x-commits');
-          channel.postMessage(commitCreatedEvent);
-          channel.close();
-        } catch {
-          // BroadcastChannel not supported
-        }
-      } catch (err: unknown) {
-        useWorkspaceStore.getState().setMode('idle');
-        toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        const channel = new BroadcastChannel('t3x-commits');
+        channel.postMessage(commitCreatedEvent);
+        channel.close();
+      } catch {
+        // BroadcastChannel not supported
       }
-    },
-    [commitIntroDemoReplay, commitTrees, introDemoActive]
-  );
+    } catch (err: unknown) {
+      useWorkspaceStore.getState().setMode('idle');
+      toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [commitIntroDemoReplay, commitTrees, getDefaultCommitName, introDemoActive]);
 
   return (
     <div
@@ -1578,19 +1570,27 @@ export function AfterPanel({
           className="absolute inset-0 z-10 flex items-center justify-center rounded-b-lg bg-[var(--overlay-scrim)] backdrop-blur-[var(--fx-blur-panel)]"
         >
           <div
+            ref={commitDialogRef}
             data-intro-target="chat-commit-dialog"
-            className="mx-3 w-full max-w-[280px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="after-panel-commit-dialog-title"
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowCommitDialog(false);
+            }}
+            className="mx-3 w-full max-w-[260px] rounded-xl border border-[var(--stroke-default)] bg-[var(--workspace-panel)] p-4 shadow-[var(--fx-shadow-lg)]"
           >
-            <label
-              htmlFor="after-panel-commit-message"
-              className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1.5"
+            <h2
+              id="after-panel-commit-dialog-title"
+              className="text-[13px] font-semibold text-[var(--text-primary)]"
             >
-              Name this commit
-            </label>
+              Commit this version?
+            </h2>
             {/*
               Dialog confirm gates on the same helper as the main button,
               so a draft that arrives while the dialog is open disables
-              Enter + click here too (defense against the race the
+              the confirm action here too (defense against the race the
               auto-close effect also handles cooperatively).
             */}
             {(() => {
@@ -1603,49 +1603,34 @@ export function AfterPanel({
                 scriptDirty,
               });
               return (
-                <>
-                  <input
-                    id="after-panel-commit-message"
-                    ref={commitInputRef}
-                    type="text"
-                    value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !dialogDisabled) handleCommit(commitMessage);
-                      if (e.key === 'Escape') setShowCommitDialog(false);
-                    }}
-                    className="w-full rounded-lg border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-commit)] transition-colors"
-                    placeholder="e.g. Budget & Attractions"
-                  />
-                  <div className="flex justify-end gap-1.5 mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowCommitDialog(false)}
-                      className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="commit-dialog-confirm"
-                      data-intro-target="chat-commit-confirm"
-                      onClick={() => handleCommit(commitMessage)}
-                      disabled={dialogDisabled}
-                      title={
-                        isInheritedBaselineOnly
-                          ? 'Extract, edit, or Apply new YOps before committing this conversation'
-                          : hasDraft
-                            ? 'Apply or Discard the staged draft before committing'
-                            : scriptDirty
-                              ? 'Run or discard script changes before committing'
-                              : undefined
-                      }
-                      className="rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
-                    >
-                      {isCommitting ? 'Committing...' : 'Commit'}
-                    </button>
-                  </div>
-                </>
+                <div className="flex justify-end gap-1.5 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCommitDialog(false)}
+                    className="rounded px-2.5 py-1 text-[10px] font-medium text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="commit-dialog-confirm"
+                    data-intro-target="chat-commit-confirm"
+                    onClick={() => handleCommit()}
+                    disabled={dialogDisabled}
+                    title={
+                      isInheritedBaselineOnly
+                        ? 'Extract, edit, or Apply new YOps before committing this conversation'
+                        : hasDraft
+                          ? 'Apply or Discard the staged draft before committing'
+                          : scriptDirty
+                            ? 'Run or discard script changes before committing'
+                            : undefined
+                    }
+                    className="rounded bg-[var(--accent-commit)] px-2.5 py-1 text-[10px] font-semibold text-[var(--on-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {isCommitting ? 'Committing...' : 'Commit'}
+                  </button>
+                </div>
               );
             })()}
           </div>
