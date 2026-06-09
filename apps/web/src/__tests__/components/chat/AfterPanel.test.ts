@@ -7,8 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   applyEdit: vi.fn(),
   commitTrees: vi.fn(),
+  commitIntroDemoReplay: vi.fn(),
   discardDraft: vi.fn(),
   executeScript: vi.fn(),
+  applyIntroDemoReplay: vi.fn(),
+  introDemoActive: false,
   scriptCanRun: false,
   scriptDisabledReason: 'No runnable script' as string | null,
   parentCommit: { current: null as null | { trees: unknown[]; message?: string | null } },
@@ -24,6 +27,17 @@ vi.mock('@/hooks/commits/useCommitActions', () => ({
 
 vi.mock('@/hooks/commits/useParentCommit', () => ({
   useParentCommit: () => mocks.parentCommit.current,
+}));
+
+vi.mock('@/hooks/onboarding/useIntroDemoQueryFlag', () => ({
+  useIntroDemoQueryFlag: () => mocks.introDemoActive,
+}));
+
+vi.mock('@/hooks/onboarding/useIntroDemoReplayActions', () => ({
+  useIntroDemoReplayActions: () => ({
+    apply: mocks.applyIntroDemoReplay,
+    commit: mocks.commitIntroDemoReplay,
+  }),
 }));
 
 vi.mock('@/hooks/drafts/useDiscardDraft', () => ({
@@ -52,8 +66,11 @@ beforeEach(() => {
   mocks.applyEdit.mockReset();
   mocks.applyEdit.mockResolvedValue(undefined);
   mocks.commitTrees.mockReset();
+  mocks.commitIntroDemoReplay.mockReset();
   mocks.discardDraft.mockReset();
   mocks.executeScript.mockReset();
+  mocks.applyIntroDemoReplay.mockReset();
+  mocks.introDemoActive = false;
   mocks.scriptCanRun = false;
   mocks.scriptDisabledReason = 'No runnable script';
   mocks.parentCommit.current = null;
@@ -369,6 +386,7 @@ describe('AfterPanel tree edit controls', () => {
       },
     ];
     window.history.pushState(null, '', '/chat/conv_demo?introDemo=1');
+    mocks.introDemoActive = true;
     mocks.parentCommit.current = {
       message: 'Old demo fixture',
       trees: parentTrees,
@@ -446,10 +464,41 @@ describe('AfterPanel tree edit controls', () => {
     render(createElement(AfterPanel));
 
     fireEvent.click(screen.getByRole('button', { name: 'Commit · main' }));
+    expect(screen.getByRole('dialog', { name: 'Commit this version?' })).not.toBeNull();
+    expect(screen.queryByText('Name this commit')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+
     fireEvent.click(screen.getByTestId('commit-dialog-confirm'));
 
+    await waitFor(() => expect(mocks.commitTrees).toHaveBeenCalledWith('Current'));
     expect(await screen.findByRole('status', { name: 'Commit sealed' })).not.toBeNull();
     expect(screen.getByTitle('sha256:1234567890abcdef1234567890abcdef')).not.toBeNull();
+  });
+
+  it('confirms intro demo commits with the generated default message', async () => {
+    mocks.introDemoActive = true;
+    mocks.commitIntroDemoReplay.mockResolvedValueOnce('sha256:intro-demo-replay');
+    useWorkspaceStore.getState().setConversation('conv_demo');
+    useWorkspaceStore.getState().setDerived({
+      tree: {
+        trees: [{ key: 'prompt_review_intake', slots: { value: 'ready' }, children: [] }],
+        relations: [],
+      },
+      sourceIndex: new Map(),
+      opsLog: [],
+    });
+
+    render(createElement(AfterPanel));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit · main' }));
+    expect(screen.queryByRole('textbox')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('commit-dialog-confirm'));
+
+    await waitFor(() =>
+      expect(mocks.commitIntroDemoReplay).toHaveBeenCalledWith('Prompt Review Intake')
+    );
+    expect(mocks.commitTrees).not.toHaveBeenCalled();
   });
 });
 

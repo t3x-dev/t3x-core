@@ -113,6 +113,12 @@ function CanvasWorkspaceInner({
     [pathname, searchParams]
   );
   const introDemoActive = searchParams.get('introDemo') === '1';
+  const introDemoLeafReturnTo = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('introDemo', '1');
+    params.set('introDemoStage', 'leaf');
+    return buildReturnTo(pathname, params);
+  }, [pathname, searchParams]);
   const withIntroDemo = useCallback(
     (href: string) => {
       if (!introDemoActive) return href;
@@ -400,6 +406,19 @@ function CanvasWorkspaceInner({
 
     return {
       actions: buildCommitActions({
+        onViewDetails: () => {
+          if (projectId && hash) {
+            const detailHref = `/project/${projectId}/commit/${encodeURIComponent(hash)}`;
+            router.push(
+              introDemoActive
+                ? withReturnTo(
+                    `${detailHref}?introDemo=1&introDemoStage=commitDetails`,
+                    introDemoLeafReturnTo
+                  )
+                : detailHref
+            );
+          }
+        },
         onViewDiff:
           parentHash && projectId && hash
             ? () => {
@@ -545,8 +564,7 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Committed nodes: single click = action panel. The commit hash inside the node
-              // is the canonical detail-page entrypoint.
+              // Committed nodes: single click = action panel. Details opens the commit page.
               if (!compactViewport) {
                 if (data.branchType === 'branch') {
                   setHighlight({ branch: data.branchName, mode: 'branch' });

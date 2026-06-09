@@ -1,6 +1,5 @@
 'use client';
 
-import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import {
   ArrowRight,
   CheckCircle2,
@@ -8,7 +7,6 @@ import {
   ChevronRight,
   FileText,
   GitCommit,
-  Keyboard,
   Layers3,
   ListChecks,
   MessageSquareText,
@@ -40,7 +38,6 @@ interface DemoStep {
   target: string | null;
   tone: DemoTone;
   icon: typeof Play;
-  details: string[];
 }
 
 interface TargetRect {
@@ -54,122 +51,74 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'welcome',
     label: 'Start',
-    title: 'Start from real material, not a blank chat',
-    description:
-      'This page is where a user gives T3X a prompt, transcript, release note, design discussion, or policy text to structure.',
+    title: 'Start with real material',
+    description: 'Paste source text to begin.',
     target: 'landing-copy',
     tone: 'conversation',
     icon: Play,
-    details: [
-      'The heading states the first user job: choose what T3X should structure.',
-      'The flow chips below summarize the mental model: source becomes YOps, YOps becomes commit.',
-      'In this demo, no external model API is required; the walkthrough uses developer-seeded example data.',
-    ],
   },
   {
     id: 'starter_cards',
     label: 'Shortcuts',
-    title: 'Use starter cards to choose a common workflow',
-    description:
-      'These cards are not decoration. They prefill the composer with a task pattern so a new user does not need to invent the first instruction.',
+    title: 'Use a starter card',
+    description: 'Pick a preset, then edit it.',
     target: 'starter-cards',
     tone: 'source',
     icon: FileText,
-    details: [
-      'Compare prompt versions: use this when the user has V1/V2 text and wants semantic changes preserved.',
-      'Extract decisions from notes: use this for meetings, research, and design discussions.',
-      'Create reusable output: use this when committed state should become a leaf artifact.',
-    ],
   },
   {
     id: 'flow',
     label: 'Flow',
-    title: 'Explain the product path before the user clicks',
-    description:
-      'The small Source -> YOps -> Commit path is the simplest explanation of what will happen after the user starts.',
+    title: 'Follow Source -> YOps -> Commit',
+    description: 'Source becomes YOps, then Commit.',
     target: 'flow-steps',
     tone: 'extract',
     icon: Layers3,
-    details: [
-      'Source is the original evidence.',
-      'YOps is the extracted, reviewable change to structured state.',
-      'Commit is the stable version users can diff, merge, and reuse.',
-    ],
   },
   {
     id: 'provider',
     label: 'Provider',
-    title: 'Provider setup is optional for this demo path',
-    description:
-      'In normal use, generation needs a configured provider. The first-run demo should still teach the interface even when the user has no API key.',
+    title: 'No API key needed',
+    description: 'This demo uses fixture replay.',
     target: 'provider-status',
     tone: 'pending',
     icon: ListChecks,
-    details: [
-      'If the provider banner is visible, it explains why live generation is disabled.',
-      'The onboarding path itself uses prepared data, so the user can learn before connecting a provider.',
-      'When a provider is configured, this step becomes a quick model/status explanation.',
-    ],
   },
   {
     id: 'composer',
     label: 'Composer',
-    title: 'The composer is where the source and instruction enter',
-    description:
-      'This is the main action area. Users paste raw material, select a model when available, attach context, then start the workflow.',
+    title: 'Use the composer',
+    description: 'Add source and instructions.',
     target: 'composer',
     tone: 'conversation',
     icon: MessageSquareText,
-    details: [
-      `Example source: ${DEMO_WORKSPACE_FIXTURE.source.title}.`,
-      'The text box receives the material and instruction.',
-      'The surrounding controls handle model selection and attachments when the provider path is enabled.',
-    ],
   },
   {
     id: 'send',
     label: 'Start',
-    title: 'Starting a run creates the next work surface',
-    description:
-      'After the user sends material, T3X moves from lightweight input into the working area where extracted points can be reviewed.',
+    title: 'Start the run',
+    description: 'Move into review.',
     target: 'composer',
     tone: 'pending',
     icon: SendHorizontal,
-    details: [
-      'For live use, the send action creates or opens a conversation workspace.',
-      'For the guided demo, the same story is played with seeded source, draft points, constraints, and output.',
-      'The important habit is: start broad, then review before committing.',
-    ],
   },
   {
     id: 'review',
     label: 'Review',
-    title: 'What the next screen teaches after starting',
-    description:
-      'The rest of the demo should continue as a guided review: inspect extracted points, adjust constraints, preview output, then commit.',
+    title: 'Review before commit',
+    description: 'Check points, rules, and output.',
     target: null,
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Draft points: include or exclude the state that should survive.',
-      'Constraints: require key facts and exclude unsafe phrasing.',
-      'Commit: save the reviewed state as a stable version before reusing it.',
-    ],
   },
   {
     id: 'finish',
     label: 'Use',
-    title: 'You can now use the page intentionally',
-    description:
-      'The first-run teaching path ends here and leaves the user on the real /chat page, ready to try the same actions.',
+    title: 'Start using T3X',
+    description: 'Continue on the real page.',
     target: null,
     tone: 'success',
     icon: CheckCircle2,
-    details: [
-      'No separate demo page is needed.',
-      'The user learned what to paste, which shortcut to choose, what provider state means, and what happens after sending.',
-      'The dev-only replay remains available at /chat?introDemo=1 while building this walkthrough.',
-    ],
   },
 ];
 
@@ -186,11 +135,6 @@ const TONE_CLASSES: Record<DemoTone, string> = {
   success:
     'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]',
 };
-
-function prefersReducedMotion() {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 function readTargetRect(target: string | null): TargetRect | null {
   if (!target) return null;
@@ -311,15 +255,6 @@ export function FirstRunDemoOverlay({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open || prefersReducedMotion() || atEnd) return;
-    const timeout = window.setTimeout(
-      () => setStepIndex((current) => Math.min(current + 1, DEMO_STEPS.length - 1)),
-      step.id === 'welcome' ? 3200 : 4200
-    );
-    return () => window.clearTimeout(timeout);
-  }, [atEnd, open, step.id]);
-
   if (!open) return null;
 
   const finishDemo = () => {
@@ -356,26 +291,23 @@ export function FirstRunDemoOverlay({
           maxHeight: 'calc(100vh - 32px)',
         }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 pb-2.5 pt-3">
           <div className="min-w-0">
             <div
               className={cn(
-                'mb-2 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium',
+                'mb-1.5 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[13px] font-medium',
                 TONE_CLASSES[step.tone]
               )}
             >
               <StepIcon className="h-3.5 w-3.5" />
-              Guided walkthrough · no API needed
+              Intro
             </div>
             <h2
               id="first-run-demo-title"
-              className="text-base font-semibold tracking-[0] text-[var(--text-primary)]"
+              className="text-[17px] font-semibold leading-6 tracking-[0] text-[var(--text-primary)]"
             >
               {step.title}
             </h2>
-            <p className="mt-1 text-sm leading-normal text-[var(--text-secondary)]">
-              {step.description}
-            </p>
           </div>
           <button
             type="button"
@@ -387,7 +319,7 @@ export function FirstRunDemoOverlay({
           </button>
         </header>
 
-        <div className="space-y-3 px-4 py-3">
+        <div className="space-y-3 px-4 py-2.5">
           <div className="grid grid-cols-4 gap-1.5">
             {DEMO_STEPS.map((item, index) => {
               const selected = index === stepIndex;
@@ -399,7 +331,7 @@ export function FirstRunDemoOverlay({
                   type="button"
                   onClick={() => setStepIndex(index)}
                   className={cn(
-                    'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                    'flex h-9 items-center justify-center rounded-md border text-[13px] transition-colors',
                     selected
                       ? cn('border-current', TONE_CLASSES[item.tone])
                       : completed
@@ -419,29 +351,6 @@ export function FirstRunDemoOverlay({
             })}
           </div>
 
-          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0] text-[var(--text-tertiary)]">
-              <Keyboard className="h-3.5 w-3.5" />
-              What to learn here
-            </div>
-            <ul className="space-y-2">
-              {step.details.map((detail) => (
-                <li
-                  key={detail}
-                  className="flex gap-2 text-sm leading-normal text-[var(--text-secondary)]"
-                >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-50" />
-                  <span>{detail}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {step.id === 'composer' || step.id === 'send' ? (
-            <div className="rounded-lg border border-[var(--accent-pending)]/25 bg-[var(--accent-pending-soft)] p-3 text-sm leading-normal text-[var(--text-secondary)]">
-              Demo source preview: {DEMO_WORKSPACE_FIXTURE.source.text}
-            </div>
-          ) : null}
           {openDemoProjectError ? (
             <div className="rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error-muted)] p-3 text-sm text-[var(--status-error)]">
               {openDemoProjectError}
@@ -449,8 +358,8 @@ export function FirstRunDemoOverlay({
           ) : null}
         </div>
 
-        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
             <span className="font-mono">
               {String(stepIndex + 1).padStart(2, '0')} /{' '}
               {String(DEMO_STEPS.length).padStart(2, '0')}

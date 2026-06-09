@@ -1,6 +1,6 @@
 'use client';
 
-import { ClipboardCheck, FileText, Gauge, Leaf as LeafIcon, ListChecks } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
@@ -36,83 +36,13 @@ import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 
 const LEAF_TOUR_STEPS: FeatureTourStep[] = [
   {
-    id: 'header',
-    label: 'Actions',
-    title: 'Click Generate to expose editing controls',
-    description:
-      'The leaf page has two real modes. Generate mode shows controls for editing constraints and regenerating the artifact.',
-    target: 'leaf-mode-generate',
-    tone: 'leaf',
-    icon: LeafIcon,
-    details: [
-      'Click Generate in the header.',
-      'The source and inspector controls become the editing workspace.',
-      'This is where users retune an artifact before publishing it.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'status',
-    label: 'Status',
-    title: 'Click the highlighted status strip',
-    description:
-      'The status strip explains artifact type, semantic coverage, commit verification, and assertion results. Click it to continue.',
-    target: 'leaf-status',
-    tone: 'commit',
-    icon: ListChecks,
-    details: [
-      'Click anywhere inside the highlighted status strip.',
-      'Semantic point coverage tells users whether the leaf reflects committed state.',
-      'Commit verified ties the artifact back to a stable version.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'source',
-    label: 'Source',
-    title: 'Click the highlighted source panel',
-    description:
-      'The left panel is where users inspect committed semantic points and add require/exclude constraints in Generate mode. Click it to continue.',
-    target: 'leaf-source-panel',
-    tone: 'source',
-    icon: FileText,
-    details: [
-      'Click inside the highlighted source panel.',
-      'Source frames show what the leaf is allowed to use.',
-      'Require and Exclude actions turn source state into output rules.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
     id: 'output',
-    label: 'Output',
-    title: 'Click Display to return to the final reusable output',
-    description:
-      'Display mode focuses the page on reading, validation, sharing, and export after the artifact has been reviewed.',
-    target: 'leaf-mode-display',
+    label: 'Generate',
+    title: 'Generate the Leaf output',
+    description: 'Run this Leaf, then demo ends.',
+    target: 'leaf-generate-action',
     tone: 'leaf',
     icon: ClipboardCheck,
-    details: [
-      'Click Display in the header.',
-      'The right rail switches to quality review.',
-      'The output stays connected to source-backed semantic points.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'quality',
-    label: 'Quality',
-    title: 'Click the highlighted quality panel',
-    description:
-      'The right rail summarizes coverage, constraints, assertions, and publish actions. Click it to finish the guided demo.',
-    target: 'leaf-quality-panel',
-    tone: 'success',
-    icon: Gauge,
-    details: [
-      'Click inside the highlighted quality panel.',
-      'Coverage shows whether selected semantic points made it into the output.',
-      'Assertions are pass/fail checks tied to constraints.',
-    ],
     advanceOnTargetClick: true,
   },
 ];
@@ -599,7 +529,7 @@ export function LeafDetailWorkspace({
       />
       <FeatureTourOverlay
         open={tourOpen}
-        title="Leaf walkthrough"
+        title="Leaf"
         steps={LEAF_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}
