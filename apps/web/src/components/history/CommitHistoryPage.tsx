@@ -51,9 +51,8 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'header',
     label: 'Tools',
-    title: 'Use history as the project timeline',
-    description:
-      'The header gives users navigation, keyboard hints, and the branch filter before they inspect individual commits.',
+    title: 'Use timeline',
+    description: 'Review project commits in order.',
     target: 'history-header',
     tone: 'commit',
     icon: History,
@@ -61,9 +60,8 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'filter',
     label: 'Branch',
-    title: 'Filter by branch to focus the timeline',
-    description:
-      'The branch selector teaches that T3X projects can have multiple semantic paths, not only one linear chat.',
+    title: 'Filter branch',
+    description: 'Focus one path.',
     target: 'history-branch-filter',
     tone: 'pending',
     icon: GitBranch,
@@ -71,9 +69,8 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'timeline',
     label: 'Rows',
-    title: 'Click a row to open the commit detail page',
-    description:
-      'Each row is a versioned snapshot with hash, message, author, branch, and diff stats.',
+    title: 'Open commit row',
+    description: 'See hash, branch, and diff stats.',
     target: 'history-timeline',
     tone: 'extract',
     icon: GitCommit,
@@ -81,9 +78,8 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'keyboard',
     label: 'Keys',
-    title: 'Keyboard navigation is part of the product workflow',
-    description:
-      'History is designed for repeated review, so the demo should teach j/k, open, and deselect rather than only mouse clicks.',
+    title: 'Use keyboard shortcuts',
+    description: 'Navigate with j/k and open.',
     target: 'history-keyboard',
     tone: 'success',
     icon: Keyboard,
@@ -335,7 +331,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
       </div>
       <FeatureTourOverlay
         open={tourOpen}
-        title="History walkthrough"
+        title="History"
         steps={HISTORY_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}

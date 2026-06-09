@@ -51,9 +51,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'welcome',
     label: 'Start',
-    title: 'Start from real material, not a blank chat',
-    description:
-      'Paste a prompt, transcript, release note, or policy text. T3X turns source material into reviewable structured changes.',
+    title: 'Start with real material',
+    description: 'Paste source text to begin.',
     target: 'landing-copy',
     tone: 'conversation',
     icon: Play,
@@ -61,9 +60,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'starter_cards',
     label: 'Shortcuts',
-    title: 'Use starter cards to choose a common workflow',
-    description:
-      'Pick a starter card to prefill the composer with a common task. It gives the run a useful shape before you edit.',
+    title: 'Use a starter card',
+    description: 'Pick a preset, then edit it.',
     target: 'starter-cards',
     tone: 'source',
     icon: FileText,
@@ -71,9 +69,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'flow',
     label: 'Flow',
-    title: 'Explain the product path before the user clicks',
-    description:
-      'This is the path: Source becomes YOps, then a commit. The demo follows that same review-before-save loop.',
+    title: 'Follow Source -> YOps -> Commit',
+    description: 'Source becomes YOps, then Commit.',
     target: 'flow-steps',
     tone: 'extract',
     icon: Layers3,
@@ -81,9 +78,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'provider',
     label: 'Provider',
-    title: 'Provider setup is optional for this demo path',
-    description:
-      'No API key is needed for this walkthrough. Live generation can be connected later from the provider status area.',
+    title: 'No API key needed',
+    description: 'This demo uses fixture replay.',
     target: 'provider-status',
     tone: 'pending',
     icon: ListChecks,
@@ -91,9 +87,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'composer',
     label: 'Composer',
-    title: 'The composer is where the source and instruction enter',
-    description:
-      'Use the composer to enter source material and the instruction for the run. Model and attachment controls stay nearby when enabled.',
+    title: 'Use the composer',
+    description: 'Add source and instructions.',
     target: 'composer',
     tone: 'conversation',
     icon: MessageSquareText,
@@ -101,9 +96,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'send',
     label: 'Start',
-    title: 'Starting a run creates the next work surface',
-    description:
-      'Sending moves from lightweight input into review. The next surface lets you inspect extracted points before committing.',
+    title: 'Start the run',
+    description: 'Move into review.',
     target: 'composer',
     tone: 'pending',
     icon: SendHorizontal,
@@ -111,9 +105,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'review',
     label: 'Review',
-    title: 'What the next screen teaches after starting',
-    description:
-      'Review the extracted points, adjust constraints, preview output, then commit. Nothing becomes stable until you save it.',
+    title: 'Review before commit',
+    description: 'Check points, rules, and output.',
     target: null,
     tone: 'commit',
     icon: GitCommit,
@@ -121,9 +114,8 @@ const DEMO_STEPS: DemoStep[] = [
   {
     id: 'finish',
     label: 'Use',
-    title: 'You can now use the page intentionally',
-    description:
-      'The tour ends on the real chat page. Start with source material, review the draft, then commit the state you trust.',
+    title: 'Start using T3X',
+    description: 'Continue on the real page.',
     target: null,
     tone: 'success',
     icon: CheckCircle2,
@@ -299,26 +291,23 @@ export function FirstRunDemoOverlay({
           maxHeight: 'calc(100vh - 32px)',
         }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 pb-2.5 pt-3">
           <div className="min-w-0">
             <div
               className={cn(
-                'mb-2 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium',
+                'mb-1.5 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[13px] font-medium',
                 TONE_CLASSES[step.tone]
               )}
             >
               <StepIcon className="h-3.5 w-3.5" />
-              Guided walkthrough · no API needed
+              Intro
             </div>
             <h2
               id="first-run-demo-title"
-              className="text-base font-semibold tracking-[0] text-[var(--text-primary)]"
+              className="text-[17px] font-semibold leading-6 tracking-[0] text-[var(--text-primary)]"
             >
               {step.title}
             </h2>
-            <p className="mt-1 text-sm leading-normal text-[var(--text-secondary)]">
-              {step.description}
-            </p>
           </div>
           <button
             type="button"
@@ -330,7 +319,7 @@ export function FirstRunDemoOverlay({
           </button>
         </header>
 
-        <div className="space-y-3 px-4 py-3">
+        <div className="space-y-3 px-4 py-2.5">
           <div className="grid grid-cols-4 gap-1.5">
             {DEMO_STEPS.map((item, index) => {
               const selected = index === stepIndex;
@@ -342,7 +331,7 @@ export function FirstRunDemoOverlay({
                   type="button"
                   onClick={() => setStepIndex(index)}
                   className={cn(
-                    'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                    'flex h-9 items-center justify-center rounded-md border text-[13px] transition-colors',
                     selected
                       ? cn('border-current', TONE_CLASSES[item.tone])
                       : completed
@@ -369,8 +358,8 @@ export function FirstRunDemoOverlay({
           ) : null}
         </div>
 
-        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
             <span className="font-mono">
               {String(stepIndex + 1).padStart(2, '0')} /{' '}
               {String(DEMO_STEPS.length).padStart(2, '0')}

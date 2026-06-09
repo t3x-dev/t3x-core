@@ -42,8 +42,8 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     {
       id: 'selectCommit',
       label: 'Commit card',
-      title: 'Click the highlighted commit card',
-      description: 'Select a committed version to reveal its Details and Leaf actions.',
+      title: 'Select this commit version',
+      description: 'Select this version.',
       target: 'canvas-commit-node',
       icon: MapIcon,
       tone: 'commit',
@@ -52,8 +52,8 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     {
       id: 'openDetails',
       label: 'Details',
-      title: 'Click Details to inspect this commit',
-      description: 'Details opens the commit page with identity, content, and audit context.',
+      title: 'Open commit details',
+      description: 'Open commit details.',
       target: 'canvas-floating-action-details',
       icon: Eye,
       tone: 'commit',
@@ -64,8 +64,8 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     {
       id: 'selectCommit',
       label: 'Commit card',
-      title: 'Click the highlighted commit card again',
-      description: 'Select the committed version so Canvas can create a Leaf from it.',
+      title: 'Select this commit version',
+      description: 'Select this version.',
       target: 'canvas-commit-node',
       icon: MapIcon,
       tone: 'commit',
@@ -74,8 +74,8 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     {
       id: 'createLeaf',
       label: '+ New Leaf',
-      title: 'Click the highlighted + New Leaf action',
-      description: 'This opens the Leaf creation panel from the selected committed version.',
+      title: 'Create a Leaf from commit',
+      description: 'Create from this commit.',
       target: 'canvas-floating-action-new-leaf',
       icon: Plus,
       tone: 'leaf',
@@ -84,9 +84,8 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     {
       id: 'chooseLeafType',
       label: 'Leaf type',
-      title: 'Choose an output type',
-      description:
-        'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
+      title: 'Choose the Leaf destination',
+      description: 'Pick Twitter, Weibo, or WeChat.',
       target: 'canvas-leaf-type-options',
       icon: Send,
       tone: 'leaf',
@@ -237,8 +236,11 @@ export function ProjectDemoTourOverlay({
   }, [open, stage]);
 
   const coachPosition = useMemo(() => {
+    const maxWidth = guided ? 376 : 420;
     const width =
-      typeof window === 'undefined' ? 420 : Math.max(240, Math.min(420, window.innerWidth - 32));
+      typeof window === 'undefined'
+        ? maxWidth
+        : Math.max(240, Math.min(maxWidth, window.innerWidth - 32));
     const height =
       typeof window === 'undefined' ? coachHeight : Math.min(coachHeight, window.innerHeight - 32);
     const maxTop =
@@ -264,7 +266,7 @@ export function ProjectDemoTourOverlay({
           : clamp(targetRect.left, 16, window.innerWidth - width - 16);
     const top = clamp(targetRect.top, 16, maxTop);
     return { width, top, left };
-  }, [coachHeight, targetRect]);
+  }, [coachHeight, guided, targetRect]);
 
   useEffect(() => {
     if (!open || !coachRef.current) return;
@@ -423,34 +425,32 @@ export function ProjectDemoTourOverlay({
       >
         <header
           className={cn(
-            'flex items-start justify-between gap-3 px-4 py-3',
+            'flex items-start justify-between gap-3 px-4',
+            guided ? 'pb-2.5 pt-3' : 'py-3',
             showStepNav && 'border-b border-[var(--stroke-divider)]'
           )}
         >
           <div>
             <div
               className={cn(
-                'mb-2 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium',
+                'mb-1.5 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[13px] font-medium',
                 TONE_CLASSES[step.tone]
               )}
             >
               <StepIcon className="h-3.5 w-3.5" />
-              Project walkthrough
+              Canvas
             </div>
             <h2
               id="project-demo-tour-title"
-              className="text-base font-semibold text-[var(--text-primary)]"
+              className="text-[17px] font-semibold leading-6 text-[var(--text-primary)]"
             >
               {step.title}
             </h2>
-            <p className="mt-1 text-sm leading-normal text-[var(--text-secondary)]">
-              {step.description}
-            </p>
           </div>
           {!guided && (
             <button
               type="button"
-              aria-label="Close project walkthrough"
+              aria-label="Close project demo"
               onClick={onClose}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
             >
@@ -474,7 +474,7 @@ export function ProjectDemoTourOverlay({
                     aria-current={selected ? 'step' : undefined}
                     aria-label={item.label}
                     className={cn(
-                      'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                      'flex h-9 items-center justify-center rounded-md border text-[13px] transition-colors',
                       selected
                         ? cn('border-current', TONE_CLASSES[item.tone])
                         : completed
@@ -496,11 +496,13 @@ export function ProjectDemoTourOverlay({
 
         <footer
           className={cn(
-            'flex flex-col border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 sm:flex-row sm:items-center sm:justify-between',
-            guided ? 'gap-1.5 py-2' : 'gap-2 py-3'
+            'px-4 sm:flex-row sm:items-center sm:justify-between',
+            guided
+              ? 'flex items-center justify-between gap-3 pb-3 pt-1.5'
+              : 'flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] py-3'
           )}
         >
-          <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
             <span className="font-mono">
               {String(stepIndex + 1).padStart(2, '0')} / {String(steps.length).padStart(2, '0')}
             </span>

@@ -38,15 +38,18 @@ describe('ProjectDemoTourOverlay', () => {
       </>
     );
 
-    expect(screen.getByText('Click the highlighted commit card')).toBeInTheDocument();
+    expect(screen.getByText('Select this commit version')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Click Details to inspect this commit')).toBeInTheDocument();
+      expect(screen.getByText('Open commit details')).toBeInTheDocument();
+    });
+    await act(async () => {
+      await Promise.resolve();
     });
     expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument();
-    expect(screen.queryByText('Click the highlighted + New Leaf action')).toBeNull();
+    expect(screen.queryByText('Create a Leaf from commit')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
 
@@ -82,12 +85,12 @@ describe('ProjectDemoTourOverlay', () => {
       </>
     );
 
-    expect(screen.getByText('Click the highlighted commit card again')).toBeInTheDocument();
+    expect(screen.getByText('Select this commit version')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+      expect(screen.getByText('Create a Leaf from commit')).toBeInTheDocument();
     });
     expect(screen.queryByText('What to click here')).toBeNull();
     expect(screen.queryByText('Click the highlighted Leaf tab')).toBeNull();
@@ -99,7 +102,7 @@ describe('ProjectDemoTourOverlay', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+      expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     });
     expect(screen.getByText('Leaf type')).toBeInTheDocument();
     expect(screen.queryByText('What to click here')).toBeNull();
@@ -138,7 +141,7 @@ describe('ProjectDemoTourOverlay', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
     await waitFor(() => {
-      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+      expect(screen.getByText('Create a Leaf from commit')).toBeInTheDocument();
     });
     await act(async () => {
       await Promise.resolve();
@@ -146,12 +149,12 @@ describe('ProjectDemoTourOverlay', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
     await waitFor(() => {
-      expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+      expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId('leaf-type-options'));
 
-    expect(screen.getByText('Choose an output type')).toBeInTheDocument();
+    expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));
@@ -189,15 +192,15 @@ describe('ProjectDemoTourOverlay', () => {
         await vi.runOnlyPendingTimersAsync();
       });
 
-      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
+      expect(screen.getByText('Create a Leaf from commit')).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3100);
       });
 
-      expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
-      expect(screen.queryByText('Choose an output type')).toBeNull();
+      expect(screen.getByText('Create a Leaf from commit')).toBeInTheDocument();
+      expect(screen.queryByText('Choose the Leaf destination')).toBeNull();
       expect(onDone).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

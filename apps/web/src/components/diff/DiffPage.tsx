@@ -59,9 +59,8 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'header',
     label: 'Range',
-    title: 'Start by checking which two commits are being compared',
-    description:
-      'The header shows the base and target hashes so users can trust the diff range before reading changes.',
+    title: 'Check commits',
+    description: 'Confirm base and target.',
     target: 'diff-header',
     tone: 'commit',
     icon: GitCompareArrows,
@@ -69,9 +68,8 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'index',
     label: 'Index',
-    title: 'Use the left index to jump between changed semantic trees',
-    description:
-      'The index groups modified, added, removed, and identical trees so users can scan before reading line-by-line detail.',
+    title: 'Use tree index',
+    description: 'Jump through changed paths.',
     target: 'diff-index',
     tone: 'extract',
     icon: ListTree,
@@ -79,9 +77,8 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'tabs',
     label: 'Views',
-    title: 'Switch between diff, graph, and JSON views',
-    description:
-      'The tabs let users inspect the same change as a text diff, visual structure, or raw data.',
+    title: 'Switch diff views',
+    description: 'Inspect text diff, graph, or JSON.',
     target: 'diff-tabs',
     tone: 'commit',
     icon: Columns3,
@@ -89,9 +86,8 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'side',
     label: 'Merge',
-    title: 'Use the right rail for summary and merge entry',
-    description:
-      'The metadata rail summarizes base, target, tree changes, relation changes, and offers Start Merge when applicable.',
+    title: 'Use summary rail',
+    description: 'Review counts or merge.',
     target: 'diff-sidebar',
     tone: 'pending',
     icon: PanelRight,
@@ -589,7 +585,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       </div>
       <FeatureTourOverlay
         open={tourOpen}
-        title="Diff walkthrough"
+        title="Diff"
         steps={DIFF_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}

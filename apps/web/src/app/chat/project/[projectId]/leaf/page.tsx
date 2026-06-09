@@ -34,9 +34,8 @@ const LEAF_INDEX_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'card',
     label: 'Open leaf',
-    title: 'Click the highlighted leaf artifact row',
-    description:
-      'Leaf starts from an index. The row is the real entry point into the generated output workspace.',
+    title: 'Open the Leaf output',
+    description: 'Open the output workspace.',
     target: 'leaf-index-card',
     tone: 'leaf',
     icon: ClipboardCheck,
@@ -284,7 +283,7 @@ export default function ChatProjectLeafIndexPage() {
       </main>
       <FeatureTourOverlay
         open={tourOpen}
-        title="Leaf index walkthrough"
+        title="Leaf"
         steps={LEAF_INDEX_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={continueIntroDemoToLeafDetail}

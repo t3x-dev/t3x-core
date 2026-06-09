@@ -180,8 +180,8 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
-    expect(screen.getByText('Guided walkthrough')).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: /create the demo workspace/i })).toBeVisible();
+    expect(screen.getAllByText('Project')[0]).toBeVisible();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /start using t3x/i }));
@@ -199,7 +199,7 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: /create the demo workspace/i })).toBeVisible();
   });
 
   it('prefills the intro demo composer after project creation', async () => {
@@ -213,9 +213,7 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    expect(
-      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
-    ).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: /send the ready prompt/i })).toBeVisible();
     expect(screen.getByRole('button', { name: /send chat/i })).toHaveAttribute(
       'data-intro-target',
       'landing-send-action'
@@ -230,7 +228,7 @@ describe('ChatLandingPage', () => {
 
     const view = render(<ChatLandingPage />);
 
-    expect(await screen.findByRole('dialog', { name: /create the first project/i })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: /create the demo workspace/i })).toBeVisible();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^skip demo$/i }));
@@ -248,9 +246,7 @@ describe('ChatLandingPage', () => {
       view.rerender(<ChatLandingPage />);
     });
 
-    expect(
-      await screen.findByRole('dialog', { name: /click the highlighted send button/i })
-    ).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: /send the ready prompt/i })).toBeVisible();
   });
 
   it('sends the intro demo message through the fixture replay path', async () => {
@@ -264,7 +260,7 @@ describe('ChatLandingPage', () => {
       render(<ChatLandingPage />);
     });
 
-    await screen.findByRole('dialog', { name: /click the highlighted send button/i });
+    await screen.findByRole('dialog', { name: /send the ready prompt/i });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /send chat/i }));
     });

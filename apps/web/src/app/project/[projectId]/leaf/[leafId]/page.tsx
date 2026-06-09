@@ -38,9 +38,8 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'output',
     label: 'Generate',
-    title: 'Click Generate to finish',
-    description:
-      'Generate runs this Leaf once; after the click, the demo cleans up and returns to chat.',
+    title: 'Generate the Leaf output',
+    description: 'Run this Leaf, then demo ends.',
     target: 'leaf-generate-action',
     tone: 'leaf',
     icon: ClipboardCheck,
@@ -530,7 +529,7 @@ export function LeafDetailWorkspace({
       />
       <FeatureTourOverlay
         open={tourOpen}
-        title="Leaf walkthrough"
+        title="Leaf"
         steps={LEAF_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}

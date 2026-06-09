@@ -74,9 +74,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'console',
     label: 'Console',
-    title: 'Open the console after reading the LLM reply',
-    description:
-      'The reply is still plain conversation. The next step is opening the right-side console where T3X extracts reviewable meaning.',
+    title: 'Open extraction controls',
+    description: 'Show extraction controls.',
     target: 'chat-yops-panel',
     tone: 'extract',
     icon: PanelRight,
@@ -85,9 +84,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'extract',
     label: 'Extract',
-    title: 'Click Extract to replay the preset meaning extraction',
-    description:
-      'In the demo this is the real Extract button, but it uses recorded fixture YOps instead of calling a model provider.',
+    title: 'Load demo YOps',
+    description: 'Load demo YOps.',
     target: 'chat-extract-action',
     tone: 'extract',
     icon: FileSearch,
@@ -96,9 +94,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'apply',
     label: 'Apply',
-    title: 'Click Apply changes to materialize the staged YOps',
-    description:
-      'Apply turns the staged proposal into the workspace output so the user sees the semantic tree update before commit.',
+    title: 'Apply selected changes',
+    description: 'Apply selected changes.',
     target: 'chat-apply-action',
     tone: 'pending',
     icon: PanelRight,
@@ -107,9 +104,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'commit',
     label: 'Commit',
-    title: 'Click Commit to save the applied state',
-    description:
-      'Commit creates the stable structured version. Canvas should only come after this review checkpoint.',
+    title: 'Save a version',
+    description: 'Save a version.',
     target: 'chat-commit-action',
     tone: 'commit',
     icon: GitCommit,
@@ -118,9 +114,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'commit-confirm',
     label: 'Confirm',
-    title: 'Confirm the commit',
-    description:
-      'This seals the applied YAML as the version that Canvas can show in the project graph.',
+    title: 'Confirm for Canvas',
+    description: 'Make it available on Canvas.',
     target: 'chat-commit-confirm',
     positionTarget: 'chat-commit-dialog',
     placement: 'above',
@@ -132,9 +127,8 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'canvas',
     label: 'Canvas',
-    title: 'Now go to Canvas',
-    description:
-      'Only after the reply has been extracted, applied, and committed does the demo move to the project graph.',
+    title: 'Open the project graph',
+    description: 'Open the project graph.',
     target: 'sidebar-canvas-tab',
     tone: 'commit',
     icon: PanelRight,
@@ -1180,7 +1174,7 @@ export function ChatWorkspace({
       )}
       <FeatureTourOverlay
         open={tourOpen}
-        title="Chat walkthrough"
+        title="Review"
         steps={CHAT_WORKSPACE_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={onIntroDemoDone ?? (() => setTourOpen(false))}

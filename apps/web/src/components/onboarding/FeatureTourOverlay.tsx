@@ -171,8 +171,11 @@ export function FeatureTourOverlay({
   const actionLabel = guided ? 'Skip demo' : doneLabel;
 
   const coachPosition = useMemo(() => {
+    const maxWidth = guided ? 376 : 420;
     const width =
-      typeof window === 'undefined' ? 420 : Math.max(240, Math.min(420, window.innerWidth - 32));
+      typeof window === 'undefined'
+        ? maxWidth
+        : Math.max(240, Math.min(maxWidth, window.innerWidth - 32));
     const height =
       typeof window === 'undefined' ? coachHeight : Math.min(coachHeight, window.innerHeight - 32);
     const maxTop =
@@ -220,7 +223,7 @@ export function FeatureTourOverlay({
         ? clamp(anchorRect.top + anchorRect.height / 2 - height / 2, 16, maxTop)
         : clamp(anchorRect.top, 16, maxTop);
     return { width, top, left, maxHeight: undefined };
-  }, [coachHeight, positionRect, step?.placement, targetRect]);
+  }, [coachHeight, guided, positionRect, step?.placement, targetRect]);
 
   useEffect(() => {
     if (!open || !coachRef.current) return;
@@ -377,14 +380,15 @@ export function FeatureTourOverlay({
       >
         <header
           className={cn(
-            'flex items-start justify-between gap-3 px-4 py-3',
+            'flex items-start justify-between gap-3 px-4',
+            guided ? 'pb-2.5 pt-3' : 'py-3',
             showStepNav && 'border-b border-[var(--stroke-divider)]'
           )}
         >
           <div>
             <div
               className={cn(
-                'mb-2 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium',
+                'mb-1.5 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[13px] font-medium',
                 TONE_CLASSES[step.tone]
               )}
             >
@@ -393,13 +397,10 @@ export function FeatureTourOverlay({
             </div>
             <h2
               id="feature-tour-title"
-              className="text-base font-semibold text-[var(--text-primary)]"
+              className="text-[17px] font-semibold leading-6 text-[var(--text-primary)]"
             >
               {step.title}
             </h2>
-            <p className="mt-1 text-sm leading-normal text-[var(--text-secondary)]">
-              {step.description}
-            </p>
           </div>
           {!guided && (
             <button
@@ -431,7 +432,7 @@ export function FeatureTourOverlay({
                     aria-current={selected ? 'step' : undefined}
                     aria-label={item.label}
                     className={cn(
-                      'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                      'flex h-9 items-center justify-center rounded-md border text-[13px] transition-colors',
                       selected
                         ? cn('border-current', TONE_CLASSES[item.tone])
                         : completed
@@ -453,11 +454,13 @@ export function FeatureTourOverlay({
 
         <footer
           className={cn(
-            'flex flex-col border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 sm:flex-row sm:items-center sm:justify-between',
-            guided ? 'gap-1.5 py-2' : 'gap-2 py-3'
+            'px-4 sm:flex-row sm:items-center sm:justify-between',
+            guided
+              ? 'flex items-center justify-between gap-3 pb-3 pt-1.5'
+              : 'flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] py-3'
           )}
         >
-          <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
             <span className="font-mono">
               {String(stepIndex + 1).padStart(2, '0')} / {String(steps.length).padStart(2, '0')}
             </span>

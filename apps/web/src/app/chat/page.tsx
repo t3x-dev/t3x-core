@@ -97,9 +97,8 @@ function ChatLanding() {
         {
           id: 'send',
           label: 'Send',
-          title: 'Click the highlighted Send button',
-          description:
-            'The composer is prefilled for this walkthrough. Click Send to create the conversation and replay the demo reply.',
+          title: 'Send the ready prompt',
+          description: 'Send the ready prompt.',
           target: 'landing-send-action',
           tone: 'conversation',
           icon: SendHorizontal,
@@ -112,9 +111,8 @@ function ChatLanding() {
       {
         id: 'create-project',
         label: 'Project',
-        title: 'Create the first project',
-        description:
-          'Click New project to give the walkthrough a place for state, commits, and leaves.',
+        title: 'Create the demo workspace',
+        description: 'Create the demo workspace.',
         target: 'sidebar-new-project',
         tone: 'conversation',
         icon: FolderPlus,
@@ -123,9 +121,8 @@ function ChatLanding() {
       {
         id: 'confirm-project',
         label: 'Create',
-        title: 'Name it or keep the default, then create',
-        description:
-          'Keep the default name or edit it, then create the project to continue the walkthrough.',
+        title: 'Confirm the project name',
+        description: 'Confirm the project name.',
         target: 'new-project-create',
         placement: 'side-center',
         tone: 'commit',
@@ -134,6 +131,7 @@ function ChatLanding() {
       },
     ];
   }, [introDemoStage, projectIdParam]);
+  const demoTourTitle = introDemoStage === 'compose' && projectIdParam ? 'Chat' : 'Project';
 
   useEffect(() => {
     if (!projectIdParam) return;
@@ -278,7 +276,7 @@ function ChatLanding() {
       </div>
       <FeatureTourOverlay
         open={firstRunDemo.open}
-        title="Guided walkthrough"
+        title={demoTourTitle}
         steps={demoTourSteps}
         onClose={firstRunDemo.close}
         onDone={firstRunDemo.close}

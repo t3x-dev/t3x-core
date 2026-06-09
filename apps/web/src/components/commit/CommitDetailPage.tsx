@@ -77,9 +77,8 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'actions',
     label: 'Actions',
-    title: 'Use the header buttons to move through the version workflow',
-    description:
-      'This row is where users leave the commit detail page, compare with a parent, share, or export the snapshot.',
+    title: 'Use header actions',
+    description: 'Back, compare, share, or export.',
     target: 'commit-actions',
     tone: 'commit',
     icon: Eye,
@@ -87,9 +86,8 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'identity',
     label: 'Snapshot',
-    title: 'Read the commit identity before drilling into content',
-    description:
-      'The identity strip explains who created the version, when it was committed, which branch it belongs to, and what changed.',
+    title: 'Read commit identity',
+    description: 'Check author, branch, and hash.',
     target: 'commit-identity',
     tone: 'commit',
     icon: GitCommit,
@@ -97,9 +95,8 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'content',
     label: 'Tabs',
-    title: 'Switch tabs to inspect the same commit from different angles',
-    description:
-      'YAML is the readable semantic document, Graph shows structure, JSON is the raw payload, and Relations isolates links.',
+    title: 'Switch content views',
+    description: 'Inspect YAML, graph, or JSON.',
     target: 'commit-tabs',
     tone: 'extract',
     icon: Tag,
@@ -107,9 +104,8 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'audit',
     label: 'Audit',
-    title: 'The right rail proves where the commit came from',
-    description:
-      'Evidence, YOps operations, hash chain, and snapshot metadata teach users that a commit is auditable, not just generated text.',
+    title: 'Review audit trail',
+    description: 'See evidence and YOps.',
     target: 'commit-audit',
     tone: 'source',
     icon: Pin,
@@ -117,9 +113,8 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'provenance',
     label: 'Graph',
-    title: 'Expand provenance to connect source, commit, and leaf',
-    description:
-      'The bottom graph makes the full path visible: source evidence becomes a stable commit and then reusable leaves.',
+    title: 'Open provenance',
+    description: 'Trace source to Leaf.',
     target: 'commit-provenance',
     tone: 'leaf',
     icon: LeafIcon,
@@ -130,8 +125,8 @@ const INTRO_COMMIT_DETAIL_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'returnToCanvas',
     label: 'View Canvas',
-    title: 'Click View Canvas to continue',
-    description: 'Commit details show the selected version before you create a Leaf.',
+    title: 'Return to Canvas',
+    description: 'Return to Canvas.',
     target: 'commit-view-canvas',
     tone: 'commit',
     icon: Eye,
@@ -703,7 +698,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       />
       <FeatureTourOverlay
         open={tourOpen}
-        title="Commit walkthrough"
+        title="Commit"
         steps={commitTourSteps}
         onClose={() => setTourOpen(false)}
         onDone={handleTourDone}
