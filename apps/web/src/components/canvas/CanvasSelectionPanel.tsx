@@ -3,7 +3,7 @@
 import type { Node } from '@xyflow/react';
 import { Leaf } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { relativeTime, shortHash } from '@/domain/format/formatters';
+import { commitHashLabel, relativeTime } from '@/domain/format/formatters';
 import type { CanvasNodeData } from '@/types/nodes';
 import { cn } from '@/utils/cn';
 import type { CommitAction } from './CommitActionPanel';
@@ -92,7 +92,6 @@ function actionButtonClass(action: CommitAction): string {
 }
 
 function panelActionLabel(action: CommitAction): string {
-  if (action.label === 'Details') return 'Open Details';
   if (action.label === 'New Leaf') return 'Create Leaf From This Version';
   if (action.label === 'Merge') return 'Start Merge Into Main';
   return action.label;
@@ -103,7 +102,6 @@ function panelActionClass(action: CommitAction): string {
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
-  if (action.label === 'Details') return 'canvas-action-details';
   if (action.label === 'View Diff') return 'canvas-action-diff';
   if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
   if (action.label === 'New Leaf') return 'canvas-action-new-leaf';
@@ -201,7 +199,7 @@ export function CanvasSelectionPanel({
 
   const branchLabel = formatBranchLabel(node);
   const hash = node.data.commitHash || node.data.commit?.hash;
-  const hashLabel = hash ? shortHash(hash) : 'none';
+  const hashLabel = hash ? commitHashLabel(hash) : 'none';
   const trees = node.data.commit?.content?.trees ?? [];
   const relations = node.data.commit?.content?.relations ?? [];
   const firstTree = trees[0]?.key ?? node.data.title;
@@ -217,8 +215,8 @@ export function CanvasSelectionPanel({
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
             SELECTION
           </div>
-          <span className="rounded-full border border-[var(--stroke-default)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-            sha:{hashLabel}
+          <span className="rounded-full border border-[var(--stroke-default)] px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-[var(--text-tertiary)]">
+            {hashLabel}
           </span>
         </div>
         <div className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
@@ -289,19 +287,19 @@ export function CanvasSelectionPanel({
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">root</span>
               <span className="text-[var(--text-tertiary)]">
-                Details + Open Leaf + New Leaf. Diff is hidden because root has no parent.
+                Open Leaf + New Leaf. Diff is hidden because root has no parent.
               </span>
             </div>
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">main child</span>
               <span className="text-[var(--text-tertiary)]">
-                Details + Diff + Create Leaf. Merge is hidden on main.
+                Diff + Create Leaf. Merge is hidden on main.
               </span>
             </div>
             <div className="grid grid-cols-[58px_1fr] gap-2 rounded-lg bg-[var(--surface-muted)] px-2 py-1.5 text-[10px]">
               <span className="font-semibold text-[var(--text-primary)]">branch head</span>
               <span className="text-[var(--text-tertiary)]">
-                Details + Diff + Create Leaf + Merge. Merge exists only on latest branch head.
+                Diff + Create Leaf + Merge. Merge exists only on latest branch head.
               </span>
             </div>
           </div>

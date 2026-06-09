@@ -58,7 +58,6 @@ describe('CanvasSelectionPanel', () => {
     const node = makeNode();
     const actions = buildCommitActions({
       onCreateLeaf: noop,
-      onViewDetails: noop,
       onViewDiff: noop,
     });
 
@@ -67,7 +66,7 @@ describe('CanvasSelectionPanel', () => {
     expect(screen.getByText('Trip Plan1')).toBeInTheDocument();
     expect(screen.getByText('1 tree · 0 relations')).toBeInTheDocument();
     expect(screen.getByText('food_ideas')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Details' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Details' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View Diff' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Create Leaf From This Version' })
@@ -87,7 +86,6 @@ describe('CanvasSelectionPanel', () => {
     const actions = buildCommitActions({
       onCreateLeaf: noop,
       onMerge: noop,
-      onViewDetails: noop,
       onViewDiff: noop,
     });
 
