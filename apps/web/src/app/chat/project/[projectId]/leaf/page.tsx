@@ -289,7 +289,7 @@ export default function ChatProjectLeafIndexPage() {
         onClose={() => setTourOpen(false)}
         onDone={continueIntroDemoToLeafDetail}
         onSkip={() => void completeIntroDemo()}
-        doneLabel={leaves.length > 0 ? 'Open Leaf' : 'Done'}
+        doneLabel={leaves.length > 0 ? 'Open Leaf' : 'Skip demo'}
         interactionMode="guided"
       />
     </div>

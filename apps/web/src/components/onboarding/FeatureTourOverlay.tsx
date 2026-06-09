@@ -152,7 +152,7 @@ export function FeatureTourOverlay({
   onClose,
   onDone,
   onSkip,
-  doneLabel = 'Done',
+  doneLabel = 'Skip demo',
   interactionMode = 'coach',
 }: FeatureTourOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
@@ -168,7 +168,7 @@ export function FeatureTourOverlay({
   const guided = interactionMode === 'guided';
   const showStepNav = !guided;
   const waitingForTargetClick = guided && step?.advanceOnTargetClick;
-  const actionLabel = guided ? 'Done' : doneLabel;
+  const actionLabel = guided ? 'Skip demo' : doneLabel;
 
   const coachPosition = useMemo(() => {
     const width =

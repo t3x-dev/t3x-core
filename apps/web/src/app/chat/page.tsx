@@ -283,7 +283,7 @@ function ChatLanding() {
         onClose={firstRunDemo.close}
         onDone={firstRunDemo.close}
         onSkip={forceIntroDemo ? handleIntroDemoSkip : firstRunDemo.close}
-        doneLabel={forceIntroDemo ? 'Skip' : 'Start using T3X'}
+        doneLabel={forceIntroDemo ? 'Skip demo' : 'Start using T3X'}
         interactionMode={forceIntroDemo ? 'guided' : 'coach'}
       />
     </>
