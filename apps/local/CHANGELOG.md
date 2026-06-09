@@ -1,5 +1,11 @@
 # @t3x-dev/local
 
+## 0.4.1
+
+### Patch Changes
+
+- [#1113](https://github.com/t3x-dev/t3x-core/pull/1113) [`96d873f`](https://github.com/t3x-dev/t3x-core/commit/96d873f987f9424c251cc19256a7c5a0e2ff3df4) Thanks [@a996qaq](https://github.com/a996qaq)! - Validate restricted alpha package publishing pipeline.
+
 ## 0.4.0
 
 ### Minor Changes

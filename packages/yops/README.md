@@ -18,7 +18,7 @@ propose changes while deterministic code validates and applies them.
 
 ## Release status
 
-`@t3x-dev/yops@0.4.0` is part of the restricted T3X alpha release surface.
+`@t3x-dev/yops@0.4.1` is part of the restricted T3X alpha release surface.
 Package visibility may be limited to accounts with alpha access.
 
 ## Stability policy

@@ -383,7 +383,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             data-intro-target="commit-view-canvas"
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
-            <Eye size={13} /> View Canvas
+            <GitCommit size={13} /> Canvas
           </Link>
           {commit.parents.length === 1 && (
             <Link

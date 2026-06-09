@@ -1,3 +1,5 @@
+import { parsePackageReleaseSection } from './releasePr.mjs';
+
 export function extractSection(markdown, heading) {
   return (
     markdown
@@ -28,6 +30,7 @@ export function findProductReleasePull(pulls) {
 export function buildProductReleaseNotes({ pull, version }) {
   const includedChanges = extractSection(pull.body ?? '', 'Included Changes');
   const packageReleases = extractSection(pull.body ?? '', 'Package Releases');
+  const parsedPackageReleases = parsePackageReleaseSection(packageReleases);
   const releaseNotes = extractSection(pull.body ?? '', 'Release Notes');
   const lines = [`# T3X v${version}`, ''];
 
@@ -35,7 +38,10 @@ export function buildProductReleaseNotes({ pull, version }) {
     lines.push('## Release Notes', '', releaseNotes, '');
   }
 
-  if (packageReleases) {
+  if (
+    packageReleases &&
+    !(parsedPackageReleases.none && parsedPackageReleases.packages.length === 0)
+  ) {
     lines.push('## Package Releases', '', packageReleases, '');
   }
 

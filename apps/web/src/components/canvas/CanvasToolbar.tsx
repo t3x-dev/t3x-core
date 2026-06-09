@@ -4,6 +4,7 @@ import { Maximize } from 'lucide-react';
 import { useMemo } from 'react';
 import { ChatSidebarToggleButton } from '@/components/chat/ChatSidebarToggleButton';
 import { Button } from '@/components/ui/button';
+import { commitHashLabel } from '@/domain/format/formatters';
 import { useCanvasStore } from '@/store/canvasStore';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
@@ -40,13 +41,14 @@ export function CanvasToolbar({
       const committedAt = new Date(node.data.commit?.committed_at ?? node.data.timestamp).getTime();
       if (Number.isFinite(committedAt) && committedAt > latestAt) {
         latestAt = committedAt;
-        latestHash = (node.data.commitHash ?? node.data.commit?.hash ?? '').replace('sha256:', '');
+        const hash = node.data.commitHash ?? node.data.commit?.hash ?? '';
+        latestHash = hash ? commitHashLabel(hash) : '';
       }
     }
 
     return {
       branches: Array.from(branchCounts.entries()),
-      latestHash: latestHash.slice(0, 7),
+      latestHash,
       leaves,
       mainCommits,
     };
@@ -88,7 +90,7 @@ export function CanvasToolbar({
             </span>
             {stats.latestHash && (
               <span className="rounded-full border border-[var(--stroke-default)] bg-[var(--surface-card)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--text-secondary)]">
-                latest commit sha:{stats.latestHash}
+                latest commit {stats.latestHash}
               </span>
             )}
           </div>

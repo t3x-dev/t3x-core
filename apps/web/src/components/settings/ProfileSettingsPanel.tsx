@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useAuthMe } from '@/hooks/shared/useAuthMe';
 import { useSession } from '@/hooks/shared/useSession';
-import { useSettingsStore } from '@/store/settingsStore';
+import {
+  DEFAULT_LOCAL_WORKSPACE_NAME,
+  resolveLocalWorkspaceName,
+  useSettingsStore,
+} from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
 import {
   getLocalWorkspaceAvatarClass,
@@ -63,10 +67,11 @@ export function ProfileSettingsPanel() {
       });
   }, [authDisabled, getKey, getUser, loadAuthMe]);
 
-  const localInitial = useMemo(
-    () => (localWorkspaceName.trim().charAt(0) || 'L').toUpperCase(),
+  const localDisplayName = useMemo(
+    () => resolveLocalWorkspaceName(localWorkspaceName),
     [localWorkspaceName]
   );
+  const localInitial = useMemo(() => localDisplayName.charAt(0).toUpperCase(), [localDisplayName]);
 
   if (authDisabled) {
     return (
@@ -74,7 +79,7 @@ export function ProfileSettingsPanel() {
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Local profile</h2>
           <p className="text-xs text-[var(--text-tertiary)]">
-            Customize how this local workspace appears in the app.
+            Set the local identity used in the sidebar and edit history.
           </p>
         </div>
 
@@ -95,13 +100,16 @@ export function ProfileSettingsPanel() {
                   htmlFor="local-workspace-name"
                   className="text-xs font-medium uppercase tracking-wide text-[var(--text-tertiary)]"
                 >
-                  Workspace name
+                  Display name
                 </label>
                 <Input
                   id="local-workspace-name"
                   value={localWorkspaceName}
                   onChange={(event) => setLocalWorkspaceName(event.target.value)}
-                  placeholder="Local Workspace"
+                  onBlur={(event) =>
+                    setLocalWorkspaceName(resolveLocalWorkspaceName(event.target.value))
+                  }
+                  placeholder={DEFAULT_LOCAL_WORKSPACE_NAME}
                   maxLength={40}
                 />
               </div>
@@ -138,8 +146,8 @@ export function ProfileSettingsPanel() {
               </div>
 
               <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-                Settings stay local to this browser. Manage model providers from the Providers tab
-                when you need API-backed features.
+                Settings stay local to this browser. The display name is used as the author for
+                local edits.
               </div>
             </div>
           </div>

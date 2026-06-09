@@ -188,7 +188,7 @@ describe('useExtraction', () => {
     expect(useWorkspaceStore.getState().draftOps[0].source).toMatchObject({
       type: 'human',
       surface: 'inline',
-      author: 'Local Workspace',
+      author: 'Local user',
     });
   });
 

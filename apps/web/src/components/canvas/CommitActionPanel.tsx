@@ -111,21 +111,23 @@ function introTargetForAction(action: CommitAction): string | undefined {
 
 /** Build standard actions for a committed node */
 export function buildCommitActions(opts: {
-  onViewDetails: () => void;
+  onViewDetails?: () => void;
   onViewDiff?: () => void;
   onOpenLeaf?: () => void;
   onCreateLeaf: () => void;
   /** Optional: surfaces a "Merge" action when the commit is the latest tip of a non-main branch. */
   onMerge?: () => void;
 }): CommitAction[] {
-  const actions: CommitAction[] = [
-    {
+  const actions: CommitAction[] = [];
+
+  if (opts.onViewDetails) {
+    actions.push({
       label: 'Details',
       icon: <Eye size={14} />,
       onClick: opts.onViewDetails,
       tone: 'primary',
-    },
-  ];
+    });
+  }
 
   if (opts.onViewDiff) {
     actions.push({

@@ -75,7 +75,7 @@ describe('useScriptExecution', () => {
     sessionUserMock.current = { id: 'user_1', name: 'Alice', username: 'alice' };
     getAuthMeMock.mockRejectedValue(new Error('unauthenticated'));
     process.env.NEXT_PUBLIC_AUTH_DISABLED = 'false';
-    useSettingsStore.setState({ localWorkspaceName: 'Local Workspace' });
+    useSettingsStore.setState({ localWorkspaceName: 'Local user' });
     useWorkspaceStore.getState().reset();
     useWorkspaceStore.setState({
       panelExpandedByProject: {},
@@ -1224,7 +1224,7 @@ describe('useScriptExecution', () => {
       });
     });
 
-    it('uses the local workspace name as the script author when auth is disabled', async () => {
+    it('uses the local display name as the script author when auth is disabled', async () => {
       sessionUserMock.current = null;
       getAuthMeMock.mockRejectedValue(new Error('auth disabled'));
       process.env.NEXT_PUBLIC_AUTH_DISABLED = 'true';

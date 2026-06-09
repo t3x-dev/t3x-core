@@ -24,7 +24,7 @@ describe('useGoldEdit.applyEdit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
-    useSettingsStore.setState({ localWorkspaceName: 'Local Workspace' });
+    useSettingsStore.setState({ localWorkspaceName: 'Local user' });
     useWorkspaceStore.getState().setConversation('conv_123');
     useWorkspaceStore
       .getState()
@@ -74,7 +74,7 @@ describe('useGoldEdit.applyEdit', () => {
     expect(resolveGoldEditSourceMock).toHaveBeenCalledTimes(1);
     expect(resolveGoldEditSourceMock).toHaveBeenCalledWith(
       { unset: { path: 'trip/style' } },
-      { localAuthor: 'Local Workspace' }
+      { localAuthor: 'Local user' }
     );
 
     // The op passed to optimistic replay carries the *same source instance*

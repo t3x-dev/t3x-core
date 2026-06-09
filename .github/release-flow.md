@@ -163,10 +163,11 @@ Release PR checklist:
 4. Fill in the T3X product release version. It must match the release branch
    name.
 5. List included PRs or the comparison range.
-6. Add user-facing release notes. Use `Package Releases: - None` when no package
-   publish is intended.
-7. Fill in the `Package Releases` section. List each package that should publish
-   or use `- None`.
+6. Add user-facing release notes.
+7. Fill in the `Package Releases` section. Use `- None` when no package publish
+   is intended. For the current restricted alpha publish flow, package releases
+   must list the complete npm publish surface with target package versions:
+   `@t3x-dev/local` and `@t3x-dev/yops`.
 8. Confirm changesets are present when public package behavior changed.
 9. Wait for PR validation and release surface checks.
 10. Request owner review when protected release, workflow, or ownership files
@@ -184,7 +185,8 @@ After the product release PR merges, the `Release` workflow runs on `main`.
   code-only and no package publish is expected.
 - The workflow records product releases by creating a `t3x-vx.y.z` GitHub
   Release from the merged release PR notes. Changesets version package PRs do
-  not create product release records.
+  not create product release records. Code-only product release notes omit the
+  `Package Releases` section from the final GitHub Release.
 
 The `Release` workflow must create the `chore: version packages` pull request
 with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
@@ -227,8 +229,8 @@ There are two version streams:
   package artifacts managed by Changesets.
 
 These versions can differ. For example, T3X product release `0.4.0` may publish
-no packages, or it may publish `@t3x-dev/yops@0.2.1` while leaving
-`@t3x-dev/local` unchanged.
+no packages, or it may publish the current restricted alpha npm surface with
+package versions determined by Changesets.
 
 A changeset is required when a pull request changes user-visible behavior for a
 restricted alpha package:
@@ -262,25 +264,29 @@ checked-in changeset files:
 - `Package Releases: - None` requires no `.changeset/*.md` files in the release
   branch.
 - Package entries require at least one `.changeset/*.md` file.
+- Package entries must use concrete target package versions, not changeset bump
+  types like `patch`, `minor`, or `major`.
 - Each listed public package must appear in a changeset frontmatter entry.
 - Each public package in changeset frontmatter must appear in `Package
   Releases`.
+- Package releases must list the complete current npm publish surface:
+  `@t3x-dev/local` and `@t3x-dev/yops`.
 
 ## Publish Rules
 
 Publishing happens from `main` only after the package versioning step determines
 that npm packages changed.
 
-- `@t3x-dev/yops` releases publish npm package artifacts only.
-- `@t3x-dev/local` releases publish npm package artifacts and runtime artifacts.
-- Runtime artifacts are built only when `@t3x-dev/local` is in the release set.
+- A product release may publish zero packages. In the release PR body, use
+  `Package Releases` with `- None`; the final GitHub Release omits package
+  information for code-only releases.
+- The current restricted alpha package publish is the complete npm publish
+  surface: `@t3x-dev/local` and `@t3x-dev/yops`.
+- Because the current package release set includes `@t3x-dev/local`, runtime
+  artifacts are required for package releases.
 - Release review and dry-run packaging must not publish real artifacts.
-- A product release may publish zero packages. In that case the release notes
-  must include `Package Releases` with `- None`.
-
-The target release behavior is to avoid building or publishing runtime artifacts
-for a `yops`-only release. The current workflow still needs release-set
-detection before that behavior is fully automated.
+- `yops`-only or `local`-only package releases are future release-set detection
+  work, not the current CI contract.
 
 ## Ownership
 

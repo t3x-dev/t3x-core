@@ -18,7 +18,7 @@ import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { updateSourceTextRevision } from '@/infrastructure/sourceTextRevisions';
 import { useChatStore } from '@/store/chatStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import {
   selectActiveUncommittedRowCount,
   selectCanonicalScriptText,
@@ -76,7 +76,7 @@ const RECONCILIATION_PROBE_SOURCE: HumanSource = {
 
 function resolveScriptHumanSource() {
   return resolveHumanSource('script', {
-    localAuthor: useSettingsStore.getState().localWorkspaceName,
+    localAuthor: resolveLocalWorkspaceName(useSettingsStore.getState().localWorkspaceName),
   });
 }
 
@@ -222,7 +222,7 @@ export function useScriptExecution() {
       // least one op was missing source or changed by the script editor.
       const msg =
         err instanceof SourceValidationError
-          ? 'Cannot apply: no session user or local workspace author available to attribute the edit.'
+          ? 'Cannot apply: no session user or local author available to attribute the edit.'
           : err instanceof Error
             ? err.message
             : 'Cannot apply: source validation failed.';

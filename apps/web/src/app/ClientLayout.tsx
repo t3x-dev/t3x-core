@@ -37,11 +37,16 @@ export function isShelllessDetailRoute(pathname: string): boolean {
   );
 }
 
+export function isSettingsRoute(pathname: string): boolean {
+  return /^\/settings(?:\/.*)?$/.test(pathname);
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
   const isChatRoute = pathname.startsWith('/chat');
   const isShelllessRoute = isShelllessDetailRoute(pathname);
+  const hasGlobalShell = !isChatRoute && !isShelllessRoute && !isSettingsRoute(pathname);
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
@@ -123,18 +128,16 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           >
             Skip to content
           </a>
-          {!isChatRoute && !isShelllessRoute && (
-            <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-          )}
+          {hasGlobalShell && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
           <main
             id="main-content"
             aria-label="Main content"
             className={cn(
               'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-              !isChatRoute && !isShelllessRoute && (sidebarCollapsed ? 'ml-16' : 'ml-52')
+              hasGlobalShell && (sidebarCollapsed ? 'ml-16' : 'ml-52')
             )}
           >
-            {!isChatRoute && !isShelllessRoute && (
+            {hasGlobalShell && (
               <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
                 {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
                 <NotificationBell />

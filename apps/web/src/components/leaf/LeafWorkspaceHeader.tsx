@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { commitHashLabel, shortHash as formatShortHash } from '@/domain/format/formatters';
 import type { WorkspaceMode } from '@/hooks/leaves/useLeafPageData';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import type { ExportFormat, Leaf } from '@/types/api';
@@ -37,7 +38,8 @@ export function LeafWorkspaceHeader({
   className,
 }: LeafWorkspaceHeaderProps) {
   const { t } = useTerminology();
-  const shortHash = leaf.commit_hash.replace('sha256:', '').slice(0, 7);
+  const shortHash = formatShortHash(leaf.commit_hash);
+  const hashLabel = commitHashLabel(leaf.commit_hash);
   const generatedTime = leaf.generated_at ? formatDisplayTime(leaf.generated_at) : null;
 
   return (
@@ -71,7 +73,7 @@ export function LeafWorkspaceHeader({
                 {leaf.title || `Leaf ${leaf.id.slice(0, 9)}`}
               </h1>
               <span className="hidden shrink-0 font-mono text-[11px] text-[var(--text-tertiary)] sm:inline">
-                {leaf.id.slice(0, 9)} · sha:{shortHash}
+                {leaf.id.slice(0, 9)} · {hashLabel}
                 {generatedTime ? ` · generated ${generatedTime}` : ''}
               </span>
             </div>
