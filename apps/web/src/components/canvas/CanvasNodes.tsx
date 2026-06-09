@@ -659,20 +659,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
           />
         )}
         {isCommitted && (!data.leaves || data.leaves.length === 0) && (
-          <div className="flex items-center justify-between gap-2 border-t border-[var(--stroke-divider)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
+          <div className="flex items-center border-t border-[var(--stroke-divider)] px-3 py-2 text-[11px] text-[var(--text-tertiary)]">
             <span>No leaf yet</span>
-            <button
-              type="button"
-              data-intro-target="canvas-new-leaf"
-              className="nodrag inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--accent-leaf)]/25 bg-[var(--accent-leaf-soft)] px-2 text-[11px] font-semibold text-[var(--accent-leaf)] transition-colors hover:bg-[var(--accent-leaf)]/15"
-              onClick={(e) => {
-                e.stopPropagation();
-                openLeafPanel(id);
-              }}
-            >
-              <Plus size={11} />
-              <span>New Leaf</span>
-            </button>
           </div>
         )}
       </motion.div>

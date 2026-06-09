@@ -296,13 +296,10 @@ describe('Canvas node semantic markers', () => {
     expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
   });
 
-  it('shows a local new leaf action when a committed node has no leaves', () => {
+  it('keeps the empty leaf state informational without a local new leaf action', () => {
     renderUnitNode(makeNodeData({ leaves: [] }));
 
     expect(screen.getByText('No leaf yet')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
-
-    expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+    expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
   });
 });
