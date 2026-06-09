@@ -144,11 +144,6 @@ const TONE_CLASSES: Record<DemoTone, string> = {
     'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]',
 };
 
-function prefersReducedMotion() {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 function readTargetRect(target: string | null): TargetRect | null {
   if (!target) return null;
   const node = document.querySelector<HTMLElement>(`[data-intro-target="${target}"]`);
@@ -267,15 +262,6 @@ export function FirstRunDemoOverlay({
       document.body.style.overflow = previousOverflow;
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!open || prefersReducedMotion() || atEnd) return;
-    const timeout = window.setTimeout(
-      () => setStepIndex((current) => Math.min(current + 1, DEMO_STEPS.length - 1)),
-      step.id === 'welcome' ? 3200 : 4200
-    );
-    return () => window.clearTimeout(timeout);
-  }, [atEnd, open, step.id]);
 
   if (!open) return null;
 

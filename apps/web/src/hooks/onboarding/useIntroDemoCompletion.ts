@@ -3,10 +3,12 @@ import { useCallback, useState } from 'react';
 import { deleteProject } from '@/commands/projects';
 import { fetchProject } from '@/queries/project';
 import { fetchProjects } from '@/queries/projects';
+import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { notifyIntroDemoProjectDeleted } from './introDemoEvents';
+import { clearIntroDemoLocalCommit, readIntroDemoLocalCommit } from './introDemoLocalCommit';
 import { isDemoWorkspaceProject } from './useEnsureDemoProject';
 
 export function useIntroDemoCompletion(projectId?: string | null) {
@@ -14,6 +16,7 @@ export function useIntroDemoCompletion(projectId?: string | null) {
   const [completing, setCompleting] = useState(false);
 
   const removeProjectLocally = useCallback((targetProjectId: string) => {
+    clearIntroDemoLocalCommit(targetProjectId);
     notifyIntroDemoProjectDeleted(targetProjectId);
     useProjectStore.getState().removeProject(targetProjectId);
 
@@ -27,6 +30,11 @@ export function useIntroDemoCompletion(projectId?: string | null) {
       workspaceStore.setActiveProject(null);
     }
     workspaceStore.reset();
+
+    const canvasStore = useCanvasStore.getState();
+    if (canvasStore.projectId === targetProjectId) {
+      canvasStore.clearCanvas();
+    }
   }, []);
 
   const completeIntroDemo = useCallback(async () => {
@@ -43,13 +51,16 @@ export function useIntroDemoCompletion(projectId?: string | null) {
 
       if (targetProjectId) {
         const project = await fetchProject(targetProjectId).catch(() => null);
-        if (project && isDemoWorkspaceProject(project)) {
+        const hasLocalDemoCommit = Boolean(readIntroDemoLocalCommit(targetProjectId));
+        if ((project && isDemoWorkspaceProject(project)) || hasLocalDemoCommit) {
           removeProjectLocally(targetProjectId);
-          await deleteProject(targetProjectId).catch((err) => {
-            const message = err instanceof Error ? err.message.toLowerCase() : String(err);
-            if (message.includes('404') || message.includes('not found')) return;
-            throw err;
-          });
+          if (project) {
+            await deleteProject(targetProjectId).catch((err) => {
+              const message = err instanceof Error ? err.message.toLowerCase() : String(err);
+              if (message.includes('404') || message.includes('not found')) return;
+              throw err;
+            });
+          }
         }
       }
     } finally {
