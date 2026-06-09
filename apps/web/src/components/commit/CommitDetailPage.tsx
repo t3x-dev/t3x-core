@@ -24,7 +24,6 @@
 import {
   ArrowLeft,
   ExternalLink,
-  Eye,
   GitBranch,
   GitCommit,
   Leaf as LeafIcon,
@@ -81,9 +80,9 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
       'This row is where users leave the commit detail page, compare with a parent, share, or export the snapshot.',
     target: 'commit-actions',
     tone: 'commit',
-    icon: Eye,
+    icon: ExternalLink,
     details: [
-      'View Canvas returns to the project map.',
+      'Canvas returns to the project map.',
       'View Diff appears when this commit has a single parent.',
       'Share and Export are the stable output actions for a reviewed commit.',
     ],
@@ -374,7 +373,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
             href={canvasHref}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
-            <Eye size={13} /> View Canvas
+            <GitCommit size={13} /> Canvas
           </Link>
           {commit.parents.length === 1 && (
             <Link

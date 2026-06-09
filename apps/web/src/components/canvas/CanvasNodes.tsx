@@ -15,7 +15,7 @@ import {
   PenSquare,
   Plus,
 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
@@ -135,8 +135,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams();
   const projectId = params?.projectId as string | undefined;
+  const introDemoActive = searchParams.get('introDemo') === '1';
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();
   const isConstellation = zoomTier === 'overview';
@@ -184,6 +186,8 @@ const UnitNode = memo(function UnitNode(props: Props) {
 
   const branchLabel = formatBranchLabel(data.branchType, data.branchName);
   const semanticSummary = inferSemanticSummary(data);
+  const commitHash = data.commit?.hash || data.commitHash || '';
+  const hashDisplay = commitHash.replace('sha256:', 'sha:').slice(0, 11);
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
@@ -243,6 +247,16 @@ const UnitNode = memo(function UnitNode(props: Props) {
       }
     }
   }, [editTitle, data.title, data.commitHash, id, updateNode, renameCommit]);
+
+  const handleOpenCommitDetails = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!projectId || !commitHash) return;
+      const href = `/project/${projectId}/commit/${encodeURIComponent(commitHash)}`;
+      router.push(introDemoActive ? `${href}?introDemo=1` : href);
+    },
+    [commitHash, introDemoActive, projectId, router]
+  );
 
   // Navigate to leaf detail page
   const _getLeafHref = (leaf: EmbeddedLeaf): string | undefined => {
@@ -497,10 +511,16 @@ const UnitNode = memo(function UnitNode(props: Props) {
           </div>
 
           {/* Row 2: Self hash (committed only) */}
-          {isCommitted && (data.commit?.hash || data.commitHash) && (
-            <div className="font-mono text-[11px] text-[var(--text-tertiary)] mb-1">
-              {(data.commit?.hash || data.commitHash || '').replace('sha256:', 'sha:').slice(0, 11)}
-            </div>
+          {isCommitted && commitHash && (
+            <button
+              type="button"
+              className="nodrag mb-1 inline-flex rounded px-1 py-0.5 font-mono text-[11px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)]"
+              onClick={handleOpenCommitDetails}
+              title={`Open commit ${hashDisplay}`}
+              aria-label={`Open commit ${hashDisplay}`}
+            >
+              {hashDisplay}
+            </button>
           )}
 
           {/* B-8: Stats line (always visible in collapsed view) */}
@@ -590,9 +610,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
           {/* B-8: Expandable detail content */}
           {contentExpanded && (
             <NodeDetailsSection
-              hashDisplay={(data.commit?.hash || data.commitHash || data.entryId || '')
-                .replace('sha256:', 'sha:')
-                .slice(0, 11)}
+              hashDisplay={
+                hashDisplay ||
+                (data.commit?.hash || data.commitHash || data.entryId || '')
+                  .replace('sha256:', 'sha:')
+                  .slice(0, 11)
+              }
               copiedHash={copiedHash}
               onCopyHash={handleCopyHash}
               isMergeCommit={data.isMergeCommit}

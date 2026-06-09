@@ -6,6 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { canvasNodeTypes } from '@/components/canvas/CanvasNodes';
 import type { CanvasNodeData } from '@/types/nodes';
 
+const navigationMocks = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
+
 vi.mock('@xyflow/react', () => ({
   Handle: ({ type }: { type: string }) => <div data-testid={`handle-${type}`} />,
   NodeToolbar: ({ children }: { children: React.ReactNode }) => (
@@ -34,7 +39,8 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: 'proj_canvas' }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: navigationMocks.routerPush }),
+  useSearchParams: () => navigationMocks.searchParams,
 }));
 
 vi.mock('@/components/canvas/AutoDraftBadge', () => ({
@@ -194,6 +200,8 @@ function renderSelectedUnitNode(data: CanvasNodeData) {
 describe('Canvas node semantic markers', () => {
   beforeEach(() => {
     openLeafPanelMock.mockClear();
+    navigationMocks.routerPush.mockClear();
+    navigationMocks.searchParams = new URLSearchParams();
   });
 
   it('labels committed, source, and leaf regions without relying on color alone', () => {
@@ -255,6 +263,27 @@ describe('Canvas node semantic markers', () => {
 
     const node = screen.getByRole('treeitem', { name: /Semantic canvas node/i });
     expect(within(node).queryByText(/Create Output/i)).not.toBeInTheDocument();
+  });
+
+  it('opens commit details from the committed hash inside the node', () => {
+    renderUnitNode(makeNodeData());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit sha:abc123' }));
+
+    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
+      '/project/proj_canvas/commit/sha256%3Aabc123'
+    );
+  });
+
+  it('keeps the intro demo query when opening commit details from the hash', () => {
+    navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
+    renderUnitNode(makeNodeData());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit sha:abc123' }));
+
+    expect(navigationMocks.routerPush).toHaveBeenCalledWith(
+      '/project/proj_canvas/commit/sha256%3Aabc123?introDemo=1'
+    );
   });
 
   it('shows a local new leaf action after expanding existing leaf output', () => {
