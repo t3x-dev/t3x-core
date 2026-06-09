@@ -265,6 +265,12 @@ describe('Canvas node semantic markers', () => {
     expect(within(node).queryByText(/Create Output/i)).not.toBeInTheDocument();
   });
 
+  it('does not allow renaming a committed node title on the canvas', () => {
+    renderUnitNode(makeNodeData());
+
+    expect(screen.queryByTitle('Rename commit')).not.toBeInTheDocument();
+  });
+
   it('opens commit details from the committed hash inside the node', () => {
     renderUnitNode(makeNodeData());
 

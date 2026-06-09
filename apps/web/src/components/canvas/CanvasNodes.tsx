@@ -12,7 +12,6 @@ import {
   Hash,
   MessageSquare,
   MessageSquarePlus,
-  Pencil,
   PenSquare,
   Plus,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { commitHashLabel } from '@/domain/format/formatters';
-import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useConversationContext } from '@/hooks/conversations/useConversationContext';
@@ -134,8 +132,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const [leavesExpanded, setLeavesExpanded] = useState(false);
   const [contentExpandedManual, setContentExpandedManual] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
   const params = useParams();
@@ -149,14 +145,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const contentExpanded = contentExpandedManual;
 
   const { t } = useTerminology();
-  const { renameCommit } = useCanvasCommitActions();
   const openLeafPanel = useCanvasStore((state) => state.openLeafPanel);
   const { remove: removeLeafFromNode } = useCanvasLeafActions();
   // Read from module-level ref to avoid Zustand re-renders on every callback update
   const leafContextMenuHandler = leafContextMenuHandlerRef.current;
   const openNodeModal = useCanvasStore((state) => state.openNodeModal);
   const { load: loadProjectData } = useCanvasNodeActions();
-  const updateNode = useCanvasStore((state) => state.updateNode);
   const notify = useProjectStore((state) => state.notifyCallback);
 
   // Pin store
@@ -232,23 +226,6 @@ const UnitNode = memo(function UnitNode(props: Props) {
       })
       .catch(() => {}); // Silently fail on clipboard permission denial
   };
-
-  const handleTitleSave = useCallback(async () => {
-    const newTitle = editTitle.trim();
-    if (!newTitle || newTitle === data.title) {
-      setIsEditingTitle(false);
-      return;
-    }
-    updateNode(id, { title: newTitle });
-    setIsEditingTitle(false);
-    if (data.commitHash) {
-      try {
-        await renameCommit(data.commitHash, newTitle);
-      } catch {
-        updateNode(id, { title: data.title });
-      }
-    }
-  }, [editTitle, data.title, data.commitHash, id, updateNode, renameCommit]);
 
   const handleOpenCommitDetails = useCallback(
     (e: React.MouseEvent) => {
@@ -438,46 +415,12 @@ const UnitNode = memo(function UnitNode(props: Props) {
         <div className="px-3 py-3">
           {/* Row 1: Title + Branch Badge */}
           <div className="flex items-start justify-between gap-2 mb-[var(--space-item)]">
-            {isEditingTitle ? (
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleTitleSave();
-                  if (e.key === 'Escape') setIsEditingTitle(false);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onBlur={handleTitleSave}
-                className="noDrag nowheel m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 bg-transparent border-b border-[var(--commit)] outline-none"
-                data-title-editable
-                // biome-ignore lint/a11y/noAutofocus: intentional — user just entered edit mode
-                autoFocus
-              />
-            ) : (
-              <div className="flex items-center gap-1 flex-1 min-w-0 group/title">
-                <NodeKindIcon kind={semanticKind} />
-                <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
-                  {data.title}
-                </h4>
-                {isCommitted && (
-                  <button
-                    type="button"
-                    data-title-editable
-                    className="shrink-0 p-0.5 rounded opacity-0 group-hover/title:opacity-60 hover:!opacity-100 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditTitle(data.title);
-                      setIsEditingTitle(true);
-                    }}
-                    title="Rename commit"
-                  >
-                    <Pencil size={10} />
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <NodeKindIcon kind={semanticKind} />
+              <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)] leading-snug flex-1 min-w-0 truncate">
+                {data.title}
+              </h4>
+            </div>
             {isDraft ? (
               <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-[var(--accent-pending)]/50 text-[var(--accent-pending)] bg-[var(--accent-pending-soft)] inline-flex items-center gap-0.5">
                 <PenSquare size={10} aria-hidden="true" />
