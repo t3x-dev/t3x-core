@@ -21,7 +21,8 @@ List merged PRs or the comparison range:
 - None
 
 <!--
-If this product release publishes packages, replace None with one line per package:
+If this product release publishes packages, replace None with the complete
+current npm publish surface:
 
 - `@t3x-dev/local`: patch
 - `@t3x-dev/yops`: patch
@@ -42,9 +43,10 @@ CI validates this section against .changeset/*.md.
 - Product release version is independent from npm package versions.
 - Every merge to `main` must have a product release version and release notes.
 - Package publish is optional and happens only through Changesets/version PRs.
-- Runtime artifacts should be required only when `@t3x-dev/local` is in the release set.
-- `@t3x-dev/yops`-only releases should avoid local runtime artifacts once
-  release-set detection is automated.
+- Code-only releases use `Package Releases: - None`; final GitHub Release notes
+  omit package information.
+- Current package releases include both `@t3x-dev/local` and `@t3x-dev/yops`,
+  so runtime artifacts are required for package releases.
 - Merging this PR to `main` does not publish by itself unless the follow-up
   Changesets version/publish flow determines a publish is required.
 

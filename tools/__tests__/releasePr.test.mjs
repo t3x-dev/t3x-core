@@ -37,10 +37,11 @@ T3X product release version: \`0.4.0\`
 ## Package Releases
 
 - \`@t3x-dev/local\`: patch
+- \`@t3x-dev/yops\`: patch
 
 ## Release Notes
 
-- Product release 0.4.0 includes local runtime fixes.
+- Product release 0.4.0 includes local runtime and YOps fixes.
 `;
 
 const validCodeOnlyReleaseBody = `## Product Release
@@ -60,12 +61,16 @@ T3X product release version: \`0.4.1\`
 - T3X 0.4.1 tightens release PR policy checks.
 `;
 
+function withPackageReleaseEntries(entries) {
+  return validReleaseBody.replace('- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch', entries);
+}
+
 test('allows a product release PR with matching release branch and package release entry', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
-    changesetFiles: [localChangeset],
+    changesetFiles: [localChangeset, yopsChangeset],
   });
 
   assert.deepEqual(result.errors, []);
@@ -97,7 +102,7 @@ test('rejects ordinary feature branches targeting main', () => {
     baseBranch: 'main',
     headBranch: 'feature/example',
     body: validReleaseBody,
-    changesetFiles: [localChangeset],
+    changesetFiles: [localChangeset, yopsChangeset],
   });
 
   assert.match(result.errors.join('\n'), /must come from release\/x\.y\.z/);
@@ -108,7 +113,7 @@ test('rejects release branch and body version mismatch', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.1',
     body: validReleaseBody,
-    changesetFiles: [localChangeset],
+    changesetFiles: [localChangeset, yopsChangeset],
   });
 
   assert.match(result.errors.join('\n'), /does not match PR body product release version/);
@@ -118,8 +123,8 @@ test('rejects missing package release entries', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '-'),
-    changesetFiles: [localChangeset],
+    body: withPackageReleaseEntries('-'),
+    changesetFiles: [localChangeset, yopsChangeset],
   });
 
   assert.match(
@@ -132,8 +137,8 @@ test('rejects package releases none when changesets exist', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: validReleaseBody.replace('- `@t3x-dev/local`: patch', '- None'),
-    changesetFiles: [localChangeset],
+    body: withPackageReleaseEntries('- None'),
+    changesetFiles: [localChangeset, yopsChangeset],
   });
 
   assert.match(result.errors.join('\n'), /Package Releases is "None"/);
@@ -148,6 +153,18 @@ test('rejects package release entries without changeset files', () => {
   });
 
   assert.match(result.errors.join('\n'), /Package Releases lists packages/);
+});
+
+test('rejects incomplete current package release set', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: withPackageReleaseEntries('- `@t3x-dev/local`: patch'),
+    changesetFiles: [localChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /complete current public package release set/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/local, @t3x-dev\/yops/);
 });
 
 test('rejects code-only release when changeset files exist', () => {
@@ -166,11 +183,10 @@ test('rejects package release entry without matching changeset target', () => {
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
     body: validReleaseBody,
-    changesetFiles: [yopsChangeset],
+    changesetFiles: [localChangeset],
   });
 
-  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/local/);
-  assert.match(result.errors.join('\n'), /changeset targets @t3x-dev\/yops/);
+  assert.match(result.errors.join('\n'), /Package Releases lists @t3x-dev\/yops/);
 });
 
 test('allows changesets version package PRs into main', () => {
@@ -217,10 +233,7 @@ test('validates multi-line package release sections against changesets', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: validReleaseBody.replace(
-      '- `@t3x-dev/local`: patch',
-      '- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch'
-    ),
+    body: validReleaseBody,
     changesetFiles: [localChangeset, yopsChangeset],
   });
 
