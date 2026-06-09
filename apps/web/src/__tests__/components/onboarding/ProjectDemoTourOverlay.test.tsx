@@ -51,9 +51,7 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Click the highlighted + New Leaf action')).toBeInTheDocument();
     });
-    expect(
-      screen.getByText('Click + New Leaf in the floating version action bar.')
-    ).toBeInTheDocument();
+    expect(screen.queryByText('What to click here')).toBeNull();
     expect(screen.queryByText('Click the highlighted Leaf tab')).toBeNull();
 
     await act(async () => {
@@ -66,9 +64,7 @@ describe('ProjectDemoTourOverlay', () => {
       expect(screen.getByText('Choose an output type')).toBeInTheDocument();
     });
     expect(screen.getByText('Leaf type')).toBeInTheDocument();
-    expect(
-      screen.getByText('Choose one of the output destination buttons in the panel.')
-    ).toBeInTheDocument();
+    expect(screen.queryByText('What to click here')).toBeNull();
     expect(onDone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));

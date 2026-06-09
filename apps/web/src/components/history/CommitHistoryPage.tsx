@@ -57,11 +57,6 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
     target: 'history-header',
     tone: 'commit',
     icon: History,
-    details: [
-      'Back returns to the canvas.',
-      'Keyboard hints teach fast scanning.',
-      'The branch dropdown narrows the timeline when a project grows.',
-    ],
   },
   {
     id: 'filter',
@@ -72,11 +67,6 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
     target: 'history-branch-filter',
     tone: 'pending',
     icon: GitBranch,
-    details: [
-      'All branches is the default full-project view.',
-      'Selecting a branch reloads commits for that version path.',
-      'This is the safe way to review project evolution before opening a commit.',
-    ],
   },
   {
     id: 'timeline',
@@ -87,11 +77,6 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
     target: 'history-timeline',
     tone: 'extract',
     icon: GitCommit,
-    details: [
-      'Diff stats summarize what changed from the parent.',
-      'The timeline dot shows root, normal, or merge commits.',
-      'Opening a row continues the demo into commit inspection.',
-    ],
   },
   {
     id: 'keyboard',
@@ -102,11 +87,6 @@ const HISTORY_TOUR_STEPS: FeatureTourStep[] = [
     target: 'history-keyboard',
     tone: 'success',
     icon: Keyboard,
-    details: [
-      'Use j/k to move through rows.',
-      'Use o or Enter to open the active commit.',
-      'Use Esc to clear the active row.',
-    ],
   },
 ];
 

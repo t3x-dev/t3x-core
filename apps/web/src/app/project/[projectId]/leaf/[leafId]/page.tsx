@@ -44,11 +44,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-mode-generate',
     tone: 'leaf',
     icon: LeafIcon,
-    details: [
-      'Click Generate in the header.',
-      'The source and inspector controls become the editing workspace.',
-      'This is where users retune an artifact before publishing it.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -60,11 +55,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-status',
     tone: 'commit',
     icon: ListChecks,
-    details: [
-      'Click anywhere inside the highlighted status strip.',
-      'Semantic point coverage tells users whether the leaf reflects committed state.',
-      'Commit verified ties the artifact back to a stable version.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -76,11 +66,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-source-panel',
     tone: 'source',
     icon: FileText,
-    details: [
-      'Click inside the highlighted source panel.',
-      'Source frames show what the leaf is allowed to use.',
-      'Require and Exclude actions turn source state into output rules.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -92,11 +77,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-mode-display',
     tone: 'leaf',
     icon: ClipboardCheck,
-    details: [
-      'Click Display in the header.',
-      'The right rail switches to quality review.',
-      'The output stays connected to source-backed semantic points.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -108,11 +88,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-quality-panel',
     tone: 'success',
     icon: Gauge,
-    details: [
-      'Click inside the highlighted quality panel.',
-      'Coverage shows whether selected semantic points made it into the output.',
-      'Assertions are pass/fail checks tied to constraints.',
-    ],
     advanceOnTargetClick: true,
   },
 ];

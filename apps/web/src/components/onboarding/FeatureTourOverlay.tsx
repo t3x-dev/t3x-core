@@ -24,7 +24,6 @@ export interface FeatureTourStep {
   placement?: 'above' | 'side-center';
   tone: FeatureTourTone;
   icon: LucideIcon;
-  details: string[];
   advanceOnTargetClick?: boolean;
   advanceDelayMs?: number;
 }

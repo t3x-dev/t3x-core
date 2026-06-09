@@ -103,11 +103,6 @@ function ChatLanding() {
           target: 'landing-send-action',
           tone: 'conversation',
           icon: SendHorizontal,
-          details: [
-            'Click the blue paper-plane button at the lower right of the composer.',
-            'No LLM API is called in this demo path.',
-            'After sending, Chat shows the preset reply and continues to Extract and Apply.',
-          ],
           advanceOnTargetClick: true,
         },
       ];
@@ -123,11 +118,6 @@ function ChatLanding() {
         target: 'sidebar-new-project',
         tone: 'conversation',
         icon: FolderPlus,
-        details: [
-          'Click New project in the sidebar.',
-          'Projects keep related conversations and committed state together.',
-          'The demo will continue in the composer after the project is created.',
-        ],
         advanceOnTargetClick: true,
       },
       {
@@ -140,11 +130,6 @@ function ChatLanding() {
         placement: 'side-center',
         tone: 'commit',
         icon: ArrowRight,
-        details: [
-          'You can type a project name, or keep the default.',
-          'Click Create to land back on Chat with this project selected.',
-          'Next, the composer will receive a prepared prompt-review request.',
-        ],
         advanceOnTargetClick: true,
       },
     ];

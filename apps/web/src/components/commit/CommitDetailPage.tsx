@@ -82,11 +82,6 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'commit-actions',
     tone: 'commit',
     icon: Eye,
-    details: [
-      'View Canvas returns to the project map.',
-      'View Diff appears when this commit has a single parent.',
-      'Share and Export are the stable output actions for a reviewed commit.',
-    ],
   },
   {
     id: 'identity',
@@ -97,11 +92,6 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'commit-identity',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'The hash is copyable so the version can be referenced elsewhere.',
-      'Diff badges use fixed semantics: added, removed, modified, and identical.',
-      'Branch and author metadata help the user trust the snapshot.',
-    ],
   },
   {
     id: 'content',
@@ -112,11 +102,6 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'commit-tabs',
     tone: 'extract',
     icon: Tag,
-    details: [
-      'Click YAML for the default audit view.',
-      'Click Graph when relationships are easier to understand visually.',
-      'Click JSON when debugging or verifying exact serialized data.',
-    ],
   },
   {
     id: 'audit',
@@ -127,11 +112,6 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'commit-audit',
     tone: 'source',
     icon: Pin,
-    details: [
-      'Open evidence rows to revisit the source context.',
-      'Copy parent or current hashes from the hash chain.',
-      'Use this rail when explaining why the committed state is trustworthy.',
-    ],
   },
   {
     id: 'provenance',
@@ -142,11 +122,6 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'commit-provenance',
     tone: 'leaf',
     icon: LeafIcon,
-    details: [
-      'Click the provenance bar to expand or collapse it.',
-      'Source nodes show where the meaning originated.',
-      'Leaf nodes show what reusable artifacts were produced from this commit.',
-    ],
   },
 ];
 

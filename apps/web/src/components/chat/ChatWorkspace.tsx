@@ -80,11 +80,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     target: 'chat-yops-panel',
     tone: 'extract',
     icon: PanelRight,
-    details: [
-      'Click the collapsed Workspace rail on the right.',
-      'This reveals the YOps editor and output area.',
-      'Extraction controls are intentionally inside this workbench surface.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -96,11 +91,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     target: 'chat-extract-action',
     tone: 'extract',
     icon: FileSearch,
-    details: [
-      'The button enters an extracting state.',
-      'A staged YOps proposal appears in the workspace.',
-      'The user can review the result before applying it.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -112,11 +102,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     target: 'chat-apply-action',
     tone: 'pending',
     icon: PanelRight,
-    details: [
-      'The staged badge clears after Apply.',
-      'The output panel becomes the applied semantic state.',
-      'Commit stays separate so users learn the review checkpoint.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -128,11 +113,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     target: 'chat-commit-action',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Click the real Commit button in the workspace action bar.',
-      'This opens the commit confirmation dialog.',
-      'The applied output is not on Canvas until it is committed.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -146,11 +126,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     placement: 'above',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Keep the generated commit name or edit it.',
-      'Click Commit in the confirmation dialog.',
-      'After the commit finishes, the walkthrough moves to Canvas.',
-    ],
     advanceOnTargetClick: true,
     advanceDelayMs: 520,
   },
@@ -163,11 +138,6 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
     target: 'sidebar-canvas-tab',
     tone: 'commit',
     icon: PanelRight,
-    details: [
-      'Click Canvas in the sidebar mode switcher.',
-      'The route will change to the project graph.',
-      'The next step asks the user to click a real canvas node, then continue to Leaf.',
-    ],
     advanceOnTargetClick: true,
   },
 ];

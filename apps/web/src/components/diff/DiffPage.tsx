@@ -65,11 +65,6 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'diff-header',
     tone: 'commit',
     icon: GitCompareArrows,
-    details: [
-      'Click either hash pill to open the corresponding commit.',
-      'Use Back to return to the canvas or the page that opened this comparison.',
-      'The demo keeps this comparison inside the seeded project.',
-    ],
   },
   {
     id: 'index',
@@ -80,11 +75,6 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'diff-index',
     tone: 'extract',
     icon: ListTree,
-    details: [
-      'Click a tree row to jump to its diff.',
-      'Use Show identical when the user needs full context.',
-      'The symbols and colors match the rest of the versioning UI.',
-    ],
   },
   {
     id: 'tabs',
@@ -95,11 +85,6 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'diff-tabs',
     tone: 'commit',
     icon: Columns3,
-    details: [
-      'Diff is best for semantic review.',
-      'Graph is best for relationship shape.',
-      'JSON is best for debugging exact payloads.',
-    ],
   },
   {
     id: 'side',
@@ -110,11 +95,6 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'diff-sidebar',
     tone: 'pending',
     icon: PanelRight,
-    details: [
-      'Read tree stats before deciding whether a merge is needed.',
-      'Start Merge creates a merge workspace from the two selected versions.',
-      'In the seeded demo, this teaches where merge lives without requiring an API call.',
-    ],
   },
 ];
 

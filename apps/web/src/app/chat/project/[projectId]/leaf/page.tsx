@@ -40,11 +40,6 @@ const LEAF_INDEX_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-index-card',
     tone: 'leaf',
     icon: ClipboardCheck,
-    details: [
-      'Click the artifact row in the center of the page.',
-      'The row opens the full Leaf workspace for this generated output.',
-      'The next page shows output, source coverage, quality, and export controls.',
-    ],
     advanceOnTargetClick: true,
   },
 ];

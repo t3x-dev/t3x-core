@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Map as MapIcon,
-  MousePointerClick,
   Play,
   Plus,
   Send,
@@ -32,7 +31,6 @@ interface ProjectTourStep {
   target: string | null;
   icon: typeof Play;
   tone: 'conversation' | 'commit' | 'leaf' | 'success';
-  details: string[];
   advanceOnTargetClick?: boolean;
   advanceClickSelector?: string;
 }
@@ -47,11 +45,6 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     target: 'canvas-commit-node',
     icon: MapIcon,
     tone: 'commit',
-    details: [
-      'Click the commit card in the graph, not the sidebar.',
-      'The click selects the reviewed version created from Chat.',
-      'After the click, Canvas reveals the version actions for that commit.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -62,11 +55,6 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     target: 'canvas-floating-action-new-leaf',
     icon: Plus,
     tone: 'leaf',
-    details: [
-      'Click + New Leaf in the floating version action bar.',
-      'This starts the output artifact flow from the selected commit.',
-      'After the click, choose the output destination type in the side panel.',
-    ],
     advanceOnTargetClick: true,
   },
   {
@@ -78,11 +66,6 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     target: 'canvas-leaf-type-options',
     icon: Send,
     tone: 'leaf',
-    details: [
-      'Choose one of the output destination buttons in the panel.',
-      'The selection creates the Leaf from the highlighted committed version.',
-      'After creation, the demo continues in the generated Leaf workspace.',
-    ],
     advanceOnTargetClick: true,
     advanceClickSelector: 'button:not(:disabled)',
   },
@@ -214,6 +197,7 @@ export function ProjectDemoTourOverlay({
   const atEnd = stepIndex === PROJECT_TOUR_STEPS.length - 1;
   const StepIcon = step.icon;
   const guided = interactionMode === 'guided';
+  const showStepNav = !guided;
   const waitingForTargetClick = guided && step.advanceOnTargetClick;
   const actionLabel = guided && onSkip ? 'Skip demo' : doneLabel;
 
@@ -402,7 +386,12 @@ export function ProjectDemoTourOverlay({
           maxHeight: 'calc(100vh - 32px)',
         }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+        <header
+          className={cn(
+            'flex items-start justify-between gap-3 px-4 py-3',
+            showStepNav && 'border-b border-[var(--stroke-divider)]'
+          )}
+        >
           <div>
             <div
               className={cn(
@@ -435,8 +424,8 @@ export function ProjectDemoTourOverlay({
           )}
         </header>
 
-        <div className="space-y-3 px-4 py-3">
-          {!guided && (
+        {showStepNav ? (
+          <div className="space-y-3 px-4 py-3">
             <div className="grid grid-cols-[repeat(auto-fit,minmax(36px,1fr))] gap-1.5">
               {PROJECT_TOUR_STEPS.map((item, index) => {
                 const selected = index === stepIndex;
@@ -467,28 +456,15 @@ export function ProjectDemoTourOverlay({
                 );
               })}
             </div>
-          )}
-
-          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0] text-[var(--text-tertiary)]">
-              <MousePointerClick className="h-3.5 w-3.5" />
-              What to click here
-            </div>
-            <ul className="space-y-2">
-              {step.details.map((detail) => (
-                <li
-                  key={detail}
-                  className="flex gap-2 text-sm leading-normal text-[var(--text-secondary)]"
-                >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-50" />
-                  <span>{detail}</span>
-                </li>
-              ))}
-            </ul>
           </div>
-        </div>
+        ) : null}
 
-        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <footer
+          className={cn(
+            'flex flex-col border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 sm:flex-row sm:items-center sm:justify-between',
+            guided ? 'gap-1.5 py-2' : 'gap-2 py-3'
+          )}
+        >
           <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
             <span className="font-mono">
               {String(stepIndex + 1).padStart(2, '0')} /{' '}

@@ -67,11 +67,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-actions',
     tone: 'pending',
     icon: Sparkles,
-    details: [
-      'Back returns to the project canvas.',
-      'The title can be edited inline.',
-      'Commit is disabled until there is reviewable content.',
-    ],
   },
   {
     id: 'fixture',
@@ -82,11 +77,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-fixture-banner',
     tone: 'commit',
     icon: FileCode2,
-    details: [
-      'The seeded nodes, constraints, and preview are developer-provided.',
-      'Users can still click through the same review surfaces.',
-      'This is the play demo path for learning the workflow safely.',
-    ],
   },
   {
     id: 'nodes',
@@ -97,11 +87,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-nodes',
     tone: 'extract',
     icon: ListChecks,
-    details: [
-      'Included points become the candidate semantic content.',
-      'Users can edit source-backed meaning before committing.',
-      'This is the main habit the demo should teach: review before versioning.',
-    ],
   },
   {
     id: 'rules',
@@ -112,11 +97,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-constraints',
     tone: 'leaf',
     icon: SlidersHorizontal,
-    details: [
-      'Constraints become quality checks.',
-      'Instructions explain the desired artifact style.',
-      'The seeded replay already fills these without an API call.',
-    ],
   },
   {
     id: 'preview',
@@ -127,11 +107,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-preview',
     tone: 'leaf',
     icon: PanelBottom,
-    details: [
-      'The fixture preview is visible immediately.',
-      'Resize or collapse the preview panel to learn the workspace controls.',
-      'In live use, Generate Preview produces this area from a provider.',
-    ],
   },
   {
     id: 'commit',
@@ -142,11 +117,6 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
     target: 'draft-commit-button',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Click Commit to open the confirmation dialog.',
-      'The success state can route back to canvas or keep iterating.',
-      'After commit, users can inspect the version, diff it, and create leaves.',
-    ],
   },
 ];
 
