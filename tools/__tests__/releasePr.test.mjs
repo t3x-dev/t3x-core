@@ -36,8 +36,8 @@ T3X product release version: \`0.4.0\`
 
 ## Package Releases
 
-- \`@t3x-dev/local\`: patch
-- \`@t3x-dev/yops\`: patch
+- \`@t3x-dev/local\`: 0.4.1
+- \`@t3x-dev/yops\`: 0.4.1
 
 ## Release Notes
 
@@ -62,7 +62,7 @@ T3X product release version: \`0.4.1\`
 `;
 
 function withPackageReleaseEntries(entries) {
-  return validReleaseBody.replace('- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch', entries);
+  return validReleaseBody.replace('- `@t3x-dev/local`: 0.4.1\n- `@t3x-dev/yops`: 0.4.1', entries);
 }
 
 test('allows a product release PR with matching release branch and package release entry', () => {
@@ -159,11 +159,23 @@ test('rejects incomplete current package release set', () => {
   const result = validateReleasePrWithSurface({
     baseBranch: 'main',
     headBranch: 'release/0.4.0',
-    body: withPackageReleaseEntries('- `@t3x-dev/local`: patch'),
+    body: withPackageReleaseEntries('- `@t3x-dev/local`: 0.4.1'),
     changesetFiles: [localChangeset],
   });
 
   assert.match(result.errors.join('\n'), /complete current public package release set/);
+  assert.match(result.errors.join('\n'), /@t3x-dev\/local, @t3x-dev\/yops/);
+});
+
+test('rejects package release entries with changeset bump types instead of versions', () => {
+  const result = validateReleasePrWithSurface({
+    baseBranch: 'main',
+    headBranch: 'release/0.4.0',
+    body: withPackageReleaseEntries('- `@t3x-dev/local`: patch\n- `@t3x-dev/yops`: patch'),
+    changesetFiles: [localChangeset, yopsChangeset],
+  });
+
+  assert.match(result.errors.join('\n'), /must use concrete package versions/);
   assert.match(result.errors.join('\n'), /@t3x-dev\/local, @t3x-dev\/yops/);
 });
 
@@ -214,17 +226,19 @@ Release package changes.
 
 test('parses package release section', () => {
   assert.deepEqual(
-    parsePackageReleaseSection(`- \`@t3x-dev/local\`: patch
-- \`@t3x-dev/yops\`: minor`),
+    parsePackageReleaseSection(`- \`@t3x-dev/local\`: 0.4.1
+- \`@t3x-dev/yops\`: 0.4.1`),
     {
       none: false,
       packages: ['@t3x-dev/local', '@t3x-dev/yops'],
+      invalidVersionPackages: [],
       hasEntries: true,
     }
   );
   assert.deepEqual(parsePackageReleaseSection('- None'), {
     none: true,
     packages: [],
+    invalidVersionPackages: [],
     hasEntries: true,
   });
 });

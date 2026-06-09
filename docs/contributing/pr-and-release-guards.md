@@ -50,12 +50,14 @@ Release PRs must include:
 - User-facing release notes.
 - A `Package Releases` section containing either `- None` or the complete
   current npm publish surface:
-  `- \`@t3x-dev/local\`: patch` and `- \`@t3x-dev/yops\`: patch`.
+  `- \`@t3x-dev/local\`: 0.4.1` and `- \`@t3x-dev/yops\`: 0.4.1`.
 
 The release PR policy check also validates changeset files:
 
 - `Package Releases: - None` rejects checked-in `.changeset/*.md` files.
 - Package release entries require at least one `.changeset/*.md`.
+- Package release entries use final target package versions, not changeset bump
+  types like `patch`, `minor`, or `major`.
 - Listed public packages must appear in changeset frontmatter.
 - Public packages in changeset frontmatter must appear in `Package Releases`.
 - Package releases currently require both restricted alpha npm packages:
