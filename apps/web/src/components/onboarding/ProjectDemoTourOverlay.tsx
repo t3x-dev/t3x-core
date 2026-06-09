@@ -17,6 +17,7 @@ import { cn } from '@/utils/cn';
 
 type ProjectTourStepId = 'selectCommit' | 'openDetails' | 'createLeaf' | 'chooseLeafType';
 type ProjectTourStage = 'details' | 'leaf';
+type ProjectTourTarget = string | string[] | null;
 
 interface TargetRect {
   top: number;
@@ -30,7 +31,7 @@ interface ProjectTourStep {
   label: string;
   title: string;
   description: string;
-  target: string | null;
+  target: ProjectTourTarget;
   icon: typeof Play;
   tone: 'conversation' | 'commit' | 'leaf' | 'success';
   advanceOnTargetClick?: boolean;
@@ -54,7 +55,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       label: 'Details',
       title: 'Open commit details',
       description: 'Open commit details.',
-      target: 'canvas-floating-action-details',
+      target: ['canvas-action-details', 'canvas-floating-action-details'],
       icon: Eye,
       tone: 'commit',
       advanceOnTargetClick: true,
@@ -76,7 +77,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       label: '+ New Leaf',
       title: 'Create a Leaf from commit',
       description: 'Create from this commit.',
-      target: 'canvas-floating-action-new-leaf',
+      target: ['canvas-action-new-leaf', 'canvas-floating-action-new-leaf'],
       icon: Plus,
       tone: 'leaf',
       advanceOnTargetClick: true,
@@ -105,29 +106,35 @@ const TONE_CLASSES: Record<ProjectTourStep['tone'], string> = {
     'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]',
 };
 
-function findIntroTarget(target: string | null): HTMLElement | null {
-  if (!target) return null;
-  const nodes = Array.from(
-    document.querySelectorAll<HTMLElement>(`[data-intro-target="${target}"]`)
-  );
-  return (
-    nodes.find((node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    }) ??
-    nodes[0] ??
-    null
-  );
+function targetNames(target: ProjectTourTarget): string[] {
+  if (!target) return [];
+  return Array.isArray(target) ? target : [target];
 }
 
-function readTargetRect(target: string | null): TargetRect | null {
+function findIntroTarget(target: ProjectTourTarget): HTMLElement | null {
+  let firstMatch: HTMLElement | null = null;
+  for (const name of targetNames(target)) {
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>(`[data-intro-target="${name}"]`)
+    );
+    firstMatch ??= nodes[0] ?? null;
+    const visibleNode = nodes.find((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (visibleNode) return visibleNode;
+  }
+  return firstMatch;
+}
+
+function readTargetRect(target: ProjectTourTarget): TargetRect | null {
   const node = findIntroTarget(target);
   if (!node) return null;
   const rect = node.getBoundingClientRect();
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 }
 
-function isTargetReady(target: string | null): boolean {
+function isTargetReady(target: ProjectTourTarget): boolean {
   const node = findIntroTarget(target);
   if (!node) return false;
   if (node instanceof HTMLButtonElement && node.disabled) return false;
@@ -135,7 +142,7 @@ function isTargetReady(target: string | null): boolean {
   return true;
 }
 
-function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<boolean> {
+function waitForReadyTarget(target: ProjectTourTarget, timeoutMs = 3000): Promise<boolean> {
   if (!target || isTargetReady(target)) return Promise.resolve(true);
 
   return new Promise((resolve) => {

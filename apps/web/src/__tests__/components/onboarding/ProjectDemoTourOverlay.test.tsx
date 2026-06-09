@@ -58,6 +58,40 @@ describe('ProjectDemoTourOverlay', () => {
     });
   });
 
+  it('prefers the selection panel Details target before the floating Details fallback', async () => {
+    const onDone = vi.fn();
+
+    render(
+      <>
+        <button type="button" data-intro-target="canvas-commit-node">
+          Commit card
+        </button>
+        <button type="button" data-intro-target="canvas-action-details">
+          Panel Details
+        </button>
+        <button type="button" data-intro-target="canvas-floating-action-details">
+          Floating Details
+        </button>
+        <ProjectDemoTourOverlay open onClose={vi.fn()} onDone={onDone} interactionMode="guided" />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit card' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Open commit details')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Floating Details' }));
+    expect(onDone).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Panel Details' }));
+
+    await waitFor(() => {
+      expect(onDone).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('moves from the commit card to the + New Leaf action in the leaf stage', async () => {
     const onDone = vi.fn();
 
