@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  ArrowLeft,
   Blocks,
   GitBranch,
   KeyRound,
@@ -82,6 +83,19 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
   return (
     <div className="flex h-full bg-[var(--surface-app)]">
       <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--stroke-divider)] px-3 py-5">
+        <div className="mb-3 px-1">
+          <Link
+            href="/chat"
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium',
+              'text-[var(--text-secondary)] transition-colors duration-150',
+              'hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
+            )}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+            <span>Back to workspace</span>
+          </Link>
+        </div>
         <div className="mb-5 flex items-center gap-2 px-3">
           <Settings className="h-5 w-5 text-[var(--text-primary)]" />
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h2>

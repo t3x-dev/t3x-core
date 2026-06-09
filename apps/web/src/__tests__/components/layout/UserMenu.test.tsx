@@ -70,8 +70,8 @@ describe('UserMenu', () => {
 
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
 
-    expect(await screen.findByText('Profile')).toBeTruthy();
-    expect(screen.getByText('Settings')).toBeTruthy();
+    expect(await screen.findByText('Settings')).toBeTruthy();
+    expect(screen.queryByText('Profile')).toBeNull();
     expect(screen.queryByText('Sign Out')).toBeNull();
     expect(loadAuthMe).not.toHaveBeenCalled();
   });
@@ -97,20 +97,7 @@ describe('UserMenu', () => {
     );
   });
 
-  it('links to profile settings from the local profile menu', async () => {
-    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
-
-    render(<UserMenu collapsed={false} />);
-
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Local profile' }));
-
-    expect(await screen.findByRole('menuitem', { name: 'Profile' })).toHaveAttribute(
-      'href',
-      '/settings/profile'
-    );
-  });
-
-  it('links to preferences settings from the local profile menu', async () => {
+  it('links to local profile settings from the local profile menu', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
 
     render(<UserMenu collapsed={false} />);
@@ -119,7 +106,7 @@ describe('UserMenu', () => {
 
     expect(await screen.findByRole('menuitem', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/settings/preferences'
+      '/settings/profile'
     );
   });
 

@@ -48,6 +48,10 @@ describe('SettingsLayout', () => {
     expect(screen.getByText('AUTOMATION')).toBeInTheDocument();
     expect(screen.getByText('PROJECT')).toBeInTheDocument();
 
+    expect(screen.getByRole('link', { name: /Back to workspace/i })).toHaveAttribute(
+      'href',
+      '/chat'
+    );
     expect(screen.getByRole('link', { name: /Health/i })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',

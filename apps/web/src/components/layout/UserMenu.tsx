@@ -5,7 +5,7 @@
  *
  * Collapsed: circular avatar with first letter of display name.
  * Expanded: avatar + username text.
- * Click: DropdownMenu with Profile / Settings / Sign Out.
+ * Click: DropdownMenu with Settings locally, or Profile / Settings / Sign Out when signed in.
  *
  * When local auth is disabled, still renders a local profile menu so
  * Settings remains reachable in source-dev and self-hosted local mode.
@@ -232,18 +232,29 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
-          <Link href="/settings/profile">
-            <User className="h-4 w-4" />
-            Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
-          <Link href="/settings/preferences">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
-        </DropdownMenuItem>
+        {authDisabled ? (
+          <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+            <Link href="/settings/profile">
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/settings/profile">
+                <User className="h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/settings/preferences">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         {showSignOut && (
           <>
             <DropdownMenuSeparator />
