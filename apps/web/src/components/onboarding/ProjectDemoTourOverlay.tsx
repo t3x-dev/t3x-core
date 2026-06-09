@@ -8,13 +8,14 @@ import {
   MousePointerClick,
   Play,
   Plus,
+  Send,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'createLeaf';
+type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
 
 interface TargetRect {
   top: number;
@@ -33,6 +34,7 @@ interface ProjectTourStep {
   tone: 'conversation' | 'commit' | 'leaf' | 'success';
   details: string[];
   advanceOnTargetClick?: boolean;
+  advanceClickSelector?: string;
 }
 
 const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
@@ -56,17 +58,33 @@ const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
     id: 'createLeaf',
     label: '+ New Leaf',
     title: 'Click the highlighted + New Leaf action',
-    description:
-      'A Leaf should be created from a selected committed version. The demo only enters Leaf after this real Canvas action.',
+    description: 'This opens the Leaf creation panel from the selected committed version.',
     target: 'canvas-floating-action-new-leaf',
     icon: Plus,
     tone: 'leaf',
     details: [
       'Click + New Leaf in the floating version action bar.',
       'This starts the output artifact flow from the selected commit.',
-      'After the click, the demo opens the project Leaf index for the generated artifact.',
+      'After the click, choose the output destination type in the side panel.',
     ],
     advanceOnTargetClick: true,
+  },
+  {
+    id: 'chooseLeafType',
+    label: 'Leaf type',
+    title: 'Choose an output type',
+    description:
+      'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
+    target: 'canvas-leaf-type-options',
+    icon: Send,
+    tone: 'leaf',
+    details: [
+      'Choose one of the output destination buttons in the panel.',
+      'The selection creates the Leaf from the highlighted committed version.',
+      'After creation, the demo continues in the generated Leaf workspace.',
+    ],
+    advanceOnTargetClick: true,
+    advanceClickSelector: 'button:not(:disabled)',
   },
 ];
 
@@ -110,8 +128,8 @@ function isTargetReady(target: string | null): boolean {
   return true;
 }
 
-function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<void> {
-  if (!target || isTargetReady(target)) return Promise.resolve();
+function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<boolean> {
+  if (!target || isTargetReady(target)) return Promise.resolve(true);
 
   return new Promise((resolve) => {
     const startedAt = Date.now();
@@ -126,9 +144,14 @@ function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<vo
     };
 
     const check = () => {
-      if (isTargetReady(target) || Date.now() - startedAt >= timeoutMs) {
+      if (isTargetReady(target)) {
         cleanup();
-        resolve();
+        resolve(true);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        cleanup();
+        resolve(false);
         return;
       }
       animationFrame = requestAnimationFrame(check);
@@ -143,6 +166,17 @@ function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<vo
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function rectsEqual(current: TargetRect | null, next: TargetRect | null) {
+  if (current === next) return true;
+  if (!current || !next) return false;
+  return (
+    Math.abs(current.top - next.top) < 0.5 &&
+    Math.abs(current.left - next.left) < 0.5 &&
+    Math.abs(current.width - next.width) < 0.5 &&
+    Math.abs(current.height - next.height) < 0.5
+  );
 }
 
 function stopInteraction(event: Event) {
@@ -181,7 +215,7 @@ export function ProjectDemoTourOverlay({
   const StepIcon = step.icon;
   const guided = interactionMode === 'guided';
   const waitingForTargetClick = guided && step.advanceOnTargetClick;
-  const actionLabel = guided ? 'Done' : doneLabel;
+  const actionLabel = guided && onSkip ? 'Skip demo' : doneLabel;
 
   const coachPosition = useMemo(() => {
     const width =
@@ -242,23 +276,37 @@ export function ProjectDemoTourOverlay({
     }
 
     let animationFrame = 0;
-    const update = () => {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = requestAnimationFrame(() => {
-        setTargetRect(readTargetRect(step.target));
-      });
+    let settleFrames = 0;
+
+    const measure = () => {
+      const nextTargetRect = readTargetRect(step.target);
+      setTargetRect((current) => (rectsEqual(current, nextTargetRect) ? current : nextTargetRect));
     };
 
-    update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    const observer = new MutationObserver(update);
+    const update = (framesToSettle = 0) => {
+      settleFrames = Math.max(settleFrames, framesToSettle);
+      cancelAnimationFrame(animationFrame);
+      const tick = () => {
+        measure();
+        if (settleFrames <= 0) return;
+        settleFrames -= 1;
+        animationFrame = requestAnimationFrame(tick);
+      };
+      animationFrame = requestAnimationFrame(tick);
+    };
+    const updateOnce = () => update();
+    const updateWhileSettling = () => update(18);
+
+    updateWhileSettling();
+    window.addEventListener('resize', updateOnce);
+    window.addEventListener('scroll', updateOnce, true);
+    const observer = new MutationObserver(updateWhileSettling);
     observer.observe(document.body, { attributes: true, childList: true, subtree: true });
     return () => {
       cancelAnimationFrame(animationFrame);
       observer.disconnect();
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', updateOnce);
+      window.removeEventListener('scroll', updateOnce, true);
     };
   }, [open, step.target]);
 
@@ -268,6 +316,12 @@ export function ProjectDemoTourOverlay({
       if (advancingAfterTargetClick) return;
       const node = findIntroTarget(step.target);
       if (!node || !node.contains(event.target as Node)) return;
+      if (step.advanceClickSelector) {
+        const eventTarget = event.target;
+        const actionTarget =
+          eventTarget instanceof Element ? eventTarget.closest(step.advanceClickSelector) : null;
+        if (!actionTarget || !node.contains(actionTarget)) return;
+      }
       setAdvancingAfterTargetClick(true);
       window.setTimeout(async () => {
         if (atEnd) {
@@ -276,7 +330,11 @@ export function ProjectDemoTourOverlay({
           return;
         }
         const nextStep = PROJECT_TOUR_STEPS[stepIndex + 1];
-        await waitForReadyTarget(nextStep?.target ?? null);
+        const targetReady = await waitForReadyTarget(nextStep?.target ?? null);
+        if (!targetReady) {
+          setAdvancingAfterTargetClick(false);
+          return;
+        }
         setStepIndex((current) => Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1));
         setAdvancingAfterTargetClick(false);
       }, 0);

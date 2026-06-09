@@ -94,16 +94,14 @@ docs: update API reference for v4 endpoints
 
 - We use [Biome](https://biomejs.dev/) for linting and formatting
 - Run `pnpm check:fix` before submitting
-- No `console.log` in production code
-- No `any` type escapes
+- Avoid `console.log` in production code unless it is intentional
+- Avoid `any`; justify type escapes when they are necessary
 
 ## Architecture Overview
 
-See [CLAUDE.md](./CLAUDE.md) for detailed architecture documentation, including:
-- Package dependency graph
-- Three-layer design (Core / Storage / Product)
-- Data formats and ID conventions
-- Testing patterns
+Start with [AGENTS.md](./AGENTS.md) for cross-agent development guidance. See
+[CLAUDE.md](./CLAUDE.md) for deeper architecture notes, including package
+dependency graph, data formats, ID conventions, and testing patterns.
 
 ## Questions?
 

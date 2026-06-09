@@ -168,7 +168,7 @@ export function AutopilotSettings({ projectId }: { projectId: string }) {
           className="max-w-[240px]"
         />
         <p className="text-xs text-[var(--text-tertiary)]">
-          Branch where auto-committed knowledge will be stored
+          Branch where auto-committed state will be stored
         </p>
       </div>
 

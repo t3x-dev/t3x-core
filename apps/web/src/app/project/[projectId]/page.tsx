@@ -326,7 +326,7 @@ export function ProjectDetailPageContent({
 
   // Chat is the producing layer. Canvas stays in place for empty projects,
   // but its empty state should distinguish a project that has not started a
-  // conversation from one that has conversations but no committed meaning yet.
+  // conversation from one that has conversations but no committed state yet.
   const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
   if (isEmptyAfterLoad) {
     const hasConversations = (project.drafts ?? 0) > 0;
@@ -366,11 +366,8 @@ export function ProjectDetailPageContent({
       <ProjectDemoTourOverlay
         open={projectTourOpen}
         onClose={() => setProjectTourOpen(false)}
-        onDone={() =>
-          router.push(`/chat/project/${encodeURIComponent(projectId)}/leaf?introDemo=1`)
-        }
+        onDone={() => setProjectTourOpen(false)}
         onSkip={() => void completeIntroDemo()}
-        doneLabel="Open Leaf index"
         interactionMode="guided"
       />
     </div>

@@ -80,7 +80,7 @@ const program = new Command();
 
 program
   .name('t3x')
-  .description('T3X CLI - Semantic version control for AI conversations')
+  .description('T3X CLI - version control for structured state')
   .version(cliVersion)
   .addOption(
     new Option('--api-url <url>', 'API base URL (default: http://localhost:8000/api)').hideHelp()

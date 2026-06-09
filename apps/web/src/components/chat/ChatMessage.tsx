@@ -307,7 +307,7 @@ function SourceMappedText({
 }
 
 /**
- * Render text with persistent green underline highlights for committed knowledge.
+ * Render text with persistent green underline highlights for committed state.
  * Each highlighted span shows a tooltip on hover.
  */
 function CommittedHighlightText({

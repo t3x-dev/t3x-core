@@ -6,9 +6,10 @@ const hotfixBranchPattern = /^hotfix\/.+/;
 const changesetsBranchPattern = /^changesets?-release\/main$/;
 const productVersionPattern =
   /^T3X product release version:\s*`?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)`?\s*$/im;
+const packageReleaseVersionPattern = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const protectedSurfaceFiles = new Set([
   'RELEASE.md',
-  'STABILITY.md',
+  'docs/stability.md',
   'release/surface.yaml',
   'release/surface.schema.json',
 ]);
@@ -47,14 +48,22 @@ export function parsePackageReleaseSection(section) {
     .filter((line) => line.startsWith('- '));
 
   const none = lines.some((line) => /^-\s+None\s*$/i.test(line));
-  const packages = lines
-    .map((line) => line.match(/^-\s+(`?@t3x-dev\/[a-z0-9-]+`?)\s*:/)?.[1])
+  const packageEntries = lines
+    .map((line) => line.match(/^-\s+(`?@t3x-dev\/[a-z0-9-]+`?)\s*:\s*(\S+)/))
     .filter(Boolean)
-    .map(normalizePackageName);
+    .map((match) => ({
+      packageName: normalizePackageName(match[1]),
+      version: match[2].replace(/^`|`$/g, '').trim(),
+    }));
+  const packages = packageEntries.map((entry) => entry.packageName);
+  const invalidVersionPackages = packageEntries
+    .filter((entry) => !packageReleaseVersionPattern.test(entry.version))
+    .map((entry) => entry.packageName);
 
   return {
     none,
     packages: [...new Set(packages)],
+    invalidVersionPackages: [...new Set(invalidVersionPackages)],
     hasEntries: none || packages.length > 0,
   };
 }
@@ -129,6 +138,14 @@ function validatePackageReleases({
     errors.push('Package Releases cannot include "None" together with package entries.');
   }
 
+  if (packageReleases.invalidVersionPackages.length > 0) {
+    errors.push(
+      `Package Releases must use concrete package versions, not changeset bump types, for: ${packageReleases.invalidVersionPackages.join(
+        ', '
+      )}.`
+    );
+  }
+
   if (packageReleases.none && changesetFiles.length > 0) {
     errors.push(
       `Package Releases is "None", but changeset files exist: ${changesetFiles
@@ -139,6 +156,22 @@ function validatePackageReleases({
 
   if (packageReleases.packages.length > 0 && changesetFiles.length === 0) {
     errors.push('Package Releases lists packages, but no .changeset/*.md files were found.');
+  }
+
+  if (packageReleases.packages.length > 0 && releaseSurfacePackages.length > 0) {
+    const expectedPackages = [...new Set(releaseSurfacePackages)].sort();
+    const actualPackages = [...new Set(packageReleases.packages)].sort();
+    const hasCompleteReleaseSet =
+      actualPackages.length === expectedPackages.length &&
+      actualPackages.every((packageName, index) => packageName === expectedPackages[index]);
+
+    if (!hasCompleteReleaseSet) {
+      errors.push(
+        `Package Releases must list the complete current public package release set: ${expectedPackages.join(
+          ', '
+        )}.`
+      );
+    }
   }
 
   const changesetPackages = new Set(changesetFiles.flatMap((file) => file.packages));

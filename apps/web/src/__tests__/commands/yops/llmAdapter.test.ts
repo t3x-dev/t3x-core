@@ -170,7 +170,9 @@ describe('callExtractionLLM', () => {
       })
     ).rejects.toEqual(
       new ExtractionRequestError(
-        createExtractionFailure('draft_schema', 'Draft schema invalid'),
+        createExtractionFailure('draft_schema', 'Draft schema invalid', {
+          details: { statusCode: 400, failure_code: 'draft_schema' },
+        }),
         400,
         'EXTRACTION_FAILED'
       )

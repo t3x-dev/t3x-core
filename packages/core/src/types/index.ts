@@ -169,7 +169,7 @@ export function isDeployLeaf(type: string): type is DeployType {
 }
 
 /**
- * A Leaf is an application of committed knowledge with specific constraints.
+ * A Leaf is an application of committed state with specific constraints.
  *
  * Key insight: Leaf owns constraints, not Commit.
  * Same commit + different constraints = different leaf outputs.

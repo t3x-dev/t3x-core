@@ -32,6 +32,10 @@ const layoutMocks = vi.hoisted(() => ({
   saveNodePosition: vi.fn(),
 }));
 
+const navigationMocks = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+}));
+
 vi.mock('@xyflow/react', async () => {
   const React = await import('react');
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
@@ -86,7 +90,7 @@ vi.mock('next-themes', () => ({
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: 'proj_test' }),
   usePathname: () => '/chat/project/proj_test/canvas',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: navigationMocks.routerPush }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -271,6 +275,7 @@ describe('CanvasWorkspace initial fit view', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     globalThis.requestAnimationFrame = requestAnimationFrame;
     globalThis.ResizeObserver = ResizeObserver;
     useCanvasStore.setState({
@@ -365,6 +370,7 @@ describe('CanvasWorkspace initial fit view', () => {
   it('reanchors an open commit action panel after dragging the selected node', async () => {
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
     render(<CanvasWorkspace projectName="Trust Gate" />);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 
     const node = useCanvasStore.getState().nodes[0];
     const clickTarget = document.createElement('div');
@@ -389,9 +395,10 @@ describe('CanvasWorkspace initial fit view', () => {
       );
     });
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(260);
     });
+    expect(screen.getByRole('button', { name: /New Leaf/i })).toBeInTheDocument();
 
     const firstPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
     expect(firstPanel).toHaveStyle({ left: '200px', top: '308px' });
@@ -425,5 +432,37 @@ describe('CanvasWorkspace initial fit view', () => {
 
     const reanchoredPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
     expect(reanchoredPanel).toHaveStyle({ left: '460px', top: '468px' });
+  });
+
+  it('does not use double click as committed node detail navigation', () => {
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+    const node = {
+      ...useCanvasStore.getState().nodes[0],
+      data: {
+        ...useCanvasStore.getState().nodes[0].data,
+        commitHash: 'sha256:2576b1356297',
+      },
+    };
+    useCanvasStore.setState({ nodes: [node] });
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+    const clickTarget = document.createElement('div');
+    clickTarget.className = 'react-flow__node';
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: clickTarget },
+        node
+      );
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: clickTarget },
+        node
+      );
+    });
+
+    expect(navigationMocks.routerPush).not.toHaveBeenCalledWith(
+      '/project/proj_test/commit/sha256%3A2576b1356297'
+    );
   });
 });

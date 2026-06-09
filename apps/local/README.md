@@ -14,7 +14,7 @@ without making every workspace package part of the public release surface.
 
 ## Release status
 
-`@t3x-dev/local@0.3.1` is part of the restricted T3X alpha release surface.
+`@t3x-dev/local@0.4.0` is part of the restricted T3X alpha release surface.
 Package visibility may be limited to accounts with alpha access.
 
 ## Install

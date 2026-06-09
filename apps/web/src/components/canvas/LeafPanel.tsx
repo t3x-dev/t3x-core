@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
+import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -36,6 +37,7 @@ export function LeafPanel() {
   const projectId = useCanvasStore((state) => state.projectId);
   const leafCreating = useCanvasStore((state) => state.leafCreating);
   const prefersReducedMotion = useReducedMotion();
+  const introDemoRequested = useIntroDemoQueryFlag();
 
   const [activeTab, setActiveTab] = useState<'type' | 'template'>('type');
   const [templateSearch, setTemplateSearch] = useState('');
@@ -59,8 +61,9 @@ export function LeafPanel() {
   const handleSelectLeaf = async (leafType: LeafType) => {
     const leafId = await addLeafNode(leafType);
     if (leafId && projectId) {
+      const params = introDemoRequested ? '?introDemo=1' : '';
       router.push(
-        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}`
+        `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leafId)}${params}`
       );
     }
   };
@@ -122,7 +125,10 @@ export function LeafPanel() {
                     <p className="mb-[var(--space-item)] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
                       Output
                     </p>
-                    <div className="flex flex-col gap-2">
+                    <div
+                      className="flex flex-col gap-2"
+                      data-intro-target="canvas-leaf-type-options"
+                    >
                       {LEAF_TYPES.filter((lt) => isRunnerEnabled || lt.type !== 'deploy_agent').map(
                         ({ type, label, icon: Icon }) => (
                           <motion.div key={type} variants={itemVariants}>

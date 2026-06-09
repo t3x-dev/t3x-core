@@ -27,7 +27,7 @@ const STARTER_CARDS = [
     icon: FileText,
     title: 'Compare prompt versions',
     description: 'Paste variants and preserve what changed.',
-    prompt: 'Compare these prompt versions and extract the meaningful changes:\n\n',
+    prompt: 'Compare these prompt versions and extract the structured changes:\n\n',
     tone: 'source',
   },
   {
@@ -40,13 +40,13 @@ const STARTER_CARDS = [
   {
     icon: LeafIcon,
     title: 'Create reusable output',
-    description: 'Turn committed meaning into an artifact.',
-    prompt: 'Create a reusable output from this committed knowledge:\n\n',
+    description: 'Turn committed state into an artifact.',
+    prompt: 'Create a reusable output from this committed state:\n\n',
     tone: 'leaf',
   },
 ] as const;
 
-const FLOW_STEPS = ['Source', 'Meaning', 'Commit'] as const;
+const FLOW_STEPS = ['Source', 'YOps', 'Commit'] as const;
 
 const ICON_TONE_CLASSES = {
   source: 'border-[var(--source)]/20 bg-[var(--source-dim)] text-[var(--source)]',
@@ -119,13 +119,13 @@ function ChatLanding() {
         label: 'Project',
         title: 'Create the first project',
         description:
-          'Start from an empty workspace. A project gives the conversation a place to store meaning, commits, and leaves.',
+          'Start from an empty workspace. A project gives the conversation a place to store state, commits, and leaves.',
         target: 'sidebar-new-project',
         tone: 'conversation',
         icon: FolderPlus,
         details: [
           'Click New project in the sidebar.',
-          'Projects keep related conversations and semantic versions together.',
+          'Projects keep related conversations and committed state together.',
           'The demo will continue in the composer after the project is created.',
         ],
         advanceOnTargetClick: true,
@@ -137,6 +137,7 @@ function ChatLanding() {
         description:
           'The dialog is the normal project creation flow. The demo only preserves the walkthrough state after creation.',
         target: 'new-project-create',
+        placement: 'side-center',
         tone: 'commit',
         icon: ArrowRight,
         details: [
@@ -209,11 +210,11 @@ function ChatLanding() {
         <div className="w-full max-w-2xl px-4 py-8">
           <div className="mb-7 text-center" data-intro-target="landing-copy">
             <h1 className="text-2xl font-bold tracking-[0] text-[var(--text-primary)]">
-              What should T3X make sense of?
+              What should T3X structure?
             </h1>
             <p className="mx-auto mt-2 max-w-[520px] text-sm leading-normal text-[var(--text-secondary)]">
               Paste a prompt, chat transcript, release note, or design discussion. T3X keeps the
-              source, extracts meaning, and turns useful work into commits.
+              source, extracts structured state, and turns useful work into commits.
             </p>
             <div
               className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-[var(--text-tertiary)]"

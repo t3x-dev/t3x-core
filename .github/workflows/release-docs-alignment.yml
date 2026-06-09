@@ -1,0 +1,61 @@
+name: Release Docs Alignment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - README.md
+      - RELEASE.md
+      - docs/**
+      - release/**
+      - .github/PULL_REQUEST_TEMPLATE.md
+      - .github/PULL_REQUEST_TEMPLATE/**
+      - .github/workflows/**
+      - package.json
+      - apps/*/README.md
+      - apps/*/package.json
+      - packages/*/README.md
+      - packages/*/package.json
+      - tools/verify-versions.mjs
+      - tools/check-release-docs-alignment.mjs
+      - tools/lib/releaseSurface.mjs
+      - tools/lib/releaseDocsAlignment.mjs
+      - tools/__tests__/releaseDocsAlignment.test.mjs
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check versioned release docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check release docs alignment
+        run: pnpm check:release-docs-alignment

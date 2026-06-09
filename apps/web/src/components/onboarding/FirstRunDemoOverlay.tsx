@@ -56,13 +56,13 @@ const DEMO_STEPS: DemoStep[] = [
     label: 'Start',
     title: 'Start from real material, not a blank chat',
     description:
-      'This page is where a user gives T3X a prompt, transcript, release note, design discussion, or policy text to make sense of.',
+      'This page is where a user gives T3X a prompt, transcript, release note, design discussion, or policy text to structure.',
     target: 'landing-copy',
     tone: 'conversation',
     icon: Play,
     details: [
-      'The heading states the first user job: choose what T3X should make sense of.',
-      'The flow chips below summarize the mental model: source becomes meaning, meaning becomes commit.',
+      'The heading states the first user job: choose what T3X should structure.',
+      'The flow chips below summarize the mental model: source becomes YOps, YOps becomes commit.',
       'In this demo, no external model API is required; the walkthrough uses developer-seeded example data.',
     ],
   },
@@ -78,7 +78,7 @@ const DEMO_STEPS: DemoStep[] = [
     details: [
       'Compare prompt versions: use this when the user has V1/V2 text and wants semantic changes preserved.',
       'Extract decisions from notes: use this for meetings, research, and design discussions.',
-      'Create reusable output: use this when committed meaning should become a leaf artifact.',
+      'Create reusable output: use this when committed state should become a leaf artifact.',
     ],
   },
   {
@@ -86,14 +86,14 @@ const DEMO_STEPS: DemoStep[] = [
     label: 'Flow',
     title: 'Explain the product path before the user clicks',
     description:
-      'The small Source -> Meaning -> Commit path is the simplest explanation of what will happen after the user starts.',
+      'The small Source -> YOps -> Commit path is the simplest explanation of what will happen after the user starts.',
     target: 'flow-steps',
     tone: 'extract',
     icon: Layers3,
     details: [
       'Source is the original evidence.',
-      'Meaning is the extracted, reviewable structure.',
-      'Commit is the stable semantic version users can diff, merge, and reuse.',
+      'YOps is the extracted, reviewable change to structured state.',
+      'Commit is the stable version users can diff, merge, and reuse.',
     ],
   },
   {
@@ -151,9 +151,9 @@ const DEMO_STEPS: DemoStep[] = [
     tone: 'commit',
     icon: GitCommit,
     details: [
-      'Draft points: include or exclude the meaning that should survive.',
+      'Draft points: include or exclude the state that should survive.',
       'Constraints: require key facts and exclude unsafe phrasing.',
-      'Commit: save the reviewed meaning as a stable version before reusing it.',
+      'Commit: save the reviewed state as a stable version before reusing it.',
     ],
   },
   {

@@ -14,6 +14,7 @@ describe('embedder', () => {
   beforeEach(() => {
     // Reset module cache so each test gets fresh singleton state
     vi.resetModules();
+    vi.clearAllMocks();
     // Suppress console output from embedder initialization
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});

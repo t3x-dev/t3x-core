@@ -122,9 +122,9 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'commit',
     label: 'Commit',
-    title: 'Click Commit to save the applied meaning',
+    title: 'Click Commit to save the applied state',
     description:
-      'Commit creates the stable semantic version. Canvas should only come after this review checkpoint.',
+      'Commit creates the stable structured version. Canvas should only come after this review checkpoint.',
     target: 'chat-commit-action',
     tone: 'commit',
     icon: GitCommit,

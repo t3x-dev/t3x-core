@@ -35,6 +35,10 @@ import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
 import { useProjectConversations } from '@/hooks/conversations/useProjectConversations';
 import { useTemporaryChatImport } from '@/hooks/conversations/useTemporaryChatImport';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
+import {
+  readIntroDemoLocalCommit,
+  toIntroDemoApiCommit,
+} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useEnsureDemoProject } from '@/hooks/onboarding/useEnsureDemoProject';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
@@ -385,10 +389,19 @@ export function ChatSidebar() {
       { all: projectLeaves.length, generated: 0, draft: 0, review: 0 }
     );
   }, [projectLeaves]);
-  const currentProjectCommitCount = currentProject?.commits_count ?? canvasCommits.length;
+  const visibleCanvasCommits = useMemo(() => {
+    const localCommit = readIntroDemoLocalCommit(currentProjectId);
+    if (!localCommit) return canvasCommits;
+    if (canvasCommits.some((commit) => commit.hash === localCommit.hash)) return canvasCommits;
+    return [...canvasCommits, toIntroDemoApiCommit(localCommit)];
+  }, [canvasCommits, currentProjectId, refreshKey]);
+  const currentProjectCommitCount = Math.max(
+    currentProject?.commits_count ?? 0,
+    visibleCanvasCommits.length
+  );
   const canvasBranchCount = useMemo(
-    () => new Set(canvasCommits.map((commit) => commit.branch || 'main')).size,
-    [canvasCommits]
+    () => new Set(visibleCanvasCommits.map((commit) => commit.branch || 'main')).size,
+    [visibleCanvasCommits]
   );
 
   const applyCommitCreatedMessage = useCallback((message: CommitCreatedSidebarEvent | null) => {
@@ -1688,7 +1701,7 @@ export function ChatSidebar() {
                               Commits
                             </span>
                             <span className="text-[10px] text-[var(--text-tertiary)]">
-                              {canvasCommits.length || currentProjectCommitCount}
+                              {visibleCanvasCommits.length || currentProjectCommitCount}
                             </span>
                           </div>
 
@@ -1715,7 +1728,7 @@ export function ChatSidebar() {
                             )}
 
                           <div className="flex min-w-0 flex-col gap-0.5">
-                            {canvasCommits.map((commit) => {
+                            {visibleCanvasCommits.map((commit) => {
                               const commitLeaves = projectLeaves.filter(
                                 (leaf) => leaf.commit_hash === commit.hash
                               );

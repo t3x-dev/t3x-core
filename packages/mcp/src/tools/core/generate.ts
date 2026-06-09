@@ -1,7 +1,7 @@
 /**
  * t3x_generate — generate leaf output with constraint validation.
  *
- * A leaf defines constraints on committed knowledge. This tool:
+ * A leaf defines constraints on committed state. This tool:
  *   1. Fetches the leaf (with its constraints) and its linked commit
  *   2. Optionally collects lessons from historical leaves on the same commit
  *   3. Calls generateLeafOutput (from @t3x-dev/core) using a direct Anthropic provider

@@ -16,7 +16,7 @@
     ]
   ],
   "linked": [],
-  "access": "public",
+  "access": "restricted",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": ["t3x-webui", "agent-demo"]

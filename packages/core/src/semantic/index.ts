@@ -1,7 +1,7 @@
 /**
  * T3X Semantic Module — Tree-Primary API
  *
- * TreeNode + Relation paradigm for structured meaning representation.
+ * TreeNode + Relation paradigm for structured state representation.
  * Zero dependencies on other @t3x/core modules.
  */
 

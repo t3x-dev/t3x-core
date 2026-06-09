@@ -54,7 +54,7 @@ test('standards matrix declares execution metadata for every row', () => {
   );
   assert.deepEqual(result.rowsById.get('row-3')?.pr_filter_paths, [
     'README.md',
-    'STABILITY.md',
+    'docs/stability.md',
     'packages/yops/**',
     'standards/**',
     'tools/api-diff/**',

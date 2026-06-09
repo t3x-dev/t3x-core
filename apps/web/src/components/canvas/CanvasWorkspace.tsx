@@ -98,7 +98,6 @@ function CanvasWorkspaceInner({
     nodeId: string;
   } | null>(null);
   const reopenActionPanelNodeRef = useRef<string | null>(null);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, getNodes, getEdges, setNodes, fitView, setCenter } = useReactFlow();
   const { resolvedTheme } = useTheme();
@@ -156,13 +155,6 @@ function CanvasWorkspaceInner({
       setOnboardingDismissed(true);
     }
   }, []);
-  // Cleanup click timer on unmount
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    };
-  }, []);
-
   useEffect(() => {
     if (!projectId) return;
 
@@ -408,11 +400,6 @@ function CanvasWorkspaceInner({
 
     return {
       actions: buildCommitActions({
-        onViewDetails: () => {
-          if (projectId && hash) {
-            router.push(withIntroDemo(`/project/${projectId}/commit/${encodeURIComponent(hash)}`));
-          }
-        },
         onViewDiff:
           parentHash && projectId && hash
             ? () => {
@@ -558,7 +545,8 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Committed nodes: single click = action panel, double click = detail page
+              // Committed nodes: single click = action panel. The commit hash inside the node
+              // is the canonical detail-page entrypoint.
               if (!compactViewport) {
                 if (data.branchType === 'branch') {
                   setHighlight({ branch: data.branchName, mode: 'branch' });
@@ -566,23 +554,7 @@ function CanvasWorkspaceInner({
                   setHighlight({ mode: 'node', nodeId: node.id });
                 }
               }
-              if (clickTimerRef.current) {
-                // Double click detected
-                clearTimeout(clickTimerRef.current);
-                clickTimerRef.current = null;
-                setActionPanel(null);
-                if (data.commitHash && projectId) {
-                  router.push(
-                    `/project/${projectId}/commit/${encodeURIComponent(data.commitHash)}`
-                  );
-                }
-              } else {
-                // First click — wait to see if double click follows
-                clickTimerRef.current = setTimeout(() => {
-                  clickTimerRef.current = null;
-                  showActionPanelForNode(event, node.id);
-                }, 250);
-              }
+              showActionPanelForNode(event, node.id);
             }}
             onNodeDragStart={(_event, node) => {
               const data = node.data as CanvasNodeData;

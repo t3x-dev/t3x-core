@@ -62,7 +62,7 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     icon: ListChecks,
     details: [
       'Click anywhere inside the highlighted status strip.',
-      'Semantic point coverage tells users whether the leaf reflects committed meaning.',
+      'Semantic point coverage tells users whether the leaf reflects committed state.',
       'Commit verified ties the artifact back to a stable version.',
     ],
     advanceOnTargetClick: true,
@@ -79,7 +79,7 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     details: [
       'Click inside the highlighted source panel.',
       'Source frames show what the leaf is allowed to use.',
-      'Require and Exclude actions turn source meaning into output rules.',
+      'Require and Exclude actions turn source state into output rules.',
     ],
     advanceOnTargetClick: true,
   },

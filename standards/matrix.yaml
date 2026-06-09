@@ -70,7 +70,7 @@ rows:
     acceptance_command: node tools/standards/check-row-3-yops-stability.mjs
     pr_filter_paths:
       - README.md
-      - STABILITY.md
+      - docs/stability.md
       - packages/yops/**
       - standards/**
       - tools/api-diff/**
@@ -111,12 +111,12 @@ rows:
     title: Self-host without us
     acceptance: |
       A clean-machine smoke job in CI boots compose end-to-end, and
-      `DEPLOYMENT.md` covers backup, upgrade, and the five most common failure
-      modes.
+      `docs/deployment.md` covers backup, upgrade, and the five most common
+      failure modes.
     acceptance_type: manual
     pr_filter_paths:
       - .github/workflows/docker-smoke.yml
-      - DEPLOYMENT.md
+      - docs/deployment.md
       - docker-compose.yml
       - docs/**
     owner_workstream: workstream-06-self-host
@@ -124,16 +124,17 @@ rows:
   - id: row-6
     title: First-time contributor experience
     acceptance: |
-      `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, and `LIMITATIONS.md`
-      exist; the PR template references Changesets, issue-ref, and English-only
-      rules; an outside contributor can land a non-trivial PR without DMs.
+      `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, and
+      `docs/limitations.md` exist; the PR template references Changesets,
+      issue-ref, and English-only rules; an outside contributor can land a
+      non-trivial PR without DMs.
     acceptance_type: manual
     pr_filter_paths:
       - .github/workflows/standards-*.yml
       - .github/ISSUE_TEMPLATE/**
       - .github/PULL_REQUEST_TEMPLATE.md
       - CODE_OF_CONDUCT.md
-      - LIMITATIONS.md
+      - docs/limitations.md
       - SECURITY.md
       - tools/__tests__/standards*.test.mjs
       - tools/lib/standardsMatrix.mjs
@@ -158,11 +159,11 @@ rows:
     title: Evidence the team uses it
     acceptance: |
       A team-built demo project lives in `/examples` or is linked from the
-      README, and `LIMITATIONS.md` enumerates current rough edges in plain
+      README, and `docs/limitations.md` enumerates current rough edges in plain
       English.
     acceptance_type: manual
     pr_filter_paths:
-      - LIMITATIONS.md
+      - docs/limitations.md
       - README.md
       - examples/**
     owner_workstream: workstream-09-team-evidence

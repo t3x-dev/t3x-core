@@ -255,9 +255,8 @@ export function VerificationBadge({ projectId }: VerificationBadgeProps) {
 
             {!developerMode && (
               <p className="text-xs text-muted-foreground mb-3">
-                Your conversation records and extracted knowledge are complete and untampered. T3X
-                uses cryptographic hashing to ensure every record traces back to its original
-                source.
+                Your conversation records and extracted state are complete and untampered. T3X uses
+                cryptographic hashing to ensure every record traces back to its original source.
               </p>
             )}
           </>

@@ -116,7 +116,7 @@ const PROMPTS: PromptDef[] = [
   {
     name: 'generate_from_leaf',
     description:
-      'User entry for reviewing a leaf and generating validated output from committed knowledge.',
+      'User entry for reviewing a leaf and generating validated output from committed state.',
     arguments: [
       { name: 'leaf_id', description: 'Leaf to inspect and generate from.', required: true },
     ],
