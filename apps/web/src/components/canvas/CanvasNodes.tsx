@@ -9,6 +9,7 @@ import {
   GitBranch,
   GitCommit,
   Globe,
+  Hash,
   MessageSquare,
   MessageSquarePlus,
   Pencil,
@@ -511,16 +512,18 @@ const UnitNode = memo(function UnitNode(props: Props) {
             )}
           </div>
 
-          {/* Row 2: Self hash (committed only) */}
+          {/* Row 2: Commit detail entry (committed only) */}
           {isCommitted && commitHash && (
             <button
               type="button"
-              className="nodrag mb-1 inline-flex rounded px-1 py-0.5 font-mono text-[11px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--accent-commit)]"
+              className="nodrag mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/35 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
               onClick={handleOpenCommitDetails}
-              title={`Open commit ${hashDisplay}`}
-              aria-label={`Open commit ${hashDisplay}`}
+              title={`Open commit details for hash ${hashDisplay}`}
+              aria-label={`Open commit details for hash ${hashDisplay}`}
             >
-              {hashDisplay}
+              <Hash size={10} aria-hidden="true" className="shrink-0" />
+              <span className="font-medium">Hash</span>
+              <span className="truncate font-mono">{hashDisplay}</span>
             </button>
           )}
 
