@@ -74,9 +74,9 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
     },
     {
       id: 'createLeaf',
-      label: '+ New Leaf',
-      title: 'Create a Leaf from commit',
-      description: 'Create from this commit.',
+      label: 'Create Leaf',
+      title: 'Create a Leaf from this version',
+      description: 'Create from the selected commit.',
       target: ['canvas-action-new-leaf', 'canvas-floating-action-new-leaf'],
       icon: Plus,
       tone: 'leaf',
