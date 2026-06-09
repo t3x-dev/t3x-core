@@ -166,8 +166,8 @@ Release PR checklist:
 6. Add user-facing release notes.
 7. Fill in the `Package Releases` section. Use `- None` when no package publish
    is intended. For the current restricted alpha publish flow, package releases
-   must list the complete npm publish surface: `@t3x-dev/local` and
-   `@t3x-dev/yops`.
+   must list the complete npm publish surface with target package versions:
+   `@t3x-dev/local` and `@t3x-dev/yops`.
 8. Confirm changesets are present when public package behavior changed.
 9. Wait for PR validation and release surface checks.
 10. Request owner review when protected release, workflow, or ownership files
@@ -264,6 +264,8 @@ checked-in changeset files:
 - `Package Releases: - None` requires no `.changeset/*.md` files in the release
   branch.
 - Package entries require at least one `.changeset/*.md` file.
+- Package entries must use concrete target package versions, not changeset bump
+  types like `patch`, `minor`, or `major`.
 - Each listed public package must appear in a changeset frontmatter entry.
 - Each public package in changeset frontmatter must appear in `Package
   Releases`.

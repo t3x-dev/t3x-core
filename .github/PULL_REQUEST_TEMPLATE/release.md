@@ -22,11 +22,12 @@ List merged PRs or the comparison range:
 
 <!--
 If this product release publishes packages, replace None with the complete
-current npm publish surface:
+current npm publish surface and the target package versions:
 
-- `@t3x-dev/local`: patch
-- `@t3x-dev/yops`: patch
+- `@t3x-dev/local`: 0.0.0
+- `@t3x-dev/yops`: 0.0.0
 
+Use concrete package versions here, not changeset bump types like patch/minor.
 CI validates this section against .changeset/*.md.
 -->
 
@@ -43,6 +44,8 @@ CI validates this section against .changeset/*.md.
 - Product release version is independent from npm package versions.
 - Every merge to `main` must have a product release version and release notes.
 - Package publish is optional and happens only through Changesets/version PRs.
+- Package Releases entries use final target package versions. Changeset files
+  use bump types such as patch/minor/major.
 - Code-only releases use `Package Releases: - None`; final GitHub Release notes
   omit package information.
 - Current package releases include both `@t3x-dev/local` and `@t3x-dev/yops`,

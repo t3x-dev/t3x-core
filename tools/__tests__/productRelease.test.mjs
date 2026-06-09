@@ -21,8 +21,8 @@ T3X product release version: \`0.4.0\`
 
 ## Package Releases
 
-- \`@t3x-dev/local\`: patch
-- \`@t3x-dev/yops\`: patch
+- \`@t3x-dev/local\`: 0.4.1
+- \`@t3x-dev/yops\`: 0.4.1
 
 ## Known Risks
 
@@ -91,8 +91,8 @@ test('builds product release notes from release PR sections', () => {
   assert.match(notes, /^# T3X v0\.4\.0/);
   assert.match(notes, /## Release Notes/);
   assert.match(notes, /## Package Releases/);
-  assert.match(notes, /`@t3x-dev\/local`: patch/);
-  assert.match(notes, /`@t3x-dev\/yops`: patch/);
+  assert.match(notes, /`@t3x-dev\/local`: 0\.4\.1/);
+  assert.match(notes, /`@t3x-dev\/yops`: 0\.4\.1/);
   assert.match(notes, /## Included Changes/);
   assert.match(notes, /PR: #12 https:\/\/github.com\/t3x-dev\/t3x-core\/pull\/12/);
 });

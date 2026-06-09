@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/yschema",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "YSchema — YAML schema validation with YOps auto-fix for the T3X ecosystem",
   "license": "Apache-2.0",
   "main": "dist/index.js",
