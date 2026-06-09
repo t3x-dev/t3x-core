@@ -99,7 +99,7 @@ function ChatLanding() {
           label: 'Send',
           title: 'Click the highlighted Send button',
           description:
-            'The composer is already filled with developer-seeded demo material. This click creates the first conversation and replays the preset assistant reply.',
+            'The composer is prefilled for this walkthrough. Click Send to create the conversation and replay the demo reply.',
           target: 'landing-send-action',
           tone: 'conversation',
           icon: SendHorizontal,
@@ -119,7 +119,7 @@ function ChatLanding() {
         label: 'Project',
         title: 'Create the first project',
         description:
-          'Start from an empty workspace. A project gives the conversation a place to store state, commits, and leaves.',
+          'Click New project to give the walkthrough a place for state, commits, and leaves.',
         target: 'sidebar-new-project',
         tone: 'conversation',
         icon: FolderPlus,
@@ -135,7 +135,7 @@ function ChatLanding() {
         label: 'Create',
         title: 'Name it or keep the default, then create',
         description:
-          'The dialog is the normal project creation flow. The demo only preserves the walkthrough state after creation.',
+          'Keep the default name or edit it, then create the project to continue the walkthrough.',
         target: 'new-project-create',
         placement: 'side-center',
         tone: 'commit',

@@ -1,6 +1,5 @@
 'use client';
 
-import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import {
   ArrowRight,
   CheckCircle2,
@@ -8,7 +7,6 @@ import {
   ChevronRight,
   FileText,
   GitCommit,
-  Keyboard,
   Layers3,
   ListChecks,
   MessageSquareText,
@@ -40,7 +38,6 @@ interface DemoStep {
   target: string | null;
   tone: DemoTone;
   icon: typeof Play;
-  details: string[];
 }
 
 interface TargetRect {
@@ -56,120 +53,80 @@ const DEMO_STEPS: DemoStep[] = [
     label: 'Start',
     title: 'Start from real material, not a blank chat',
     description:
-      'This page is where a user gives T3X a prompt, transcript, release note, design discussion, or policy text to structure.',
+      'Paste a prompt, transcript, release note, or policy text. T3X turns source material into reviewable structured changes.',
     target: 'landing-copy',
     tone: 'conversation',
     icon: Play,
-    details: [
-      'The heading states the first user job: choose what T3X should structure.',
-      'The flow chips below summarize the mental model: source becomes YOps, YOps becomes commit.',
-      'In this demo, no external model API is required; the walkthrough uses developer-seeded example data.',
-    ],
   },
   {
     id: 'starter_cards',
     label: 'Shortcuts',
     title: 'Use starter cards to choose a common workflow',
     description:
-      'These cards are not decoration. They prefill the composer with a task pattern so a new user does not need to invent the first instruction.',
+      'Pick a starter card to prefill the composer with a common task. It gives the run a useful shape before you edit.',
     target: 'starter-cards',
     tone: 'source',
     icon: FileText,
-    details: [
-      'Compare prompt versions: use this when the user has V1/V2 text and wants semantic changes preserved.',
-      'Extract decisions from notes: use this for meetings, research, and design discussions.',
-      'Create reusable output: use this when committed state should become a leaf artifact.',
-    ],
   },
   {
     id: 'flow',
     label: 'Flow',
     title: 'Explain the product path before the user clicks',
     description:
-      'The small Source -> YOps -> Commit path is the simplest explanation of what will happen after the user starts.',
+      'This is the path: Source becomes YOps, then a commit. The demo follows that same review-before-save loop.',
     target: 'flow-steps',
     tone: 'extract',
     icon: Layers3,
-    details: [
-      'Source is the original evidence.',
-      'YOps is the extracted, reviewable change to structured state.',
-      'Commit is the stable version users can diff, merge, and reuse.',
-    ],
   },
   {
     id: 'provider',
     label: 'Provider',
     title: 'Provider setup is optional for this demo path',
     description:
-      'In normal use, generation needs a configured provider. The first-run demo should still teach the interface even when the user has no API key.',
+      'No API key is needed for this walkthrough. Live generation can be connected later from the provider status area.',
     target: 'provider-status',
     tone: 'pending',
     icon: ListChecks,
-    details: [
-      'If the provider banner is visible, it explains why live generation is disabled.',
-      'The onboarding path itself uses prepared data, so the user can learn before connecting a provider.',
-      'When a provider is configured, this step becomes a quick model/status explanation.',
-    ],
   },
   {
     id: 'composer',
     label: 'Composer',
     title: 'The composer is where the source and instruction enter',
     description:
-      'This is the main action area. Users paste raw material, select a model when available, attach context, then start the workflow.',
+      'Use the composer to enter source material and the instruction for the run. Model and attachment controls stay nearby when enabled.',
     target: 'composer',
     tone: 'conversation',
     icon: MessageSquareText,
-    details: [
-      `Example source: ${DEMO_WORKSPACE_FIXTURE.source.title}.`,
-      'The text box receives the material and instruction.',
-      'The surrounding controls handle model selection and attachments when the provider path is enabled.',
-    ],
   },
   {
     id: 'send',
     label: 'Start',
     title: 'Starting a run creates the next work surface',
     description:
-      'After the user sends material, T3X moves from lightweight input into the working area where extracted points can be reviewed.',
+      'Sending moves from lightweight input into review. The next surface lets you inspect extracted points before committing.',
     target: 'composer',
     tone: 'pending',
     icon: SendHorizontal,
-    details: [
-      'For live use, the send action creates or opens a conversation workspace.',
-      'For the guided demo, the same story is played with seeded source, draft points, constraints, and output.',
-      'The important habit is: start broad, then review before committing.',
-    ],
   },
   {
     id: 'review',
     label: 'Review',
     title: 'What the next screen teaches after starting',
     description:
-      'The rest of the demo should continue as a guided review: inspect extracted points, adjust constraints, preview output, then commit.',
+      'Review the extracted points, adjust constraints, preview output, then commit. Nothing becomes stable until you save it.',
     target: null,
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Draft points: include or exclude the state that should survive.',
-      'Constraints: require key facts and exclude unsafe phrasing.',
-      'Commit: save the reviewed state as a stable version before reusing it.',
-    ],
   },
   {
     id: 'finish',
     label: 'Use',
     title: 'You can now use the page intentionally',
     description:
-      'The first-run teaching path ends here and leaves the user on the real /chat page, ready to try the same actions.',
+      'The tour ends on the real chat page. Start with source material, review the draft, then commit the state you trust.',
     target: null,
     tone: 'success',
     icon: CheckCircle2,
-    details: [
-      'No separate demo page is needed.',
-      'The user learned what to paste, which shortcut to choose, what provider state means, and what happens after sending.',
-      'The dev-only replay remains available at /chat?introDemo=1 while building this walkthrough.',
-    ],
   },
 ];
 
@@ -419,29 +376,6 @@ export function FirstRunDemoOverlay({
             })}
           </div>
 
-          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0] text-[var(--text-tertiary)]">
-              <Keyboard className="h-3.5 w-3.5" />
-              What to learn here
-            </div>
-            <ul className="space-y-2">
-              {step.details.map((detail) => (
-                <li
-                  key={detail}
-                  className="flex gap-2 text-sm leading-normal text-[var(--text-secondary)]"
-                >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-50" />
-                  <span>{detail}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {step.id === 'composer' || step.id === 'send' ? (
-            <div className="rounded-lg border border-[var(--accent-pending)]/25 bg-[var(--accent-pending-soft)] p-3 text-sm leading-normal text-[var(--text-secondary)]">
-              Demo source preview: {DEMO_WORKSPACE_FIXTURE.source.text}
-            </div>
-          ) : null}
           {openDemoProjectError ? (
             <div className="rounded-lg border border-[var(--status-error)]/25 bg-[var(--status-error-muted)] p-3 text-sm text-[var(--status-error)]">
               {openDemoProjectError}
