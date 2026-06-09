@@ -20,6 +20,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AutoDraftBadge } from '@/components/canvas/AutoDraftBadge';
 import { SealAnimation } from '@/components/canvas/SealAnimation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { commitHashLabel } from '@/domain/format/formatters';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
@@ -187,7 +188,7 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const branchLabel = formatBranchLabel(data.branchType, data.branchName);
   const semanticSummary = inferSemanticSummary(data);
   const commitHash = data.commit?.hash || data.commitHash || '';
-  const hashDisplay = commitHash.replace('sha256:', 'sha:').slice(0, 11);
+  const hashDisplay = commitHash ? commitHashLabel(commitHash) : '';
 
   // Dark mode semantic glow (CSS uses .dark ancestor selector)
   const nodeGlowClass = isCommitted
@@ -612,9 +613,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
             <NodeDetailsSection
               hashDisplay={
                 hashDisplay ||
-                (data.commit?.hash || data.commitHash || data.entryId || '')
-                  .replace('sha256:', 'sha:')
-                  .slice(0, 11)
+                (data.commit?.hash || data.commitHash || data.entryId
+                  ? commitHashLabel(data.commit?.hash || data.commitHash || data.entryId || '')
+                  : '')
               }
               copiedHash={copiedHash}
               onCopyHash={handleCopyHash}

@@ -268,7 +268,7 @@ describe('Canvas node semantic markers', () => {
   it('opens commit details from the committed hash inside the node', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit sha:abc123' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit haxi:abc123' }));
 
     expect(navigationMocks.routerPush).toHaveBeenCalledWith(
       '/project/proj_canvas/commit/sha256%3Aabc123'
@@ -279,7 +279,7 @@ describe('Canvas node semantic markers', () => {
     navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit sha:abc123' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit haxi:abc123' }));
 
     expect(navigationMocks.routerPush).toHaveBeenCalledWith(
       '/project/proj_canvas/commit/sha256%3Aabc123?introDemo=1'
