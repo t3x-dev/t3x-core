@@ -1,5 +1,13 @@
 # @t3x-dev/api
 
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @t3x-dev/api@0.4.1
+  - @t3x-dev/storage@0.4.1
+
 ## 0.0.13
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @t3x-dev/core
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`96d873f`](https://github.com/t3x-dev/t3x-core/commit/96d873f987f9424c251cc19256a7c5a0e2ff3df4)]:
+  - @t3x-dev/yops@0.4.1
+  - @t3x-dev/yschema@0.4.1
+
 ## 0.4.0
 
 ### Patch Changes
