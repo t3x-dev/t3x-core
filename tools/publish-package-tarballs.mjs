@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { buildReleaseAssetUploadPlan } from './lib/packageReleaseAssets.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -23,6 +24,7 @@ const maxPublishAttempts = parsePositiveInt(process.env.T3X_PUBLISH_MAX_ATTEMPTS
 const publishRetryDelayMs = parsePositiveInt(process.env.T3X_PUBLISH_RETRY_DELAY_MS, 15000);
 
 const packageDirs = await getPublishPackageDirs();
+const packedPackages = [];
 
 try {
   for (const relativeDir of packageDirs) {
@@ -37,13 +39,6 @@ try {
       );
     }
 
-    if (isPackageVersionPublished(packageJson.name, packageJson.version)) {
-      console.log(
-        `[publish-package-tarballs] Skipping ${packageJson.name}@${packageJson.version}; already published.`
-      );
-      continue;
-    }
-
     console.log(`[publish-package-tarballs] Packing ${packageJson.name}@${packageJson.version}`);
     const packOutput = execFileSync(
       'npm',
@@ -56,6 +51,19 @@ try {
     );
     const tarball = parsePackFilename(packOutput, packageDir);
     const tarballPath = path.join(packDir, tarball);
+    packedPackages.push({
+      name: packageJson.name,
+      version: packageJson.version,
+      tarballPath,
+    });
+
+    if (isPackageVersionPublished(packageJson.name, packageJson.version)) {
+      console.log(
+        `[publish-package-tarballs] Skipping ${packageJson.name}@${packageJson.version}; already published.`
+      );
+      continue;
+    }
+
     const publishArgs = ['publish', tarballPath];
     const access = packageJson.publishConfig?.access;
 
@@ -82,6 +90,8 @@ try {
       publishArgs,
     });
   }
+
+  uploadPackageReleaseAssets(packedPackages);
 } finally {
   if (process.env.T3X_KEEP_PUBLISH_PACKS === '1') {
     console.log(`[publish-package-tarballs] Kept packed tarballs at ${packDir}`);
@@ -107,6 +117,76 @@ async function getPublishPackageDirs() {
   );
 
   return publishDirs;
+}
+
+function uploadPackageReleaseAssets(packageRecords) {
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
+  if (!token) {
+    console.log(
+      '[publish-package-tarballs] Skipping GitHub Release asset upload: missing-github-token.'
+    );
+    return;
+  }
+
+  const releaseRecords = getProductReleaseRecords(token);
+  const uploadPlan = buildReleaseAssetUploadPlan({
+    packageRecords,
+    assetPaths: packageRecords.map((record) => record.tarballPath),
+    env: process.env,
+    releaseRecords,
+  });
+
+  if (uploadPlan.skippedReason) {
+    console.log(
+      `[publish-package-tarballs] Skipping GitHub Release asset upload: ${uploadPlan.skippedReason}.`
+    );
+    return;
+  }
+
+  console.log(
+    `[publish-package-tarballs] Uploading package tarballs to ${uploadPlan.releaseTag}: ${packageRecords
+      .map((record) => path.basename(record.tarballPath))
+      .join(', ')}`
+  );
+  execFileSync('gh', uploadPlan.args, {
+    cwd: repoRoot,
+    env: uploadPlan.env,
+    stdio: 'inherit',
+  });
+}
+
+function getProductReleaseRecords(token) {
+  const repository = getGitHubRepository(token);
+  const releases = JSON.parse(
+    execFileSync('gh', ['api', `/repos/${repository}/releases?per_page=100`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GH_TOKEN: token,
+      },
+    })
+  );
+
+  return releases.map((release) => ({
+    tagName: release.tag_name,
+    body: release.body,
+  }));
+}
+
+function getGitHubRepository(token) {
+  if (process.env.GITHUB_REPOSITORY) {
+    return process.env.GITHUB_REPOSITORY;
+  }
+
+  return execFileSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GH_TOKEN: token,
+    },
+  }).trim();
 }
 
 function parsePackFilename(output, packageDir) {

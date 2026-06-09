@@ -180,13 +180,18 @@ After the product release PR merges, the `Release` workflow runs on `main`.
 - If unconsumed changesets are present, Changesets creates a
   `chore: version packages` pull request.
 - If the version packages PR merges, the same workflow publishes the package
-  artifacts.
+  artifacts to npm and uploads the packed npm package tarballs to the product
+  GitHub Release `t3x-vx.y.z` as archived release assets.
 - If no changesets or version package commit are present, the product release is
   code-only and no package publish is expected.
 - The workflow records product releases by creating a `t3x-vx.y.z` GitHub
   Release from the merged release PR notes. Changesets version package PRs do
   not create product release records. Code-only product release notes omit the
   `Package Releases` section from the final GitHub Release.
+- Runtime tarballs continue to live on the local runtime release
+  `t3x-local-vx.y.z`. The npm package `.tgz` files on `t3x-vx.y.z` are
+  installable-package mirrors for audit and direct download convenience; npm
+  remains the primary install source.
 
 The `Release` workflow must create the `chore: version packages` pull request
 with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
