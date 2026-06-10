@@ -1110,6 +1110,31 @@ describe('ChatSidebar', () => {
     expect(mocks.routerPush).not.toHaveBeenCalled();
   });
 
+  it('does not reload conversations for a deleted project lingering in sidebar state', async () => {
+    mocks.projects = [
+      {
+        project_id: 'proj_live',
+        name: 'Live Project',
+        created_at: '2026-05-27T00:00:00Z',
+        conversations_count: 0,
+        commits_count: 0,
+      },
+    ];
+    mocks.chatState.activeProjectId = 'proj_deleted';
+    mocks.chatState.expandedProjectIds = new Set(['proj_deleted']);
+
+    render(<ChatSidebar />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.loadConversations).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalledWith(
+      'Failed to load conversations: Project proj_deleted not found',
+      { id: 'project-conversations-load-error' }
+    );
+  });
+
   it('handles project conversation load failures without opening the runtime overlay', async () => {
     mocks.projects = [
       {

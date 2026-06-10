@@ -319,6 +319,10 @@ export function ChatSidebar() {
     return match ? decodeURIComponent(match[1]) : null;
   }, [pathname]);
   const effectiveProjectId = routeProjectId ?? activeProjectId;
+  const existingProjectIds = useMemo(
+    () => new Set(projects.map((project) => project.project_id)),
+    [projects]
+  );
   const workspaceMode = pathname.includes('/canvas')
     ? 'canvas'
     : pathname.includes('/leaf')
@@ -712,8 +716,11 @@ export function ChatSidebar() {
   // Fetch conversations for expanded projects and the active top workbench
   // project (re-fetch on refreshKey).
   useEffect(() => {
-    const projectIdsToLoad = new Set(expandedProjectIds);
-    if (effectiveProjectId) {
+    const projectIdsToLoad = new Set<string>();
+    for (const projectId of expandedProjectIds) {
+      if (existingProjectIds.has(projectId)) projectIdsToLoad.add(projectId);
+    }
+    if (effectiveProjectId && existingProjectIds.has(effectiveProjectId)) {
       projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
@@ -721,7 +728,7 @@ export function ChatSidebar() {
         notifyProjectConversationsLoadFailure
       );
     }
-  }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
+  }, [effectiveProjectId, existingProjectIds, expandedProjectIds, refreshKey, loadConversations]);
 
   useEffect(() => {
     if (!renameTarget) return;
