@@ -11,6 +11,7 @@
 
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import { formatUserFacingError } from '@/domain/format/errors';
 import * as api from '@/infrastructure';
 
 interface ProceedInput {
@@ -72,7 +73,7 @@ export function usePendingCommitExtraction(): UsePendingCommitExtractionReturn {
       const result = await api.extractIncremental(projectId, sourceConversationId, draft.id);
       setSemanticPoints([...result.ready_points, ...result.review_points]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Extraction failed';
+      const msg = formatUserFacingError(err, 'Extraction failed.');
       setExtractionError(msg);
       toast.error(msg);
       throw err; // Let the caller decide whether to unlock config.
@@ -90,7 +91,7 @@ export function usePendingCommitExtraction(): UsePendingCommitExtractionReturn {
         const result = await api.extractIncremental(projectId, sourceConversationId, draftId);
         setSemanticPoints([...result.ready_points, ...result.review_points]);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Re-extraction failed';
+        const msg = formatUserFacingError(err, 'Re-extraction failed.');
         setExtractionError(msg);
         toast.error(msg);
       } finally {

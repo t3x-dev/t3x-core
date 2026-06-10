@@ -13,6 +13,7 @@ import {
   createTemplate as createTemplateCommand,
   deleteTemplate as deleteTemplateCommand,
 } from '@/commands/templates';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchTemplates } from '@/queries/templates';
 import { useTemplateStore } from '@/store/templateStore';
 import type { Template } from '@/types/api';
@@ -47,7 +48,7 @@ export function useTemplates() {
       store.setLoading(false);
     } catch (err) {
       if (gen !== fetchGen) return;
-      store.setError(err instanceof Error ? err.message : 'Failed to load templates');
+      store.setError(formatUserFacingError(err, 'Failed to load templates.'));
       store.setLoading(false);
     }
   }, []);

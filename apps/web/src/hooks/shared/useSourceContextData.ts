@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { checkContentIntegrity } from '@/domain/format/truncationUtils';
 import type { Leaf } from '@/infrastructure';
 import * as api from '@/infrastructure';
@@ -119,7 +120,7 @@ export function useSourceContextData(
             });
           }
         } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to load context';
+          const errorMsg = formatUserFacingError(err, 'Failed to load context.');
           if (!cancelled) {
             newTurnData.set(turnHash, {
               turnHash,
@@ -152,7 +153,7 @@ export function useSourceContextData(
             });
           }
         } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to load leaf';
+          const errorMsg = formatUserFacingError(err, 'Failed to load leaf.');
           if (!cancelled) {
             newLeafData.set(leafId, {
               leafId,

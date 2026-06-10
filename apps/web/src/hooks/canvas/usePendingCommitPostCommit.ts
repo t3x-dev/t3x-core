@@ -7,6 +7,7 @@
 
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import * as api from '@/infrastructure';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -74,7 +75,7 @@ export function usePendingCommitPostCommit({
       const routeProject = data.projectId || projectId;
       window.location.href = `/project/${routeProject}/draft/${newDraft.id}`;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create draft');
+      toast.error(formatUserFacingError(err, 'Failed to create draft.'));
     } finally {
       setOpeningAsDraft(false);
     }

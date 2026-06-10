@@ -28,6 +28,7 @@ import {
   formatRetainedFailureRow,
   getResultPanelHeaderLabel,
 } from '@/domain/draft/retainedFailureLabel';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { getSlotSource } from '@/domain/source';
 import { deriveWorkspaceActionBarState } from '@/domain/workspace/actionBarState';
 import { useCommitActions } from '@/hooks/commits/useCommitActions';
@@ -999,7 +1000,7 @@ export function AfterPanel({
 
   const handleGoldEditFailure = useCallback((err: unknown) => {
     const workspaceError = useWorkspaceStore.getState().lastError;
-    toast.error(workspaceError ?? (err instanceof Error ? err.message : 'Edit failed'));
+    toast.error(formatUserFacingError(workspaceError ?? err, 'Edit failed.'));
   }, []);
 
   const handlePanelBackgroundClick = useCallback(
@@ -1289,7 +1290,7 @@ export function AfterPanel({
       }
     } catch (err: unknown) {
       useWorkspaceStore.getState().setMode('idle');
-      toast.error(`Commit failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(formatUserFacingError(err, 'Commit failed.'));
     }
   }, [commitIntroDemoReplay, commitTrees, getDefaultCommitName, introDemoActive]);
 

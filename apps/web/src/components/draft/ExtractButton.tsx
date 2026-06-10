@@ -4,6 +4,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useExtractIncremental } from '@/hooks/drafts/useExtractIncremental';
 
 interface ExtractButtonProps {
@@ -32,7 +33,7 @@ export function ExtractButton({
       toast.success(`Extracted ${total} point${total !== 1 ? 's' : ''}`);
       onExtracted();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Extraction failed');
+      toast.error(formatUserFacingError(err, 'Extraction failed.'));
     } finally {
       setLoading(false);
     }

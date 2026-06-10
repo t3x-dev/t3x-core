@@ -16,6 +16,7 @@ import { useCallback } from 'react';
 import { renameCommit as renameCommitCommand } from '@/commands/commits';
 import { createConversation } from '@/commands/conversations';
 import { createMergeDraft } from '@/commands/merge';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchTurns } from '@/queries/turns';
 import { useCanvasStore } from '@/store/canvasStore';
 import {
@@ -261,8 +262,7 @@ export function useCanvasCommitActions() {
       });
       return data.draftId;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      notify?.(`Failed to create merge: ${errorMessage}`, 'error');
+      notify?.(formatUserFacingError(error, 'Failed to create merge.'), 'error');
       return null;
     }
   }, []);

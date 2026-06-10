@@ -29,6 +29,7 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -291,7 +292,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(formatUserFacingError(err, 'Failed to load diff.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -337,7 +338,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       );
       router.push(withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo));
     } catch (err) {
-      setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');
+      setMergeError(formatUserFacingError(err, 'Failed to create merge draft.'));
     } finally {
       setMergeLoading(false);
     }

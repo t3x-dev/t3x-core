@@ -2,6 +2,7 @@
 
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasLeafActions } from '@/hooks/canvas/useCanvasLeafActions';
 import { useCanvasStore } from '@/store/canvasStore';
@@ -120,7 +121,7 @@ export function useContextMenu({
             try {
               await addNode('unit', position);
             } catch (err) {
-              notify?.(err instanceof Error ? err.message : 'Failed', 'error');
+              notify?.(formatUserFacingError(err, 'Failed to create branch.'), 'error');
             }
           });
         },

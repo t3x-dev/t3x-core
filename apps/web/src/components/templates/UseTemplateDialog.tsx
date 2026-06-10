@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useProjectsList } from '@/hooks/projects/useProjectsList';
@@ -119,7 +120,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
       onOpenChange(false);
       router.push(`/project/${selectedProjectId}/leaf/${leaf.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create leaf');
+      toast.error(formatUserFacingError(err, 'Failed to create leaf.'));
     } finally {
       setIsCreating(false);
     }

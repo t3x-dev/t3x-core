@@ -44,6 +44,7 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
@@ -225,7 +226,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           // History fetch failure is non-critical
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load commit');
+        setError(formatUserFacingError(err, 'Failed to load commit.'));
       } finally {
         setLoading(false);
       }

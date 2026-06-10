@@ -5,6 +5,7 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useHealth } from '@/hooks/shared/useApi';
 import { cn } from '@/utils/cn';
 
@@ -71,7 +72,9 @@ export function ErrorMessage({ error, onRetry }: { error: Error; onRetry?: () =>
       <AlertCircle className="h-8 w-8 text-destructive" />
       <div className="space-y-1">
         <p className="font-medium text-foreground">Something went wrong</p>
-        <p className="text-sm text-muted-foreground">{error.message}</p>
+        <p className="text-sm text-muted-foreground">
+          {formatUserFacingError(error, 'Something went wrong.')}
+        </p>
       </div>
       {onRetry && (
         <Button variant="outline" onClick={onRetry}>

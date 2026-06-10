@@ -8,6 +8,7 @@
  */
 
 import { useCallback } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { ApiError } from '@/infrastructure/core';
 import { type LearnFromEditsResult, learnFromEdits } from '@/infrastructure/leaves';
 
@@ -27,7 +28,7 @@ export function useLearnFromEdits(): {
       if (err instanceof ApiError && err.code === 'NO_EDITS') {
         return { kind: 'no_edits', message: err.message };
       }
-      return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
+      return { kind: 'error', message: formatUserFacingError(err, 'Failed to learn from edits.') };
     }
   }, []);
   return { run };

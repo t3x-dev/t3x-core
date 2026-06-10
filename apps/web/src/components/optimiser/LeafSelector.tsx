@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useLeafById } from '@/hooks/leaves/useLeafById';
 import { useLeavesByProject } from '@/hooks/projects/useLeavesByProject';
 import { useProjectsList } from '@/hooks/projects/useProjectsList';
@@ -163,7 +164,7 @@ export function LeafSelector({
       showToast('Run started successfully', 'success');
       onRunComplete?.(result.run_id);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to start run', 'error');
+      showToast(formatUserFacingError(err, 'Failed to start run.'), 'error');
     } finally {
       setIsRunning(false);
     }

@@ -10,6 +10,7 @@
 
 import { useCallback } from 'react';
 import { createLeaf, deleteLeaf } from '@/commands/leaves';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { toEmbeddedLeaf } from '@/hooks/canvas/leafEmbedding';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { getTerminology } from '@/hooks/shared/useTerminology';
@@ -99,7 +100,7 @@ export function useCanvasLeafActions() {
       notify?.(`${LEAF_TYPE_LABELS[leafType]} created successfully`, 'success');
       return leaf.id;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create leaf';
+      const message = formatUserFacingError(err, 'Failed to create leaf.');
       notify?.(message, 'error');
       store.setLeafCreating(false);
       // Keep panel open on failure so the user can retry.
@@ -148,7 +149,7 @@ export function useCanvasLeafActions() {
       notify?.(`${template.title} leaf created from template`, 'success');
       return leaf.id;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create leaf from template';
+      const message = formatUserFacingError(err, 'Failed to create leaf from template.');
       notify?.(message, 'error');
       store.setLeafCreating(false);
       return null;
@@ -169,7 +170,7 @@ export function useCanvasLeafActions() {
       }
       notify?.('Leaf deleted', 'success');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete leaf';
+      const message = formatUserFacingError(err, 'Failed to delete leaf.');
       notify?.(message, 'error');
     }
   }, []);

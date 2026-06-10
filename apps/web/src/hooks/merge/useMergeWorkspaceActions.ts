@@ -26,6 +26,7 @@ import {
   deleteMergeDraft,
   saveMergeDraft,
 } from '@/commands/merge';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { getMergeDraft, getMergeDraftChecks } from '@/queries/mergeApi';
 import { fetchTurnContext } from '@/queries/turnContext';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
@@ -38,7 +39,7 @@ export function useMergeWorkspaceActions() {
       const draft = await getMergeDraft(draftId);
       useMergeWorkspaceStore.getState().setDraftLoaded(draft);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load draft';
+      const message = formatUserFacingError(err, 'Failed to load draft.');
       useMergeWorkspaceStore.getState().setLoadError(message);
       throw err;
     }
@@ -64,7 +65,7 @@ export function useMergeWorkspaceActions() {
         useMergeWorkspaceStore.getState().setDraftLoaded(draft);
         return draft.draftId;
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create draft';
+        const message = formatUserFacingError(err, 'Failed to create draft.');
         useMergeWorkspaceStore.getState().setLoadError(message);
         throw err;
       }
@@ -83,7 +84,7 @@ export function useMergeWorkspaceActions() {
       await saveMergeDraft(draftId, { prepared: treeMergeResult ?? undefined, message });
       useMergeWorkspaceStore.getState().setSaveSucceeded();
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to save';
+      const errorMsg = formatUserFacingError(err, 'Failed to save.');
       console.warn('[useMergeWorkspaceActions] Auto-save failed:', errorMsg);
       useMergeWorkspaceStore.getState().setSaveFailed();
     }
@@ -103,7 +104,7 @@ export function useMergeWorkspaceActions() {
       useMergeWorkspaceStore.getState().setCommitted();
       return commitResult;
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
+      const errorMsg = formatUserFacingError(err, 'Failed to commit.');
       useMergeWorkspaceStore.getState().setCommitFailed(errorMsg);
       throw err;
     }
@@ -160,7 +161,7 @@ export function useMergeWorkspaceActions() {
       const result = await getMergeDraftChecks(draftId);
       useMergeWorkspaceStore.getState().setServerChecksSucceeded(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch server checks';
+      const message = formatUserFacingError(err, 'Failed to fetch server checks.');
       useMergeWorkspaceStore.getState().setServerChecksFailed(message);
     }
   }, []);

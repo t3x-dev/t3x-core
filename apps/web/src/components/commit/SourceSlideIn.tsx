@@ -13,6 +13,7 @@ import { ChevronRight, ExternalLink, MessageSquare, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TurnBubble } from '@/components/source-context/TurnBubble';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useTurnsList } from '@/hooks/shared/useTurnsList';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import type { TurnBubbleData } from '@/types/sourceContext';
@@ -209,7 +210,7 @@ export function SourceSlideIn({ projectId }: SourceSlideInProps) {
         );
         setConversationId(convId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load conversation');
+        setError(formatUserFacingError(err, 'Failed to load conversation.'));
         setTurns([]);
       } finally {
         setLoading(false);

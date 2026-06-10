@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useRecipeCommands } from '@/hooks/recipes/useRecipeCommands';
 import { useProjectStore } from '@/store/projectStore';
@@ -76,7 +77,7 @@ export default function RecipesPage() {
       }
       setRecipes(allRecipes);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load recipes';
+      const message = formatUserFacingError(err, 'Failed to load recipes.');
       setError(message);
     } finally {
       setLoading(false);
@@ -111,7 +112,7 @@ export default function RecipesPage() {
         setEditingRecipe(null);
         setSelectedProjectId(null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Operation failed';
+        const message = formatUserFacingError(err, 'Operation failed.');
         toast.error(message);
       } finally {
         setFormLoading(false);
@@ -130,7 +131,7 @@ export default function RecipesPage() {
       toast.success('Recipe deleted');
       setDeleteTarget(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete recipe';
+      const message = formatUserFacingError(err, 'Failed to delete recipe.');
       toast.error(message);
     } finally {
       setDeleteLoading(false);
@@ -147,7 +148,7 @@ export default function RecipesPage() {
         });
         setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to toggle recipe';
+        const message = formatUserFacingError(err, 'Failed to toggle recipe.');
         toast.error(message);
       } finally {
         setTogglingId(null);

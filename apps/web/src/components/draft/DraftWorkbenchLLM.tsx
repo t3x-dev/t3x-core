@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useReviewAction } from '@/hooks/shared/useReviewAction';
 import type { SemanticPointAPI } from '@/types/api';
 import { ExtractButton } from './ExtractButton';
@@ -38,7 +39,7 @@ export function DraftWorkbenchLLM({
         const result = await submitReviewAction(draftId, spId, action, editedText);
         onUpdate(result.semantic_points);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Review action failed');
+        toast.error(formatUserFacingError(err, 'Review action failed.'));
       }
     },
     [draftId, onUpdate, submitReviewAction]

@@ -1,5 +1,6 @@
 import type { Node, ReactFlowInstance } from '@xyflow/react';
 import { useCallback } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import type { NotifyCallback } from '@/store/canvasStoreTypes';
 import type { NodeKind } from '@/types/nodes';
 
@@ -42,7 +43,7 @@ export function useCanvasHandlers({
       try {
         await addNode(kind, position);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create node';
+        const message = formatUserFacingError(err, 'Failed to create node.');
         notify?.(message, 'error');
       } finally {
         setIsAdding(false);

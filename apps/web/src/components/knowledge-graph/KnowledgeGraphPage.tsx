@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useKnowledgeGraph } from '@/hooks/knowledge-graph/useKnowledgeGraph';
 import { KGCanvas } from './KGCanvas';
 import { KGDetailPanel } from './KGDetailPanel';
@@ -28,7 +29,7 @@ export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
         {/* Error banner */}
         {error && (
           <div className="absolute inset-x-0 top-0 z-40 bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
-            {error.message}
+            {formatUserFacingError(error, 'Failed to load graph.')}
           </div>
         )}
 

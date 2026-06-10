@@ -14,6 +14,7 @@ import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lu
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -150,7 +151,7 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
         onLeavesChange([...leaves, leaf]);
         router.push(`/project/${projectId}/leaf/${leaf.id}`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create leaf';
+        const message = formatUserFacingError(err, 'Failed to create leaf.');
         notifyCallback?.(message, 'error');
       } finally {
         setLeafCreating(false);

@@ -1153,7 +1153,7 @@ describe('ChatSidebar', () => {
 
     await waitFor(() => {
       expect(mocks.toastError).toHaveBeenCalledWith(
-        'Failed to load conversations: Failed to fetch',
+        'Network request failed. Check your connection and try again.',
         { id: 'project-conversations-load-error' }
       );
     });

@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { type ArchivedYOpsRow, fetchArchivedYopsLog } from '@/queries/archivedYopsLog';
 
 // Re-export so the L4 (component) layer can read the row shape via the
@@ -48,7 +49,7 @@ export function useArchivedYopsLog(
       })
       .catch((err) => {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : 'Failed to load archived ops';
+        const msg = formatUserFacingError(err, 'Failed to load archived ops.');
         setState({ status: 'error', rows: [], error: msg });
       });
     return () => {

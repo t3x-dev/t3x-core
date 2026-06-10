@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useConversationBranchSwitch } from '@/hooks/conversations/useConversationBranchSwitch';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
@@ -113,7 +114,7 @@ export function ChatHeader({
       try {
         await switchConversationBranch({ projectId: activeProjectId, conversationId, branch });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to update branch');
+        toast.error(formatUserFacingError(err, 'Failed to update branch.'));
       } finally {
         setBranchSwitching(false);
       }

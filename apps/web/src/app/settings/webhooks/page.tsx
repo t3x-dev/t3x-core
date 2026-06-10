@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useWebhookCommands } from '@/hooks/webhooks/useWebhookCommands';
 import type { CreateWebhookInput, UpdateWebhookInput, WebhookData } from '@/types/api';
 
@@ -59,7 +60,7 @@ export default function WebhooksPage() {
       const data = await listWebhooks();
       setWebhooks(data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load webhooks';
+      const message = formatUserFacingError(err, 'Failed to load webhooks.');
       setError(message);
     } finally {
       setLoading(false);
@@ -92,7 +93,7 @@ export default function WebhooksPage() {
         setFormOpen(false);
         setEditingWebhook(null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Operation failed';
+        const message = formatUserFacingError(err, 'Operation failed.');
         toast.error(message);
       } finally {
         setFormLoading(false);
@@ -111,7 +112,7 @@ export default function WebhooksPage() {
       toast.success('Webhook deleted');
       setDeleteTarget(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete webhook';
+      const message = formatUserFacingError(err, 'Failed to delete webhook.');
       toast.error(message);
     } finally {
       setDeleteLoading(false);
@@ -130,7 +131,7 @@ export default function WebhooksPage() {
           toast.error(`Test failed (HTTP ${result.status})`);
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Test request failed';
+        const message = formatUserFacingError(err, 'Test request failed.');
         toast.error(message);
       } finally {
         setTestingId(null);

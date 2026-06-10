@@ -5,6 +5,7 @@ import {
   MAX_CONVERSATION_TITLE_LENGTH,
   normalizeGeneratedConversationTitle,
 } from '@/domain/conversationTitle';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { syncSavedTurnIntoWorkspace } from '@/hooks/conversations/syncSavedTurnIntoWorkspace';
 import { type ChatMessage, useChatHistory } from '@/hooks/conversations/useChatHistory';
 import { useChatStreamState } from '@/hooks/conversations/useChatStreamState';
@@ -467,7 +468,7 @@ export function useConversationChat({
               addedFinalMessage = true;
             }
           } else if (event.type === 'error') {
-            warnings.setError(event.message || 'Unknown error');
+            warnings.setError(formatUserFacingError(event.message, 'Chat request failed.'));
           }
         }
 
@@ -520,8 +521,7 @@ export function useConversationChat({
           history.setIsChatLoading(false);
           return;
         }
-        const error = err instanceof Error ? err : new Error(String(err));
-        warnings.setError(error.message);
+        warnings.setError(formatUserFacingError(err, 'Chat request failed.'));
       } finally {
         stream.setIsChatStreaming(false);
         stream.setStreamingContent('');

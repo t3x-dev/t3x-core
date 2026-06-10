@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useAuthMe } from '@/hooks/shared/useAuthMe';
 import { useSession } from '@/hooks/shared/useSession';
 import { cn } from '@/utils/cn';
@@ -97,7 +98,7 @@ export function PreferencesSettingsPanel() {
       setDraftDefaults(next);
       toast.success('Default model preference saved');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save model defaults');
+      toast.error(formatUserFacingError(error, 'Failed to save model defaults.'));
     } finally {
       setSavingDefaults(false);
     }

@@ -18,6 +18,7 @@
 import { AlertTriangle, CheckCircle2, Circle, Loader2, RefreshCw, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { ProviderCredentialDialog } from '@/components/settings/ProviderCredentialDialog';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useProviderCommands } from '@/hooks/providers/useProviderCommands';
 import { useProvidersSettingsData } from '@/hooks/providers/useProvidersSettingsData';
 import {
@@ -233,7 +234,7 @@ export function ProvidersSettingsPanel() {
       setProviders(nextProviders);
       setStatuses(nextStatuses);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load providers';
+      const message = formatUserFacingError(err, 'Failed to load providers.');
       setLoadError(message);
       console.error('Failed to load providers:', err);
     } finally {
@@ -270,7 +271,7 @@ export function ProvidersSettingsPanel() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setDialogError(err instanceof Error ? err.message : 'Failed to load provider status');
+        setDialogError(formatUserFacingError(err, 'Failed to load provider status.'));
       })
       .finally(() => {
         if (!cancelled) {
@@ -330,7 +331,7 @@ export function ProvidersSettingsPanel() {
         console.error('Failed to refresh providers after credential save:', refreshError);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save provider credentials';
+      const message = formatUserFacingError(err, 'Failed to save provider credentials.');
       setDialogError(message);
       throw err;
     }
@@ -357,7 +358,7 @@ export function ProvidersSettingsPanel() {
         console.error('Failed to refresh providers after credential removal:', refreshError);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove provider credentials';
+      const message = formatUserFacingError(err, 'Failed to remove provider credentials.');
       setDialogError(message);
       throw err;
     }

@@ -16,6 +16,7 @@ import {
   ProjectPersistenceError,
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { fetchProjects } from '@/queries/projects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
@@ -36,7 +37,7 @@ export function useProjectCrud() {
       store.setError(error);
       store.setLoading(false);
       store.setInitialized(true);
-      store.notifyCallback?.(`Failed to load projects: ${error.message}`, 'error');
+      store.notifyCallback?.(formatUserFacingError(error, 'Failed to load projects.'), 'error');
     }
   }, []);
 
@@ -107,7 +108,7 @@ export function useProjectCrud() {
       if (removed) {
         store.addToProjects(removed);
       }
-      notify?.(`Failed to delete: ${error.message}`, 'error');
+      notify?.(formatUserFacingError(error, 'Failed to delete project.'), 'error');
     }
   }, []);
 
@@ -127,7 +128,7 @@ export function useProjectCrud() {
         notify?.('Model settings saved', 'success');
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        notify?.(`Failed to save model settings: ${error.message}`, 'error');
+        notify?.(formatUserFacingError(error, 'Failed to save model settings.'), 'error');
         throw error;
       }
     },
