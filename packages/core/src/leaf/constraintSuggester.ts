@@ -51,9 +51,9 @@ function buildConstraintSuggestionPrompt(
 
   const knowledgeText = serializeForPrompt(knowledge);
 
-  return `You are a constraint suggestion engine for a semantic version control system.
+  return `You are a constraint suggestion engine for a structured-state version control system.
 
-Given a set of knowledge frames and a target output type, suggest constraints that should be applied when generating output.
+Given a set of committed state frames and a target output type, suggest constraints that should be applied when generating output.
 
 ## Output Type: ${leafType}
 ${typeGuidance}

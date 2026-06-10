@@ -575,7 +575,7 @@ function CanvasWorkspaceInner({
             !initialLayoutDone && nodes.length > 0 && 'opacity-0'
           )}
           role="tree"
-          aria-label="Knowledge graph canvas"
+          aria-label="State graph canvas"
           style={{
             backgroundColor: 'var(--surface-canvas)',
           }}

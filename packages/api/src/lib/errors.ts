@@ -124,7 +124,7 @@ export const ErrorCodes = {
   UNRESOLVED_PAIRS: 'UNRESOLVED_PAIRS',
   LLM_NOT_CONFIGURED: 'LLM_NOT_CONFIGURED',
 
-  // Knowledge Graph errors
+  // State index errors
   GRAPH_BUILD_FAILED: 'GRAPH_BUILD_FAILED',
   GRAPH_NODE_NOT_FOUND: 'GRAPH_NODE_NOT_FOUND',
   GRAPH_NOT_BUILT: 'GRAPH_NOT_BUILT',
@@ -259,7 +259,7 @@ export const ErrorStatusCodes: Record<ErrorCode, number> = {
   UNRESOLVED_PAIRS: 400,
   LLM_NOT_CONFIGURED: 400,
 
-  // Knowledge Graph errors
+  // State index errors
   GRAPH_BUILD_FAILED: 500,
   GRAPH_NODE_NOT_FOUND: 404,
   GRAPH_NOT_BUILT: 400,

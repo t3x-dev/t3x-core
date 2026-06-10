@@ -40,9 +40,7 @@ export function KGToolbar({ projectId }: KGToolbarProps) {
   }, []);
 
   const handleDelete = useCallback(() => {
-    if (
-      window.confirm('Delete the entire knowledge graph for this project? This cannot be undone.')
-    ) {
+    if (window.confirm('Delete the entire state index for this project? This cannot be undone.')) {
       deleteGraph(projectId);
     }
   }, [projectId, deleteGraph]);
@@ -67,7 +65,7 @@ export function KGToolbar({ projectId }: KGToolbarProps) {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Knowledge Graph</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">State Graph</h2>
       </div>
 
       <div className="flex items-center gap-2">

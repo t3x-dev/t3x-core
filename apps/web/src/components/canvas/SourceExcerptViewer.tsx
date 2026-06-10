@@ -50,7 +50,7 @@ export function SourceExcerptViewer({ blocks }: SourceExcerptViewerProps) {
   if (!excerptText.trim()) {
     return (
       <div className="p-[var(--space-group)] bg-[var(--color-bg-subtle)] rounded-lg border border-[var(--color-border)] text-center text-sm text-[var(--color-text-muted)] italic">
-        <span>No semantic content selected</span>
+        <span>No state content selected</span>
       </div>
     );
   }

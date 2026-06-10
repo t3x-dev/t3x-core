@@ -4,6 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app';
 
+const testApiKey = (suffix: string) => `t3xk_${suffix}`;
+
 describe('Local Config Routes', () => {
   const originalConfigPath = process.env.T3X_CONFIG_PATH;
   const originalApiUrl = process.env.T3X_API_URL;
@@ -204,7 +206,7 @@ describe('Local Config Routes', () => {
   });
 
   it('reports an invalid key when auth is required and the bearer check is rejected', async () => {
-    process.env.T3X_API_KEY = 't3xk_invalid_key';
+    process.env.T3X_API_KEY = testApiKey('invalid_key');
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 401 }))

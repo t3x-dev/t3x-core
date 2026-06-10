@@ -13,8 +13,9 @@ documents.
 
 ## Why
 
-T3X uses YOps as the only mutation path for semantic tree content, so LLMs can
-propose changes while deterministic code validates and applies them.
+T3X uses YOps as the only mutation path for structured YAML state, so LLMs,
+humans, and tools can propose changes while deterministic code validates and
+applies them.
 
 ## Release status
 
@@ -60,6 +61,9 @@ Engine          →  dispatches ops to handlers, executes the pipeline
 The spec is the source of truth. The registry enforces it. The engine executes it.
 
 ## Install
+
+This command requires restricted alpha npm access. If npm returns 404 or cannot
+resolve the package, use the source workspace until package access is granted.
 
 ```bash
 npm install @t3x-dev/yops
@@ -180,4 +184,4 @@ The TypeScript package is the reference implementation.
 
 ## License
 
-[Apache License 2.0](./LICENSE)
+[Apache License 2.0](../../LICENSE)

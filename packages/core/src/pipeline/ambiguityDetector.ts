@@ -65,7 +65,7 @@ const NO_AMBIGUITY: AmbiguityResult = { clean: true, questions: [] };
  * Detect ambiguity in extracted nodes.
  *
  * @param provider - LLM provider
- * @param snapshot - Current semantic content (trees + relations)
+ * @param snapshot - Current state content (trees + relations)
  * @param recentTurns - Recent conversation turns for context
  * @returns Advisory questions (may be empty)
  */

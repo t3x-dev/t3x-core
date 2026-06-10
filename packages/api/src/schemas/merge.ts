@@ -219,7 +219,7 @@ export const MergeCommitSchema = z.object({
     example: '2024-01-15T10:30:00.000Z',
   }),
   content: SemanticContentSchema.openapi({
-    description: 'Merged semantic content (frames + relations)',
+    description: 'Merged state content (frames + relations)',
   }),
   message: z.string().openapi({
     description: 'Commit message',

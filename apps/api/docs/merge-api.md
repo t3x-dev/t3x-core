@@ -2,7 +2,7 @@
 
 ## Overview
 
-The T3X Merge API provides two-way merge capabilities for semantic commits. Unlike traditional three-way merges that require a common ancestor, our two-way merge directly compares source and target commits using advanced semantic similarity algorithms.
+The T3X Merge API provides two-way merge capabilities for structured-state commits. Unlike traditional three-way merges that require a common ancestor, this two-way merge directly compares source and target commits using deterministic state comparison plus configured similarity checks.
 
 ## Endpoints
 

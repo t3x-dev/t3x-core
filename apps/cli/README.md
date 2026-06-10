@@ -1,6 +1,6 @@
 # @t3x-dev/cli
 
-Command-line interface for T3X — semantic version control for AI conversations.
+Command-line interface for T3X structured-state workflows.
 
 ## Preview status
 

@@ -18,7 +18,7 @@ import {
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
-describe('Knowledge Graph Queries', () => {
+describe('State Index Queries', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
   let projectId: string;

@@ -2,7 +2,7 @@
 /**
  * T3X CLI
  *
- * Command-line interface for T3X semantic version control.
+ * Command-line interface for T3X structured-state workflows.
  *
  * Action-first command style (kubectl-like):
  *   t3x list projects      t3x show commit <hash>

@@ -336,9 +336,7 @@ describe('CanvasWorkspace initial fit view', () => {
 
     expect(screen.getByTestId('flow-background')).toHaveAttribute('data-variant', 'lines');
     expect(screen.getByTestId('flow-background')).toHaveAttribute('data-gap', '32');
-    const style = screen
-      .getByRole('tree', { name: /knowledge graph canvas/i })
-      .getAttribute('style');
+    const style = screen.getByRole('tree', { name: /state graph canvas/i }).getAttribute('style');
     expect(style).toContain('--surface-canvas');
   });
 

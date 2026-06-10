@@ -1,7 +1,7 @@
 /**
  * diff Operation
  *
- * Read-only pipeline operation for frame-based semantic diff between two commits.
+ * Read-only pipeline operation for frame-based structured diff between two commits.
  *
  * Steps:
  *   load      — fetch both commits from DB by hash

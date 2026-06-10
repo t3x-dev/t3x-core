@@ -494,7 +494,7 @@ CREATE INDEX IF NOT EXISTS idx_nr_commit ON node_relations (commit_hash);
 CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations (project_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
--- Knowledge Graph (cross-conversation entity/topic graph)
+-- State index (cross-conversation entity/topic graph)
 CREATE TABLE IF NOT EXISTS knowledge_nodes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,

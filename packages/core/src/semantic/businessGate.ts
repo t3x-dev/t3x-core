@@ -44,7 +44,7 @@ export function parseGatesConfig(rules: BusinessRuleConfig[]): BusinessRuleConfi
 }
 
 /**
- * Evaluate a single deterministic rule expression against semantic content.
+ * Evaluate a single deterministic rule expression against state content.
  *
  * The expression has access to `trees` and `relations` variables.
  * It should return a truthy value to pass.
@@ -88,7 +88,7 @@ export function evaluateRule(
 /**
  * Business Gate evaluator.
  *
- * Evaluates a set of business rules (deterministic + LLM) against semantic content.
+ * Evaluates a set of business rules (deterministic + LLM) against state content.
  * An LLMProvider is only needed when rules of type 'llm' are present.
  */
 export class BusinessGate {
@@ -99,7 +99,7 @@ export class BusinessGate {
   }
 
   /**
-   * Evaluate all rules against the given semantic content.
+   * Evaluate all rules against the given state content.
    *
    * - `type: 'rule'` — deterministic JS expression
    * - `type: 'llm'` — LLM prompt (requires provider; skipped with warning if absent)

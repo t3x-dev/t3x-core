@@ -5,7 +5,7 @@ import { deepEqual, relKey } from './utils';
 const WORD_DIFF_THRESHOLD = 5;
 
 /**
- * Compute a semantic diff between two SemanticContent snapshots.
+ * Compute a structured diff between two SemanticContent snapshots.
  *
  * Internally flattens trees to frames for comparison, then returns
  * results using path strings (not FlatNode objects).
