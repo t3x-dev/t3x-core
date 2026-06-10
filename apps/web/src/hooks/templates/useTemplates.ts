@@ -15,7 +15,7 @@ import {
 } from '@/commands/templates';
 import { fetchTemplates } from '@/queries/templates';
 import { useTemplateStore } from '@/store/templateStore';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 
 // Module-scoped generation counter — survives component re-renders so
 // stale fetches are discarded even when the hook is remounted.
@@ -61,7 +61,7 @@ export function useTemplates() {
   );
 
   const setLeafType = useCallback(
-    (next: string | null) => {
+    (next: TemplateLeafType | null) => {
       useTemplateStore.getState().setLeafType(next);
       void runFetch();
     },

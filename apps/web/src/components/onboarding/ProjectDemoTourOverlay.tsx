@@ -86,7 +86,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       id: 'chooseLeafType',
       label: 'Leaf type',
       title: 'Choose the Leaf destination',
-      description: 'Pick Twitter, Weibo, or WeChat.',
+      description: 'Pick X / Twitter, LinkedIn, Reddit, or Threads.',
       target: 'canvas-leaf-type-options',
       icon: Send,
       tone: 'leaf',

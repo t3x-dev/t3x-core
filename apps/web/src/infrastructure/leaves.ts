@@ -11,10 +11,11 @@ import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
 export type LeafType =
   | 'tweet'
-  | 'weibo'
-  | 'wechat'
-  | 'email'
+  | 'linkedin'
+  | 'reddit'
+  | 'threads'
   | 'article'
+  | 'email'
   | 'slack'
   | 'deploy_agent';
 

@@ -96,11 +96,12 @@ export {
   emailDefaultTemplate,
   getAllDefaultTemplates,
   getDefaultTemplate,
+  linkedinDefaultTemplate,
+  redditDefaultTemplate,
   slackDefaultTemplate,
+  threadsDefaultTemplate,
   // Individual default templates
   tweetDefaultTemplate,
-  wechatDefaultTemplate,
-  weiboDefaultTemplate,
 } from './templates';
 // ═══════════════════════════════════════════════════════════════════════════
 // Type Exports (SHARED - frozen contract)

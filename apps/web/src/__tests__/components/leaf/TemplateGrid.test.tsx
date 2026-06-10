@@ -25,10 +25,13 @@ describe('TemplateGrid', () => {
   it('renders all built-in templates when API fails (fallback)', async () => {
     render(<TemplateGrid selected={null} onSelect={vi.fn()} />);
     await waitFor(() => {
-      expect(screen.getByText('Tweet')).toBeTruthy();
+      expect(screen.getByText('X / Twitter')).toBeTruthy();
     });
+    expect(screen.getByText('LinkedIn')).toBeTruthy();
+    expect(screen.getByText('Reddit')).toBeTruthy();
+    expect(screen.getByText('Threads')).toBeTruthy();
     expect(screen.getByText('Email')).toBeTruthy();
-    expect(screen.getByText('Article')).toBeTruthy();
+    expect(screen.getByText('Blog post')).toBeTruthy();
     expect(screen.getByText('Slack')).toBeTruthy();
     expect(screen.getByText('Custom')).toBeTruthy();
   });
@@ -37,18 +40,18 @@ describe('TemplateGrid', () => {
     const onSelect = vi.fn();
     render(<TemplateGrid selected={null} onSelect={onSelect} />);
     await waitFor(() => {
-      expect(screen.getByText('Tweet')).toBeTruthy();
+      expect(screen.getByText('X / Twitter')).toBeTruthy();
     });
-    fireEvent.click(screen.getByText('Tweet'));
+    fireEvent.click(screen.getByText('X / Twitter'));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'tweet' }));
   });
 
   it('highlights selected template', async () => {
     render(<TemplateGrid selected="tweet" onSelect={vi.fn()} />);
     await waitFor(() => {
-      expect(screen.getByText('Tweet')).toBeTruthy();
+      expect(screen.getByText('X / Twitter')).toBeTruthy();
     });
-    const tweetCard = screen.getByText('Tweet').closest('button');
+    const tweetCard = screen.getByText('X / Twitter').closest('button');
     expect(tweetCard?.className).toContain('ring');
   });
 
@@ -118,9 +121,9 @@ describe('TemplateGrid semantic_threshold defaults', () => {
     const onSelect = vi.fn();
     render(<TemplateGrid selected={null} onSelect={onSelect} />);
     await waitFor(() => {
-      expect(screen.getByText('Tweet')).toBeTruthy();
+      expect(screen.getByText('X / Twitter')).toBeTruthy();
     });
-    fireEvent.click(screen.getByText('Tweet'));
+    fireEvent.click(screen.getByText('X / Twitter'));
     const template: LeafTemplate = onSelect.mock.calls[0][0];
     expect(template.semantic_threshold).toBeDefined();
     expect(template.semantic_threshold!.require).toBe(0.85);
@@ -131,9 +134,9 @@ describe('TemplateGrid semantic_threshold defaults', () => {
     const onSelect = vi.fn();
     render(<TemplateGrid selected={null} onSelect={onSelect} />);
     await waitFor(() => {
-      expect(screen.getByText('Article')).toBeTruthy();
+      expect(screen.getByText('Blog post')).toBeTruthy();
     });
-    fireEvent.click(screen.getByText('Article'));
+    fireEvent.click(screen.getByText('Blog post'));
     const template: LeafTemplate = onSelect.mock.calls[0][0];
     expect(template.semantic_threshold).toBeDefined();
     expect(template.semantic_threshold!.require).toBe(0.75);

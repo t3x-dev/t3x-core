@@ -107,7 +107,7 @@ describe('ProjectDemoTourOverlay', () => {
           Leaf tab
         </button>
         <div data-intro-target="canvas-leaf-type-options">
-          <button type="button">Twitter</button>
+          <button type="button">X / Twitter</button>
         </div>
         <ProjectDemoTourOverlay
           open
@@ -142,7 +142,7 @@ describe('ProjectDemoTourOverlay', () => {
     expect(screen.queryByText('What to click here')).toBeNull();
     expect(onDone).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'X / Twitter' }));
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);
@@ -164,7 +164,7 @@ describe('ProjectDemoTourOverlay', () => {
           New Leaf
         </button>
         <div data-intro-target="canvas-leaf-type-options">
-          <button type="button">Twitter</button>
+          <button type="button">X / Twitter</button>
         </div>
         <ProjectDemoTourOverlay
           open
@@ -208,7 +208,7 @@ describe('ProjectDemoTourOverlay', () => {
           New Leaf
         </button>
         <div data-testid="leaf-type-options" data-intro-target="canvas-leaf-type-options">
-          <button type="button">Twitter</button>
+          <button type="button">X / Twitter</button>
         </div>
         <ProjectDemoTourOverlay
           open
@@ -238,7 +238,7 @@ describe('ProjectDemoTourOverlay', () => {
     expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Twitter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'X / Twitter' }));
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);

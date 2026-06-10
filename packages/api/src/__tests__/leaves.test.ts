@@ -95,7 +95,7 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'weibo',
+          type: 'linkedin',
           project_id: testProjectId,
         }),
       });
@@ -105,7 +105,7 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.id).toMatch(/^leaf_/);
-      expect(data.data.title).toBe(`${testCommitHash.slice(0, 16)} — weibo`);
+      expect(data.data.title).toBe(`${testCommitHash.slice(0, 16)} — linkedin`);
       expect(data.data.constraints).toEqual([]);
       expect(data.data.config).toEqual({});
     });
@@ -228,8 +228,8 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'weibo',
-          title: 'Weibo 1',
+          type: 'linkedin',
+          title: 'LinkedIn 1',
           project_id: testProjectId,
         }),
       });
@@ -255,7 +255,7 @@ describe('Leaves Routes', () => {
     });
 
     it('filters by type', async () => {
-      // beforeEach creates tweet and weibo leaves
+      // beforeEach creates tweet and LinkedIn leaves
       const tweetRes = await app.request(
         `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves?type=tweet`
       );
@@ -266,15 +266,15 @@ describe('Leaves Routes', () => {
       expect(tweetData.data.length).toBeGreaterThan(0);
       expect(tweetData.data.every((leaf: ApiResponse) => leaf.type === 'tweet')).toBe(true);
 
-      const weiboRes = await app.request(
-        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves?type=weibo`
+      const linkedInRes = await app.request(
+        `/v1/commits/${encodeURIComponent(testCommitHash)}/leaves?type=linkedin`
       );
-      expect(weiboRes.status).toBe(200);
+      expect(linkedInRes.status).toBe(200);
 
-      const weiboData: ApiResponse = await weiboRes.json();
-      expect(weiboData.success).toBe(true);
-      expect(weiboData.data.length).toBeGreaterThan(0);
-      expect(weiboData.data.every((leaf: ApiResponse) => leaf.type === 'weibo')).toBe(true);
+      const linkedInData: ApiResponse = await linkedInRes.json();
+      expect(linkedInData.success).toBe(true);
+      expect(linkedInData.data.length).toBeGreaterThan(0);
+      expect(linkedInData.data.every((leaf: ApiResponse) => leaf.type === 'linkedin')).toBe(true);
     });
   });
 
@@ -305,7 +305,7 @@ describe('Leaves Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'wechat',
+          type: 'reddit',
           project_id: testProjectId,
         }),
       });

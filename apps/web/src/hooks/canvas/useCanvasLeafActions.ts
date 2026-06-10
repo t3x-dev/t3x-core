@@ -19,11 +19,12 @@ import type { Template } from '@/types/api';
 import type { LeafType } from '@/types/nodes';
 
 const LEAF_TYPE_LABELS: Record<LeafType, string> = {
-  tweet: 'Twitter',
-  weibo: 'Weibo',
-  wechat: 'WeChat Moments',
+  tweet: 'X / Twitter',
+  linkedin: 'LinkedIn',
+  reddit: 'Reddit',
+  threads: 'Threads',
+  article: 'Blog post',
   email: 'Email',
-  article: 'Article',
   slack: 'Slack',
   deploy_agent: 'Deploy Agent',
 };

@@ -186,7 +186,16 @@ vi.mock('@t3x-dev/storage', () => ({
 // -- Core mock --
 
 vi.mock('@t3x-dev/core', () => ({
-  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
+  ALL_LEAF_TYPES: [
+    'tweet',
+    'linkedin',
+    'reddit',
+    'threads',
+    'article',
+    'email',
+    'slack',
+    'deploy_agent',
+  ],
   diffCommits: vi.fn(() => ({
     identical: [],
     modified: [

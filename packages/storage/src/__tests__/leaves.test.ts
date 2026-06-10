@@ -167,7 +167,7 @@ describe('Leaves Storage', () => {
     it('stores the leaf in the database', async () => {
       const input: CreateLeafInput = {
         commit_hash: testCommitHash,
-        type: 'weibo',
+        type: 'linkedin',
         project_id: testProjectId,
       };
 
@@ -178,7 +178,7 @@ describe('Leaves Storage', () => {
 
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe(result.id);
-      expect(rows[0].type).toBe('weibo');
+      expect(rows[0].type).toBe('linkedin');
     });
   });
 
@@ -782,10 +782,11 @@ describe('Leaves Storage', () => {
   describe('leaf types', () => {
     it.each([
       'tweet',
-      'weibo',
-      'wechat',
-      'email',
+      'linkedin',
+      'reddit',
+      'threads',
       'article',
+      'email',
       'slack',
     ] as const)('supports leaf type: %s', async (type) => {
       const created = await createLeaf(db, {

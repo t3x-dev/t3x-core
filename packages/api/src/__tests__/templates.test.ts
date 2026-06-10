@@ -2,7 +2,7 @@
  * Templates Route Tests
  */
 
-import type { AnyDB } from '@t3x-dev/storage';
+import { type AnyDB, createTemplate } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB } from './setup';
@@ -79,8 +79,8 @@ describe('Templates Routes', () => {
       expect(res.status).toBe(200);
       const json: ApiResponse = await res.json();
       const data = json.data as Array<Record<string, unknown>>;
-      // social: tweet, weibo, wechat
-      expect(data.length).toBeGreaterThanOrEqual(3);
+      // social: tweet, linkedin, reddit, threads
+      expect(data.length).toBeGreaterThanOrEqual(4);
       for (const t of data) {
         expect(t.category).toBe('social');
       }
@@ -111,6 +111,32 @@ describe('Templates Routes', () => {
       const json: ApiResponse = await res.json();
       const data = json.data as Array<Record<string, unknown>>;
       expect(data.length).toBeLessThanOrEqual(2);
+    });
+
+    it('hides legacy unsupported output templates', async () => {
+      await createTemplate(mockDB, {
+        template_id: 'tmpl_legacy_weibo',
+        title: 'Legacy Weibo',
+        description: 'Old unsupported output destination',
+        category: 'social',
+        leaf_type: 'weibo',
+        system_prompt: 'Legacy system prompt',
+        user_prompt: 'Legacy user prompt',
+        variables: [],
+        tags: ['weibo', 'legacy'],
+        is_builtin: true,
+      });
+
+      const res = await app.request('/v1/templates');
+      expect(res.status).toBe(200);
+      const json: ApiResponse = await res.json();
+      const data = json.data as Array<Record<string, unknown>>;
+
+      expect(data.some((t) => t.leaf_type === 'weibo')).toBe(false);
+      expect(data.some((t) => t.title === 'Legacy Weibo')).toBe(false);
+
+      const directRes = await app.request('/v1/templates/tmpl_legacy_weibo');
+      expect(directRes.status).toBe(404);
     });
   });
 

@@ -124,8 +124,9 @@ interface AnthropicError {
 /** Default max tokens per leaf type */
 const TYPE_MAX_TOKENS: Record<string, number> = {
   tweet: 256,
-  weibo: 512,
-  wechat: 2048,
+  linkedin: 1024,
+  reddit: 2048,
+  threads: 512,
   article: 4096,
   email: 2048,
   slack: 1024,

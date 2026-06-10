@@ -2,7 +2,7 @@
  * Seed Builtin Templates
  *
  * Imports DEFAULT_TEMPLATES from @t3x-dev/core and seeds them into the database.
- * Idempotent: uses INSERT ... ON CONFLICT DO NOTHING.
+ * Idempotent: uses INSERT ... ON CONFLICT DO UPDATE for builtin templates.
  */
 
 import { getAllDefaultTemplates } from '@t3x-dev/core';
@@ -12,8 +12,9 @@ import { templates } from '../schema';
 /** Category mapping: leaf type → template category */
 const CATEGORY_MAP: Record<string, string> = {
   tweet: 'social',
-  weibo: 'social',
-  wechat: 'social',
+  linkedin: 'social',
+  reddit: 'social',
+  threads: 'social',
   slack: 'business',
   email: 'business',
   article: 'creative',
@@ -22,7 +23,7 @@ const CATEGORY_MAP: Record<string, string> = {
 /**
  * Seed all builtin templates into the database.
  *
- * Idempotent: existing templates with matching IDs are left untouched.
+ * Idempotent: builtin templates with matching IDs are refreshed from core defaults.
  */
 export async function seedBuiltinTemplates(db: AnyDB): Promise<void> {
   const defaults = getAllDefaultTemplates();
@@ -55,6 +56,34 @@ export async function seedBuiltinTemplates(db: AnyDB): Promise<void> {
         createdAt: now,
         updatedAt: now,
       })
-      .onConflictDoNothing({ target: templates.templateId });
+      .onConflictDoUpdate({
+        target: templates.templateId,
+        set: {
+          title: tmpl.name,
+          description: tmpl.description,
+          category,
+          leafType: tmpl.type,
+          systemPrompt: tmpl.systemPrompt,
+          userPrompt: tmpl.userPrompt,
+          variables: tmpl.variables.map(
+            (v: {
+              name: string;
+              description: string;
+              required: boolean;
+              defaultValue?: string;
+            }) => ({
+              name: v.name,
+              description: v.description,
+              required: v.required,
+              ...(v.defaultValue !== undefined ? { defaultValue: v.defaultValue } : {}),
+            })
+          ),
+          tags: [tmpl.type, category],
+          isBuiltin: true,
+          defaultConstraints: [],
+          semanticThreshold: null,
+          updatedAt: now,
+        },
+      });
   }
 }

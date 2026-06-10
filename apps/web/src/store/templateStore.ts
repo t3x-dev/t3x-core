@@ -7,7 +7,7 @@
  */
 
 import { create } from 'zustand';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 
 interface TemplateState {
   templates: Template[];
@@ -15,7 +15,7 @@ interface TemplateState {
   error: string | null;
 
   category: string | null;
-  leafType: string | null;
+  leafType: TemplateLeafType | null;
   search: string;
 
   setTemplates: (templates: Template[]) => void;
@@ -23,7 +23,7 @@ interface TemplateState {
   setError: (error: string | null) => void;
 
   setCategory: (category: string | null) => void;
-  setLeafType: (leafType: string | null) => void;
+  setLeafType: (leafType: TemplateLeafType | null) => void;
   setSearch: (search: string) => void;
 
   addTemplate: (template: Template) => void;

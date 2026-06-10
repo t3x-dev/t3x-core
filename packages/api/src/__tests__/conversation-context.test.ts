@@ -726,7 +726,7 @@ describe('Conversation Context Routes', () => {
       const leaf = await createLeaf(mockDB, {
         project_id: project.projectId,
         commit_hash: parentCommit.hash,
-        type: 'wechat',
+        type: 'reddit',
         title: 'Reusable Output Material',
       });
       const leafPin = await createPin(mockDB, {

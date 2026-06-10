@@ -5,6 +5,7 @@ import {
   Eye,
   FileText,
   Hash,
+  Linkedin,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -19,10 +20,11 @@ import { cn } from '@/utils/cn';
 
 const LEAF_TYPE_ICONS: Record<string, React.ElementType> = {
   tweet: Hash,
+  linkedin: Linkedin,
+  reddit: MessageCircle,
+  threads: AtSign,
   article: FileText,
   email: Mail,
-  weibo: AtSign,
-  wechat: MessageCircle,
   slack: MessageSquare,
 };
 

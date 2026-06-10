@@ -18,6 +18,7 @@ import {
   toLocalProviderId,
 } from '@/types/providers';
 import { API_V1, ApiError, fetchWithTimeout, handleResponse, injectAuthHeaders } from './core';
+import type { LeafType } from './leaves';
 
 export type {
   LocalProviderCredentialInput,
@@ -86,6 +87,8 @@ export async function listShareLinks(entityType: string, entityId: string): Prom
 // Templates
 // ============================================================================
 
+export type TemplateLeafType = Exclude<LeafType, 'deploy_agent'>;
+
 export interface TemplateVariable {
   name: string;
   description: string;
@@ -109,7 +112,7 @@ export interface Template {
   title: string;
   description: string;
   category: 'social' | 'business' | 'technical' | 'creative';
-  leaf_type: string;
+  leaf_type: TemplateLeafType;
   system_prompt: string;
   user_prompt: string;
   variables: TemplateVariable[];
@@ -125,7 +128,7 @@ export interface CreateTemplateInput {
   title: string;
   description: string;
   category: 'social' | 'business' | 'technical' | 'creative';
-  leaf_type: string;
+  leaf_type: TemplateLeafType;
   system_prompt: string;
   user_prompt: string;
   variables: TemplateVariable[];
@@ -134,7 +137,7 @@ export interface CreateTemplateInput {
 
 export async function listTemplates(opts?: {
   category?: string;
-  leaf_type?: string;
+  leaf_type?: TemplateLeafType;
   search?: string;
   limit?: number;
   offset?: number;

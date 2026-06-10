@@ -168,10 +168,11 @@ describe('LeafDetailPage', () => {
     const validTypes: api.LeafType[] = [
       'deploy_agent',
       'tweet',
-      'weibo',
-      'wechat',
-      'email',
+      'linkedin',
+      'reddit',
+      'threads',
       'article',
+      'email',
       'slack',
     ];
 

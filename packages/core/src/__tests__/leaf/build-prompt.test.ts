@@ -52,19 +52,25 @@ describe('getTypeInstructions', () => {
   it('returns tweet instructions with 280 char limit', () => {
     const instructions = getTypeInstructions('tweet');
     expect(instructions).toContain('280 characters');
-    expect(instructions).toContain('Twitter');
+    expect(instructions).toContain('X / Twitter');
   });
 
-  it('returns weibo instructions in Chinese context', () => {
-    const instructions = getTypeInstructions('weibo');
-    expect(instructions).toContain('Chinese');
-    expect(instructions).toContain('微博');
+  it('returns linkedin instructions', () => {
+    const instructions = getTypeInstructions('linkedin');
+    expect(instructions).toContain('LinkedIn');
+    expect(instructions).toContain('Professional');
   });
 
-  it('returns wechat instructions', () => {
-    const instructions = getTypeInstructions('wechat');
-    expect(instructions).toContain('WeChat');
-    expect(instructions).toContain('微信');
+  it('returns reddit instructions', () => {
+    const instructions = getTypeInstructions('reddit');
+    expect(instructions).toContain('Reddit');
+    expect(instructions).toContain('community discussion');
+  });
+
+  it('returns threads instructions', () => {
+    const instructions = getTypeInstructions('threads');
+    expect(instructions).toContain('Threads');
+    expect(instructions).toContain('conversational');
   });
 
   it('returns article instructions with headings', () => {

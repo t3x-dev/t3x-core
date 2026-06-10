@@ -3,7 +3,7 @@
  *
  * CRUD operations for reusable prompt templates.
  */
-import { and, desc, eq, ilike, lt, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, lt, or } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type Template, templates } from '../schema';
 import { type CursorPage, decodeCursor, toCursorPage } from './pagination';
@@ -39,6 +39,7 @@ export interface CreateTemplateInput {
 export interface ListTemplatesOptions {
   category?: string;
   leaf_type?: string;
+  leaf_types?: readonly string[];
   search?: string;
   limit?: number;
   offset?: number;
@@ -113,6 +114,9 @@ export async function listTemplates(
   }
   if (opts.leaf_type) {
     conditions.push(eq(templates.leafType, opts.leaf_type));
+  }
+  if (opts.leaf_types && opts.leaf_types.length > 0) {
+    conditions.push(inArray(templates.leafType, [...opts.leaf_types]));
   }
   if (opts.search) {
     const escaped = opts.search.replace(/[%_\\]/g, '\\$&');
