@@ -461,11 +461,10 @@ const UnitNode = memo(function UnitNode(props: Props) {
               type="button"
               className="nodrag mb-1 inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--accent-commit)]/35 hover:bg-[var(--accent-commit-soft)] hover:text-[var(--accent-commit)]"
               onClick={handleOpenCommitDetails}
-              title={`Open commit details for hash ${hashDisplay}`}
-              aria-label={`Open commit details for hash ${hashDisplay}`}
+              title={`Open commit ${hashDisplay}`}
+              aria-label={`Open commit ${hashDisplay}`}
             >
               <Hash size={10} aria-hidden="true" className="shrink-0" />
-              <span className="font-medium">Hash</span>
               <span className="truncate font-mono">{hashDisplay}</span>
             </button>
           )}
