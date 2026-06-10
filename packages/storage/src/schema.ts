@@ -419,7 +419,7 @@ export const templates = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull(),
     category: text('category').notNull(), // social|business|technical|creative
-    leafType: text('leaf_type').notNull(), // tweet|article|email|weibo|wechat|slack
+    leafType: text('leaf_type').notNull(), // tweet|linkedin|reddit|threads|article|email|slack
     systemPrompt: text('system_prompt').notNull(),
     userPrompt: text('user_prompt').notNull(),
     variables: jsonb('variables').notNull().$type<

@@ -395,7 +395,7 @@ export const DeleteLeafHistoryResponse = SuccessResponse(
 // POST /v1/commits/{hash}/leaves/batch
 // 单个 leaf 的配置（批量创建时使用）
 export const BatchLeafConfig = z.object({
-  type: LeafTypeEnum, // leaf 类型 (tweet, weibo, email 等)
+  type: LeafTypeEnum, // leaf type (tweet, linkedin, email, etc.)
   title: z.string().optional(), // 可选标题
   constraints: z.array(ConstraintSchema).default([]), // 约束条件
   config: LeafConfigSchema.default({}), // 生成配置

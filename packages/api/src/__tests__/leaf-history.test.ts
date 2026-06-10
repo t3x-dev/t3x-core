@@ -245,7 +245,7 @@ describe('Leaf History Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           commit_hash: testCommitHash,
-          type: 'weibo',
+          type: 'linkedin',
           project_id: testProjectId,
         }),
       });

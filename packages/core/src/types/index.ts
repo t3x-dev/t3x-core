@@ -138,7 +138,15 @@ export interface Assertion {
  * Leaf types represent different output formats/channels.
  * Single source of truth - used by both TypeScript types and Zod schemas.
  */
-export const LEAF_TYPES = ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack'] as const;
+export const LEAF_TYPES = [
+  'tweet',
+  'linkedin',
+  'reddit',
+  'threads',
+  'article',
+  'email',
+  'slack',
+] as const;
 
 export type LeafType = (typeof LEAF_TYPES)[number];
 

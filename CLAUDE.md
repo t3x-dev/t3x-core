@@ -394,7 +394,7 @@ Second-class (not hashed): `project_id`, `message`, `branch`, `provenance`, `yop
 {
   "id": "leaf_…",
   "commit_hash": "sha256:…",
-  "type": "deploy_agent|tweet|weibo|wechat|email|article|slack|eval",
+  "type": "deploy_agent|tweet|linkedin|reddit|threads|article|email|slack|eval",
   "title": "…",
   "constraints": [
     { "id": "cst_…", "type": "require|exclude", "match_mode": "exact|semantic", "value": "…", "reason": "…" }

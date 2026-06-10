@@ -10,9 +10,9 @@ export function shortHash(hash: string): string {
   return hash.replace('sha256:', '').slice(0, 7);
 }
 
-/** Display label for a commit hash when the hash value needs an explicit prefix. */
+/** Display label for a commit hash when only the short hash value is needed. */
 export function commitHashLabel(hash: string): string {
-  return `haxi:${shortHash(hash)}`;
+  return shortHash(hash);
 }
 
 /** Human-friendly relative time string from an ISO-8601 timestamp. */

@@ -64,6 +64,7 @@ export function CommitActionPanel({ x, y, actions, onClose }: CommitActionPanelP
   return (
     <div
       ref={panelRef}
+      data-testid="commit-action-panel"
       className={cn(
         'fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-[var(--stroke-default)] px-1.5 py-1',
         'bg-[var(--surface-elevated)]/95 shadow-[var(--fx-shadow-hover)] backdrop-blur-sm',

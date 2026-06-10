@@ -42,11 +42,12 @@ interface CommitTreeIndexProps {
 // ============================================================================
 
 const LEAF_TYPE_OPTIONS: { type: LeafType; label: string }[] = [
-  { type: 'tweet', label: 'Twitter' },
-  { type: 'weibo', label: 'Weibo' },
-  { type: 'wechat', label: 'WeChat Moments' },
+  { type: 'tweet', label: 'X / Twitter' },
+  { type: 'linkedin', label: 'LinkedIn' },
+  { type: 'reddit', label: 'Reddit' },
+  { type: 'threads', label: 'Threads' },
+  { type: 'article', label: 'Blog post' },
   { type: 'email', label: 'Email' },
-  { type: 'article', label: 'Article' },
   { type: 'slack', label: 'Slack' },
   { type: 'deploy_agent', label: 'Deploy Agent' },
 ];

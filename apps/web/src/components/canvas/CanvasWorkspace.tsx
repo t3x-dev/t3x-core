@@ -107,6 +107,7 @@ function CanvasWorkspaceInner({
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
   const compactViewport = useCompactViewport();
+  const selectionPanelVisible = useCompactViewport('(min-width: 1280px)');
   const canvasMinZoom = compactViewport ? 0.55 : 0.25;
   const currentReturnTo = useMemo(
     () => buildReturnTo(pathname, searchParams),
@@ -702,7 +703,7 @@ function CanvasWorkspaceInner({
           onClose={closeContextMenu}
         />
       )}
-      {actionPanel && selectedUnitNode && (
+      {actionPanel && selectedUnitNode && !selectionPanelVisible && (
         <CommitActionPanel
           x={actionPanel.x}
           y={actionPanel.y}

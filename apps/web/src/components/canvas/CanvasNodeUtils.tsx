@@ -2,8 +2,10 @@
 
 import { useStore } from '@xyflow/react';
 import {
+  AtSign,
   FilePlus,
   FileText,
+  Linkedin,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -22,25 +24,11 @@ export const LEAF_TYPES: {
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
 }[] = [
-  { type: 'tweet', label: 'Twitter', icon: Twitter },
-  {
-    type: 'weibo',
-    label: '\u5FAE\u535A',
-    icon: ({ size, className }) => (
-      <svg
-        width={size || 16}
-        height={size || 16}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className={className}
-      >
-        <title>Weibo</title>
-        <path d="M10.098 20.323c-3.977.391-7.414-1.406-7.672-4.02-.259-2.609 2.759-5.047 6.74-5.441 3.979-.394 7.413 1.404 7.671 4.018.259 2.6-2.759 5.049-6.739 5.443zM9.05 17.219c-.384.616-1.208.884-1.829.602-.612-.279-.793-.991-.406-1.593.379-.595 1.176-.861 1.793-.601.622.263.82.972.442 1.592zm1.27-1.627c-.141.237-.449.353-.689.253-.236-.09-.313-.361-.177-.586.138-.227.436-.346.672-.24.239.09.315.36.194.573zm.176-2.719c-1.893-.493-4.033.45-4.857 2.118-.836 1.704-.026 3.591 1.886 4.21 1.983.64 4.318-.341 5.132-2.179.8-1.793-.201-3.642-2.161-4.149zm7.563-1.224c-.346-.105-.579-.18-.405-.649.381-1.017.422-1.896-.002-2.521-.789-1.161-2.948-1.098-5.418-.032 0 0-.776.34-.577-.277.379-1.207.324-2.218-.267-2.799-1.344-1.32-4.91.051-7.97 3.06C1.87 10.54.5 12.8.5 14.81c0 3.85 4.943 6.19 9.779 6.19 6.332 0 10.546-3.674 10.546-6.587 0-1.762-1.484-2.762-2.766-3.164z" />
-      </svg>
-    ),
-  },
-  { type: 'wechat', label: '\u670B\u53CB\u5708', icon: MessageCircle },
-  { type: 'article', label: '\u6587\u7AE0', icon: FileText },
+  { type: 'tweet', label: 'X / Twitter', icon: Twitter },
+  { type: 'linkedin', label: 'LinkedIn', icon: Linkedin },
+  { type: 'reddit', label: 'Reddit', icon: MessageCircle },
+  { type: 'threads', label: 'Threads', icon: AtSign },
+  { type: 'article', label: 'Blog post', icon: FileText },
   { type: 'email', label: 'Email', icon: Mail },
   {
     type: 'slack',

@@ -76,7 +76,7 @@ describe('useCanvasLeafActions.add', () => {
       id: 'leaf_mock',
       commit_hash: 'sha256:abc',
       type: 'tweet',
-      title: 'Twitter',
+      title: 'X / Twitter',
       constraints: [],
       config: {},
       output: null,

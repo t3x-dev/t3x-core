@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { useTemplates } from '@/hooks/templates/useTemplates';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 const CATEGORIES = [
@@ -21,13 +21,14 @@ const CATEGORIES = [
   { value: 'creative', label: 'Creative' },
 ] as const;
 
-const LEAF_TYPES = [
+const LEAF_TYPES: ReadonlyArray<{ value: TemplateLeafType | null; label: string }> = [
   { value: null, label: 'All Types' },
-  { value: 'tweet', label: 'Tweet' },
-  { value: 'article', label: 'Article' },
+  { value: 'tweet', label: 'X / Twitter' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'reddit', label: 'Reddit' },
+  { value: 'threads', label: 'Threads' },
+  { value: 'article', label: 'Blog post' },
   { value: 'email', label: 'Email' },
-  { value: 'weibo', label: 'Weibo' },
-  { value: 'wechat', label: 'WeChat' },
   { value: 'slack', label: 'Slack' },
 ] as const;
 
@@ -140,7 +141,10 @@ export default function TemplatesPage() {
           {/* Leaf type filter */}
           <select
             value={leafType ?? ''}
-            onChange={(e) => setLeafType(e.target.value || null)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setLeafType(next === '' ? null : (next as TemplateLeafType));
+            }}
             className="h-8 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-2 text-xs text-[var(--text-primary)]"
           >
             {LEAF_TYPES.map((t) => (

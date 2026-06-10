@@ -152,7 +152,7 @@ export const leaves = pgTable(
      */
     commitHash: text('commit_hash').notNull(),
 
-    /** Output type: 'deploy_agent' | 'tweet' | 'weibo' | etc. */
+    /** Output type: 'deploy_agent' | 'tweet' | 'linkedin' | etc. */
     type: text('type').notNull(),
 
     /** Human-readable title */

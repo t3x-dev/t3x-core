@@ -18,10 +18,11 @@ export type CommitStatus = 'staging' | 'committed' | 'draft';
 // Must match @t3x-dev/core AnyLeafType from V4 schema
 export type LeafType =
   | 'tweet'
-  | 'weibo'
-  | 'wechat'
-  | 'email'
+  | 'linkedin'
+  | 'reddit'
+  | 'threads'
   | 'article'
+  | 'email'
   | 'slack'
   | 'deploy_agent';
 

@@ -102,6 +102,7 @@ function panelActionClass(action: CommitAction): string {
 }
 
 function introTargetForAction(action: CommitAction): string | undefined {
+  if (action.label === 'Details') return 'canvas-action-details';
   if (action.label === 'View Diff') return 'canvas-action-diff';
   if (action.label === 'Open Leaf') return 'canvas-action-open-leaf';
   if (action.label === 'New Leaf') return 'canvas-action-new-leaf';

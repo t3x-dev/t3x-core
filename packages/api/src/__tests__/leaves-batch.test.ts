@@ -115,7 +115,7 @@ describe('Batch Generation Routes', () => {
             project_id: testProjectId,
             leaves: [
               { type: 'tweet', title: 'Tweet 1' },
-              { type: 'weibo', title: 'Weibo 1' },
+              { type: 'linkedin', title: 'LinkedIn 1' },
               { type: 'email', title: 'Email 1' },
             ],
             skip_generation: true,
@@ -139,7 +139,7 @@ describe('Batch Generation Routes', () => {
       expect(data.data.results[0].leaf.output).toBeNull(); // No generation
       expect(data.data.results[0].error).toBeNull();
 
-      expect(data.data.results[1].leaf.type).toBe('weibo');
+      expect(data.data.results[1].leaf.type).toBe('linkedin');
       expect(data.data.results[2].leaf.type).toBe('email');
     });
 
@@ -192,10 +192,11 @@ describe('Batch Generation Routes', () => {
             project_id: testProjectId,
             leaves: [
               { type: 'tweet' },
-              { type: 'weibo' },
-              { type: 'wechat' },
-              { type: 'email' },
+              { type: 'linkedin' },
+              { type: 'reddit' },
+              { type: 'threads' },
               { type: 'article' },
+              { type: 'email' },
               { type: 'slack' },
             ],
             skip_generation: true,
@@ -207,16 +208,17 @@ describe('Batch Generation Routes', () => {
 
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
-      expect(data.data.results).toHaveLength(6);
-      expect(data.data.summary.succeeded).toBe(6);
+      expect(data.data.results).toHaveLength(7);
+      expect(data.data.summary.succeeded).toBe(7);
 
       // Verify each type
       const types = data.data.results.map((r: ApiResponse) => r.leaf.type);
       expect(types).toContain('tweet');
-      expect(types).toContain('weibo');
-      expect(types).toContain('wechat');
-      expect(types).toContain('email');
+      expect(types).toContain('linkedin');
+      expect(types).toContain('reddit');
+      expect(types).toContain('threads');
       expect(types).toContain('article');
+      expect(types).toContain('email');
       expect(types).toContain('slack');
     });
 
@@ -388,7 +390,7 @@ describe('Batch Generation Routes', () => {
             project_id: testProjectId,
             leaves: [
               { type: 'tweet', title: 'Same Commit 1' },
-              { type: 'weibo', title: 'Same Commit 2' },
+              { type: 'linkedin', title: 'Same Commit 2' },
             ],
             skip_generation: true,
           }),

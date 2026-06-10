@@ -16,8 +16,8 @@ import type { LeafTemplate } from '../types';
 export const tweetDefaultTemplate: LeafTemplate = {
   id: 'tweet_default',
   type: 'tweet',
-  name: 'Twitter Standard Template',
-  description: 'Standard template for Twitter/X posts with 280 character limit',
+  name: 'X / Twitter Standard Template',
+  description: 'Standard template for X / Twitter posts with 280 character limit',
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
@@ -26,7 +26,7 @@ Key principles:
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
 
-Format: Twitter/X post
+Format: X / Twitter post
 - Maximum 280 characters
 - Be concise and impactful
 - Use hashtags sparingly if relevant
@@ -86,8 +86,8 @@ Generate the tweet content based on the above source knowledge and constraints.`
 export const articleDefaultTemplate: LeafTemplate = {
   id: 'article_default',
   type: 'article',
-  name: 'Article Standard Template',
-  description: 'Standard template for blog posts and articles with sections and headings',
+  name: 'Blog Post Standard Template',
+  description: 'Standard template for blog posts with sections and headings',
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
@@ -96,7 +96,7 @@ Key principles:
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
 
-Format: Article/Blog post
+Format: Blog post
 - Include a compelling title
 - Use clear section headings
 - Well-structured paragraphs
@@ -221,14 +221,14 @@ Generate the email content based on the above source knowledge and constraints.`
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Weibo Template (微博)
+// LinkedIn Template
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const weiboDefaultTemplate: LeafTemplate = {
-  id: 'weibo_default',
-  type: 'weibo',
-  name: '微博标准模板',
-  description: '微博帖子标准模板，支持中文，最多2000字符',
+export const linkedinDefaultTemplate: LeafTemplate = {
+  id: 'linkedin_default',
+  type: 'linkedin',
+  name: 'LinkedIn Standard Template',
+  description: 'Standard template for professional LinkedIn posts',
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
@@ -237,59 +237,68 @@ Key principles:
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
 
-Format: Weibo post (微博)
-- Write in Chinese (简体中文)
-- Maximum 2000 characters (but shorter is better)
-- Can include emojis if appropriate
-- Adapt tone for Chinese social media culture`,
-  userPrompt: `## 来源知识
+Format: LinkedIn post
+- Professional but conversational tone
+- Lead with the main takeaway
+- Use short paragraphs for readability
+- Include a clear closing insight or question`,
+  userPrompt: `## Source Knowledge
 
-请基于以下知识作为素材：
+Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
 {{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
-## 背景
+## Context
 
-标题/目的：{{leafTitle}}
+Title/Purpose: {{leafTitle}}
 {{/leafTitle}}
 {{#additionalInstructions}}
-## 附加说明
+## Additional Instructions
 
 {{additionalInstructions}}
 {{/additionalInstructions}}
-## 任务
+## Task
 
-根据以上来源知识和约束条件，生成微博内容。`,
+Generate the LinkedIn post based on the above source knowledge and constraints.`,
   variables: [
-    { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
+    {
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
+      required: true,
+    },
     {
       name: 'formattedSemanticPoints',
-      description: '已选语义要点部分',
+      description: 'Selected semantic points section',
       required: false,
       defaultValue: '',
     },
     {
       name: 'formattedConstraints',
-      description: '格式化的约束部分',
+      description: 'Formatted constraints section',
       required: false,
       defaultValue: '',
     },
-    { name: 'leafTitle', description: 'Leaf 标题作为背景', required: false, defaultValue: '' },
-    { name: 'additionalInstructions', description: '附加说明', required: false, defaultValue: '' },
+    { name: 'leafTitle', description: 'Leaf title for context', required: false, defaultValue: '' },
+    {
+      name: 'additionalInstructions',
+      description: 'Extra instructions',
+      required: false,
+      defaultValue: '',
+    },
   ],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WeChat Template (微信)
+// Reddit Template
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const wechatDefaultTemplate: LeafTemplate = {
-  id: 'wechat_default',
-  type: 'wechat',
-  name: '微信标准模板',
-  description: '微信公众号/消息标准模板，支持中文，专业格式',
+export const redditDefaultTemplate: LeafTemplate = {
+  id: 'reddit_default',
+  type: 'reddit',
+  name: 'Reddit Standard Template',
+  description: 'Standard template for Reddit posts designed for community discussion',
   systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
 
 Key principles:
@@ -298,47 +307,126 @@ Key principles:
 3. Adapt the content to the specified format
 4. Maintain accuracy and do not add information not present in the source
 
-Format: WeChat article/message (微信)
-- Write in Chinese (简体中文)
-- Clear and readable formatting
-- Appropriate for professional or personal context
-- Can be longer form if needed`,
-  userPrompt: `## 来源知识
+Format: Reddit post
+- Use a clear, specific title-style opening
+- Add enough context for community discussion
+- Avoid marketing language
+- End with a concrete question or prompt for replies`,
+  userPrompt: `## Source Knowledge
 
-请基于以下知识作为素材：
+Use the following knowledge as your source material:
 {{formattedKnowledge}}
 
 {{formattedSemanticPoints}}
 {{formattedConstraints}}
 {{#leafTitle}}
-## 背景
+## Context
 
-标题/目的：{{leafTitle}}
+Title/Purpose: {{leafTitle}}
 {{/leafTitle}}
 {{#additionalInstructions}}
-## 附加说明
+## Additional Instructions
 
 {{additionalInstructions}}
 {{/additionalInstructions}}
-## 任务
+## Task
 
-根据以上来源知识和约束条件，生成微信内容。`,
+Generate the Reddit post based on the above source knowledge and constraints.`,
   variables: [
-    { name: 'formattedKnowledge', description: 'YAML格式化的来源知识', required: true },
+    {
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
+      required: true,
+    },
     {
       name: 'formattedSemanticPoints',
-      description: '已选语义要点部分',
+      description: 'Selected semantic points section',
       required: false,
       defaultValue: '',
     },
     {
       name: 'formattedConstraints',
-      description: '格式化的约束部分',
+      description: 'Formatted constraints section',
       required: false,
       defaultValue: '',
     },
-    { name: 'leafTitle', description: 'Leaf 标题作为背景', required: false, defaultValue: '' },
-    { name: 'additionalInstructions', description: '附加说明', required: false, defaultValue: '' },
+    { name: 'leafTitle', description: 'Leaf title for context', required: false, defaultValue: '' },
+    {
+      name: 'additionalInstructions',
+      description: 'Extra instructions',
+      required: false,
+      defaultValue: '',
+    },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Threads Template
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const threadsDefaultTemplate: LeafTemplate = {
+  id: 'threads_default',
+  type: 'threads',
+  name: 'Threads Standard Template',
+  description: 'Standard template for concise Threads posts',
+  systemPrompt: `You are a content generation assistant. Your task is to create high-quality content based on the provided knowledge and constraints.
+
+Key principles:
+1. Use ONLY the provided knowledge as your source material
+2. Follow ALL constraints exactly - they are non-negotiable
+3. Adapt the content to the specified format
+4. Maintain accuracy and do not add information not present in the source
+
+Format: Threads post
+- Short, conversational, and easy to scan
+- Can use a compact multi-line structure
+- Avoid heavy formatting
+- Keep the tone direct and human`,
+  userPrompt: `## Source Knowledge
+
+Use the following knowledge as your source material:
+{{formattedKnowledge}}
+
+{{formattedSemanticPoints}}
+{{formattedConstraints}}
+{{#leafTitle}}
+## Context
+
+Title/Purpose: {{leafTitle}}
+{{/leafTitle}}
+{{#additionalInstructions}}
+## Additional Instructions
+
+{{additionalInstructions}}
+{{/additionalInstructions}}
+## Task
+
+Generate the Threads post based on the above source knowledge and constraints.`,
+  variables: [
+    {
+      name: 'formattedKnowledge',
+      description: 'YAML-like formatted knowledge',
+      required: true,
+    },
+    {
+      name: 'formattedSemanticPoints',
+      description: 'Selected semantic points section',
+      required: false,
+      defaultValue: '',
+    },
+    {
+      name: 'formattedConstraints',
+      description: 'Formatted constraints section',
+      required: false,
+      defaultValue: '',
+    },
+    { name: 'leafTitle', description: 'Leaf title for context', required: false, defaultValue: '' },
+    {
+      name: 'additionalInstructions',
+      description: 'Extra instructions',
+      required: false,
+      defaultValue: '',
+    },
   ],
 };
 
@@ -423,10 +511,11 @@ import type { LeafType } from '../../types';
  */
 export const DEFAULT_TEMPLATES: Record<LeafType, LeafTemplate> = {
   tweet: tweetDefaultTemplate,
+  linkedin: linkedinDefaultTemplate,
+  reddit: redditDefaultTemplate,
+  threads: threadsDefaultTemplate,
   article: articleDefaultTemplate,
   email: emailDefaultTemplate,
-  weibo: weiboDefaultTemplate,
-  wechat: wechatDefaultTemplate,
   slack: slackDefaultTemplate,
 };
 

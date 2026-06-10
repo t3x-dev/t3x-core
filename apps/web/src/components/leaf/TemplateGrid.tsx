@@ -1,13 +1,21 @@
 'use client';
 
-import { FileText, Mail, MessageCircle, MessageSquare, PenTool } from 'lucide-react';
+import {
+  AtSign,
+  FileText,
+  Linkedin,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  PenTool,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { useTemplatesList } from '@/hooks/templates/useTemplatesList';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 import { cn } from '@/utils/cn';
 
 export interface LeafTemplate {
-  type: string;
+  type: TemplateLeafType | 'custom';
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -19,13 +27,37 @@ export interface LeafTemplate {
 const DEFAULT_TEMPLATES: LeafTemplate[] = [
   {
     type: 'tweet',
-    label: 'Tweet',
+    label: 'X / Twitter',
     description: '\u2264280 characters, concise',
     icon: <MessageCircle className="h-5 w-5" />,
     constraints: [
       { type: 'require', match_mode: 'exact', value: 'Must be 280 characters or fewer' },
     ],
     semantic_threshold: { require: 0.85, exclude: 0.8 },
+  },
+  {
+    type: 'linkedin',
+    label: 'LinkedIn',
+    description: 'Professional, credible',
+    icon: <Linkedin className="h-5 w-5" />,
+    constraints: [],
+    semantic_threshold: { require: 0.8, exclude: 0.75 },
+  },
+  {
+    type: 'reddit',
+    label: 'Reddit',
+    description: 'Discussion-driven',
+    icon: <MessageCircle className="h-5 w-5" />,
+    constraints: [],
+    semantic_threshold: { require: 0.8, exclude: 0.75 },
+  },
+  {
+    type: 'threads',
+    label: 'Threads',
+    description: 'Short, conversational',
+    icon: <AtSign className="h-5 w-5" />,
+    constraints: [],
+    semantic_threshold: { require: 0.82, exclude: 0.75 },
   },
   {
     type: 'email',
@@ -39,7 +71,7 @@ const DEFAULT_TEMPLATES: LeafTemplate[] = [
   },
   {
     type: 'article',
-    label: 'Article',
+    label: 'Blog post',
     description: 'Long-form, detailed',
     icon: <FileText className="h-5 w-5" />,
     constraints: [],
@@ -63,8 +95,11 @@ const DEFAULT_TEMPLATES: LeafTemplate[] = [
 ];
 
 /** Map leaf_type to icon component */
-const ICON_MAP: Record<string, React.ReactNode> = {
+const ICON_MAP: Record<TemplateLeafType | 'custom', React.ReactNode> = {
   tweet: <MessageCircle className="h-5 w-5" />,
+  linkedin: <Linkedin className="h-5 w-5" />,
+  reddit: <MessageCircle className="h-5 w-5" />,
+  threads: <AtSign className="h-5 w-5" />,
   email: <Mail className="h-5 w-5" />,
   article: <FileText className="h-5 w-5" />,
   slack: <MessageSquare className="h-5 w-5" />,

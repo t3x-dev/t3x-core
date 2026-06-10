@@ -321,18 +321,18 @@ describe('POST /v1/leaves/:id/generate — lesson collector wiring', () => {
   it('forwards commit and leaf alongside lessons to generateLeafOutput', async () => {
     const leaf = await createLeaf(mockDB, {
       commit_hash: testCommitHash,
-      type: 'weibo',
-      title: 'Weibo with Context',
+      type: 'linkedin',
+      title: 'LinkedIn with Context',
       // biome-ignore lint/suspicious/noExplicitAny: test type cast
       constraints: [{ type: 'require', match_mode: 'exact', value: 'concise' }] as any,
       project_id: testProjectId,
     });
 
-    const fakeLessons = ['Keep it under 140 characters'];
+    const fakeLessons = ['Keep the professional takeaway concise'];
     mockCollectLessonsFromAssertions.mockReturnValue(fakeLessons);
 
     mockGenerateLeafOutput.mockResolvedValue({
-      output: 'Concise weibo post',
+      output: 'Concise LinkedIn post',
       model: 'test-model',
       usage: { inputTokens: 120, outputTokens: 18 },
       prompt: { system: 'sys', user: 'usr' },
