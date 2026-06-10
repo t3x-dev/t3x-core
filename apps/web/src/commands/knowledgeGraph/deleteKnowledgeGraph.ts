@@ -1,5 +1,5 @@
 /**
- * L3 command — delete the knowledge graph for a project.
+ * L3 command — delete the state index for a project.
  */
 
 import { deleteKnowledgeGraph as deleteKnowledgeGraphInfra } from '@/infrastructure/knowledge-graph';

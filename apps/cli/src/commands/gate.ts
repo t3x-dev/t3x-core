@@ -1,7 +1,7 @@
 /**
  * Gate Commands
  *
- * Run quality gates (structure, semantic, business) on commit semantic content.
+ * Run quality gates (structure, semantic, business) on commit state content.
  */
 
 import chalk from 'chalk';
@@ -94,7 +94,7 @@ function formatScore(score: number, ci: boolean): string {
 }
 
 /**
- * Fetch a V4 commit from the API and extract its semantic content.
+ * Fetch a V4 commit from the API and extract its state content.
  */
 async function fetchSemanticContent(apiUrl: string, commitHash: string): Promise<SemanticContent> {
   const encodedHash = encodeURIComponent(commitHash);
@@ -121,7 +121,7 @@ async function fetchSemanticContent(apiUrl: string, commitHash: string): Promise
   const semantic = json.data.semantic;
   if (!semantic || !semantic.frames || semantic.frames.length === 0) {
     throw new Error(
-      `Commit ${commitHash} has no semantic content (frames). ` +
+      `Commit ${commitHash} has no state content (frames). ` +
         'Gate check requires frames and relations.'
     );
   }
@@ -296,7 +296,7 @@ export function registerGateCommands(program: Command): void {
         const startTime = Date.now();
 
         try {
-          // 1. Fetch semantic content from commit
+          // 1. Fetch state content from commit
           const content = await fetchSemanticContent(apiUrl, commitHash);
 
           // 2. Run gate check via API

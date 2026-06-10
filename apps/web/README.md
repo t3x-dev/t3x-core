@@ -1,6 +1,6 @@
 # t3x-webui
 
-Web frontend for T3X, a canvas-based semantic version control interface built with Next.js.
+Web frontend for T3X structured-state workflows, built with Next.js.
 
 **Last Updated:** 2026-06-02
 

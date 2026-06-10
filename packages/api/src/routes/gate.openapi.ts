@@ -1,10 +1,10 @@
 /**
  * Gate Check Routes
  *
- * Run quality gates (structure, semantic, business) on semantic content.
+ * Run quality gates (structure, semantic, business) on commit state content.
  *
  * Endpoints:
- * - POST /v1/gate/check - Run quality gates on semantic content
+ * - POST /v1/gate/check - Run quality gates on commit state content
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -137,7 +137,7 @@ const gateCheckRoute = createRoute({
   method: 'post',
   path: '/v1/gate/check',
   tags: ['Gate'],
-  summary: 'Run quality gates on semantic content',
+  summary: 'Run quality gates on commit state content',
   description:
     'Runs up to 3 quality gates (structure, semantic, business) on semantic frame content. Gate 1 (structure) is deterministic. Gate 2 (semantic) requires an LLM provider and conversation turns. Gate 3 (business) evaluates configurable rules.',
   request: {

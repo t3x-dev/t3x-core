@@ -1,7 +1,7 @@
 /**
  * Search Routes
  *
- * Search operates on tree-based semantic content via the knowledge graph.
+ * Search operates on tree-based state content via the project state index.
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';

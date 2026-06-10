@@ -1,7 +1,7 @@
 /**
- * Knowledge Graph Routes
+ * State Index Routes
  *
- * Cross-conversation knowledge graph endpoints.
+ * Cross-conversation state index endpoints.
  *
  * - POST   /v1/projects/:projectId/knowledge-graph/build           — Rebuild graph from committed tree content
  * - GET    /v1/projects/:projectId/knowledge-graph/nodes           — List nodes
@@ -11,7 +11,7 @@
  * - DELETE /v1/projects/:projectId/knowledge-graph                 — Delete graph
  */
 
-/** biome-ignore-all lint/suspicious/noExplicitAny: knowledge graph route normalizes dynamic DB records pending dedicated graph DTOs */
+/** biome-ignore-all lint/suspicious/noExplicitAny: state index route normalizes dynamic DB records pending dedicated DTOs */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 
@@ -103,8 +103,8 @@ const BuildGraphResponseSchema = z.object({
 const buildRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/knowledge-graph/build',
-  tags: ['Knowledge Graph'],
-  summary: 'Build or rebuild knowledge graph for a project',
+  tags: ['State Index'],
+  summary: 'Build or rebuild the state index for a project',
   description: 'Deterministically rebuilds the graph from committed tree content.',
   request: { params: ProjectIdParam },
   responses: {
@@ -378,8 +378,8 @@ const ListNodesResponseSchema = z.object({
 const listNodesRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/knowledge-graph/nodes',
-  tags: ['Knowledge Graph'],
-  summary: 'List knowledge graph nodes for a project',
+  tags: ['State Index'],
+  summary: 'List state index nodes for a project',
   description: 'Returns nodes sorted by member_count descending.',
   request: {
     params: ProjectIdParam,
@@ -429,7 +429,7 @@ const NodeDetailResponseSchema = z.object({
 const getNodeRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}',
-  tags: ['Knowledge Graph'],
+  tags: ['State Index'],
   summary: 'Get knowledge node detail with members',
   request: { params: NodeIdParam },
   responses: {
@@ -480,7 +480,7 @@ const NeighborsResponseSchema = z.object({
 const getNeighborsRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/knowledge-graph/nodes/{nodeId}/neighbors',
-  tags: ['Knowledge Graph'],
+  tags: ['State Index'],
   summary: 'Get 1-hop neighbor nodes with edge information',
   request: { params: NodeIdParam },
   responses: {
@@ -531,8 +531,8 @@ const SearchNodesResponseSchema = z.object({
 const searchNodesRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/knowledge-graph/search',
-  tags: ['Knowledge Graph'],
-  summary: 'Search knowledge graph nodes by label',
+  tags: ['State Index'],
+  summary: 'Search state index nodes by label',
   description: 'Case-insensitive substring search on node labels.',
   request: {
     params: ProjectIdParam,
@@ -586,8 +586,8 @@ const DeleteGraphResponseSchema = z.object({
 const deleteGraphRoute = createRoute({
   method: 'delete',
   path: '/v1/projects/{projectId}/knowledge-graph',
-  tags: ['Knowledge Graph'],
-  summary: 'Delete the knowledge graph for a project',
+  tags: ['State Index'],
+  summary: 'Delete the state index for a project',
   description: 'Removes all nodes, members, and edges. Cascade delete via FK constraints.',
   request: { params: ProjectIdParam },
   responses: {

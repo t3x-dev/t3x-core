@@ -89,7 +89,7 @@ tree 之间的关系类型是否正确？
   // Format turns
   const turnsText = turns.map((t) => `[${t.role}]: ${t.content}`).join('\n');
 
-  // Format semantic content as readable YAML-like text
+  // Format state content as readable YAML-like text
   const treesText = serializeForPrompt(content);
 
   const relationsText =
@@ -330,10 +330,10 @@ export class SemanticGate {
   constructor(private readonly provider: LLMProvider) {}
 
   /**
-   * Review semantic content extracted from conversation turns.
+   * Review state content extracted from conversation turns.
    *
    * @param turns - The original conversation turns
-   * @param content - The extracted semantic content (frames + relations)
+   * @param content - The extracted state content (frames + relations)
    * @returns Semantic gate result with scores and issues
    */
   async review(
@@ -362,7 +362,7 @@ export class SemanticGate {
    * Check coverage of extracted frames against original conversation.
    *
    * @param turns - The original conversation turns
-   * @param content - The extracted semantic content (frames + relations)
+   * @param content - The extracted state content (frames + relations)
    * @returns Coverage result with ratio and uncovered segments
    */
   async checkCoverage(

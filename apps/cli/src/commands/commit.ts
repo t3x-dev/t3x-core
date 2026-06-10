@@ -1,7 +1,7 @@
 /**
  * Commit Command
  *
- * Commit a draft as an immutable semantic commit.
+ * Commit a draft as an immutable structured-state commit.
  */
 
 import type { Command } from 'commander';
@@ -10,7 +10,7 @@ import { createSpinner, error, getClientWithAuth, getDraftId, success } from '..
 export function registerCommitCommand(program: Command): void {
   program
     .command('commit [draft-id]')
-    .description('Commit a draft as an immutable semantic commit')
+    .description('Commit a draft as an immutable structured-state commit')
     .requiredOption('-p, --project <id>', 'Project ID')
     .option('-m, --message <message>', 'Commit message')
     .option('-b, --branch <branch>', 'Branch name (default: main)')

@@ -2,7 +2,7 @@
  * Frame-Based Commits Queries
  *
  * CRUD operations for commits table using Drizzle ORM.
- * Commits store frame-based semantic content (frames + relations).
+ * Commits store frame-based state content (frames + relations).
  *
  * @see packages/core/src/commit/types.ts
  */

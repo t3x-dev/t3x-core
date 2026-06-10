@@ -168,7 +168,7 @@ test.describe('Open-source workbench visual smoke', () => {
           path: () => '/chat',
           ready: async (p) => {
             await expect(
-              p.getByRole('heading', { name: 'What should T3X make sense of?' })
+              p.getByRole('heading', { name: 'What should T3X structure?' })
             ).toBeVisible();
           },
         },

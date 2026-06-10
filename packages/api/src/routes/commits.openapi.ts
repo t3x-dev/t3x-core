@@ -2,7 +2,7 @@
  * Frame-Based Commits Routes with OpenAPI
  *
  * REST API endpoints for frame-based commits with OpenAPI documentation.
- * Frame-based commits store semantic content as frames + relations.
+ * Frame-based commits store state content as frames + relations.
  *
  * Endpoints:
  * - POST   /v1/commits               - Create a new commit

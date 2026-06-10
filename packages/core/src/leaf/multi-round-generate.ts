@@ -155,7 +155,7 @@ export function buildRound1Prompt(
   parts.push('## Task');
   parts.push(
     'Generate a structured output that covers ALL required constraints. ' +
-      'Use the knowledge base as your source material. ' +
+      'Use the committed state as your source material. ' +
       'Ensure every REQUIRE constraint value appears in your output.'
   );
 

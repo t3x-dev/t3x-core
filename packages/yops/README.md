@@ -13,8 +13,9 @@ documents.
 
 ## Why
 
-T3X uses YOps as the only mutation path for semantic tree content, so LLMs can
-propose changes while deterministic code validates and applies them.
+T3X uses YOps as the only mutation path for structured YAML state, so LLMs,
+humans, and tools can propose changes while deterministic code validates and
+applies them.
 
 ## Release status
 
@@ -180,4 +181,4 @@ The TypeScript package is the reference implementation.
 
 ## License
 
-[Apache License 2.0](./LICENSE)
+[Apache License 2.0](../../LICENSE)

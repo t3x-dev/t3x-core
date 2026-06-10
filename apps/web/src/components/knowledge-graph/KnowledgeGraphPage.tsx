@@ -43,9 +43,7 @@ export function KnowledgeGraphPage({ projectId }: KnowledgeGraphPageProps) {
         {isEmpty && !error && (
           <div className="flex h-full flex-col items-center justify-center">
             <div className="text-center">
-              <p className="text-lg font-medium text-[var(--text-primary)]">
-                No knowledge graph data
-              </p>
+              <p className="text-lg font-medium text-[var(--text-primary)]">No state graph data</p>
               <p className="mt-1 text-sm text-[var(--text-tertiary)]">
                 Saved graph nodes will appear here when the graph backend is enabled.
               </p>

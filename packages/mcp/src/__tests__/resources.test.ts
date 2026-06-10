@@ -207,7 +207,7 @@ describe('MCP resources', () => {
         relations: [],
       },
       project_id: 'proj_123',
-      message: 'Initial semantic commit',
+      message: 'Initial structured-state commit',
       branch: 'main',
       provenance: { method: 'llm_extraction' },
       yops_log_ids: ['yl_1'],
@@ -222,7 +222,7 @@ describe('MCP resources', () => {
       hash: 'sha256:commit123',
       project_id: 'proj_123',
       branch: 'main',
-      message: 'Initial semantic commit',
+      message: 'Initial structured-state commit',
       tree_count: 1,
       relation_count: 0,
     });

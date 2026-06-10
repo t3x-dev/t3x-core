@@ -41,14 +41,20 @@ outputs.
 
 ### Try the local package
 
+Use this path if your npm account has restricted alpha access:
+
 ```bash
 npx -p @t3x-dev/local t3x-local start
 ```
 
 Use this for the packaged local T3X experience, including the preview WebUI.
 Package or runtime asset access may be restricted; see [Availability](#availability).
+If you do not have alpha package access yet, use the source-development path
+below.
 
 ### Use YOps as a library
+
+Use this path if your npm account has restricted alpha access:
 
 ```bash
 npm install @t3x-dev/yops
@@ -71,6 +77,9 @@ Requires Node.js 20+ and pnpm 10+.
 Use this to contribute to T3X or run the source-first apps locally. Source
 development opens straight into the app by default; set `AUTH_DISABLED=false`
 before starting both processes if you want to exercise the login flow.
+
+Use source development when you do not have restricted alpha package access yet,
+or when you want to inspect and change the repository itself.
 
 ### Validate the self-hosted stack <sup>evaluation</sup>
 
@@ -133,6 +142,40 @@ result with parents, operation logs, and provenance.
 
 Diff and merge compare committed structured states. Fixes, extraction edits, and
 merge resolutions are applied back through YOps before a new commit is written.
+
+### Small example
+
+```yaml
+source:
+  text: Move launch region from US to EU and add security review before release.
+
+state_before:
+  launch:
+    region: us
+    gates:
+      - qa
+
+yops:
+  - set:
+      path: launch/region
+      value: eu
+  - append:
+      path: launch/gates
+      value: security_review
+
+state_after:
+  launch:
+    region: eu
+    gates:
+      - qa
+      - security_review
+
+commit:
+  parents:
+    - sha256:...
+  provenance:
+    source: launch-note
+```
 
 <br/>
 

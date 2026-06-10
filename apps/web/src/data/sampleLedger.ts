@@ -78,7 +78,7 @@ export const timeline = [
   {
     id: 'CF-284',
     label: 'Commit signed',
-    detail: 'Osaka plan promoted to semantic commit.',
+    detail: 'Osaka plan promoted to structured-state commit.',
     time: '2h ago',
     stage: 'commit',
   },

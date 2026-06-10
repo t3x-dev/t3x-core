@@ -1,5 +1,5 @@
 /**
- * Knowledge Graph Route Tests
+ * State Index Route Tests
  *
  * Tests for /v1/projects/:projectId/knowledge-graph/* endpoints.
  * Build endpoint deterministically rebuilds the graph from commit tree content.
@@ -42,7 +42,7 @@ import {
 } from '@t3x-dev/storage';
 import { knowledgeGraphRoutes, listProjectGraphCommits } from '../routes/knowledge-graph.openapi';
 
-describe('Knowledge Graph Routes', () => {
+describe('State Index Routes', () => {
   let cleanup: () => Promise<void>;
   let testProjectId: string;
   const app = new Hono();

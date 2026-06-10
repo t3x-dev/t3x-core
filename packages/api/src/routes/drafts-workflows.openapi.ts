@@ -3,7 +3,7 @@
  *
  * Heavier workflow operations for Draft management.
  * - POST /v1/drafts/:id/preview  - Generate preview output
- * - POST /v1/drafts/:id/commit   - Commit draft to knowledge base
+ * - POST /v1/drafts/:id/commit   - Commit draft to project state
  * - POST /v1/drafts/:id/fork     - Fork a committed draft
  * - POST /v1/drafts/:id/extract  - Extract nodes from conversation
  * - POST /v1/drafts/:id/suggest  - Node suggestions from tree-backed graph search

@@ -1,5 +1,5 @@
 /**
- * Knowledge Graph Queries
+ * State Index Queries
  *
  * CRUD operations for knowledge_nodes, knowledge_node_members, knowledge_edges tables.
  * Supports graph traversal and node search.
@@ -209,7 +209,7 @@ export async function findKnowledgeNodeById(
 }
 
 /**
- * Delete entire knowledge graph for a project.
+ * Delete entire state index for a project.
  * Cascade deletes members and edges via FK ON DELETE CASCADE.
  */
 export async function deleteKnowledgeGraphByProject(

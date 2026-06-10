@@ -35,7 +35,7 @@ import { TEMPLATE_VARIABLE_NAMES } from './types';
 /**
  * Build template context from semantic knowledge and leaf data.
  *
- * @param knowledge - The semantic content (frames + relations)
+ * @param knowledge - The state content (frames + relations)
  * @param leaf - The leaf containing constraints and config
  * @param additionalInstructions - Optional additional instructions
  * @returns Template context with all variable values

@@ -882,7 +882,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_nr_project ON node_relations(project_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_nr_pair ON node_relations(commit_hash, source_id, target_id, type);
 
-    -- Rename legacy sentence columns before knowledge graph table references
+    -- Rename legacy sentence columns before state index table references
     DO $$
     BEGIN
       IF EXISTS (
@@ -909,7 +909,7 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     $$;
 
     -- ═══════════════════════════════════════════════════════════════════════════
-    -- Knowledge Graph (Cross-conversation entity/topic graph)
+    -- State index (cross-conversation entity/topic graph)
     -- ═══════════════════════════════════════════════════════════════════════════
 
     CREATE TABLE IF NOT EXISTS knowledge_nodes (

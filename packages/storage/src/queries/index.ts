@@ -164,7 +164,7 @@ export {
   listGlobalSettings,
   setGlobalSetting,
 } from './global-settings';
-// Knowledge Graph (cross-conversation entity/topic graph)
+// State index (cross-conversation entity/topic graph)
 export {
   deleteKnowledgeGraphByProject,
   findEdgesByNode,
