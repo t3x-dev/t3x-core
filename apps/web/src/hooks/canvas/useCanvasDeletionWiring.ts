@@ -9,18 +9,36 @@
 
 import { useEffect } from 'react';
 import { deleteConversation } from '@/commands/conversations';
+import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
+import { dispatchConversationDeleted } from '@/hooks/shared/deleteEvents';
 import { useCanvasStore } from '@/store/canvasStore';
 
 export function useCanvasDeletionWiring(): void {
+  const { load } = useCanvasNodeActions();
+
   useEffect(() => {
     const handler = (conversationId: string) => {
-      deleteConversation(conversationId).catch(() => {
-        // Fire-and-forget — error handled silently to match prior behavior.
-      });
+      const projectId = useCanvasStore.getState().projectId;
+      deleteConversation(conversationId)
+        .then(() => {
+          if (projectId) {
+            dispatchConversationDeleted({ projectId, conversationId });
+          }
+        })
+        .catch((err) => {
+          const store = useCanvasStore.getState();
+          store.notifyCallback?.(
+            err instanceof Error ? err.message : 'Failed to delete conversation',
+            'error'
+          );
+          if (projectId && store.projectId === projectId) {
+            void load(projectId);
+          }
+        });
     };
     useCanvasStore.getState().setDeleteConversationCallback(handler);
     return () => {
       useCanvasStore.getState().setDeleteConversationCallback(null);
     };
-  }, []);
+  }, [load]);
 }

@@ -15,6 +15,12 @@ import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
+import {
+  CONVERSATION_DELETED_EVENT,
+  type ConversationDeletedDetail,
+  PROJECT_DELETED_EVENT,
+  type ProjectDeletedDetail,
+} from '@/hooks/shared/deleteEvents';
 import { useCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useContextMenu } from '@/hooks/shared/useContextMenu';
 import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
@@ -174,6 +180,52 @@ function CanvasWorkspaceInner({
     window.addEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
     return () => window.removeEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
   }, [projectId, refreshCanvasLeaves]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const handleConversationDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ConversationDeletedDetail>).detail;
+      if (detail?.projectId !== projectId || !detail.conversationId) return;
+      useCanvasStore.setState((state) => {
+        if (state.projectId !== projectId) return {};
+        const nodesToRemove = new Set(
+          state.nodes
+            .filter(
+              (node) =>
+                node.data.kind === 'unit' &&
+                node.data.conversationId === detail.conversationId &&
+                node.data.commitStatus !== 'committed'
+            )
+            .map((node) => node.id)
+        );
+        if (nodesToRemove.size === 0) return {};
+        return {
+          nodes: state.nodes.filter((node) => !nodesToRemove.has(node.id)),
+          edges: state.edges.filter(
+            (edge) => !nodesToRemove.has(edge.source) && !nodesToRemove.has(edge.target)
+          ),
+          openNodeId:
+            state.openNodeId && nodesToRemove.has(state.openNodeId) ? null : state.openNodeId,
+          modalViewMode:
+            state.openNodeId && nodesToRemove.has(state.openNodeId) ? null : state.modalViewMode,
+        };
+      });
+    };
+
+    const handleProjectDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ProjectDeletedDetail>).detail;
+      if (detail?.projectId !== projectId) return;
+      useCanvasStore.getState().clearCanvas();
+    };
+
+    window.addEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+    window.addEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    return () => {
+      window.removeEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+      window.removeEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    };
+  }, [projectId]);
 
   const notify = useProjectStore((state) => state.notifyCallback);
 

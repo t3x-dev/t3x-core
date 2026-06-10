@@ -17,6 +17,7 @@ import {
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import { dispatchProjectDeleted } from '@/hooks/shared/deleteEvents';
 import { fetchProjects } from '@/queries/projects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
@@ -96,6 +97,7 @@ export function useProjectCrud() {
 
     try {
       await deleteProject(id);
+      dispatchProjectDeleted({ projectId: id });
       notify?.(`Deleted "${removed?.name || id}"`, 'success');
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

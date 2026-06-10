@@ -6,8 +6,15 @@
  * than on mount.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { updateConversation as updateConversationCommand } from '@/commands/conversations';
+import {
+  CONVERSATION_DELETED_EVENT,
+  type ConversationDeletedDetail,
+  dispatchConversationDeleted,
+  PROJECT_DELETED_EVENT,
+  type ProjectDeletedDetail,
+} from '@/hooks/shared/deleteEvents';
 import { deleteConversation, listConversations } from '@/infrastructure/conversations';
 import type { Conversation } from '@/infrastructure/types';
 
@@ -21,6 +28,39 @@ export interface UseProjectConversationsResult {
 export function useProjectConversations(limit = 50): UseProjectConversationsResult {
   const [byProject, setByProject] = useState<Record<string, Conversation[]>>({});
 
+  useEffect(() => {
+    const handleConversationDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ConversationDeletedDetail>).detail;
+      if (!detail?.projectId || !detail.conversationId) return;
+      setByProject((prev) => {
+        const list = prev[detail.projectId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [detail.projectId]: list.filter((c) => c.conversation_id !== detail.conversationId),
+        };
+      });
+    };
+
+    const handleProjectDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ProjectDeletedDetail>).detail;
+      if (!detail?.projectId) return;
+      setByProject((prev) => {
+        if (!(detail.projectId in prev)) return prev;
+        const next = { ...prev };
+        delete next[detail.projectId];
+        return next;
+      });
+    };
+
+    window.addEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+    window.addEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    return () => {
+      window.removeEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+      window.removeEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    };
+  }, []);
+
   const load = useCallback(
     async (projectId: string) => {
       const data = await listConversations(projectId, limit, 0);
@@ -33,6 +73,7 @@ export function useProjectConversations(limit = 50): UseProjectConversationsResu
 
   const remove = useCallback(async (projectId: string, conversationId: string) => {
     await deleteConversation(conversationId);
+    dispatchConversationDeleted({ projectId, conversationId });
     setByProject((prev) => {
       const list = prev[projectId];
       if (!list) return prev;

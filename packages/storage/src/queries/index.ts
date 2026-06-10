@@ -76,6 +76,7 @@ export {
   getCommit,
   getCommitsByHashes,
   getLatestCommit,
+  hasConversationCommitReferences,
   type ListCommitsOptions,
   listCommits,
   SupersededYOpsLogIdsError,
