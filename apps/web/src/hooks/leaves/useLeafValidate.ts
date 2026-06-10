@@ -8,7 +8,8 @@
  */
 
 import { useCallback, useState } from 'react';
-import { ApiError, validateLeafOutput } from '@/infrastructure';
+import { formatUserFacingError } from '@/domain/format/errors';
+import { validateLeafOutput } from '@/infrastructure';
 import type { Leaf } from '@/types/api';
 
 export interface UseLeafValidateReturn {
@@ -40,7 +41,7 @@ export function useLeafValidate(
         setSemanticWarning(true);
       }
     } catch (err) {
-      setValidateError(err instanceof ApiError ? err.message : 'Validation failed');
+      setValidateError(formatUserFacingError(err, 'Validation failed.'));
     } finally {
       setIsValidating(false);
     }

@@ -13,6 +13,7 @@
 
 import type { Node } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { usePendingCommitExtraction } from '@/hooks/canvas/usePendingCommitExtraction';
 import { usePendingCommitLayout } from '@/hooks/canvas/usePendingCommitLayout';
 import { usePendingCommitPostCommit } from '@/hooks/canvas/usePendingCommitPostCommit';
@@ -308,7 +309,7 @@ export function usePendingCommitState({
       setCommitSuccess({ commitHash, parentHash, diffStats });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      setCommitError(error.message);
+      setCommitError(formatUserFacingError(error, 'Commit failed.'));
     } finally {
       setIsCommitting(false);
     }

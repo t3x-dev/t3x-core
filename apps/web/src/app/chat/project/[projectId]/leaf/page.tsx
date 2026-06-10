@@ -16,6 +16,7 @@ import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -74,7 +75,7 @@ export default function ChatProjectLeafIndexPage() {
       } catch (err) {
         if (commitLoadSeq.current !== seq) return;
         setCommitCount(null);
-        setCommitsError(err instanceof Error ? err.message : String(err));
+        setCommitsError(formatUserFacingError(err, 'Failed to load commits.'));
       } finally {
         if (commitLoadSeq.current === seq && !options?.silent) setCommitsLoading(false);
       }
@@ -96,7 +97,7 @@ export default function ChatProjectLeafIndexPage() {
       } catch (err) {
         if (projectLoadSeq.current !== seq) return;
         setConversationCount(null);
-        setProjectError(err instanceof Error ? err.message : String(err));
+        setProjectError(formatUserFacingError(err, 'Failed to load project.'));
       } finally {
         if (projectLoadSeq.current === seq && !options?.silent) setProjectLoading(false);
       }

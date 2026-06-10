@@ -75,7 +75,7 @@ describe('useDraftWorkspaceActions.load', () => {
     await waitForHook();
 
     const state = useDraftWorkspaceStore.getState();
-    expect(state.error).toBe('404');
+    expect(state.error).toBe('The requested resource is no longer available.');
     expect(state.loading).toBe(false);
   });
 });

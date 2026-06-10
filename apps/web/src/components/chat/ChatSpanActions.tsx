@@ -9,6 +9,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { SyntheticEvent } from 'react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { type InlineTextAction, useSourceTextDraft } from '@/hooks/shared/useSourceTextDraft';
 import type { TextSelectionResult } from '@/hooks/shared/useTextSelection';
 import { cn } from '@/utils/cn';
@@ -54,7 +55,7 @@ export function ChatSpanActions({ selection, onDone }: ChatSpanActionsProps) {
       }
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Source edit failed');
+      toast.error(formatUserFacingError(err, 'Source edit failed.'));
     }
   }
 

@@ -19,6 +19,7 @@ import { flattenTrees } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { createCommit } from '@/commands/commits';
 import { enrichTreesWithSourceRefs } from '@/domain/enrichSourceRefs';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchCommits } from '@/queries/commits';
 import { useCommitStore } from '@/store/commitStore';
 import { usePinsStore } from '@/store/pinsStore';
@@ -149,9 +150,7 @@ export function useCommitActions() {
       };
     } catch (err) {
       useCommitStore.getState().setIsCommitting(false);
-      useCommitStore
-        .getState()
-        .setCommitError(err instanceof Error ? err.message : 'Commit failed');
+      useCommitStore.getState().setCommitError(formatUserFacingError(err, 'Commit failed.'));
       throw err;
     }
   }, []);

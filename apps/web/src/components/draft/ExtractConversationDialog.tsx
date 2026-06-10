@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useConversationsList } from '@/hooks/conversations/useConversationsList';
 import { useExtractFromConversation } from '@/hooks/conversations/useExtractFromConversation';
 import type { Conversation } from '@/types/api';
@@ -80,7 +81,7 @@ export function ExtractConversationDialog({
       onExtracted();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Extraction failed');
+      toast.error(formatUserFacingError(err, 'Extraction failed.'));
     } finally {
       setExtracting(false);
     }

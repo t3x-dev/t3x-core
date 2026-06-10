@@ -12,6 +12,7 @@ import type { TreeDiff } from '@t3x-dev/core';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
 import type { CommitMeta } from '@/types/api';
@@ -69,7 +70,7 @@ export function DiffFullScreen({
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load diff');
+        setError(formatUserFacingError(err, 'Failed to load diff.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

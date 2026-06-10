@@ -10,6 +10,7 @@ import {
   createProject as createProjectCommand,
   updateProject as updateProjectCommand,
 } from '@/commands/projects';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import {
   INTRO_DEMO_PROJECT_DELETED_EVENT,
@@ -45,7 +46,7 @@ export function useProjects(limit = 50): UseProjectsResult {
       setProjects(data.projects ?? []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatUserFacingError(err, 'Failed to load projects.'));
     } finally {
       setLoading(false);
     }

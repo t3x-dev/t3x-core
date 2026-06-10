@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { SourceValidationError } from '@/commands/yops/errors';
 import { resolveHumanSource } from '@/commands/yops/goldEditBuilder';
 import { commitOps } from '@/commands/yops/yopsService';
+import { formatUserFacingError } from '@/domain/format/errors';
 import {
   type ApplyPayloadPolicy,
   deriveWorkspaceScriptState,
@@ -251,7 +252,7 @@ export function useScriptExecution() {
       // Commit failed — yops_log was NOT written; the draft is still
       // applicable, leave it staged so the user can retry. This is the
       // only path that preserves the draft.
-      const msg = err instanceof Error ? err.message : 'Execution failed';
+      const msg = formatUserFacingError(err, 'Execution failed.');
       useWorkspaceStore.getState().setMode('idle');
       if (currentScriptDirty) {
         warnYOpsInputIssue('Fix the YOps changes before applying.', msg);

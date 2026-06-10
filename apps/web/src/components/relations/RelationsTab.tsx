@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitRelations } from '@/hooks/commits/useCommitRelations';
 import type { Relation, RelationType } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -30,7 +31,7 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
       const data = await loadRelations(commitHash);
       setRelations(data.relations);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load relations');
+      setError(formatUserFacingError(err, 'Failed to load relations.'));
     } finally {
       setLoading(false);
     }

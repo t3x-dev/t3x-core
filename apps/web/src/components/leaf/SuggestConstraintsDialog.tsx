@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useSuggestConstraints } from '@/hooks/drafts/useSuggestConstraints';
 import type { SuggestedConstraint } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -62,7 +63,7 @@ export function SuggestConstraintsDialog({
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to get suggestions');
+        setError(formatUserFacingError(err, 'Failed to get suggestions.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

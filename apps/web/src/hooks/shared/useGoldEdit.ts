@@ -16,6 +16,7 @@ import type { SourcedYOp, YOp } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { SourceValidationError, YOpsReplayError } from '@/commands/yops/errors';
 import { commitGoldEdit, resolveGoldEditSource } from '@/commands/yops/goldEditBuilder';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { replay } from '@/domain/replay';
 import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
@@ -24,7 +25,7 @@ function formatGoldEditError(err: unknown): string {
   if (err instanceof SourceValidationError) {
     return 'Cannot save: no session user or local author available to attribute the edit.';
   }
-  return err instanceof Error ? err.message : String(err);
+  return formatUserFacingError(err, 'Edit failed.');
 }
 
 interface GoldEditSnapshot {

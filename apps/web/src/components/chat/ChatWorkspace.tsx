@@ -11,6 +11,7 @@ import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
@@ -34,7 +35,7 @@ import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { getTemporaryChat } from '@/store/temporaryChatsStore';
+import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -235,7 +236,8 @@ export function ChatWorkspace({
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
-  const isTemporaryChat = !resolvedProjectId;
+  const isTemporaryChat =
+    isTemporaryChatId(resolvedConversationId ?? conversationId) || !resolvedProjectId;
   const showProjectContext = !isTemporaryChat;
   const chatInputDraftKey = resolvedConversationId
     ? isTemporaryChat
@@ -332,7 +334,7 @@ export function ChatWorkspace({
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
   useEffect(() => {
-    if (projectId) setResolvedProjectId(projectId);
+    setResolvedProjectId(projectId ?? '');
   }, [projectId]);
 
   useEffect(() => {
@@ -566,8 +568,7 @@ export function ChatWorkspace({
         }
         if (created) await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to pin leaf';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to pin leaf.'));
       } finally {
         setPinningLeafIds((prev) => {
           const next = new Set(prev);
@@ -623,8 +624,7 @@ export function ChatWorkspace({
           await refreshProjectMaterials();
         }
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to use material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to use material.'));
       } finally {
         setPinningMaterialIds((prev) => {
           const next = new Set(prev);
@@ -656,8 +656,7 @@ export function ChatWorkspace({
         await handlePinMaterialForContext(material.id);
         toast.message('Material added to context');
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to add material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to add material.'));
       }
     },
     [handlePinMaterialForContext, refreshProjectMaterials, resolvedProjectId, uploadMaterial]
@@ -679,8 +678,7 @@ export function ChatWorkspace({
         await reloadContextManifest();
         toast.message('Material archived');
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to archive material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to archive material.'));
       } finally {
         setArchivingMaterialIds((prev) => {
           const next = new Set(prev);
@@ -863,8 +861,7 @@ export function ChatWorkspace({
         await updateContextSelectedPins(resolvedConversationId, nextSelectedPinIds);
         await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to update context';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to update context.'));
       } finally {
         contextManifestUpdatingRef.current = false;
         setContextManifestUpdating(false);
@@ -899,8 +896,7 @@ export function ChatWorkspace({
         }
         await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to update feedback';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to update feedback.'));
       } finally {
         contextManifestUpdatingRef.current = false;
         setContextManifestUpdating(false);

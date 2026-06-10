@@ -83,7 +83,9 @@ describe('useMergeWorkspaceActions.load', () => {
     const { result } = renderHook(() => useMergeWorkspaceActions());
     await expect(result.current.load('merge_1')).rejects.toThrow('404');
     await waitForHook();
-    expect(useMergeWorkspaceStore.getState().error).toBe('404');
+    expect(useMergeWorkspaceStore.getState().error).toBe(
+      'The requested resource is no longer available.'
+    );
   });
 });
 

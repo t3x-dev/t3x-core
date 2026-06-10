@@ -46,6 +46,7 @@ const edgeTypes = {
 
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -835,7 +836,7 @@ function CanvasWorkspaceInner({
           onImported={() => {
             setShowImportDialog(false);
             loadCanvas(projectId).catch((err) => {
-              const message = err instanceof Error ? err.message : 'Failed to refresh canvas';
+              const message = formatUserFacingError(err, 'Failed to refresh canvas.');
               notify?.(message, 'error');
             });
           }}

@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCreateEngineRun } from '@/hooks/shared/useCreateEngineRun';
 import type { DeployAgent } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -113,7 +114,7 @@ export function E2ETestCard({ agents, runnerHealthy, onRunComplete }: E2ETestCar
 
       onRunComplete?.(result.run_id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run test');
+      setError(formatUserFacingError(err, 'Failed to run test.'));
       setLastRun((prev) => (prev ? { ...prev, status: 'failed' } : null));
     } finally {
       setIsRunning(false);

@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useNewProjectChat } from '@/hooks/conversations/useNewProjectChat';
@@ -137,8 +138,7 @@ function getLeafAssertionCounts(leaf: ApiLeaf): { total: number; passed: number 
 }
 
 function notifyProjectConversationsLoadFailure(err: unknown) {
-  const detail = err instanceof Error ? err.message : 'Unknown error';
-  toast.error(`Failed to load conversations: ${detail}`, {
+  toast.error(formatUserFacingError(err, 'Failed to load conversations.'), {
     id: 'project-conversations-load-error',
   });
 }
@@ -327,6 +327,10 @@ export function ChatSidebar() {
     return match ? decodeURIComponent(match[1]) : null;
   }, [pathname]);
   const effectiveProjectId = routeProjectId ?? activeProjectId;
+  const existingProjectIds = useMemo(
+    () => new Set(projects.map((project) => project.project_id)),
+    [projects]
+  );
   const workspaceMode = pathname.includes('/canvas')
     ? 'canvas'
     : pathname.includes('/leaf')
@@ -721,7 +725,7 @@ export function ChatSidebar() {
         }
       } catch (err) {
         if (!cancelled) {
-          setCanvasCommitsError(err instanceof Error ? err.message : 'Failed to load commits');
+          setCanvasCommitsError(formatUserFacingError(err, 'Failed to load commits.'));
           setCanvasCommits([]);
         }
       } finally {
@@ -741,8 +745,11 @@ export function ChatSidebar() {
   // Fetch conversations for expanded projects and the active top workbench
   // project (re-fetch on refreshKey).
   useEffect(() => {
-    const projectIdsToLoad = new Set(expandedProjectIds);
-    if (effectiveProjectId) {
+    const projectIdsToLoad = new Set<string>();
+    for (const projectId of expandedProjectIds) {
+      if (existingProjectIds.has(projectId)) projectIdsToLoad.add(projectId);
+    }
+    if (effectiveProjectId && existingProjectIds.has(effectiveProjectId)) {
       projectIdsToLoad.add(effectiveProjectId);
     }
     for (const projectId of Array.from(projectIdsToLoad)) {
@@ -750,7 +757,7 @@ export function ChatSidebar() {
         notifyProjectConversationsLoadFailure
       );
     }
-  }, [effectiveProjectId, expandedProjectIds, refreshKey, loadConversations]);
+  }, [effectiveProjectId, existingProjectIds, expandedProjectIds, refreshKey, loadConversations]);
 
   useEffect(() => {
     if (!renameTarget) return;

@@ -23,6 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitDraft } from '@/hooks/commits/useCommitDraft';
 import { usePromoteDraft } from '@/hooks/drafts/usePromoteDraft';
 import { useUpdateDraft } from '@/hooks/drafts/useUpdateDraft';
@@ -92,7 +93,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       toast.success(t('draft_committed'));
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('commit_failed'));
+      toast.error(formatUserFacingError(err, t('commit_failed')));
     } finally {
       setCommitting(false);
     }
@@ -105,7 +106,7 @@ export function DraftQuickSheet({ open, onClose, draftId, projectId }: DraftQuic
       setDraft(updated);
       toast.success('Draft promoted to editing');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Promote failed');
+      toast.error(formatUserFacingError(err, 'Promote failed.'));
     } finally {
       setPromoting(false);
     }

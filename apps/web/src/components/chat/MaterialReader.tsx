@@ -15,6 +15,7 @@ import { isValidElement, useMemo, useState } from 'react';
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useMaterialDetail } from '@/hooks/materials/useMaterialDetail';
 import type { MaterialDetail, MaterialSegment } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -82,7 +83,7 @@ export function MaterialReader({
               Material unavailable
             </h2>
             <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-              {error?.message ?? 'Failed to load material'}
+              {formatUserFacingError(error, 'Failed to load material.')}
             </p>
           </div>
           <button
@@ -230,7 +231,7 @@ export function MaterialSourceDetails({
           </div>
         ) : error || !material ? (
           <div className="space-y-3 rounded-lg border border-[var(--status-error)]/20 bg-[var(--status-error-muted)] p-3 text-xs text-[var(--status-error)]">
-            <p>{error?.message ?? 'Failed to load material'}</p>
+            <p>{formatUserFacingError(error, 'Failed to load material.')}</p>
             <button
               type="button"
               onClick={() => {

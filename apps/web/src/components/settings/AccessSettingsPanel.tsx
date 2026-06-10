@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { LocalAccessCheckResult, LocalConfigState } from '@/domain/accessConfig';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useAccessSettings } from '@/hooks/access/useAccessSettings';
 
 function formatSourceLabel(
@@ -48,7 +49,7 @@ export function AccessSettingsPanel() {
       })
       .catch((error) => {
         if (cancelled) return;
-        toast.error(error instanceof Error ? error.message : 'Failed to load shared access');
+        toast.error(formatUserFacingError(error, 'Failed to load shared access.'));
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -74,7 +75,7 @@ export function AccessSettingsPanel() {
       setApiKey('');
       toast.success('Shared access updated');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save shared access');
+      toast.error(formatUserFacingError(error, 'Failed to save shared access.'));
     } finally {
       setIsSaving(false);
     }
@@ -91,7 +92,7 @@ export function AccessSettingsPanel() {
       setApiKey('');
       toast.success('Stored API key cleared');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to clear stored API key');
+      toast.error(formatUserFacingError(error, 'Failed to clear stored API key.'));
     } finally {
       setIsClearing(false);
     }
@@ -108,7 +109,7 @@ export function AccessSettingsPanel() {
         toast.error(result.message);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to test shared access');
+      toast.error(formatUserFacingError(error, 'Failed to test shared access.'));
     } finally {
       setIsChecking(false);
     }

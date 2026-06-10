@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
 import { fetchLeavesByProject } from '@/queries/leaves';
 import type { Leaf } from '@/types/api';
@@ -40,7 +41,7 @@ export function useProjectLeaves(
       setLeaves(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatUserFacingError(err, 'Failed to load leaves.'));
     } finally {
       setLoading(false);
     }

@@ -8,8 +8,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
-import { ApiError, generateLeafOutput, getLeaf } from '@/infrastructure';
+import { generateLeafOutput, getLeaf } from '@/infrastructure';
 import type { Leaf } from '@/types/api';
 
 export interface UseLeafGenerateReturn {
@@ -86,7 +87,7 @@ export function useLeafGenerate(
         bannerTimerRef.current = setTimeout(() => setGenerateSuccessBanner(null), 3000);
       }
     } catch (err) {
-      setGenerateError(err instanceof ApiError ? err.message : 'Generation failed');
+      setGenerateError(formatUserFacingError(err, 'Generation failed.'));
     } finally {
       setIsGenerating(false);
     }

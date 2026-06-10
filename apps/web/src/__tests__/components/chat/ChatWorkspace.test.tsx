@@ -19,7 +19,9 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   stopGenerating: vi.fn(),
   toastMessage: vi.fn(),
+  useChatInit: vi.fn(),
   useContextManifest: vi.fn(),
+  useConversationChat: vi.fn(),
   reloadContextManifest: vi.fn(),
   updateSelectedPins: vi.fn(),
   parentConversationId: null as string | null,
@@ -60,7 +62,10 @@ vi.mock('@/hooks/commits/useCommittedHighlights', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useChatInit', () => ({
-  useChatInit: () => ({ parentConversationId: mocks.parentConversationId }),
+  useChatInit: (params: unknown) => {
+    mocks.useChatInit(params);
+    return { parentConversationId: mocks.parentConversationId };
+  },
 }));
 
 vi.mock('@/hooks/conversations/useContextManifest', () => ({
@@ -82,20 +87,23 @@ vi.mock('@/hooks/conversations/useConversationContextPins', () => ({
 }));
 
 vi.mock('@/hooks/conversations/useConversationChat', () => ({
-  useConversationChat: () => ({
-    messages: [{ id: 'sha256:t1', role: 'user', content: 'hello' }],
-    isLoading: false,
-    isStreaming: false,
-    streamingContent: '',
-    error: null,
-    warning: null,
-    sendMessage: mocks.sendMessage,
-    stopGenerating: mocks.stopGenerating,
-    searchQuery: null,
-    citations: [],
-    thinkingContent: '',
-    isThinking: false,
-  }),
+  useConversationChat: (params: unknown) => {
+    mocks.useConversationChat(params);
+    return {
+      messages: [{ id: 'sha256:t1', role: 'user', content: 'hello' }],
+      isLoading: false,
+      isStreaming: false,
+      streamingContent: '',
+      error: null,
+      warning: null,
+      sendMessage: mocks.sendMessage,
+      stopGenerating: mocks.stopGenerating,
+      searchQuery: null,
+      citations: [],
+      thinkingContent: '',
+      isThinking: false,
+    };
+  },
 }));
 
 vi.mock('@/hooks/drafts/useExtraction', () => ({
@@ -266,7 +274,9 @@ describe('ChatWorkspace', () => {
     mocks.refreshProjectMaterials.mockReset();
     mocks.uploadMaterial.mockReset();
     mocks.archiveMaterial.mockReset();
+    mocks.useChatInit.mockReset();
     mocks.useContextManifest.mockReset();
+    mocks.useConversationChat.mockReset();
     const workspace = useWorkspaceStore.getState();
     workspace.reset();
     workspace.setActiveProject('proj_123');
@@ -474,6 +484,29 @@ describe('ChatWorkspace', () => {
     expect(mocks.useContextManifest).toHaveBeenCalledWith(null);
     expect(screen.queryByRole('button', { name: /open sources/i })).toBeNull();
     expect(screen.queryByRole('region', { name: /sources/i })).toBeNull();
+  });
+
+  it('clears stale project context when navigating from a project conversation to a temporary chat', async () => {
+    const { rerender } = render(<ChatWorkspace conversationId="conv_123" projectId="proj_123" />);
+
+    rerender(<ChatWorkspace conversationId="temp_chat_1" />);
+
+    await waitFor(() => {
+      expect(mocks.useConversationChat).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          conversationId: 'temp_chat_1',
+          projectId: '',
+        })
+      );
+      expect(mocks.useChatInit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          conversationId: 'temp_chat_1',
+          resolvedConversationId: 'temp_chat_1',
+          resolvedProjectId: '',
+        })
+      );
+    });
+    expect(mocks.useContextManifest).toHaveBeenLastCalledWith(null);
   });
 
   it('does not show source text actions for a user question selection', () => {

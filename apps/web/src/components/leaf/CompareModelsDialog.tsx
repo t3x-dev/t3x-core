@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCompareModels } from '@/hooks/shared/useCompareModels';
 import { useProvidersList } from '@/hooks/shared/useProvidersList';
 import type { CompareModelsResult } from '@/types/api';
@@ -76,7 +77,7 @@ export function CompareModelsDialog({ open, onOpenChange, leafId }: CompareModel
       const result = await compare(leafId, Array.from(selectedModels));
       setResults(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Comparison failed');
+      setError(formatUserFacingError(err, 'Comparison failed.'));
     } finally {
       setComparing(false);
     }

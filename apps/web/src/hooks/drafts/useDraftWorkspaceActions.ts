@@ -25,6 +25,7 @@ import {
   previewWorkbenchDraft,
   updateWorkbenchDraft,
 } from '@/commands/drafts';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { ApiError } from '@/queries/apiErrors';
 import { fetchWorkbenchDraft } from '@/queries/workbenchDrafts';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
@@ -37,7 +38,7 @@ export function useDraftWorkspaceActions() {
       const draft = await fetchWorkbenchDraft(draftId);
       useDraftWorkspaceStore.getState().setLoadedDraft(draft);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load draft';
+      const message = formatUserFacingError(err, 'Failed to load draft.');
       useDraftWorkspaceStore.getState().setLoadError(message);
     }
   }, []);
@@ -100,7 +101,7 @@ export function useDraftWorkspaceActions() {
       });
     } catch (err) {
       if (gen !== useDraftWorkspaceStore.getState().previewGeneration) return;
-      const message = err instanceof Error ? err.message : 'Preview generation failed';
+      const message = formatUserFacingError(err, 'Preview generation failed.');
       useDraftWorkspaceStore.getState().setPreviewFailed(message);
     }
   }, [save]);
@@ -126,7 +127,7 @@ export function useDraftWorkspaceActions() {
         useDraftWorkspaceStore.getState().setCommitted();
         return { commit: result.commit, leaf: result.leaf };
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to commit';
+        const errorMsg = formatUserFacingError(err, 'Failed to commit.');
         useDraftWorkspaceStore.getState().setCommitFailed(errorMsg);
         throw err;
       }

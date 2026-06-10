@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useTemplates } from '@/hooks/templates/useTemplates';
 import type {
   CreateTemplateInput,
@@ -174,7 +175,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
         tags: [],
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create template');
+      toast.error(formatUserFacingError(err, 'Failed to create template.'));
     } finally {
       setIsCreating(false);
     }

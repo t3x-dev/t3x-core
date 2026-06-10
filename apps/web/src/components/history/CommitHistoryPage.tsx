@@ -20,6 +20,7 @@ import {
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
@@ -168,7 +169,7 @@ export function CommitHistoryPage({ projectId }: CommitHistoryPageProps) {
 
         if (!cancelled) setCommits(results);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load history');
+        if (!cancelled) setError(formatUserFacingError(err, 'Failed to load history.'));
       } finally {
         if (!cancelled) setLoading(false);
       }

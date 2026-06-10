@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchCommitHistory } from '@/queries/commitHistory';
 import type { ApiCommit } from '@/types/api';
 
@@ -47,7 +48,7 @@ export function useCommitHistory(
         if (!cancelled) setHistory(data);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load history');
+        if (!cancelled) setError(formatUserFacingError(err, 'Failed to load history.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

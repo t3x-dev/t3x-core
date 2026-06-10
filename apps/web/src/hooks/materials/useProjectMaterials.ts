@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchMaterialsByProject } from '@/queries/materials';
 import type { Material } from '@/types/api';
 
@@ -35,7 +36,7 @@ export function useProjectMaterials(
       setMaterials(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatUserFacingError(err, 'Failed to load materials.'));
     } finally {
       setLoading(false);
     }

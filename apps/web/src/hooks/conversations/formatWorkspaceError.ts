@@ -1,4 +1,5 @@
 import { YOpsReplayError } from '@/commands/yops/errors';
+import { formatUserFacingError } from '@/domain/format/errors';
 
 /**
  * Render a user-facing message for a workspace error. Initial-load
@@ -12,5 +13,5 @@ export function formatWorkspaceError(err: unknown): string {
   if (err instanceof YOpsReplayError) {
     return `Workspace data is structurally invalid at op[${err.opIndex}]: ${err.opError}`;
   }
-  return err instanceof Error ? err.message : String(err);
+  return formatUserFacingError(err, 'Workspace failed to load. Try refreshing.');
 }

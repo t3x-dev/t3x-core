@@ -43,7 +43,9 @@ describe('useProjects.create', () => {
     });
 
     expect(result.current.projects).toEqual([]);
-    expect(result.current.error).toBe('Failed to fetch');
+    expect(result.current.error).toBe(
+      'Network request failed. Check your connection and try again.'
+    );
     expect(result.current.loading).toBe(false);
   });
 
