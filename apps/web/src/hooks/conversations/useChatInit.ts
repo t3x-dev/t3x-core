@@ -51,28 +51,29 @@ export function useChatInit({
   useEffect(() => {
     const convId = resolvedConversationId ?? conversationId;
     const isTemporaryConversation = isTemporaryChatId(convId);
+    const projectIdForConversation = isTemporaryConversation ? '' : resolvedProjectId;
 
     // ── 1. Sync store state for the current conversation ──
     const chatStore = useChatStore.getState();
-    chatStore.setActiveConversation(convId, resolvedProjectId || null);
+    chatStore.setActiveConversation(convId, projectIdForConversation || null);
     chatStore.setConversationTitle(null);
     useCommitStore.getState().setConversationTitle(null);
     if (!inheritedRef.current) {
       useWorkspaceStore.getState().reset();
     }
     useWorkspaceStore.getState().setConversation(convId === 'new' ? null : convId);
-    if (resolvedProjectId) {
-      useSessionStore.getState().setLastSession(resolvedProjectId, convId);
+    if (projectIdForConversation) {
+      useSessionStore.getState().setLastSession(projectIdForConversation, convId);
     }
-    useCommitStore.getState().setProjectId(resolvedProjectId || null);
+    useCommitStore.getState().setProjectId(projectIdForConversation || null);
     useCommitStore.getState().setBeforeCommitHash(null);
     // Inheritance sets its own lastCommitHash, so don't overwrite it with the branch head.
-    if (resolvedProjectId && !inheritFromCommitHash) {
-      void initCommitState(resolvedProjectId, chatStore.activeBranch || 'main');
+    if (projectIdForConversation && !inheritFromCommitHash) {
+      void initCommitState(projectIdForConversation, chatStore.activeBranch || 'main');
     }
 
     // ── 2. Backfill the project id from the conversation when it's missing ──
-    if (!resolvedProjectId && convId && convId !== 'new' && !isTemporaryConversation) {
+    if (!projectIdForConversation && convId && convId !== 'new' && !isTemporaryConversation) {
       void fetchConversationMeta(convId).then((conv) => {
         if (!conv?.project_id) return;
         setResolvedProjectId(conv.project_id);
@@ -106,8 +107,8 @@ export function useChatInit({
       }
     };
 
-    if (convId && convId !== 'new' && resolvedProjectId) {
-      hydrateConversationToStore(resolvedProjectId, convId)
+    if (convId && convId !== 'new' && projectIdForConversation && !isTemporaryConversation) {
+      hydrateConversationToStore(projectIdForConversation, convId)
         .then(async () => {
           // Topics are display-only until a workspaceStore slot exists.
           // TODO(topics-state): route through workspaceStore once the schema lands.
@@ -123,7 +124,7 @@ export function useChatInit({
           store.setError(formatWorkspaceError(err));
         });
     } else if (inheritFromCommitHash) {
-      useCommitStore.getState().setProjectId(resolvedProjectId || null);
+      useCommitStore.getState().setProjectId(projectIdForConversation || null);
       void runInheritance(inheritFromCommitHash);
     }
   }, [

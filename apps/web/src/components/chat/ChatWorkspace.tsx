@@ -34,7 +34,7 @@ import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { getTemporaryChat } from '@/store/temporaryChatsStore';
+import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -235,7 +235,8 @@ export function ChatWorkspace({
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
-  const isTemporaryChat = !resolvedProjectId;
+  const isTemporaryChat =
+    isTemporaryChatId(resolvedConversationId ?? conversationId) || !resolvedProjectId;
   const showProjectContext = !isTemporaryChat;
   const chatInputDraftKey = resolvedConversationId
     ? isTemporaryChat
@@ -332,7 +333,7 @@ export function ChatWorkspace({
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
   useEffect(() => {
-    if (projectId) setResolvedProjectId(projectId);
+    setResolvedProjectId(projectId ?? '');
   }, [projectId]);
 
   useEffect(() => {
