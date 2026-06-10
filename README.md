@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/status-restricted%20alpha-purple" alt="restricted alpha" />
+  <img src="https://img.shields.io/badge/alpha-v0.4.1%20restricted-purple" alt="restricted alpha v0.4.1" />
 </p>
 
 <br/>
