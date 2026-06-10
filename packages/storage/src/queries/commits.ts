@@ -12,7 +12,7 @@ import { COMMIT_SCHEMA, computeCommitHash } from '@t3x-dev/core';
 
 export { computeCommitHash } from '@t3x-dev/core';
 
-import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type CommitRecord, commits } from '../schema-commits';
 import { yopsLog } from '../schema-trees';
@@ -236,6 +236,23 @@ export async function listCommits(db: AnyDB, options: ListCommitsOptions): Promi
   }
 
   return result;
+}
+
+/**
+ * Returns true when any commit records a conversation as an explicit source.
+ */
+export async function hasConversationCommitReferences(
+  db: AnyDB,
+  conversationId: string
+): Promise<boolean> {
+  const sourceRef = JSON.stringify([{ type: 'conversation', id: conversationId }]);
+  const rows = await db
+    .select({ hash: commits.hash })
+    .from(commits)
+    .where(sql`${commits.sources} @> ${sourceRef}::jsonb`)
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /**

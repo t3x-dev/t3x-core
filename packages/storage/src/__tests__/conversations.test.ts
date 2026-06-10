@@ -7,6 +7,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
+import { createCommit, hasConversationCommitReferences } from '../queries/commits';
 import {
   deleteConversation,
   findConversationByAliasOrId,
@@ -383,6 +384,46 @@ describe('Conversations Storage', () => {
       const deleted = await deleteConversation(db, 'conv_nonexistent');
 
       expect(deleted).toBe(false);
+    });
+  });
+
+  describe('hasConversationCommitReferences', () => {
+    it('returns true when a commit source references the conversation', async () => {
+      const conversation = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Committed Source' })
+      );
+
+      await createCommit(db, {
+        project_id: testProjectId,
+        author: { type: 'human', name: 'Tester' },
+        content: {
+          trees: [{ key: 'source', slots: { text: 'Conversation source' }, children: [] }],
+          relations: [],
+        },
+        sources: [
+          {
+            type: 'conversation',
+            id: conversation.conversationId,
+            title: conversation.title ?? undefined,
+          },
+        ],
+      });
+
+      await expect(hasConversationCommitReferences(db, conversation.conversationId)).resolves.toBe(
+        true
+      );
+    });
+
+    it('returns false when no commit source references the conversation', async () => {
+      const conversation = await insertConversation(
+        db,
+        testData.conversation(testProjectId, { title: 'Uncommitted Source' })
+      );
+
+      await expect(hasConversationCommitReferences(db, conversation.conversationId)).resolves.toBe(
+        false
+      );
     });
   });
 

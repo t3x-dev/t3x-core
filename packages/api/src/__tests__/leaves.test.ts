@@ -5,7 +5,13 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createPin, findPinsByProject, insertProject } from '@t3x-dev/storage';
+import {
+  createCommit,
+  createPin,
+  deleteProject,
+  findPinsByProject,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -169,6 +175,28 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
     });
+
+    it('returns 404 after the project is soft-deleted', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Deleted Leaf Create' })
+      );
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request('/v1/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: testCommitHash,
+          type: 'tweet',
+          project_id: project.projectId,
+        }),
+      });
+
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
+    });
   });
 
   describe('GET /v1/leaves/:id', () => {
@@ -207,6 +235,26 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(false);
       expect(data.error.code).toBe('LEAF_NOT_FOUND');
+    });
+
+    it('returns 404 after the leaf project is soft-deleted', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Deleted Leaf Read' }));
+      const createRes = await app.request('/v1/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: testCommitHash,
+          type: 'article',
+          project_id: project.projectId,
+        }),
+      });
+      const leafData: ApiResponse = await createRes.json();
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/leaves/${leafData.data.id}`);
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -252,6 +300,27 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data).toEqual([]);
+    });
+
+    it('returns 404 when the commit project is soft-deleted', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Deleted Commit Leaves' })
+      );
+      const commit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', name: 'Tester' },
+        content: {
+          trees: [{ key: 'deleted-project', slots: { text: 'Hidden leaves' }, children: [] }],
+          relations: [],
+        },
+      });
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/commits/${encodeURIComponent(commit.hash)}/leaves`);
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
     });
 
     it('filters by type', async () => {
@@ -326,6 +395,16 @@ describe('Leaves Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.length).toBeLessThanOrEqual(2);
+    });
+
+    it('returns 404 after the project is soft-deleted', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Deleted Leaf List' }));
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/projects/${project.projectId}/leaves`);
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
     });
   });
 

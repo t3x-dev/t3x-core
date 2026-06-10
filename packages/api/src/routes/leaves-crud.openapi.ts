@@ -27,6 +27,7 @@ import {
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
 import { pinoLogger } from '../middleware/logger';
 import {
@@ -318,6 +319,8 @@ leavesCrudRoutes.openapi(createLeafRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Auto-generate title from commit message if not provided
     let title = body.title;
@@ -372,6 +375,8 @@ leavesCrudRoutes.openapi(getLeafRoute, async (c) => {
     if (!leaf) {
       return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
     }
+    const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     return c.json({ success: true as const, data: toApiLeaf(leaf) }, 200);
   } catch (err) {
@@ -388,6 +393,11 @@ leavesCrudRoutes.openapi(listLeavesByCommitRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const commit = await getCommitUnified(db, decodedHash);
+    if (commit?.project_id) {
+      const accessResult = await assertProjectAccess(c, db, commit.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -428,6 +438,8 @@ leavesCrudRoutes.openapi(listLeavesByProjectRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -468,11 +480,16 @@ leavesCrudRoutes.openapi(updateLeafRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findLeafById(db, id);
+    if (!existing) {
+      return errorResponse(c, 'LEAF_NOT_FOUND', `Leaf not found: ${id}`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     // Track output edits for reverse learning (Item 17)
     // If the user is changing the output, record the before/after
     if (body.output !== undefined) {
-      const existing = await findLeafById(db, id);
       if (existing?.output && existing.output !== body.output) {
         insertLeafOutputEdit(db, {
           leaf_id: id,
@@ -516,6 +533,10 @@ leavesCrudRoutes.openapi(deleteLeafRoute, async (c) => {
     // Then immediately attempt delete — if it returns false (concurrent delete),
     // return 404. Pin cleanup only runs when delete actually succeeds.
     const leaf = await findLeafById(db, id);
+    if (leaf) {
+      const accessResult = await assertProjectAccess(c, db, leaf.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
 
     const deleted = await deleteLeaf(db, id);
 

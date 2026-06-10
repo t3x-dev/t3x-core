@@ -41,9 +41,15 @@ import {
 } from '@/hooks/onboarding/introDemoLocalCommit';
 import { useEnsureDemoProject } from '@/hooks/onboarding/useEnsureDemoProject';
 import { useProjects } from '@/hooks/projects/useProjects';
+import {
+  CONVERSATION_DELETED_EVENT,
+  type ConversationDeletedDetail,
+} from '@/hooks/shared/deleteEvents';
 import { useChatCompactViewport } from '@/hooks/shared/useChatCompactViewport';
+import { useCanvasStore } from '@/store/canvasStore';
 import { CHAT_SIDEBAR_COLLAPSED_WIDTH, useChatStore } from '@/store/chatStore';
 import { useCommitStore } from '@/store/commitStore';
+import { useProjectStore } from '@/store/projectStore';
 import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { ApiCommit, Leaf as ApiLeaf, Conversation } from '@/types/api';
@@ -296,6 +302,8 @@ export function ChatSidebar() {
     commitStore.setProjectId(null);
     commitStore.setConversationTitle(null);
     commitStore.setBeforeCommitHash(null);
+
+    useCanvasStore.getState().clearCanvas();
   }, []);
   const temporaryDeleteTarget = useMemo(
     () => temporaryChats.find((chat) => chat.id === temporaryDeleteTargetId) ?? null,
@@ -594,6 +602,27 @@ export function ChatSidebar() {
     if (!routeProjectId || activeProjectId === routeProjectId) return;
     setActiveConversation(null, routeProjectId);
   }, [activeProjectId, routeProjectId, setActiveConversation]);
+
+  useEffect(() => {
+    const handleConversationDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ConversationDeletedDetail>).detail;
+      if (!detail?.projectId || !detail.conversationId) return;
+
+      void Promise.resolve(loadConversations(detail.projectId)).catch(
+        notifyProjectConversationsLoadFailure
+      );
+      void refreshProjects();
+      useChatStore.getState().refreshSidebar();
+
+      if (useChatStore.getState().activeConversationId === detail.conversationId) {
+        clearActiveWorkspace();
+        router.push('/chat');
+      }
+    };
+
+    window.addEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+    return () => window.removeEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+  }, [clearActiveWorkspace, loadConversations, refreshProjects, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1035,6 +1064,8 @@ export function ChatSidebar() {
     setProjectDeleteTargetId(null);
     try {
       await removeProject(projectId);
+      useProjectStore.getState().removeProject(projectId);
+      useChatStore.getState().refreshSidebar();
       if (activeProjectId === projectId) {
         clearActiveWorkspace();
         router.push('/chat');

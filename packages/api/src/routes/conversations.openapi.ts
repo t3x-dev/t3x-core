@@ -19,9 +19,9 @@ import {
   deleteConversation,
   findConversationById,
   findConversationsByProject,
-  findProjectById,
   getConversationContext,
   getConversationTurnCount,
+  hasConversationCommitReferences,
   insertConversation,
   renameConversation,
   setConversationContext,
@@ -32,6 +32,7 @@ import { buildConversationContextManifest } from '../lib/context-manifest';
 import { getDB } from '../lib/db';
 import { hasDbErrorCode } from '../lib/db-errors';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import {
   CursorPageResponseSchema,
   ErrorResponseSchema,
@@ -278,6 +279,8 @@ conversationRoutes.openapi(listConversationsRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
@@ -358,12 +361,8 @@ conversationRoutes.openapi(createConversationRoute, async (c) => {
 
   try {
     const db = await getDB();
-
-    // Verify project exists
-    const project = await findProjectById(db, body.project_id);
-    if (!project) {
-      return errorResponse(c, 'NOT_FOUND', `Project ${body.project_id} not found`);
-    }
+    const accessResult = await assertProjectAccess(c, db, body.project_id);
+    if (accessResult instanceof Response) return accessResult;
 
     const conversation = await insertConversation(db, {
       projectId: body.project_id,
@@ -436,6 +435,8 @@ conversationRoutes.openapi(getConversationRoute, async (c) => {
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const turnsCount = await getConversationTurnCount(db, conversationId);
 
@@ -518,6 +519,13 @@ conversationRoutes.openapi(updateConversationRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const existing = await findConversationById(db, conversationId);
+    if (!existing) {
+      return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
+    }
+    const accessResult = await assertProjectAccess(c, db, existing.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const conversation = await updateConversation(db, conversationId, {
       title: body.title,
       parentCommitHash: body.parent_commit_hash,
@@ -593,6 +601,22 @@ conversationRoutes.openapi(deleteConversationRoute, async (c) => {
 
   try {
     const db = await getDB();
+    const conversation = await findConversationById(db, conversationId);
+    if (!conversation) {
+      return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
+    }
+
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
+
+    if (conversation.committedAs || (await hasConversationCommitReferences(db, conversationId))) {
+      return errorResponse(
+        c,
+        'CONFLICT',
+        `Conversation ${conversationId} is referenced by a commit`
+      );
+    }
+
     const deleted = await deleteConversation(db, conversationId);
 
     if (!deleted) {
@@ -658,6 +682,8 @@ conversationRoutes.openapi(getContextRoute, async (c) => {
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Get context config (null = using default, all pins)
     const context = await getConversationContext(db, conversationId);
@@ -727,6 +753,8 @@ conversationRoutes.openapi(updateContextRoute, async (c) => {
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // Set context config (upsert)
     const context = await setConversationContext(db, conversationId, body.selected_pin_ids ?? null);
@@ -782,6 +810,8 @@ conversationRoutes.openapi(getContextManifestRoute, async (c) => {
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const manifest = await buildConversationContextManifest(db, conversationId);
     return c.json({ success: true as const, data: manifest }, 200);
@@ -840,6 +870,8 @@ conversationRoutes.openapi(getMemoryRoute, async (c) => {
     if (!conversation) {
       return errorResponse(c, 'NOT_FOUND', `Conversation ${conversationId} not found`);
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     const manifest = await buildConversationContextManifest(db, conversationId);
 
@@ -890,6 +922,8 @@ conversationRoutes.get('/v1/conversations/:id/context-export', async (c) => {
         404
       );
     }
+    const accessResult = await assertProjectAccess(c, db, conversation.projectId);
+    if (accessResult instanceof Response) return accessResult;
 
     // 2. Build export context from the same manifest-backed context as /memory.
     const manifest = await buildConversationContextManifest(db, conversationId);
@@ -971,6 +1005,8 @@ conversationRoutes.openapi(renameRoute, async (c) => {
   if (!existing) {
     return errorResponse(c, 'CONVERSATION_NOT_FOUND', `Conversation not found: ${conversation_id}`);
   }
+  const accessResult = await assertProjectAccess(c, db, existing.projectId);
+  if (accessResult instanceof Response) return accessResult;
 
   try {
     await renameConversation(db, conversation_id, alias);
