@@ -62,6 +62,9 @@ The spec is the source of truth. The registry enforces it. The engine executes i
 
 ## Install
 
+This command requires restricted alpha npm access. If npm returns 404 or cannot
+resolve the package, use the source workspace until package access is granted.
+
 ```bash
 npm install @t3x-dev/yops
 ```

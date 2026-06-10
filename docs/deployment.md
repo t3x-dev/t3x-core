@@ -7,9 +7,9 @@ repository. It does not describe the private SaaS deployment.
 
 | Path | Command | Intended use |
 |---|---|---|
-| Local alpha package | `npx -p @t3x-dev/local t3x-local start` | Packaged local evaluation |
+| Source development | `pnpm dev:api` and `pnpm dev:webui` | Contributor and implementation work; no restricted npm access required |
+| Local alpha package | `npx -p @t3x-dev/local t3x-local start` | Packaged local evaluation; restricted alpha npm access required |
 | Docker Compose | `docker compose up -d --build` | Self-hosted WebUI + API + Postgres evaluation |
-| Source development | `pnpm dev:api` and `pnpm dev:webui` | Contributor and implementation work |
 
 ## Docker Self-Hosting
 

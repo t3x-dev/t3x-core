@@ -19,6 +19,9 @@ Package visibility may be limited to accounts with alpha access.
 
 ## Install
 
+This command requires restricted alpha npm access. If npm returns 404 or cannot
+resolve the package, use the source-development path in the root README.
+
 ```bash
 npx -p @t3x-dev/local t3x-local start
 ```
@@ -36,6 +39,8 @@ For private GitHub releases, set `T3X_LOCAL_GITHUB_TOKEN`, `GH_TOKEN`, or
 `GITHUB_TOKEN` to a token with access to the runtime release.
 
 ## Sample
+
+Requires restricted alpha npm access:
 
 ```bash
 npx -p @t3x-dev/local t3x-local start

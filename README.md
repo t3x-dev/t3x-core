@@ -16,8 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/alpha-v0.4.1%20restricted-purple" alt="restricted alpha v0.4.1" />
-  <a href="./apps/local/"><img src="https://img.shields.io/badge/local-v0.4.1-blue" alt="@t3x-dev/local v0.4.1" /></a>
+  <img src="https://img.shields.io/badge/status-restricted%20alpha-purple" alt="restricted alpha" />
 </p>
 
 <br/>
@@ -39,6 +38,24 @@ outputs.
 
 ## Quickstart
 
+### Develop from source
+
+Use this path if you do not have restricted alpha npm package access yet, or if
+you want to inspect and change the repository itself.
+
+```bash
+git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
+pnpm install
+pnpm dev:api     # API at localhost:8000
+pnpm dev:webui   # WebUI preview at localhost:3000
+```
+
+Requires Node.js 20+ and pnpm 10+.
+
+Source development opens straight into the app by default; set
+`AUTH_DISABLED=false` before starting both processes if you want to exercise
+the login flow.
+
 ### Try the local package
 
 Use this path if your npm account has restricted alpha access:
@@ -49,8 +66,8 @@ npx -p @t3x-dev/local t3x-local start
 
 Use this for the packaged local T3X experience, including the preview WebUI.
 Package or runtime asset access may be restricted; see [Availability](#availability).
-If you do not have alpha package access yet, use the source-development path
-below.
+If this package returns 404 or cannot be resolved, use the source-development
+path above.
 
 ### Use YOps as a library
 
@@ -62,24 +79,8 @@ npm install @t3x-dev/yops
 
 Use this when you want the deterministic YAML operation engine inside your own
 app.
-
-### Develop from source
-
-```bash
-git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
-pnpm install
-pnpm dev:api     # API at localhost:8000
-pnpm dev:webui   # WebUI preview at localhost:3000
-```
-
-Requires Node.js 20+ and pnpm 10+.
-
-Use this to contribute to T3X or run the source-first apps locally. Source
-development opens straight into the app by default; set `AUTH_DISABLED=false`
-before starting both processes if you want to exercise the login flow.
-
-Use source development when you do not have restricted alpha package access yet,
-or when you want to inspect and change the repository itself.
+If npm returns 404 or cannot resolve the package, use the source workspace until
+package access is granted.
 
 ### Validate the self-hosted stack <sup>evaluation</sup>
 
