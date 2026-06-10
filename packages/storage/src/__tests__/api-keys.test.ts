@@ -25,6 +25,8 @@ import {
 import { insertProject } from '../queries/projects';
 import { createTestDB, testData } from './setup';
 
+const testApiKey = (suffix: string) => `t3xk_${suffix}`;
+
 describe('API Keys Storage', () => {
   let db: AnyDB;
   let cleanup: () => Promise<void>;
@@ -48,7 +50,7 @@ describe('API Keys Storage', () => {
     it('creates an API key with all required fields', async () => {
       const result = await createApiKey(db, {
         name: 'Test Key',
-        keyValue: 't3xk_testkey1234567890abcdef',
+        keyValue: testApiKey('testkey1234567890abcdef'),
       });
 
       expect(result).toBeDefined();
@@ -66,7 +68,7 @@ describe('API Keys Storage', () => {
     it('creates a project-scoped API key', async () => {
       const result = await createApiKey(db, {
         name: 'Project Key',
-        keyValue: 't3xk_projectkey1234567890ab',
+        keyValue: testApiKey('projectkey1234567890ab'),
         projectId: testProjectId,
       });
 
@@ -75,7 +77,7 @@ describe('API Keys Storage', () => {
     });
 
     it('stores the SHA-256 hash, not the raw key', async () => {
-      const rawKey = 't3xk_rawhashcheck1234567890';
+      const rawKey = testApiKey('rawhashcheck1234567890');
       const result = await createApiKey(db, {
         name: 'Hash Check Key',
         keyValue: rawKey,
@@ -88,7 +90,7 @@ describe('API Keys Storage', () => {
     });
 
     it('stores the first 8 chars as key_prefix', async () => {
-      const rawKey = 't3xk_abcdefghijklmnop';
+      const rawKey = testApiKey('abcdefghijklmnop');
       const result = await createApiKey(db, {
         name: 'Prefix Check Key',
         keyValue: rawKey,
@@ -100,7 +102,7 @@ describe('API Keys Storage', () => {
 
   describe('findApiKeyByValue', () => {
     it('finds an API key by raw value', async () => {
-      const rawKey = 't3xk_findbyvalue1234567890';
+      const rawKey = testApiKey('findbyvalue1234567890');
       const created = await createApiKey(db, {
         name: 'Find By Value Key',
         keyValue: rawKey,
@@ -114,13 +116,13 @@ describe('API Keys Storage', () => {
     });
 
     it('returns null for non-existent key', async () => {
-      const found = await findApiKeyByValue(db, 't3xk_nonexistent1234567890');
+      const found = await findApiKeyByValue(db, testApiKey('nonexistent1234567890'));
 
       expect(found).toBeNull();
     });
 
     it('returns null for revoked key', async () => {
-      const rawKey = 't3xk_revokedkey1234567890ab';
+      const rawKey = testApiKey('revokedkey1234567890ab');
       const created = await createApiKey(db, {
         name: 'Revoked Key',
         keyValue: rawKey,
@@ -137,7 +139,7 @@ describe('API Keys Storage', () => {
     it('finds an API key by ID', async () => {
       const created = await createApiKey(db, {
         name: 'Find By ID Key',
-        keyValue: 't3xk_findbyid12345678901234',
+        keyValue: testApiKey('findbyid12345678901234'),
       });
 
       const found = await findApiKeyById(db, created.id);
@@ -154,7 +156,7 @@ describe('API Keys Storage', () => {
     });
 
     it('returns revoked key (unlike findApiKeyByValue)', async () => {
-      const rawKey = 't3xk_findbyidrevoked1234567';
+      const rawKey = testApiKey('findbyidrevoked1234567');
       const created = await createApiKey(db, {
         name: 'Revoked By ID Key',
         keyValue: rawKey,
@@ -184,7 +186,7 @@ describe('API Keys Storage', () => {
       // Create a key scoped to the test project
       await createApiKey(db, {
         name: 'Project Scoped List Key',
-        keyValue: 't3xk_projectlist1234567890a',
+        keyValue: testApiKey('projectlist1234567890a'),
         projectId: testProjectId,
       });
 
@@ -197,7 +199,7 @@ describe('API Keys Storage', () => {
     });
 
     it('excludes revoked keys', async () => {
-      const rawKey = 't3xk_listrevoked1234567890a';
+      const rawKey = testApiKey('listrevoked1234567890a');
       const created = await createApiKey(db, {
         name: 'List Revoked Key',
         keyValue: rawKey,
@@ -215,7 +217,7 @@ describe('API Keys Storage', () => {
     it('soft-deletes an API key', async () => {
       const created = await createApiKey(db, {
         name: 'Revoke Test Key',
-        keyValue: 't3xk_revoketest1234567890ab',
+        keyValue: testApiKey('revoketest1234567890ab'),
       });
 
       const revoked = await revokeApiKey(db, created.id);
@@ -234,7 +236,7 @@ describe('API Keys Storage', () => {
     it('can revoke an already revoked key (idempotent)', async () => {
       const created = await createApiKey(db, {
         name: 'Double Revoke Key',
-        keyValue: 't3xk_doublerevoke1234567890',
+        keyValue: testApiKey('doublerevoke1234567890'),
       });
 
       const first = await revokeApiKey(db, created.id);
@@ -250,7 +252,7 @@ describe('API Keys Storage', () => {
     it('updates last_used_at timestamp', async () => {
       const created = await createApiKey(db, {
         name: 'Touch Test Key',
-        keyValue: 't3xk_touchtest12345678901234',
+        keyValue: testApiKey('touchtest12345678901234'),
       });
 
       expect(created.last_used_at).toBeNull();
@@ -265,7 +267,7 @@ describe('API Keys Storage', () => {
     it('updates timestamp on subsequent calls', async () => {
       const created = await createApiKey(db, {
         name: 'Touch Twice Key',
-        keyValue: 't3xk_touchtwice12345678901234',
+        keyValue: testApiKey('touchtwice12345678901234'),
       });
 
       await touchLastUsed(db, created.id);
@@ -286,7 +288,7 @@ describe('API Keys Storage', () => {
     it('uses snake_case for all fields', async () => {
       const created = await createApiKey(db, {
         name: 'Format Test Key',
-        keyValue: 't3xk_formattest1234567890ab',
+        keyValue: testApiKey('formattest1234567890ab'),
       });
 
       // Verify snake_case keys exist
@@ -311,7 +313,7 @@ describe('API Keys Storage', () => {
     it('converts timestamps to ISO strings', async () => {
       const created = await createApiKey(db, {
         name: 'ISO Test Key',
-        keyValue: 't3xk_isotest123456789012345',
+        keyValue: testApiKey('isotest123456789012345'),
       });
 
       expect(created.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);

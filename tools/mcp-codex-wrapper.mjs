@@ -29,7 +29,7 @@ log(
       T3X_MCP_BACKEND: childEnv.T3X_MCP_BACKEND ?? null,
       T3X_API_URL: childEnv.T3X_API_URL ?? null,
       T3X_TOOLSETS: childEnv.T3X_TOOLSETS ?? null,
-      T3X_API_KEY: childEnv.T3X_API_KEY ? '<set>' : '<unset>',
+      apiKeyConfigured: Boolean(childEnv.T3X_API_KEY),
       HOME: childEnv.HOME ?? null,
       PATH: childEnv.PATH ?? null,
     },
