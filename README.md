@@ -9,9 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://t3x-docs.vercel.app">Docs</a> &middot;
-  <a href="https://t3x.dev">Website</a> &middot;
-  <a href="https://discord.gg/t3x">Community</a>
+  <a href="https://docs.t3x.dev">Docs</a> &middot;
+  <a href="https://www.t3x.dev">Website</a>
 </p>
 
 <p align="center">
@@ -97,7 +96,7 @@ WebUI visit goes through the built-in username/password login at `/login`.
 ## WebUI preview
 
 <p align="center">
-  <img src="https://t3x-docs.vercel.app/img/screenshots/chat-light.png" alt="T3X WebUI chat preview" width="760" />
+  <img src="https://docs.t3x.dev/img/screenshots/chat-light.png" alt="T3X WebUI chat preview" width="760" />
 </p>
 
 The `/chat` view shows the `Source -> YOps -> Commit` workflow before the
@@ -345,7 +344,7 @@ release surface.
 
 ## Documentation
 
-[t3x-docs.vercel.app](https://t3x-docs.vercel.app) &mdash; Quickstart, YOps
+[docs.t3x.dev](https://docs.t3x.dev) &mdash; Quickstart, YOps
 reference, WebUI guide, and release notes.
 
 Policies: [Security](SECURITY.md) &middot; [Alpha limitations](docs/limitations.md) &middot;
