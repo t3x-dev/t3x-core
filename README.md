@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://docs.t3x.dev">Docs</a> &middot;
-  <a href="https://t3x.dev">Website</a>
+  <a href="https://www.t3x.dev">Website</a>
 </p>
 
 <p align="center">
