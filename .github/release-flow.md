@@ -101,7 +101,7 @@ Target release PR guards:
 
 Some target release guards are not fully automated yet. They are part of the
 alpha release-readiness workstreams and should become required checks before
-the first restricted alpha publish.
+the first public alpha publish.
 
 ## Release Readiness Report Schema
 
@@ -142,8 +142,8 @@ External tester evidence:
 - Each file declares `id`, `tester`, `status`, and `summary`, with an optional
   `url`.
 - `status` is one of `pass`, `fail`, or `missing`.
-- Demo, public npm access flips, and runtime artifact publishing are not
-  required by this readiness report.
+- Demo and runtime artifact publishing are not required by this readiness
+  report.
 
 Owner decisions:
 
@@ -165,7 +165,7 @@ Release PR checklist:
 5. List included PRs or the comparison range.
 6. Add user-facing release notes.
 7. Fill in the `Package Releases` section. Use `- None` when no package publish
-   is intended. For the current restricted alpha publish flow, package releases
+   is intended. For the current public alpha publish flow, package releases
    must list the complete npm publish surface with target package versions:
    `@t3x-dev/local` and `@t3x-dev/yops`.
 8. Confirm changesets are present when public package behavior changed.
@@ -180,18 +180,20 @@ After the product release PR merges, the `Release` workflow runs on `main`.
 - If unconsumed changesets are present, Changesets creates a
   `chore: version packages` pull request.
 - If the version packages PR merges, the same workflow publishes the package
-  artifacts to npm and uploads the packed npm package tarballs to the product
-  GitHub Release `t3x-vx.y.z` as archived release assets.
+  artifacts to npm and uploads release assets to three GitHub Release records:
+  the product release `t3x-vx.y.z`, the local package release
+  `t3x-local-vx.y.z`, and the YOps package release `t3x-yops-vx.y.z`.
 - If no changesets or version package commit are present, the product release is
   code-only and no package publish is expected.
 - The workflow records product releases by creating a `t3x-vx.y.z` GitHub
   Release from the merged release PR notes. Changesets version package PRs do
   not create product release records. Code-only product release notes omit the
   `Package Releases` section from the final GitHub Release.
-- Runtime tarballs continue to live on the local runtime release
-  `t3x-local-vx.y.z`. The npm package `.tgz` files on `t3x-vx.y.z` are
-  installable-package mirrors for audit and direct download convenience; npm
-  remains the primary install source.
+- Runtime tarballs live on the local package release `t3x-local-vx.y.z`
+  alongside the `@t3x-dev/local` npm package tarball. The product release
+  `t3x-vx.y.z` carries a package manifest, checksums, and a combined package
+  archive for audit and direct download convenience; npm remains the primary
+  install source.
 
 The `Release` workflow must create the `chore: version packages` pull request
 with the `CHANGESETS_TOKEN` repository secret. This secret should be a GitHub
@@ -234,11 +236,11 @@ There are two version streams:
   package artifacts managed by Changesets.
 
 These versions can differ. For example, T3X product release `0.4.0` may publish
-no packages, or it may publish the current restricted alpha npm surface with
+no packages, or it may publish the current public alpha npm surface with
 package versions determined by Changesets.
 
 A changeset is required when a pull request changes user-visible behavior for a
-restricted alpha package:
+public alpha package:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
@@ -256,8 +258,8 @@ Examples that usually do not require a changeset:
 - CI workflow changes.
 - Contributor docs.
 - Tests that do not change package behavior.
-- Changes limited to restricted/internal packages that are not exported through
-  a public package.
+- Changes limited to internal packages that are not exported through a public
+  package.
 
 When an ordinary PR into `dev` has no package or product release impact, mark it
 as `no-release-impact` in the PR body or label. A product release PR into
@@ -285,7 +287,7 @@ that npm packages changed.
 - A product release may publish zero packages. In the release PR body, use
   `Package Releases` with `- None`; the final GitHub Release omits package
   information for code-only releases.
-- The current restricted alpha package publish is the complete npm publish
+- The current public alpha package publish is the complete npm publish
   surface: `@t3x-dev/local` and `@t3x-dev/yops`.
 - Because the current package release set includes `@t3x-dev/local`, runtime
   artifacts are required for package releases.

@@ -19,8 +19,8 @@ applies them.
 
 ## Release status
 
-`@t3x-dev/yops@0.4.1` is part of the restricted T3X alpha release surface.
-Package visibility may be limited to accounts with alpha access.
+`@t3x-dev/yops@0.4.1` is part of the public T3X alpha release surface.
+Package visibility is public on npm.
 
 ## Stability policy
 
@@ -62,8 +62,7 @@ The spec is the source of truth. The registry enforces it. The engine executes i
 
 ## Install
 
-This command requires restricted alpha npm access. If npm returns 404 or cannot
-resolve the package, use the source workspace until package access is granted.
+This command uses the public npm package.
 
 ```bash
 npm install @t3x-dev/yops

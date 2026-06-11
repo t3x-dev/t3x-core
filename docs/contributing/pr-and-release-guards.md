@@ -60,7 +60,7 @@ The release PR policy check also validates changeset files:
   types like `patch`, `minor`, or `major`.
 - Listed public packages must appear in changeset frontmatter.
 - Public packages in changeset frontmatter must appear in `Package Releases`.
-- Package releases currently require both restricted alpha npm packages:
+- Package releases currently require both public alpha npm packages:
   `@t3x-dev/local` and `@t3x-dev/yops`.
 
 The product release version is independent from npm package versions. If the

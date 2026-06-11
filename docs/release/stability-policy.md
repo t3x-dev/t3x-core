@@ -4,15 +4,15 @@ This document defines the minimum stability expectations for the T3X release
 surface. It should evolve as packages move from alpha candidates into stable
 support.
 
-## Restricted Alpha Surface
+## Public Alpha Surface
 
-The restricted alpha surface is limited to:
+The public alpha surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
 
-Other packages may exist in the repository, but they are treated as internal or
-restricted until explicitly promoted.
+Other packages may exist in the repository, but they are treated as internal
+until explicitly promoted.
 
 ## Stability Tiers
 
@@ -60,9 +60,9 @@ The YOps contract-bearing surface includes:
 - Conformance test cases in `yops.yaml`.
 - Recipes and examples that users or agents may copy.
 - Deprecation and removal rules.
-- Versioning expectations for the restricted alpha package.
+- Versioning expectations for the public alpha package.
 
-These surfaces may still change during restricted alpha, but they cannot change
+These surfaces may still change during public alpha, but they cannot change
 casually. A PR that changes any contract-bearing surface must state whether the
 change is additive, tightening, or breaking.
 

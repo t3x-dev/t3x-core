@@ -12,7 +12,7 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
-test('release surface declares local and yops as the restricted alpha npm packages', () => {
+test('release surface declares local and yops as the public alpha npm packages', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
@@ -26,8 +26,8 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
-  assert.equal(result.packagesByName.get('@t3x-dev/local')?.access, 'restricted');
-  assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'restricted');
+  assert.equal(result.packagesByName.get('@t3x-dev/local')?.access, 'public');
+  assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/core')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/api-client')?.access, 'restricted');
@@ -35,12 +35,12 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   assert.equal(result.packagesByName.get('@t3x-dev/mcp')?.access, 'restricted');
 });
 
-test('README mirrors the restricted alpha surface instead of the old broad package list', () => {
+test('README mirrors the public alpha surface instead of the old broad package list', () => {
   const readme = readText('README.md');
 
   assert.match(readme, /The current npm release surface is intentionally narrow/);
-  assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| restricted alpha \|/);
-  assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| restricted alpha \|/);
+  assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha \|/);
+  assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| public alpha \|/);
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);
 });
