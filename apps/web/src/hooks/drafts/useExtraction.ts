@@ -35,7 +35,7 @@ import {
 } from '@/domain/sourceTextDrafts';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
 import { useChatStore } from '@/store/chatStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import { EXTRACTION_TOAST_ID } from './extractionToast';
 
@@ -69,7 +69,7 @@ function defaultConfirmOverwrite(): boolean {
 }
 
 function inlineHumanSource(): HumanSource {
-  const author = useSettingsStore.getState().localWorkspaceName.trim() || 'Local Workspace';
+  const author = resolveLocalWorkspaceName(useSettingsStore.getState().localWorkspaceName);
   return {
     type: 'human',
     author,

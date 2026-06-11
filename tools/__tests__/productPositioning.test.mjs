@@ -31,6 +31,10 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
   const surfaces = [
     'README.md',
     'docs/README.md',
+    'apps/cli/README.md',
+    'apps/local/README.md',
+    'apps/web/README.md',
+    'packages/yops/README.md',
     'apps/web/src/app/chat/page.tsx',
     'apps/web/src/components/onboarding/FirstRunDemoOverlay.tsx',
     'apps/web/src/components/chat/ChatWorkspace.tsx',
@@ -45,7 +49,9 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
     /source becomes meaning/i,
     /applied meaning/i,
     /reviewed meaning/i,
+    /semantic tree content/i,
     /What should T3X make sense of\?/i,
+    /semantic version control for AI conversations/i,
     /semantic version control system/i,
   ];
 
@@ -57,8 +63,9 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
   }
 });
 
-test('release policy avoids public-alpha wording during restricted alpha', () => {
+test('release policy documents the public alpha package surface', () => {
   const releaseFlow = readText('.github/release-flow.md');
 
-  assert.doesNotMatch(releaseFlow, /public alpha/i);
+  assert.match(releaseFlow, /public alpha/i);
+  assert.doesNotMatch(releaseFlow, /restricted alpha/i);
 });

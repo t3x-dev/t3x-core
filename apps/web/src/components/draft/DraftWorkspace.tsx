@@ -61,92 +61,56 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'actions',
     label: 'Top Bar',
-    title: 'Use the draft top bar to save, extract, and commit',
-    description:
-      'The draft workspace is where seeded material becomes reviewed semantic meaning before it turns into a commit.',
+    title: 'Use top bar',
+    description: 'Save, extract, or commit.',
     target: 'draft-actions',
     tone: 'pending',
     icon: Sparkles,
-    details: [
-      'Back returns to the project canvas.',
-      'The title can be edited inline.',
-      'Commit is disabled until there is reviewable content.',
-    ],
   },
   {
     id: 'fixture',
     label: 'No API',
-    title: 'This demo replay uses prepared content only',
-    description:
-      'The fixture banner makes it explicit that the walkthrough is not calling a provider or requiring user API keys.',
+    title: 'Fixture replay',
+    description: 'No provider or API key is used.',
     target: 'draft-fixture-banner',
     tone: 'commit',
     icon: FileCode2,
-    details: [
-      'The seeded nodes, constraints, and preview are developer-provided.',
-      'Users can still click through the same review surfaces.',
-      'This is the play demo path for learning the workflow safely.',
-    ],
   },
   {
     id: 'nodes',
     label: 'Nodes',
-    title: 'Review which semantic points should survive',
-    description:
-      'The node area teaches include/exclude review before the project receives a new version.',
+    title: 'Review semantic points',
+    description: 'Choose what gets committed.',
     target: 'draft-nodes',
     tone: 'extract',
     icon: ListChecks,
-    details: [
-      'Included points become the candidate semantic content.',
-      'Users can edit source-backed meaning before committing.',
-      'This is the main habit the demo should teach: review before versioning.',
-    ],
   },
   {
     id: 'rules',
     label: 'Rules',
-    title: 'Use constraints and instructions to shape the output',
-    description:
-      'The output rules section teaches what the leaf must include, exclude, and how it should be generated.',
+    title: 'Set output rules',
+    description: 'Control required and excluded content.',
     target: 'draft-constraints',
     tone: 'leaf',
     icon: SlidersHorizontal,
-    details: [
-      'Constraints become quality checks.',
-      'Instructions explain the desired artifact style.',
-      'The seeded replay already fills these without an API call.',
-    ],
   },
   {
     id: 'preview',
     label: 'Preview',
-    title: 'Preview shows the artifact before commit',
-    description:
-      'The bottom panel lets users inspect the prepared leaf output and understand what will be reused later.',
+    title: 'Preview the artifact',
+    description: 'Inspect output before commit.',
     target: 'draft-preview',
     tone: 'leaf',
     icon: PanelBottom,
-    details: [
-      'The fixture preview is visible immediately.',
-      'Resize or collapse the preview panel to learn the workspace controls.',
-      'In live use, Generate Preview produces this area from a provider.',
-    ],
   },
   {
     id: 'commit',
     label: 'Commit',
-    title: 'Commit finalizes reviewed state',
-    description:
-      'The final action converts reviewed state points and output rules into a stable project version.',
+    title: 'Commit state',
+    description: 'Save a stable version.',
     target: 'draft-commit-button',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Click Commit to open the confirmation dialog.',
-      'The success state can route back to canvas or keep iterating.',
-      'After commit, users can inspect the version, diff it, and create leaves.',
-    ],
   },
 ];
 
@@ -408,7 +372,7 @@ export function DraftWorkspace({ projectId, onClose, onDemoDone }: DraftWorkspac
       />
       <FeatureTourOverlay
         open={tourOpen}
-        title="Draft walkthrough"
+        title="Draft"
         steps={DRAFT_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={onDemoDone}

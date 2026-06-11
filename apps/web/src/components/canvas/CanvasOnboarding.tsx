@@ -32,7 +32,7 @@ export function CanvasOnboarding({ onAddNode, onDismiss, isAdding }: CanvasOnboa
     {
       icon: GitCommitHorizontal,
       title: 'Extract State',
-      desc: `${t('commitAction')} semantic content from your conversations`,
+      desc: `${t('commitAction')} structured state from your conversations`,
     },
     {
       icon: FileOutput,

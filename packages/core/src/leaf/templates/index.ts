@@ -19,9 +19,10 @@ export {
   emailDefaultTemplate,
   getAllDefaultTemplates,
   getDefaultTemplate,
+  linkedinDefaultTemplate,
+  redditDefaultTemplate,
   slackDefaultTemplate,
+  threadsDefaultTemplate,
   // Individual templates
   tweetDefaultTemplate,
-  wechatDefaultTemplate,
-  weiboDefaultTemplate,
 } from './defaults';

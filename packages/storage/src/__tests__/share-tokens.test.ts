@@ -397,7 +397,7 @@ describe('Share Tokens Storage', () => {
     it('revoking one token does not affect others', async () => {
       const leaf = await createLeaf(db, {
         commit_hash: testCommitHash,
-        type: 'weibo',
+        type: 'linkedin',
         title: 'Selective Revoke Test',
         project_id: testProjectId,
       });

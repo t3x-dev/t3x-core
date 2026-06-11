@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { setLeafSemanticPointIncluded } from '@/domain/leaf/semanticPoints';
 import { updateLeaf } from '@/infrastructure';
 import type { Constraint, Leaf } from '@/types/api';
@@ -170,7 +171,7 @@ export function useLeafConstraintsEdit(
         const updated = await updateLeaf(leafId, { config: updatedConfig });
         setLeaf(updated);
       } catch (err) {
-        setModelError(err instanceof Error ? err.message : 'Failed to update model');
+        setModelError(formatUserFacingError(err, 'Failed to update model.'));
       } finally {
         setSavingModel(false);
       }

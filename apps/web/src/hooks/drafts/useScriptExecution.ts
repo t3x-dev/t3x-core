@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { SourceValidationError } from '@/commands/yops/errors';
 import { resolveHumanSource } from '@/commands/yops/goldEditBuilder';
 import { commitOps } from '@/commands/yops/yopsService';
+import { formatUserFacingError } from '@/domain/format/errors';
 import {
   type ApplyPayloadPolicy,
   deriveWorkspaceScriptState,
@@ -18,7 +19,7 @@ import { reconcileScriptSources } from '@/domain/yops/sourceReconciliation';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { updateSourceTextRevision } from '@/infrastructure/sourceTextRevisions';
 import { useChatStore } from '@/store/chatStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import {
   selectActiveUncommittedRowCount,
   selectCanonicalScriptText,
@@ -76,7 +77,7 @@ const RECONCILIATION_PROBE_SOURCE: HumanSource = {
 
 function resolveScriptHumanSource() {
   return resolveHumanSource('script', {
-    localAuthor: useSettingsStore.getState().localWorkspaceName,
+    localAuthor: resolveLocalWorkspaceName(useSettingsStore.getState().localWorkspaceName),
   });
 }
 
@@ -222,7 +223,7 @@ export function useScriptExecution() {
       // least one op was missing source or changed by the script editor.
       const msg =
         err instanceof SourceValidationError
-          ? 'Cannot apply: no session user or local workspace author available to attribute the edit.'
+          ? 'Cannot apply: no session user or local author available to attribute the edit.'
           : err instanceof Error
             ? err.message
             : 'Cannot apply: source validation failed.';
@@ -251,7 +252,7 @@ export function useScriptExecution() {
       // Commit failed — yops_log was NOT written; the draft is still
       // applicable, leave it staged so the user can retry. This is the
       // only path that preserves the draft.
-      const msg = err instanceof Error ? err.message : 'Execution failed';
+      const msg = formatUserFacingError(err, 'Execution failed.');
       useWorkspaceStore.getState().setMode('idle');
       if (currentScriptDirty) {
         warnYOpsInputIssue('Fix the YOps changes before applying.', msg);

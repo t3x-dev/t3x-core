@@ -1,7 +1,7 @@
 /**
  * Diff Command
  *
- * Compare two commits and display semantic differences.
+ * Compare two commits and display structured-state differences.
  *
  *   t3x diff <from> <to> [--slot] [--json]
  */

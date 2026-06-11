@@ -11,6 +11,7 @@
 import type { Pin, PinType } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { createPin, deletePin, updatePinAssertions } from '@/commands/pins';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchPins } from '@/queries/pins';
 import { usePinsStore } from '@/store/pinsStore';
 
@@ -40,7 +41,7 @@ export function usePinsCrud() {
       store.setLoading(false);
       store.setInitialized(true);
       store.setCurrentProjectId(projectId);
-      store.notifyCallback?.(`Failed to load pins: ${error.message}`, 'error');
+      store.notifyCallback?.(formatUserFacingError(error, 'Failed to load pins.'), 'error');
     } finally {
       fetchInProgressFor = null;
     }
@@ -66,7 +67,7 @@ export function usePinsCrud() {
         if (error.message.includes('DUPLICATE_PIN') || error.message.includes('409')) {
           notify?.('Item is already pinned', 'warning');
         } else {
-          notify?.(`Failed to pin: ${error.message}`, 'error');
+          notify?.(formatUserFacingError(error, 'Failed to pin item.'), 'error');
         }
         return null;
       }
@@ -92,7 +93,7 @@ export function usePinsCrud() {
       if (error.message.includes('404') || error.message.includes('not found')) {
         notify?.('Pin was already removed', 'warning');
       } else {
-        notify?.(`Failed to remove pin: ${error.message}`, 'error');
+        notify?.(formatUserFacingError(error, 'Failed to remove pin.'), 'error');
       }
     }
   }, []);
@@ -109,7 +110,7 @@ export function usePinsCrud() {
         return updated;
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        notify?.(`Failed to update pin: ${error.message}`, 'error');
+        notify?.(formatUserFacingError(error, 'Failed to update pin.'), 'error');
         return null;
       }
     },

@@ -134,7 +134,7 @@ Extract -> Inspect -> Edit -> Commit
 
 Merge
 
-1. t3x_diff({ source_hash, target_hash })                -> semantic diff
+1. t3x_diff({ source_hash, target_hash })                -> structured diff
 2. t3x_merge({ action: "prepare", source_hash, target_hash })
 3. t3x_query / resources/read merge draft for inspection
 4. t3x_merge({ action: "resolve", ... })

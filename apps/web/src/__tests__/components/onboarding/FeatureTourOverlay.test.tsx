@@ -29,7 +29,6 @@ describe('FeatureTourOverlay', () => {
         target: 'stable-target',
         tone: 'commit',
         icon: TestIcon as FeatureTourStep['icon'],
-        details: ['Watch the stable target.'],
       },
     ];
 

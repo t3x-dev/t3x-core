@@ -1,8 +1,8 @@
 /**
  * Diff Routes (OpenAPI)
  *
- * POST /v1/diff/two-way - Calculate two-way semantic diff
- * POST /v1/diff/three-way - Calculate three-way semantic diff
+ * POST /v1/diff/two-way - Calculate two-way structured diff
+ * POST /v1/diff/three-way - Calculate three-way structured diff
  * POST /v1/diff/frame - Frame-based diff between two commits
  */
 
@@ -68,7 +68,7 @@ const twoWayRoute = createRoute({
   method: 'post',
   path: '/v1/diff/two-way',
   tags: ['Diff'],
-  summary: 'Calculate two-way semantic diff',
+  summary: 'Calculate two-way structured diff',
   request: {
     body: {
       content: { 'application/json': { schema: TwoWayBodySchema } },
@@ -121,7 +121,7 @@ const threeWayRoute = createRoute({
   method: 'post',
   path: '/v1/diff/three-way',
   tags: ['Diff'],
-  summary: 'Calculate three-way semantic diff',
+  summary: 'Calculate three-way structured diff',
   request: {
     body: {
       content: { 'application/json': { schema: ThreeWayBodySchema } },
@@ -240,7 +240,7 @@ diffRoutes.onError((err, c) => {
 });
 
 /**
- * POST /v1/diff/two-way - Calculate two-way semantic diff
+ * POST /v1/diff/two-way - Calculate two-way structured diff
  */
 diffRoutes.openapi(twoWayRoute, async (c) => {
   const body = c.req.valid('json');
@@ -279,7 +279,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
     }
   }
   // Removed legacy sentence/segment diff modes. Returning success with a
-  // placeholder made callers believe they had a real semantic diff.
+  // placeholder made callers believe they had a real structured diff.
   else if ((body.baseTurnHash && body.targetTurnHash) || (body.baseId && body.targetId)) {
     return errorResponse(
       c,
@@ -298,7 +298,7 @@ diffRoutes.openapi(twoWayRoute, async (c) => {
 });
 
 /**
- * POST /v1/diff/three-way - Calculate three-way semantic diff
+ * POST /v1/diff/three-way - Calculate three-way structured diff
  */
 diffRoutes.openapi(threeWayRoute, async (c) => {
   const body = c.req.valid('json');

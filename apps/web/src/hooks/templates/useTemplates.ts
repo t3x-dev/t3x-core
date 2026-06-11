@@ -13,9 +13,10 @@ import {
   createTemplate as createTemplateCommand,
   deleteTemplate as deleteTemplateCommand,
 } from '@/commands/templates';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { fetchTemplates } from '@/queries/templates';
 import { useTemplateStore } from '@/store/templateStore';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 
 // Module-scoped generation counter — survives component re-renders so
 // stale fetches are discarded even when the hook is remounted.
@@ -47,7 +48,7 @@ export function useTemplates() {
       store.setLoading(false);
     } catch (err) {
       if (gen !== fetchGen) return;
-      store.setError(err instanceof Error ? err.message : 'Failed to load templates');
+      store.setError(formatUserFacingError(err, 'Failed to load templates.'));
       store.setLoading(false);
     }
   }, []);
@@ -61,7 +62,7 @@ export function useTemplates() {
   );
 
   const setLeafType = useCallback(
-    (next: string | null) => {
+    (next: TemplateLeafType | null) => {
       useTemplateStore.getState().setLeafType(next);
       void runFetch();
     },

@@ -48,6 +48,8 @@ export function ProjectDetailPageContent({
   const searchParams = useSearchParams();
   const showIntroDemo =
     process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
+  const introDemoStage = searchParams.get('introDemoStage');
+  const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
   const [projectTourOpen, setProjectTourOpen] = useState(showIntroDemo);
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
 
@@ -369,6 +371,7 @@ export function ProjectDetailPageContent({
         onDone={() => setProjectTourOpen(false)}
         onSkip={() => void completeIntroDemo()}
         interactionMode="guided"
+        stage={projectTourStage}
       />
     </div>
   );

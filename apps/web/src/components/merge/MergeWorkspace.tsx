@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommitCeremony } from '@/components/commit/CommitCeremony';
 import { MergeIllustration } from '@/components/illustrations/MergeIllustration';
 import { EmptyState } from '@/components/ui/empty-state';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { buildMergeDecisionLabels, buildMergeVoices } from '@/domain/merge/voices';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
@@ -168,7 +169,7 @@ export function MergeWorkspace({
       })
       .catch((err) => {
         if (cancelled) return;
-        setTreeError(err instanceof Error ? err.message : 'Failed to load commits for tree merge');
+        setTreeError(formatUserFacingError(err, 'Failed to load commits for tree merge.'));
         setTreeLoading(false);
       });
 
@@ -259,7 +260,7 @@ export function MergeWorkspace({
         onClose();
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to commit tree merge';
+      const message = formatUserFacingError(err, 'Failed to commit tree merge.');
       setTreeError(message);
       throw err instanceof Error ? err : new Error(message);
     } finally {

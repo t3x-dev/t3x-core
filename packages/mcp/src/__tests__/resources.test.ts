@@ -59,7 +59,16 @@ vi.mock('@t3x-dev/storage', () => ({
 }));
 
 vi.mock('@t3x-dev/core', () => ({
-  ALL_LEAF_TYPES: ['tweet', 'weibo', 'wechat', 'email', 'article', 'slack', 'deploy_agent'],
+  ALL_LEAF_TYPES: [
+    'tweet',
+    'linkedin',
+    'reddit',
+    'threads',
+    'article',
+    'email',
+    'slack',
+    'deploy_agent',
+  ],
   diffCommits: vi.fn(),
   prepareMerge: vi.fn(),
   executeMerge: vi.fn(),
@@ -198,7 +207,7 @@ describe('MCP resources', () => {
         relations: [],
       },
       project_id: 'proj_123',
-      message: 'Initial semantic commit',
+      message: 'Initial structured-state commit',
       branch: 'main',
       provenance: { method: 'llm_extraction' },
       yops_log_ids: ['yl_1'],
@@ -213,7 +222,7 @@ describe('MCP resources', () => {
       hash: 'sha256:commit123',
       project_id: 'proj_123',
       branch: 'main',
-      message: 'Initial semantic commit',
+      message: 'Initial structured-state commit',
       tree_count: 1,
       relation_count: 0,
     });

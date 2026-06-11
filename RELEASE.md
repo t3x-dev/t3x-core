@@ -8,13 +8,11 @@ this file is the human-readable mirror.
 
 | Package | Path | Access | Tier | Publish State | Why Published |
 |---|---|---|---|---|---|
-| `@t3x-dev/local` | `apps/local` | restricted | alpha | applied | First-door local installer and no-key demo entrypoint. |
-| `@t3x-dev/yops` | `packages/yops` | restricted | alpha | applied | Deterministic YAML operation contract. |
+| `@t3x-dev/local` | `apps/local` | public | alpha | applied | First-door local installer and no-key demo entrypoint. |
+| `@t3x-dev/yops` | `packages/yops` | public | alpha | applied | Deterministic YAML operation contract. |
 
 `npm_publish: true` means the package is part of the alpha npm release surface.
-`access: restricted` means package visibility is limited to accounts with
-alpha access. A future public access flip is handled separately from the
-restricted alpha release.
+`access: public` means the package is available through the public npm registry.
 
 ## Restricted Packages
 
@@ -42,5 +40,5 @@ surface. They may be promoted later after API stability review:
 ## Changelog
 
 - 2026-06-01: Kept the npm release surface to `@t3x-dev/local` and
-  `@t3x-dev/yops`, with restricted npm access for the closed alpha.
+  `@t3x-dev/yops`.
 - 2026-05-31: Initial alpha declaration.

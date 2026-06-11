@@ -5,7 +5,13 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { insertConversation, insertProject, insertTurn } from '@t3x-dev/storage';
+import {
+  createCommit,
+  deleteProject,
+  insertConversation,
+  insertProject,
+  insertTurn,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -75,6 +81,23 @@ describe('Conversations Routes', () => {
       expect(res.status).toBe(200);
       const data: ApiResponse = await res.json();
       expect(data.data.conversations.length).toBe(1);
+    });
+
+    it('returns 404 after the project is soft-deleted', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Deleted Conversation Project' })
+      );
+      await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Hidden after project delete',
+      });
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/conversations?project_id=${project.projectId}`);
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
     });
   });
 
@@ -188,6 +211,23 @@ describe('Conversations Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.error.code).toBe('NOT_FOUND');
     });
+
+    it('returns 404 after the conversation project is soft-deleted', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Deleted Conversation Read' })
+      );
+      const conv = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'Hidden conversation',
+      });
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/conversations/${conv.conversationId}`);
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
+    });
   });
 
   // =========================================================================
@@ -259,6 +299,28 @@ describe('Conversations Routes', () => {
 
       expect(res.status).toBe(404);
     });
+
+    it('returns 404 after the conversation project is soft-deleted', async () => {
+      const project = await insertProject(
+        mockDB,
+        testData.project({ name: 'Deleted Conversation Update' })
+      );
+      const conv = await insertConversation(mockDB, {
+        projectId: project.projectId,
+        title: 'No updates after delete',
+      });
+      await deleteProject(mockDB, project.projectId);
+
+      const res = await app.request(`/v1/conversations/${conv.conversationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Should not update' }),
+      });
+
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('NOT_FOUND');
+    });
   });
 
   // =========================================================================
@@ -282,6 +344,33 @@ describe('Conversations Routes', () => {
       // Verify deleted
       const getRes = await app.request(`/v1/conversations/${conv.conversationId}`);
       expect(getRes.status).toBe(404);
+    });
+
+    it('returns 409 when the conversation is referenced by a commit source', async () => {
+      const conv = await insertConversation(mockDB, {
+        projectId: testProjectId,
+        title: 'Committed Source',
+      });
+      await createCommit(mockDB, {
+        project_id: testProjectId,
+        author: { type: 'human', name: 'Tester' },
+        content: {
+          trees: [{ key: 'source', slots: { text: 'Committed source' }, children: [] }],
+          relations: [],
+        },
+        sources: [{ type: 'conversation', id: conv.conversationId, title: conv.title ?? '' }],
+      });
+
+      const res = await app.request(`/v1/conversations/${conv.conversationId}`, {
+        method: 'DELETE',
+      });
+
+      expect(res.status).toBe(409);
+      const data: ApiResponse = await res.json();
+      expect(data.error.code).toBe('CONFLICT');
+
+      const getRes = await app.request(`/v1/conversations/${conv.conversationId}`);
+      expect(getRes.status).toBe(200);
     });
 
     it('returns 404 for non-existent conversation', async () => {

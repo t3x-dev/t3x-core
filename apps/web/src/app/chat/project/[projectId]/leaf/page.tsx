@@ -16,6 +16,7 @@ import {
   FeatureTourOverlay,
   type FeatureTourStep,
 } from '@/components/onboarding/FeatureTourOverlay';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useProjectLeaves } from '@/hooks/leaves/useProjectLeaves';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -34,17 +35,11 @@ const LEAF_INDEX_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'card',
     label: 'Open leaf',
-    title: 'Click the highlighted leaf artifact row',
-    description:
-      'Leaf starts from an index. The row is the real entry point into the generated output workspace.',
+    title: 'Open the Leaf output',
+    description: 'Open the output workspace.',
     target: 'leaf-index-card',
     tone: 'leaf',
     icon: ClipboardCheck,
-    details: [
-      'Click the artifact row in the center of the page.',
-      'The row opens the full Leaf workspace for this generated output.',
-      'The next page shows output, source coverage, quality, and export controls.',
-    ],
     advanceOnTargetClick: true,
   },
 ];
@@ -80,7 +75,7 @@ export default function ChatProjectLeafIndexPage() {
       } catch (err) {
         if (commitLoadSeq.current !== seq) return;
         setCommitCount(null);
-        setCommitsError(err instanceof Error ? err.message : String(err));
+        setCommitsError(formatUserFacingError(err, 'Failed to load commits.'));
       } finally {
         if (commitLoadSeq.current === seq && !options?.silent) setCommitsLoading(false);
       }
@@ -102,7 +97,7 @@ export default function ChatProjectLeafIndexPage() {
       } catch (err) {
         if (projectLoadSeq.current !== seq) return;
         setConversationCount(null);
-        setProjectError(err instanceof Error ? err.message : String(err));
+        setProjectError(formatUserFacingError(err, 'Failed to load project.'));
       } finally {
         if (projectLoadSeq.current === seq && !options?.silent) setProjectLoading(false);
       }
@@ -289,12 +284,12 @@ export default function ChatProjectLeafIndexPage() {
       </main>
       <FeatureTourOverlay
         open={tourOpen}
-        title="Leaf index walkthrough"
+        title="Leaf"
         steps={LEAF_INDEX_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={continueIntroDemoToLeafDetail}
         onSkip={() => void completeIntroDemo()}
-        doneLabel={leaves.length > 0 ? 'Open Leaf' : 'Done'}
+        doneLabel={leaves.length > 0 ? 'Open Leaf' : 'Skip demo'}
         interactionMode="guided"
       />
     </div>

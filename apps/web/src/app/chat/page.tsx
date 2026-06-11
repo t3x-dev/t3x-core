@@ -97,17 +97,11 @@ function ChatLanding() {
         {
           id: 'send',
           label: 'Send',
-          title: 'Click the highlighted Send button',
-          description:
-            'The composer is already filled with developer-seeded demo material. This click creates the first conversation and replays the preset assistant reply.',
+          title: 'Send the ready prompt',
+          description: 'Send the ready prompt.',
           target: 'landing-send-action',
           tone: 'conversation',
           icon: SendHorizontal,
-          details: [
-            'Click the blue paper-plane button at the lower right of the composer.',
-            'No LLM API is called in this demo path.',
-            'After sending, Chat shows the preset reply and continues to Extract and Apply.',
-          ],
           advanceOnTargetClick: true,
         },
       ];
@@ -117,38 +111,27 @@ function ChatLanding() {
       {
         id: 'create-project',
         label: 'Project',
-        title: 'Create the first project',
-        description:
-          'Start from an empty workspace. A project gives the conversation a place to store state, commits, and leaves.',
+        title: 'Create the demo workspace',
+        description: 'Create the demo workspace.',
         target: 'sidebar-new-project',
         tone: 'conversation',
         icon: FolderPlus,
-        details: [
-          'Click New project in the sidebar.',
-          'Projects keep related conversations and committed state together.',
-          'The demo will continue in the composer after the project is created.',
-        ],
         advanceOnTargetClick: true,
       },
       {
         id: 'confirm-project',
         label: 'Create',
-        title: 'Name it or keep the default, then create',
-        description:
-          'The dialog is the normal project creation flow. The demo only preserves the walkthrough state after creation.',
+        title: 'Confirm the project name',
+        description: 'Confirm the project name.',
         target: 'new-project-create',
         placement: 'side-center',
         tone: 'commit',
         icon: ArrowRight,
-        details: [
-          'You can type a project name, or keep the default.',
-          'Click Create to land back on Chat with this project selected.',
-          'Next, the composer will receive a prepared prompt-review request.',
-        ],
         advanceOnTargetClick: true,
       },
     ];
   }, [introDemoStage, projectIdParam]);
+  const demoTourTitle = introDemoStage === 'compose' && projectIdParam ? 'Chat' : 'Project';
 
   useEffect(() => {
     if (!projectIdParam) return;
@@ -293,12 +276,12 @@ function ChatLanding() {
       </div>
       <FeatureTourOverlay
         open={firstRunDemo.open}
-        title="Guided walkthrough"
+        title={demoTourTitle}
         steps={demoTourSteps}
         onClose={firstRunDemo.close}
         onDone={firstRunDemo.close}
         onSkip={forceIntroDemo ? handleIntroDemoSkip : firstRunDemo.close}
-        doneLabel={forceIntroDemo ? 'Skip' : 'Start using T3X'}
+        doneLabel={forceIntroDemo ? 'Skip demo' : 'Start using T3X'}
         interactionMode={forceIntroDemo ? 'guided' : 'coach'}
       />
     </>

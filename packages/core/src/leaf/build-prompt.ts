@@ -27,28 +27,35 @@ export function getTypeInstructions(
 ): string {
   switch (leafType) {
     case 'tweet':
-      return `Format: Twitter/X post
+      return `Format: X / Twitter post
 - Maximum 280 characters
 - Be concise and impactful
 - Use hashtags sparingly if relevant
 - No formal greetings or sign-offs`;
 
-    case 'weibo':
-      return `Format: Weibo post (微博)
-- Write in Chinese (简体中文)
-- Maximum 2000 characters (but shorter is better)
-- Can include emojis if appropriate
-- Adapt tone for Chinese social media culture`;
+    case 'linkedin':
+      return `Format: LinkedIn post
+- Professional but conversational tone
+- Lead with the main takeaway
+- Use short paragraphs for readability
+- Include a clear closing insight or question`;
 
-    case 'wechat':
-      return `Format: WeChat article/message (微信)
-- Write in Chinese (简体中文)
-- Clear and readable formatting
-- Appropriate for professional or personal context
-- Can be longer form if needed`;
+    case 'reddit':
+      return `Format: Reddit post
+- Use a clear, specific title-style opening
+- Add enough context for community discussion
+- Avoid marketing language
+- End with a concrete question or prompt for replies`;
+
+    case 'threads':
+      return `Format: Threads post
+- Short, conversational, and easy to scan
+- Can use a compact multi-line structure
+- Avoid heavy formatting
+- Keep the tone direct and human`;
 
     case 'article':
-      return `Format: Article/Blog post
+      return `Format: Blog post
 - Include a compelling title
 - Use clear section headings
 - Well-structured paragraphs

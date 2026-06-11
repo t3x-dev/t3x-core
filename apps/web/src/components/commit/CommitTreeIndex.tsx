@@ -14,6 +14,7 @@ import { ChevronRight, Leaf as LeafIcon, Loader2, MessageSquare, Plus } from 'lu
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -42,11 +43,12 @@ interface CommitTreeIndexProps {
 // ============================================================================
 
 const LEAF_TYPE_OPTIONS: { type: LeafType; label: string }[] = [
-  { type: 'tweet', label: 'Twitter' },
-  { type: 'weibo', label: 'Weibo' },
-  { type: 'wechat', label: 'WeChat Moments' },
+  { type: 'tweet', label: 'X / Twitter' },
+  { type: 'linkedin', label: 'LinkedIn' },
+  { type: 'reddit', label: 'Reddit' },
+  { type: 'threads', label: 'Threads' },
+  { type: 'article', label: 'Blog post' },
   { type: 'email', label: 'Email' },
-  { type: 'article', label: 'Article' },
   { type: 'slack', label: 'Slack' },
   { type: 'deploy_agent', label: 'Deploy Agent' },
 ];
@@ -150,7 +152,7 @@ export function CommitTreeIndex({ projectId, leaves, onLeavesChange }: CommitTre
         onLeavesChange([...leaves, leaf]);
         router.push(`/project/${projectId}/leaf/${leaf.id}`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create leaf';
+        const message = formatUserFacingError(err, 'Failed to create leaf.');
         notifyCallback?.(message, 'error');
       } finally {
         setLeafCreating(false);

@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useAvailableModels } from '@/hooks/shared/useAvailableModels';
 import type { LLMProviderInfo } from '@/types/api';
 
@@ -46,7 +47,7 @@ export function ModelSelector({ initialProvider, initialModel, onChange }: Model
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load models');
+          setError(formatUserFacingError(err, 'Failed to load models.'));
           setLoading(false);
         }
       });

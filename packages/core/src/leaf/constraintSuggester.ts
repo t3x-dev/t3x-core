@@ -51,9 +51,9 @@ function buildConstraintSuggestionPrompt(
 
   const knowledgeText = serializeForPrompt(knowledge);
 
-  return `You are a constraint suggestion engine for a semantic version control system.
+  return `You are a constraint suggestion engine for a structured-state version control system.
 
-Given a set of knowledge frames and a target output type, suggest constraints that should be applied when generating output.
+Given a set of committed state frames and a target output type, suggest constraints that should be applied when generating output.
 
 ## Output Type: ${leafType}
 ${typeGuidance}
@@ -96,15 +96,17 @@ Return ONLY the JSON array, no other text.`;
 function getTypeGuidance(leafType: AnyLeafType): string {
   switch (leafType) {
     case 'tweet':
-      return 'Output is a tweet (max 280 characters). Focus on concise, impactful messaging. Suggest character limit exclude constraint.';
-    case 'weibo':
-      return 'Output is a Weibo post (max 140 characters for short posts). Focus on concise Chinese social media style.';
-    case 'wechat':
-      return 'Output is a WeChat article. Can be longer form. Focus on engaging, informative content.';
+      return 'Output is an X / Twitter post (max 280 characters). Focus on concise, impactful messaging. Suggest character limit exclude constraint.';
+    case 'linkedin':
+      return 'Output is a LinkedIn post. Focus on professional credibility, concise context, and a clear takeaway.';
+    case 'reddit':
+      return 'Output is a Reddit post. Focus on enough context for discussion, community fit, and avoiding marketing language.';
+    case 'threads':
+      return 'Output is a Threads post. Focus on short, conversational, scannable writing.';
     case 'email':
       return 'Output is an email. Should have proper greeting, body, and closing. Focus on professionalism and clarity.';
     case 'article':
-      return 'Output is an article/blog post. Should be well-structured with clear sections. Focus on completeness and readability.';
+      return 'Output is a blog post. Should be well-structured with clear sections. Focus on completeness and readability.';
     case 'slack':
       return 'Output is a Slack message. Should be conversational but professional. Focus on clarity and actionability.';
     case 'deploy_agent':

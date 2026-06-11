@@ -74,7 +74,7 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
   let text = '';
 
   // ─────────────────────────────────────────────────────────────────────────
-  // BASE: Current knowledge frames (always included, like git HEAD)
+  // BASE: Current state frames (always included, like git HEAD)
   // ─────────────────────────────────────────────────────────────────────────
   if (input.knowledge) {
     text += '## Current Knowledge\n\n';
@@ -202,10 +202,10 @@ export function buildConversationContext(input: ContextBuildInput): BuiltContext
 /**
  * Build context for leaf generation.
  *
- * Returns knowledge frames - constraints are in leaf itself.
+ * Returns state frames - constraints are in leaf itself.
  *
- * @param knowledge - The semantic content to build context from
- * @returns Built context with knowledge frames
+ * @param knowledge - The state content to build context from
+ * @returns Built context with state frames
  */
 export function buildLeafContext(knowledge: SemanticContent): BuiltContext {
   let text = '## Knowledge\n\n';

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
 import { useTerminology } from '@/hooks/shared/useTerminology';
@@ -97,18 +98,7 @@ export function LeafCreationDialog({
         `/chat/project/${encodeURIComponent(projectId)}/leaf/${encodeURIComponent(leaf.id)}`
       );
     } catch (err) {
-      // Handle specific error codes
-      if (err instanceof Error) {
-        if (err.message.includes('COMMIT_NOT_FOUND')) {
-          toast.error('The commit no longer exists. Please refresh and try again.');
-        } else if (err.message.includes('PROJECT_NOT_FOUND')) {
-          toast.error('Project not found. Please check your permissions.');
-        } else {
-          toast.error(err.message);
-        }
-      } else {
-        toast.error('An unexpected error occurred');
-      }
+      toast.error(formatUserFacingError(err, 'Could not create leaf. Try again.'));
     } finally {
       setIsCreating(false);
     }

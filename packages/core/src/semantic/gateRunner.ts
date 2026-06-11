@@ -31,7 +31,7 @@ export interface GateRunnerOptions {
 
 export class GateRunner {
   /**
-   * Run all gates on semantic content.
+   * Run all gates on state content.
    * Gate 1 always runs. Gates 2 and 3 are optional.
    */
   async run(content: SemanticContent, options: GateRunnerOptions = {}): Promise<GateResult> {

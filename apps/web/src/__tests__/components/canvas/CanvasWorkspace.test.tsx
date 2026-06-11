@@ -36,6 +36,10 @@ const navigationMocks = vi.hoisted(() => ({
   routerPush: vi.fn(),
 }));
 
+const viewportMocks = vi.hoisted(() => ({
+  selectionPanelVisible: false,
+}));
+
 vi.mock('@xyflow/react', async () => {
   const React = await import('react');
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
@@ -198,7 +202,8 @@ vi.mock('@/hooks/conversations/useConversationContext', () => ({
 }));
 
 vi.mock('@/hooks/shared/useChatCompactViewport', () => ({
-  useCompactViewport: () => false,
+  useCompactViewport: (query?: string) =>
+    query === '(min-width: 1280px)' ? viewportMocks.selectionPanelVisible : false,
 }));
 
 vi.mock('@/hooks/shared/useNodePositionSaver', () => ({
@@ -241,6 +246,7 @@ describe('CanvasWorkspace initial fit view', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     flowMocks.reactFlowProps = undefined;
+    viewportMocks.selectionPanelVisible = false;
     globalThis.ResizeObserver = class {
       disconnect() {}
       observe() {}
@@ -330,9 +336,7 @@ describe('CanvasWorkspace initial fit view', () => {
 
     expect(screen.getByTestId('flow-background')).toHaveAttribute('data-variant', 'lines');
     expect(screen.getByTestId('flow-background')).toHaveAttribute('data-gap', '32');
-    const style = screen
-      .getByRole('tree', { name: /knowledge graph canvas/i })
-      .getAttribute('style');
+    const style = screen.getByRole('tree', { name: /state graph canvas/i }).getAttribute('style');
     expect(style).toContain('--surface-canvas');
   });
 
@@ -432,6 +436,45 @@ describe('CanvasWorkspace initial fit view', () => {
 
     const reanchoredPanel = screen.getByRole('button', { name: /New Leaf/i }).parentElement;
     expect(reanchoredPanel).toHaveStyle({ left: '460px', top: '468px' });
+  });
+
+  it('uses the selection panel actions instead of a floating panel on xl viewports', () => {
+    viewportMocks.selectionPanelVisible = true;
+    layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    const node = useCanvasStore.getState().nodes[0];
+    const clickTarget = document.createElement('div');
+    clickTarget.className = 'react-flow__node';
+    clickTarget.getBoundingClientRect = () =>
+      ({
+        bottom: 300,
+        height: 160,
+        left: 100,
+        right: 300,
+        top: 140,
+        width: 200,
+        x: 100,
+        y: 140,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    act(() => {
+      flowMocks.reactFlowProps?.onNodeClick?.(
+        { clientX: 200, clientY: 300, target: clickTarget },
+        node
+      );
+    });
+
+    expect(screen.queryByTestId('commit-action-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute(
+      'data-intro-target',
+      'canvas-action-details'
+    );
+    expect(screen.getByRole('button', { name: 'Create Leaf From This Version' })).toHaveAttribute(
+      'data-intro-target',
+      'canvas-action-new-leaf'
+    );
   });
 
   it('does not use double click as committed node detail navigation', () => {

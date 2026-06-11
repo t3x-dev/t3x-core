@@ -23,6 +23,7 @@ import {
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import * as api from '@/infrastructure';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
@@ -108,7 +109,7 @@ export default function SharePage() {
         setLoading(false);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Share link not found or expired');
+        setError(formatUserFacingError(err, 'Share link not found or expired.'));
         setLoading(false);
       });
   }, [token]);

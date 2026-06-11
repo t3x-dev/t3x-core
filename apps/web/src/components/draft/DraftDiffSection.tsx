@@ -21,6 +21,7 @@ import {
   incrementalDiffCommits,
   type WordDiffSegment,
 } from '@/domain/diff/diffUtils';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useDraftWorkspaceStore } from '@/store/draftWorkspaceStore';
 import { cn } from '@/utils/cn';
@@ -74,7 +75,7 @@ export function DraftDiffSection() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load parent commit');
+        setError(formatUserFacingError(err, 'Failed to load parent commit.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

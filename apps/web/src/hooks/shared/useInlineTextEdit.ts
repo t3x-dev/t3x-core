@@ -5,9 +5,10 @@ import { useCallback, useState } from 'react';
 import { addSpanAsYOps } from '@/commands/yops/addSpanCommand';
 import { SourceValidationError, YOpsReplayError } from '@/commands/yops/errors';
 import { resolveHumanSource } from '@/commands/yops/goldEditBuilder';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { replay } from '@/domain/replay';
 import { buildSweepOps, findPathsOverlappingSpan, type SpanMatch } from '@/domain/spanSweep';
-import { useSettingsStore } from '@/store/settingsStore';
+import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 export type InlineTextAction = 'add' | 'edit' | 'delete';
@@ -27,14 +28,14 @@ type PathLookup =
 
 function formatInlineEditError(err: unknown): string {
   if (err instanceof SourceValidationError) {
-    return 'Cannot stage source edit: no session user or local workspace author available.';
+    return 'Cannot stage source edit: no session user or local author available.';
   }
-  return err instanceof Error ? err.message : String(err);
+  return formatUserFacingError(err, 'Source edit failed.');
 }
 
 function resolveInlineHumanSource() {
   return resolveHumanSource('inline', {
-    localAuthor: useSettingsStore.getState().localWorkspaceName,
+    localAuthor: resolveLocalWorkspaceName(useSettingsStore.getState().localWorkspaceName),
   });
 }
 

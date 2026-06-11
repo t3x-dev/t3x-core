@@ -265,10 +265,16 @@ describe('Canvas node semantic markers', () => {
     expect(within(node).queryByText(/Create Output/i)).not.toBeInTheDocument();
   });
 
+  it('does not allow renaming a committed node title on the canvas', () => {
+    renderUnitNode(makeNodeData());
+
+    expect(screen.queryByTitle('Rename commit')).not.toBeInTheDocument();
+  });
+
   it('opens commit details from the committed hash inside the node', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit haxi:abc123' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
 
     expect(navigationMocks.routerPush).toHaveBeenCalledWith(
       '/project/proj_canvas/commit/sha256%3Aabc123'
@@ -279,7 +285,7 @@ describe('Canvas node semantic markers', () => {
     navigationMocks.searchParams = new URLSearchParams({ introDemo: '1' });
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open commit haxi:abc123' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open commit hash:abc123' }));
 
     expect(navigationMocks.routerPush).toHaveBeenCalledWith(
       '/project/proj_canvas/commit/sha256%3Aabc123?introDemo=1'
@@ -296,13 +302,10 @@ describe('Canvas node semantic markers', () => {
     expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
   });
 
-  it('shows a local new leaf action when a committed node has no leaves', () => {
+  it('keeps the empty leaf state informational without a local new leaf action', () => {
     renderUnitNode(makeNodeData({ leaves: [] }));
 
     expect(screen.getByText('No leaf yet')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
-
-    expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+    expect(screen.queryByRole('button', { name: /New Leaf/i })).not.toBeInTheDocument();
   });
 });

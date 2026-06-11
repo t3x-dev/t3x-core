@@ -4,8 +4,9 @@ import { Globe, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useUrlImport } from '@/hooks/imports/useUrlImport';
-import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
+import { type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import { ImportPreview } from './ImportPreview';
 import { ImportProgress } from './ImportProgress';
 
@@ -39,7 +40,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
       setPreview(result);
     } catch (err) {
       setImportStatus('error');
-      setStatusMessage(err instanceof ApiError ? err.message : 'Failed to fetch URL');
+      setStatusMessage(formatUserFacingError(err, 'Failed to fetch URL.'));
     } finally {
       setPreviewLoading(false);
     }
@@ -79,7 +80,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         if (lastConversationId) onImported(lastConversationId);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     } else {
       setImportStatus('loading');
@@ -92,7 +93,7 @@ export function UrlImportTab({ projectId, onImported }: UrlImportTabProps) {
         onImported(result.conversation_id);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     }
   }, [url, projectId, preview, onImported, stream, run]);

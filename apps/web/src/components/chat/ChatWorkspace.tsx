@@ -11,6 +11,7 @@ import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getExtractDisabledReason } from '@/domain/extractionReadiness';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { buildSourceMap } from '@/domain/sourceMap';
 import { useCommittedHighlights } from '@/hooks/commits/useCommittedHighlights';
 import { useChatInit } from '@/hooks/conversations/useChatInit';
@@ -34,7 +35,7 @@ import { useTextSelection } from '@/hooks/shared/useTextSelection';
 import { useUndo } from '@/hooks/shared/useUndo';
 import { useChatStore } from '@/store/chatStore';
 import { usePinsStore } from '@/store/pinsStore';
-import { getTemporaryChat } from '@/store/temporaryChatsStore';
+import { getTemporaryChat, isTemporaryChatId } from '@/store/temporaryChatsStore';
 import { selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -74,100 +75,64 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'console',
     label: 'Console',
-    title: 'Open the console after reading the LLM reply',
-    description:
-      'The reply is still plain conversation. The next step is opening the right-side console where T3X extracts reviewable meaning.',
+    title: 'Open extraction controls',
+    description: 'Show extraction controls.',
     target: 'chat-yops-panel',
     tone: 'extract',
     icon: PanelRight,
-    details: [
-      'Click the collapsed Workspace rail on the right.',
-      'This reveals the YOps editor and output area.',
-      'Extraction controls are intentionally inside this workbench surface.',
-    ],
     advanceOnTargetClick: true,
   },
   {
     id: 'extract',
     label: 'Extract',
-    title: 'Click Extract to replay the preset meaning extraction',
-    description:
-      'In the demo this is the real Extract button, but it uses recorded fixture YOps instead of calling a model provider.',
+    title: 'Load demo YOps',
+    description: 'Load demo YOps.',
     target: 'chat-extract-action',
     tone: 'extract',
     icon: FileSearch,
-    details: [
-      'The button enters an extracting state.',
-      'A staged YOps proposal appears in the workspace.',
-      'The user can review the result before applying it.',
-    ],
     advanceOnTargetClick: true,
   },
   {
     id: 'apply',
     label: 'Apply',
-    title: 'Click Apply changes to materialize the staged YOps',
-    description:
-      'Apply turns the staged proposal into the workspace output so the user sees the semantic tree update before commit.',
+    title: 'Apply selected changes',
+    description: 'Apply selected changes.',
     target: 'chat-apply-action',
     tone: 'pending',
     icon: PanelRight,
-    details: [
-      'The staged badge clears after Apply.',
-      'The output panel becomes the applied semantic state.',
-      'Commit stays separate so users learn the review checkpoint.',
-    ],
     advanceOnTargetClick: true,
   },
   {
     id: 'commit',
     label: 'Commit',
-    title: 'Click Commit to save the applied state',
-    description:
-      'Commit creates the stable structured version. Canvas should only come after this review checkpoint.',
+    title: 'Save a version',
+    description: 'Save a version.',
     target: 'chat-commit-action',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Click the real Commit button in the workspace action bar.',
-      'This opens the commit confirmation dialog.',
-      'The applied output is not on Canvas until it is committed.',
-    ],
     advanceOnTargetClick: true,
   },
   {
     id: 'commit-confirm',
     label: 'Confirm',
-    title: 'Confirm the commit',
-    description:
-      'This seals the applied YAML as the version that Canvas can show in the project graph.',
+    title: 'Confirm for Canvas',
+    description: 'Make it available on Canvas.',
     target: 'chat-commit-confirm',
     positionTarget: 'chat-commit-dialog',
     placement: 'above',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'Keep the generated commit name or edit it.',
-      'Click Commit in the confirmation dialog.',
-      'After the commit finishes, the walkthrough moves to Canvas.',
-    ],
     advanceOnTargetClick: true,
     advanceDelayMs: 520,
   },
   {
     id: 'canvas',
     label: 'Canvas',
-    title: 'Now go to Canvas',
-    description:
-      'Only after the reply has been extracted, applied, and committed does the demo move to the project graph.',
+    title: 'Open the project graph',
+    description: 'Open the project graph.',
     target: 'sidebar-canvas-tab',
     tone: 'commit',
     icon: PanelRight,
-    details: [
-      'Click Canvas in the sidebar mode switcher.',
-      'The route will change to the project graph.',
-      'The next step asks the user to click a real canvas node, then continue to Leaf.',
-    ],
     advanceOnTargetClick: true,
   },
 ];
@@ -271,7 +236,8 @@ export function ChatWorkspace({
   const [resolvedConversationId, setResolvedConversationId] = useState<string | undefined>(
     isNewChat ? undefined : conversationId
   );
-  const isTemporaryChat = !resolvedProjectId;
+  const isTemporaryChat =
+    isTemporaryChatId(resolvedConversationId ?? conversationId) || !resolvedProjectId;
   const showProjectContext = !isTemporaryChat;
   const chatInputDraftKey = resolvedConversationId
     ? isTemporaryChat
@@ -368,7 +334,7 @@ export function ChatWorkspace({
 
   // Sync resolved IDs when props change (e.g. sidebar navigation between conversations)
   useEffect(() => {
-    if (projectId) setResolvedProjectId(projectId);
+    setResolvedProjectId(projectId ?? '');
   }, [projectId]);
 
   useEffect(() => {
@@ -602,8 +568,7 @@ export function ChatWorkspace({
         }
         if (created) await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to pin leaf';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to pin leaf.'));
       } finally {
         setPinningLeafIds((prev) => {
           const next = new Set(prev);
@@ -659,8 +624,7 @@ export function ChatWorkspace({
           await refreshProjectMaterials();
         }
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to use material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to use material.'));
       } finally {
         setPinningMaterialIds((prev) => {
           const next = new Set(prev);
@@ -692,8 +656,7 @@ export function ChatWorkspace({
         await handlePinMaterialForContext(material.id);
         toast.message('Material added to context');
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to add material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to add material.'));
       }
     },
     [handlePinMaterialForContext, refreshProjectMaterials, resolvedProjectId, uploadMaterial]
@@ -715,8 +678,7 @@ export function ChatWorkspace({
         await reloadContextManifest();
         toast.message('Material archived');
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to archive material';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to archive material.'));
       } finally {
         setArchivingMaterialIds((prev) => {
           const next = new Set(prev);
@@ -899,8 +861,7 @@ export function ChatWorkspace({
         await updateContextSelectedPins(resolvedConversationId, nextSelectedPinIds);
         await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to update context';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to update context.'));
       } finally {
         contextManifestUpdatingRef.current = false;
         setContextManifestUpdating(false);
@@ -935,8 +896,7 @@ export function ChatWorkspace({
         }
         await reloadContextManifest();
       } catch (cause) {
-        const message = cause instanceof Error ? cause.message : 'Failed to update feedback';
-        toast.message(message);
+        toast.message(formatUserFacingError(cause, 'Failed to update feedback.'));
       } finally {
         contextManifestUpdatingRef.current = false;
         setContextManifestUpdating(false);
@@ -1210,7 +1170,7 @@ export function ChatWorkspace({
       )}
       <FeatureTourOverlay
         open={tourOpen}
-        title="Chat walkthrough"
+        title="Review"
         steps={CHAT_WORKSPACE_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={onIntroDemoDone ?? (() => setTourOpen(false))}

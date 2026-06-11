@@ -391,7 +391,7 @@ export function LeafOutputDisplay({
         <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">No output yet</p>
         <p className="text-xs text-[var(--text-tertiary)] mb-5 max-w-[280px] leading-relaxed">
           Configure your constraints on the left, write instructions below, then generate AI output
-          from your knowledge base.
+          from your committed state.
         </p>
         <Button size="sm" onClick={onGenerate} disabled={isGenerating}>
           {isGenerating ? (

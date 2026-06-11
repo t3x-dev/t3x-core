@@ -5,15 +5,16 @@
  *
  * Collapsed: circular avatar with first letter of display name.
  * Expanded: avatar + username text.
- * Click: DropdownMenu with Profile / Settings / Sign Out.
+ * Click: DropdownMenu with Settings locally, or Profile / Settings / Sign Out when signed in.
  *
- * When local auth is disabled, still renders a local workspace menu so
+ * When local auth is disabled, still renders a local profile menu so
  * Settings remains reachable in source-dev and self-hosted local mode.
  * Otherwise reads from localStorage on mount, lazy-refreshes from /auth/me
  * in background, and hides until a session exists.
  */
 
 import { LogOut, Settings, User } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   DropdownMenu,
@@ -26,8 +27,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthMe } from '@/hooks/shared/useAuthMe';
 import { useSession } from '@/hooks/shared/useSession';
-import { useSettingsModalStore } from '@/store/settingsModalStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import {
+  DEFAULT_LOCAL_WORKSPACE_NAME,
+  resolveLocalWorkspaceName,
+  useSettingsStore,
+} from '@/store/settingsStore';
 import { cn } from '@/utils/cn';
 import { getLocalWorkspaceAvatarClass } from '@/utils/localWorkspaceAvatar';
 
@@ -100,7 +104,6 @@ export function UserMenu({ collapsed }: UserMenuProps) {
   const [mounted, setMounted] = useState(false);
   const { loadAuthMe } = useAuthMe();
   const { clear, getKey, getUser, setUser: persistUser } = useSession();
-  const openSettingsModal = useSettingsModalStore((state) => state.openSettingsModal);
   const localWorkspaceName = useSettingsStore((state) => state.localWorkspaceName);
   const localWorkspaceAvatarColor = useSettingsStore((state) => state.localWorkspaceAvatarColor);
   const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
@@ -138,7 +141,8 @@ export function UserMenu({ collapsed }: UserMenuProps) {
       });
   }, [authDisabled, getKey, getUser, loadAuthMe, persistUser]);
 
-  const menuUser = authDisabled ? { name: localWorkspaceName, username: null } : user;
+  const localDisplayName = resolveLocalWorkspaceName(localWorkspaceName);
+  const menuUser = authDisabled ? { name: localDisplayName, username: null } : user;
   const showSignOut = !authDisabled;
 
   if (!mounted) {
@@ -154,6 +158,8 @@ export function UserMenu({ collapsed }: UserMenuProps) {
   if (!menuUser) return null;
 
   const displayName = menuUser.name || menuUser.username || 'User';
+  const triggerDisplayName =
+    authDisabled && displayName === DEFAULT_LOCAL_WORKSPACE_NAME ? 'Local profile' : displayName;
 
   const trigger = (
     <DropdownMenuTrigger asChild>
@@ -167,7 +173,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
             ? 'h-9 w-9 justify-center text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             : 'h-10 justify-start gap-2.5 border border-[var(--stroke-default)] bg-[var(--sidebar-panel)] px-2.5 pr-3 text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg-strong)] hover:text-[var(--text-primary)]'
         )}
-        aria-label={displayName}
+        aria-label={triggerDisplayName}
       >
         <UserAvatar
           name={menuUser.name}
@@ -179,7 +185,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
         />
         {!collapsed && (
           <span className="min-w-0 truncate text-[12px] font-medium leading-none">
-            {displayName}
+            {triggerDisplayName}
           </span>
         )}
       </button>
@@ -192,7 +198,7 @@ export function UserMenu({ collapsed }: UserMenuProps) {
         <Tooltip>
           <TooltipTrigger asChild>{trigger}</TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            {displayName}
+            {triggerDisplayName}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -215,7 +221,10 @@ export function UserMenu({ collapsed }: UserMenuProps) {
               }
             />
             <div className="flex flex-col">
-              <span className="text-sm font-medium">{displayName}</span>
+              <span className="text-sm font-medium">{triggerDisplayName}</span>
+              {authDisabled && triggerDisplayName !== 'Local profile' && (
+                <span className="text-xs text-muted-foreground">Local profile</span>
+              )}
               {menuUser.username && menuUser.name && (
                 <span className="text-xs text-muted-foreground">@{menuUser.username}</span>
               )}
@@ -223,20 +232,29 @@ export function UserMenu({ collapsed }: UserMenuProps) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => openSettingsModal('profile')}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <User className="h-4 w-4" />
-          Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => openSettingsModal('preferences')}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </DropdownMenuItem>
+        {authDisabled ? (
+          <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+            <Link href="/settings/profile">
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/settings/profile">
+                <User className="h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="flex cursor-pointer items-center gap-2">
+              <Link href="/settings/preferences">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         {showSignOut && (
           <>
             <DropdownMenuSeparator />

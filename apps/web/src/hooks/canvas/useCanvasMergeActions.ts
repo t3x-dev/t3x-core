@@ -13,6 +13,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { useCallback } from 'react';
 import { executeMerge, prepareMerge } from '@/commands/merge';
 import { computeMergeNodePosition } from '@/domain/canvasLayout';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { getTerminology } from '@/hooks/shared/useTerminology';
 import { useCanvasStore } from '@/store/canvasStore';
 import { edgeStyle, edgeType } from '@/store/canvasStoreUtils';
@@ -45,10 +46,10 @@ export function useCanvasMergeActions() {
       useCanvasStore.getState().setMergePrepared({ sourceHash, targetHash, prepared: data });
       notifyCallback?.('Merge prepared successfully', 'success');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = formatUserFacingError(error, 'Failed to prepare merge.');
       useCanvasStore.getState().setMergeLoading(false);
       useCanvasStore.getState().setMergeError(errorMessage);
-      notifyCallback?.(`Failed to prepare merge: ${errorMessage}`, 'error');
+      notifyCallback?.(errorMessage, 'error');
       throw error;
     }
   }, []);
@@ -140,10 +141,10 @@ export function useCanvasMergeActions() {
       notifyCallback?.('Merge executed successfully', 'success');
       return mergeCommit;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = formatUserFacingError(error, 'Failed to execute merge.');
       useCanvasStore.getState().setMergeLoading(false);
       useCanvasStore.getState().setMergeError(errorMessage);
-      notifyCallback?.(`Failed to execute merge: ${errorMessage}`, 'error');
+      notifyCallback?.(errorMessage, 'error');
       throw error;
     }
   }, []);

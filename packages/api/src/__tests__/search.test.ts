@@ -29,7 +29,7 @@ describe('Search Route', () => {
     await cleanup();
   });
 
-  it('returns tree-based knowledge graph matches', async () => {
+  it('returns tree-based state index matches', async () => {
     await insertKnowledgeNode(mockDB, {
       project_id: projectId,
       label: 'refund policy',

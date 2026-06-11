@@ -7,6 +7,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { commitOps } from '@/commands/yops/yopsService';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { removeYOpsEntry } from '@/infrastructure/yopsLog';
 import { useChatStore } from '@/store/chatStore';
@@ -47,8 +48,7 @@ export function useReplayWarningActions() {
       await hydrateConversationToStore(projectId, conversationId);
       toast.success('Removed failing op — workspace re-replayed');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Could not remove op: ${msg}`);
+      toast.error(formatUserFacingError(err, 'Could not remove op.'));
     } finally {
       setBusy(false);
     }
@@ -64,8 +64,7 @@ export function useReplayWarningActions() {
       await hydrateConversationToStore(projectId, conversationId);
       toast.success('Deleted failing entry — workspace re-replayed');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Could not delete entry: ${msg}`);
+      toast.error(formatUserFacingError(err, 'Could not delete entry.'));
     } finally {
       setBusy(false);
     }

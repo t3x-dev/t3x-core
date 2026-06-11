@@ -2,6 +2,7 @@
 
 import { AlertCircle, ChevronDown, GitCommit, Loader2, RefreshCw } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 import type { ConversationContextManifest } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { ContextManifestPanel, type ContextManifestSourcePicker } from './ContextManifestPanel';
@@ -40,7 +41,7 @@ function plural(value: number, singular: string, compactPlural?: string): string
 
 function errorMessage(error: ContextManifestBarProps['error']): string | null {
   if (!error) return null;
-  return error instanceof Error ? error.message : error;
+  return formatUserFacingError(error, 'Could not load context sources.');
 }
 
 export function ContextManifestBar({

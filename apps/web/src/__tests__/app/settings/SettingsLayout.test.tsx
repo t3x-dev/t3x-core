@@ -42,12 +42,16 @@ describe('SettingsLayout', () => {
     );
 
     expect(screen.getByText('OVERVIEW')).toBeInTheDocument();
-    expect(screen.getByText('WORKSPACE')).toBeInTheDocument();
+    expect(screen.getByText('LOCAL')).toBeInTheDocument();
     expect(screen.getByText('AI')).toBeInTheDocument();
     expect(screen.getByText('ACCESS')).toBeInTheDocument();
     expect(screen.getByText('AUTOMATION')).toBeInTheDocument();
     expect(screen.getByText('PROJECT')).toBeInTheDocument();
 
+    expect(screen.getByRole('link', { name: /Back to workspace/i })).toHaveAttribute(
+      'href',
+      '/chat'
+    );
     expect(screen.getByRole('link', { name: /Health/i })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',

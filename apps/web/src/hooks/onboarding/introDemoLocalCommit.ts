@@ -24,6 +24,25 @@ export function saveIntroDemoLocalCommit(commit: IntroDemoLocalCommit): void {
   }
 }
 
+export function clearIntroDemoLocalCommit(projectId?: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!projectId) {
+      window.sessionStorage.removeItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY);
+      return;
+    }
+
+    const raw = window.sessionStorage.getItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<IntroDemoLocalCommit>;
+    if (parsed.projectId === projectId) {
+      window.sessionStorage.removeItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY);
+    }
+  } catch {
+    window.sessionStorage.removeItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY);
+  }
+}
+
 export function readIntroDemoLocalCommit(
   projectId: string | null | undefined
 ): IntroDemoLocalCommit | null {

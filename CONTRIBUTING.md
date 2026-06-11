@@ -1,6 +1,9 @@
 # Contributing to T3X
 
-Thank you for your interest in contributing to T3X! We welcome contributions from everyone and are grateful for every pull request, bug report, and feature suggestion.
+Thank you for your interest in contributing to T3X. The project is in
+restricted alpha, so the public package surface is intentionally narrow while
+the core product hardens. Bug reports, feature suggestions, and focused pull
+requests are welcome.
 
 ## Licensing
 
@@ -105,4 +108,5 @@ dependency graph, data formats, ID conventions, and testing patterns.
 
 ## Questions?
 
-Open a [Discussion](https://github.com/t3x-dev/t3x-core/discussions) or file an issue. We're happy to help you get started.
+Open an issue for questions, bugs, or feature proposals. GitHub Discussions are
+not the current support path for this repository.

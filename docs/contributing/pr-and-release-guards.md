@@ -60,12 +60,15 @@ The release PR policy check also validates changeset files:
   types like `patch`, `minor`, or `major`.
 - Listed public packages must appear in changeset frontmatter.
 - Public packages in changeset frontmatter must appear in `Package Releases`.
-- Package releases currently require both restricted alpha npm packages:
+- Package releases currently require both public alpha npm packages:
   `@t3x-dev/local` and `@t3x-dev/yops`.
 
 The product release version is independent from npm package versions. If the
 release publishes no packages, write `- None` in `Package Releases`; final
 GitHub Release notes omit package information for code-only releases.
+When package publishing does run, npm remains the primary install source, and
+the packed npm package tarballs are also uploaded to the product GitHub Release
+`t3x-vx.y.z` as archived assets for audit and direct download.
 
 Hotfix PRs may target `main` from `hotfix/*`, but they still need product
 release metadata and release notes. Changesets version package PRs are exempt

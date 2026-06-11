@@ -2,7 +2,7 @@
  * Frame-Based Commits Routes with OpenAPI
  *
  * REST API endpoints for frame-based commits with OpenAPI documentation.
- * Frame-based commits store semantic content as frames + relations.
+ * Frame-based commits store state content as frames + relations.
  *
  * Endpoints:
  * - POST   /v1/commits               - Create a new commit
@@ -32,6 +32,7 @@ import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
+import { assertProjectAccess } from '../lib/project-access';
 import { findUncommittedYOpsIds, mapSupersededError } from '../lib/yops-commit-link';
 import { commitOp } from '../ops/commit';
 import { buildPipelineContext } from '../ops/context';
@@ -286,6 +287,10 @@ commitRoutes.openapi(getCommitRoute, async (c) => {
     if (!commit) {
       return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit not found: ${hash}`);
     }
+    if (commit.project_id) {
+      const accessResult = await assertProjectAccess(c, db, commit.project_id);
+      if (accessResult instanceof Response) return accessResult;
+    }
     return c.json({ success: true as const, data: { commit } }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to get commit';
@@ -332,6 +337,9 @@ commitRoutes.openapi(listCommitsRoute, async (c) => {
   const db = await getDB();
 
   try {
+    const accessResult = await assertProjectAccess(c, db, projectId);
+    if (accessResult instanceof Response) return accessResult;
+
     const commits = await listCommits(db, {
       projectId,
       branch,

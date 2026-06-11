@@ -152,7 +152,7 @@ export const leaves = pgTable(
      */
     commitHash: text('commit_hash').notNull(),
 
-    /** Output type: 'deploy_agent' | 'tweet' | 'weibo' | etc. */
+    /** Output type: 'deploy_agent' | 'tweet' | 'linkedin' | etc. */
     type: text('type').notNull(),
 
     /** Human-readable title */
@@ -1042,7 +1042,7 @@ export type TopicRecord = typeof topics.$inferSelect;
 export type TopicInsert = typeof topics.$inferInsert;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Knowledge Graph (Cross-conversation entity/topic graph)
+// State index (cross-conversation entity/topic graph)
 // @see docs/plans/2026-03-05-knowledge-graph-design.md
 // ═══════════════════════════════════════════════════════════════════════════
 

@@ -4,8 +4,9 @@ import { FileText, Loader2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useDocumentImport } from '@/hooks/imports/useDocumentImport';
-import { ApiError, type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
+import { type ImportPreviewResult, STREAMING_IMPORT_THRESHOLD } from '@/types/api';
 import {
   DOCUMENT_SOURCE_ACCEPT_HINT,
   DOCUMENT_SOURCE_ACCEPTED_TYPES,
@@ -57,7 +58,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         setPreview(result);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Failed to parse document');
+        setStatusMessage(formatUserFacingError(err, 'Failed to parse document.'));
       } finally {
         setPreviewLoading(false);
       }
@@ -99,7 +100,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         if (lastConversationId) onImported(lastConversationId);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     } else {
       setImportStatus('loading');
@@ -112,7 +113,7 @@ export function DocumentImportTab({ projectId, onImported }: DocumentImportTabPr
         onImported(result.conversation_id);
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     }
   }, [file, projectId, preview, onImported]);

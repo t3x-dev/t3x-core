@@ -282,7 +282,7 @@ describe('Draft Workbench Features', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns goal-based suggestions from the tree-backed knowledge graph', async () => {
+    it('returns goal-based suggestions from the tree-backed state index', async () => {
       const node = await insertKnowledgeNode(mockDB, {
         project_id: testProjectId,
         label: 'pricing_anchor',

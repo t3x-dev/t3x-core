@@ -1,5 +1,5 @@
 /**
- * Knowledge Graph API — build and query project-level knowledge graphs
+ * State Index API — build and query project-level state indexes
  */
 
 import type {
@@ -15,7 +15,7 @@ import { API_V1, buildQueryString, fetchWithTimeout, handleResponse } from './co
 export type { EdgeEvidence, KnowledgeEdge, KnowledgeNode, NeighborNode, NodeMember };
 
 // ============================================================================
-// Knowledge Graph Operations
+// State Index Operations
 // ============================================================================
 
 /**
@@ -67,7 +67,7 @@ export async function searchKnowledgeNodes(
 }
 
 /**
- * Delete the entire knowledge graph for a project.
+ * Delete the entire state index for a project.
  */
 export async function deleteKnowledgeGraph(projectId: string): Promise<void> {
   const res = await fetchWithTimeout(

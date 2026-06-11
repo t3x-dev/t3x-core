@@ -5,9 +5,9 @@ import { useCallback, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { usePlatformImport } from '@/hooks/imports/usePlatformImport';
 import {
-  ApiError,
   type PlatformImportResult,
   type PlatformPreviewResult,
   STREAMING_IMPORT_THRESHOLD,
@@ -62,7 +62,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
       setSelectedIds(new Set(convos.map((c) => c.id)));
     } catch (err) {
       setImportStatus('error');
-      setStatusMessage(err instanceof ApiError ? err.message : 'Failed to parse export file');
+      setStatusMessage(formatUserFacingError(err, 'Failed to parse export file.'));
     } finally {
       setPreviewLoading(false);
     }
@@ -132,7 +132,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
         onImported();
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     } else {
       setImportStatus('loading');
@@ -145,7 +145,7 @@ export function PlatformImportTab({ projectId, onImported }: PlatformImportTabPr
         onImported();
       } catch (err) {
         setImportStatus('error');
-        setStatusMessage(err instanceof ApiError ? err.message : 'Import failed');
+        setStatusMessage(formatUserFacingError(err, 'Import failed.'));
       }
     }
   }, [rawData, projectId, preview, onImported]);

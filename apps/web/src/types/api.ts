@@ -77,6 +77,7 @@ export type {
   RoleAssignment,
   ShareLink,
   Template,
+  TemplateLeafType,
   TemplateVariable,
   UpdateWebhookInput,
   WebhookData,

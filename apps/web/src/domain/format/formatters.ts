@@ -12,7 +12,7 @@ export function shortHash(hash: string): string {
 
 /** Display label for a commit hash when the hash value needs an explicit prefix. */
 export function commitHashLabel(hash: string): string {
-  return `haxi:${shortHash(hash)}`;
+  return `hash:${shortHash(hash)}`;
 }
 
 /** Human-friendly relative time string from an ISO-8601 timestamp. */

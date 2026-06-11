@@ -39,7 +39,7 @@ export const RESOURCE_TEMPLATES = [
   {
     name: 'commit',
     uriTemplate: 't3x://commits/{commit_hash}',
-    description: 'Read a semantic commit by hash.',
+    description: 'Read a structured-state commit by hash.',
     mimeType: 'application/json',
   },
   {

@@ -451,18 +451,25 @@ describe('getDefaultTemplate', () => {
     expect(template.systemPrompt).toContain('headings');
   });
 
-  it('returns weibo template in Chinese context', () => {
-    const template = getDefaultTemplate('weibo');
+  it('returns linkedin template with professional guidance', () => {
+    const template = getDefaultTemplate('linkedin');
 
-    expect(template.systemPrompt).toContain('Chinese');
-    expect(template.userPrompt).toContain('来源知识');
+    expect(template.systemPrompt).toContain('LinkedIn');
+    expect(template.userPrompt).toContain('LinkedIn post');
   });
 
-  it('returns wechat template in Chinese context', () => {
-    const template = getDefaultTemplate('wechat');
+  it('returns reddit template with community guidance', () => {
+    const template = getDefaultTemplate('reddit');
 
-    expect(template.systemPrompt).toContain('微信');
-    expect(template.userPrompt).toContain('背景');
+    expect(template.systemPrompt).toContain('community discussion');
+    expect(template.userPrompt).toContain('Reddit post');
+  });
+
+  it('returns threads template with concise guidance', () => {
+    const template = getDefaultTemplate('threads');
+
+    expect(template.systemPrompt).toContain('Threads');
+    expect(template.userPrompt).toContain('Threads post');
   });
 });
 

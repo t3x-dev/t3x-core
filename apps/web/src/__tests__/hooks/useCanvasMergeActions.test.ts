@@ -75,7 +75,7 @@ describe('useCanvasMergeActions.prepare', () => {
     const state = useCanvasStore.getState();
     expect(state.mergeError).toBe('boom');
     expect(state.mergeLoading).toBe(false);
-    expect(notify).toHaveBeenCalledWith('Failed to prepare merge: boom', 'error');
+    expect(notify).toHaveBeenCalledWith('boom', 'error');
   });
 });
 

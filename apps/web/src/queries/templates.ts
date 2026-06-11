@@ -5,11 +5,11 @@
  */
 
 import { listTemplates } from '@/infrastructure/misc';
-import type { Template } from '@/types/api';
+import type { Template, TemplateLeafType } from '@/types/api';
 
 export interface FetchTemplatesOptions {
   category?: string;
-  leaf_type?: string;
+  leaf_type?: TemplateLeafType;
   search?: string;
   limit?: number;
   offset?: number;

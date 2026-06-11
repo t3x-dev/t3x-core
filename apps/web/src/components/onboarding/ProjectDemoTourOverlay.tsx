@@ -4,8 +4,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Eye,
   Map as MapIcon,
-  MousePointerClick,
   Play,
   Plus,
   Send,
@@ -15,7 +15,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-type ProjectTourStepId = 'selectCommit' | 'createLeaf' | 'chooseLeafType';
+type ProjectTourStepId = 'selectCommit' | 'openDetails' | 'createLeaf' | 'chooseLeafType';
+type ProjectTourStage = 'details' | 'leaf';
+type ProjectTourTarget = string | string[] | null;
 
 interface TargetRect {
   top: number;
@@ -29,64 +31,70 @@ interface ProjectTourStep {
   label: string;
   title: string;
   description: string;
-  target: string | null;
+  target: ProjectTourTarget;
   icon: typeof Play;
   tone: 'conversation' | 'commit' | 'leaf' | 'success';
-  details: string[];
   advanceOnTargetClick?: boolean;
   advanceClickSelector?: string;
 }
 
-const PROJECT_TOUR_STEPS: ProjectTourStep[] = [
-  {
-    id: 'selectCommit',
-    label: 'Commit card',
-    title: 'Click the highlighted commit card',
-    description:
-      'This is the first Canvas action: select a committed version before inspecting or creating output from it.',
-    target: 'canvas-commit-node',
-    icon: MapIcon,
-    tone: 'commit',
-    details: [
-      'Click the commit card in the graph, not the sidebar.',
-      'The click selects the reviewed version created from Chat.',
-      'After the click, Canvas reveals the version actions for that commit.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'createLeaf',
-    label: '+ New Leaf',
-    title: 'Click the highlighted + New Leaf action',
-    description: 'This opens the Leaf creation panel from the selected committed version.',
-    target: 'canvas-floating-action-new-leaf',
-    icon: Plus,
-    tone: 'leaf',
-    details: [
-      'Click + New Leaf in the floating version action bar.',
-      'This starts the output artifact flow from the selected commit.',
-      'After the click, choose the output destination type in the side panel.',
-    ],
-    advanceOnTargetClick: true,
-  },
-  {
-    id: 'chooseLeafType',
-    label: 'Leaf type',
-    title: 'Choose an output type',
-    description:
-      'Pick the destination for the generated Leaf, such as Twitter, Weibo, or WeChat Moments.',
-    target: 'canvas-leaf-type-options',
-    icon: Send,
-    tone: 'leaf',
-    details: [
-      'Choose one of the output destination buttons in the panel.',
-      'The selection creates the Leaf from the highlighted committed version.',
-      'After creation, the demo continues in the generated Leaf workspace.',
-    ],
-    advanceOnTargetClick: true,
-    advanceClickSelector: 'button:not(:disabled)',
-  },
-];
+const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> = {
+  details: [
+    {
+      id: 'selectCommit',
+      label: 'Commit card',
+      title: 'Select this commit version',
+      description: 'Select this version.',
+      target: 'canvas-commit-node',
+      icon: MapIcon,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'openDetails',
+      label: 'Details',
+      title: 'Open commit details',
+      description: 'Open commit details.',
+      target: ['canvas-action-details', 'canvas-floating-action-details'],
+      icon: Eye,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+  ],
+  leaf: [
+    {
+      id: 'selectCommit',
+      label: 'Commit card',
+      title: 'Select this commit version',
+      description: 'Select this version.',
+      target: 'canvas-commit-node',
+      icon: MapIcon,
+      tone: 'commit',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'createLeaf',
+      label: 'Create Leaf',
+      title: 'Create a Leaf from this version',
+      description: 'Create from the selected commit.',
+      target: ['canvas-action-new-leaf', 'canvas-floating-action-new-leaf'],
+      icon: Plus,
+      tone: 'leaf',
+      advanceOnTargetClick: true,
+    },
+    {
+      id: 'chooseLeafType',
+      label: 'Leaf type',
+      title: 'Choose the Leaf destination',
+      description: 'Pick X / Twitter, LinkedIn, Reddit, or Threads.',
+      target: 'canvas-leaf-type-options',
+      icon: Send,
+      tone: 'leaf',
+      advanceOnTargetClick: true,
+      advanceClickSelector: 'button:not(:disabled)',
+    },
+  ],
+};
 
 const TONE_CLASSES: Record<ProjectTourStep['tone'], string> = {
   conversation:
@@ -98,29 +106,35 @@ const TONE_CLASSES: Record<ProjectTourStep['tone'], string> = {
     'border-[var(--status-success)]/25 bg-[var(--status-success-muted)] text-[var(--status-success)]',
 };
 
-function findIntroTarget(target: string | null): HTMLElement | null {
-  if (!target) return null;
-  const nodes = Array.from(
-    document.querySelectorAll<HTMLElement>(`[data-intro-target="${target}"]`)
-  );
-  return (
-    nodes.find((node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    }) ??
-    nodes[0] ??
-    null
-  );
+function targetNames(target: ProjectTourTarget): string[] {
+  if (!target) return [];
+  return Array.isArray(target) ? target : [target];
 }
 
-function readTargetRect(target: string | null): TargetRect | null {
+function findIntroTarget(target: ProjectTourTarget): HTMLElement | null {
+  let firstMatch: HTMLElement | null = null;
+  for (const name of targetNames(target)) {
+    const nodes = Array.from(
+      document.querySelectorAll<HTMLElement>(`[data-intro-target="${name}"]`)
+    );
+    firstMatch ??= nodes[0] ?? null;
+    const visibleNode = nodes.find((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (visibleNode) return visibleNode;
+  }
+  return firstMatch;
+}
+
+function readTargetRect(target: ProjectTourTarget): TargetRect | null {
   const node = findIntroTarget(target);
   if (!node) return null;
   const rect = node.getBoundingClientRect();
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 }
 
-function isTargetReady(target: string | null): boolean {
+function isTargetReady(target: ProjectTourTarget): boolean {
   const node = findIntroTarget(target);
   if (!node) return false;
   if (node instanceof HTMLButtonElement && node.disabled) return false;
@@ -128,7 +142,7 @@ function isTargetReady(target: string | null): boolean {
   return true;
 }
 
-function waitForReadyTarget(target: string | null, timeoutMs = 3000): Promise<boolean> {
+function waitForReadyTarget(target: ProjectTourTarget, timeoutMs = 3000): Promise<boolean> {
   if (!target || isTargetReady(target)) return Promise.resolve(true);
 
   return new Promise((resolve) => {
@@ -194,6 +208,7 @@ interface ProjectDemoTourOverlayProps {
   onSkip?: () => void;
   doneLabel?: string;
   interactionMode?: 'coach' | 'guided';
+  stage?: ProjectTourStage;
 }
 
 export function ProjectDemoTourOverlay({
@@ -201,25 +216,38 @@ export function ProjectDemoTourOverlay({
   onClose,
   onDone,
   onSkip,
-  doneLabel = 'Done',
+  doneLabel = 'Skip demo',
   interactionMode = 'coach',
+  stage = 'details',
 }: ProjectDemoTourOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const [advancingAfterTargetClick, setAdvancingAfterTargetClick] = useState(false);
   const coachRef = useRef<HTMLDivElement>(null);
   const [coachHeight, setCoachHeight] = useState(360);
-  const step = PROJECT_TOUR_STEPS[stepIndex] ?? PROJECT_TOUR_STEPS[0];
+  const steps = PROJECT_TOUR_STEPS_BY_STAGE[stage] ?? PROJECT_TOUR_STEPS_BY_STAGE.details;
+  const step = steps[stepIndex] ?? steps[0];
   const atStart = stepIndex === 0;
-  const atEnd = stepIndex === PROJECT_TOUR_STEPS.length - 1;
+  const atEnd = stepIndex === steps.length - 1;
   const StepIcon = step.icon;
   const guided = interactionMode === 'guided';
+  const showStepNav = !guided;
   const waitingForTargetClick = guided && step.advanceOnTargetClick;
-  const actionLabel = guided && onSkip ? 'Skip demo' : doneLabel;
+  const actionLabel = guided ? 'Skip demo' : doneLabel;
+
+  useEffect(() => {
+    if (!open) return;
+    setStepIndex(0);
+    setTargetRect(null);
+    setAdvancingAfterTargetClick(false);
+  }, [open, stage]);
 
   const coachPosition = useMemo(() => {
+    const maxWidth = guided ? 376 : 420;
     const width =
-      typeof window === 'undefined' ? 420 : Math.max(240, Math.min(420, window.innerWidth - 32));
+      typeof window === 'undefined'
+        ? maxWidth
+        : Math.max(240, Math.min(maxWidth, window.innerWidth - 32));
     const height =
       typeof window === 'undefined' ? coachHeight : Math.min(coachHeight, window.innerHeight - 32);
     const maxTop =
@@ -245,7 +273,7 @@ export function ProjectDemoTourOverlay({
           : clamp(targetRect.left, 16, window.innerWidth - width - 16);
     const top = clamp(targetRect.top, 16, maxTop);
     return { width, top, left };
-  }, [coachHeight, targetRect]);
+  }, [coachHeight, guided, targetRect]);
 
   useEffect(() => {
     if (!open || !coachRef.current) return;
@@ -329,19 +357,19 @@ export function ProjectDemoTourOverlay({
           onDone?.();
           return;
         }
-        const nextStep = PROJECT_TOUR_STEPS[stepIndex + 1];
+        const nextStep = steps[stepIndex + 1];
         const targetReady = await waitForReadyTarget(nextStep?.target ?? null);
         if (!targetReady) {
           setAdvancingAfterTargetClick(false);
           return;
         }
-        setStepIndex((current) => Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1));
+        setStepIndex((current) => Math.min(current + 1, steps.length - 1));
         setAdvancingAfterTargetClick(false);
       }, 0);
     };
     document.addEventListener('click', handleTargetClick, true);
     return () => document.removeEventListener('click', handleTargetClick, true);
-  }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex]);
+  }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex, steps]);
 
   useEffect(() => {
     if (!open || interactionMode !== 'guided') return;
@@ -402,31 +430,34 @@ export function ProjectDemoTourOverlay({
           maxHeight: 'calc(100vh - 32px)',
         }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+        <header
+          className={cn(
+            'flex items-start justify-between gap-3 px-4',
+            guided ? 'pb-2.5 pt-3' : 'py-3',
+            showStepNav && 'border-b border-[var(--stroke-divider)]'
+          )}
+        >
           <div>
             <div
               className={cn(
-                'mb-2 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium',
+                'mb-1.5 inline-flex items-center gap-2 rounded-md border px-2 py-1 text-[13px] font-medium',
                 TONE_CLASSES[step.tone]
               )}
             >
               <StepIcon className="h-3.5 w-3.5" />
-              Project walkthrough
+              Canvas
             </div>
             <h2
               id="project-demo-tour-title"
-              className="text-base font-semibold text-[var(--text-primary)]"
+              className="text-[17px] font-semibold leading-6 text-[var(--text-primary)]"
             >
               {step.title}
             </h2>
-            <p className="mt-1 text-sm leading-normal text-[var(--text-secondary)]">
-              {step.description}
-            </p>
           </div>
           {!guided && (
             <button
               type="button"
-              aria-label="Close project walkthrough"
+              aria-label="Close project demo"
               onClick={onClose}
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
             >
@@ -435,10 +466,10 @@ export function ProjectDemoTourOverlay({
           )}
         </header>
 
-        <div className="space-y-3 px-4 py-3">
-          {!guided && (
+        {showStepNav ? (
+          <div className="space-y-3 px-4 py-3">
             <div className="grid grid-cols-[repeat(auto-fit,minmax(36px,1fr))] gap-1.5">
-              {PROJECT_TOUR_STEPS.map((item, index) => {
+              {steps.map((item, index) => {
                 const selected = index === stepIndex;
                 const completed = index < stepIndex;
                 const Icon = item.icon;
@@ -450,7 +481,7 @@ export function ProjectDemoTourOverlay({
                     aria-current={selected ? 'step' : undefined}
                     aria-label={item.label}
                     className={cn(
-                      'flex h-9 items-center justify-center rounded-md border text-xs transition-colors',
+                      'flex h-9 items-center justify-center rounded-md border text-[13px] transition-colors',
                       selected
                         ? cn('border-current', TONE_CLASSES[item.tone])
                         : completed
@@ -467,32 +498,20 @@ export function ProjectDemoTourOverlay({
                 );
               })}
             </div>
-          )}
-
-          <div className="rounded-lg border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0] text-[var(--text-tertiary)]">
-              <MousePointerClick className="h-3.5 w-3.5" />
-              What to click here
-            </div>
-            <ul className="space-y-2">
-              {step.details.map((detail) => (
-                <li
-                  key={detail}
-                  className="flex gap-2 text-sm leading-normal text-[var(--text-secondary)]"
-                >
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-50" />
-                  <span>{detail}</span>
-                </li>
-              ))}
-            </ul>
           </div>
-        </div>
+        ) : null}
 
-        <footer className="flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+        <footer
+          className={cn(
+            'px-4 sm:flex-row sm:items-center sm:justify-between',
+            guided
+              ? 'flex items-center justify-between gap-3 pb-3 pt-1.5'
+              : 'flex flex-col gap-2 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)] py-3'
+          )}
+        >
+          <div className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
             <span className="font-mono">
-              {String(stepIndex + 1).padStart(2, '0')} /{' '}
-              {String(PROJECT_TOUR_STEPS.length).padStart(2, '0')}
+              {String(stepIndex + 1).padStart(2, '0')} / {String(steps.length).padStart(2, '0')}
             </span>
             <span>{step.label}</span>
           </div>
@@ -513,9 +532,7 @@ export function ProjectDemoTourOverlay({
                   size="sm"
                   disabled={Boolean(waitingForTargetClick)}
                   onClick={() =>
-                    setStepIndex((current) =>
-                      atEnd ? 0 : Math.min(current + 1, PROJECT_TOUR_STEPS.length - 1)
-                    )
+                    setStepIndex((current) => (atEnd ? 0 : Math.min(current + 1, steps.length - 1)))
                   }
                 >
                   {waitingForTargetClick ? 'Click highlighted item' : atEnd ? 'Replay' : 'Next'}

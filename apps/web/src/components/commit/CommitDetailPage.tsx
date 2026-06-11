@@ -24,6 +24,7 @@
 import {
   ArrowLeft,
   ExternalLink,
+  Eye,
   GitBranch,
   GitCommit,
   Leaf as LeafIcon,
@@ -33,7 +34,7 @@ import {
   Tag,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FeatureTourOverlay,
@@ -43,6 +44,7 @@ import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { KeyboardHintBar } from '@/components/shared/KeyboardHintBar';
 import { ShareLinkButton } from '@/components/shared/ShareLinkButton';
 import { TreeGraphView } from '@/components/tree-graph';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
@@ -54,6 +56,7 @@ import { useKeyboardNavigation } from '@/hooks/shared/useKeyboardNavigation';
 import { useCommitDetailStore } from '@/store/commitDetailStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { ApiCommit, Leaf } from '@/types/api';
+import { safeInternalReturnTo } from '@/utils/navigationReturn';
 import { PAGE_ANIMATION_STYLES } from '@/utils/pageAnimations';
 import { CopyButton, useCountUp } from './CommitDetailHelpers';
 import { CommitOperationsSidebar } from './CommitOperationsSidebar';
@@ -75,77 +78,60 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'actions',
     label: 'Actions',
-    title: 'Use the header buttons to move through the version workflow',
-    description:
-      'This row is where users leave the commit detail page, compare with a parent, share, or export the snapshot.',
+    title: 'Use header actions',
+    description: 'Back, compare, share, or export.',
     target: 'commit-actions',
     tone: 'commit',
-    icon: ExternalLink,
-    details: [
-      'Canvas returns to the project map.',
-      'View Diff appears when this commit has a single parent.',
-      'Share and Export are the stable output actions for a reviewed commit.',
-    ],
+    icon: Eye,
   },
   {
     id: 'identity',
     label: 'Snapshot',
-    title: 'Read the commit identity before drilling into content',
-    description:
-      'The identity strip explains who created the version, when it was committed, which branch it belongs to, and what changed.',
+    title: 'Read commit identity',
+    description: 'Check author, branch, and hash.',
     target: 'commit-identity',
     tone: 'commit',
     icon: GitCommit,
-    details: [
-      'The hash is copyable so the version can be referenced elsewhere.',
-      'Diff badges use fixed semantics: added, removed, modified, and identical.',
-      'Branch and author metadata help the user trust the snapshot.',
-    ],
   },
   {
     id: 'content',
     label: 'Tabs',
-    title: 'Switch tabs to inspect the same commit from different angles',
-    description:
-      'YAML is the readable semantic document, Graph shows structure, JSON is the raw payload, and Relations isolates links.',
+    title: 'Switch content views',
+    description: 'Inspect YAML, graph, or JSON.',
     target: 'commit-tabs',
     tone: 'extract',
     icon: Tag,
-    details: [
-      'Click YAML for the default audit view.',
-      'Click Graph when relationships are easier to understand visually.',
-      'Click JSON when debugging or verifying exact serialized data.',
-    ],
   },
   {
     id: 'audit',
     label: 'Audit',
-    title: 'The right rail proves where the commit came from',
-    description:
-      'Evidence, YOps operations, hash chain, and snapshot metadata teach users that a commit is auditable, not just generated text.',
+    title: 'Review audit trail',
+    description: 'See evidence and YOps.',
     target: 'commit-audit',
     tone: 'source',
     icon: Pin,
-    details: [
-      'Open evidence rows to revisit the source context.',
-      'Copy parent or current hashes from the hash chain.',
-      'Use this rail when explaining why the committed state is trustworthy.',
-    ],
   },
   {
     id: 'provenance',
     label: 'Graph',
-    title: 'Expand provenance to connect source, commit, and leaf',
-    description:
-      'The bottom graph makes the full path visible: source evidence becomes a stable commit and then reusable leaves.',
+    title: 'Open provenance',
+    description: 'Trace source to Leaf.',
     target: 'commit-provenance',
     tone: 'leaf',
     icon: LeafIcon,
-    details: [
-      'Click the provenance bar to expand or collapse it.',
-      'Source nodes show where the meaning originated.',
-      'Leaf nodes show what reusable artifacts were produced from this commit.',
-    ],
+  },
+];
+
+const INTRO_COMMIT_DETAIL_TOUR_STEPS: FeatureTourStep[] = [
+  {
+    id: 'returnToCanvas',
+    label: 'View Canvas',
+    title: 'Return to Canvas',
+    description: 'Return to Canvas.',
+    target: 'commit-view-canvas',
+    tone: 'commit',
+    icon: Eye,
+    advanceOnTargetClick: true,
   },
 ];
 
@@ -155,7 +141,10 @@ const COMMIT_TOUR_STEPS: FeatureTourStep[] = [
 
 export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const introDemoRequested = useIntroDemoQueryFlag();
+  const introDemoStage = searchParams.get('introDemoStage');
+  const isIntroCommitDetailsStage = introDemoRequested && introDemoStage === 'commitDetails';
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const _notify = useProjectStore((state) => state.notifyCallback);
 
@@ -190,7 +179,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
   // ── Refs ──────────────────────────────────────────
   const frameRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const canvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const baseCanvasHref = `/chat/project/${encodeURIComponent(projectId)}/canvas`;
+  const fallbackIntroDemoReturnTo = `${baseCanvasHref}?introDemo=1&introDemoStage=leaf`;
+  const introDemoReturnTo = useMemo(
+    () => safeInternalReturnTo(searchParams.get('returnTo'), fallbackIntroDemoReturnTo),
+    [fallbackIntroDemoReturnTo, searchParams]
+  );
+  const canvasHref = isIntroCommitDetailsStage ? introDemoReturnTo : baseCanvasHref;
+  const commitTourSteps = isIntroCommitDetailsStage
+    ? INTRO_COMMIT_DETAIL_TOUR_STEPS
+    : COMMIT_TOUR_STEPS;
 
   // ── Fetch data ────────────────────────────────────
   useEffect(() => {
@@ -228,7 +226,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
           // History fetch failure is non-critical
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load commit');
+        setError(formatUserFacingError(err, 'Failed to load commit.'));
       } finally {
         setLoading(false);
       }
@@ -280,12 +278,24 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
   );
 
   const handleBack = useCallback(() => {
+    if (isIntroCommitDetailsStage) {
+      router.push(introDemoReturnTo);
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push(canvasHref);
-  }, [canvasHref, router]);
+  }, [canvasHref, introDemoReturnTo, isIntroCommitDetailsStage, router]);
+
+  const handleTourDone = useCallback(() => {
+    if (isIntroCommitDetailsStage) {
+      router.push(introDemoReturnTo);
+      return;
+    }
+    void completeIntroDemo();
+  }, [completeIntroDemo, introDemoReturnTo, isIntroCommitDetailsStage, router]);
 
   // ── Keyboard navigation (shared hook, controlled mode) ──
   useKeyboardNavigation({
@@ -371,6 +381,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         <div className="flex items-center gap-1.5" data-intro-target="commit-actions">
           <Link
             href={canvasHref}
+            data-intro-target="commit-view-canvas"
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--stroke-default)] bg-transparent px-3 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
             <GitCommit size={13} /> Canvas
@@ -688,10 +699,12 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       />
       <FeatureTourOverlay
         open={tourOpen}
-        title="Commit walkthrough"
-        steps={COMMIT_TOUR_STEPS}
+        title="Commit"
+        steps={commitTourSteps}
         onClose={() => setTourOpen(false)}
-        onDone={() => void completeIntroDemo()}
+        onDone={handleTourDone}
+        onSkip={() => void completeIntroDemo()}
+        interactionMode={isIntroCommitDetailsStage ? 'guided' : 'coach'}
       />
     </div>
   );

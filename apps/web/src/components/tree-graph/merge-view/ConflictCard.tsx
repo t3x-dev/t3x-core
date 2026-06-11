@@ -4,6 +4,7 @@ import type { MergeResult, SlotValue } from '@t3x-dev/core';
 import { Check, ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useTreeMergeSuggestion } from '@/hooks/merge/useTreeMergeSuggestion';
 import type { TreeMergeSuggestion } from '@/types/api';
 import { cn } from '@/utils/cn';
@@ -73,7 +74,7 @@ export function ConflictCard({
       );
       setSuggestion(result);
     } catch (err) {
-      setSuggestError(err instanceof Error ? err.message : 'Failed to get suggestion');
+      setSuggestError(formatUserFacingError(err, 'Failed to get suggestion.'));
     } finally {
       setSuggestLoading(false);
     }

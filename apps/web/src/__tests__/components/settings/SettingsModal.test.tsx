@@ -253,9 +253,14 @@ describe('SettingsModal', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Quick Settings' })).toBeInTheDocument();
     expect(screen.getByText('Fast local changes and readiness shortcuts.')).toBeInTheDocument();
-    expect(screen.getByText('Local Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Local profile')).toBeInTheDocument();
+    expect(screen.getByText('Display name, avatar, and edit author.')).toBeInTheDocument();
     expect(screen.getByText('Appearance')).toBeInTheDocument();
     expect(screen.getByText('Provider readiness')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Provider readiness/i })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
     expect(screen.getByRole('link', { name: 'Open full settings' })).toHaveAttribute(
       'href',
       '/settings'
@@ -266,6 +271,20 @@ describe('SettingsModal', () => {
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     });
+
+    await waitFor(() => {
+      expect(useSettingsModalStore.getState().isOpen).toBe(false);
+    });
+  });
+
+  it('closes the quick modal when navigating to a setting shortcut', async () => {
+    act(() => {
+      useSettingsModalStore.getState().openSettingsModal('profile');
+    });
+
+    render(<SettingsModal />);
+
+    fireEvent.click(await screen.findByRole('link', { name: /Local profile/i }));
 
     await waitFor(() => {
       expect(useSettingsModalStore.getState().isOpen).toBe(false);

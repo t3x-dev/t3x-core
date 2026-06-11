@@ -4,6 +4,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   applyIntroDemoCommitToCanvasGraph,
+  clearIntroDemoLocalCommit,
   INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY,
   type IntroDemoLocalCommit,
   readIntroDemoLocalCommit,
@@ -58,6 +59,18 @@ describe('intro demo local commit', () => {
     expect(readIntroDemoLocalCommit('proj_demo')).toEqual(commit);
     expect(readIntroDemoLocalCommit('proj_other')).toBeNull();
     expect(window.sessionStorage.getItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('clears the local demo commit marker for the completed project only', () => {
+    const commit = makeCommit();
+    saveIntroDemoLocalCommit(commit);
+
+    clearIntroDemoLocalCommit('proj_other');
+    expect(readIntroDemoLocalCommit('proj_demo')).toEqual(commit);
+
+    clearIntroDemoLocalCommit('proj_demo');
+    expect(readIntroDemoLocalCommit('proj_demo')).toBeNull();
+    expect(window.sessionStorage.getItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY)).toBeNull();
   });
 
   it('turns the demo staging unit into a committed canvas unit', () => {

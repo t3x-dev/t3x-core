@@ -29,6 +29,7 @@ import {
 } from '@/components/onboarding/FeatureTourOverlay';
 import { Breadcrumb } from '@/components/shared/Breadcrumb';
 import { TreeGraphView } from '@/components/tree-graph';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useMergeWorkspaceActions } from '@/hooks/merge/useMergeWorkspaceActions';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
@@ -59,62 +60,38 @@ const DIFF_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'header',
     label: 'Range',
-    title: 'Start by checking which two commits are being compared',
-    description:
-      'The header shows the base and target hashes so users can trust the diff range before reading changes.',
+    title: 'Check commits',
+    description: 'Confirm base and target.',
     target: 'diff-header',
     tone: 'commit',
     icon: GitCompareArrows,
-    details: [
-      'Click either hash pill to open the corresponding commit.',
-      'Use Back to return to the canvas or the page that opened this comparison.',
-      'The demo keeps this comparison inside the seeded project.',
-    ],
   },
   {
     id: 'index',
     label: 'Index',
-    title: 'Use the left index to jump between changed semantic trees',
-    description:
-      'The index groups modified, added, removed, and identical trees so users can scan before reading line-by-line detail.',
+    title: 'Use tree index',
+    description: 'Jump through changed paths.',
     target: 'diff-index',
     tone: 'extract',
     icon: ListTree,
-    details: [
-      'Click a tree row to jump to its diff.',
-      'Use Show identical when the user needs full context.',
-      'The symbols and colors match the rest of the versioning UI.',
-    ],
   },
   {
     id: 'tabs',
     label: 'Views',
-    title: 'Switch between diff, graph, and JSON views',
-    description:
-      'The tabs let users inspect the same change as a text diff, visual structure, or raw data.',
+    title: 'Switch diff views',
+    description: 'Inspect text diff, graph, or JSON.',
     target: 'diff-tabs',
     tone: 'commit',
     icon: Columns3,
-    details: [
-      'Diff is best for semantic review.',
-      'Graph is best for relationship shape.',
-      'JSON is best for debugging exact payloads.',
-    ],
   },
   {
     id: 'side',
     label: 'Merge',
-    title: 'Use the right rail for summary and merge entry',
-    description:
-      'The metadata rail summarizes base, target, tree changes, relation changes, and offers Start Merge when applicable.',
+    title: 'Use summary rail',
+    description: 'Review counts or merge.',
     target: 'diff-sidebar',
     tone: 'pending',
     icon: PanelRight,
-    details: [
-      'Read tree stats before deciding whether a merge is needed.',
-      'Start Merge creates a merge workspace from the two selected versions.',
-      'In the seeded demo, this teaches where merge lives without requiring an API call.',
-    ],
   },
 ];
 
@@ -315,7 +292,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(formatUserFacingError(err, 'Failed to load diff.'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -361,7 +338,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       );
       router.push(withReturnTo(`/project/${projectId}/merge/${draftId}`, currentReturnTo));
     } catch (err) {
-      setMergeError(err instanceof Error ? err.message : 'Failed to create merge draft');
+      setMergeError(formatUserFacingError(err, 'Failed to create merge draft.'));
     } finally {
       setMergeLoading(false);
     }
@@ -609,7 +586,7 @@ export function DiffPage({ projectId, baseHash, targetHash }: DiffPageProps) {
       </div>
       <FeatureTourOverlay
         open={tourOpen}
-        title="Diff walkthrough"
+        title="Diff"
         steps={DIFF_TOUR_STEPS}
         onClose={() => setTourOpen(false)}
         onDone={() => void completeIntroDemo()}

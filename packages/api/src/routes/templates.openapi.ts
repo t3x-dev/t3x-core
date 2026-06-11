@@ -9,6 +9,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import { getDefaultTemplate, LEAF_TYPES, type LeafType } from '@t3x-dev/core';
 import { createTemplate, deleteTemplate, findTemplateById, listTemplates } from '@t3x-dev/storage';
 import { nanoid } from 'nanoid';
 import { getDB } from '../lib/db';
@@ -64,7 +65,7 @@ const CreateTemplateRequest = z.object({
   title: z.string().min(1).max(200),
   description: z.string().min(1).max(1000),
   category: z.enum(['social', 'business', 'technical', 'creative']),
-  leaf_type: z.enum(['tweet', 'article', 'email', 'weibo', 'wechat', 'slack']),
+  leaf_type: z.enum(LEAF_TYPES),
   system_prompt: z.string().min(1).max(50000),
   user_prompt: z.string().min(1).max(50000),
   variables: z.array(TemplateVariableSchema).default([]),
@@ -79,7 +80,7 @@ const TemplateIdParam = z.object({
 
 const ListTemplatesQuery = z.object({
   category: z.enum(['social', 'business', 'technical', 'creative']).optional(),
-  leaf_type: z.enum(['tweet', 'article', 'email', 'weibo', 'wechat', 'slack']).optional(),
+  leaf_type: z.enum(LEAF_TYPES).optional(),
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().int().min(0).default(0).optional(),
@@ -89,6 +90,12 @@ const ListTemplatesQuery = z.object({
 export const templatesRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+const SUPPORTED_TEMPLATE_LEAF_TYPES = new Set<string>(LEAF_TYPES);
+
+function isSupportedTemplateLeafType(leafType: string): leafType is LeafType {
+  return SUPPORTED_TEMPLATE_LEAF_TYPES.has(leafType);
+}
 
 // ============================================================
 // Helper: format DB row → API response
@@ -114,15 +121,20 @@ function formatTemplate(row: {
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const builtinDefault =
+    row.isBuiltin && isSupportedTemplateLeafType(row.leafType)
+      ? getDefaultTemplate(row.leafType)
+      : null;
+
   return {
     template_id: row.templateId,
-    title: row.title,
-    description: row.description,
+    title: builtinDefault?.name ?? row.title,
+    description: builtinDefault?.description ?? row.description,
     category: row.category,
     leaf_type: row.leafType,
-    system_prompt: row.systemPrompt,
-    user_prompt: row.userPrompt,
-    variables: row.variables,
+    system_prompt: builtinDefault?.systemPrompt ?? row.systemPrompt,
+    user_prompt: builtinDefault?.userPrompt ?? row.userPrompt,
+    variables: builtinDefault?.variables ?? row.variables,
     tags: row.tags,
     is_builtin: row.isBuiltin,
     default_constraints: row.defaultConstraints ?? [],
@@ -173,7 +185,14 @@ templatesRoutes.openapi(listTemplatesRoute, async (c) => {
 
     // Cursor-based pagination mode
     if (cursor !== undefined) {
-      const result = await listTemplates(db, { category, leaf_type, search, cursor, limit });
+      const result = await listTemplates(db, {
+        category,
+        leaf_type,
+        leaf_types: LEAF_TYPES,
+        search,
+        cursor,
+        limit,
+      });
       return c.json({
         success: true as const,
         data: {
@@ -185,7 +204,14 @@ templatesRoutes.openapi(listTemplatesRoute, async (c) => {
     }
 
     // Legacy offset/limit mode
-    const rows = await listTemplates(db, { category, leaf_type, search, limit, offset });
+    const rows = await listTemplates(db, {
+      category,
+      leaf_type,
+      leaf_types: LEAF_TYPES,
+      search,
+      limit,
+      offset,
+    });
     return c.json({
       success: true as const,
       data: rows.map(formatTemplate),
@@ -231,7 +257,7 @@ templatesRoutes.openapi(getTemplateRoute, async (c) => {
   try {
     const db = await getDB();
     const row = await findTemplateById(db, id);
-    if (!row) {
+    if (!row || !isSupportedTemplateLeafType(row.leafType)) {
       return errorResponse(c, 'NOT_FOUND', `Template not found: ${id}`);
     }
     return c.json({ success: true as const, data: formatTemplate(row) });

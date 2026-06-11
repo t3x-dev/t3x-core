@@ -15,6 +15,12 @@ import { useCanvasCommitActions } from '@/hooks/canvas/useCanvasCommitActions';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { useCanvasPositionPersist } from '@/hooks/canvas/useCanvasPositionPersist';
 import { LEAF_CHANGED_EVENT, type LeafChangedDetail } from '@/hooks/leaves/leafEvents';
+import {
+  CONVERSATION_DELETED_EVENT,
+  type ConversationDeletedDetail,
+  PROJECT_DELETED_EVENT,
+  type ProjectDeletedDetail,
+} from '@/hooks/shared/deleteEvents';
 import { useCompactViewport } from '@/hooks/shared/useChatCompactViewport';
 import { useContextMenu } from '@/hooks/shared/useContextMenu';
 import { useNodePositionSaver } from '@/hooks/shared/useNodePositionSaver';
@@ -40,6 +46,7 @@ const edgeTypes = {
 
 import { Button } from '@/components/ui/button';
 import { ZoomSlider } from '@/components/ui/zoom-slider';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useProjectStore } from '@/store/projectStore';
 import type { CanvasNodeData } from '@/types/nodes';
@@ -107,12 +114,19 @@ function CanvasWorkspaceInner({
   const [isAdding, setIsAdding] = useState(false);
   const { isDeveloperMode } = useTerminology();
   const compactViewport = useCompactViewport();
+  const selectionPanelVisible = useCompactViewport('(min-width: 1280px)');
   const canvasMinZoom = compactViewport ? 0.55 : 0.25;
   const currentReturnTo = useMemo(
     () => buildReturnTo(pathname, searchParams),
     [pathname, searchParams]
   );
   const introDemoActive = searchParams.get('introDemo') === '1';
+  const introDemoLeafReturnTo = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('introDemo', '1');
+    params.set('introDemoStage', 'leaf');
+    return buildReturnTo(pathname, params);
+  }, [pathname, searchParams]);
   const withIntroDemo = useCallback(
     (href: string) => {
       if (!introDemoActive) return href;
@@ -167,6 +181,52 @@ function CanvasWorkspaceInner({
     window.addEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
     return () => window.removeEventListener(LEAF_CHANGED_EVENT, handleLeafChanged);
   }, [projectId, refreshCanvasLeaves]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const handleConversationDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ConversationDeletedDetail>).detail;
+      if (detail?.projectId !== projectId || !detail.conversationId) return;
+      useCanvasStore.setState((state) => {
+        if (state.projectId !== projectId) return {};
+        const nodesToRemove = new Set(
+          state.nodes
+            .filter(
+              (node) =>
+                node.data.kind === 'unit' &&
+                node.data.conversationId === detail.conversationId &&
+                node.data.commitStatus !== 'committed'
+            )
+            .map((node) => node.id)
+        );
+        if (nodesToRemove.size === 0) return {};
+        return {
+          nodes: state.nodes.filter((node) => !nodesToRemove.has(node.id)),
+          edges: state.edges.filter(
+            (edge) => !nodesToRemove.has(edge.source) && !nodesToRemove.has(edge.target)
+          ),
+          openNodeId:
+            state.openNodeId && nodesToRemove.has(state.openNodeId) ? null : state.openNodeId,
+          modalViewMode:
+            state.openNodeId && nodesToRemove.has(state.openNodeId) ? null : state.modalViewMode,
+        };
+      });
+    };
+
+    const handleProjectDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<ProjectDeletedDetail>).detail;
+      if (detail?.projectId !== projectId) return;
+      useCanvasStore.getState().clearCanvas();
+    };
+
+    window.addEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+    window.addEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    return () => {
+      window.removeEventListener(CONVERSATION_DELETED_EVENT, handleConversationDeleted);
+      window.removeEventListener(PROJECT_DELETED_EVENT, handleProjectDeleted);
+    };
+  }, [projectId]);
 
   const notify = useProjectStore((state) => state.notifyCallback);
 
@@ -400,6 +460,19 @@ function CanvasWorkspaceInner({
 
     return {
       actions: buildCommitActions({
+        onViewDetails: () => {
+          if (projectId && hash) {
+            const detailHref = `/project/${projectId}/commit/${encodeURIComponent(hash)}`;
+            router.push(
+              introDemoActive
+                ? withReturnTo(
+                    `${detailHref}?introDemo=1&introDemoStage=commitDetails`,
+                    introDemoLeafReturnTo
+                  )
+                : detailHref
+            );
+          }
+        },
         onViewDiff:
           parentHash && projectId && hash
             ? () => {
@@ -503,7 +576,7 @@ function CanvasWorkspaceInner({
             !initialLayoutDone && nodes.length > 0 && 'opacity-0'
           )}
           role="tree"
-          aria-label="Knowledge graph canvas"
+          aria-label="State graph canvas"
           style={{
             backgroundColor: 'var(--surface-canvas)',
           }}
@@ -545,8 +618,7 @@ function CanvasWorkspaceInner({
                 return;
               }
 
-              // Committed nodes: single click = action panel. The commit hash inside the node
-              // is the canonical detail-page entrypoint.
+              // Committed nodes: single click = action panel. Details opens the commit page.
               if (!compactViewport) {
                 if (data.branchType === 'branch') {
                   setHighlight({ branch: data.branchName, mode: 'branch' });
@@ -684,7 +756,7 @@ function CanvasWorkspaceInner({
           onClose={closeContextMenu}
         />
       )}
-      {actionPanel && selectedUnitNode && (
+      {actionPanel && selectedUnitNode && !selectionPanelVisible && (
         <CommitActionPanel
           x={actionPanel.x}
           y={actionPanel.y}
@@ -764,7 +836,7 @@ function CanvasWorkspaceInner({
           onImported={() => {
             setShowImportDialog(false);
             loadCanvas(projectId).catch((err) => {
-              const message = err instanceof Error ? err.message : 'Failed to refresh canvas';
+              const message = formatUserFacingError(err, 'Failed to refresh canvas.');
               notify?.(message, 'error');
             });
           }}

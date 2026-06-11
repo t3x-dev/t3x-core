@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatUserFacingError } from '@/domain/format/errors';
 
 interface TableInfo {
   name: string;
@@ -47,7 +48,7 @@ export default function DevDatabasePage() {
         if (data.tables) setTables(data.tables);
         if (data.error) setError(data.error);
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(formatUserFacingError(err, 'Failed to load database tables.')));
   }, []);
 
   const executeQuery = useCallback(async () => {
@@ -67,7 +68,7 @@ export default function DevDatabasePage() {
         setResult(data);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Query failed');
+      setError(formatUserFacingError(err, 'Query failed.'));
       setResult(null);
     } finally {
       setLoading(false);

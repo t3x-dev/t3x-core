@@ -16,11 +16,34 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useTemplates } from '@/hooks/templates/useTemplates';
-import type { CreateTemplateInput, Template, TemplateVariable } from '@/types/api';
+import type {
+  CreateTemplateInput,
+  Template,
+  TemplateLeafType,
+  TemplateVariable,
+} from '@/types/api';
 
 const CATEGORIES = ['social', 'business', 'technical', 'creative'] as const;
-const LEAF_TYPES = ['tweet', 'article', 'email', 'weibo', 'wechat', 'slack'] as const;
+const LEAF_TYPES = [
+  'tweet',
+  'linkedin',
+  'reddit',
+  'threads',
+  'article',
+  'email',
+  'slack',
+] as const satisfies readonly TemplateLeafType[];
+const LEAF_TYPE_LABELS: Record<TemplateLeafType, string> = {
+  tweet: 'X / Twitter',
+  linkedin: 'LinkedIn',
+  reddit: 'Reddit',
+  threads: 'Threads',
+  article: 'Blog post',
+  email: 'Email',
+  slack: 'Slack',
+};
 
 interface CreateTemplateDialogProps {
   open: boolean;
@@ -152,7 +175,7 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
         tags: [],
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create template');
+      toast.error(formatUserFacingError(err, 'Failed to create template.'));
     } finally {
       setIsCreating(false);
     }
@@ -214,13 +237,13 @@ export function CreateTemplateDialog({ open, onOpenChange, onCreated }: CreateTe
               <Label>Leaf Type</Label>
               <select
                 value={form.leaf_type}
-                onChange={(e) => updateForm({ leaf_type: e.target.value })}
+                onChange={(e) => updateForm({ leaf_type: e.target.value as TemplateLeafType })}
                 disabled={isCreating}
                 className="w-full h-9 rounded-md border border-[var(--stroke-default)] bg-[var(--surface-base)] px-3 text-sm"
               >
                 {LEAF_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                    {LEAF_TYPE_LABELS[t]}
                   </option>
                 ))}
               </select>

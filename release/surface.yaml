@@ -5,7 +5,7 @@ notes: |
 packages:
   - name: "@t3x-dev/local"
     path: apps/local
-    access: restricted
+    access: public
     publish_state: applied
     npm_publish: true
     stability_tier: alpha
@@ -15,7 +15,7 @@ packages:
 
   - name: "@t3x-dev/yops"
     path: packages/yops
-    access: restricted
+    access: public
     publish_state: applied
     npm_publish: true
     stability_tier: alpha

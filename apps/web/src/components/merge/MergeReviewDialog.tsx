@@ -18,6 +18,7 @@ import {
 } from '@/components/merge/mergeReleaseNote';
 import type { MergeSummary } from '@/components/merge/mergeSummary';
 import { Button } from '@/components/ui/button';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useClipboard } from '@/hooks/shared/useClipboard';
 import { useCountUp } from '@/hooks/shared/useCountUp';
 import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
@@ -150,7 +151,7 @@ export function MergeReviewDialog({
       setState('success');
     } catch (err) {
       setState('error');
-      setErrorMsg(err instanceof Error ? err.message : t('merge_failed'));
+      setErrorMsg(formatUserFacingError(err, t('merge_failed')));
     }
   }, [onConfirm]);
 

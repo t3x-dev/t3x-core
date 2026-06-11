@@ -13,6 +13,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useTreeDiff } from '@/hooks/shared/useTreeDiff';
@@ -188,7 +189,7 @@ export function CommitHistoryPanel({
         const response = await loadDiff(parentHash, hash);
         setDiffData(response.diff);
       } catch (err) {
-        setDiffError(err instanceof Error ? err.message : 'Failed to load diff');
+        setDiffError(formatUserFacingError(err, 'Failed to load diff.'));
       } finally {
         setDiffLoading(false);
       }

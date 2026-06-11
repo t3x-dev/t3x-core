@@ -54,9 +54,13 @@ import {
 // Runner URL (t3x-runner service)
 const RUNNER_URL = process.env.RUNNER_URL || 'http://t3x-runner:8080';
 
+const DEFAULT_ENGINE_CALLBACK_BASE = 'http://t3x-api:8000';
+const DEFAULT_ENGINE_CALLBACK_PATH = '/api/v1/runs/ingest';
+
 // This Engine's callback URL for Runner to call back
 const ENGINE_CALLBACK_URL =
-  process.env.ENGINE_CALLBACK_URL || 'http://t3x-api:8000/api/v1/runs/ingest';
+  process.env.ENGINE_CALLBACK_URL ||
+  new URL(DEFAULT_ENGINE_CALLBACK_PATH, DEFAULT_ENGINE_CALLBACK_BASE).toString();
 
 // Runner's callback URL for n8n to call back
 const RUNNER_CALLBACK_URL =
