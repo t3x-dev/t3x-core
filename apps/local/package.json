@@ -1,6 +1,6 @@
 {
   "name": "@t3x-dev/local",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "T3X local entry package",
   "license": "Apache-2.0",
   "type": "module",
