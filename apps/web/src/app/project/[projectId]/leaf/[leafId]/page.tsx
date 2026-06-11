@@ -277,7 +277,7 @@ export function LeafDetailWorkspace({
             {leaf.type} artifact
           </span>
           <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
-            {coverageIncluded} / {coverageTotal} semantic points
+            {coverageIncluded} / {coverageTotal} state points
           </span>
           <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-commit)]">
             {semanticContent ? 'commit verified' : 'commit loading'}
