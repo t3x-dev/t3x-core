@@ -139,14 +139,14 @@ export const CHAT_WORKSPACE_TOUR_STEPS: FeatureTourStep[] = [
 
 const INTRO_DEMO_EMPTY_TREE = { trees: [], relations: [] };
 const INTRO_DEMO_ASSISTANT_REPLY = [
-  'I reviewed the prompt-review intake and found the core meaning to preserve:',
+  'I reviewed the prompt-review intake and found the core state to preserve:',
   '',
   '- Refunds above $100 should go to manual review.',
   '- Replies need the order id, policy citation, and refund amount before deciding.',
   '- Tone should stay calm, precise, and policy-grounded.',
   '- The main risks are skipped citations and drift in the threshold copy.',
   '',
-  'Next, open the console, extract these points into reviewable T3X meaning, then apply them before moving to Canvas.',
+  'Next, open the console, extract these points into reviewable T3X state, then apply them before moving to Canvas.',
 ].join('\n');
 
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {

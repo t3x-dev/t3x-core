@@ -23,7 +23,7 @@ const YOPS_REFERENCE = {
   name: 'YOps — YAML Operations',
   version: '1.0',
   description:
-    '18 base operations + 2 T3X extensions (relate/unrelate) for mutating semantic trees. ' +
+    '18 base operations + 2 T3X extensions (relate/unrelate) for mutating structured state trees. ' +
     'YOps is to YAML what SQL is to tables — a standard language for tree manipulation.',
 
   path_syntax: {
@@ -42,9 +42,9 @@ const YOPS_REFERENCE = {
   },
 
   workflow: {
-    description: 'Typical agent workflow for editing a semantic tree:',
+    description: 'Typical agent workflow for editing a structured state tree:',
     steps: [
-      'POST /v1/extract — extract semantic tree from text → returns draft_id',
+      'POST /v1/extract — extract a state tree from text → returns draft_id',
       'GET /v1/drafts/{draft_id} — view the extracted tree and get revision number',
       'POST /v1/drafts/{draft_id}/apply-yops — edit the tree with YOps (pass if_revision)',
       'POST /v1/drafts/{draft_id}/commit — save as immutable commit',
@@ -86,7 +86,7 @@ const YOPS_REFERENCE = {
       operations: ['assert'],
     },
     t3x: {
-      name: 'T3X — Semantic Relations (T3X extensions)',
+      name: 'T3X — Relations (T3X extensions)',
       operations: ['relate', 'unrelate'],
     },
   },
@@ -297,7 +297,7 @@ const YOPS_REFERENCE = {
     {
       name: 'relate',
       category: 't3x',
-      description: 'Add a semantic relation between two tree nodes (T3X extension)',
+      description: 'Add a relation between two tree nodes (T3X extension)',
       fields: {
         from: 'string (required) — source node path',
         to: 'string (required) — target node path',
@@ -311,7 +311,7 @@ const YOPS_REFERENCE = {
     {
       name: 'unrelate',
       category: 't3x',
-      description: 'Remove a semantic relation between two tree nodes (T3X extension)',
+      description: 'Remove a relation between two tree nodes (T3X extension)',
       fields: {
         from: 'string (required) — source node path',
         to: 'string (required) — target node path',

@@ -5,7 +5,7 @@
  * runs the canonical extraction pipeline, and stores the result as a draft.
  *
  * Endpoints:
- * - POST /v1/extract — Extract semantic trees from raw text
+ * - POST /v1/extract — Extract structured state trees from raw text
  */
 
 import type { z } from '@hono/zod-openapi';
@@ -52,9 +52,9 @@ const postExtractRoute = createRoute({
   path: '/v1/extract',
   tags: ['Integration'],
   operationId: 'extractSemanticTrees',
-  summary: 'Extract semantic trees from raw text',
+  summary: 'Extract structured state trees from raw text',
   description:
-    'Main entry point for the T3X workflow. Takes raw text and produces a structured semantic tree.\n\n' +
+    'Main entry point for the T3X workflow. Takes raw text and produces a structured state tree.\n\n' +
     '**What it does:**\n' +
     '1. Creates a conversation + turn from the raw text\n' +
     '2. Runs the LLM extraction pipeline (structure-aware, evidence-backed)\n' +

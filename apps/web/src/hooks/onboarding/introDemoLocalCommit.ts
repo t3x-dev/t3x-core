@@ -136,7 +136,7 @@ export function applyIntroDemoCommitToCanvasGraph({
         ...node.data,
         entryId: nextId.slice(0, 12),
         title: message,
-        summary: `${commit.content.trees.length} semantic tree${
+        summary: `${commit.content.trees.length} state tree${
           commit.content.trees.length === 1 ? '' : 's'
         }`,
         status: 'committed',

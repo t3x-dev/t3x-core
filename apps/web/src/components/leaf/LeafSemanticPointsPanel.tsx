@@ -23,7 +23,7 @@ export function LeafSemanticPointsPanel({
     <div className="p-3 border-b border-[var(--stroke-divider)]">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
-          Semantic Points
+          State Points
         </span>
         <span className="text-[10px] text-[var(--text-tertiary)]">
           {summary.included} / {summary.total} included
@@ -32,7 +32,7 @@ export function LeafSemanticPointsPanel({
 
       {points.length === 0 ? (
         <p className="py-2 text-center text-[10px] text-[var(--text-tertiary)]">
-          No source semantic points available.
+          No source state points available.
         </p>
       ) : (
         <div className="max-h-[240px] space-y-1 overflow-y-auto pr-1">

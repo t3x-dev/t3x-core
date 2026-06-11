@@ -134,7 +134,7 @@ export interface TreeMergeSuggestion {
 }
 
 /**
- * Get AI merge suggestion for a conflicting semantic tree in a merge draft
+ * Get AI merge suggestion for a conflicting state tree in a merge draft
  */
 export async function getTreeMergeSuggestion(
   mergeId: string,

@@ -170,9 +170,9 @@ export function QualityPanel({
               <p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">
                 {coverageComplete
                   ? constraints.length === 0
-                    ? 'Every semantic point is represented. No constraint has been added yet.'
-                    : 'Every semantic point is represented in the output.'
-                  : `${includedCoverage} of ${totalCoverage} semantic points are included in this leaf.`}
+                    ? 'Every state point is represented. No constraint has been added yet.'
+                    : 'Every state point is represented in the output.'
+                  : `${includedCoverage} of ${totalCoverage} state points are included in this leaf.`}
               </p>
             </div>
           </div>
@@ -181,7 +181,7 @@ export function QualityPanel({
         <section className="overflow-hidden rounded-xl border border-[var(--stroke-default)] bg-[var(--surface-card)]">
           <div className="flex items-center justify-between border-b border-[var(--stroke-divider)] px-3 py-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-              Semantic Coverage
+              State Coverage
             </span>
             <span className="font-mono text-[11px] font-semibold text-[var(--text-tertiary)]">
               {includedCoverage} included
@@ -202,7 +202,7 @@ export function QualityPanel({
                 ))
             ) : (
               <p className="text-[12px] leading-5 text-[var(--text-tertiary)]">
-                Semantic points are loading from the commit source.
+                State points are loading from the commit source.
               </p>
             )}
           </div>

@@ -35,7 +35,7 @@ function getSummary(node: CanvasUnitNode, firstTree?: string): string {
   if (message && message !== node.data.title) return message;
   const summary = node.data.summary?.trim();
   if (summary && summary !== 'No facets') return summary;
-  return firstTree ? `${firstTree} updated in this version` : 'semantic tree updated';
+  return firstTree ? `${firstTree} updated in this version` : 'state tree updated';
 }
 
 function treeLabel(count: number): string {
@@ -238,7 +238,7 @@ export function CanvasSelectionPanel({
           </div>
         </PanelBlock>
 
-        <PanelBlock meta={hasParent ? 'vs parent' : 'root'} title="Meaning Delta">
+        <PanelBlock meta={hasParent ? 'vs parent' : 'root'} title="State Delta">
           <div className="space-y-1.5">
             <DeltaRow badge={hasParent ? '+' : '•'} label={firstTree} tone="leaf">
               {summary}
