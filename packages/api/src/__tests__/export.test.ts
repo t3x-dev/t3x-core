@@ -100,7 +100,7 @@ describe('Export Routes', () => {
       expect(turn.content).toContain('$3000');
     });
 
-    it('exports semantic snapshots from the inherited parent commit plus active yops', async () => {
+    it('exports state snapshots from the inherited parent commit plus active yops', async () => {
       const parent = await createCommit(mockDB, {
         author: { type: 'human', name: 'test' },
         content: {

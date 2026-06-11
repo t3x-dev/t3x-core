@@ -196,7 +196,7 @@ export function useLeafConstraintsEdit(
         setLeaf(updated);
       } catch (err) {
         setLeaf(previousLeaf);
-        setError(err instanceof Error ? err : new Error('Failed to update semantic points'));
+        setError(err instanceof Error ? err : new Error('Failed to update state points'));
       } finally {
         setSavingSemanticPoints(false);
       }

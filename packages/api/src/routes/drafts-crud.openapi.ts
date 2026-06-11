@@ -128,7 +128,7 @@ const getDraftRoute = createRoute({
   operationId: 'getDraft',
   summary: 'Get draft by ID',
   description:
-    'Returns the draft including its semantic tree (`nodes`), revision number, and status. ' +
+    'Returns the draft including its structured state tree (`nodes`), revision number, and status. ' +
     'Use the `revision` field as `if_revision` when calling `POST /v1/drafts/{id}/apply-yops`.',
   request: { params: IdParamSchema },
   responses: {

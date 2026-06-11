@@ -111,7 +111,7 @@ const commitDraftRoute = createRoute({
   operationId: 'commitDraft',
   summary: 'Commit draft',
   description:
-    "Saves the draft's current semantic tree as an immutable commit in the hash chain. " +
+    "Saves the draft's current structured state tree as an immutable commit in the hash chain. " +
     'The draft status changes to `committed`. ' +
     'Optionally provide a `message` and `branch` (defaults to current branch).',
   request: {
@@ -520,7 +520,7 @@ draftsWorkflowRoutes.openapi(commitDraftRoute, async (c) => {
       ).filter((sp) => sp.zone === 'ready' && sp.status !== 'undone' && sp.staged);
 
       if (activeSPs.length === 0) {
-        return errorResponse(c, 'INVALID_REQUEST', 'No staged semantic points to commit');
+        return errorResponse(c, 'INVALID_REQUEST', 'No staged state points to commit');
       }
 
       nodes = activeSPs.map((sp) => {

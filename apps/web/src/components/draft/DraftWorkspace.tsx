@@ -3,7 +3,7 @@
 /**
  * DraftWorkspace - Full-screen draft editing workspace
  *
- * Provides a workbench for composing semantic knowledge:
+ * Provides a workbench for composing structured state:
  * - ContentNode list with include/exclude toggles
  * - Constraint editor with local validation
  * - Instruction editor for generation guidance
@@ -79,7 +79,7 @@ const DRAFT_TOUR_STEPS: FeatureTourStep[] = [
   {
     id: 'nodes',
     label: 'Nodes',
-    title: 'Review semantic points',
+    title: 'Review state points',
     description: 'Choose what gets committed.',
     target: 'draft-nodes',
     tone: 'extract',

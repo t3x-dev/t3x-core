@@ -52,7 +52,7 @@ const compressTreesRoute = createRoute({
   method: 'post',
   path: '/v1/conversations/{conversationId}/compress',
   tags: ['Extract'],
-  summary: 'Compress semantic trees in a conversation using LLM',
+  summary: 'Compress state trees in a conversation using LLM',
   description:
     'Runs the v2 compression pipeline on conversation nodes, merges redundant frames, removes low-value content, and appends the compress YOps to the yops-log.',
   request: {

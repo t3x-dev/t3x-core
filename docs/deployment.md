@@ -53,7 +53,7 @@ dev processes.
 
 ## Environment
 
-At least one provider key is required for semantic extraction or chat:
+At least one provider key is required for live extraction or chat:
 
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`

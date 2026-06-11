@@ -1,7 +1,7 @@
 /**
  * Tree State Sync
  *
- * Syncs semantic tree state to the trees + tree_relations tables.
+ * Syncs state tree data to the trees + tree_relations tables.
  * Used by extraction, compression, manual edit, and undo routes.
  * All operations use the caller's transaction handle (tx) for atomicity.
  *

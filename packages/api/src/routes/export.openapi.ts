@@ -229,7 +229,7 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       evidence_refs: [],
     };
 
-    // Build semantic snapshots from yops logs
+    // Build state snapshots from yops logs
     const semanticSnapshots: Record<string, unknown> = {};
     for (const conv of await findConversationsByProject(db, { projectId, limit: 10000 })) {
       const yopsLogs = await listActiveYOpsLogByConversation(db, conv.conversationId);
@@ -255,7 +255,7 @@ exportRoutes.openapi(exportCfpackRoute, async (c) => {
       turns,
       findings,
       commits,
-      // Include Frame semantic snapshots if any conversations have Frame data
+      // Include Frame state snapshots if any conversations have Frame data
       ...(Object.keys(semanticSnapshots).length > 0
         ? { semantic_snapshots: semanticSnapshots }
         : {}),
@@ -375,7 +375,7 @@ exportRoutes.openapi(exportLedgerRoute, async (c) => {
       );
     }
 
-    // Semantic snapshots
+    // State snapshots
     for (const conv of conversations) {
       const yopsLogs = await listActiveYOpsLogByConversation(db, conv.conversationId);
       if (yopsLogs.length > 0 || conv.parentCommitHash) {

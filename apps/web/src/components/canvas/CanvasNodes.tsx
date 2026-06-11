@@ -107,7 +107,7 @@ function inferSemanticSummary(data: CanvasNodeData): { label: string; meta: stri
   const trees = (data.commit?.content?.trees ?? []) as TreeSummaryNode[];
   if (trees.length === 0) return null;
 
-  const rootKey = trees[0]?.key ?? 'semantic tree';
+  const rootKey = trees[0]?.key ?? 'state tree';
   const nodeCount = flattenTrees(trees).length;
   const destination = trees[0]?.slots?.destination;
   if (

@@ -33,7 +33,7 @@ describe('LeafSemanticPointsPanel', () => {
   it('renders the included summary and checkbox state', () => {
     render(<LeafSemanticPointsPanel points={points} saving={false} onTogglePoint={vi.fn()} />);
 
-    expect(screen.getByText('Semantic Points')).toBeInTheDocument();
+    expect(screen.getByText('State Points')).toBeInTheDocument();
     expect(screen.getByText('2 / 3 included')).toBeInTheDocument();
     expect(screen.getByLabelText('trip')).toBeChecked();
     expect(screen.getByLabelText('trip.city = Kyoto')).toBeChecked();
