@@ -1,5 +1,11 @@
 # @t3x-dev/local
 
+## 0.5.0
+
+### Minor Changes
+
+- [#1128](https://github.com/t3x-dev/t3x-core/pull/1128) [`43ba36d`](https://github.com/t3x-dev/t3x-core/commit/43ba36d0747bcf3378a2a08e18f631b8a98e84f9) Thanks [@lqw905](https://github.com/lqw905)! - Publish the public alpha package surface and GitHub Release assets for local and YOps.
+
 ## 0.4.1
 
 ### Patch Changes
