@@ -8,6 +8,7 @@ import {
   INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY,
   type IntroDemoLocalCommit,
   readIntroDemoLocalCommit,
+  resolveIntroDemoApiCommitForHash,
   saveIntroDemoLocalCommit,
 } from '@/hooks/onboarding/introDemoLocalCommit';
 import { DEMO_COMMIT_HASH, demoTree } from '@/hooks/onboarding/useIntroDemoReplayActions';
@@ -71,6 +72,20 @@ describe('intro demo local commit', () => {
     clearIntroDemoLocalCommit('proj_demo');
     expect(readIntroDemoLocalCommit('proj_demo')).toBeNull();
     expect(window.sessionStorage.getItem(INTRO_DEMO_LOCAL_COMMIT_STORAGE_KEY)).toBeNull();
+  });
+
+  it('resolves a local demo commit into an API commit for matching detail routes', () => {
+    const commit = makeCommit();
+    saveIntroDemoLocalCommit(commit);
+
+    const resolved = resolveIntroDemoApiCommitForHash('proj_demo', DEMO_COMMIT_HASH);
+
+    expect(resolved?.hash).toBe(DEMO_COMMIT_HASH);
+    expect(resolved?.project_id).toBe('proj_demo');
+    expect(resolved?.message).toBe('Prompt review demo');
+    expect(resolved?.content.trees[0]?.key).toBe('prompt_review_intake');
+    expect(resolveIntroDemoApiCommitForHash('proj_demo', 'sha256:missing')).toBeNull();
+    expect(resolveIntroDemoApiCommitForHash('proj_other', DEMO_COMMIT_HASH)).toBeNull();
   });
 
   it('turns the demo staging unit into a committed canvas unit', () => {

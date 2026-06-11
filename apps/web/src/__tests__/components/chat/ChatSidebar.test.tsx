@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => {
     loadConversations: vi.fn(),
     loadCommits: vi.fn(),
     importChat: vi.fn(),
+    ensureDemoProject: vi.fn(),
     pathname: '/chat/conv_a432e35d',
     projects: [] as Array<{
       project_id: string;
@@ -128,6 +129,10 @@ vi.mock('@/hooks/commits/useCommitsList', () => ({
   }),
 }));
 
+vi.mock('@/hooks/onboarding/useEnsureDemoProject', () => ({
+  useEnsureDemoProject: () => mocks.ensureDemoProject,
+}));
+
 vi.mock('@/hooks/leaves/useProjectLeaves', () => ({
   useProjectLeaves: () => ({
     leaves: mocks.projectLeaves,
@@ -164,6 +169,7 @@ import { useTemporaryChatsStore } from '@/store/temporaryChatsStore';
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   useTemporaryChatsStore.setState({ chats: [] });
   mocks.projects = [];
   mocks.projectLeaves = [];
@@ -172,6 +178,14 @@ afterEach(() => {
   mocks.commits = [];
   mocks.loadConversations.mockResolvedValue([]);
   mocks.loadCommits.mockResolvedValue(mocks.commits);
+  mocks.ensureDemoProject.mockResolvedValue({
+    project_id: 'proj_demo',
+    name: 'Prompt Review',
+    created_at: '2026-06-08T00:00:00Z',
+    conversations_count: 1,
+    commits_count: 1,
+    metadata: { is_demo: true, demo_fixture_id: 'prompt_review' },
+  });
   mocks.importChat.mockResolvedValue({
     conversation_id: 'conv_imported',
     project_id: 'proj_import',
@@ -186,9 +200,35 @@ afterEach(() => {
   mocks.chatState.expandedProjectIds = new Set<string>();
   mocks.chatState.refreshKey = 0;
   window.sessionStorage.clear();
+  window.history.pushState(null, '', '/chat');
 });
 
 describe('ChatSidebar', () => {
+  it('does not render a persistent demo entry in the sidebar chrome', () => {
+    render(<ChatSidebar />);
+
+    expect(screen.queryByRole('link', { name: 'Open demo' })).not.toBeInTheDocument();
+  });
+
+  it('creates the seeded demo project from the intro demo URL in local production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    window.history.pushState(null, '', '/chat?introDemo=1');
+
+    render(<ChatSidebar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(mocks.ensureDemoProject).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.routerPush).toHaveBeenCalledWith(
+      '/chat?projectId=proj_demo&introDemo=1&introDemoStage=compose'
+    );
+  });
+
   it('creates a temporary chat from the Temporary chats action', () => {
     render(<ChatSidebar />);
 

@@ -13,13 +13,22 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AllProvidersFailedError,
   collectResult,
+  DEMO_WORKSPACE_FIXTURE,
   GenerationError,
   type GenerationMode,
   runOperation,
   validateConstraints,
   validateConstraintsExactOnly,
 } from '@t3x-dev/core';
-import { createLeaf, findLeafById, getCommitUnified, updateLeaf } from '@t3x-dev/storage';
+import {
+  createLeaf,
+  createLeafHistory,
+  findLeafById,
+  findProjectById,
+  getCommitUnified,
+  updateLeaf,
+  updateLeafAtomic,
+} from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
 import { getEmbedder, isSemanticValidationConfigured } from '../lib/embedder';
 import { errorResponse, zodErrorHook } from '../lib/errors';
@@ -27,6 +36,7 @@ import { assertProjectAccess } from '../lib/project-access';
 import { resolveProviderAndModel } from '../lib/provider-resolver';
 import { getUserId } from '../lib/usage-tracking';
 import { webhookDispatcher } from '../lib/webhook-dispatcher';
+import { pinoLogger } from '../middleware/logger';
 import { buildPipelineContext } from '../ops/context';
 import { leafGenerateOp } from '../ops/leaf-gen';
 import { ErrorResponseSchema, IdParamSchema } from '../schemas/common';
@@ -44,6 +54,63 @@ import { pushNotification } from './notifications.openapi';
 export const leavesGenerationRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
+
+type LeafRecord = Awaited<ReturnType<typeof findLeafById>>;
+
+function isPromptReviewDemoMetadata(metadataJson: string | null | undefined): boolean {
+  if (!metadataJson) return false;
+  try {
+    const metadata = JSON.parse(metadataJson) as Record<string, unknown>;
+    return metadata.is_demo === true && metadata.demo_fixture_id === DEMO_WORKSPACE_FIXTURE.id;
+  } catch {
+    return false;
+  }
+}
+
+async function generateDemoFixtureLeafOutput(
+  db: Awaited<ReturnType<typeof getDB>>,
+  leaf: NonNullable<LeafRecord>,
+  mode: GenerationMode
+) {
+  const project = await findProjectById(db, leaf.project_id);
+  if (!isPromptReviewDemoMetadata(project?.metadataJson)) return null;
+
+  const updatedLeaf = await updateLeafAtomic(db, leaf.id, {
+    output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+    assertions: DEMO_WORKSPACE_FIXTURE.leaf.assertions,
+  });
+  if (!updatedLeaf) {
+    throw new Error('Failed to update demo leaf with fixture output');
+  }
+
+  try {
+    await createLeafHistory(db, {
+      leaf_id: leaf.id,
+      output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+      config: {
+        ...(leaf.config ?? {}),
+        generation_mode: mode,
+        fixture_id: DEMO_WORKSPACE_FIXTURE.id,
+      },
+      model: 'fixture-replay',
+    });
+  } catch (historyErr) {
+    pinoLogger.warn({ err: historyErr }, 'failed to save demo generation history');
+  }
+
+  return {
+    output: DEMO_WORKSPACE_FIXTURE.leaf.output,
+    generated_at: updatedLeaf.generated_at ?? new Date().toISOString(),
+    validation: {
+      all_passed: DEMO_WORKSPACE_FIXTURE.leaf.assertions.every((assertion) => assertion.passed),
+      passed_count: DEMO_WORKSPACE_FIXTURE.leaf.assertions.filter((assertion) => assertion.passed)
+        .length,
+      failed_count: DEMO_WORKSPACE_FIXTURE.leaf.assertions.filter((assertion) => !assertion.passed)
+        .length,
+      attempts: 1,
+    },
+  };
+}
 
 // ============================================================
 // Route Definitions
@@ -245,6 +312,29 @@ leavesGenerationRoutes.openapi(generateLeafRoute, async (c) => {
     }
     const accessResult = await assertProjectAccess(c, db, leaf.project_id);
     if (accessResult instanceof Response) return accessResult;
+
+    const demoResult = await generateDemoFixtureLeafOutput(db, leaf, mode);
+    if (demoResult) {
+      webhookDispatcher.dispatch(
+        'leaf.generated',
+        { leaf_id: id, project_id: leaf.project_id },
+        leaf.project_id
+      );
+      pushNotification({
+        type: 'leaf.generated',
+        title: 'Output Generated',
+        message: `Leaf "${leaf.title || id}" output generated (${mode} mode)`,
+        project_id: leaf.project_id,
+        ref_id: id,
+      });
+      return c.json(
+        {
+          success: true as const,
+          data: demoResult,
+        },
+        200
+      );
+    }
 
     const providerResolution = await resolveProviderAndModel({
       db,

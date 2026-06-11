@@ -4,6 +4,7 @@
  * Integration tests for POST /v1/leaves/:id/generate endpoint.
  */
 
+import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import { createCommit, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -261,6 +262,64 @@ describe('POST /v1/leaves/:id/generate', () => {
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(false);
     expect(data.error.code).toBe('GENERATION_NOT_CONFIGURED');
+  });
+
+  it('returns fixture replay output for demo project leaves without a configured provider', async () => {
+    mockResolveProviderAndModel.mockResolvedValue({
+      ok: false,
+      code: 'unavailable',
+      message: 'No configured generation provider is available',
+    });
+
+    const project = await insertProject(
+      mockDB,
+      testData.project({
+        name: DEMO_WORKSPACE_FIXTURE.project.name,
+        metadata: DEMO_WORKSPACE_FIXTURE.project.metadata,
+      })
+    );
+    const commit = await createCommit(mockDB, {
+      author: DEMO_WORKSPACE_FIXTURE.commit.author,
+      content: {
+        trees: DEMO_WORKSPACE_FIXTURE.replay.trees,
+        relations: DEMO_WORKSPACE_FIXTURE.replay.relations,
+      },
+      project_id: project.projectId,
+      branch: 'main',
+      message: DEMO_WORKSPACE_FIXTURE.commit.message,
+      provenance: DEMO_WORKSPACE_FIXTURE.commit.provenance,
+    });
+    const createRes = await app.request('/v1/leaves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commit_hash: commit.hash,
+        type: 'tweet',
+        title: 'Demo generated leaf',
+        constraints: [],
+        project_id: project.projectId,
+      }),
+    });
+    const created: ApiResponse = await createRes.json();
+
+    const res = await app.request(`/v1/leaves/${created.data.id}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const data: ApiResponse = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.data.output).toBe(DEMO_WORKSPACE_FIXTURE.leaf.output);
+    expect(data.data.generated_at).toBeDefined();
+    expect(mockResolveProviderAndModel).not.toHaveBeenCalled();
+    expect(mockGenerateLeafOutput).not.toHaveBeenCalled();
+
+    const getRes = await app.request(`/v1/leaves/${created.data.id}`);
+    const getData: ApiResponse = await getRes.json();
+    expect(getData.data.output).toBe(DEMO_WORKSPACE_FIXTURE.leaf.output);
+    expect(getData.data.assertions).toEqual(DEMO_WORKSPACE_FIXTURE.leaf.assertions);
   });
 
   it('returns 404 for non-existent leaf', async () => {

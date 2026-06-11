@@ -373,7 +373,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
         data-node-semantic-kind={semanticKind}
         data-intro-target={
           isCommitted
-            ? 'canvas-commit-node'
+            ? data.leaves && data.leaves.length > 0
+              ? 'canvas-commit-node-with-leaf'
+              : 'canvas-commit-node'
             : isStaging || isDraft
               ? 'canvas-pending-node'
               : undefined

@@ -47,10 +47,24 @@ export async function seedDemoWorkspace(
   const settingKey = getDemoWorkspaceSeedKey(ownerId);
   const existingMarker = await getGlobalSetting<DemoWorkspaceSeedMarker>(db, settingKey);
 
-  if (existingMarker && !(options.resetDeleted && existingMarker.status === 'deleted')) {
+  if (existingMarker) {
     const existingProject = await findProjectByIdIncludingDeleted(db, existingMarker.project_id);
     if (existingMarker.status === 'active' && existingProject && !existingProject.deletedAt) {
       return { status: 'exists', project: existingProject };
+    }
+
+    if (options.resetDeleted) {
+      const created = await createDemoWorkspaceRows(db, ownerId);
+      await setGlobalSetting(db, settingKey, {
+        fixture_id: DEMO_WORKSPACE_FIXTURE.id,
+        fixture_version: DEMO_WORKSPACE_FIXTURE.project.metadata.demo_fixture_version,
+        owner_id: ownerId,
+        project_id: created.project.projectId,
+        status: 'active',
+        seeded_at: getMetadataString(created.project.metadataJson, 'demo_seeded_at'),
+      } satisfies DemoWorkspaceSeedMarker);
+
+      return { status: 'created', ...created };
     }
 
     const deletedMarker: DemoWorkspaceSeedMarker = {

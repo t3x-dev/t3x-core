@@ -99,4 +99,14 @@ describe('seedDemoWorkspace', () => {
     expect(reset.project?.projectId).not.toBe(first.project?.projectId);
     expect(await findProjects(db, {})).toHaveLength(1);
   });
+
+  it('recreates a deleted demo project when reset is explicit on the first retry', async () => {
+    const first = await seedDemoWorkspace(db, { ownerId: null });
+    await deleteProject(db, first.project!.projectId);
+
+    const reset = await seedDemoWorkspace(db, { ownerId: null, resetDeleted: true });
+    expect(reset.status).toBe('created');
+    expect(reset.project?.projectId).not.toBe(first.project?.projectId);
+    expect(await findProjects(db, {})).toHaveLength(1);
+  });
 });

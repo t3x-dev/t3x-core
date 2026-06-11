@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "packageVersion": "0.4.1",
   "fixedVersion": "0.4.1",
-  "generatedAt": "2026-06-10T03:28:05.449Z",
+  "generatedAt": "2026-06-11T10:30:46.472Z",
   "dependencies": {
     "@t3x-dev/yops": "0.4.1",
     "@t3x-dev/yschema": "0.4.1",
@@ -19,8 +19,8 @@
     "darwin-arm64": {
       "fileName": "t3x-local-runtime-0.4.1-darwin-arm64.tar.gz",
       "url": "https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.4.1/t3x-local-runtime-0.4.1-darwin-arm64.tar.gz",
-      "sha256": "08d7f76414d530e09a9883a69157c6b15ce5472595b519cd54e3a0ba69eafdac",
-      "size": 22179667
+      "sha256": "3ff0cb511c532e54216f8b1c5b9ae513a7d24cdf3096be49faea49c7924b93b0",
+      "size": 18264831
     }
   }
 }

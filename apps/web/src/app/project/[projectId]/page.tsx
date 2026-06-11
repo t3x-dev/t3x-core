@@ -19,6 +19,7 @@ import { fetchProject } from '@/queries/project';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
+import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 
 export default function ProjectDetailPage() {
   return (
@@ -46,8 +47,7 @@ export function ProjectDetailPageContent({
   const projectId = params.projectId as string;
 
   const searchParams = useSearchParams();
-  const showIntroDemo =
-    process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
+  const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
   const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
   const [projectTourOpen, setProjectTourOpen] = useState(showIntroDemo);
