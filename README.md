@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/alpha-v0.4.1%20restricted-purple" alt="restricted alpha v0.4.1" />
+  <img src="https://img.shields.io/badge/alpha-v0.4.1%20public-green" alt="public alpha v0.4.1" />
 </p>
 
 <br/>
@@ -40,8 +40,7 @@ outputs.
 
 ### Develop from source
 
-Use this path if you do not have restricted alpha npm package access yet, or if
-you want to inspect and change the repository itself.
+Use this path if you want to inspect and change the repository itself.
 
 ```bash
 git clone https://github.com/t3x-dev/t3x-core.git && cd t3x-core
@@ -58,29 +57,26 @@ the login flow.
 
 ### Try the local package
 
-Use this path if your npm account has restricted alpha access:
+Use this path to run the packaged local T3X experience:
 
 ```bash
 npx -p @t3x-dev/local t3x-local start
 ```
 
 Use this for the packaged local T3X experience, including the preview WebUI.
-Package or runtime asset access may be restricted; see [Availability](#availability).
-If this package returns 404 or cannot be resolved, use the source-development
-path above.
+Package and runtime release assets are public alpha artifacts; see
+[Availability](#availability).
 
 ### Use YOps as a library
 
-Use this path if your npm account has restricted alpha access:
+Use this path when you want the deterministic YAML operation engine inside your
+own app:
 
 ```bash
 npm install @t3x-dev/yops
 ```
 
-Use this when you want the deterministic YAML operation engine inside your own
-app.
-If npm returns 404 or cannot resolve the package, use the source workspace until
-package access is granted.
+The package is part of the public alpha npm release surface.
 
 ### Validate the self-hosted stack <sup>evaluation</sup>
 
@@ -339,11 +335,11 @@ The current npm release surface is intentionally narrow and declared in
 
 | Package | Status | Description |
 |:--------|:----|:------------|
-| [`@t3x-dev/local`](apps/local/) | restricted alpha | Local installer and no-key demo entrypoint |
-| [`@t3x-dev/yops`](packages/yops/) | restricted alpha | Declarative YAML operations |
+| [`@t3x-dev/local`](apps/local/) | public alpha | Local installer and no-key demo entrypoint |
+| [`@t3x-dev/yops`](packages/yops/) | public alpha | Declarative YAML operations |
 
-Other packages and runtime assets may be restricted until they are promoted into
-the release surface.
+Other packages remain internal or preview until they are promoted into the
+release surface.
 
 <br/>
 

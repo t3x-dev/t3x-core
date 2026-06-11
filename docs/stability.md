@@ -1,11 +1,11 @@
 # Stability Summary
 
-T3X is in restricted alpha. The release-facing contract is intentionally narrow
+T3X is in public alpha. The release-facing contract is intentionally narrow
 while the core product and package boundaries harden.
 
 ## Current Release Surface
 
-The restricted alpha release surface is:
+The public alpha release surface is:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
@@ -16,7 +16,7 @@ or preview until explicitly promoted.
 
 ## What Alpha Means
 
-- External use is expected, but package access may be restricted.
+- External use is expected through the public npm package surface.
 - Breaking changes are allowed when they are intentional, reviewed, and
   documented.
 - User-visible package changes require a changeset.
@@ -25,7 +25,7 @@ or preview until explicitly promoted.
 
 ## YOps Contract
 
-YOps is part of the restricted alpha surface. Its runtime source of truth is
+YOps is part of the public alpha surface. Its runtime source of truth is
 `packages/yops/yops.yaml`.
 
 Contract-bearing YOps changes include operation names, operation families,

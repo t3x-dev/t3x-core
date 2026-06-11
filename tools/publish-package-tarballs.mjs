@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { buildReleaseAssetUploadPlan } from './lib/packageReleaseAssets.mjs';
+import {
+  buildPackageReleaseAssetUploadPlan,
+  buildReleaseAssetUploadPlan,
+  resolveProductReleaseTag,
+} from './lib/packageReleaseAssets.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -17,6 +22,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
 }
 
 const packDir = await fs.mkdtemp(path.join(os.tmpdir(), 't3x-publish-packs-'));
+const releaseAssetDir = await fs.mkdtemp(path.join(os.tmpdir(), 't3x-release-assets-'));
 const registry = getArgValue('--registry') ?? process.env.NPM_CONFIG_REGISTRY;
 const tag = getArgValue('--tag') ?? process.env.NPM_DIST_TAG;
 const otp = getArgValue('--otp') ?? process.env.NPM_OTP;
@@ -91,12 +97,14 @@ try {
     });
   }
 
-  uploadPackageReleaseAssets(packedPackages);
+  await uploadPackageReleaseAssets(packedPackages);
 } finally {
   if (process.env.T3X_KEEP_PUBLISH_PACKS === '1') {
     console.log(`[publish-package-tarballs] Kept packed tarballs at ${packDir}`);
+    console.log(`[publish-package-tarballs] Kept release assets at ${releaseAssetDir}`);
   } else {
     await fs.rm(packDir, { recursive: true, force: true });
+    await fs.rm(releaseAssetDir, { recursive: true, force: true });
   }
 }
 
@@ -119,40 +127,220 @@ async function getPublishPackageDirs() {
   return publishDirs;
 }
 
-function uploadPackageReleaseAssets(packageRecords) {
+async function uploadPackageReleaseAssets(packageRecords) {
   const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
   if (!token) {
-    console.log(
-      '[publish-package-tarballs] Skipping GitHub Release asset upload: missing-github-token.'
-    );
-    return;
+    throw new Error('GH_TOKEN or GITHUB_TOKEN is required to upload package release assets.');
   }
 
   const releaseRecords = getProductReleaseRecords(token);
+  const productReleaseTag = resolveProductReleaseTag(packageRecords, releaseRecords);
+  const productAssetPaths = await createProductReleaseAssets({
+    packageRecords,
+    productReleaseTag,
+  });
   const uploadPlan = buildReleaseAssetUploadPlan({
     packageRecords,
-    assetPaths: packageRecords.map((record) => record.tarballPath),
+    assetPaths: productAssetPaths,
     env: process.env,
     releaseRecords,
   });
 
-  if (uploadPlan.skippedReason) {
-    console.log(
-      `[publish-package-tarballs] Skipping GitHub Release asset upload: ${uploadPlan.skippedReason}.`
-    );
+  console.log(
+    `[publish-package-tarballs] Uploading product release package assets to ${uploadPlan.releaseTag}: ${productAssetPaths
+      .map((assetPath) => path.basename(assetPath))
+      .join(', ')}`
+  );
+  runGh(uploadPlan.args, uploadPlan.env);
+
+  for (const packageRecord of packageRecords) {
+    await uploadSinglePackageReleaseAssets(packageRecord);
+  }
+}
+
+async function createProductReleaseAssets({ packageRecords, productReleaseTag }) {
+  const productDir = path.join(releaseAssetDir, 'product');
+  await fs.mkdir(productDir, { recursive: true });
+
+  const packageFileRecords = await buildFileRecords(
+    packageRecords.map((record) => record.tarballPath)
+  );
+  const manifestPath = path.join(productDir, 'manifest.json');
+  const manifest = {
+    schema: 't3x.product-release-packages.v1',
+    productRelease: productReleaseTag,
+    generatedAt: new Date().toISOString(),
+    gitSha: process.env.GITHUB_SHA ?? null,
+    npmRegistry: registry ?? 'https://registry.npmjs.org/',
+    packages: packageFileRecords.map((fileRecord) => {
+      const packageRecord = packageRecords.find((record) => record.tarballPath === fileRecord.path);
+      if (!packageRecord) {
+        throw new Error(`Could not resolve package record for ${fileRecord.path}`);
+      }
+      return {
+        name: packageRecord.name,
+        version: packageRecord.version,
+        npmUrl: packageVersionUrl(packageRecord),
+        packageRelease: packageReleaseTag(packageRecord),
+        assetName: fileRecord.fileName,
+        sha256: fileRecord.sha256,
+        size: fileRecord.size,
+      };
+    }),
+  };
+  await writeJson(manifestPath, manifest);
+
+  const archivePath = path.join(productDir, `${productReleaseTag}-packages.zip`);
+  createZipArchive(archivePath, [
+    ...packageRecords.map((record) => record.tarballPath),
+    manifestPath,
+  ]);
+
+  const checksumPath = path.join(productDir, 'checksums.txt');
+  const checksumRecords = await buildFileRecords([
+    ...packageRecords.map((record) => record.tarballPath),
+    manifestPath,
+    archivePath,
+  ]);
+  await writeChecksums(checksumPath, checksumRecords);
+
+  return [
+    ...packageRecords.map((record) => record.tarballPath),
+    archivePath,
+    manifestPath,
+    checksumPath,
+  ];
+}
+
+async function uploadSinglePackageReleaseAssets(packageRecord) {
+  const assetPaths = await packageReleaseAssetPaths(packageRecord);
+  const packageAssetDir = path.join(releaseAssetDir, packageRecord.name.replace('@t3x-dev/', ''));
+  await fs.mkdir(packageAssetDir, { recursive: true });
+  const checksumPath = path.join(packageAssetDir, 'checksums.txt');
+  await writeChecksums(checksumPath, await buildFileRecords(assetPaths));
+  const uploadPlan = buildPackageReleaseAssetUploadPlan({
+    packageRecord,
+    assetPaths: [...assetPaths, checksumPath],
+    env: process.env,
+  });
+
+  ensureRelease(uploadPlan);
+
+  console.log(
+    `[publish-package-tarballs] Uploading ${packageRecord.name} assets to ${uploadPlan.releaseTag}: ${uploadPlan.assetPaths
+      .map((assetPath) => path.basename(assetPath))
+      .join(', ')}`
+  );
+  runGh(uploadPlan.uploadArgs, uploadPlan.env);
+}
+
+async function packageReleaseAssetPaths(packageRecord) {
+  if (packageRecord.name === '@t3x-dev/yops') {
+    return [packageRecord.tarballPath];
+  }
+
+  if (packageRecord.name !== '@t3x-dev/local') {
+    throw new Error(`Unsupported package release asset package: ${packageRecord.name}`);
+  }
+
+  const runtimeArtifactsDir = path.join(repoRoot, 'apps', 'local', 'runtime-artifacts');
+  const runtimeManifestPath = path.join(repoRoot, 'apps', 'local', 'runtime-manifest.json');
+  const artifactNames = (await fs.readdir(runtimeArtifactsDir))
+    .filter((fileName) => fileName.endsWith('.tar.gz'))
+    .sort();
+
+  if (artifactNames.length === 0) {
+    throw new Error(`No runtime tarballs found in ${runtimeArtifactsDir}`);
+  }
+
+  await fs.access(runtimeManifestPath);
+  return [
+    packageRecord.tarballPath,
+    ...artifactNames.map((fileName) => path.join(runtimeArtifactsDir, fileName)),
+    runtimeManifestPath,
+  ];
+}
+
+function ensureRelease(uploadPlan) {
+  if (releaseExists(uploadPlan.releaseTag, uploadPlan.env)) {
     return;
   }
 
-  console.log(
-    `[publish-package-tarballs] Uploading package tarballs to ${uploadPlan.releaseTag}: ${packageRecords
-      .map((record) => path.basename(record.tarballPath))
-      .join(', ')}`
-  );
-  execFileSync('gh', uploadPlan.args, {
+  console.log(`[publish-package-tarballs] Creating package release ${uploadPlan.releaseTag}`);
+  runGh(uploadPlan.createArgs, uploadPlan.env);
+}
+
+function releaseExists(releaseTag, env) {
+  try {
+    execFileSync('gh', ['release', 'view', releaseTag], {
+      cwd: repoRoot,
+      env,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runGh(args, env) {
+  execFileSync('gh', args, {
     cwd: repoRoot,
-    env: uploadPlan.env,
+    env,
     stdio: 'inherit',
   });
+}
+
+async function buildFileRecords(filePaths) {
+  return Promise.all(
+    filePaths.map(async (filePath) => {
+      const bytes = await fs.readFile(filePath);
+      return {
+        path: filePath,
+        fileName: path.basename(filePath),
+        size: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      };
+    })
+  );
+}
+
+async function writeChecksums(filePath, fileRecords) {
+  const lines = fileRecords.map((record) => `${record.sha256}  ${record.fileName}`);
+  await fs.writeFile(filePath, `${lines.join('\n')}\n`);
+}
+
+async function writeJson(filePath, value) {
+  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function createZipArchive(archivePath, filePaths) {
+  execFileSync('zip', ['-j', archivePath, ...filePaths], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+}
+
+function packageVersionUrl(packageRecord) {
+  if (
+    registry &&
+    registry !== 'https://registry.npmjs.org/' &&
+    registry !== 'https://registry.npmjs.org'
+  ) {
+    return null;
+  }
+
+  return `https://www.npmjs.com/package/${packageRecord.name}/v/${packageRecord.version}`;
+}
+
+function packageReleaseTag(packageRecord) {
+  if (packageRecord.name === '@t3x-dev/local') {
+    return `t3x-local-v${packageRecord.version}`;
+  }
+  if (packageRecord.name === '@t3x-dev/yops') {
+    return `t3x-yops-v${packageRecord.version}`;
+  }
+  return null;
 }
 
 function getProductReleaseRecords(token) {

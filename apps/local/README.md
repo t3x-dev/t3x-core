@@ -14,13 +14,12 @@ without making every workspace package part of the public release surface.
 
 ## Release status
 
-`@t3x-dev/local@0.4.1` is part of the restricted T3X alpha release surface.
-Package visibility may be limited to accounts with alpha access.
+`@t3x-dev/local@0.4.1` is part of the public T3X alpha release surface.
+Package visibility is public on npm.
 
 ## Install
 
-This command requires restricted alpha npm access. If npm returns 404 or cannot
-resolve the package, use the source-development path in the root README.
+This command uses the public npm package.
 
 ```bash
 npx -p @t3x-dev/local t3x-local start
@@ -35,12 +34,12 @@ npx -p @t3x-dev/local t3x-local start
 On package install, `postinstall` downloads the platform runtime asset from
 `runtime-manifest.json`.
 
-For private GitHub releases, set `T3X_LOCAL_GITHUB_TOKEN`, `GH_TOKEN`, or
-`GITHUB_TOKEN` to a token with access to the runtime release.
+For private mirrors or local testing, set `T3X_LOCAL_GITHUB_TOKEN`, `GH_TOKEN`,
+or `GITHUB_TOKEN` to a token with access to the runtime release.
 
 ## Sample
 
-Requires restricted alpha npm access:
+Public npm install:
 
 ```bash
 npx -p @t3x-dev/local t3x-local start

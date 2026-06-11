@@ -97,7 +97,7 @@ test('blocks readiness when hard gates or external tester evidence fail', async 
       standardsResult('row-4', 'API surface', 'fail', 'API surface changed unexpectedly.'),
     ]),
     releaseSurface: releaseSurface({
-      errors: ['@t3x-dev/local publishConfig.access is public, expected restricted'],
+      errors: ['@t3x-dev/local publishConfig.access is restricted, expected public'],
     }),
     testerEvidence: [
       {

@@ -17,7 +17,7 @@
     "runtime-manifest.json"
   ],
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "repository": {
     "type": "git",

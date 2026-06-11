@@ -26,17 +26,17 @@ function escapeRegex(value) {
 
 function validateReadmeAlphaBadge({ readme, expectedVersion, errors }) {
   const badgeMatch = readme.match(
-    /<img src="https:\/\/img\.shields\.io\/badge\/alpha-v([^"]+?)%20restricted-purple" alt="([^"]+)" \/>/
+    /<img src="https:\/\/img\.shields\.io\/badge\/alpha-v([^"]+?)%20public-green" alt="([^"]+)" \/>/
   );
 
   if (!badgeMatch) {
-    errors.push('README.md must include the restricted alpha version badge.');
+    errors.push('README.md must include the public alpha version badge.');
     return;
   }
 
   const badgeVersion = badgeMatch[1];
   const badgeAlt = badgeMatch[2];
-  const expectedBadgeAlt = `restricted alpha v${expectedVersion}`;
+  const expectedBadgeAlt = `public alpha v${expectedVersion}`;
 
   if (badgeVersion !== expectedVersion) {
     errors.push(`README.md alpha badge must be v${expectedVersion}, found v${badgeVersion}.`);
@@ -93,8 +93,8 @@ function validateStabilitySurface({ stability, releaseSurface, errors }) {
     }
   }
 
-  if (!/restricted alpha/i.test(stability)) {
-    errors.push('docs/stability.md must describe the current surface as restricted alpha.');
+  if (!/public alpha/i.test(stability)) {
+    errors.push('docs/stability.md must describe the current surface as public alpha.');
   }
 }
 

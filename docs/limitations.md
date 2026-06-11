@@ -1,6 +1,6 @@
 # Alpha Limitations
 
-T3X is a restricted alpha. The current repository is suitable for source
+T3X is a public alpha. The current repository is suitable for source
 development, local evaluation, and self-hosted testing, but it should not be
 read as a production-readiness claim.
 
@@ -11,7 +11,7 @@ The current release-facing npm package surface is limited to:
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
 
-Package access may be restricted to alpha users. Other packages in this
+Package access is public for the current release surface. Other packages in this
 repository are preview or internal until promoted through the release process in
 [`RELEASE.md`](../RELEASE.md) and [`release/surface.yaml`](../release/surface.yaml).
 
@@ -24,7 +24,8 @@ repository are preview or internal until promoted through the release process in
 - Docker Compose is the supported self-host evaluation path. High availability,
   backup automation, hosted upgrades, managed monitoring, and multi-region
   deployment are not claimed by this alpha.
-- Local alpha package behavior may depend on restricted runtime assets.
+- Local alpha package behavior may depend on runtime assets published with the
+  local package release.
 - CLI, MCP, API, runner, and storage package contracts may change before they
   are promoted to the release surface.
 
@@ -52,9 +53,9 @@ repository are preview or internal until promoted through the release process in
 ## YOps Limitations
 
 YOps is the deterministic mutation language for T3X and is part of the
-restricted alpha surface. Its runtime source of truth is
+public alpha surface. Its runtime source of truth is
 `packages/yops/yops.yaml`.
 
-Spec changes are allowed during restricted alpha, but contract-bearing changes
+Spec changes are allowed during public alpha, but contract-bearing changes
 must follow the stability policy. Future YOps tightening work should proceed in
 small PRs, one spec contraction at a time, with executable conformance coverage.

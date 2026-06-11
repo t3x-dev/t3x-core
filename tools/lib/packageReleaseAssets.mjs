@@ -8,13 +8,7 @@ export function buildReleaseAssetUploadPlan({
   const token = env.GH_TOKEN || env.GITHUB_TOKEN || '';
 
   if (!token) {
-    return {
-      releaseTag: null,
-      assetPaths: normalizedAssetPaths,
-      args: null,
-      env: null,
-      skippedReason: 'missing-github-token',
-    };
+    throw new Error('GH_TOKEN or GITHUB_TOKEN is required to upload release assets');
   }
 
   const releaseTag = resolveProductReleaseTag(packageRecords, releaseRecords);
@@ -27,6 +21,39 @@ export function buildReleaseAssetUploadPlan({
       GH_TOKEN: token,
     },
     skippedReason: null,
+  };
+}
+
+export function buildPackageReleaseAssetUploadPlan({
+  packageRecord,
+  assetPaths,
+  env = process.env,
+}) {
+  const normalizedAssetPaths = normalizeAssetPaths(assetPaths);
+  const token = env.GH_TOKEN || env.GITHUB_TOKEN || '';
+
+  if (!token) {
+    throw new Error('GH_TOKEN or GITHUB_TOKEN is required to upload package release assets');
+  }
+
+  const release = packageReleaseFor(packageRecord);
+  return {
+    ...release,
+    assetPaths: normalizedAssetPaths,
+    createArgs: [
+      'release',
+      'create',
+      release.releaseTag,
+      '--title',
+      release.releaseTitle,
+      '--notes',
+      release.releaseNotes,
+    ],
+    uploadArgs: ['release', 'upload', release.releaseTag, ...normalizedAssetPaths, '--clobber'],
+    env: {
+      ...env,
+      GH_TOKEN: token,
+    },
   };
 }
 
@@ -72,6 +99,33 @@ function normalizePackageRecords(packageRecords) {
       version: record.version,
     };
   });
+}
+
+function packageReleaseFor(packageRecord) {
+  if (!packageRecord || typeof packageRecord.name !== 'string') {
+    throw new Error('package release assets require a package record with a name');
+  }
+  if (typeof packageRecord.version !== 'string' || packageRecord.version.length === 0) {
+    throw new Error('package release assets require a package record with a version');
+  }
+
+  if (packageRecord.name === '@t3x-dev/local') {
+    return {
+      releaseTag: `t3x-local-v${packageRecord.version}`,
+      releaseTitle: `t3x-local v${packageRecord.version}`,
+      releaseNotes: `Package release for @t3x-dev/local@${packageRecord.version}.`,
+    };
+  }
+
+  if (packageRecord.name === '@t3x-dev/yops') {
+    return {
+      releaseTag: `t3x-yops-v${packageRecord.version}`,
+      releaseTitle: `t3x-yops v${packageRecord.version}`,
+      releaseNotes: `Package release for @t3x-dev/yops@${packageRecord.version}.`,
+    };
+  }
+
+  throw new Error(`unsupported package release asset package: ${packageRecord.name}`);
 }
 
 function normalizeAssetPaths(assetPaths) {

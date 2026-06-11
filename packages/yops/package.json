@@ -50,6 +50,6 @@
     "directory": "packages/yops"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }

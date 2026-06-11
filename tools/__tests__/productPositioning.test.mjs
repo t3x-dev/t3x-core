@@ -63,8 +63,9 @@ test('public first-impression surfaces avoid the retired meaning-first frame', (
   }
 });
 
-test('release policy avoids public-alpha wording during restricted alpha', () => {
+test('release policy documents the public alpha package surface', () => {
   const releaseFlow = readText('.github/release-flow.md');
 
-  assert.doesNotMatch(releaseFlow, /public alpha/i);
+  assert.match(releaseFlow, /public alpha/i);
+  assert.doesNotMatch(releaseFlow, /restricted alpha/i);
 });
