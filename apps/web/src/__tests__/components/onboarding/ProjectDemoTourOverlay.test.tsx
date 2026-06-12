@@ -134,7 +134,6 @@ describe('ProjectDemoTourOverlay', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
-
     await waitFor(() => {
       expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     });

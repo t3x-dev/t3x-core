@@ -21,6 +21,7 @@ import { useFirstRunDemo } from '@/hooks/onboarding/useFirstRunDemo';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useChatStore } from '@/store/chatStore';
+import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 
 const STARTER_CARDS = [
   {
@@ -68,8 +69,7 @@ export default function ChatLandingPage() {
 function ChatLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const forceIntroDemo =
-    process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
+  const forceIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage') ?? 'create';
   // Anchor this landing to a specific project when one was passed in the
   // URL (e.g. the "+ New Project" sidebar action lands here so the user can

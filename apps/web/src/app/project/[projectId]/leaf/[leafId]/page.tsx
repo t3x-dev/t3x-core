@@ -43,7 +43,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-generate-action',
     tone: 'leaf',
     icon: ClipboardCheck,
-    advanceOnTargetClick: true,
   },
 ];
 
@@ -86,6 +85,7 @@ export function LeafDetailWorkspace({
   const projectId = params.projectId as string;
   const leafId = params.leafId as string;
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
+  const [introDemoAwaitingGeneration, setIntroDemoAwaitingGeneration] = useState(false);
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
 
   const {
@@ -202,6 +202,32 @@ export function LeafDetailWorkspace({
   useEffect(() => {
     if (introDemoRequested) setTourOpen(true);
   }, [introDemoRequested]);
+
+  const handleLeafGenerate = useCallback(async () => {
+    if (introDemoRequested) {
+      setIntroDemoAwaitingGeneration(true);
+    }
+    await handleGenerate();
+  }, [handleGenerate, introDemoRequested]);
+
+  useEffect(() => {
+    if (!introDemoRequested || !introDemoAwaitingGeneration || isGenerating || !leaf?.output) {
+      return;
+    }
+
+    setTourOpen(false);
+    setIntroDemoAwaitingGeneration(false);
+    const timeout = window.setTimeout(() => {
+      void completeIntroDemo();
+    }, 1200);
+    return () => window.clearTimeout(timeout);
+  }, [
+    completeIntroDemo,
+    introDemoAwaitingGeneration,
+    introDemoRequested,
+    isGenerating,
+    leaf?.output,
+  ]);
 
   // Keyboard navigation for nodes
   const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
@@ -420,7 +446,7 @@ export function LeafDetailWorkspace({
               generatedAt={leaf.generated_at}
               assertions={leaf.assertions}
               constraints={leaf.constraints}
-              onGenerate={handleGenerate}
+              onGenerate={handleLeafGenerate}
               isGenerating={isGenerating}
               generatePhase={generatePhase}
               generateProgressMessages={generateProgressMessages}
@@ -469,7 +495,7 @@ export function LeafDetailWorkspace({
               generateProgressMessages={generateProgressMessages}
               onUpdateInstruction={handleUpdateUserInstruction}
               onUpdateModel={handleUpdateModel}
-              onGenerate={handleGenerate}
+              onGenerate={handleLeafGenerate}
               onValidate={handleValidate}
               onSuggestOpen={() => setSuggestOpen(true)}
             />

@@ -55,6 +55,7 @@ import { type TemporaryChat, useTemporaryChatsStore } from '@/store/temporaryCha
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { ApiCommit, Leaf as ApiLeaf, Conversation } from '@/types/api';
 import { cn } from '@/utils/cn';
+import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 import { glass } from '@/utils/theme';
 import { ContextMenuPortal, useContextMenu } from './sidebar/ContextMenu';
@@ -203,12 +204,8 @@ export function ChatSidebar() {
   >({});
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') {
-      setIntroDemoActive(false);
-      return;
-    }
     const syncIntroDemoFlag = () => {
-      setIntroDemoActive(new URLSearchParams(window.location.search).get('introDemo') === '1');
+      setIntroDemoActive(isIntroDemoQueryEnabled(new URLSearchParams(window.location.search)));
     };
     syncIntroDemoFlag();
     window.addEventListener('popstate', syncIntroDemoFlag);

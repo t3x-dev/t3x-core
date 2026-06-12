@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 
 export function useIntroDemoQueryFlag() {
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return isIntroDemoQueryEnabled(new URLSearchParams(window.location.search));
+  });
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return;
-    setEnabled(new URLSearchParams(window.location.search).get('introDemo') === '1');
+    setEnabled(isIntroDemoQueryEnabled(new URLSearchParams(window.location.search)));
   }, []);
 
   return enabled;

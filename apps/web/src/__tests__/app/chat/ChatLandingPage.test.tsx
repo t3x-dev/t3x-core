@@ -192,7 +192,7 @@ describe('ChatLandingPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('opens the first-run demo from the dev-only introDemo query even after it was seen', async () => {
+  it('opens the first-run demo from the introDemo query even after it was seen', async () => {
     searchParamsValue = new URLSearchParams({ introDemo: '1' });
 
     await act(async () => {

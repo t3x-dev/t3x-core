@@ -24,6 +24,7 @@ import {
 } from '../runtime/pid.js';
 import { assertPortAvailable } from '../runtime/ports.js';
 import { type SpawnedProcess, spawnNodeScript, terminateProcess } from '../runtime/spawn.js';
+import { buildIntroDemoUrl } from '../runtime/urls.js';
 import { assertVersionLockOrThrow } from '../runtime/version-check.js';
 
 export interface StartCommandOptions {
@@ -110,11 +111,12 @@ export async function runStartCommand(input: StartCommandOptions = {}): Promise<
       waitForHttpOk(runtimeState.webHealthUrl, { label: 'Web' }),
     ]);
 
-    console.log(`[t3x-local] Started API pid ${runtimeState.apiPid} at ${runtimeState.apiUrl}`);
-    console.log(`[t3x-local] Started Web pid ${runtimeState.webPid} at ${runtimeState.webUrl}`);
-    console.log(`[t3x-local] Data dir: ${runtimeState.dataDir}`);
-    console.log(`[t3x-local] State file: ${metadataPaths.stateFilePath}`);
-    console.log(`[t3x-local] Logs: ${metadataPaths.apiLogPath} | ${metadataPaths.webLogPath}`);
+    for (const message of formatStartedRuntimeMessages({
+      ...runtimeState,
+      stateFilePath: metadataPaths.stateFilePath,
+    })) {
+      console.log(message);
+    }
   } catch (error) {
     await Promise.all([
       apiProcess ? terminateProcess(apiProcess) : Promise.resolve(),
@@ -123,6 +125,28 @@ export async function runStartCommand(input: StartCommandOptions = {}): Promise<
     ]);
     throw error;
   }
+}
+
+export interface StartedRuntimeMessageInput {
+  apiPid: number;
+  webPid: number;
+  apiUrl: string;
+  webUrl: string;
+  dataDir: string;
+  stateFilePath: string;
+  apiLogPath: string;
+  webLogPath: string;
+}
+
+export function formatStartedRuntimeMessages(input: StartedRuntimeMessageInput): string[] {
+  return [
+    `[t3x-local] Started API pid ${input.apiPid} at ${input.apiUrl}`,
+    `[t3x-local] Started Web pid ${input.webPid} at ${input.webUrl}`,
+    `[t3x-local] Demo: ${buildIntroDemoUrl(input.webUrl)}`,
+    `[t3x-local] Data dir: ${input.dataDir}`,
+    `[t3x-local] State file: ${input.stateFilePath}`,
+    `[t3x-local] Logs: ${input.apiLogPath} | ${input.webLogPath}`,
+  ];
 }
 
 function buildRuntimeState(

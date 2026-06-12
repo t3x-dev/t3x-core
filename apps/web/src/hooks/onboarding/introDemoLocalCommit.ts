@@ -83,6 +83,16 @@ export function toIntroDemoApiCommit(commit: IntroDemoLocalCommit): ApiCommit {
   };
 }
 
+export function resolveIntroDemoApiCommitForHash(
+  projectId: string | null | undefined,
+  hash: string | null | undefined
+): ApiCommit | null {
+  if (!hash) return null;
+  const commit = readIntroDemoLocalCommit(projectId);
+  if (!commit || commit.hash !== hash) return null;
+  return toIntroDemoApiCommit(commit);
+}
+
 export function applyIntroDemoCommitToCanvasGraph({
   nodes,
   edges,
