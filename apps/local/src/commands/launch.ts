@@ -28,6 +28,16 @@ export interface LaunchReadyInput {
   verbose: boolean;
 }
 
+export type SetupProgressStatus = 'running' | 'done' | 'skipped' | 'failed';
+
+export interface SetupProgressInput {
+  current: number;
+  total: number;
+  label: string;
+  status: SetupProgressStatus;
+  detail?: string;
+}
+
 export interface LaunchCommandOptions {
   yes?: boolean;
   open?: boolean;
@@ -109,6 +119,11 @@ export function formatLaunchReady(input: LaunchReadyInput): string {
   return lines.join('\n');
 }
 
+export function formatSetupProgressLine(input: SetupProgressInput): string {
+  const detail = input.detail ? ` (${input.detail})` : '';
+  return `[t3x-local] [${input.current}/${input.total}] ${input.label}: ${input.status}${detail}`;
+}
+
 export async function runLaunchCommand(
   input: LaunchCommandOptions = {},
   dependencies: LaunchDependencies = {}
@@ -149,28 +164,122 @@ export async function runLaunchCommand(
     }
   }
 
+  output.write('Setup progress\n');
+  writeSetupProgressLine(output, {
+    current: 1,
+    total: 6,
+    label: 'Check local runtime',
+    status: 'done',
+  });
+
   if (!runtimeInstalled) {
-    output.write('Installing runtime assets...\n');
-    await (dependencies.ensureRuntimeInstalled?.() ?? ensureRuntimeInstalled());
+    writeSetupProgressLine(output, {
+      current: 2,
+      total: 6,
+      label: 'Download runtime assets if needed',
+      status: 'running',
+    });
+
+    try {
+      await (dependencies.ensureRuntimeInstalled?.() ?? ensureRuntimeInstalled());
+      writeSetupProgressLine(output, {
+        current: 2,
+        total: 6,
+        label: 'Download runtime assets if needed',
+        status: 'done',
+      });
+    } catch (error) {
+      writeSetupProgressLine(output, {
+        current: 2,
+        total: 6,
+        label: 'Download runtime assets if needed',
+        status: 'failed',
+      });
+      throw error;
+    }
+  } else {
+    writeSetupProgressLine(output, {
+      current: 2,
+      total: 6,
+      label: 'Download runtime assets if needed',
+      status: 'skipped',
+      detail: 'already installed',
+    });
   }
 
-  const runtimeState =
-    (await dependencies.start?.({
-      dataDir: input.dataDir,
-      apiPort: input.apiPort,
-      webPort: input.webPort,
-      verbose: input.verbose === true,
-    })) ??
-    (await runStartCommand({
-      dataDir: input.dataDir,
-      apiPort: input.apiPort,
-      webPort: input.webPort,
-      verbose: input.verbose === true,
-    }));
+  writeSetupProgressLine(output, {
+    current: 3,
+    total: 6,
+    label: 'Verify package integrity',
+    status: 'running',
+  });
+  writeSetupProgressLine(output, {
+    current: 4,
+    total: 6,
+    label: 'Prepare local data directory',
+    status: 'running',
+  });
+  writeSetupProgressLine(output, {
+    current: 5,
+    total: 6,
+    label: 'Start API and WebUI',
+    status: 'running',
+  });
+
+  let runtimeState: LaunchRuntimeState;
+  try {
+    runtimeState =
+      (await dependencies.start?.({
+        dataDir: input.dataDir,
+        apiPort: input.apiPort,
+        webPort: input.webPort,
+        verbose: input.verbose === true,
+      })) ??
+      (await runStartCommand({
+        dataDir: input.dataDir,
+        apiPort: input.apiPort,
+        webPort: input.webPort,
+        verbose: input.verbose === true,
+      }));
+  } catch (error) {
+    writeSetupProgressLine(output, {
+      current: 5,
+      total: 6,
+      label: 'Start API and WebUI',
+      status: 'failed',
+    });
+    throw error;
+  }
+
+  writeSetupProgressLine(output, {
+    current: 3,
+    total: 6,
+    label: 'Verify package integrity',
+    status: 'done',
+  });
+  writeSetupProgressLine(output, {
+    current: 4,
+    total: 6,
+    label: 'Prepare local data directory',
+    status: 'done',
+  });
+  writeSetupProgressLine(output, {
+    current: 5,
+    total: 6,
+    label: 'Start API and WebUI',
+    status: 'done',
+  });
 
   const openWebUrl = buildIntroDemoUrl(runtimeState.webUrl);
 
   if (input.open !== false) {
+    writeSetupProgressLine(output, {
+      current: 6,
+      total: 6,
+      label: 'Ask to open T3X in your browser',
+      status: 'running',
+    });
+
     const shouldOpen =
       yes ||
       !interactive ||
@@ -180,11 +289,40 @@ export async function runLaunchCommand(
     if (shouldOpen) {
       try {
         await (dependencies.openBrowser?.(openWebUrl) ?? openBrowser(openWebUrl));
+        writeSetupProgressLine(output, {
+          current: 6,
+          total: 6,
+          label: 'Ask to open T3X in your browser',
+          status: 'done',
+        });
         output.write('Opened WebUI.\n\n');
       } catch {
+        writeSetupProgressLine(output, {
+          current: 6,
+          total: 6,
+          label: 'Ask to open T3X in your browser',
+          status: 'failed',
+          detail: 'manual open required',
+        });
         output.write(`Could not open WebUI automatically. Open ${openWebUrl}\n\n`);
       }
+    } else {
+      writeSetupProgressLine(output, {
+        current: 6,
+        total: 6,
+        label: 'Ask to open T3X in your browser',
+        status: 'skipped',
+        detail: 'user declined',
+      });
     }
+  } else {
+    writeSetupProgressLine(output, {
+      current: 6,
+      total: 6,
+      label: 'Ask to open T3X in your browser',
+      status: 'skipped',
+      detail: 'disabled',
+    });
   }
 
   output.write(
@@ -195,6 +333,10 @@ export async function runLaunchCommand(
     })}\n`
   );
   return 'launched';
+}
+
+function writeSetupProgressLine(output: LaunchOutput, input: SetupProgressInput): void {
+  output.write(`${formatSetupProgressLine(input)}\n`);
 }
 
 function isInteractiveTerminal(): boolean {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatLaunchIntro,
   formatLaunchReady,
+  formatSetupProgressLine,
   runLaunchCommand,
   shouldConfirmLaunch,
 } from '../src/commands/launch.js';
@@ -72,6 +73,27 @@ describe('local launch flow', () => {
     expect(ready).toContain('API: http://localhost:8000');
   });
 
+  it('formats setup progress lines with step numbers and status', () => {
+    expect(
+      formatSetupProgressLine({
+        current: 1,
+        total: 6,
+        label: 'Check local runtime',
+        status: 'done',
+      })
+    ).toBe('[t3x-local] [1/6] Check local runtime: done');
+
+    expect(
+      formatSetupProgressLine({
+        current: 2,
+        total: 6,
+        label: 'Download runtime assets if needed',
+        status: 'skipped',
+        detail: 'already installed',
+      })
+    ).toBe('[t3x-local] [2/6] Download runtime assets if needed: skipped (already installed)');
+  });
+
   it('runs start, opens the fixture demo WebUI, and hides API details by default', async () => {
     const output: string[] = [];
     const startedWith: unknown[] = [];
@@ -114,6 +136,15 @@ describe('local launch flow', () => {
     expect(text).toContain('T3X Local v0.5.0');
     expect(text).toContain('Version control for structured state.');
     expect(text).toContain('Runtime: installed');
+    expect(text).toContain('Setup progress');
+    expect(text).toContain('[t3x-local] [1/6] Check local runtime: done');
+    expect(text).toContain(
+      '[t3x-local] [2/6] Download runtime assets if needed: skipped (already installed)'
+    );
+    expect(text).toContain('[t3x-local] [3/6] Verify package integrity: done');
+    expect(text).toContain('[t3x-local] [4/6] Prepare local data directory: done');
+    expect(text).toContain('[t3x-local] [5/6] Start API and WebUI: done');
+    expect(text).toContain('[t3x-local] [6/6] Ask to open T3X in your browser: done');
     expect(text).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
     expect(text).not.toContain('http://localhost:8000');
     expect(startedWith).toEqual([
