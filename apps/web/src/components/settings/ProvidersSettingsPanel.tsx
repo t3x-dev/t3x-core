@@ -122,7 +122,9 @@ function ProviderCard({
                     Connected ({result.latency_ms}ms)
                   </span>
                 ) : (
-                  <span className="text-[var(--status-error)]">{result.error}</span>
+                  <span className="text-[var(--status-error)]">
+                    {formatUserFacingError(result.error, 'Connection test failed.')}
+                  </span>
                 )}
               </div>
             )}
@@ -289,10 +291,10 @@ export function ProvidersSettingsPanel() {
     try {
       const result = await runProviderConnectionTest(providerId);
       setTestResults((prev) => ({ ...prev, [providerId]: result }));
-    } catch {
+    } catch (err) {
       setTestResults((prev) => ({
         ...prev,
-        [providerId]: { ok: false, error: 'Connection test failed' },
+        [providerId]: { ok: false, error: formatUserFacingError(err, 'Connection test failed.') },
       }));
     }
   };

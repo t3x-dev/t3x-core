@@ -107,6 +107,25 @@ function mapApiFailureToReason(code: ExtractionFailureCode): ExtractionFailedErr
   return 'llm_error';
 }
 
+function mapApiCodeToReason(apiCode: string | undefined): ExtractionFailedError['reason'] | null {
+  switch (apiCode) {
+    case 'PROVIDER_KEY_MISSING':
+      return 'provider_key_missing';
+    case 'AUTH_ERROR':
+      return 'provider_auth';
+    case 'RATE_LIMITED':
+      return 'provider_rate_limited';
+    case 'PROVIDER_UNAVAILABLE':
+      return 'provider_unavailable';
+    default:
+      return null;
+  }
+}
+
+function isTerminalProviderApiCode(apiCode: string | undefined): boolean {
+  return apiCode === 'PROVIDER_KEY_MISSING' || apiCode === 'AUTH_ERROR';
+}
+
 /**
  * Build a synthetic RetryFailingOp[] from a server failure's structured
  * details so the web's ExtractionFailedError carries the same per-op
@@ -165,16 +184,20 @@ export async function runExtraction({
         // the same turns/provider/model/preset would burn another
         // round of LLM calls for the same predictable failure.
         //
-        // Web only retries `transport` failures (network blips,
-        // rate-limit, transient provider errors) where another HTTP
-        // attempt has a real chance of succeeding without the model
-        // doing anything different. Everything else — draft_parse,
+        // Web only retries retryable `transport` failures (network
+        // blips, rate-limit, transient provider errors) where another
+        // HTTP attempt has a real chance of succeeding without the
+        // model doing anything different. Terminal setup/auth failures
+        // such as PROVIDER_KEY_MISSING and AUTH_ERROR are not retried.
+        // Everything else — draft_parse,
         // draft_schema, provenance, compile, executable_structure,
         // domain_schema, unverifiable_quote — is the server's
         // verdict and treated as terminal here.
         const isTransport = e.failure.code === 'transport';
         const retryDecision = e.failure.retry;
+        const providerReason = mapApiCodeToReason(e.apiCode);
         const exhausted =
+          isTerminalProviderApiCode(e.apiCode) ||
           !isTransport ||
           !retryDecision.retryable ||
           attempt >= retryDecision.maxAttempts ||
@@ -192,7 +215,7 @@ export async function runExtraction({
           // `failingOps.length`, but keeping the shape stable means future
           // UI features (per-op highlight, "show me which quote was bad")
           // can read the structured data without another wire round-trip.
-          const reason = mapApiFailureToReason(e.failure.code);
+          const reason = providerReason ?? mapApiFailureToReason(e.failure.code);
           const failingOps = synthesiseFailingOpsFromApi(e.failure);
           throw new ExtractionFailedError(failingOps, attempt, reason, e.message, e.failure.code);
         }

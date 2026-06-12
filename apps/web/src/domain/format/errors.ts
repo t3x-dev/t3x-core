@@ -51,6 +51,12 @@ function rawMessage(error: unknown): string {
   return String(error);
 }
 
+function rawCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
 function compact(message: string): string {
   return message.replace(/\s+/g, ' ').trim();
 }
@@ -60,10 +66,41 @@ export function formatUserFacingError(
   fallback = 'Something went wrong. Try again.'
 ): string {
   const message = compact(rawMessage(error));
+  const code = rawCode(error);
+
+  if (code === 'PROVIDER_KEY_MISSING') {
+    return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
+  }
+
+  if (code === 'AUTH_ERROR') {
+    return 'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.';
+  }
+
+  if (code === 'RATE_LIMITED') {
+    return 'Provider rate limit reached. Wait a moment or choose a different configured provider.';
+  }
+
+  if (code === 'PROVIDER_UNAVAILABLE') {
+    return 'Provider is unavailable. Try again later or choose another configured provider.';
+  }
+
   if (!message) return fallback;
 
   if (/\b(failed to fetch|networkerror|network request failed)\b/i.test(message)) {
     return 'Network request failed. Check your connection and try again.';
+  }
+
+  if (/\b(api key not configured|no configured .*provider|provider key missing)\b/i.test(message)) {
+    return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
+  }
+
+  if (
+    /\b(unauthorized|authentication failed|invalid api key|invalid key|forbidden)\b/i.test(
+      message
+    ) &&
+    /\b(provider|api key|key)\b/i.test(message)
+  ) {
+    return 'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.';
   }
 
   for (const resource of MISSING_RESOURCE_PATTERNS) {

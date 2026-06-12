@@ -89,6 +89,64 @@ describe('runExtraction', () => {
     expect(commitOpsMock).not.toHaveBeenCalled();
   });
 
+  it('fails fast on provider authentication errors instead of retrying a closed key', async () => {
+    const llm = vi
+      .fn()
+      .mockRejectedValue(
+        new ExtractionRequestError(
+          createExtractionFailure('transport', 'Provider authentication failed'),
+          401,
+          'AUTH_ERROR'
+        )
+      );
+
+    await expect(
+      runExtraction({
+        baseTree: { trees: [], relations: [] },
+        conversationId: 'conv_123',
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+        llm,
+      })
+    ).rejects.toMatchObject<Partial<ExtractionFailedError>>({
+      reason: 'provider_auth',
+      lastAttempt: 1,
+      message: 'Provider authentication failed',
+      failureCode: 'transport',
+    });
+
+    expect(llm).toHaveBeenCalledTimes(1);
+    expect(commitOpsMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces missing provider keys as provider setup failures', async () => {
+    const llm = vi
+      .fn()
+      .mockRejectedValue(
+        new ExtractionRequestError(
+          createExtractionFailure('draft_parse', 'No configured extraction provider is available'),
+          400,
+          'PROVIDER_KEY_MISSING'
+        )
+      );
+
+    await expect(
+      runExtraction({
+        baseTree: { trees: [], relations: [] },
+        conversationId: 'conv_123',
+        turns: [{ turn_hash: 'sha256:t1', role: 'user', content: 'hello' }],
+        llm,
+      })
+    ).rejects.toMatchObject<Partial<ExtractionFailedError>>({
+      reason: 'provider_key_missing',
+      lastAttempt: 1,
+      message: 'No configured extraction provider is available',
+      failureCode: 'draft_parse',
+    });
+
+    expect(llm).toHaveBeenCalledTimes(1);
+    expect(commitOpsMock).not.toHaveBeenCalled();
+  });
+
   it('does NOT retry on unverifiable_quote — server already exhausted internal reasks', async () => {
     // Review P2: callExtractionLLM no longer forwards failingOps
     // because the API now owns targeted reask. So when the API
