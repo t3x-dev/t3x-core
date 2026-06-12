@@ -72,7 +72,7 @@ describe('local launch flow', () => {
     expect(ready).toContain('API: http://localhost:8000');
   });
 
-  it('runs start, opens the WebUI, and hides API details by default', async () => {
+  it('runs start, opens the fixture demo WebUI, and hides API details by default', async () => {
     const output: string[] = [];
     const startedWith: unknown[] = [];
     const openedUrls: string[] = [];
@@ -114,7 +114,7 @@ describe('local launch flow', () => {
     expect(text).toContain('T3X Local v0.5.0');
     expect(text).toContain('Version control for structured state.');
     expect(text).toContain('Runtime: installed');
-    expect(text).toContain('T3X is ready: http://localhost:3000');
+    expect(text).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
     expect(text).not.toContain('http://localhost:8000');
     expect(startedWith).toEqual([
       {
@@ -124,7 +124,7 @@ describe('local launch flow', () => {
         verbose: false,
       },
     ]);
-    expect(openedUrls).toEqual(['http://localhost:3000']);
+    expect(openedUrls).toEqual(['http://localhost:3000/chat?introDemo=1']);
   });
 
   it('asks before opening the WebUI during interactive launches', async () => {
@@ -166,7 +166,7 @@ describe('local launch flow', () => {
 
     expect(prompts).toEqual(['Run setup now? Y/n ', 'Open WebUI in your browser? Y/n ']);
     expect(openedUrls).toEqual([]);
-    expect(output.join('')).toContain('T3X is ready: http://localhost:3000');
+    expect(output.join('')).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
   });
 
   it('refuses non-interactive launches unless --yes is provided', async () => {
@@ -237,6 +237,7 @@ describe('local launch flow', () => {
 
     const text = output.join('');
     expect(text).toContain('Could not open WebUI automatically.');
-    expect(text).toContain('T3X is ready: http://localhost:3000');
+    expect(text).toContain('http://localhost:3000/chat?introDemo=1');
+    expect(text).toContain('T3X is ready: http://localhost:3000/chat?introDemo=1');
   });
 });

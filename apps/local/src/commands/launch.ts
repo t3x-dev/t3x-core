@@ -4,6 +4,7 @@ import readline from 'node:readline/promises';
 import { Chalk } from 'chalk';
 import { resolveStartOptions } from '../runtime/env.js';
 import { getLocalPaths, getMissingStartArtifacts } from '../runtime/paths.js';
+import { buildIntroDemoUrl } from '../runtime/urls.js';
 import { runStartCommand } from './start.js';
 
 const PRODUCT_TAGLINE = 'Version control for structured state.';
@@ -115,7 +116,7 @@ export async function runLaunchCommand(
   const output = dependencies.output ?? process.stdout;
   const paths = getLocalPaths();
   const options = resolveStartOptions(input, paths, process.env);
-  const webUrl = `http://localhost:${options.webPort}`;
+  const webUrl = buildIntroDemoUrl(`http://localhost:${options.webPort}`);
   const runtimeInstalled =
     dependencies.isRuntimeInstalled?.() ?? getMissingStartArtifacts(paths).length === 0;
 
@@ -167,6 +168,8 @@ export async function runLaunchCommand(
       verbose: input.verbose === true,
     }));
 
+  const openWebUrl = buildIntroDemoUrl(runtimeState.webUrl);
+
   if (input.open !== false) {
     const shouldOpen =
       yes ||
@@ -176,17 +179,17 @@ export async function runLaunchCommand(
 
     if (shouldOpen) {
       try {
-        await (dependencies.openBrowser?.(runtimeState.webUrl) ?? openBrowser(runtimeState.webUrl));
+        await (dependencies.openBrowser?.(openWebUrl) ?? openBrowser(openWebUrl));
         output.write('Opened WebUI.\n\n');
       } catch {
-        output.write(`Could not open WebUI automatically. Open ${runtimeState.webUrl}\n\n`);
+        output.write(`Could not open WebUI automatically. Open ${openWebUrl}\n\n`);
       }
     }
   }
 
   output.write(
     `${formatLaunchReady({
-      webUrl: runtimeState.webUrl,
+      webUrl: openWebUrl,
       apiUrl: runtimeState.apiUrl,
       verbose: input.verbose === true,
     })}\n`
