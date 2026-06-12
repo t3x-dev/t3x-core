@@ -24,7 +24,10 @@ program
   .option('--api-port <port>', 'API port (default: 8000)', parseInteger)
   .option('--web-port <port>', 'Web port (default: 3000)', parseInteger)
   .action(async (options) => {
-    const result = await runLaunchCommand(options);
+    const result = await runLaunchCommand({
+      ...options,
+      packageVersion: packageJson.version ?? '0.0.0',
+    });
     if (result === 'needs-yes') {
       process.exitCode = 1;
     }

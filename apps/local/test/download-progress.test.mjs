@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   createDownloadProgressReporter,
   formatBytes,
+  formatDownloadBrandHeader,
   formatDownloadStatus,
+  formatRuntimeDownloadFailureHint,
+  formatRuntimeInstallPlan,
   parseContentLength,
 } from '../scripts/download-progress.mjs';
 
@@ -51,6 +54,48 @@ describe('download progress formatting', () => {
         elapsedMs: 1000,
       })
     ).toBe('1.5 KiB downloaded | 1.5 KiB/s');
+  });
+
+  it('formats a lightweight postinstall brand header', () => {
+    expect(
+      formatDownloadBrandHeader({
+        packageVersion: '0.5.0',
+        prefix: 't3x-local:postinstall',
+      })
+    ).toBe('[t3x-local:postinstall] T3X Local v0.5.0 - Version control for structured state.');
+  });
+
+  it('formats the runtime install plan before opening the network request', () => {
+    expect(
+      formatRuntimeInstallPlan({
+        fileName: 't3x-local-runtime-0.5.0-darwin-arm64.tar.gz',
+        platformKey: 'darwin-arm64',
+        prefix: 't3x-local:postinstall',
+      })
+    ).toEqual([
+      '[t3x-local:postinstall] Runtime platform: darwin-arm64',
+      '[t3x-local:postinstall] Runtime asset: t3x-local-runtime-0.5.0-darwin-arm64.tar.gz',
+      '[t3x-local:postinstall] Connecting to runtime download...',
+    ]);
+  });
+
+  it('formats an actionable mirror fallback when runtime download fails', () => {
+    expect(
+      formatRuntimeDownloadFailureHint({
+        fileName: 't3x-local-runtime-0.5.0-darwin-arm64.tar.gz',
+        mirrorDir: '/private/tmp/t3x-local-runtime-mirror',
+        packageSpecifier: '<package.tgz>',
+        prefix: 't3x-local:postinstall',
+        source:
+          'https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.5.0/t3x-local-runtime-0.5.0-darwin-arm64.tar.gz',
+      })
+    ).toEqual([
+      '[t3x-local:postinstall] Runtime download did not complete.',
+      '[t3x-local:postinstall] If GitHub is slow or blocked, download the runtime archive once and reinstall with T3X_LOCAL_RUNTIME_MIRROR.',
+      '[t3x-local:postinstall] mkdir -p /private/tmp/t3x-local-runtime-mirror',
+      '[t3x-local:postinstall] curl -L --retry 5 --retry-delay 3 --connect-timeout 30 --continue-at - -o /private/tmp/t3x-local-runtime-mirror/t3x-local-runtime-0.5.0-darwin-arm64.tar.gz https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.5.0/t3x-local-runtime-0.5.0-darwin-arm64.tar.gz',
+      "[t3x-local:postinstall] T3X_LOCAL_RUNTIME_MIRROR=/private/tmp/t3x-local-runtime-mirror npm install '<package.tgz>' --foreground-scripts --no-audit --no-fund",
+    ]);
   });
 });
 

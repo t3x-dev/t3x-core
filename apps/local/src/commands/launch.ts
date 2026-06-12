@@ -1,14 +1,19 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import readline from 'node:readline/promises';
+import { Chalk } from 'chalk';
 import { resolveStartOptions } from '../runtime/env.js';
 import { getLocalPaths, getMissingStartArtifacts } from '../runtime/paths.js';
 import { runStartCommand } from './start.js';
+
+const PRODUCT_TAGLINE = 'Version control for structured state.';
 
 export interface LaunchIntroInput {
   webUrl: string;
   dataDir: string;
   runtimeInstalled: boolean;
+  packageVersion?: string;
+  color?: boolean;
 }
 
 export interface LaunchConfirmInput {
@@ -26,6 +31,7 @@ export interface LaunchCommandOptions {
   yes?: boolean;
   open?: boolean;
   verbose?: boolean;
+  packageVersion?: string;
   dataDir?: string;
   apiPort?: number;
   webPort?: number;
@@ -45,6 +51,7 @@ export interface LaunchStartOptions {
 
 export interface LaunchOutput {
   write(chunk: string): void;
+  isTTY?: boolean;
 }
 
 export interface LaunchDependencies {
@@ -60,26 +67,30 @@ export interface LaunchDependencies {
 export type LaunchResult = 'launched' | 'cancelled' | 'needs-yes';
 
 export function formatLaunchIntro(input: LaunchIntroInput): string {
+  const color = new Chalk({ level: input.color ? 1 : 0 });
+  const logo = formatTerminalLogo(color, input.color === true);
+  const version = `v${input.packageVersion ?? '0.0.0'}`;
+  const runtimeStatus = input.runtimeInstalled
+    ? color.green('installed')
+    : color.yellow('install required');
+
   return [
-    '+-----+',
-    '| T3X |',
-    '+-----+',
+    `${color.bold('T3X Local')} ${color.dim(version)}`,
+    PRODUCT_TAGLINE,
     '',
-    'T3X Local',
+    `${logo[0]}   ${color.bold('Local alpha runtime')}`,
+    `${logo[1]}   ${color.dim('WebUI-first setup')}`,
+    `${logo[2]}   Runtime: ${runtimeStatus}`,
+    `${logo[3]}   WebUI:    ${input.webUrl}`,
+    `             Data:     ${input.dataDir}`,
     '',
-    'Set up and launch T3X on this machine.',
-    '',
-    `Runtime: ${input.runtimeInstalled ? 'installed' : 'install required'}`,
-    `WebUI:    ${input.webUrl}`,
-    `Data:     ${input.dataDir}`,
-    '',
-    'Steps:',
-    '1. Check local runtime',
-    '2. Download runtime assets if needed',
-    '3. Verify package integrity',
-    '4. Prepare local data directory',
-    '5. Start API and WebUI',
-    '6. Ask to open T3X in your browser',
+    color.bold('Setup'),
+    `  ${color.cyan('1.')} Check local runtime`,
+    `  ${color.cyan('2.')} Download runtime assets if needed`,
+    `  ${color.cyan('3.')} Verify package integrity`,
+    `  ${color.cyan('4.')} Prepare local data directory`,
+    `  ${color.cyan('5.')} Start API and WebUI`,
+    `  ${color.cyan('6.')} Ask to open T3X in your browser`,
   ].join('\n');
 }
 
@@ -113,6 +124,8 @@ export async function runLaunchCommand(
       webUrl,
       dataDir: options.dataDir,
       runtimeInstalled,
+      packageVersion: input.packageVersion,
+      color: shouldUseColor(output),
     })}\n\n`
   );
 
@@ -183,6 +196,33 @@ export async function runLaunchCommand(
 
 function isInteractiveTerminal(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
+}
+
+function shouldUseColor(output: LaunchOutput): boolean {
+  if (process.env.NO_COLOR) return false;
+  return output.isTTY === true;
+}
+
+function formatTerminalLogo(color: Chalk, unicode: boolean): string[] {
+  const shell = color.dim;
+  const orange = color.hex('#FB923C');
+  const blue = color.hex('#2563EB');
+
+  if (unicode) {
+    return [
+      `  ${shell('╭────────╮')}`,
+      `  ${shell('│')} ${orange('╲____')}${blue('╱')} ${shell('│')}`,
+      `  ${shell('│')} ${blue('╱    ')}${orange('╲')} ${shell('│')}`,
+      `  ${shell('╰────────╯')}`,
+    ];
+  }
+
+  return [
+    `  ${shell('.--------.')}`,
+    `  ${shell('|')} ${orange('\\____')}${blue('/')} ${shell('|')}`,
+    `  ${shell('|')} ${blue('/    ')}${orange('\\')} ${shell('|')}`,
+    `  ${shell("'--------'")}`,
+  ];
 }
 
 async function promptConfirm(message: string): Promise<boolean> {

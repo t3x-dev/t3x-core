@@ -9,7 +9,13 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createDownloadProgressReporter, parseContentLength } from './download-progress.mjs';
+import {
+  createDownloadProgressReporter,
+  formatDownloadBrandHeader,
+  formatRuntimeDownloadFailureHint,
+  formatRuntimeInstallPlan,
+  parseContentLength,
+} from './download-progress.mjs';
 import {
   assertRuntimeLayout,
   ensureDir,
@@ -42,6 +48,10 @@ const DOWNLOAD_RETRY_DELAY_MS = parsePositiveInt(
   process.env.T3X_LOCAL_DOWNLOAD_RETRY_DELAY_MS,
   3000
 );
+const FALLBACK_MIRROR_DIR =
+  process.env.T3X_LOCAL_FALLBACK_MIRROR_DIR || './t3x-local-runtime-mirror';
+const FALLBACK_PACKAGE_SPECIFIER =
+  process.env.T3X_LOCAL_PACKAGE_SPECIFIER || '<package.tgz-or-@t3x-dev/local>';
 
 if (process.env.T3X_LOCAL_SKIP_DOWNLOAD === '1' || process.env.T3X_LOCAL_SKIP_DOWNLOAD === 'true') {
   console.log(
@@ -67,6 +77,12 @@ if (!(await fileExists(manifestPath))) {
 }
 
 const manifest = await readJson(manifestPath);
+console.log(
+  formatDownloadBrandHeader({
+    packageVersion: manifest.packageVersion,
+    prefix: DOWNLOAD_LOG_PREFIX,
+  })
+);
 await verifyInstalledVersionLock(packageDir, manifest);
 const platformKey = getPlatformKey();
 const artifact = manifest.platforms?.[platformKey];
@@ -88,16 +104,42 @@ if (!downloadSource) {
   );
 }
 
+for (const line of formatRuntimeInstallPlan({
+  fileName: artifact.fileName,
+  platformKey,
+  prefix: DOWNLOAD_LOG_PREFIX,
+})) {
+  console.log(line);
+}
+
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 't3x-local-postinstall-'));
 const archivePath = path.join(tempDir, artifact.fileName);
 
 try {
-  await downloadArtifact(downloadSource, archivePath);
+  try {
+    await downloadArtifact(downloadSource, archivePath);
+  } catch (error) {
+    if (isHttpDownloadSource(downloadSource)) {
+      for (const line of formatRuntimeDownloadFailureHint({
+        fileName: artifact.fileName,
+        mirrorDir: FALLBACK_MIRROR_DIR,
+        packageSpecifier: FALLBACK_PACKAGE_SPECIFIER,
+        prefix: DOWNLOAD_LOG_PREFIX,
+        source: downloadSource,
+      })) {
+        console.error(line);
+      }
+    }
+    throw error;
+  }
+
+  console.log(`${DOWNLOAD_LOG_LABEL} Verifying runtime archive...`);
   await verifyArchiveSha(archivePath, artifact.sha256);
 
   await fs.rm(runtimeDir, { recursive: true, force: true });
   await ensureDir(runtimeDir);
 
+  console.log(`${DOWNLOAD_LOG_LABEL} Extracting runtime assets...`);
   const extractResult = spawnSync('tar', ['-xzf', archivePath, '-C', runtimeDir], {
     stdio: 'inherit',
   });
@@ -325,6 +367,10 @@ function isGitHubUrl(source) {
   } catch {
     return false;
   }
+}
+
+function isHttpDownloadSource(source) {
+  return source.startsWith('http://') || source.startsWith('https://');
 }
 
 function isGitHubReleaseDownloadUrl(source) {

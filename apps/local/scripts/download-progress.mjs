@@ -1,4 +1,5 @@
 const DEFAULT_MIN_INTERVAL_MS = 1000;
+const PRODUCT_TAGLINE = 'Version control for structured state.';
 
 export function parseContentLength(value) {
   if (typeof value !== 'string') return null;
@@ -41,6 +42,51 @@ export function formatDownloadStatus({ downloadedBytes, totalBytes, elapsedMs })
 
   const percent = Math.min(100, Math.floor((downloadedBytes / totalBytes) * 100));
   return `${percent}% | ${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)} | ${rate}`;
+}
+
+export function formatDownloadBrandHeader({
+  packageVersion = '0.0.0',
+  prefix = 't3x-local:postinstall',
+} = {}) {
+  return `[${prefix}] T3X Local v${packageVersion} - ${PRODUCT_TAGLINE}`;
+}
+
+export function formatRuntimeInstallPlan({
+  fileName = 'runtime archive',
+  platformKey = 'unknown',
+  prefix = 't3x-local:postinstall',
+} = {}) {
+  return [
+    `[${prefix}] Runtime platform: ${platformKey}`,
+    `[${prefix}] Runtime asset: ${fileName}`,
+    `[${prefix}] Connecting to runtime download...`,
+  ];
+}
+
+export function formatRuntimeDownloadFailureHint({
+  fileName = 'runtime archive',
+  mirrorDir = './t3x-local-runtime-mirror',
+  packageSpecifier = '<package.tgz-or-@t3x-dev/local>',
+  prefix = 't3x-local:postinstall',
+  source = '<runtime-download-url>',
+} = {}) {
+  const mirrorFilePath = `${mirrorDir.replace(/\/+$/, '')}/${fileName}`;
+  return [
+    `[${prefix}] Runtime download did not complete.`,
+    `[${prefix}] If GitHub is slow or blocked, download the runtime archive once and reinstall with T3X_LOCAL_RUNTIME_MIRROR.`,
+    `[${prefix}] mkdir -p ${shellQuote(mirrorDir)}`,
+    `[${prefix}] curl -L --retry 5 --retry-delay 3 --connect-timeout 30 --continue-at - -o ${shellQuote(mirrorFilePath)} ${shellQuote(source)}`,
+    `[${prefix}] T3X_LOCAL_RUNTIME_MIRROR=${shellQuote(mirrorDir)} npm install ${shellQuote(packageSpecifier)} --foreground-scripts --no-audit --no-fund`,
+  ];
+}
+
+function shellQuote(value) {
+  const text = String(value);
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text)) {
+    return text;
+  }
+
+  return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
 export function createDownloadProgressReporter({

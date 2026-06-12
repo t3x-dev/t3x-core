@@ -12,16 +12,36 @@ describe('local launch flow', () => {
       webUrl: 'http://localhost:3000',
       dataDir: '/tmp/t3x-data',
       runtimeInstalled: false,
+      packageVersion: '0.5.0',
     });
 
-    expect(intro).toContain('+-----+');
-    expect(intro).toContain('| T3X |');
-    expect(intro).toContain('T3X Local');
+    expect(intro).toContain('T3X Local v0.5.0');
+    expect(intro).toContain('Version control for structured state.');
+    expect(intro).toContain('Local alpha runtime');
+    expect(intro).toContain('WebUI-first setup');
+    expect(intro).toContain('\\____/');
+    expect(intro).toContain('/    \\');
     expect(intro).toContain('Runtime: install required');
     expect(intro).toContain('WebUI:    http://localhost:3000');
     expect(intro).toContain('1. Check local runtime');
     expect(intro).toContain('5. Start API and WebUI');
     expect(intro).not.toContain('API:');
+    expect(intro).not.toContain('\u001b[');
+  });
+
+  it('can render the launcher intro with ANSI color for interactive terminals', () => {
+    const intro = formatLaunchIntro({
+      webUrl: 'http://localhost:3000',
+      dataDir: '/tmp/t3x-data',
+      runtimeInstalled: true,
+      packageVersion: '0.5.0',
+      color: true,
+    });
+
+    expect(intro).toContain('T3X Local');
+    expect(intro).toContain('v0.5.0');
+    expect(intro).toContain('Version control for structured state.');
+    expect(intro).toContain('\u001b[');
   });
 
   it('prompts for confirmation only for interactive non-yes launches', () => {
@@ -62,6 +82,7 @@ describe('local launch flow', () => {
         yes: true,
         open: true,
         verbose: false,
+        packageVersion: '0.5.0',
         dataDir: '/tmp/t3x-data',
         apiPort: 8000,
         webPort: 3000,
@@ -90,7 +111,8 @@ describe('local launch flow', () => {
     );
 
     const text = output.join('');
-    expect(text).toContain('T3X Local');
+    expect(text).toContain('T3X Local v0.5.0');
+    expect(text).toContain('Version control for structured state.');
     expect(text).toContain('Runtime: installed');
     expect(text).toContain('T3X is ready: http://localhost:3000');
     expect(text).not.toContain('http://localhost:8000');
