@@ -34,6 +34,18 @@ export interface StartCommandOptions {
   verbose?: boolean;
 }
 
+export type StartProgressPhase = 'verify' | 'prepare' | 'start';
+export type StartProgressStatus = 'running' | 'done' | 'failed';
+
+export interface StartProgressEvent {
+  phase: StartProgressPhase;
+  status: StartProgressStatus;
+}
+
+export interface StartCommandHooks {
+  onProgress?: (event: StartProgressEvent) => void;
+}
+
 const TEXT_RUNTIME_EXTENSIONS = new Set(['.html', '.js', '.json', '.mjs']);
 const BAKED_API_URL_PATTERNS = [
   {
@@ -52,80 +64,115 @@ interface RuntimeRewriteStats {
   replacements: number;
 }
 
-export async function runStartCommand(input: StartCommandOptions = {}): Promise<RuntimeState> {
+export async function runStartCommand(
+  input: StartCommandOptions = {},
+  hooks: StartCommandHooks = {}
+): Promise<RuntimeState> {
   const paths = getLocalPaths();
-  assertVersionLockOrThrow(paths, 't3x-local start');
-  const options = resolveStartOptions(input, paths, process.env);
-  const missing = getMissingStartArtifacts(paths);
+  let activePhase: StartProgressPhase | null = null;
 
-  if (missing.length > 0) {
-    throw new Error(formatMissingArtifacts(missing, paths));
+  function beginPhase(phase: StartProgressPhase): void {
+    activePhase = phase;
+    hooks.onProgress?.({ phase, status: 'running' });
   }
 
-  const existingState = await readRuntimeState(paths);
-  if (existingState) {
-    const status = getRuntimeProcessStatus(existingState);
-
-    if (status.apiRunning || status.webRunning) {
-      throw new Error(
-        '[t3x-local] Local runtime is already running. ' +
-          `API pid=${existingState.apiPid}, Web pid=${existingState.webPid}. ` +
-          'Run `t3x-local doctor` or `t3x-local stop` first.'
-      );
-    }
-
-    await clearRuntimeState(paths);
+  function completePhase(phase: StartProgressPhase): void {
+    hooks.onProgress?.({ phase, status: 'done' });
+    activePhase = null;
   }
 
-  await Promise.all([
-    assertPortAvailable(options.apiPort, 'API'),
-    assertPortAvailable(options.webPort, 'Web'),
-  ]);
+  function failActivePhase(): void {
+    if (!activePhase) return;
+    hooks.onProgress?.({ phase: activePhase, status: 'failed' });
+    activePhase = null;
+  }
 
-  const metadataPaths = await ensureRuntimeMetadataDirs(paths);
-  let apiProcess: SpawnedProcess | null = null;
-  let webProcess: SpawnedProcess | null = null;
-
+  let options: ResolvedStartOptions;
   try {
-    await prepareWebRuntime(paths, options);
-    apiProcess = spawnApi(paths, options, metadataPaths.apiLogPath);
-    webProcess = spawnWeb(paths, options, metadataPaths.webLogPath);
+    beginPhase('verify');
+    assertVersionLockOrThrow(paths, 't3x-local start');
+    options = resolveStartOptions(input, paths, process.env);
+    const missing = getMissingStartArtifacts(paths);
 
-    if (!apiProcess.child.pid || !webProcess.child.pid) {
-      throw new Error('[t3x-local] Failed to capture child process IDs for the local runtime');
+    if (missing.length > 0) {
+      throw new Error(formatMissingArtifacts(missing, paths));
     }
+    completePhase('verify');
 
-    const runtimeState = buildRuntimeState(
-      options,
-      metadataPaths.apiLogPath,
-      metadataPaths.webLogPath,
-      {
-        apiPid: apiProcess.child.pid,
-        webPid: webProcess.child.pid,
+    beginPhase('prepare');
+    const existingState = await readRuntimeState(paths);
+    if (existingState) {
+      const status = getRuntimeProcessStatus(existingState);
+
+      if (status.apiRunning || status.webRunning) {
+        throw new Error(
+          '[t3x-local] Local runtime is already running. ' +
+            `API pid=${existingState.apiPid}, Web pid=${existingState.webPid}. ` +
+            'Run `t3x-local doctor` or `t3x-local stop` first.'
+        );
       }
-    );
 
-    await clearRuntimeState(paths);
-    await Promise.all([
-      writeRuntimeState(paths, runtimeState),
-      waitForHttpOk(runtimeState.apiHealthUrl, { label: 'API' }),
-      waitForHttpOk(runtimeState.webHealthUrl, { label: 'Web' }),
-    ]);
-
-    for (const message of formatStartedRuntimeMessages({
-      ...runtimeState,
-      stateFilePath: metadataPaths.stateFilePath,
-      verbose: input.verbose === true,
-    })) {
-      console.log(message);
+      await clearRuntimeState(paths);
     }
-    return runtimeState;
-  } catch (error) {
+
     await Promise.all([
-      apiProcess ? terminateProcess(apiProcess) : Promise.resolve(),
-      webProcess ? terminateProcess(webProcess) : Promise.resolve(),
-      clearRuntimeState(paths),
+      assertPortAvailable(options.apiPort, 'API'),
+      assertPortAvailable(options.webPort, 'Web'),
     ]);
+
+    const metadataPaths = await ensureRuntimeMetadataDirs(paths);
+    await prepareWebRuntime(paths, options);
+    completePhase('prepare');
+
+    beginPhase('start');
+    let apiProcess: SpawnedProcess | null = null;
+    let webProcess: SpawnedProcess | null = null;
+
+    try {
+      apiProcess = spawnApi(paths, options, metadataPaths.apiLogPath);
+      webProcess = spawnWeb(paths, options, metadataPaths.webLogPath);
+
+      if (!apiProcess.child.pid || !webProcess.child.pid) {
+        throw new Error('[t3x-local] Failed to capture child process IDs for the local runtime');
+      }
+
+      const runtimeState = buildRuntimeState(
+        options,
+        metadataPaths.apiLogPath,
+        metadataPaths.webLogPath,
+        {
+          apiPid: apiProcess.child.pid,
+          webPid: webProcess.child.pid,
+        }
+      );
+
+      await clearRuntimeState(paths);
+      await Promise.all([
+        writeRuntimeState(paths, runtimeState),
+        waitForHttpOk(runtimeState.apiHealthUrl, { label: 'API' }),
+        waitForHttpOk(runtimeState.webHealthUrl, { label: 'Web' }),
+      ]);
+
+      for (const message of formatStartedRuntimeMessages({
+        ...runtimeState,
+        stateFilePath: metadataPaths.stateFilePath,
+        verbose: input.verbose === true,
+      })) {
+        console.log(message);
+      }
+      completePhase('start');
+      return runtimeState;
+    } catch (error) {
+      failActivePhase();
+      await Promise.all([
+        apiProcess ? terminateProcess(apiProcess) : Promise.resolve(),
+        webProcess ? terminateProcess(webProcess) : Promise.resolve(),
+        clearRuntimeState(paths),
+      ]);
+      throw error;
+    }
+  } catch (error) {
+    failActivePhase();
     throw error;
   }
 }

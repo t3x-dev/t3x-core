@@ -5,9 +5,10 @@ import { Chalk } from 'chalk';
 import { resolveStartOptions } from '../runtime/env.js';
 import { getLocalPaths, getMissingStartArtifacts } from '../runtime/paths.js';
 import { buildIntroDemoUrl } from '../runtime/urls.js';
-import { runStartCommand } from './start.js';
+import { runStartCommand, type StartProgressEvent } from './start.js';
 
 const PRODUCT_TAGLINE = 'Version control for structured state.';
+type TerminalColor = InstanceType<typeof Chalk>;
 
 export interface LaunchIntroInput {
   webUrl: string;
@@ -207,68 +208,74 @@ export async function runLaunchCommand(
     });
   }
 
-  writeSetupProgressLine(output, {
-    current: 3,
-    total: 6,
-    label: 'Verify package integrity',
-    status: 'running',
-  });
-  writeSetupProgressLine(output, {
-    current: 4,
-    total: 6,
-    label: 'Prepare local data directory',
-    status: 'running',
-  });
-  writeSetupProgressLine(output, {
-    current: 5,
-    total: 6,
-    label: 'Start API and WebUI',
-    status: 'running',
-  });
-
   let runtimeState: LaunchRuntimeState;
-  try {
-    runtimeState =
-      (await dependencies.start?.({
-        dataDir: input.dataDir,
-        apiPort: input.apiPort,
-        webPort: input.webPort,
-        verbose: input.verbose === true,
-      })) ??
-      (await runStartCommand({
-        dataDir: input.dataDir,
-        apiPort: input.apiPort,
-        webPort: input.webPort,
-        verbose: input.verbose === true,
-      }));
-  } catch (error) {
+  if (dependencies.start) {
+    writeSetupProgressLine(output, {
+      current: 3,
+      total: 6,
+      label: 'Verify package integrity',
+      status: 'running',
+    });
+    writeSetupProgressLine(output, {
+      current: 3,
+      total: 6,
+      label: 'Verify package integrity',
+      status: 'done',
+    });
+    writeSetupProgressLine(output, {
+      current: 4,
+      total: 6,
+      label: 'Prepare local data directory',
+      status: 'running',
+    });
+    writeSetupProgressLine(output, {
+      current: 4,
+      total: 6,
+      label: 'Prepare local data directory',
+      status: 'done',
+    });
     writeSetupProgressLine(output, {
       current: 5,
       total: 6,
       label: 'Start API and WebUI',
-      status: 'failed',
+      status: 'running',
     });
-    throw error;
-  }
 
-  writeSetupProgressLine(output, {
-    current: 3,
-    total: 6,
-    label: 'Verify package integrity',
-    status: 'done',
-  });
-  writeSetupProgressLine(output, {
-    current: 4,
-    total: 6,
-    label: 'Prepare local data directory',
-    status: 'done',
-  });
-  writeSetupProgressLine(output, {
-    current: 5,
-    total: 6,
-    label: 'Start API and WebUI',
-    status: 'done',
-  });
+    try {
+      runtimeState = await dependencies.start({
+        dataDir: input.dataDir,
+        apiPort: input.apiPort,
+        webPort: input.webPort,
+        verbose: input.verbose === true,
+      });
+      writeSetupProgressLine(output, {
+        current: 5,
+        total: 6,
+        label: 'Start API and WebUI',
+        status: 'done',
+      });
+    } catch (error) {
+      writeSetupProgressLine(output, {
+        current: 5,
+        total: 6,
+        label: 'Start API and WebUI',
+        status: 'failed',
+      });
+      throw error;
+    }
+  } else {
+    runtimeState = await runStartCommand(
+      {
+        dataDir: input.dataDir,
+        apiPort: input.apiPort,
+        webPort: input.webPort,
+        verbose: input.verbose === true,
+      },
+      {
+        onProgress: (event) => writeStartProgressLine(output, event),
+      }
+    );
+  }
 
   const openWebUrl = buildIntroDemoUrl(runtimeState.webUrl);
 
@@ -335,6 +342,29 @@ export async function runLaunchCommand(
   return 'launched';
 }
 
+function writeStartProgressLine(output: LaunchOutput, event: StartProgressEvent): void {
+  const step = getStartProgressStep(event.phase);
+  writeSetupProgressLine(output, {
+    ...step,
+    total: 6,
+    status: event.status,
+  });
+}
+
+function getStartProgressStep(phase: StartProgressEvent['phase']): {
+  current: number;
+  label: string;
+} {
+  switch (phase) {
+    case 'verify':
+      return { current: 3, label: 'Verify package integrity' };
+    case 'prepare':
+      return { current: 4, label: 'Prepare local data directory' };
+    case 'start':
+      return { current: 5, label: 'Start API and WebUI' };
+  }
+}
+
 function writeSetupProgressLine(output: LaunchOutput, input: SetupProgressInput): void {
   output.write(`${formatSetupProgressLine(input)}\n`);
 }
@@ -348,7 +378,7 @@ function shouldUseColor(output: LaunchOutput): boolean {
   return output.isTTY === true;
 }
 
-function formatTerminalLogo(color: Chalk, unicode: boolean): string[] {
+function formatTerminalLogo(color: TerminalColor, unicode: boolean): string[] {
   const shell = color.dim;
   const orange = color.hex('#FB923C');
   const blue = color.hex('#2563EB');

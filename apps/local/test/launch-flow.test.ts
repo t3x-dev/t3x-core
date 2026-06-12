@@ -158,6 +158,54 @@ describe('local launch flow', () => {
     expect(openedUrls).toEqual(['http://localhost:3000/chat?introDemo=1']);
   });
 
+  it('reports setup progress in execution order', async () => {
+    const output: string[] = [];
+
+    await runLaunchCommand(
+      {
+        yes: true,
+        open: false,
+        verbose: false,
+        dataDir: '/tmp/t3x-data',
+        apiPort: 8000,
+        webPort: 3000,
+      },
+      {
+        output: {
+          write(chunk) {
+            output.push(String(chunk));
+          },
+        },
+        isInteractive: () => true,
+        isRuntimeInstalled: () => true,
+        start: async () => {
+          output.push('[test] start dependency entered\n');
+          return {
+            apiUrl: 'http://localhost:8000',
+            webUrl: 'http://localhost:3000',
+          };
+        },
+      }
+    );
+
+    const text = output.join('');
+    const verifyDone = text.indexOf('[t3x-local] [3/6] Verify package integrity: done');
+    const prepareDone = text.indexOf('[t3x-local] [4/6] Prepare local data directory: done');
+    const startRunning = text.indexOf('[t3x-local] [5/6] Start API and WebUI: running');
+    const startEntered = text.indexOf('[test] start dependency entered');
+    const startDone = text.indexOf('[t3x-local] [5/6] Start API and WebUI: done');
+
+    expect(verifyDone).toBeGreaterThan(-1);
+    expect(prepareDone).toBeGreaterThan(-1);
+    expect(startRunning).toBeGreaterThan(-1);
+    expect(startEntered).toBeGreaterThan(-1);
+    expect(startDone).toBeGreaterThan(-1);
+    expect(verifyDone).toBeLessThan(startEntered);
+    expect(prepareDone).toBeLessThan(startEntered);
+    expect(startRunning).toBeLessThan(startEntered);
+    expect(startDone).toBeGreaterThan(startEntered);
+  });
+
   it('asks before opening the WebUI during interactive launches', async () => {
     const output: string[] = [];
     const prompts: string[] = [];
