@@ -92,6 +92,31 @@ function markInlineSourceDraftVariants(
   ) as typeof variants;
 }
 
+function formatExtractionFailure(error: ExtractionFailedError): string {
+  switch (error.reason) {
+    case 'unverifiable_quote':
+      return `Extraction could not verify ${error.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`;
+    case 'missing_source':
+      return 'Extraction returned ops without provenance. Please retry.';
+    case 'invalid_structure':
+      return 'Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.';
+    case 'provider_key_missing':
+      return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
+    case 'provider_auth':
+      return 'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.';
+    case 'provider_rate_limited':
+      return 'Provider rate limit reached. Wait a moment or choose a different configured provider.';
+    case 'provider_unavailable':
+      return 'Provider is unavailable. Try again later or choose another configured provider.';
+    case 'llm_error':
+      return error.failureCode
+        ? `Extraction failed (${error.failureCode}): ${error.message}`
+        : `LLM call failed: ${error.message}`;
+    default:
+      return `Extraction failed after ${error.lastAttempt} attempts.`;
+  }
+}
+
 export function useExtraction({
   resolvedConversationId,
   selectedProvider,
@@ -273,17 +298,7 @@ export function useExtraction({
         useWorkspaceStore.getState().setMode('idle');
         const isExtractionFailed = err instanceof ExtractionFailedError;
         const msg = isExtractionFailed
-          ? err.reason === 'unverifiable_quote'
-            ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
-            : err.reason === 'missing_source'
-              ? `Extraction returned ops without provenance. Please retry.`
-              : err.reason === 'invalid_structure'
-                ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                : err.reason === 'llm_error'
-                  ? err.failureCode
-                    ? `Extraction failed (${err.failureCode}): ${err.message}`
-                    : `LLM call failed: ${err.message}`
-                  : `Extraction failed after ${err.lastAttempt} attempts.`
+          ? formatExtractionFailure(err)
           : formatWorkspaceError(err) || 'Extraction failed';
 
         useWorkspaceStore.getState().setError(msg);

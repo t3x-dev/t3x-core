@@ -706,6 +706,29 @@ describe('useExtraction', () => {
     expect(state.retainedDraftFailure).toBeNull();
   });
 
+  it('shows provider auth guidance when the selected provider rejects the key', async () => {
+    runExtractionMock.mockRejectedValueOnce(
+      new ExtractionFailedError([], 1, 'provider_auth', 'Provider authentication failed')
+    );
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.4-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    const expected =
+      'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.';
+    expect(useWorkspaceStore.getState().lastError).toBe(expected);
+    expect(toastErrorMock).toHaveBeenCalledWith(expected, { id: EXTRACTION_TOAST_ID });
+  });
+
   it('a confirm-accepted dirty edit clears the editor when no prior draft is staged', async () => {
     // Companion to the previous case: same consent, no prior draft.
     // The editor must reset to empty (not stay on the dirty text)
