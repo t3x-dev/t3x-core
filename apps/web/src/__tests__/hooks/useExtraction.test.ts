@@ -335,6 +335,76 @@ describe('useExtraction', () => {
     expect(runArgs?.baseTree).toBe(hydratedTree);
   });
 
+  it('refreshes the active workspace before extraction and uses the hydrated tree as base', async () => {
+    const hydratedTree = {
+      trees: [{ key: 'trip', slots: { destination: 'Dali' }, children: [] }],
+      relations: [],
+    };
+    hydrateConversationToStoreMock.mockImplementationOnce(async () => {
+      useWorkspaceStore.getState().setDerived({
+        tree: hydratedTree,
+        sourceIndex: new Map(),
+        opsLog: [
+          {
+            define: { path: 'trip' },
+            source: {
+              type: 'human',
+              author: 'test',
+              at: '2026-01-01T00:00:00.000Z',
+              surface: 'tree',
+            },
+          },
+        ],
+      });
+    });
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(hydrateConversationToStoreMock).toHaveBeenCalledWith('proj_123', 'conv_123');
+    const runArgs = runExtractionMock.mock.calls[0]?.[0] as
+      | { baseTree?: typeof hydratedTree }
+      | undefined;
+    expect(runArgs?.baseTree).toBe(hydratedTree);
+  });
+
+  it('hydrates before deciding whether there are saved turns to extract', async () => {
+    useWorkspaceStore.getState().setTurns([]);
+    hydrateConversationToStoreMock.mockImplementationOnce(async () => {
+      useWorkspaceStore
+        .getState()
+        .setTurns([{ turn_hash: 'sha256:t1', role: 'user', content: 'hello after hydrate' }]);
+    });
+
+    const { result } = renderHook(() =>
+      useExtraction({
+        resolvedConversationId: 'conv_123',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-4o-mini',
+      })
+    );
+
+    await act(async () => {
+      await result.current.handleExtract();
+    });
+
+    expect(hydrateConversationToStoreMock).toHaveBeenCalledWith('proj_123', 'conv_123');
+    expect(runExtractionMock).toHaveBeenCalled();
+    const runArgs = runExtractionMock.mock.calls[0]?.[0] as
+      | { turns?: Array<{ content: string }> }
+      | undefined;
+    expect(runArgs?.turns?.[0]?.content).toBe('hello after hydrate');
+  });
+
   it('toasts and skips extraction when project context has not loaded yet', async () => {
     // Simulates the race where /chat/[convId] renders before
     // `useChatInit.fetchConversationMeta` backfills `activeProjectId`.
@@ -411,7 +481,7 @@ describe('useExtraction', () => {
     expect(dismissCallOrder).toBeLessThan(successCallOrder);
   });
 
-  it('stages a draft locally without hydrating or committing on success', async () => {
+  it('stages a draft locally without committing on success', async () => {
     // Propose-only model: a successful Extract writes a draft to the
     // workspace store (ops + scriptText + dry-run preview tree) but does
     // NOT hit the server's hydrate path because nothing has been
@@ -428,8 +498,9 @@ describe('useExtraction', () => {
       await result.current.handleExtract();
     });
 
-    // No hydrate — server state is unchanged on the propose-only path.
-    expect(hydrateConversationToStoreMock).not.toHaveBeenCalled();
+    // Preflight hydrate only refreshes the review base. The successful
+    // propose-only path still does not persist anything until Apply.
+    expect(hydrateConversationToStoreMock).toHaveBeenCalledWith('proj_123', 'conv_123');
 
     const state = useWorkspaceStore.getState();
     expect(state.hasDraft).toBe(true);
