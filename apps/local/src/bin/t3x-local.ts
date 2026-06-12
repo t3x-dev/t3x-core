@@ -3,6 +3,7 @@
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { runDoctorCommand } from '../commands/doctor.js';
+import { runLaunchCommand } from '../commands/launch.js';
 import { runResetCommand } from '../commands/reset.js';
 import { runStartCommand } from '../commands/start.js';
 import { runStopCommand } from '../commands/stop.js';
@@ -15,7 +16,19 @@ const program = new Command();
 program
   .name('t3x-local')
   .description('T3X local runtime entrypoint')
-  .version(packageJson.version ?? '0.0.0');
+  .version(packageJson.version ?? '0.0.0')
+  .option('-y, --yes', 'Run setup and launch without confirmation prompts')
+  .option('--no-open', 'Do not prompt to open the WebUI in a browser')
+  .option('--verbose', 'Print API, log, and state details')
+  .option('--data-dir <path>', 'Embedded PostgreSQL data directory')
+  .option('--api-port <port>', 'API port (default: 8000)', parseInteger)
+  .option('--web-port <port>', 'Web port (default: 3000)', parseInteger)
+  .action(async (options) => {
+    const result = await runLaunchCommand(options);
+    if (result === 'needs-yes') {
+      process.exitCode = 1;
+    }
+  });
 
 program
   .command('start')
@@ -23,6 +36,7 @@ program
   .option('--data-dir <path>', 'Embedded PostgreSQL data directory')
   .option('--api-port <port>', 'API port (default: 8000)', parseInteger)
   .option('--web-port <port>', 'Web port (default: 3000)', parseInteger)
+  .option('--verbose', 'Print API, log, and state details')
   .action(async (options) => {
     await runStartCommand(options);
   });

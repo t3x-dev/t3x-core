@@ -59,10 +59,11 @@ the login flow.
 Use this path to run the packaged local T3X experience:
 
 ```bash
-npx -p @t3x-dev/local t3x-local start
+npx -p @t3x-dev/local t3x-local
 ```
 
 Use this for the packaged local T3X experience, including the preview WebUI.
+The launcher asks before setup and before opening the WebUI in your browser.
 Package and runtime release assets are public alpha artifacts; see
 [Availability](#availability).
 

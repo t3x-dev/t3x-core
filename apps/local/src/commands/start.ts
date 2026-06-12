@@ -31,6 +31,7 @@ export interface StartCommandOptions {
   dataDir?: string;
   apiPort?: number;
   webPort?: number;
+  verbose?: boolean;
 }
 
 const TEXT_RUNTIME_EXTENSIONS = new Set(['.html', '.js', '.json', '.mjs']);
@@ -51,7 +52,7 @@ interface RuntimeRewriteStats {
   replacements: number;
 }
 
-export async function runStartCommand(input: StartCommandOptions = {}): Promise<void> {
+export async function runStartCommand(input: StartCommandOptions = {}): Promise<RuntimeState> {
   const paths = getLocalPaths();
   assertVersionLockOrThrow(paths, 't3x-local start');
   const options = resolveStartOptions(input, paths, process.env);
@@ -114,9 +115,11 @@ export async function runStartCommand(input: StartCommandOptions = {}): Promise<
     for (const message of formatStartedRuntimeMessages({
       ...runtimeState,
       stateFilePath: metadataPaths.stateFilePath,
+      verbose: input.verbose === true,
     })) {
       console.log(message);
     }
+    return runtimeState;
   } catch (error) {
     await Promise.all([
       apiProcess ? terminateProcess(apiProcess) : Promise.resolve(),
@@ -136,17 +139,28 @@ export interface StartedRuntimeMessageInput {
   stateFilePath: string;
   apiLogPath: string;
   webLogPath: string;
+  verbose?: boolean;
 }
 
 export function formatStartedRuntimeMessages(input: StartedRuntimeMessageInput): string[] {
-  return [
-    `[t3x-local] Started API pid ${input.apiPid} at ${input.apiUrl}`,
-    `[t3x-local] Started Web pid ${input.webPid} at ${input.webUrl}`,
+  const messages = [
+    `[t3x-local] Started WebUI at ${input.webUrl}`,
     `[t3x-local] Demo: ${buildIntroDemoUrl(input.webUrl)}`,
-    `[t3x-local] Data dir: ${input.dataDir}`,
-    `[t3x-local] State file: ${input.stateFilePath}`,
-    `[t3x-local] Logs: ${input.apiLogPath} | ${input.webLogPath}`,
   ];
+
+  if (input.verbose) {
+    messages.push(
+      `[t3x-local] Started API pid ${input.apiPid} at ${input.apiUrl}`,
+      `[t3x-local] Started Web pid ${input.webPid} at ${input.webUrl}`,
+      `[t3x-local] Data dir: ${input.dataDir}`,
+      `[t3x-local] State file: ${input.stateFilePath}`,
+      `[t3x-local] Logs: ${input.apiLogPath} | ${input.webLogPath}`
+    );
+  } else {
+    messages.push('[t3x-local] Run `t3x-local doctor` for API, log, and state details.');
+  }
+
+  return messages;
 }
 
 function buildRuntimeState(

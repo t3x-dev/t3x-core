@@ -6,9 +6,10 @@ import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { createDownloadProgressReporter, parseContentLength } from './download-progress.mjs';
 import {
   assertRuntimeLayout,
   ensureDir,
@@ -34,6 +35,8 @@ const FIXED_VERSION_PACKAGES = [
   '@t3x-dev/local',
 ];
 const GITHUB_TOKEN_ENV_NAMES = ['T3X_LOCAL_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
+const DOWNLOAD_LOG_PREFIX = process.env.T3X_LOCAL_DOWNLOAD_PREFIX || 't3x-local:postinstall';
+const DOWNLOAD_LOG_LABEL = `[${DOWNLOAD_LOG_PREFIX}]`;
 const DOWNLOAD_MAX_ATTEMPTS = parsePositiveInt(process.env.T3X_LOCAL_DOWNLOAD_ATTEMPTS, 3);
 const DOWNLOAD_RETRY_DELAY_MS = parsePositiveInt(
   process.env.T3X_LOCAL_DOWNLOAD_RETRY_DELAY_MS,
@@ -42,7 +45,7 @@ const DOWNLOAD_RETRY_DELAY_MS = parsePositiveInt(
 
 if (process.env.T3X_LOCAL_SKIP_DOWNLOAD === '1' || process.env.T3X_LOCAL_SKIP_DOWNLOAD === 'true') {
   console.log(
-    '[t3x-local:postinstall] Skipping runtime download because T3X_LOCAL_SKIP_DOWNLOAD is set.'
+    `${DOWNLOAD_LOG_LABEL} Skipping runtime download because T3X_LOCAL_SKIP_DOWNLOAD is set.`
   );
   process.exit(0);
 }
@@ -53,13 +56,13 @@ const workspaceRepoRoot = await findWorkspaceRepoRoot(packageDir);
 
 if (workspaceRepoRoot) {
   console.log(
-    `[t3x-local:postinstall] Detected workspace install at ${workspaceRepoRoot}. Skipping runtime download.`
+    `${DOWNLOAD_LOG_LABEL} Detected workspace install at ${workspaceRepoRoot}. Skipping runtime download.`
   );
   process.exit(0);
 }
 
 if (!(await fileExists(manifestPath))) {
-  console.log('[t3x-local:postinstall] No runtime manifest found. Skipping runtime download.');
+  console.log(`${DOWNLOAD_LOG_LABEL} No runtime manifest found. Skipping runtime download.`);
   process.exit(0);
 }
 
@@ -69,7 +72,7 @@ const platformKey = getPlatformKey();
 const artifact = manifest.platforms?.[platformKey];
 
 if (!artifact) {
-  throw new Error(`[t3x-local:postinstall] No runtime artifact configured for ${platformKey}`);
+  throw new Error(`${DOWNLOAD_LOG_LABEL} No runtime artifact configured for ${platformKey}`);
 }
 
 const runtimeDir = path.resolve(
@@ -81,7 +84,7 @@ const downloadSource = process.env.T3X_LOCAL_RUNTIME_MIRROR
 
 if (!downloadSource) {
   throw new Error(
-    '[t3x-local:postinstall] Runtime manifest did not contain a URL and no T3X_LOCAL_RUNTIME_MIRROR was provided.'
+    `${DOWNLOAD_LOG_LABEL} Runtime manifest did not contain a URL and no T3X_LOCAL_RUNTIME_MIRROR was provided.`
   );
 }
 
@@ -101,7 +104,7 @@ try {
 
   if (extractResult.status !== 0) {
     throw new Error(
-      `[t3x-local:postinstall] tar extraction failed with exit code ${String(extractResult.status)}`
+      `${DOWNLOAD_LOG_LABEL} tar extraction failed with exit code ${String(extractResult.status)}`
     );
   }
 
@@ -123,7 +126,7 @@ try {
     'utf8'
   );
 
-  console.log(`[t3x-local:postinstall] Runtime ready at ${runtimeDir}`);
+  console.log(`${DOWNLOAD_LOG_LABEL} Runtime ready at ${runtimeDir}`);
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
@@ -154,7 +157,7 @@ async function downloadHttpArtifact(source, destinationPath) {
         throw buildHttpDownloadError(source, response.status);
       }
 
-      await writeResponseBody(response, destinationPath);
+      await writeResponseBody(response, destinationPath, artifactFileNameFromSource(source));
       return;
     } catch (error) {
       lastError = error;
@@ -164,7 +167,7 @@ async function downloadHttpArtifact(source, destinationPath) {
       }
 
       console.log(
-        `[t3x-local:postinstall] Runtime download failed (${getErrorSummary(error)}). Retrying ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`
+        `${DOWNLOAD_LOG_LABEL} Runtime download failed (${getErrorSummary(error)}). Retrying ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`
       );
       await sleep(DOWNLOAD_RETRY_DELAY_MS * attempt);
     }
@@ -173,17 +176,49 @@ async function downloadHttpArtifact(source, destinationPath) {
   throw lastError;
 }
 
-async function writeResponseBody(response, destinationPath) {
+async function writeResponseBody(response, destinationPath, fileName) {
   if (!response.body) {
-    throw new Error('[t3x-local:postinstall] Runtime download response did not contain a body');
+    throw new Error(`${DOWNLOAD_LOG_LABEL} Runtime download response did not contain a body`);
   }
 
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(destinationPath));
+  const reporter = createDownloadProgressReporter({
+    fileName,
+    prefix: DOWNLOAD_LOG_PREFIX,
+    totalBytes: parseContentLength(response.headers.get('content-length')),
+  });
+  reporter.start();
+
+  try {
+    await pipeline(
+      Readable.fromWeb(response.body),
+      new Transform({
+        transform(chunk, _encoding, callback) {
+          reporter.tick(chunk.length);
+          callback(null, chunk);
+        },
+      }),
+      createWriteStream(destinationPath)
+    );
+    reporter.finish();
+  } catch (error) {
+    reporter.fail();
+    throw error;
+  }
+}
+
+function artifactFileNameFromSource(source) {
+  try {
+    const url = new URL(source);
+    const pathname = decodeURIComponent(url.pathname);
+    return path.basename(pathname) || 'runtime archive';
+  } catch {
+    return path.basename(source) || 'runtime archive';
+  }
 }
 
 function buildHttpDownloadError(source, status) {
   const error = new Error(
-    `[t3x-local:postinstall] Failed to download runtime: HTTP ${status}${getDownloadHint(source)}`
+    `${DOWNLOAD_LOG_LABEL} Failed to download runtime: HTTP ${status}${getDownloadHint(source)}`
   );
   error.httpStatus = status;
   return error;
@@ -363,7 +398,7 @@ async function verifyArchiveSha(archivePath, expectedSha) {
 
   if (actualSha !== expectedSha) {
     throw new Error(
-      `[t3x-local:postinstall] SHA256 mismatch for runtime archive. Expected ${expectedSha}, got ${actualSha}`
+      `${DOWNLOAD_LOG_LABEL} SHA256 mismatch for runtime archive. Expected ${expectedSha}, got ${actualSha}`
     );
   }
 }
@@ -429,7 +464,7 @@ async function verifyInstalledVersionLock(packageDir, manifest) {
 
   if (problems.length > 0) {
     throw new Error(
-      '[t3x-local:postinstall] Fixed version verification failed.\n' +
+      `${DOWNLOAD_LOG_LABEL} Fixed version verification failed.\n` +
         problems.map((problem) => `- ${problem}`).join('\n')
     );
   }
