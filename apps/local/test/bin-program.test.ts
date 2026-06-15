@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import packageJson from '../package.json' with { type: 'json' };
 import { createLocalProgram, type LocalCliDependencies } from '../src/bin/t3x-local.js';
 import type { LaunchCommandOptions, LaunchResult } from '../src/commands/launch.js';
 import type { StartCommandOptions } from '../src/commands/start.js';
@@ -27,7 +28,7 @@ describe('t3x-local command parser', () => {
       apiPort: 8371,
       webPort: 3371,
       dataDir: '/tmp/t3x-data',
-      packageVersion: '0.5.0',
+      packageVersion: packageJson.version,
     });
   });
 
