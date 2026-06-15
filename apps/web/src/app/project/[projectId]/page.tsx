@@ -76,6 +76,7 @@ export function ProjectDetailPageContent({
   const canvasError = useCanvasStore((state) => state.loadError);
   const loadedProjectId = useCanvasStore((state) => state.projectId);
   const canvasNodeCount = useCanvasStore((state) => state.nodes.length);
+  const closeNodeModal = useCanvasStore((state) => state.closeNodeModal);
 
   // Parse initial viewport from URL params
   const initialViewport = useMemo(() => {
@@ -89,13 +90,18 @@ export function ProjectDetailPageContent({
   }, []); // intentionally empty — only read once on mount
 
   // Open selected node from URL on first load
-  const selectedFromUrl = useRef(searchParams.get('selected'));
+  const selectedFromUrl = useRef(showIntroDemo ? null : searchParams.get('selected'));
   useEffect(() => {
     if (selectedFromUrl.current && !canvasLoading && !canvasError) {
       useCanvasStore.getState().openNodeModal(selectedFromUrl.current, 'commit');
       selectedFromUrl.current = null;
     }
   }, [canvasLoading, canvasError]);
+  useEffect(() => {
+    if (!showIntroDemo) return;
+    selectedFromUrl.current = null;
+    closeNodeModal();
+  }, [closeNodeModal, showIntroDemo]);
 
   // Keep a stable ref to searchParams so callbacks don't re-create on every URL change
   const searchParamsRef = useRef(searchParams);
