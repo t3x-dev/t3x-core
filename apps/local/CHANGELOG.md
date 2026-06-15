@@ -1,5 +1,11 @@
 # @t3x-dev/local
 
+## 0.5.1
+
+### Patch Changes
+
+- [#1141](https://github.com/t3x-dev/t3x-core/pull/1141) [`0ea2fe1`](https://github.com/t3x-dev/t3x-core/commit/0ea2fe1d0227c9a0cc9cf336da1f3ca7dc6b1cca) Thanks [@lqw905](https://github.com/lqw905)! - Fix the local package intro demo runtime flow so the packaged demo uses the shared WebUI demo path and cleans up after completion.
+
 ## 0.5.0
 
 ### Minor Changes

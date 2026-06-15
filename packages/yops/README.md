@@ -19,7 +19,7 @@ applies them.
 
 ## Release status
 
-`@t3x-dev/yops@0.5.0` is part of the public T3X alpha release surface.
+`@t3x-dev/yops@0.5.1` is part of the public T3X alpha release surface.
 Package visibility is public on npm.
 
 ## Stability policy
