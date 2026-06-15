@@ -1,13 +1,13 @@
 /**
  * Tree Extraction Routes
  *
- * LLM-based semantic extraction from conversation turns.
+ * LLM-based state extraction from conversation turns.
  * Delegates to the shared API extraction pipeline (v2) and appends the
  * resulting delta to the delta log.
  *
  * Endpoints:
- * - POST /v1/extract/trees        - Extract semantic trees (JSON response)
- * - POST /v1/extract/trees/stream - Extract semantic trees (SSE stream)
+ * - POST /v1/extract/trees        - Extract state trees (JSON response)
+ * - POST /v1/extract/trees/stream - Extract state trees (SSE stream)
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -62,7 +62,7 @@ const extractTreesRoute = createRoute({
   method: 'post',
   path: '/v1/extract/trees',
   tags: ['Extract'],
-  summary: 'Extract semantic trees from a conversation using LLM',
+  summary: 'Extract state trees from a conversation using LLM',
   description:
     'Runs the v2 extraction pipeline on conversation turns, appends the resulting delta ' +
     'to the delta log, and returns the delta with the updated snapshot. The conversation_id ' +

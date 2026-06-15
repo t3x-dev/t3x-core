@@ -16,10 +16,10 @@
  * earlier "extraction succeeded but the old red toast is still on screen
  * so it looks like it failed" failure mode.
  *
- * No hydration on the success path: nothing has been committed yet, so
- * server state is unchanged. The success toast fires after the local
- * draft is in place so the user sees the proposal and the confirmation
- * in the same render.
+ * Preflight hydration refreshes the local review base before the LLM call.
+ * A successful Extract still does not persist anything; the success toast
+ * fires after the local draft is in place so the user sees the proposal and
+ * the confirmation in the same render.
  */
 
 import type { HumanSource, SemanticContent, SourcedYOp } from '@t3x-dev/core';
@@ -34,6 +34,7 @@ import {
   type SourceTextDraftsByTurn,
 } from '@/domain/sourceTextDrafts';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
@@ -90,6 +91,31 @@ function markInlineSourceDraftVariants(
       ops ? markOpsFromSourceTextDrafts(ops, sourceTextDrafts, source) : ops,
     ])
   ) as typeof variants;
+}
+
+function formatExtractionFailure(error: ExtractionFailedError): string {
+  switch (error.reason) {
+    case 'unverifiable_quote':
+      return `Extraction could not verify ${error.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`;
+    case 'missing_source':
+      return 'Extraction returned ops without provenance. Please retry.';
+    case 'invalid_structure':
+      return 'Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.';
+    case 'provider_key_missing':
+      return 'No provider key is configured. Open Provider settings and connect OpenAI, Anthropic, or Google.';
+    case 'provider_auth':
+      return 'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.';
+    case 'provider_rate_limited':
+      return 'Provider rate limit reached. Wait a moment or choose a different configured provider.';
+    case 'provider_unavailable':
+      return 'Provider is unavailable. Try again later or choose another configured provider.';
+    case 'llm_error':
+      return error.failureCode
+        ? `Extraction failed (${error.failureCode}): ${error.message}`
+        : `LLM call failed: ${error.message}`;
+    default:
+      return `Extraction failed after ${error.lastAttempt} attempts.`;
+  }
 }
 
 export function useExtraction({
@@ -149,10 +175,6 @@ export function useExtraction({
       if (selectScriptDirty(store) && !confirmOverwrite()) {
         return;
       }
-      if (selectEffectiveTurns(store).length === 0) {
-        toast.message('No saved conversation turns to extract.', { id: EXTRACTION_TOAST_ID });
-        return;
-      }
       // Pre-sync the workspace's activeProjectId + conversationId before
       // doing anything that depends on them. ConversationPage mirrors
       // chatStore → workspaceStore via useEffect, and hydrate eventually
@@ -194,11 +216,31 @@ export function useExtraction({
       const extractionPreset = useWorkspaceStore.getState().extractionPreset;
 
       try {
+        await hydrateConversationToStore(projectId, extractConvId);
         const extractionState = useWorkspaceStore.getState();
+        if (extractionState.isCommitted) {
+          extractionState.setMode('idle');
+          toast.message('Committed conversations are read-only.', { id: EXTRACTION_TOAST_ID });
+          return;
+        }
+        if (extractionState.hasDraft) {
+          extractionState.setMode('idle');
+          toast.message('Apply or discard the staged draft before extracting again.', {
+            id: EXTRACTION_TOAST_ID,
+          });
+          return;
+        }
+        extractionState.setMode('streaming');
         const turns = selectEffectiveTurns(extractionState);
+        if (turns.length === 0) {
+          extractionState.setMode('idle');
+          toast.message('No saved conversation turns to extract.', { id: EXTRACTION_TOAST_ID });
+          return;
+        }
         const sourceTextDrafts = extractionState.sourceTextDrafts;
+        const baseTree = extractionState.tree;
         const result = await runExtraction({
-          baseTree: tree,
+          baseTree,
           conversationId: extractConvId,
           turns,
           commit: false,
@@ -236,7 +278,7 @@ export function useExtraction({
             ? markInlineSourceDraftVariants(result.variants, sourceTextDrafts, inlineSource)
             : result.variants;
 
-        const previewResult = applySourcedYOps(tree, stagedOps);
+        const previewResult = applySourcedYOps(baseTree, stagedOps);
         // YOpsResult exposes trees + relations directly. On failure, fall
         // back to the current tree — the worker already validated, so any
         // failure here is a post-validation surprise; the script editor
@@ -244,7 +286,7 @@ export function useExtraction({
         // (which will hit the same engine and report the real error).
         const previewTree: SemanticContent = previewResult.ok
           ? { trees: previewResult.trees, relations: previewResult.relations }
-          : tree;
+          : baseTree;
         const store = useWorkspaceStore.getState();
         // setDraft writes the new draft AND clears any retainedDraftFailure
         // marker — see workspaceStore. clearDraft is no longer called
@@ -273,24 +315,14 @@ export function useExtraction({
         useWorkspaceStore.getState().setMode('idle');
         const isExtractionFailed = err instanceof ExtractionFailedError;
         const msg = isExtractionFailed
-          ? err.reason === 'unverifiable_quote'
-            ? `Extraction could not verify ${err.failingOps.length} slot(s) against the conversation. Please refine the prompt or edit manually.`
-            : err.reason === 'missing_source'
-              ? `Extraction returned ops without provenance. Please retry.`
-              : err.reason === 'invalid_structure'
-                ? `Extraction returned ops that do not form a valid tree update. The batch was sent back to the model for retry, but all retries failed.`
-                : err.reason === 'llm_error'
-                  ? err.failureCode
-                    ? `Extraction failed (${err.failureCode}): ${err.message}`
-                    : `LLM call failed: ${err.message}`
-                  : `Extraction failed after ${err.lastAttempt} attempts.`
+          ? formatExtractionFailure(err)
           : formatWorkspaceError(err) || 'Extraction failed';
 
         useWorkspaceStore.getState().setError(msg);
         toast.error(msg, { id: EXTRACTION_TOAST_ID });
       }
     },
-    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite, tree]
+    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite]
   );
 
   // Back-compat return shape for existing callers:

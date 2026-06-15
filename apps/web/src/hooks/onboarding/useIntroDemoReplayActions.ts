@@ -2,6 +2,7 @@
 
 import {
   DEMO_WORKSPACE_FIXTURE,
+  flattenTrees,
   type SemanticContent,
   type Source,
   type SourcedYOp,
@@ -9,9 +10,15 @@ import {
 } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { createCommit } from '@/commands/commits';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { EXTRACTION_TOAST_ID } from '@/hooks/drafts/extractionToast';
-import { saveIntroDemoLocalCommit } from '@/hooks/onboarding/introDemoLocalCommit';
+import {
+  readIntroDemoLocalCommit,
+  saveIntroDemoLocalCommit,
+} from '@/hooks/onboarding/introDemoLocalCommit';
 import { useChatStore } from '@/store/chatStore';
+import { useCommitStore } from '@/store/commitStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
 const DEMO_DELAY_MS = 650;
@@ -89,6 +96,23 @@ export function demoTree(): SemanticContent {
   };
 }
 
+function buildCommittedSnapshot(content: SemanticContent): {
+  committedNodeIds: Record<string, boolean>;
+  committedNodeSnapshot: Record<string, TreeNode>;
+} {
+  const committedNodeIds: Record<string, boolean> = {};
+  const committedNodeSnapshot: Record<string, TreeNode> = {};
+
+  for (const node of flattenTrees(content.trees)) {
+    committedNodeIds[node.id] = true;
+  }
+  for (const tree of content.trees) {
+    committedNodeSnapshot[tree.key] = { ...tree, slots: { ...tree.slots } };
+  }
+
+  return { committedNodeIds, committedNodeSnapshot };
+}
+
 export function useIntroDemoReplayActions() {
   const extract = useCallback(async () => {
     const store = useWorkspaceStore.getState();
@@ -155,21 +179,52 @@ export function useIntroDemoReplayActions() {
       toast.error('Apply the staged demo extract before committing.');
       return null;
     }
-    if (store.isCommitted) return DEMO_COMMIT_HASH;
+    const chatState = useChatStore.getState();
+    const commitState = useCommitStore.getState();
+    const projectId =
+      chatState.activeProjectId ?? store.activeProjectId ?? commitState.projectId ?? undefined;
+    if (store.isCommitted) return readIntroDemoLocalCommit(projectId)?.hash ?? DEMO_COMMIT_HASH;
+
+    const conversationId = store.conversationId ?? chatState.activeConversationId ?? undefined;
+    if (!projectId || !conversationId) {
+      toast.error('Demo commit needs a project and conversation.');
+      return null;
+    }
 
     store.setMode('committing');
-    await delay(420);
+    useCommitStore.getState().setIsCommitting(true);
 
-    const hash = DEMO_COMMIT_HASH;
-    useWorkspaceStore.getState().setMode('idle');
-    useWorkspaceStore.getState().setCommitted(true);
-    toast.success(message?.trim() ? `Committed: ${message.trim()}` : 'Demo commit created');
+    try {
+      await delay(420);
 
-    const projectId = useChatStore.getState().activeProjectId ?? store.activeProjectId ?? undefined;
-    const conversationId = store.conversationId ?? undefined;
-    const branch = useChatStore.getState().activeBranch;
-    const commitMessage = message?.trim() || 'Demo Commit';
-    if (projectId && conversationId) {
+      const content = demoTree();
+      const branch = chatState.activeBranch || commitState.commitBranch || 'main';
+      const commitMessage = message?.trim() || 'Demo Commit';
+      const result = await createCommit(projectId, content, {
+        parents: commitState.lastCommitHash ? [commitState.lastCommitHash] : [],
+        branch,
+        message: commitMessage,
+        sources: [
+          {
+            type: 'conversation',
+            id: conversationId,
+            title: commitState.conversationTitle ?? chatState.conversationTitle ?? undefined,
+          },
+        ],
+        source_conversation_id: conversationId,
+        provenance: { method: 'llm_extraction', model: 'fixture-replay' },
+      });
+      const hash = result.commit.hash;
+      const { committedNodeIds, committedNodeSnapshot } = buildCommittedSnapshot(content);
+
+      useCommitStore.getState().setCommitSuccess({
+        lastCommitHash: hash,
+        committedNodeIds,
+        committedNodeSnapshot,
+      });
+      useWorkspaceStore.getState().setMode('idle');
+      useWorkspaceStore.getState().setCommitted(true);
+      toast.success(message?.trim() ? `Committed: ${message.trim()}` : 'Demo commit created');
       saveIntroDemoLocalCommit({
         projectId,
         conversationId,
@@ -177,26 +232,32 @@ export function useIntroDemoReplayActions() {
         branch,
         message: commitMessage,
         committedAt: new Date().toISOString(),
-        content: demoTree(),
+        content,
       });
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('t3x:commit-created', {
-          detail: {
-            type: 'commit.created',
-            projectId,
-            conversationId,
-            conversationIds: conversationId ? [conversationId] : [],
-            branch,
-            payload: { hash, branch },
-          },
-        })
-      );
-    }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('t3x:commit-created', {
+            detail: {
+              type: 'commit.created',
+              projectId,
+              conversationId,
+              conversationIds: [conversationId],
+              branch,
+              payload: { hash, branch },
+            },
+          })
+        );
+      }
 
-    useChatStore.getState().refreshSidebar();
-    return hash;
+      useChatStore.getState().refreshSidebar();
+      return hash;
+    } catch (err) {
+      useWorkspaceStore.getState().setMode('idle');
+      useCommitStore.getState().setIsCommitting(false);
+      useCommitStore.getState().setCommitError(formatUserFacingError(err, 'Demo commit failed.'));
+      toast.error(formatUserFacingError(err, 'Demo commit failed.'));
+      return null;
+    }
   }, []);
 
   return { extract, apply, commit };

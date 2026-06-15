@@ -223,7 +223,7 @@ export function PendingCommitView({
                   /* Extraction in progress */
                   <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 text-[var(--text-tertiary)]">
                     <Loader2 className="h-8 w-8 animate-spin" />
-                    <span className="text-sm">Extracting semantic points...</span>
+                    <span className="text-sm">Extracting state points...</span>
                   </div>
                 ) : state.extractionError && !state.extractionLoading ? (
                   /* Extraction error */
@@ -252,7 +252,7 @@ export function PendingCommitView({
                 ) : state.draftId && state.semanticPoints.length === 0 ? (
                   /* No points extracted */
                   <div className="flex flex-col items-center justify-center flex-1 min-h-[300px] gap-3 p-8 text-center text-[var(--text-tertiary)]">
-                    <span className="text-sm">No semantic points extracted.</span>
+                    <span className="text-sm">No state points extracted.</span>
                     <span className="text-xs">Try adding more conversation content first.</span>
                   </div>
                 ) : null}

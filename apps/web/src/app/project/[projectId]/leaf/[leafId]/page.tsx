@@ -2,7 +2,7 @@
 
 import { ClipboardCheck } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
 import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
@@ -43,7 +43,6 @@ const LEAF_TOUR_STEPS: FeatureTourStep[] = [
     target: 'leaf-generate-action',
     tone: 'leaf',
     icon: ClipboardCheck,
-    advanceOnTargetClick: true,
   },
 ];
 
@@ -86,6 +85,8 @@ export function LeafDetailWorkspace({
   const projectId = params.projectId as string;
   const leafId = params.leafId as string;
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
+  const [introDemoAwaitingGeneration, setIntroDemoAwaitingGeneration] = useState(false);
+  const introDemoCompletionTimerRef = useRef<number | null>(null);
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
 
   const {
@@ -203,6 +204,49 @@ export function LeafDetailWorkspace({
     if (introDemoRequested) setTourOpen(true);
   }, [introDemoRequested]);
 
+  const scheduleIntroDemoCompletion = useCallback(() => {
+    setTourOpen(false);
+    setIntroDemoAwaitingGeneration(false);
+    if (introDemoCompletionTimerRef.current) {
+      window.clearTimeout(introDemoCompletionTimerRef.current);
+    }
+    introDemoCompletionTimerRef.current = window.setTimeout(() => {
+      void completeIntroDemo();
+    }, 1200);
+  }, [completeIntroDemo]);
+
+  useEffect(() => {
+    return () => {
+      if (introDemoCompletionTimerRef.current) {
+        window.clearTimeout(introDemoCompletionTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleLeafGenerate = useCallback(async () => {
+    if (introDemoRequested) {
+      setIntroDemoAwaitingGeneration(true);
+    }
+    const generatedLeaf = await handleGenerate();
+    if (introDemoRequested && generatedLeaf?.output) {
+      scheduleIntroDemoCompletion();
+    }
+  }, [handleGenerate, introDemoRequested, scheduleIntroDemoCompletion]);
+
+  useEffect(() => {
+    if (!introDemoRequested || !introDemoAwaitingGeneration || isGenerating || !leaf?.output) {
+      return;
+    }
+
+    scheduleIntroDemoCompletion();
+  }, [
+    introDemoAwaitingGeneration,
+    introDemoRequested,
+    isGenerating,
+    leaf?.output,
+    scheduleIntroDemoCompletion,
+  ]);
+
   // Keyboard navigation for nodes
   const nodeIds = useMemo(() => nodes.map((s) => s.id), [nodes]);
   useKeyboardNavigation({
@@ -277,7 +321,7 @@ export function LeafDetailWorkspace({
             {leaf.type} artifact
           </span>
           <span className="inline-flex items-center rounded-full border border-[var(--accent-leaf)]/30 bg-[var(--accent-leaf-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-leaf)]">
-            {coverageIncluded} / {coverageTotal} semantic points
+            {coverageIncluded} / {coverageTotal} state points
           </span>
           <span className="inline-flex items-center rounded-full border border-[var(--accent-commit)]/30 bg-[var(--accent-commit-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--accent-commit)]">
             {semanticContent ? 'commit verified' : 'commit loading'}
@@ -420,7 +464,7 @@ export function LeafDetailWorkspace({
               generatedAt={leaf.generated_at}
               assertions={leaf.assertions}
               constraints={leaf.constraints}
-              onGenerate={handleGenerate}
+              onGenerate={handleLeafGenerate}
               isGenerating={isGenerating}
               generatePhase={generatePhase}
               generateProgressMessages={generateProgressMessages}
@@ -469,7 +513,7 @@ export function LeafDetailWorkspace({
               generateProgressMessages={generateProgressMessages}
               onUpdateInstruction={handleUpdateUserInstruction}
               onUpdateModel={handleUpdateModel}
-              onGenerate={handleGenerate}
+              onGenerate={handleLeafGenerate}
               onValidate={handleValidate}
               onSuggestOpen={() => setSuggestOpen(true)}
             />

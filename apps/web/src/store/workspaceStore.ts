@@ -73,7 +73,11 @@ export type ExtractionFailureReason =
   | 'unverifiable_quote'
   | 'invalid_structure'
   | 'exhausted_retries'
-  | 'llm_error';
+  | 'llm_error'
+  | 'provider_key_missing'
+  | 'provider_auth'
+  | 'provider_rate_limited'
+  | 'provider_unavailable';
 
 export interface RetainedDraftFailure {
   /** User-facing failure message — same string we'd put on a toast. */

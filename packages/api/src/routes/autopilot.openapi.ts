@@ -344,7 +344,7 @@ autopilotRoutes.openapi(autoCommitRoute, async (c) => {
     const storedConfig = await getAutopilotConfig(db, draft.project_id);
     const config = mergeAutopilotConfig(storedConfig ?? undefined);
 
-    // 5. Build candidates from semantic points
+    // 5. Build candidates from state points
     // SemanticPoint type is no longer exported; use structural typing
     const sps = (draft.semantic_points ?? []) as Array<{
       id: string;

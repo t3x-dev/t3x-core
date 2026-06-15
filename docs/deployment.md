@@ -8,7 +8,7 @@ repository. It does not describe the private SaaS deployment.
 | Path | Command | Intended use |
 |---|---|---|
 | Source development | `pnpm dev:api` and `pnpm dev:webui` | Contributor and implementation work |
-| Local alpha package | `npx -p @t3x-dev/local t3x-local start` | Packaged local evaluation from public npm |
+| Local alpha package | `npx -p @t3x-dev/local t3x-local` | Packaged local evaluation from public npm |
 | Docker Compose | `docker compose up -d --build` | Self-hosted WebUI + API + Postgres evaluation |
 
 ## Docker Self-Hosting
@@ -53,7 +53,7 @@ dev processes.
 
 ## Environment
 
-At least one provider key is required for semantic extraction or chat:
+At least one provider key is required for live extraction or chat:
 
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`

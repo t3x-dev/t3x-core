@@ -107,7 +107,7 @@ function inferSemanticSummary(data: CanvasNodeData): { label: string; meta: stri
   const trees = (data.commit?.content?.trees ?? []) as TreeSummaryNode[];
   if (trees.length === 0) return null;
 
-  const rootKey = trees[0]?.key ?? 'semantic tree';
+  const rootKey = trees[0]?.key ?? 'state tree';
   const nodeCount = flattenTrees(trees).length;
   const destination = trees[0]?.slots?.destination;
   if (
@@ -373,7 +373,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
         data-node-semantic-kind={semanticKind}
         data-intro-target={
           isCommitted
-            ? 'canvas-commit-node'
+            ? data.leaves && data.leaves.length > 0
+              ? 'canvas-commit-node-with-leaf'
+              : 'canvas-commit-node'
             : isStaging || isDraft
               ? 'canvas-pending-node'
               : undefined

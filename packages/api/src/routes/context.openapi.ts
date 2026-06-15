@@ -1,7 +1,7 @@
 /**
  * Context Route — Integration Layer "Show" Verb
  *
- * Returns the current semantic knowledge (trees) from the latest
+ * Returns the current structured state trees from the latest
  * commit on a branch.
  *
  * Endpoints:
@@ -28,9 +28,9 @@ const getContextRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{id}/context',
   tags: ['Integration'],
-  summary: 'Get current semantic context',
+  summary: 'Get current state context',
   description:
-    'Returns the current semantic knowledge (trees) from the latest commit on a branch. ' +
+    'Returns the current structured state trees from the latest commit on a branch. ' +
     'Optionally returns YAML format for human-readable inspection.',
   request: {
     params: z.object({

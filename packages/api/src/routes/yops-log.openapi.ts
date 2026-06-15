@@ -1,8 +1,8 @@
 /**
  * YOps Log Routes with OpenAPI
  *
- * REST API endpoints for semantic yops log CRUD and draft computation.
- * YOps track incremental changes to semantic trees within a conversation.
+ * REST API endpoints for yops log CRUD and draft computation.
+ * YOps track incremental changes to state trees within a conversation.
  *
  * Endpoints:
  * - POST   /v1/conversations/:conversationId/yops        - Append yops

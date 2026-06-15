@@ -315,7 +315,7 @@ export function CommitConfigStep({
             {extractionLoading && (
               <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)]">
                 <Loader2 size={14} className="animate-spin" />
-                <span>Extracting semantic points...</span>
+                <span>Extracting state points...</span>
               </div>
             )}
 
@@ -337,7 +337,7 @@ export function CommitConfigStep({
             {!extractionLoading && !extractionError && semanticPointsCount > 0 && (
               <div className="flex items-center gap-2 text-[0.85rem] text-[var(--text-secondary)]">
                 <Check size={14} className="text-[var(--status-success)]" />
-                <span>{semanticPointsCount} semantic points extracted</span>
+                <span>{semanticPointsCount} state points extracted</span>
               </div>
             )}
 

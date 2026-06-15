@@ -1,21 +1,28 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
+let searchParamsValue = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: 'proj_test' }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParamsValue,
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
 
 vi.mock('@/components/canvas', () => ({
   CanvasWorkspace: ({ projectName }: { projectName: string }) => (
     <div data-testid="canvas-workspace">{projectName}</div>
+  ),
+}));
+
+vi.mock('@/components/onboarding/ProjectDemoTourOverlay', () => ({
+  ProjectDemoTourOverlay: ({ open }: { open: boolean }) => (
+    <div data-open={String(open)} data-testid="project-demo-tour" />
   ),
 }));
 
@@ -47,6 +54,7 @@ import { useProjectStore } from '@/store/projectStore';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  searchParamsValue = new URLSearchParams();
   vi.mocked(fetchProject).mockResolvedValue({
     project_id: 'proj_test',
     name: 'Test Project',
@@ -68,6 +76,8 @@ beforeEach(() => {
     loading: false,
     loadError: null,
     projectId: 'proj_test',
+    openNodeId: null,
+    modalViewMode: null,
   });
 });
 
@@ -79,6 +89,8 @@ afterEach(() => {
     loading: false,
     loadError: null,
     projectId: null,
+    openNodeId: null,
+    modalViewMode: null,
   });
 });
 
@@ -152,6 +164,31 @@ describe('ProjectDetailPage — empty canvas states', () => {
 
     expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores selected-node deep links while the intro demo canvas tour is active', async () => {
+    searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:abc123', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+      openNodeId: null,
+      modalViewMode: null,
+    });
+
+    render(<ProjectDetailPage />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('project-demo-tour')).toHaveAttribute('data-open', 'true');
+    expect(useCanvasStore.getState().openNodeId).toBeNull();
+    expect(useCanvasStore.getState().modalViewMode).toBeNull();
   });
 
   it('does NOT redirect when load is for a different project (race guard)', () => {

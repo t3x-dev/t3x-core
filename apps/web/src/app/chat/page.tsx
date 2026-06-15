@@ -21,6 +21,8 @@ import { useFirstRunDemo } from '@/hooks/onboarding/useFirstRunDemo';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useChatStore } from '@/store/chatStore';
+import { useProjectStore } from '@/store/projectStore';
+import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 
 const STARTER_CARDS = [
   {
@@ -68,8 +70,8 @@ export default function ChatLandingPage() {
 function ChatLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const forceIntroDemo =
-    process.env.NODE_ENV !== 'production' && searchParams.get('introDemo') === '1';
+  const forceIntroDemo = isIntroDemoQueryEnabled(searchParams);
+  const localAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const introDemoStage = searchParams.get('introDemoStage') ?? 'create';
   // Anchor this landing to a specific project when one was passed in the
   // URL (e.g. the "+ New Project" sidebar action lands here so the user can
@@ -77,11 +79,14 @@ function ChatLanding() {
   // sync for the sidebar; propagating the param to /chat/new survives
   // refresh and avoids relying solely on in-memory state.
   const projectIdParam = searchParams.get('projectId');
+  const projectsInitialized = useProjectStore((state) => state.initialized);
+  const hasExistingProjects = useProjectStore((state) => state.projects.length > 0);
   const [starterDraft, setStarterDraft] = useState<{ text: string; revision: number } | null>(null);
   const introDemoForceKey = forceIntroDemo
     ? `${introDemoStage}:${projectIdParam ?? 'no-project'}`
     : null;
   const firstRunDemo = useFirstRunDemo({
+    autoOpen: projectsInitialized && !hasExistingProjects,
     forceOpen: forceIntroDemo,
     forceOpenKey: introDemoForceKey,
   });
@@ -149,6 +154,22 @@ function ChatLanding() {
     handleModelChange,
     availabilityError,
   } = useChatModelSelection({});
+  const shouldAutoStartIntroDemo =
+    !forceIntroDemo &&
+    !projectIdParam &&
+    localAuthDisabled &&
+    projectsInitialized &&
+    !hasExistingProjects &&
+    firstRunDemo.ready &&
+    !firstRunDemo.seen &&
+    !loading &&
+    !hasConfiguredGenerationProvider &&
+    availabilityError !== 'api_unavailable';
+
+  useEffect(() => {
+    if (!shouldAutoStartIntroDemo) return;
+    router.push('/chat?introDemo=1');
+  }, [router, shouldAutoStartIntroDemo]);
 
   useEffect(() => {
     if (!forceIntroDemo || introDemoStage !== 'compose' || !projectIdParam) return;
@@ -250,13 +271,16 @@ function ChatLanding() {
             ))}
           </div>
 
-          {!forceIntroDemo && !loading && !hasConfiguredGenerationProvider && (
-            <div className="mb-4" data-intro-target="provider-status">
-              <ProviderSetupBanner
-                variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
-              />
-            </div>
-          )}
+          {!forceIntroDemo &&
+            !shouldAutoStartIntroDemo &&
+            !loading &&
+            !hasConfiguredGenerationProvider && (
+              <div className="mb-4" data-intro-target="provider-status">
+                <ProviderSetupBanner
+                  variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
+                />
+              </div>
+            )}
 
           <div data-intro-target="composer">
             <ChatInput

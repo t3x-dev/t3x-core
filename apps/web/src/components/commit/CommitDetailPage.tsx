@@ -49,6 +49,7 @@ import { relativeTime, shortHash } from '@/domain/format/formatters';
 import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitHistory } from '@/hooks/commits/useCommitHistory';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
+import { resolveIntroDemoApiCommitForHash } from '@/hooks/onboarding/introDemoLocalCommit';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useIntroDemoQueryFlag } from '@/hooks/onboarding/useIntroDemoQueryFlag';
 import { useProjectDetail } from '@/hooks/projects/useProjectDetail';
@@ -196,9 +197,12 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       setLoading(true);
       setError(null);
       try {
+        const introDemoCommit = introDemoRequested
+          ? resolveIntroDemoApiCommitForHash(projectId, commitHash)
+          : null;
         const [commitData, leavesData, projectData] = await Promise.all([
-          loadCommit(commitHash),
-          loadLeaves(commitHash).catch(() => [] as Leaf[]),
+          introDemoCommit ? Promise.resolve(introDemoCommit) : loadCommit(commitHash),
+          introDemoCommit ? Promise.resolve([] as Leaf[]) : loadLeaves(commitHash).catch(() => []),
           loadProject(projectId).catch(() => null),
         ]);
         setCommitLocal(commitData);
@@ -207,7 +211,7 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
 
         // Fetch parent commit for diff computation (if single parent)
         let parentCommit: ApiCommit | null = null;
-        if (commitData.parents.length === 1) {
+        if (!introDemoCommit && commitData.parents.length === 1) {
           try {
             parentCommit = await loadCommit(commitData.parents[0]);
           } catch {
@@ -219,11 +223,15 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
         storeSetCommit(commitData, parentCommit);
 
         // Fetch commit history
-        try {
-          const history = await loadHistory(commitHash, 10);
-          setCommitHistory(history);
-        } catch {
-          // History fetch failure is non-critical
+        if (introDemoCommit) {
+          setCommitHistory([]);
+        } else {
+          try {
+            const history = await loadHistory(commitHash, 10);
+            setCommitHistory(history);
+          } catch {
+            // History fetch failure is non-critical
+          }
         }
       } catch (err) {
         setError(formatUserFacingError(err, 'Failed to load commit.'));
@@ -232,7 +240,16 @@ export function CommitDetailPage({ projectId, commitHash }: CommitDetailPageProp
       }
     };
     load();
-  }, [commitHash, projectId, storeSetCommit, loadCommit, loadLeaves, loadProject, loadHistory]);
+  }, [
+    commitHash,
+    projectId,
+    introDemoRequested,
+    storeSetCommit,
+    loadCommit,
+    loadLeaves,
+    loadProject,
+    loadHistory,
+  ]);
 
   useEffect(() => {
     if (introDemoRequested) setTourOpen(true);

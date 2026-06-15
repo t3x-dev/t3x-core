@@ -83,6 +83,16 @@ export function toIntroDemoApiCommit(commit: IntroDemoLocalCommit): ApiCommit {
   };
 }
 
+export function resolveIntroDemoApiCommitForHash(
+  projectId: string | null | undefined,
+  hash: string | null | undefined
+): ApiCommit | null {
+  if (!hash) return null;
+  const commit = readIntroDemoLocalCommit(projectId);
+  if (!commit || commit.hash !== hash) return null;
+  return toIntroDemoApiCommit(commit);
+}
+
 export function applyIntroDemoCommitToCanvasGraph({
   nodes,
   edges,
@@ -136,7 +146,7 @@ export function applyIntroDemoCommitToCanvasGraph({
         ...node.data,
         entryId: nextId.slice(0, 12),
         title: message,
-        summary: `${commit.content.trees.length} semantic tree${
+        summary: `${commit.content.trees.length} state tree${
           commit.content.trees.length === 1 ? '' : 's'
         }`,
         status: 'committed',

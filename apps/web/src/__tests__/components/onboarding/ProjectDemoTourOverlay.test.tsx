@@ -5,6 +5,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 
+async function flushGuidedClick() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
+  });
+}
+
 describe('ProjectDemoTourOverlay', () => {
   it('labels the guided escape action as skipping the demo', () => {
     const onSkip = vi.fn();
@@ -100,6 +108,9 @@ describe('ProjectDemoTourOverlay', () => {
         <button type="button" data-intro-target="canvas-commit-node">
           Commit card
         </button>
+        <button type="button" data-intro-target="canvas-action-new-leaf">
+          Create Leaf From This Version
+        </button>
         <button type="button" data-intro-target="canvas-floating-action-new-leaf">
           New Leaf
         </button>
@@ -133,8 +144,7 @@ describe('ProjectDemoTourOverlay', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Leaf' }));
-
+    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf From This Version' }));
     await waitFor(() => {
       expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     });
@@ -143,6 +153,7 @@ describe('ProjectDemoTourOverlay', () => {
     expect(onDone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'X / Twitter' }));
+    await flushGuidedClick();
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);
@@ -239,6 +250,7 @@ describe('ProjectDemoTourOverlay', () => {
     expect(onDone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'X / Twitter' }));
+    await flushGuidedClick();
 
     await waitFor(() => {
       expect(onDone).toHaveBeenCalledTimes(1);

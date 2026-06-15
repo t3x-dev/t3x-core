@@ -56,17 +56,16 @@ function isExtractionFailureCode(value: unknown): value is ExtractionFailureCode
 
 /**
  * Non-domain HTTP error codes that map to the core `transport` failure
- * because retrying the same request has a real chance of succeeding
- * without anything else changing — upstream 5xx, rate-limit waits, and
- * provider-side auth that may recover on its own.
+ * because the extraction domain pipeline did not run. The worker still
+ * reads `apiCode` to decide which of these are terminal setup/auth
+ * failures and which are worth retrying.
  *
  * Configuration / bad-request codes (PROVIDER_KEY_MISSING,
- * INVALID_REQUEST, INTERNAL_ERROR) are intentionally NOT here: the
- * worker auto-retries `transport`, and burning N retries on "you
- * haven't set an API key" is just N identical failures before the
- * toast fires. Those fall through to `draft_parse` below, which the
- * worker explicitly does not retry (`isTransport` gate in
- * extractionWorker.ts).
+ * INVALID_REQUEST, INTERNAL_ERROR) are intentionally NOT here. They
+ * fall through to `draft_parse` below, which the worker treats as
+ * terminal; a missing key is not helped by repeating the same request.
+ * AUTH_ERROR maps to transport because the domain pipeline did not run,
+ * but the worker treats that specific apiCode as terminal too.
  */
 const NON_DOMAIN_TRANSPORT_API_CODES = new Set([
   'PROVIDER_UNAVAILABLE',

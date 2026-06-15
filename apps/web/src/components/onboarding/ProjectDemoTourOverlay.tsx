@@ -11,7 +11,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
@@ -45,7 +45,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       label: 'Commit card',
       title: 'Select this commit version',
       description: 'Select this version.',
-      target: 'canvas-commit-node',
+      target: ['canvas-commit-node', 'canvas-commit-node-with-leaf'],
       icon: MapIcon,
       tone: 'commit',
       advanceOnTargetClick: true,
@@ -67,7 +67,7 @@ const PROJECT_TOUR_STEPS_BY_STAGE: Record<ProjectTourStage, ProjectTourStep[]> =
       label: 'Commit card',
       title: 'Select this commit version',
       description: 'Select this version.',
-      target: 'canvas-commit-node',
+      target: ['canvas-commit-node-with-leaf', 'canvas-commit-node'],
       icon: MapIcon,
       tone: 'commit',
       advanceOnTargetClick: true,
@@ -338,7 +338,7 @@ export function ProjectDemoTourOverlay({
     };
   }, [open, step.target]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !step.advanceOnTargetClick || !step.target) return;
     const handleTargetClick = (event: MouseEvent) => {
       if (advancingAfterTargetClick) return;
