@@ -135,7 +135,7 @@ export function formatMissingArtifacts(items: MissingArtifact[], paths: LocalPat
   const details = items.map((item) => `- ${item.label}: ${item.path}`).join('\n');
   const hint =
     paths.runtimeSource === 'installed'
-      ? 'Reinstall `@t3x-dev/local`, or rerun the postinstall download with `T3X_LOCAL_RUNTIME_MIRROR` configured.'
+      ? 'Run `t3x-local` again, or set `T3X_LOCAL_RUNTIME_MIRROR` and rerun the foreground setup.'
       : 'Run `pnpm build:api-server` and `pnpm build:webui` from the repo root first.';
 
   return 'Missing local runtime artifacts required by `t3x-local start`.\n' + `${details}\n` + hint;

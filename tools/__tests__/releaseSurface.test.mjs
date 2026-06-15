@@ -41,7 +41,8 @@ test('README mirrors the public alpha surface instead of the old broad package l
   assert.match(readme, /The current npm release surface is intentionally narrow/);
   assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha \|/);
   assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| public alpha \|/);
-  assert.match(readme, /npx -p @t3x-dev\/local t3x-local start/);
+  assert.match(readme, /npx -p @t3x-dev\/local t3x-local/);
+  assert.doesNotMatch(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);
 });
 

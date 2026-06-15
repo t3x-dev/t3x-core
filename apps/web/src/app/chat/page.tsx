@@ -70,6 +70,7 @@ function ChatLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const forceIntroDemo = isIntroDemoQueryEnabled(searchParams);
+  const localAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED?.toLowerCase() === 'true';
   const introDemoStage = searchParams.get('introDemoStage') ?? 'create';
   // Anchor this landing to a specific project when one was passed in the
   // URL (e.g. the "+ New Project" sidebar action lands here so the user can
@@ -149,6 +150,17 @@ function ChatLanding() {
     handleModelChange,
     availabilityError,
   } = useChatModelSelection({});
+  const shouldAutoStartIntroDemo =
+    !forceIntroDemo &&
+    localAuthDisabled &&
+    !loading &&
+    !hasConfiguredGenerationProvider &&
+    availabilityError !== 'api_unavailable';
+
+  useEffect(() => {
+    if (!shouldAutoStartIntroDemo) return;
+    router.push('/chat?introDemo=1');
+  }, [router, shouldAutoStartIntroDemo]);
 
   useEffect(() => {
     if (!forceIntroDemo || introDemoStage !== 'compose' || !projectIdParam) return;
@@ -250,13 +262,16 @@ function ChatLanding() {
             ))}
           </div>
 
-          {!forceIntroDemo && !loading && !hasConfiguredGenerationProvider && (
-            <div className="mb-4" data-intro-target="provider-status">
-              <ProviderSetupBanner
-                variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
-              />
-            </div>
-          )}
+          {!forceIntroDemo &&
+            !shouldAutoStartIntroDemo &&
+            !loading &&
+            !hasConfiguredGenerationProvider && (
+              <div className="mb-4" data-intro-target="provider-status">
+                <ProviderSetupBanner
+                  variant={availabilityError === 'api_unavailable' ? 'api-unavailable' : 'setup'}
+                />
+              </div>
+            )}
 
           <div data-intro-target="composer">
             <ChatInput

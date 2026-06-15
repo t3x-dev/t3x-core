@@ -1,26 +1,26 @@
 {
   "manifestVersion": 1,
-  "packageVersion": "0.4.1",
-  "fixedVersion": "0.4.1",
-  "generatedAt": "2026-06-11T10:30:46.472Z",
+  "packageVersion": "0.5.0",
+  "fixedVersion": "0.5.0",
+  "generatedAt": "2026-06-12T09:53:20.820Z",
   "dependencies": {
-    "@t3x-dev/yops": "0.4.1",
-    "@t3x-dev/yschema": "0.4.1",
-    "@t3x-dev/core": "0.4.1",
-    "@t3x-dev/storage": "0.4.1",
-    "@t3x-dev/api": "0.4.1",
-    "@t3x-dev/api-client": "0.4.1",
-    "@t3x-dev/cli": "0.4.1",
-    "@t3x-dev/mcp": "0.4.1",
-    "@t3x-dev/local": "0.4.1",
+    "@t3x-dev/yops": "0.5.0",
+    "@t3x-dev/yschema": "0.5.0",
+    "@t3x-dev/core": "0.5.0",
+    "@t3x-dev/storage": "0.5.0",
+    "@t3x-dev/api": "0.5.0",
+    "@t3x-dev/api-client": "0.5.0",
+    "@t3x-dev/cli": "0.5.0",
+    "@t3x-dev/mcp": "0.5.0",
+    "@t3x-dev/local": "0.5.0",
     "web": "0.1.0"
   },
   "platforms": {
     "darwin-arm64": {
-      "fileName": "t3x-local-runtime-0.4.1-darwin-arm64.tar.gz",
-      "url": "https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.4.1/t3x-local-runtime-0.4.1-darwin-arm64.tar.gz",
-      "sha256": "3ff0cb511c532e54216f8b1c5b9ae513a7d24cdf3096be49faea49c7924b93b0",
-      "size": 18264831
+      "fileName": "t3x-local-runtime-0.5.0-darwin-arm64.tar.gz",
+      "url": "https://github.com/t3x-dev/t3x-core/releases/download/t3x-local-v0.5.0/t3x-local-runtime-0.5.0-darwin-arm64.tar.gz",
+      "sha256": "85038ea73d49c2bb006f2b3999cb03ecb73c20ecadac3df132df3db2b374cf99",
+      "size": 18299583
     }
   }
 }

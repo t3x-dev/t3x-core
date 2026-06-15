@@ -165,6 +165,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
   localStorage.removeItem('t3x-chat-model-preferences');
   localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
   setModelSelection();
@@ -200,6 +201,25 @@ describe('ChatLandingPage', () => {
     });
 
     expect(await screen.findByRole('dialog', { name: /create the demo workspace/i })).toBeVisible();
+  });
+
+  it('redirects local auth-disabled no-provider visits to the fixture demo', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    setModelSelection({
+      hasConfiguredGenerationProvider: false,
+      selectedProvider: null,
+      selectedModel: null,
+      availabilityError: null,
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/chat?introDemo=1');
+    });
+    expect(screen.queryByText('Set up a generation provider')).not.toBeInTheDocument();
   });
 
   it('prefills the intro demo composer after project creation', async () => {
