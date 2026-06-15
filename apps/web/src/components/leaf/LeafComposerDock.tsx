@@ -23,7 +23,7 @@ interface LeafComposerDockProps {
   generateProgressMessages: string[];
   onUpdateInstruction: (instruction: string) => Promise<void>;
   onUpdateModel: (model: string | undefined) => Promise<void>;
-  onGenerate: () => Promise<void>;
+  onGenerate: () => Promise<unknown>;
   onValidate: () => Promise<void>;
   onSuggestOpen: () => void;
   className?: string;

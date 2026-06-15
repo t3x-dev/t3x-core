@@ -19,7 +19,7 @@ export interface UseLeafGenerateReturn {
   generateProgressMessages: string[];
   generateError: string | null;
   generateSuccessBanner: string | null;
-  handleGenerate: () => Promise<void>;
+  handleGenerate: () => Promise<Leaf | null>;
 }
 
 export function useLeafGenerate(
@@ -67,7 +67,7 @@ export function useLeafGenerate(
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (!leaf) return;
+    if (!leaf) return null;
     setIsGenerating(true);
     setGenerateError(null);
     try {
@@ -86,8 +86,10 @@ export function useLeafGenerate(
         clearTimeout(bannerTimerRef.current);
         bannerTimerRef.current = setTimeout(() => setGenerateSuccessBanner(null), 3000);
       }
+      return updatedLeaf;
     } catch (err) {
       setGenerateError(formatUserFacingError(err, 'Generation failed.'));
+      return null;
     } finally {
       setIsGenerating(false);
     }

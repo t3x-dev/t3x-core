@@ -2,7 +2,7 @@
 
 import { ClipboardCheck } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { LeafComposerDock } from '@/components/leaf/LeafComposerDock';
 import { LeafExtractToDraft } from '@/components/leaf/LeafExtractToDraft';
@@ -86,6 +86,7 @@ export function LeafDetailWorkspace({
   const leafId = params.leafId as string;
   const { completeIntroDemo } = useIntroDemoCompletion(projectId);
   const [introDemoAwaitingGeneration, setIntroDemoAwaitingGeneration] = useState(false);
+  const introDemoCompletionTimerRef = useRef<number | null>(null);
   const projectName = useProjectStore((s) => s.getProject(projectId))?.name;
 
   const {
@@ -203,30 +204,47 @@ export function LeafDetailWorkspace({
     if (introDemoRequested) setTourOpen(true);
   }, [introDemoRequested]);
 
+  const scheduleIntroDemoCompletion = useCallback(() => {
+    setTourOpen(false);
+    setIntroDemoAwaitingGeneration(false);
+    if (introDemoCompletionTimerRef.current) {
+      window.clearTimeout(introDemoCompletionTimerRef.current);
+    }
+    introDemoCompletionTimerRef.current = window.setTimeout(() => {
+      void completeIntroDemo();
+    }, 1200);
+  }, [completeIntroDemo]);
+
+  useEffect(() => {
+    return () => {
+      if (introDemoCompletionTimerRef.current) {
+        window.clearTimeout(introDemoCompletionTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleLeafGenerate = useCallback(async () => {
     if (introDemoRequested) {
       setIntroDemoAwaitingGeneration(true);
     }
-    await handleGenerate();
-  }, [handleGenerate, introDemoRequested]);
+    const generatedLeaf = await handleGenerate();
+    if (introDemoRequested && generatedLeaf?.output) {
+      scheduleIntroDemoCompletion();
+    }
+  }, [handleGenerate, introDemoRequested, scheduleIntroDemoCompletion]);
 
   useEffect(() => {
     if (!introDemoRequested || !introDemoAwaitingGeneration || isGenerating || !leaf?.output) {
       return;
     }
 
-    setTourOpen(false);
-    setIntroDemoAwaitingGeneration(false);
-    const timeout = window.setTimeout(() => {
-      void completeIntroDemo();
-    }, 1200);
-    return () => window.clearTimeout(timeout);
+    scheduleIntroDemoCompletion();
   }, [
-    completeIntroDemo,
     introDemoAwaitingGeneration,
     introDemoRequested,
     isGenerating,
     leaf?.output,
+    scheduleIntroDemoCompletion,
   ]);
 
   // Keyboard navigation for nodes
