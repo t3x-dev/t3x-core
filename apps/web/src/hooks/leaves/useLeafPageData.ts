@@ -101,7 +101,7 @@ export interface UseLeafPageDataReturn {
   handleUpdateUserInstruction: (instruction: string) => Promise<void>;
   handleUpdateModel: (model: string | undefined) => Promise<void>;
   handleSetSemanticPointIncluded: (pointId: string, included: boolean) => Promise<void>;
-  handleGenerate: () => Promise<void>;
+  handleGenerate: () => Promise<Leaf | null>;
   handleValidate: () => Promise<void>;
   handleExport: (format: ExportFormat) => Promise<void>;
   toggleAssertion: (id: string) => void;
