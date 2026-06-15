@@ -16,10 +16,10 @@
  * earlier "extraction succeeded but the old red toast is still on screen
  * so it looks like it failed" failure mode.
  *
- * No hydration on the success path: nothing has been committed yet, so
- * server state is unchanged. The success toast fires after the local
- * draft is in place so the user sees the proposal and the confirmation
- * in the same render.
+ * Preflight hydration refreshes the local review base before the LLM call.
+ * A successful Extract still does not persist anything; the success toast
+ * fires after the local draft is in place so the user sees the proposal and
+ * the confirmation in the same render.
  */
 
 import type { HumanSource, SemanticContent, SourcedYOp } from '@t3x-dev/core';
@@ -34,6 +34,7 @@ import {
   type SourceTextDraftsByTurn,
 } from '@/domain/sourceTextDrafts';
 import { formatWorkspaceError } from '@/hooks/conversations/formatWorkspaceError';
+import { hydrateConversationToStore } from '@/hooks/conversations/hydrateConversationToStore';
 import { useChatStore } from '@/store/chatStore';
 import { resolveLocalWorkspaceName, useSettingsStore } from '@/store/settingsStore';
 import { selectEffectiveTurns, selectScriptDirty, useWorkspaceStore } from '@/store/workspaceStore';
@@ -174,10 +175,6 @@ export function useExtraction({
       if (selectScriptDirty(store) && !confirmOverwrite()) {
         return;
       }
-      if (selectEffectiveTurns(store).length === 0) {
-        toast.message('No saved conversation turns to extract.', { id: EXTRACTION_TOAST_ID });
-        return;
-      }
       // Pre-sync the workspace's activeProjectId + conversationId before
       // doing anything that depends on them. ConversationPage mirrors
       // chatStore → workspaceStore via useEffect, and hydrate eventually
@@ -219,11 +216,31 @@ export function useExtraction({
       const extractionPreset = useWorkspaceStore.getState().extractionPreset;
 
       try {
+        await hydrateConversationToStore(projectId, extractConvId);
         const extractionState = useWorkspaceStore.getState();
+        if (extractionState.isCommitted) {
+          extractionState.setMode('idle');
+          toast.message('Committed conversations are read-only.', { id: EXTRACTION_TOAST_ID });
+          return;
+        }
+        if (extractionState.hasDraft) {
+          extractionState.setMode('idle');
+          toast.message('Apply or discard the staged draft before extracting again.', {
+            id: EXTRACTION_TOAST_ID,
+          });
+          return;
+        }
+        extractionState.setMode('streaming');
         const turns = selectEffectiveTurns(extractionState);
+        if (turns.length === 0) {
+          extractionState.setMode('idle');
+          toast.message('No saved conversation turns to extract.', { id: EXTRACTION_TOAST_ID });
+          return;
+        }
         const sourceTextDrafts = extractionState.sourceTextDrafts;
+        const baseTree = extractionState.tree;
         const result = await runExtraction({
-          baseTree: tree,
+          baseTree,
           conversationId: extractConvId,
           turns,
           commit: false,
@@ -261,7 +278,7 @@ export function useExtraction({
             ? markInlineSourceDraftVariants(result.variants, sourceTextDrafts, inlineSource)
             : result.variants;
 
-        const previewResult = applySourcedYOps(tree, stagedOps);
+        const previewResult = applySourcedYOps(baseTree, stagedOps);
         // YOpsResult exposes trees + relations directly. On failure, fall
         // back to the current tree — the worker already validated, so any
         // failure here is a post-validation surprise; the script editor
@@ -269,7 +286,7 @@ export function useExtraction({
         // (which will hit the same engine and report the real error).
         const previewTree: SemanticContent = previewResult.ok
           ? { trees: previewResult.trees, relations: previewResult.relations }
-          : tree;
+          : baseTree;
         const store = useWorkspaceStore.getState();
         // setDraft writes the new draft AND clears any retainedDraftFailure
         // marker — see workspaceStore. clearDraft is no longer called
@@ -305,7 +322,7 @@ export function useExtraction({
         toast.error(msg, { id: EXTRACTION_TOAST_ID });
       }
     },
-    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite, tree]
+    [resolvedConversationId, isExtracting, selectedProvider, selectedModel, confirmOverwrite]
   );
 
   // Back-compat return shape for existing callers:
