@@ -11,35 +11,45 @@ function writeSeenFlag() {
 }
 
 interface UseFirstRunDemoOptions {
+  autoOpen?: boolean;
   forceOpen?: boolean;
   forceOpenKey?: string | null;
 }
 
 export function useFirstRunDemo({
+  autoOpen = true,
   forceOpen = false,
   forceOpenKey = null,
 }: UseFirstRunDemoOptions = {}) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [seen, setSeen] = useState(false);
 
   useEffect(() => {
     setReady(true);
+    let hasSeen = false;
+    try {
+      hasSeen = window.localStorage.getItem(FIRST_RUN_DEMO_SEEN_KEY) === 'true';
+    } catch {
+      // Storage errors should not block the intro demo.
+    }
+    setSeen(hasSeen);
+
     if (forceOpen) {
       setOpen(true);
       return;
     }
-    try {
-      if (window.localStorage.getItem(FIRST_RUN_DEMO_SEEN_KEY) === 'true') {
-        return;
-      }
-    } catch {
-      // Storage errors should not block the intro demo.
+    if (!autoOpen) {
+      setOpen(false);
+      return;
     }
+    if (hasSeen) return;
     setOpen(true);
-  }, [forceOpen, forceOpenKey]);
+  }, [autoOpen, forceOpen, forceOpenKey]);
 
   const close = useCallback(() => {
     writeSeenFlag();
+    setSeen(true);
     setOpen(false);
   }, []);
 
@@ -47,5 +57,5 @@ export function useFirstRunDemo({
     setOpen(true);
   }, []);
 
-  return { ready, open, close, replay };
+  return { ready, seen, open, close, replay };
 }

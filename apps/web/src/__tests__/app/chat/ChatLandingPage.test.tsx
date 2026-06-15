@@ -138,6 +138,7 @@ vi.mock('@/components/chat/ChatInput', () => ({
 import ChatLandingPage from '@/app/chat/page';
 import { FIRST_RUN_DEMO_SEEN_KEY } from '@/hooks/onboarding/useFirstRunDemo';
 import { useChatStore } from '@/store/chatStore';
+import { type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
 function setModelSelection(overrides: Partial<typeof modelSelectionFixture.value> = {}): void {
   modelSelectionFixture.value = {
@@ -160,6 +161,7 @@ beforeEach(() => {
     offset: 0,
   });
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+  useProjectStore.setState({ projects: [], initialized: false, loading: false, error: null });
   searchParamsValue = new URLSearchParams();
 });
 
@@ -170,12 +172,14 @@ afterEach(() => {
   localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
   setModelSelection();
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+  useProjectStore.setState({ projects: [], initialized: false, loading: false, error: null });
   searchParamsValue = new URLSearchParams();
 });
 
 describe('ChatLandingPage', () => {
   it('opens the first-run demo when the user has not seen it yet', async () => {
     localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
+    useProjectStore.setState({ initialized: true, projects: [] });
 
     await act(async () => {
       render(<ChatLandingPage />);
@@ -203,8 +207,40 @@ describe('ChatLandingPage', () => {
     expect(await screen.findByRole('dialog', { name: /create the demo workspace/i })).toBeVisible();
   });
 
+  it('does not open the first-run demo coach when projects already exist', async () => {
+    localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
+    useProjectStore.setState({
+      initialized: true,
+      projects: [
+        {
+          id: 'proj_existing',
+          name: 'Existing Project',
+          description: '',
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'draft',
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+          defaultProvider: null,
+          defaultModel: null,
+        } satisfies ProjectSummary,
+      ],
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalledWith('/chat?introDemo=1');
+  });
+
   it('redirects local auth-disabled no-provider visits to the fixture demo', async () => {
     vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    localStorage.removeItem(FIRST_RUN_DEMO_SEEN_KEY);
+    useProjectStore.setState({ initialized: true, projects: [] });
     setModelSelection({
       hasConfiguredGenerationProvider: false,
       selectedProvider: null,
@@ -220,6 +256,103 @@ describe('ChatLandingPage', () => {
       expect(push).toHaveBeenCalledWith('/chat?introDemo=1');
     });
     expect(screen.queryByText('Set up a generation provider')).not.toBeInTheDocument();
+  });
+
+  it('keeps local no-provider visits on the manual intake after the demo was seen', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    useProjectStore.setState({ initialized: true, projects: [] });
+    setModelSelection({
+      hasConfiguredGenerationProvider: false,
+      selectedProvider: null,
+      selectedModel: null,
+      availabilityError: null,
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalledWith('/chat?introDemo=1');
+    expect(
+      screen.queryByRole('dialog', { name: /create the demo workspace/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps project-scoped local no-provider visits on the manual chat intake', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    searchParamsValue = new URLSearchParams({ projectId: 'proj_manual' });
+    useProjectStore.setState({
+      initialized: true,
+      projects: [
+        {
+          id: 'proj_manual',
+          name: 'Manual UI Extract Smoke',
+          description: '',
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'draft',
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+          defaultProvider: null,
+          defaultModel: null,
+        } satisfies ProjectSummary,
+      ],
+    });
+    setModelSelection({
+      hasConfiguredGenerationProvider: false,
+      selectedProvider: null,
+      selectedModel: null,
+      availabilityError: null,
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalledWith('/chat?introDemo=1');
+    expect(
+      screen.queryByRole('dialog', { name: /create the demo workspace/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps local no-provider visits on the manual intake when projects already exist', async () => {
+    vi.stubEnv('NEXT_PUBLIC_AUTH_DISABLED', 'true');
+    useProjectStore.setState({
+      initialized: true,
+      projects: [
+        {
+          id: 'proj_existing',
+          name: 'Existing Project',
+          description: '',
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'draft',
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+          defaultProvider: null,
+          defaultModel: null,
+        } satisfies ProjectSummary,
+      ],
+    });
+    setModelSelection({
+      hasConfiguredGenerationProvider: false,
+      selectedProvider: null,
+      selectedModel: null,
+      availabilityError: null,
+    });
+
+    await act(async () => {
+      render(<ChatLandingPage />);
+    });
+
+    expect(screen.getByText('Set up a generation provider')).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalledWith('/chat?introDemo=1');
   });
 
   it('prefills the intro demo composer after project creation', async () => {
