@@ -254,9 +254,7 @@ export function useIntroDemoReplayActions() {
     } catch (err) {
       useWorkspaceStore.getState().setMode('idle');
       useCommitStore.getState().setIsCommitting(false);
-      useCommitStore
-        .getState()
-        .setCommitError(formatUserFacingError(err, 'Demo commit failed.'));
+      useCommitStore.getState().setCommitError(formatUserFacingError(err, 'Demo commit failed.'));
       toast.error(formatUserFacingError(err, 'Demo commit failed.'));
       return null;
     }

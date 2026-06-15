@@ -21,6 +21,7 @@ import { useFirstRunDemo } from '@/hooks/onboarding/useFirstRunDemo';
 import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletion';
 import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { useChatStore } from '@/store/chatStore';
+import { useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 
 const STARTER_CARDS = [
@@ -78,11 +79,14 @@ function ChatLanding() {
   // sync for the sidebar; propagating the param to /chat/new survives
   // refresh and avoids relying solely on in-memory state.
   const projectIdParam = searchParams.get('projectId');
+  const projectsInitialized = useProjectStore((state) => state.initialized);
+  const hasExistingProjects = useProjectStore((state) => state.projects.length > 0);
   const [starterDraft, setStarterDraft] = useState<{ text: string; revision: number } | null>(null);
   const introDemoForceKey = forceIntroDemo
     ? `${introDemoStage}:${projectIdParam ?? 'no-project'}`
     : null;
   const firstRunDemo = useFirstRunDemo({
+    autoOpen: projectsInitialized && !hasExistingProjects,
     forceOpen: forceIntroDemo,
     forceOpenKey: introDemoForceKey,
   });
@@ -152,7 +156,12 @@ function ChatLanding() {
   } = useChatModelSelection({});
   const shouldAutoStartIntroDemo =
     !forceIntroDemo &&
+    !projectIdParam &&
     localAuthDisabled &&
+    projectsInitialized &&
+    !hasExistingProjects &&
+    firstRunDemo.ready &&
+    !firstRunDemo.seen &&
     !loading &&
     !hasConfiguredGenerationProvider &&
     availabilityError !== 'api_unavailable';
