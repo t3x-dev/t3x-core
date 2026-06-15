@@ -1,5 +1,15 @@
 # @t3x-dev/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`0ea2fe1`](https://github.com/t3x-dev/t3x-core/commit/0ea2fe1d0227c9a0cc9cf336da1f3ca7dc6b1cca)]:
+  - @t3x-dev/yops@0.5.1
+  - @t3x-dev/core@0.5.1
+  - @t3x-dev/yschema@0.5.1
+  - @t3x-dev/api-client@0.5.1
+
 ## 0.5.0
 
 ### Patch Changes
