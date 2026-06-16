@@ -21,7 +21,7 @@ packages:
     stability_tier: alpha
     readme_required: true
     api_extractor: true
-    why: Public deterministic YAML operation contract.
+    why: Public deterministic operation contract for JSON-compatible YAML documents.
 
   - name: "@t3x-dev/core"
     path: packages/core

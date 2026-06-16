@@ -1,7 +1,7 @@
 {
   "name": "@t3x-dev/yops",
   "version": "0.5.1",
-  "description": "Declarative YAML operations — 18 atomic ops for any YAML document",
+  "description": "Declarative operations over JSON-compatible YAML documents",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,15 +1,18 @@
 # @t3x-dev/yops
 
-Declarative YAML operations. 18 atomic ops for any YAML document.
+Declarative operations over JSON-compatible YAML documents. 18 deterministic
+ops for human-readable YAML declarations and machine-validated object models.
 
-```
-YAML in  →  YOps  →  YAML out
+```text
+YAML declaration  ->  YOPS Document Model  ->  updated document
+JSON object       ->  YOPS Document Model  ->  updated document
 ```
 
 ## What
 
-`@t3x-dev/yops` validates and applies deterministic YAML operations to YAML-like
-documents.
+`@t3x-dev/yops` validates and applies deterministic operations to
+JSON-compatible YAML documents. YAML is the human declaration surface; the
+parsed YOPS Document Model is the machine contract.
 
 ## Why
 

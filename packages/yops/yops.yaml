@@ -12,7 +12,27 @@
 
 name: yops
 version: "1.0"
-description: Declarative YAML-to-YAML operations
+description: Declarative operations over JSON-compatible YAML documents
+
+# ----------------------------------------------------------------------------
+# Document model and serializations — what is normative
+# ----------------------------------------------------------------------------
+document_model:
+  name: YOPS Document Model
+  description: >
+    The normative machine contract for YOPS. Values are JSON-compatible:
+    string, number, boolean, null, sequence, or mapping with string keys.
+
+serializations:
+  yaml_declaration:
+    name: YOPS YAML Declaration
+    description: Human-readable YAML 1.2 profile accepted by YOPS parsers.
+  json_object:
+    name: YOPS JSON Object
+    description: Native JSON-compatible object form used by APIs and SDKs.
+  canonical_json:
+    name: YOPS Canonical JSON
+    description: Deterministic audit/hash serialization of the document model.
 
 # ----------------------------------------------------------------------------
 # Value — what YOps operates on
@@ -20,8 +40,9 @@ description: Declarative YAML-to-YAML operations
 value:
   type: any
   description: >
-    Any valid YAML value. A YOps document is any YValue — scalar, sequence,
-    or mapping. Operations address locations within the document via paths.
+    Any JSON-compatible YAML value. A YOps document is any YValue — scalar,
+    sequence, or mapping with string keys. Operations address locations within
+    the document via paths.
   variants:
     - string
     - number
