@@ -54,6 +54,29 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(result.applied).toBe(0);
   });
 
+  it('returns the original content when a later operation fails', () => {
+    const genericThenRelateFailure = applyYOps(content(), [
+      { define: { path: 'trip' } },
+      { relate: { from: 'trip', to: 'missing', type: 'depends' } },
+    ]);
+
+    expect(genericThenRelateFailure.ok).toBe(false);
+    expect(genericThenRelateFailure.applied).toBe(1);
+    expect(genericThenRelateFailure.trees).toEqual([]);
+    expect(genericThenRelateFailure.relations).toEqual([]);
+
+    const base = content([node('trip'), node('budget')]);
+    const relateThenGenericFailure = applyYOps(base, [
+      { relate: { from: 'budget', to: 'trip', type: 'conditions' } },
+      { populate: { path: 'missing', values: { amount: 5000 } } },
+    ]);
+
+    expect(relateThenGenericFailure.ok).toBe(false);
+    expect(relateThenGenericFailure.applied).toBe(1);
+    expect(relateThenGenericFailure.trees).toEqual(base.trees);
+    expect(relateThenGenericFailure.relations).toEqual(base.relations);
+  });
+
   it('applies relate operation', () => {
     const input = content([
       node('budget', { amount: 5000 }),
