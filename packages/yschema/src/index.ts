@@ -18,6 +18,41 @@ export type {
 
 export { normalizeSlot, parseSchema, parseSchemaObject } from './parser';
 
+// ── P0 Contract ──
+
+export type {
+  ContentKind,
+  FixProposal,
+  NodeSchema,
+  PromptContract,
+  PromptNodeContract,
+  PromptRelationTypeContract,
+  PromptSlotContract,
+  ProvenanceIndex,
+  ProvenanceRef,
+  RelateYOp,
+  RelationEndpointPattern,
+  RelationTypeSchema,
+  ReservedRuleSchema,
+  SlotSchema,
+  SlotType,
+  UnrelateYOp,
+  ValidationError,
+  ValidationErrorCode,
+  ValidationGap,
+  ValidationGapCode,
+  ValidationInput,
+  ValidationLocation,
+  ValidationResult,
+  YOpsHint,
+  YSchema,
+  YSchemaFixOp,
+  YSchemaKey,
+  YSchemaPath,
+  YSchemaRelation,
+} from './p0';
+export { normalizeYSchemaObject, parseYSchema, t3xPrdP0Fixtures } from './p0';
+
 // ── Validator ──
 
 export { validateSchema } from './validator';

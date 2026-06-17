@@ -1,0 +1,87 @@
+yschema: "0.1"
+name: t3x/prd
+version: "0.1.0"
+description: Product requirements document reference workflow.
+strict: false
+
+nodes:
+  summary:
+    required: true
+    content_kind: prose
+    description: Short PRD summary.
+    content_guidance: Keep this section factual and evidence-backed. Do not include roadmap language.
+    required_slots: [problem, audience, outcome]
+    slots:
+      problem:
+        type: string
+        max_words: 80
+        provenance_required: true
+        description: The product problem this PRD addresses.
+        content_guidance: State the user problem only. Do not include proposed solutions.
+        gap_question: What problem should this PRD solve?
+      audience:
+        type: string
+        max_words: 40
+        provenance_required: true
+        description: Primary users or buyers for this PRD.
+        gap_question: Who is this PRD for?
+      outcome:
+        type: string
+        max_words: 60
+        provenance_required: true
+        description: The measurable outcome this PRD should produce.
+        gap_question: What outcome should this PRD drive?
+
+  requirements:
+    required: true
+    repeated: true
+    content_kind: structured
+    description: User-facing requirements.
+    content_guidance: Each item should describe one user-visible requirement.
+    required_slots: [title, priority, acceptance]
+    slots:
+      title:
+        type: string
+        max_words: 24
+        provenance_required: true
+        description: Human-readable requirement title.
+        gap_question: What requirement should be captured?
+      priority:
+        enum: [must, should, could]
+        default: should
+        description: Requirement priority.
+        gap_question: How important is this requirement?
+      acceptance:
+        type: array
+        provenance_required: true
+        description: Acceptance criteria for the requirement.
+        gap_question: How will we know this requirement is satisfied?
+
+  milestones:
+    required: false
+    repeated: true
+    content_kind: structured
+    description: Delivery milestones.
+    required_slots: [title, sequence]
+    slots:
+      title:
+        type: string
+        provenance_required: true
+      sequence:
+        type: integer
+        minimum: 1
+        description: Stable milestone order.
+
+relation_types:
+  depends_on:
+    from: requirements/*
+    to: requirements/*
+    description: Source requirement needs target requirement first.
+    content_guidance: Use only for true prerequisite relationships.
+    acyclic: true
+  precedes:
+    from: milestones/*
+    to: milestones/*
+    description: Source milestone should happen before target milestone.
+    content_guidance: Use only when the order is explicit or strongly implied.
+    acyclic: true
