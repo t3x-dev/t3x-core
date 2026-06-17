@@ -39,7 +39,7 @@ describe('applyYOps — engine behavior', () => {
     expect(result.applied).toBe(1);
     expect(result.error?.code).toBe('PATH_NOT_FOUND');
     expect(result.error?.op_index).toBe(1);
-    expect(result.doc).toEqual({ a: 1, b: 2 });
+    expect(result.doc).toEqual({ a: 1 });
   });
 
   it('returns applied: 0 for empty ops array', () => {

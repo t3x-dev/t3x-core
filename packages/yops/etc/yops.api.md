@@ -364,7 +364,8 @@ declare class OpRegistry {
  * Factory that creates an engine from an OpRegistry.
  * Dispatches ops via registry lookup with field validation.
  * Deep clones input so the original is never mutated.
- * Fail-fast: stops at the first error and returns partial state.
+ * Fail-fast and atomic: stops at the first error and returns the original
+ * document state on failure.
  */
 
 declare function createEngine(registry: OpRegistry): {

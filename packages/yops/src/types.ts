@@ -151,6 +151,8 @@ export interface YOpsWarning {
   replacement_field?: string;
 }
 
+// On failure, doc is the original document state. Partial working state is
+// never exposed as the result document.
 export interface YOpsResult {
   ok: boolean;
   doc: YValue;
