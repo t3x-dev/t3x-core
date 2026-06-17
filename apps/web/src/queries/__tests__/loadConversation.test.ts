@@ -91,7 +91,7 @@ describe('fetchConversationSnapshot', () => {
     expect(snapshot.opsLog).toEqual([]);
   });
 
-  it('returns partial snapshot when persisted ops are structurally invalid', async () => {
+  it('returns original snapshot with warning metadata when persisted ops are structurally invalid', async () => {
     const goodOp: SourcedYOp = {
       define: { path: 'trip' },
       source: { type: 'human', author: 'e', at: '2026-04-12T00:00:00Z' },
@@ -126,8 +126,10 @@ describe('fetchConversationSnapshot', () => {
 
     const snapshot = await fetchConversationSnapshot('p1', 'c1');
 
-    // First op applied, second blew up → partial snapshot with row mapping
-    expect(snapshot.tree.trees.length).toBeGreaterThan(0);
+    // First op made progress, second blew up. The atomic replay result keeps
+    // the original tree but still maps the warning back to the failing row.
+    expect(snapshot.tree.trees).toEqual([]);
+    expect(snapshot.sourceIndex.has('trip')).toBe(false);
     expect(snapshot.partial).toBeDefined();
     expect(snapshot.partial?.opIndex).toBe(1);
     expect(snapshot.partial?.appliedCount).toBe(1);

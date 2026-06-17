@@ -5,9 +5,9 @@
  * useRealtimeSync so each consumer does not duplicate the store-write
  * boilerplate.
  *
- * Resilience contract: if the persisted ops log replays partially,
- * we still write the partial tree + sourceIndex + opsLog to the store
- * and surface a structured `replayWarning` for the UI. We do NOT
+ * Resilience contract: if the persisted ops log fails after partial
+ * progress, we still write the atomic baseline tree + sourceIndex + opsLog
+ * to the store and surface a structured `replayWarning` for the UI. We do NOT
  * throw — a single bad legacy op should not brick the workspace. The
  * mode lands as 'idle' and lastError stays null. The banner reads
  * `replayWarning` and offers a "Delete this op" action that calls

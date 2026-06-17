@@ -22,10 +22,10 @@ export type WorkspaceMode = 'idle' | 'streaming' | 'executed' | 'committing' | '
 export type SelectionSource = 'chat' | 'script' | 'before' | 'after' | null;
 
 /**
- * Surfaced when initial replay applied some but not all persisted ops.
+ * Surfaced when initial replay failed after making partial progress.
  * Distinct from `lastError` (which is for hard errors / extraction failures)
- * — replayWarning is non-fatal: the workspace still renders the partial
- * tree and points the user at the row to delete.
+ * — replayWarning is non-fatal: the workspace renders the original baseline
+ * tree and points the user at the row to delete or repair.
  */
 export interface ReplayWarning {
   /** Index in the flat ops array of the first failing op. */
