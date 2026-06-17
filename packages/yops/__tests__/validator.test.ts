@@ -22,6 +22,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  parseYOpsYaml,
   validateYOpsOps,
   validateYOpsYaml,
   YOPS_DIAGNOSTIC_CODES,
@@ -56,6 +57,72 @@ describe('validateYOpsYaml — document / envelope codes', () => {
   it('accepts the { yops: [...] } envelope', () => {
     const diags = validateYOpsYaml('yops:\n  - define:\n      path: foo');
     expect(diags).toEqual([]);
+  });
+
+  it('accepts JSON syntax and YAML 1.2 string scalars', () => {
+    const jsonDiags = validateYOpsYaml('[{ "set": { "path": "feature/enabled", "value": true } }]');
+    const stringScalarDiags = validateYOpsYaml(`
+yops:
+  - set: { path: flags/on, value: on }
+  - set: { path: flags/off, value: off }
+  - set: { path: flags/yes, value: yes }
+  - set: { path: flags/no, value: no }
+`);
+
+    expect(jsonDiags).toEqual([]);
+    expect(stringScalarDiags).toEqual([]);
+  });
+
+  it('accepts quoted literal merge-like keys as normal strings', () => {
+    const diags = validateYOpsYaml(`
+yops:
+  - set:
+      path: feature
+      value: { "<<": literal }
+`);
+    expect(diags).toEqual([]);
+  });
+
+  it.each([
+    [
+      'anchors',
+      `
+yops:
+  - set: &set_payload { path: feature/enabled, value: true }
+`,
+    ],
+    [
+      'aliases',
+      `
+yops:
+  - set: &set_payload { path: feature/enabled, value: true }
+  - set: *set_payload
+`,
+    ],
+    [
+      'merge keys',
+      `
+yops:
+  - set:
+      <<: { path: feature/enabled }
+      value: true
+`,
+    ],
+    [
+      'multiple documents',
+      `
+---
+yops: []
+---
+yops: []
+`,
+    ],
+  ])('matches parseYOpsYaml rejection for unsupported YAML profile feature: %s', (_name, yamlInput) => {
+    const parseResult = parseYOpsYaml(yamlInput);
+    const diags = validateYOpsYaml(yamlInput);
+
+    expect(parseResult.ok).toBe(false);
+    expect(diags.map((d) => d.code)).toContain('YOPS_YAML_PROFILE_UNSUPPORTED');
   });
 });
 
@@ -301,6 +368,7 @@ describe('every error-severity diagnostic code is reachable from a fixture', () 
 
     const fixtureBundle: { yaml?: string; ops?: unknown[] }[] = [
       { yaml: '{ unclosed: [' },
+      { yaml: 'yops:\n  - set: &set_payload { path: feature/enabled, value: true }' },
       { yaml: 'just-a-string' },
       { yaml: 'yops: not-an-array' },
       { ops: [null] },

@@ -46,6 +46,84 @@ describe('parseYOpsYaml', () => {
     expect(result.ops[0]).toEqual({ define: { path: 'title' } });
   });
 
+  it('accepts JSON syntax as a YAML declaration', () => {
+    const result = parseYOpsYaml('[{ "set": { "path": "feature/enabled", "value": true } }]');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toEqual([{ set: { path: 'feature/enabled', value: true } }]);
+  });
+
+  it('treats on, off, yes, and no as YAML 1.2 strings', () => {
+    const result = parseYOpsYaml(`
+yops:
+  - set: { path: flags/on, value: on }
+  - set: { path: flags/off, value: off }
+  - set: { path: flags/yes, value: yes }
+  - set: { path: flags/no, value: no }
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toEqual([
+      { set: { path: 'flags/on', value: 'on' } },
+      { set: { path: 'flags/off', value: 'off' } },
+      { set: { path: 'flags/yes', value: 'yes' } },
+      { set: { path: 'flags/no', value: 'no' } },
+    ]);
+  });
+
+  it('accepts quoted literal merge-like keys as normal strings', () => {
+    const result = parseYOpsYaml(`
+yops:
+  - set:
+      path: feature
+      value: { "<<": literal }
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.ops).toEqual([{ set: { path: 'feature', value: { '<<': 'literal' } } }]);
+  });
+
+  it.each([
+    [
+      'anchors',
+      `
+yops:
+  - set: &set_payload { path: feature/enabled, value: true }
+`,
+    ],
+    [
+      'aliases',
+      `
+yops:
+  - set: &set_payload { path: feature/enabled, value: true }
+  - set: *set_payload
+`,
+    ],
+    [
+      'merge keys',
+      `
+yops:
+  - set:
+      <<: { path: feature/enabled }
+      value: true
+`,
+    ],
+    [
+      'multiple documents',
+      `
+---
+yops: []
+---
+yops: []
+`,
+    ],
+  ])('rejects YAML profile feature: %s', (_name, yamlInput) => {
+    const result = parseYOpsYaml(yamlInput);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/yaml profile|anchor|alias|merge|multiple documents/i);
+  });
+
   it('returns error for invalid YAML syntax', () => {
     const result = parseYOpsYaml('{ unclosed: [');
     expect(result.ok).toBe(false);

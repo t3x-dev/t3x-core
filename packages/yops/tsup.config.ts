@@ -7,7 +7,7 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
-  noExternal: ['zod', 'js-yaml'],
+  noExternal: ['zod', 'js-yaml', 'yaml'],
   onSuccess: async () => {
     copyFileSync('yops.yaml', 'dist/yops.yaml');
   },

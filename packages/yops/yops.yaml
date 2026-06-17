@@ -34,6 +34,61 @@ serializations:
     name: YOPS Canonical JSON
     description: Deterministic audit/hash serialization of the document model.
 
+yaml_profile:
+  name: YOPS YAML Declaration Profile
+  description: >-
+    A JSON-compatible YAML 1.2 authoring profile for human-readable YOPS
+    declarations. It preserves plain strings such as on/off/yes/no, accepts
+    JSON syntax, and rejects YAML graph/document features that do not map
+    cleanly to the YOPS Document Model.
+  accepts:
+    - bare array of operations
+    - mapping envelope with yops array
+    - JSON syntax
+    - YAML 1.2 plain strings such as on, off, yes, and no
+  rejects:
+    - anchors
+    - aliases
+    - merge keys
+    - multiple YAML documents
+  conformance_cases:
+    - name: accepts JSON syntax
+      yaml: '[{ "set": { "path": "feature/enabled", "value": true } }]'
+      accepted: true
+    - name: treats YAML 1.1 boolean words as strings
+      yaml: |
+        yops:
+          - set: { path: flags/on, value: on }
+          - set: { path: flags/off, value: off }
+          - set: { path: flags/yes, value: yes }
+          - set: { path: flags/no, value: no }
+      accepted: true
+    - name: rejects anchors
+      yaml: |
+        yops:
+          - set: &set_payload { path: feature/enabled, value: true }
+      accepted: false
+    - name: rejects aliases
+      yaml: |
+        yops:
+          - set: &set_payload { path: feature/enabled, value: true }
+          - set: *set_payload
+      accepted: false
+    - name: rejects merge keys
+      yaml: |
+        yops:
+          - set:
+              <<: { path: feature/enabled }
+              value: true
+      accepted: false
+    - name: rejects multiple documents
+      yaml: |
+        ---
+        yops: []
+        ---
+        yops: []
+      accepted: false
+
 # ----------------------------------------------------------------------------
 # Value — what YOps operates on
 # ----------------------------------------------------------------------------
@@ -1518,6 +1573,13 @@ diagnostic_codes:
   YOPS_INVALID_YAML:
     severity: error
     meaning: The input string failed to parse as YAML.
+
+  YOPS_YAML_PROFILE_UNSUPPORTED:
+    severity: error
+    meaning: >-
+      The input parsed as YAML but used a feature outside the YOPS YAML
+      Declaration Profile, such as anchors, aliases, merge keys, or multiple
+      YAML documents.
 
   YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY:
     severity: error
