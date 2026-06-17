@@ -131,7 +131,7 @@ describe('Level 2: YOps rejects bad operations', () => {
     expect(result.error?.code).toBe('UNKNOWN_OP');
   });
 
-  it('stops at first error (fail-fast), preserves partial state', () => {
+  it('stops at first error (fail-fast), returns original state', () => {
     const doc: YValue = {};
     const result = applyYOps(doc, [
       { set: { path: 'a', value: 1 } }, // succeeds
@@ -141,9 +141,8 @@ describe('Level 2: YOps rejects bad operations', () => {
     ]);
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(2);
-    expect((result.doc as Record<string, unknown>).a).toBe(1);
-    expect((result.doc as Record<string, unknown>).b).toBe(2);
-    expect((result.doc as Record<string, unknown>).c).toBeUndefined();
+    expect(result.doc).toEqual({});
+    expect(doc).toEqual({});
   });
 
   it('rejects operations on null document', () => {

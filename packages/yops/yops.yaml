@@ -1171,6 +1171,11 @@ execution:
   order: sequential          # operations execute top to bottom
   on_error: stop             # stop at first failed operation
   immutable_input: true      # engine deep clones input, never mutates original
+  atomicity: >
+    A YOPS document is applied atomically. Operations apply in order against a
+    working copy. If any operation fails, application stops, the error reports
+    the failing op index, and the result document is the original document
+    state.
   idempotent_ops: [unset, omit]  # no error on missing target
   strict_ops:
     - define
