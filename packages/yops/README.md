@@ -129,6 +129,13 @@ const result = applyYOps(doc, [
 |----|-------------|---------|
 | `assert` | Validate condition (read-only) | `{ assert: { path: 'version', equals: 2 } }` |
 
+## Extension Policy
+
+The 18 core operations are the YOPS 1.x conformance surface. New operation
+ideas start as experimental namespaced extensions and are excluded from core
+conformance until promoted with production evidence, tests, and stability
+review.
+
 ## Path Syntax
 
 ```

@@ -1195,6 +1195,17 @@ execution:
     - pick
   readonly_ops: [assert]     # never mutates the document
 
+extension_policy:
+  core_ops: frozen_for_1_x
+  rule: >
+    The 18 core operations are the stable conformance surface for YOPS 1.x.
+    New operations must start as namespaced extensions, marked experimental,
+    and excluded from core conformance until promoted by a later spec version.
+  promotion_requires:
+    - production usage evidence
+    - conformance cases
+    - stability review
+
 # ----------------------------------------------------------------------------
 # Document Format
 # ----------------------------------------------------------------------------
