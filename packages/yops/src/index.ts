@@ -2,6 +2,7 @@
 
 // ── Types ──
 
+export { canonicalJson, canonicalKey, compareCodepoints, compareYValues } from './canonical';
 export type { YOpCategory } from './classify';
 export { classifyYOp } from './classify';
 export { createEngine } from './engine';

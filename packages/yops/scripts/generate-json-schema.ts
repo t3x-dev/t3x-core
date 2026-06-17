@@ -19,8 +19,8 @@ const annotated = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   title: 'YOps',
   description:
-    'Declarative YAML Operations — an array of atomic YOps operations. ' +
-    'Each element is exactly one of the 18 supported op types.',
+    'YOPS Document Model — JSON-compatible object representation of declarative ' +
+    'operations over YAML documents. YAML declarations parse into this shape.',
   ...schema,
 };
 

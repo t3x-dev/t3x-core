@@ -33,6 +33,10 @@ serializations:
   canonical_json:
     name: YOPS Canonical JSON
     description: Deterministic audit/hash serialization of the document model.
+    algorithm: yops-canonical-json-v1
+    rule: >
+      Serialize JSON-compatible YOPS values with mappings sorted by Unicode
+      codepoint order. This form is for audit and hash identity, not authoring.
 
 yaml_profile:
   name: YOPS YAML Declaration Profile
