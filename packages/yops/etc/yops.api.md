@@ -77,7 +77,7 @@ declare function parseSpec(yamlStr: string): YOpsSpec;
 /**
  * @yops-dev/core — Type Definitions
  *
- * YValue: any valid YAML value (the document type)
+ * YValue: JSON-compatible YAML value in the YOPS Document Model
  * YOp: discriminated union of all 18 operations
  * YOpsResult/YOpsError: execution result types
  */
@@ -220,6 +220,45 @@ interface YOpsResult {
     error?: YOpsError;
     warnings?: YOpsWarning[];
 }
+
+/**
+ * Deterministic, language-portable equality keys and ordering for YValue.
+ *
+ * - Strings compare by Unicode codepoint, not UTF-16 code unit. JS's
+ *   default `<`/`>` and `Array.prototype.sort` compare code units, which
+ *   diverges for non-BMP characters (a surrogate pair's high surrogate
+ *   is in U+D800..U+DFFF, below BMP private-use chars at U+E000+, even
+ *   though the codepoint it represents is U+10000+). A spec that claims
+ *   portable order must compare codepoints directly.
+ *
+ * - `canonicalKey` encodes a value as a string by recursively sorting
+ *   mapping keys by codepoint and emitting JSON-style scalars. Two
+ *   YValues are equal iff their canonical encodings are equal — this
+ *   gives `unique` a portable equivalence relation that does not depend
+ *   on insertion order, runtime, or YAML loader.
+ */
+
+/**
+ * Compare two strings by Unicode codepoint.
+ *
+ * Iterating a string with `for…of` (or `Symbol.iterator`) yields one
+ * "character" per codepoint, automatically pairing surrogates. Each
+ * yielded chunk is a 1- or 2-char string whose codepoint we read with
+ * `codePointAt(0)`. We compare codepoints numerically; on a tie we
+ * advance both iterators.
+ */
+declare function compareCodepoints(a: string, b: string): number;
+declare function canonicalKey(value: YValue): string;
+/**
+ * Audit-facing canonical JSON serialization for YOPS document-model values.
+ *
+ * This intentionally reuses the same codepoint-ordered mapping rule as
+ * `canonicalKey`, so equality/order helpers and audit serialization agree.
+ * It is a YOPS canonical form; do not label it RFC 8785/JCS unless the spec
+ * and tests explicitly adopt that external algorithm.
+ */
+declare function canonicalJson(value: YValue): string;
+declare function compareYValues(a: YValue, b: YValue): number;
 
 /**
  * @yops-dev/core — Op Category Classification
@@ -968,5 +1007,5 @@ declare const spec: YOpsSpec;
 /** The initialized op registry. */
 declare const registry: OpRegistry;
 
-export { type AppendOp, type AssertOp, type CloneOp, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, type YOp, type YOpCategory, YOpSchema, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsResult, type YOpsSpec, type YOpsWarning, type YValue, applyYOps, classifyYOp, createEngine, formatYOps, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
+export { type AppendOp, type AssertOp, type CloneOp, type DefineOp, type DropOp, type FieldSpec, type FoldOp, type MergeOp, type MoveOp, type NestOp, type OmitOp, type OpHandler, OpRegistry, type OpResult, type OpSpec, type ParsePathResult, type ParseResult, type PathFields, type PathSegment, type PickOp, type PopulateOp, type RenameOp, type SetOp, type SortOp, type SplitOp, type StabilityStatus, type TestCase, type UniqueOp, type UnsetOp, type ValidationResult, type YDocument, YOPS_DIAGNOSTIC_CODES, YOPS_ERRORS, type YOp, type YOpCategory, YOpSchema, type YOpsDiagnostic, type YOpsDiagnosticCode, type YOpsError, type YOpsErrorCode, type YOpsResult, type YOpsSpec, type YOpsWarning, type YValue, applyYOps, canonicalJson, canonicalKey, classifyYOp, compareCodepoints, compareYValues, createEngine, formatYOps, parsePath, parseSpec, parseYOpsYaml, registerAllHandlers, registry, resolvePath, spec, tryParsePath, validateOps, validateYOpsOps, validateYOpsYaml };
 ```

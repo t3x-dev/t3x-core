@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalKey, compareCodepoints, compareYValues } from '../src/canonical';
+import { canonicalJson, canonicalKey, compareCodepoints, compareYValues } from '../src/canonical';
 
 describe('compareCodepoints', () => {
   it('orders BMP strings by codepoint', () => {
@@ -50,6 +50,22 @@ describe('canonicalKey', () => {
 
   it('produces equal keys for two mappings with different insertion order', () => {
     expect(canonicalKey({ a: 1, b: 2 })).toBe(canonicalKey({ b: 2, a: 1 }));
+  });
+});
+
+describe('canonicalJson', () => {
+  it('serializes mappings with keys sorted by Unicode codepoint', () => {
+    expect(canonicalJson({ b: 2, a: 1 })).toBe('{"a":1,"b":2}');
+    expect(canonicalJson({ a: 1, b: 2 })).toBe('{"a":1,"b":2}');
+  });
+
+  it('serializes nested JSON-compatible values into the YOPS audit form', () => {
+    expect(
+      canonicalJson({
+        z: [true, null, 'text'],
+        a: { b: 2, a: 1 },
+      })
+    ).toBe('{"a":{"a":1,"b":2},"z":[true,null,"text"]}');
   });
 });
 
