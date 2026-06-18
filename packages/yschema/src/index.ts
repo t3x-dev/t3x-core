@@ -51,7 +51,13 @@ export type {
   YSchemaPath,
   YSchemaRelation,
 } from './p0';
-export { normalizeYSchemaObject, parseYSchema, t3xPrdP0Fixtures, validateTree } from './p0';
+export {
+  generatePromptContract,
+  normalizeYSchemaObject,
+  parseYSchema,
+  t3xPrdP0Fixtures,
+  validateTree,
+} from './p0';
 
 // ── Validator ──
 

@@ -1,4 +1,5 @@
 export { normalizeYSchemaObject, parseYSchema } from './normalize';
+export { generatePromptContract } from './promptContract';
 export { t3xPrdP0Fixtures } from './t3xPrdFixture';
 export type {
   ContentKind,

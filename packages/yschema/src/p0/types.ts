@@ -116,6 +116,7 @@ export interface PromptSlotContract {
   default?: YValue;
   description?: string;
   contentGuidance?: string;
+  contentKind?: ContentKind;
   examples?: YValue[];
   minimum?: number;
   maximum?: number;
