@@ -511,4 +511,56 @@ describe('generatePromptContract', () => {
       },
     ]);
   });
+
+  it('does not share mutable structured slot values with the source schema', () => {
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'example/clone',
+      nodes: {
+        settings: {
+          slots: {
+            mode: {
+              enum: [{ label: 'review' }],
+              default: { label: 'review' },
+              examples: [{ label: 'review' }],
+            },
+            lock: {
+              const: { locked: true },
+            },
+          },
+        },
+      },
+    });
+
+    const contract = generatePromptContract(schema);
+    const modeSlot = contract.nodes[0]?.slots.find((slot) => slot.key === 'mode');
+    const lockSlot = contract.nodes[0]?.slots.find((slot) => slot.key === 'lock');
+
+    expect(modeSlot).toMatchObject({
+      path: 'settings/mode',
+      key: 'mode',
+      enum: [{ label: 'review' }],
+      default: { label: 'review' },
+      examples: [{ label: 'review' }],
+    });
+    expect(lockSlot).toMatchObject({
+      path: 'settings/lock',
+      key: 'lock',
+      const: { locked: true },
+    });
+    expect(modeSlot?.enum).not.toBe(schema.nodes.settings?.slots?.mode?.enum);
+    expect(modeSlot?.default).not.toBe(schema.nodes.settings?.slots?.mode?.default);
+    expect(modeSlot?.examples).not.toBe(schema.nodes.settings?.slots?.mode?.examples);
+    expect(lockSlot?.const).not.toBe(schema.nodes.settings?.slots?.lock?.const);
+
+    (modeSlot?.enum?.[0] as Record<string, unknown>).label = 'mutated';
+    (modeSlot?.default as Record<string, unknown>).label = 'mutated';
+    (modeSlot?.examples?.[0] as Record<string, unknown>).label = 'mutated';
+    (lockSlot?.const as Record<string, unknown>).locked = false;
+
+    expect(schema.nodes.settings?.slots?.mode?.enum).toEqual([{ label: 'review' }]);
+    expect(schema.nodes.settings?.slots?.mode?.default).toEqual({ label: 'review' });
+    expect(schema.nodes.settings?.slots?.mode?.examples).toEqual([{ label: 'review' }]);
+    expect(schema.nodes.settings?.slots?.lock?.const).toEqual({ locked: true });
+  });
 });
