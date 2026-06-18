@@ -14,6 +14,7 @@ import {
 } from '../__fixtures__/t3x-prd';
 import {
   type FixProposal,
+  generatePromptContract,
   normalizeYSchemaObject,
   type PromptContract,
   parseYSchema,
@@ -395,5 +396,171 @@ describe('t3x/prd P0 fixtures', () => {
         },
       ],
     });
+  });
+});
+
+describe('generatePromptContract', () => {
+  it('derives the stable t3x/prd PromptContract fixture from normalized YSchema', () => {
+    expect(generatePromptContract(normalizedT3xPrdYSchema)).toEqual(expectedPromptContract);
+  });
+
+  it('derives a generic PromptContract without hardcoding t3x/prd behavior', () => {
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'example/prd',
+      version: '2026-06-18',
+      description: 'Example PRD workflow.',
+      nodes: {
+        summary: {
+          slots: {
+            body: {
+              type: 'string',
+              content_kind: 'prose',
+              yops_hint: {
+                preferred_op: 'set',
+                path: 'summary',
+                slot: 'body',
+              },
+            },
+          },
+        },
+        release: {
+          children: {
+            milestones: {
+              repeated: true,
+              content_kind: 'structured',
+              required_slots: ['title'],
+              slots: {
+                title: {
+                  type: 'string',
+                  max_words: 12,
+                },
+              },
+            },
+            notes: {
+              children: 'any',
+              slots: {
+                text: {
+                  type: 'string',
+                },
+              },
+            },
+          },
+        },
+      },
+      relation_types: {
+        blocks: {
+          from: 'release/milestones/*',
+          to: 'release/milestones/*',
+          acyclic: true,
+        },
+      },
+    });
+
+    const contract = generatePromptContract(schema);
+
+    expect(contract).toMatchObject({
+      schemaName: 'example/prd',
+      schemaVersion: '2026-06-18',
+      description: 'Example PRD workflow.',
+    });
+    expect(contract.nodes.map((node) => node.path)).toEqual([
+      'summary',
+      'release',
+      'release/milestones',
+      'release/notes',
+    ]);
+    expect(contract.nodes.find((node) => node.path === 'summary')?.slots).toEqual([
+      {
+        path: 'summary/body',
+        key: 'body',
+        type: 'string',
+        contentKind: 'prose',
+        yopsHint: {
+          preferredOp: 'set',
+          path: 'summary',
+          slot: 'body',
+        },
+      },
+    ]);
+    expect(contract.nodes.find((node) => node.path === 'release/milestones')).toMatchObject({
+      path: 'release/milestones',
+      repeated: true,
+      contentKind: 'structured',
+      requiredSlots: ['title'],
+      slots: [
+        {
+          path: 'release/milestones/*/title',
+          key: 'title',
+          type: 'string',
+          maxWords: 12,
+        },
+      ],
+    });
+    expect(
+      contract.nodes
+        .find((node) => node.path === 'release/milestones')
+        ?.slots.find((slot) => slot.key === 'title')
+    ).not.toHaveProperty('enum');
+    expect(contract.relationTypes).toEqual([
+      {
+        type: 'blocks',
+        from: 'release/milestones/*',
+        to: 'release/milestones/*',
+        acyclic: true,
+      },
+    ]);
+  });
+
+  it('does not share mutable structured slot values with the source schema', () => {
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'example/clone',
+      nodes: {
+        settings: {
+          slots: {
+            mode: {
+              enum: [{ label: 'review' }],
+              default: { label: 'review' },
+              examples: [{ label: 'review' }],
+            },
+            lock: {
+              const: { locked: true },
+            },
+          },
+        },
+      },
+    });
+
+    const contract = generatePromptContract(schema);
+    const modeSlot = contract.nodes[0]?.slots.find((slot) => slot.key === 'mode');
+    const lockSlot = contract.nodes[0]?.slots.find((slot) => slot.key === 'lock');
+
+    expect(modeSlot).toMatchObject({
+      path: 'settings/mode',
+      key: 'mode',
+      enum: [{ label: 'review' }],
+      default: { label: 'review' },
+      examples: [{ label: 'review' }],
+    });
+    expect(lockSlot).toMatchObject({
+      path: 'settings/lock',
+      key: 'lock',
+      const: { locked: true },
+    });
+    expect(modeSlot?.enum).not.toBe(schema.nodes.settings?.slots?.mode?.enum);
+    expect(modeSlot?.default).not.toBe(schema.nodes.settings?.slots?.mode?.default);
+    expect(modeSlot?.examples).not.toBe(schema.nodes.settings?.slots?.mode?.examples);
+    expect(lockSlot?.const).not.toBe(schema.nodes.settings?.slots?.lock?.const);
+
+    (modeSlot?.enum?.[0] as Record<string, unknown>).label = 'mutated';
+    (modeSlot?.default as Record<string, unknown>).label = 'mutated';
+    (modeSlot?.examples?.[0] as Record<string, unknown>).label = 'mutated';
+    (lockSlot?.const as Record<string, unknown>).locked = false;
+
+    expect(schema.nodes.settings?.slots?.mode?.enum).toEqual([{ label: 'review' }]);
+    expect(schema.nodes.settings?.slots?.mode?.default).toEqual({ label: 'review' });
+    expect(schema.nodes.settings?.slots?.mode?.examples).toEqual([{ label: 'review' }]);
+    expect(schema.nodes.settings?.slots?.lock?.const).toEqual({ locked: true });
   });
 });
