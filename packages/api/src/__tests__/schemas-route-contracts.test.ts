@@ -14,6 +14,10 @@ import {
   UpdateLeafRequest,
 } from '../schemas/contracts';
 import {
+  ExecuteMergeResponseSchema,
+  RelationSchema as MergeRelationSchema,
+} from '../schemas/merge';
+import {
   LocalProviderStatusSchema,
   LocalProviderWriteSchema,
   ProviderListSchema,
@@ -308,5 +312,71 @@ describe('route contract schemas', () => {
     };
 
     expect(CreateCommitRequest.safeParse(request).success).toBe(false);
+  });
+
+  it('rejects invalid relation keys in commit response contracts', () => {
+    const response = {
+      hash: 'sha256:test',
+      schema: 't3x/commit',
+      parents: [],
+      author: { type: 'human' as const, name: 'tester' },
+      committed_at: '2026-06-18T00:00:00.000Z',
+      content: {
+        trees: [
+          {
+            key: 'requirements',
+            slots: {},
+            children: [],
+          },
+        ],
+        relations: [
+          {
+            from: 'requirements',
+            to: 'requirements',
+            type: 'depends-on',
+          },
+        ],
+      },
+      project_id: 'proj_test',
+      message: null,
+      branch: null,
+      created_at: '2026-06-18T00:00:00.000Z',
+    };
+
+    expect(CommitResponse.safeParse(response).success).toBe(false);
+  });
+
+  it('preserves schema-defined relation keys in merge response contracts', () => {
+    expect(
+      MergeRelationSchema.parse({
+        from: 'requirements/review_gate',
+        to: 'requirements/schema_contract',
+        type: 'depends_on',
+      }).type
+    ).toBe('depends_on');
+
+    expect(MergeRelationSchema.safeParse({ from: 'a', to: 'b', type: 'Depends-On' }).success).toBe(
+      false
+    );
+
+    const parsed = ExecuteMergeResponseSchema.parse({
+      hash: 'sha256:merge',
+      parents: ['sha256:source', 'sha256:target'],
+      author: { type: 'human', name: 'tester' },
+      committed_at: '2026-06-18T00:00:00.000Z',
+      content: {
+        frames: [],
+        relations: [
+          {
+            from: 'requirements/review_gate',
+            to: 'requirements/schema_contract',
+            type: 'depends_on',
+          },
+        ],
+      },
+      message: 'merge',
+    });
+
+    expect(parsed.content.relations[0].type).toBe('depends_on');
   });
 });

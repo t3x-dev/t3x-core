@@ -119,28 +119,38 @@ function validateRelationFixOps(input: ApplyYSchemaFixOpsInput):
       error: YOpsError;
       validation: ValidationResult;
     } {
-  for (let index = 0; index < input.ops.length; index++) {
-    const relation = relationFromFixOp(input.ops[index] as YSchemaFixOp);
-    if (relation === undefined) continue;
+  let previewContent = input.content;
 
-    const validation = validateTree({
-      schema: input.schema,
-      tree: treesToYValue(input.content.trees),
-      relations: [relation],
-      provenanceByPath: input.provenanceByPath,
-    });
-    const relationError = validation.errors.find((error) => error.path === '$relations');
-    if (relationError !== undefined) {
-      return {
-        ok: false,
-        validation,
-        error: {
-          code: relationError.code,
-          message: relationError.message,
-          op_index: index,
-        },
-      };
+  for (let index = 0; index < input.ops.length; index++) {
+    const op = input.ops[index] as YSchemaFixOp;
+
+    if ('relate' in op) {
+      const validation = validateTree({
+        schema: input.schema,
+        tree: treesToYValue(previewContent.trees),
+        relations: [op.relate],
+        provenanceByPath: input.provenanceByPath,
+      });
+      const relationError = validation.errors.find((error) => error.path === '$relations');
+      if (relationError !== undefined) {
+        return {
+          ok: false,
+          validation,
+          error: {
+            code: relationError.code,
+            message: relationError.message,
+            op_index: index,
+          },
+        };
+      }
     }
+
+    const previewResult = applyYOps(previewContent, [op as YOp]);
+    if (!previewResult.ok) return { ok: true };
+    previewContent = {
+      trees: previewResult.trees,
+      relations: previewResult.relations,
+    };
   }
 
   return { ok: true };
