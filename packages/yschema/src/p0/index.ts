@@ -31,3 +31,4 @@ export type {
   YSchemaPath,
   YSchemaRelation,
 } from './types';
+export { validateTree } from './validateTree';
