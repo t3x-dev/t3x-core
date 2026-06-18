@@ -41,7 +41,8 @@ export const RelationSchema = z.object({
   from: z.string().openapi({ description: 'Source frame ID' }),
   to: z.string().openapi({ description: 'Target frame ID' }),
   type: z
-    .enum(['causes', 'conditions', 'contrasts', 'elaborates', 'follows', 'depends'])
+    .string()
+    .regex(/^[a-z][a-z0-9_]*$/)
     .openapi({ description: 'Relation type' }),
 });
 

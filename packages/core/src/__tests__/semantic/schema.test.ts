@@ -102,10 +102,18 @@ describe('SemanticContentSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid relation type', () => {
+  it('accepts schema-defined relation types on persisted relation state', () => {
     const result = SemanticContentSchema.safeParse({
       trees: [{ key: 'topic', slots: { a: 1 }, children: [] }],
-      relations: [{ from: 'topic', to: 'other', type: 'invalid' }],
+      relations: [{ from: 'topic', to: 'other', type: 'depends_on' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects empty relation type', () => {
+    const result = SemanticContentSchema.safeParse({
+      trees: [{ key: 'topic', slots: { a: 1 }, children: [] }],
+      relations: [{ from: 'topic', to: 'other', type: '' }],
     });
     expect(result.success).toBe(false);
   });

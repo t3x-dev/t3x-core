@@ -64,7 +64,7 @@ const OapiTreeNodeSchema: z.ZodType<{
     },
   });
 
-const OapiRelationTypeSchema = z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']);
+const OapiRelationTypeSchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
 
 const OapiRelationSchema = z.object({
   from: z.string(),

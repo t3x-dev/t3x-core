@@ -6,6 +6,8 @@ import {
 } from '../schemas/chat';
 import { ErrorResponseSchema } from '../schemas/common';
 import {
+  CommitResponse,
+  CreateCommitRequest,
   CreateLeafRequest,
   LeafHistoryResponse,
   LeafResponse,
@@ -228,5 +230,58 @@ describe('route contract schemas', () => {
     });
 
     expect(invalidUpdate.success).toBe(false);
+  });
+
+  it('allows schema-defined relation keys in commit content contracts', () => {
+    const content = {
+      trees: [
+        {
+          key: 'requirements',
+          slots: {},
+          children: [
+            {
+              key: 'review_gate',
+              slots: { title: 'Review before commit' },
+              children: [],
+            },
+            {
+              key: 'schema_contract',
+              slots: { title: 'Define the schema contract' },
+              children: [],
+            },
+          ],
+        },
+      ],
+      relations: [
+        {
+          from: 'requirements/review_gate',
+          to: 'requirements/schema_contract',
+          type: 'depends_on',
+        },
+      ],
+    };
+
+    expect(
+      CreateCommitRequest.parse({
+        author: { type: 'human', name: 'tester' },
+        content,
+        project_id: 'proj_test',
+      }).content.relations[0].type
+    ).toBe('depends_on');
+
+    expect(
+      CommitResponse.parse({
+        hash: 'sha256:test',
+        schema: 't3x/commit',
+        parents: [],
+        author: { type: 'human', name: 'tester' },
+        committed_at: '2026-06-18T00:00:00.000Z',
+        content,
+        project_id: 'proj_test',
+        message: null,
+        branch: null,
+        created_at: '2026-06-18T00:00:00.000Z',
+      }).content.relations[0].type
+    ).toBe('depends_on');
   });
 });

@@ -38,10 +38,12 @@ export const RelationTypeSchema = z.enum([
   'depends',
 ]);
 
+const RelationKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
 export const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
-  type: RelationTypeSchema,
+  type: RelationKeySchema,
   from_project: z.string().optional(),
   to_project: z.string().optional(),
 });

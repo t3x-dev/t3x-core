@@ -49,7 +49,7 @@ const FrameSchema = z.object({
 const RelationSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
-  type: z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']),
+  type: z.string().regex(/^[a-z][a-z0-9_]*$/),
 });
 
 const GateCheckRequest = z.object({

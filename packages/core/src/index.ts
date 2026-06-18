@@ -435,6 +435,8 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './storage';
 export type {
+  ApplyYSchemaFixOpsInput,
+  ApplyYSchemaFixOpsResult,
   CloneOp,
   DefineOp,
   DropOp,
@@ -473,6 +475,7 @@ export type {
 export {
   applySourcedYOps,
   applyYOps,
+  applyYSchemaFixOps,
   classifyYOp,
   extractOpsFromEntries,
   findNode,

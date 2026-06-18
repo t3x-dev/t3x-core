@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatUserFacingError } from '@/domain/format/errors';
 import { useCommitRelations } from '@/hooks/commits/useCommitRelations';
-import type { Relation, RelationType } from '@/types/api';
+import type { Relation } from '@/types/api';
 import { cn } from '@/utils/cn';
 import { RelationsGraph } from './RelationsGraph';
 import { RelationsList } from './RelationsList';
@@ -15,13 +15,13 @@ interface RelationsTabProps {
   nodes: Array<{ id: string; text: string }>;
 }
 
-const ALL_TYPES: RelationType[] = ['causes', 'conditions', 'contrasts', 'follows', 'depends'];
+const DEFAULT_TYPES = ['causes', 'conditions', 'contrasts', 'follows', 'depends'];
 
 export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [typeFilters, setTypeFilters] = useState<Set<RelationType>>(() => new Set(ALL_TYPES));
+  const [typeFilters, setTypeFilters] = useState<Set<string>>(() => new Set(DEFAULT_TYPES));
   const { loadRelations } = useCommitRelations();
   const fetchRelations = useCallback(async () => {
     if (!commitHash) return;
@@ -41,13 +41,25 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
     fetchRelations();
   }, [fetchRelations]);
 
+  const allTypes = useMemo(() => {
+    return Array.from(new Set([...DEFAULT_TYPES, ...relations.map((relation) => relation.type)]));
+  }, [relations]);
+
+  useEffect(() => {
+    setTypeFilters((prev) => {
+      const next = new Set(prev);
+      for (const type of allTypes) next.add(type);
+      return next.size === prev.size ? prev : next;
+    });
+  }, [allTypes]);
+
   // Filtered relations
   const filtered = useMemo(
     () => relations.filter((r) => typeFilters.has(r.type)),
     [relations, typeFilters]
   );
 
-  const toggleType = useCallback((type: RelationType) => {
+  const toggleType = useCallback((type: string) => {
     setTypeFilters((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
@@ -89,7 +101,7 @@ export function RelationsTab({ commitHash, nodes }: RelationsTabProps) {
       {relations.length > 0 && (
         <div className="flex flex-col gap-3 p-3 bg-[var(--surface-app)] border border-[var(--stroke-divider)] rounded-md">
           <div className="flex flex-wrap gap-2">
-            {ALL_TYPES.map((type) => (
+            {allTypes.map((type) => (
               <label
                 key={type}
                 className={cn(
