@@ -43,7 +43,7 @@ export const RelationSchema = z.object({
   type: z
     .string()
     .regex(/^[a-z][a-z0-9_]*$/)
-    .openapi({ description: 'Relation type' }),
+    .openapi({ description: 'Schema-defined relation key' }),
 });
 
 /**

@@ -21,6 +21,8 @@ export const relationsRoutes = new OpenAPIHono({ defaultHook: zodErrorHook });
 const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
+  // Commit content can contain schema-defined relation keys such as
+  // "depends_on"; this read endpoint preserves them.
   type: z.string().regex(/^[a-z][a-z0-9_]*$/),
 });
 

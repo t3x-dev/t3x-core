@@ -284,4 +284,29 @@ describe('route contract schemas', () => {
       }).content.relations[0].type
     ).toBe('depends_on');
   });
+
+  it('rejects invalid relation keys in commit content contracts', () => {
+    const request = {
+      author: { type: 'human' as const, name: 'tester' },
+      content: {
+        trees: [
+          {
+            key: 'requirements',
+            slots: {},
+            children: [],
+          },
+        ],
+        relations: [
+          {
+            from: 'requirements',
+            to: 'requirements',
+            type: 'Depends-On',
+          },
+        ],
+      },
+      project_id: 'proj_test',
+    };
+
+    expect(CreateCommitRequest.safeParse(request).success).toBe(false);
+  });
 });

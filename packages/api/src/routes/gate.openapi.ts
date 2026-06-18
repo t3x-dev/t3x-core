@@ -49,6 +49,8 @@ const FrameSchema = z.object({
 const RelationSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
+  // Gate receives already-materialized content; YSchema declaration checks live
+  // in the schema-aware validation path.
   type: z.string().regex(/^[a-z][a-z0-9_]*$/),
 });
 
