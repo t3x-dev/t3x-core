@@ -194,6 +194,158 @@ describe('normalizeYSchemaObject', () => {
         },
       })
     ).toThrow(/INVALID_SCHEMA.*contentKind.*content_kind/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'deprecated-alias',
+        nodes: {
+          summary: {
+            guidance: 'Use the canonical field name.',
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*guidance.*content_guidance/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-pattern',
+        nodes: {
+          summary: {
+            slots: {
+              slug: { type: 'string', pattern: '[a-z+' },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*pattern.*valid regex/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-default',
+        nodes: {
+          summary: {
+            slots: {
+              priority: { enum: ['must', 'should'], default: 'could' },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*default.*enum/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-range',
+        nodes: {
+          summary: {
+            slots: {
+              score: { type: 'number', minimum: 10, maximum: 5 },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*minimum.*maximum/);
+  });
+
+  it('rejects deprecated P0 metadata aliases wherever metadata is accepted', () => {
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'deprecated-slot-alias',
+        nodes: {
+          summary: {
+            slots: {
+              problem: {
+                type: 'string',
+                ask: 'What problem should this PRD solve?',
+              },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*ask.*gap_question/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'deprecated-relation-alias',
+        nodes: {
+          requirements: {
+            repeated: true,
+          },
+        },
+        relation_types: {
+          depends_on: {
+            from: 'requirements/*',
+            to: 'requirements/*',
+            zone: 'structured',
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*zone.*content_kind/);
+  });
+
+  it('rejects contradictory slot defaults and const values', () => {
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-const-enum',
+        nodes: {
+          summary: {
+            slots: {
+              status: { enum: ['draft', 'accepted'], const: 'rejected' },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*const.*enum/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-default-const',
+        nodes: {
+          summary: {
+            slots: {
+              status: { const: 'draft', default: 'accepted' },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*default.*const/);
+  });
+
+  it('rejects invalid P0 slot length and word-count constraints', () => {
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-length',
+        nodes: {
+          summary: {
+            slots: {
+              problem: { type: 'string', min_length: 20, max_length: 10 },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*minLength.*maxLength/);
+
+    expect(() =>
+      normalizeYSchemaObject({
+        yschema: '0.1',
+        name: 'bad-max-words',
+        nodes: {
+          summary: {
+            slots: {
+              problem: { type: 'string', max_words: 0 },
+            },
+          },
+        },
+      })
+    ).toThrow(/INVALID_SCHEMA.*maxWords.*positive integer/);
   });
 });
 
@@ -216,6 +368,14 @@ describe('t3x/prd P0 fixtures', () => {
     expect(expectedPromptContract.nodes.find((node) => node.path === 'summary')).toMatchObject({
       contentKind: 'prose',
       requiredSlots: ['problem', 'audience', 'outcome'],
+    });
+    expect(
+      expectedPromptContract.nodes
+        .find((node) => node.path === 'milestones')
+        ?.slots.find((slot) => slot.path === 'milestones/*/sequence')
+    ).toMatchObject({
+      type: 'integer',
+      minimum: 1,
     });
     expect(expectedHardErrorValidationResult.errors.map((error) => error.code)).toEqual([
       'INVALID_ENUM',

@@ -117,8 +117,13 @@ export interface PromptSlotContract {
   description?: string;
   contentGuidance?: string;
   examples?: YValue[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
   maxWords?: number;
   pattern?: string;
+  format?: string;
   provenanceRequired?: boolean;
   gapQuestion?: string;
   yopsHint?: YOpsHint;
