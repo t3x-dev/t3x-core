@@ -262,6 +262,7 @@ describe('applyYSchemaFixOps', () => {
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('RELATION_CYCLE');
     expect(result.error.op_index).toBe(0);
+    expect(result.applied).toBe(0);
     expect(result.content.relations).toEqual([
       {
         from: 'requirements/schema_contract',

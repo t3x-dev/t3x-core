@@ -404,6 +404,8 @@ export {
   GateRunner,
   type GateRunnerOptions,
   isBlob,
+  LegacyRelationSchema,
+  LegacySemanticContentSchema,
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,

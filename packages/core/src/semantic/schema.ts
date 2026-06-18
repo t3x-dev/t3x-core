@@ -48,6 +48,10 @@ export const RelationSchema = z.object({
   to_project: z.string().optional(),
 });
 
+export const LegacyRelationSchema = RelationSchema.extend({
+  type: RelationTypeSchema,
+});
+
 // ── SemanticContent ──
 
 export const SemanticContentSchema = z.object({
@@ -56,6 +60,10 @@ export const SemanticContentSchema = z.object({
     .min(1)
     .max(1000),
   relations: z.array(RelationSchema).max(5000).default([]),
+});
+
+export const LegacySemanticContentSchema = SemanticContentSchema.extend({
+  relations: z.array(LegacyRelationSchema).max(5000).default([]),
 });
 
 // ── Internal: FlatNode Schema (for diff/merge validation only) ──

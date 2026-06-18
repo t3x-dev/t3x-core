@@ -9,8 +9,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   checkRelationSanity,
+  LegacySemanticContentSchema,
   type SemanticContent,
-  SemanticContentSchema,
   validateIntegrity,
 } from '@t3x-dev/core';
 import type { Command } from 'commander';
@@ -56,7 +56,7 @@ export function parseAndValidate(
   }
 
   // 2. Zod structural validation
-  const result = SemanticContentSchema.safeParse(parsed);
+  const result = LegacySemanticContentSchema.safeParse(parsed);
   if (!result.success) {
     const errors = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
     return { valid: false, tree_count: 0, node_count: 0, relation_count: 0, errors, warnings: [] };

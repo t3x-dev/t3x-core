@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FlatNodeSchema,
+  LegacySemanticContentSchema,
   RelationTypeSchema,
   SemanticContentSchema,
   TreeNodeSchema,
@@ -108,6 +109,14 @@ describe('SemanticContentSchema', () => {
       relations: [{ from: 'topic', to: 'other', type: 'depends_on' }],
     });
     expect(result.success).toBe(true);
+  });
+
+  it('keeps legacy semantic content validation on legacy relation types', () => {
+    const result = LegacySemanticContentSchema.safeParse({
+      trees: [{ key: 'topic', slots: { a: 1 }, children: [] }],
+      relations: [{ from: 'topic', to: 'other', type: 'depends_on' }],
+    });
+    expect(result.success).toBe(false);
   });
 
   it('rejects empty relation type', () => {

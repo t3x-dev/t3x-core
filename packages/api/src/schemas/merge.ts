@@ -37,13 +37,14 @@ export const FrameSchema = z.object({
 /**
  * Relation schema — matches @t3x-dev/core Relation
  */
+const RelationTransportKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
 export const RelationSchema = z.object({
   from: z.string().openapi({ description: 'Source frame ID' }),
   to: z.string().openapi({ description: 'Target frame ID' }),
-  type: z
-    .string()
-    .regex(/^[a-z][a-z0-9_]*$/)
-    .openapi({ description: 'Schema-defined relation key' }),
+  type: RelationTransportKeySchema.openapi({
+    description: 'Machine-safe relation key; schema declaration is validated before commit',
+  }),
 });
 
 /**

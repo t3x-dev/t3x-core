@@ -89,7 +89,7 @@ export function applyYSchemaFixOps(input: ApplyYSchemaFixOpsInput): ApplyYSchema
     return {
       ok: false,
       content: input.content,
-      applied: applied.applied,
+      applied: 0,
       validation,
       error: {
         ...blockingError,
@@ -128,7 +128,14 @@ function validateRelationFixOps(input: ApplyYSchemaFixOpsInput):
       const validation = validateTree({
         schema: input.schema,
         tree: treesToYValue(previewContent.trees),
-        relations: [op.relate],
+        relations: [
+          ...previewContent.relations.map((relation) => ({
+            from: relation.from,
+            to: relation.to,
+            type: relation.type,
+          })),
+          op.relate,
+        ],
         provenanceByPath: input.provenanceByPath,
       });
       const relationError = validation.errors.find((error) => error.path === '$relations');
