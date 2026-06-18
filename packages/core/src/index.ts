@@ -404,6 +404,8 @@ export {
   GateRunner,
   type GateRunnerOptions,
   isBlob,
+  LegacyRelationSchema,
+  LegacySemanticContentSchema,
   parseCoverageResponse,
   parseGatesConfig,
   parseSemanticGateResponse,
@@ -435,6 +437,8 @@ export {
 // ═══════════════════════════════════════════════════════════════════════════
 export * from './storage';
 export type {
+  ApplyYSchemaFixOpsInput,
+  ApplyYSchemaFixOpsResult,
   CloneOp,
   DefineOp,
   DropOp,
@@ -473,6 +477,7 @@ export type {
 export {
   applySourcedYOps,
   applyYOps,
+  applyYSchemaFixOps,
   classifyYOp,
   extractOpsFromEntries,
   findNode,

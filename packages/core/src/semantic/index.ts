@@ -28,6 +28,8 @@ export { executeMerge, prepareMerge } from './merge';
 
 // ── Zod Schemas (public) ──
 export {
+  LegacyRelationSchema,
+  LegacySemanticContentSchema,
   RelationSchema,
   RelationTypeSchema,
   SemanticContentSchema,

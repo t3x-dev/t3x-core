@@ -1,4 +1,4 @@
-import type { RELATION_TYPES, SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
+import type { SemanticContent, SlotValue, TreeNode } from '@t3x-dev/core';
 
 /**
  * Runtime-enriched tree node shape. API trees from historical commits may
@@ -12,9 +12,6 @@ import type { Edge, Node } from '@xyflow/react';
 
 export type ZoomLevel = 'overview' | 'expand' | 'full';
 
-/** Relation type for graph display (from core semantic RELATION_TYPES) */
-type RelationType = (typeof RELATION_TYPES)[number];
-
 export interface TreeNodeData {
   treeType: string;
   slots: Record<string, SlotValue>;
@@ -23,7 +20,7 @@ export interface TreeNodeData {
 }
 
 export interface RelationEdgeData {
-  relationType: RelationType;
+  relationType: string;
   /** When true, the edge plays a stroke-dashoffset draw animation */
   isNew?: boolean;
   [key: string]: unknown;

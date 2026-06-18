@@ -58,3 +58,8 @@ export type {
   YOpsResult,
 } from './types';
 export { SNAKE_CASE_KEY, YOPS_ERRORS } from './types';
+export {
+  type ApplyYSchemaFixOpsInput,
+  type ApplyYSchemaFixOpsResult,
+  applyYSchemaFixOps,
+} from './yschemaFixOps';

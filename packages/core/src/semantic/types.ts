@@ -35,7 +35,15 @@ export type RelationType = (typeof RELATION_TYPES)[number];
 export interface Relation {
   from: string;
   to: string;
-  type: RelationType;
+  /**
+   * Relation type key.
+   *
+   * Legacy semantic workflows still use RelationType / RELATION_TYPES above.
+   * Schema-backed workflows may persist schema-defined keys such as
+   * "depends_on"; their validity is checked by the schema contract, not by
+   * this generic storage shape.
+   */
+  type: string;
   /** Source project ID — present only for cross-project relations */
   from_project?: string;
   /** Target project ID — present only for cross-project relations */
