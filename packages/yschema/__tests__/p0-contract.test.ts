@@ -563,4 +563,112 @@ describe('generatePromptContract', () => {
     expect(schema.nodes.settings?.slots?.mode?.examples).toEqual([{ label: 'review' }]);
     expect(schema.nodes.settings?.slots?.lock?.const).toEqual({ locked: true });
   });
+
+  it('preserves complete slot metadata and explicit false values', () => {
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'example/metadata',
+      nodes: {
+        summary: {
+          required: false,
+          repeated: false,
+          content_kind: 'structured',
+          slots: {
+            status: {
+              type: 'string',
+              enum: ['draft', 'ready'],
+              const: 'draft',
+              default: 'draft',
+              description: 'Workflow status.',
+              content_guidance: 'Use the canonical status only.',
+              examples: ['draft'],
+              min_length: 2,
+              max_length: 12,
+              pattern: '^[a-z]+$',
+              format: 'slug',
+              provenance_required: false,
+              gap_question: 'What status should this use?',
+            },
+            score: {
+              type: 'number',
+              minimum: 0,
+              maximum: 10,
+            },
+          },
+        },
+      },
+      relation_types: {
+        references: {
+          from: 'summary',
+          to: 'summary',
+          description: 'Summary references itself for review.',
+          content_guidance: 'Use only for explicit references.',
+          acyclic: false,
+        },
+      },
+    });
+
+    const contract = generatePromptContract(schema);
+
+    expect(contract.nodes[0]).toMatchObject({
+      path: 'summary',
+      required: false,
+      repeated: false,
+      contentKind: 'structured',
+    });
+    expect(contract.nodes[0]?.slots.find((slot) => slot.key === 'status')).toEqual({
+      path: 'summary/status',
+      key: 'status',
+      type: 'string',
+      enum: ['draft', 'ready'],
+      const: 'draft',
+      default: 'draft',
+      description: 'Workflow status.',
+      contentGuidance: 'Use the canonical status only.',
+      examples: ['draft'],
+      minLength: 2,
+      maxLength: 12,
+      pattern: '^[a-z]+$',
+      format: 'slug',
+      provenanceRequired: false,
+      gapQuestion: 'What status should this use?',
+    });
+    expect(contract.nodes[0]?.slots.find((slot) => slot.key === 'score')).toEqual({
+      path: 'summary/score',
+      key: 'score',
+      type: 'number',
+      minimum: 0,
+      maximum: 10,
+    });
+    expect(contract.relationTypes).toEqual([
+      {
+        type: 'references',
+        from: 'summary',
+        to: 'summary',
+        description: 'Summary references itself for review.',
+        contentGuidance: 'Use only for explicit references.',
+        acyclic: false,
+      },
+    ]);
+  });
+
+  it('omits relationTypes when the schema has no relation type contract', () => {
+    const schema = normalizeYSchemaObject({
+      yschema: '0.1',
+      name: 'example/no-relations',
+      nodes: {
+        summary: {},
+      },
+    });
+
+    expect(generatePromptContract(schema)).toEqual({
+      schemaName: 'example/no-relations',
+      nodes: [
+        {
+          path: 'summary',
+          slots: [],
+        },
+      ],
+    });
+  });
 });
