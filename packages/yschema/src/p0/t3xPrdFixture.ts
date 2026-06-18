@@ -279,6 +279,7 @@ export const expectedPromptContract: PromptContract = {
           path: 'milestones/*/sequence',
           key: 'sequence',
           type: 'integer',
+          minimum: 1,
           description: 'Stable milestone order.',
         },
       ],

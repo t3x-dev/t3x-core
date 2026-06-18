@@ -22,6 +22,11 @@ const SLOT_TYPES: readonly SlotType[] = [
   'object',
   'null',
 ];
+const DEPRECATED_FIELD_REPLACEMENTS: Record<string, string> = {
+  ask: 'gap_question',
+  guidance: 'content_guidance',
+  zone: 'content_kind',
+};
 
 function invalidSchema(message: string): never {
   throw new Error(`INVALID_SCHEMA: ${message}`);
@@ -47,6 +52,14 @@ function getField(record: Record<string, unknown>, camel: string, snake?: string
   return undefined;
 }
 
+function rejectDeprecatedFields(record: Record<string, unknown>, context: string): void {
+  for (const [deprecated, replacement] of Object.entries(DEPRECATED_FIELD_REPLACEMENTS)) {
+    if (record[deprecated] !== undefined) {
+      invalidSchema(`${context}.${deprecated} is deprecated; use ${replacement}`);
+    }
+  }
+}
+
 function asOptionalString(value: unknown, context: string): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string') invalidSchema(`${context} must be a string`);
@@ -65,6 +78,18 @@ function asOptionalNumber(value: unknown, context: string): number | undefined {
     invalidSchema(`${context} must be a finite number`);
   }
   return value;
+}
+
+function assertNonNegativeInteger(value: number, context: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    invalidSchema(`${context} must be a non-negative integer`);
+  }
+}
+
+function assertPositiveInteger(value: number, context: string): void {
+  if (!Number.isInteger(value) || value < 1) {
+    invalidSchema(`${context} must be a positive integer`);
+  }
 }
 
 function asOptionalContentKind(value: unknown, context: string): ContentKind | undefined {
@@ -96,6 +121,22 @@ function asYValueArray(value: unknown, context: string): YValue[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) invalidSchema(`${context} must be an array`);
   return value.map((item, index) => asYValue(item, `${context}[${index}]`));
+}
+
+function yValueEquals(a: YValue, b: YValue): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, index) => yValueEquals(item, b[index]));
+  }
+  if (isRecord(a) || isRecord(b)) {
+    if (!isRecord(a) || !isRecord(b)) return false;
+    const aKeys = Object.keys(a).sort();
+    const bKeys = Object.keys(b).sort();
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((key, index) => key === bKeys[index] && yValueEquals(a[key], b[key]));
+  }
+  return false;
 }
 
 function assertKey(key: string, context: string): void {
@@ -165,6 +206,7 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
   }
 
   const raw = asRecord(def, context);
+  rejectDeprecatedFields(raw, context);
   const typeValue = raw.type;
   const slot: SlotSchema = {};
 
@@ -195,9 +237,34 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
   const yopsHint = getField(raw, 'yopsHint', 'yops_hint');
 
   const enumArray = asYValueArray(enumValue, `${context}.enum`);
-  if (enumArray !== undefined) slot.enum = enumArray;
+  if (enumArray !== undefined) {
+    if (enumArray.length === 0) invalidSchema(`${context}.enum must not be empty`);
+    slot.enum = enumArray;
+  }
   if (constValue !== undefined) slot.const = asYValue(constValue, `${context}.const`);
   if (defaultValue !== undefined) slot.default = asYValue(defaultValue, `${context}.default`);
+
+  if (
+    slot.enum &&
+    slot.const !== undefined &&
+    !slot.enum.some((item) => yValueEquals(item, slot.const!))
+  ) {
+    invalidSchema(`${context}.const must be one of ${context}.enum`);
+  }
+  if (
+    slot.enum &&
+    slot.default !== undefined &&
+    !slot.enum.some((item) => yValueEquals(item, slot.default!))
+  ) {
+    invalidSchema(`${context}.default must be one of ${context}.enum`);
+  }
+  if (
+    slot.const !== undefined &&
+    slot.default !== undefined &&
+    !yValueEquals(slot.const, slot.default)
+  ) {
+    invalidSchema(`${context}.default must equal ${context}.const`);
+  }
 
   const exampleArray = asYValueArray(examples, `${context}.examples`);
   if (exampleArray !== undefined) slot.examples = exampleArray;
@@ -219,21 +286,51 @@ function normalizeSlot(def: unknown, context: string): SlotSchema {
 
   const normalizedMaximum = asOptionalNumber(maximum, `${context}.maximum`);
   if (normalizedMaximum !== undefined) slot.maximum = normalizedMaximum;
+  if (
+    normalizedMinimum !== undefined &&
+    normalizedMaximum !== undefined &&
+    normalizedMinimum > normalizedMaximum
+  ) {
+    invalidSchema(`${context}.minimum cannot be greater than ${context}.maximum`);
+  }
 
   const normalizedMinLength = asOptionalNumber(minLength, `${context}.minLength`);
-  if (normalizedMinLength !== undefined) slot.minLength = normalizedMinLength;
+  if (normalizedMinLength !== undefined) {
+    assertNonNegativeInteger(normalizedMinLength, `${context}.minLength`);
+    slot.minLength = normalizedMinLength;
+  }
 
   const normalizedMaxLength = asOptionalNumber(maxLength, `${context}.maxLength`);
-  if (normalizedMaxLength !== undefined) slot.maxLength = normalizedMaxLength;
+  if (normalizedMaxLength !== undefined) {
+    assertNonNegativeInteger(normalizedMaxLength, `${context}.maxLength`);
+    slot.maxLength = normalizedMaxLength;
+  }
+  if (
+    normalizedMinLength !== undefined &&
+    normalizedMaxLength !== undefined &&
+    normalizedMinLength > normalizedMaxLength
+  ) {
+    invalidSchema(`${context}.minLength cannot be greater than ${context}.maxLength`);
+  }
 
   const pattern = asOptionalString(raw.pattern, `${context}.pattern`);
-  if (pattern !== undefined) slot.pattern = pattern;
+  if (pattern !== undefined) {
+    try {
+      new RegExp(pattern);
+    } catch (error) {
+      invalidSchema(`${context}.pattern must be a valid regex: ${(error as Error).message}`);
+    }
+    slot.pattern = pattern;
+  }
 
   const format = asOptionalString(raw.format, `${context}.format`);
   if (format !== undefined) slot.format = format;
 
   const normalizedMaxWords = asOptionalNumber(maxWords, `${context}.maxWords`);
-  if (normalizedMaxWords !== undefined) slot.maxWords = normalizedMaxWords;
+  if (normalizedMaxWords !== undefined) {
+    assertPositiveInteger(normalizedMaxWords, `${context}.maxWords`);
+    slot.maxWords = normalizedMaxWords;
+  }
 
   const normalizedProvenanceRequired = asOptionalBoolean(
     provenanceRequired,
@@ -262,6 +359,7 @@ function normalizeSlots(value: unknown, context: string): Record<string, SlotSch
 
 function normalizeNode(def: unknown, context: string): NodeSchema {
   const raw = asRecord(def, context);
+  rejectDeprecatedFields(raw, context);
   const node: NodeSchema = {};
 
   const required = asOptionalBoolean(raw.required, `${context}.required`);
@@ -371,6 +469,7 @@ function normalizeRelationTypes(
   for (const [typeKey, typeDef] of Object.entries(rawRelationTypes)) {
     assertKey(typeKey, 'relationTypes');
     const raw = asRecord(typeDef, `relationTypes.${typeKey}`);
+    rejectDeprecatedFields(raw, `relationTypes.${typeKey}`);
     const fromValue = raw.from;
     const toValue = raw.to;
     if (typeof fromValue !== 'string')
