@@ -661,8 +661,7 @@ function validateNode(
     return;
   }
 
-  const expectsMapping =
-    node.slots !== undefined || (node.children !== undefined && node.children !== 'any');
+  const expectsMapping = node.slots !== undefined || node.children !== undefined;
   if (expectsMapping && !isMapping(nodeValue)) {
     pushError(state, 'INVALID_TYPE', nodePath, `${nodePath} must be an object.`, {
       expected: 'object',

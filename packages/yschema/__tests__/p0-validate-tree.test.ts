@@ -268,6 +268,42 @@ describe('validateTree P0 result semantics', () => {
     ]);
   });
 
+  it('requires children:any nodes to be objects', () => {
+    const schema: YSchema = {
+      yschema: '0.1',
+      name: 'children-any',
+      strict: true,
+      nodes: {
+        services: {
+          required: true,
+          children: 'any',
+        },
+      },
+      rules: [],
+    };
+
+    const result = validateTree({
+      schema,
+      tree: {
+        services: 'nginx:1',
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.ready).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        code: 'INVALID_TYPE',
+        path: 'services',
+        message: 'services must be an object.',
+        details: {
+          expected: 'object',
+          actual: 'string',
+        },
+      },
+    ]);
+  });
+
   it('suggests optional defaults without blocking readiness', () => {
     const schema: YSchema = {
       yschema: '0.1',
