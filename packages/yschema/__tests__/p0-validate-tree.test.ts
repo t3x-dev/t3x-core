@@ -52,6 +52,107 @@ const relationCodesFor = (relations: YSchemaRelation[]) =>
     relations,
   }).errors.map((error) => error.code);
 
+const projectPlanSchema: YSchema = {
+  yschema: '0.1',
+  name: 't3x/project_plan',
+  strict: true,
+  nodes: {
+    objective: {
+      required: true,
+      contentKind: 'prose',
+      requiredSlots: ['summary'],
+      slots: {
+        summary: {
+          type: 'string',
+          maxWords: 16,
+          provenanceRequired: true,
+          gapQuestion: 'What outcome should this plan produce?',
+        },
+      },
+    },
+    tasks: {
+      required: true,
+      repeated: true,
+      contentKind: 'structured',
+      requiredSlots: ['title', 'owner', 'status'],
+      slots: {
+        title: {
+          type: 'string',
+          provenanceRequired: true,
+        },
+        owner: {
+          type: 'string',
+          provenanceRequired: true,
+        },
+        status: {
+          enum: ['todo', 'doing', 'done'],
+          default: 'todo',
+        },
+      },
+    },
+  },
+  relationTypes: {
+    blocks: {
+      from: 'tasks/*',
+      to: 'tasks/*',
+      acyclic: true,
+    },
+  },
+  rules: [],
+};
+
+const projectPlanTree = {
+  objective: {
+    summary: 'Ship the YSchema P0 core contract.',
+  },
+  tasks: {
+    schema_contract: {
+      title: 'Publish shared YSchema contracts',
+      owner: 'core',
+      status: 'done',
+    },
+    relation_adapter: {
+      title: 'Apply schema-defined relation fixes',
+      owner: 'core',
+    },
+  },
+};
+
+const completeProjectPlanTree = {
+  ...projectPlanTree,
+  tasks: {
+    ...projectPlanTree.tasks,
+    relation_adapter: {
+      ...projectPlanTree.tasks.relation_adapter,
+      status: 'todo',
+    },
+  },
+};
+
+const projectPlanRelations: YSchemaRelation[] = [
+  {
+    from: 'tasks/relation_adapter',
+    type: 'blocks',
+    to: 'tasks/schema_contract',
+  },
+];
+
+const projectPlanEvidence = acceptedEvidence([
+  'objective/summary',
+  'tasks/schema_contract/title',
+  'tasks/schema_contract/owner',
+  'tasks/relation_adapter/title',
+  'tasks/relation_adapter/owner',
+]);
+
+const projectPlanRelationCodesFor = (relations: YSchemaRelation[]) =>
+  validateTree({
+    schema: projectPlanSchema,
+    tree: completeProjectPlanTree,
+    provenanceByPath: projectPlanEvidence,
+    relations,
+  }).errors.map((error) => error.code);
+
 describe('validateTree P0 result semantics', () => {
   it('matches the shared t3x/prd result fixtures exactly', () => {
     expect(
@@ -558,89 +659,11 @@ describe('validateTree P0 result semantics', () => {
   });
 
   it('validates a non-PRD project plan schema with the same P0 semantics', () => {
-    const schema: YSchema = {
-      yschema: '0.1',
-      name: 't3x/project_plan',
-      strict: true,
-      nodes: {
-        objective: {
-          required: true,
-          contentKind: 'prose',
-          requiredSlots: ['summary'],
-          slots: {
-            summary: {
-              type: 'string',
-              maxWords: 16,
-              provenanceRequired: true,
-              gapQuestion: 'What outcome should this plan produce?',
-            },
-          },
-        },
-        tasks: {
-          required: true,
-          repeated: true,
-          contentKind: 'structured',
-          requiredSlots: ['title', 'owner', 'status'],
-          slots: {
-            title: {
-              type: 'string',
-              provenanceRequired: true,
-            },
-            owner: {
-              type: 'string',
-              provenanceRequired: true,
-            },
-            status: {
-              enum: ['todo', 'doing', 'done'],
-              default: 'todo',
-            },
-          },
-        },
-      },
-      relationTypes: {
-        blocks: {
-          from: 'tasks/*',
-          to: 'tasks/*',
-          acyclic: true,
-        },
-      },
-      rules: [],
-    };
-
-    const tree = {
-      objective: {
-        summary: 'Ship the YSchema P0 core contract.',
-      },
-      tasks: {
-        schema_contract: {
-          title: 'Publish shared YSchema contracts',
-          owner: 'core',
-          status: 'done',
-        },
-        relation_adapter: {
-          title: 'Apply schema-defined relation fixes',
-          owner: 'core',
-        },
-      },
-    };
-
     const result = validateTree({
-      schema,
-      tree,
-      relations: [
-        {
-          from: 'tasks/relation_adapter',
-          type: 'blocks',
-          to: 'tasks/schema_contract',
-        },
-      ],
-      provenanceByPath: acceptedEvidence([
-        'objective/summary',
-        'tasks/schema_contract/title',
-        'tasks/schema_contract/owner',
-        'tasks/relation_adapter/title',
-        'tasks/relation_adapter/owner',
-      ]),
+      schema: projectPlanSchema,
+      tree: projectPlanTree,
+      relations: projectPlanRelations,
+      provenanceByPath: projectPlanEvidence,
     });
 
     expect(result).toEqual({
@@ -673,5 +696,59 @@ describe('validateTree P0 result semantics', () => {
         },
       ],
     });
+  });
+
+  it('returns ready=true for a complete non-PRD project plan with schema-defined relations', () => {
+    expect(
+      validateTree({
+        schema: projectPlanSchema,
+        tree: completeProjectPlanTree,
+        relations: projectPlanRelations,
+        provenanceByPath: projectPlanEvidence,
+      })
+    ).toEqual({
+      valid: true,
+      ready: true,
+      errors: [],
+      gaps: [],
+      fixes: [],
+    });
+  });
+
+  it('reports non-PRD relation errors from schema-defined relation types', () => {
+    expect(
+      projectPlanRelationCodesFor([
+        {
+          from: 'tasks/relation_adapter',
+          type: 'depends_on',
+          to: 'tasks/schema_contract',
+        },
+      ])
+    ).toEqual(['INVALID_RELATION_TYPE']);
+
+    expect(
+      projectPlanRelationCodesFor([
+        {
+          from: 'objective/summary',
+          type: 'blocks',
+          to: 'tasks/schema_contract',
+        },
+      ])
+    ).toEqual(['RELATION_ENDPOINT_MISMATCH']);
+
+    expect(
+      projectPlanRelationCodesFor([
+        {
+          from: 'tasks/relation_adapter',
+          type: 'blocks',
+          to: 'tasks/schema_contract',
+        },
+        {
+          from: 'tasks/schema_contract',
+          type: 'blocks',
+          to: 'tasks/relation_adapter',
+        },
+      ])
+    ).toEqual(['RELATION_CYCLE']);
   });
 });
