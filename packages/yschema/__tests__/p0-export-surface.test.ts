@@ -7,6 +7,7 @@ describe('YSchema public export surface', () => {
       'generatePromptContract',
       'normalizeYSchemaObject',
       'parseYSchema',
+      'renderYSchemaMarkdown',
       't3xPrdP0Fixtures',
       'validateTree',
     ]);

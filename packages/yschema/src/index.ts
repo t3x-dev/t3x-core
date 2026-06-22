@@ -13,6 +13,7 @@ export type {
   RelateYOp,
   RelationEndpointPattern,
   RelationTypeSchema,
+  RenderYSchemaMarkdownInput,
   ReservedRuleSchema,
   SlotSchema,
   SlotType,
@@ -35,6 +36,7 @@ export {
   generatePromptContract,
   normalizeYSchemaObject,
   parseYSchema,
+  renderYSchemaMarkdown,
   t3xPrdP0Fixtures,
   validateTree,
 } from './p0';
