@@ -35,3 +35,8 @@ export type {
   YSchemaRelation,
 } from './types';
 export { validateTree } from './validateTree';
+export type {
+  DiffValidationResultsInput,
+  YSchemaValidationDelta,
+} from './validationDelta';
+export { diffValidationResults } from './validationDelta';
