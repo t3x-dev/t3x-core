@@ -82,6 +82,7 @@ import {
   webhooksRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
+  yschemaPrdSmokeRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
 
@@ -176,6 +177,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
+  api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);
   api.route('/', leavesRoutes);

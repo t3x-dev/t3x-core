@@ -1,15 +1,14 @@
 /**
  * YLint Types — Knowledge Tree Linter
  *
- * Two layers:
- *   General — 4 normal forms, always runs, no schema needed
- *   Schema  — validates against user-defined @t3x-dev/yschema (optional)
+ * Runs the 4 built-in structural normal forms. Domain-specific YSchema P0
+ * contract validation lives in @t3x-dev/yschema.
  */
 
 import type { YOp } from '@t3x-dev/yops';
 
 export interface LintWarning {
-  form: 1 | 2 | 3 | 4 | 'schema';
+  form: 1 | 2 | 3 | 4;
   rule: string;
   path: string;
   message: string;
