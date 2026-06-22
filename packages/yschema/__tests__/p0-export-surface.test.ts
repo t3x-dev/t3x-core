@@ -4,6 +4,7 @@ import * as yschema from '../src/index';
 describe('YSchema public export surface', () => {
   it('exposes only the P0 runtime API', () => {
     expect(Object.keys(yschema).sort()).toEqual([
+      'diffValidationResults',
       'generatePromptContract',
       'normalizeYSchemaObject',
       'parseYSchema',

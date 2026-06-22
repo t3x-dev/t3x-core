@@ -2,6 +2,7 @@
 
 export type {
   ContentKind,
+  DiffValidationResultsInput,
   FixProposal,
   NodeSchema,
   PromptContract,
@@ -31,8 +32,10 @@ export type {
   YSchemaKey,
   YSchemaPath,
   YSchemaRelation,
+  YSchemaValidationDelta,
 } from './p0';
 export {
+  diffValidationResults,
   generatePromptContract,
   normalizeYSchemaObject,
   parseYSchema,
