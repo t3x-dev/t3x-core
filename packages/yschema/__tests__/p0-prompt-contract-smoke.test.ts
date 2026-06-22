@@ -7,6 +7,9 @@ import { generatePromptContract, parseYSchema } from '../src/index';
 const referenceYSchemaPath = fileURLToPath(
   new URL('../__fixtures__/t3x-prd/reference.yschema.yaml', import.meta.url)
 );
+const exampleYSchemaPath = fileURLToPath(
+  new URL('../examples/t3x-prd.yschema.yaml', import.meta.url)
+);
 
 describe('PromptContract public API smoke test', () => {
   it('parses the reference YSchema YAML and generates the canonical prompt contract', () => {
@@ -23,5 +26,13 @@ describe('PromptContract public API smoke test', () => {
       'depends_on',
       'precedes',
     ]);
+  });
+
+  it('publishes t3x/prd as a package example equivalent to the fixture contract', () => {
+    const fixtureSchema = parseYSchema(readFileSync(referenceYSchemaPath, 'utf8'));
+    const exampleSchema = parseYSchema(readFileSync(exampleYSchemaPath, 'utf8'));
+
+    expect(exampleSchema).toEqual(fixtureSchema);
+    expect(generatePromptContract(exampleSchema)).toEqual(expectedPromptContract);
   });
 });

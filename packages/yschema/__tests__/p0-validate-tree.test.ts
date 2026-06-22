@@ -556,4 +556,122 @@ describe('validateTree P0 result semantics', () => {
       ])
     ).toEqual(['RELATION_CYCLE']);
   });
+
+  it('validates a non-PRD project plan schema with the same P0 semantics', () => {
+    const schema: YSchema = {
+      yschema: '0.1',
+      name: 't3x/project_plan',
+      strict: true,
+      nodes: {
+        objective: {
+          required: true,
+          contentKind: 'prose',
+          requiredSlots: ['summary'],
+          slots: {
+            summary: {
+              type: 'string',
+              maxWords: 16,
+              provenanceRequired: true,
+              gapQuestion: 'What outcome should this plan produce?',
+            },
+          },
+        },
+        tasks: {
+          required: true,
+          repeated: true,
+          contentKind: 'structured',
+          requiredSlots: ['title', 'owner', 'status'],
+          slots: {
+            title: {
+              type: 'string',
+              provenanceRequired: true,
+            },
+            owner: {
+              type: 'string',
+              provenanceRequired: true,
+            },
+            status: {
+              enum: ['todo', 'doing', 'done'],
+              default: 'todo',
+            },
+          },
+        },
+      },
+      relationTypes: {
+        blocks: {
+          from: 'tasks/*',
+          to: 'tasks/*',
+          acyclic: true,
+        },
+      },
+      rules: [],
+    };
+
+    const tree = {
+      objective: {
+        summary: 'Ship the YSchema P0 core contract.',
+      },
+      tasks: {
+        schema_contract: {
+          title: 'Publish shared YSchema contracts',
+          owner: 'core',
+          status: 'done',
+        },
+        relation_adapter: {
+          title: 'Apply schema-defined relation fixes',
+          owner: 'core',
+        },
+      },
+    };
+
+    const result = validateTree({
+      schema,
+      tree,
+      relations: [
+        {
+          from: 'tasks/relation_adapter',
+          type: 'blocks',
+          to: 'tasks/schema_contract',
+        },
+      ],
+      provenanceByPath: acceptedEvidence([
+        'objective/summary',
+        'tasks/schema_contract/title',
+        'tasks/schema_contract/owner',
+        'tasks/relation_adapter/title',
+        'tasks/relation_adapter/owner',
+      ]),
+    });
+
+    expect(result).toEqual({
+      valid: true,
+      ready: false,
+      errors: [],
+      gaps: [
+        {
+          code: 'DEFAULT_REQUIRES_APPROVAL',
+          path: 'tasks/relation_adapter/status',
+          message: 'tasks/relation_adapter/status can use a schema default after review.',
+          fixIds: ['set-tasks-relation_adapter-status-default'],
+        },
+      ],
+      fixes: [
+        {
+          id: 'set-tasks-relation_adapter-status-default',
+          code: 'DEFAULT_REQUIRES_APPROVAL',
+          path: 'tasks/relation_adapter/status',
+          title: 'Use default status',
+          applyMode: 'automatic_after_review',
+          ops: [
+            {
+              set: {
+                path: 'tasks/relation_adapter/status',
+                value: 'todo',
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
 });
