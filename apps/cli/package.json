@@ -21,7 +21,6 @@
     "@t3x-dev/api-client": "workspace:*",
     "@t3x-dev/core": "workspace:*",
     "@t3x-dev/yops": "workspace:*",
-    "@t3x-dev/yschema": "workspace:*",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "js-yaml": "^4.1.1",

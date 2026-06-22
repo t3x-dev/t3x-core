@@ -194,12 +194,12 @@ validate-and-fix loop: detect issues, emit fix operations, apply them, confirm.
 </tr>
 <tr>
 <td>Atomic YAML operations<br/>Spec-driven, deterministic<br/>Sequential, fail-fast</td>
-<td>User-defined domain schemas<br/>Slot types, enums, ranges<br/>Cross-node rules</td>
+<td>P0 domain contracts<br/>Prompt contract generation<br/>Tree, relation, provenance checks</td>
 <td>Built-in structural rules<br/>Runs without a schema<br/>Auto-fix via YOps</td>
 </tr>
 <tr>
 <td><a href="packages/yops/yops.yaml"><code>yops.yaml</code></a></td>
-<td><a href="packages/yschema/yschema.yaml"><code>yschema.yaml</code></a></td>
+<td><a href="packages/yschema/examples/t3x-prd.yschema.yaml"><code>t3x-prd.yschema.yaml</code></a></td>
 <td>Built into <code>@t3x-dev/core</code></td>
 </tr>
 </table>
@@ -208,12 +208,15 @@ Two functions cover the core loop:
 
 ```typescript
 applyYOps(doc, ops)              // mutate: apply operations to a YAML tree
-validateTree(content, { schema }) // validate: check structure + domain, get fixes
+validateTree(content)            // validate: check built-in structural hygiene
 ```
 
-`validateTree` runs ylint and yschema internally, collects warnings, and returns
-a ready-to-apply fix plan. Auto-fixable issues resolve through `applyYOps()`.
-Everything else is surfaced for review.
+Core `validateTree` runs ylint, collects warnings, and returns a ready-to-apply
+fix plan. Auto-fixable issues resolve through `applyYOps()`. Domain-specific
+contract validation lives in `@t3x-dev/yschema` P0: parse a schema with
+`parseYSchema`, derive extraction/review guidance with `generatePromptContract`,
+then validate candidate trees, relations, and provenance with YSchema
+`validateTree`.
 
 ### YOps &mdash; Declarative YAML Operations
 
@@ -243,12 +246,13 @@ The full spec &mdash; including a decision guide, type contracts, composition re
 
 ### Validation
 
-YSchema defines domain-specific shape: required nodes, slot types, enums, ranges,
-and cross-node rules. YLint checks structural hygiene: key naming, value quality,
-list hygiene, and tree depth. Both can emit YOps fixes.
+YSchema P0 defines domain-specific contracts for candidate trees: required
+nodes, slot constraints, relation types, provenance requirements, and review
+gaps. YLint checks structural hygiene: key naming, value quality, list hygiene,
+and tree depth. Both can emit YOps-compatible fixes.
 
-Specs: [`yschema.yaml`](packages/yschema/yschema.yaml), YLint in
-[`@t3x-dev/core`](packages/core/).
+Example contract: [`t3x-prd.yschema.yaml`](packages/yschema/examples/t3x-prd.yschema.yaml),
+YLint in [`@t3x-dev/core`](packages/core/).
 
 <br/>
 

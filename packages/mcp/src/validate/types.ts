@@ -2,7 +2,7 @@
  * 4-Layer YOps Validation Pipeline — Types
  *
  * Layer 1: Parse (YAML text -> JS objects)
- * Layer 2: YSchema (validate structure against schema)
+ * Layer 2: Reserved for schema contract checks
  * Layer 3: Engine dry-run (apply ops in memory)
  * Layer 4: Gates (structural quality checks)
  */

@@ -6,7 +6,7 @@
  * subsequent layers from running.
  *
  * Layer 1: Parse — YAML text -> YOp[]
- * Layer 2: YSchema — validate document against schema (optional, skipped if no schema)
+ * Layer 2: Reserved for schema contract checks (currently skipped)
  * Layer 3: Engine — dry-run applyYOps in memory
  * Layer 4: Gates — structural quality checks (advisory warnings only)
  */

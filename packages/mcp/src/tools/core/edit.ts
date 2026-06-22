@@ -2,11 +2,11 @@
  * t3x_edit — apply YOps to a draft through the 4-layer validation pipeline.
  *
  * Accepts a YAML string containing YOps operations, validates through all
- * 4 layers (parse, yschema, engine dry-run, gates), and only persists
+ * 4 layers (parse, schema-reserved, engine dry-run, gates), and only persists
  * the result if every layer passes.
  *
  * Layer 1: Parse — YAML text -> YOp[]
- * Layer 2: YSchema — validate document against schema (optional)
+ * Layer 2: Reserved for schema contract checks (currently skipped)
  * Layer 3: Engine — dry-run applyYOps in memory
  * Layer 4: Gates — structural quality checks (advisory warnings)
  */
@@ -28,7 +28,7 @@ export const editDef: ToolDef = {
     '',
     'Pass a YAML string containing YOps; the tool validates through all layers:',
     '  Layer 1 (Parse): YAML syntax and YOps structure',
-    '  Layer 2 (YSchema): Document schema validation (if schema defined)',
+    '  Layer 2 (Schema contract): reserved; currently skipped',
     '  Layer 3 (Engine): Dry-run ops against current tree in memory',
     '  Layer 4 (Gates): Structural quality checks (duplicate keys, broken relations)',
     '',

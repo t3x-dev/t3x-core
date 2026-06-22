@@ -1,24 +1,4 @@
-// @t3x-dev/schema — YAML Schema Validation
-
-// ── Types ──
-
-export type {
-  NodeDef,
-  RuleDef,
-  Schema,
-  SchemaResult,
-  SlotDef,
-  SlotFull,
-  SlotShorthand,
-  Violation,
-  ViolationCode,
-} from './types';
-
-// ── Parser ──
-
-export { normalizeSlot, parseSchema, parseSchemaObject } from './parser';
-
-// ── P0 Contract ──
+// @t3x-dev/yschema — P0 schema contract validation
 
 export type {
   ContentKind,
@@ -58,12 +38,3 @@ export {
   t3xPrdP0Fixtures,
   validateTree,
 } from './p0';
-
-// ── Validator ──
-
-export { validateSchema } from './validator';
-
-// ── Fixer ──
-
-export type { FixPlan } from './fixer';
-export { buildFixPlan } from './fixer';
