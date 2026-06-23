@@ -4,7 +4,8 @@
  * Factory that creates an engine from an OpRegistry.
  * Dispatches ops via registry lookup with field validation.
  * Deep clones input so the original is never mutated.
- * Fail-fast: stops at the first error and returns partial state.
+ * Fail-fast and atomic: stops at the first error and returns the original
+ * document state on failure.
  */
 
 import { YOPS_ERRORS, yopsError } from './errors';
@@ -85,7 +86,8 @@ function deprecatedFieldWarnings(
 
 export function createEngine(registry: OpRegistry) {
   function applyYOps(doc: YValue, ops: YOp[]): YOpsResult {
-    let current = deepClone(doc);
+    const original = deepClone(doc);
+    let current = deepClone(original);
     const warnings: YOpsWarning[] = [];
 
     function finish(result: Omit<YOpsResult, 'warnings'>): YOpsResult {
@@ -102,7 +104,7 @@ export function createEngine(registry: OpRegistry) {
       if (!isMappingObject(rawOp)) {
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: yopsError(
             YOPS_ERRORS.INVALID_OP,
@@ -118,7 +120,7 @@ export function createEngine(registry: OpRegistry) {
       if (opName === null) {
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: yopsError(YOPS_ERRORS.INVALID_OP, `Op at index ${i} has no operation key`, i),
         });
@@ -131,7 +133,7 @@ export function createEngine(registry: OpRegistry) {
       if (!handler) {
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: yopsError(YOPS_ERRORS.UNKNOWN_OP, `Unknown operation: ${opName}`, i),
         });
@@ -146,7 +148,7 @@ export function createEngine(registry: OpRegistry) {
       if (!isMappingObject(payload)) {
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: yopsError(
             YOPS_ERRORS.INVALID_OP,
@@ -166,7 +168,7 @@ export function createEngine(registry: OpRegistry) {
       const opSpec = registry.getOpSpec(opName) as OpSpec;
       const fieldError = validateFields(opName, fields, opSpec, i);
       if (fieldError) {
-        return finish({ ok: false, doc: current, applied: i, error: fieldError });
+        return finish({ ok: false, doc: original, applied: i, error: fieldError });
       }
       warnings.push(...deprecatedFieldWarnings(opName, fields, opSpec, i));
 
@@ -177,7 +179,7 @@ export function createEngine(registry: OpRegistry) {
         const issue = schemaResult.error.issues[0];
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: yopsError(
             YOPS_ERRORS.INVALID_OP,
@@ -192,7 +194,7 @@ export function createEngine(registry: OpRegistry) {
       if (result.error) {
         return finish({
           ok: false,
-          doc: current,
+          doc: original,
           applied: i,
           error: result.error,
         });

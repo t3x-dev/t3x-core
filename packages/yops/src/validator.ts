@@ -29,11 +29,11 @@
  *   - Auto-apply of `suggestion` text (consumers' UI decision).
  */
 
-import * as yaml from 'js-yaml';
 import { isMappingObject, OP_METADATA_KEYS, resolveOpName } from './opShape';
 import { tryParsePath } from './paths';
 import { parseSpec, type YOpsSpec } from './spec';
 import { SPEC_YAML } from './specData';
+import { parseYamlDeclaration, YOPS_YAML_PROFILE_UNSUPPORTED } from './yamlProfile';
 
 // ── Diagnostic shape ─────────────────────────────────────────────────────
 
@@ -77,6 +77,7 @@ export interface YOpsDiagnostic {
 export const YOPS_DIAGNOSTIC_CODES = {
   // Document / envelope (op_index === null)
   YOPS_INVALID_YAML: 'YOPS_INVALID_YAML',
+  YOPS_YAML_PROFILE_UNSUPPORTED,
   YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY: 'YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY',
   YOPS_DOCUMENT_YOPS_NOT_ARRAY: 'YOPS_DOCUMENT_YOPS_NOT_ARRAY',
   // Op-level
@@ -751,36 +752,37 @@ export function validateYOpsOps(ops: unknown[]): YOpsDiagnostic[] {
  * normative `{ yops: [...] }` form and a bare array.
  */
 export function validateYOpsYaml(yamlStr: string): YOpsDiagnostic[] {
-  let parsed: unknown;
-  try {
-    parsed = yaml.load(yamlStr);
-  } catch (err) {
+  const parsed = parseYamlDeclaration(yamlStr);
+  if (!parsed.ok) {
+    const isProfileViolation = parsed.kind === 'unsupported-profile';
     return [
       diagnostic(
         'error',
-        YOPS_DIAGNOSTIC_CODES.YOPS_INVALID_YAML,
-        `YAML parse error: ${err instanceof Error ? err.message : String(err)}`,
+        isProfileViolation
+          ? YOPS_DIAGNOSTIC_CODES.YOPS_YAML_PROFILE_UNSUPPORTED
+          : YOPS_DIAGNOSTIC_CODES.YOPS_INVALID_YAML,
+        isProfileViolation ? parsed.error : `YAML parse error: ${parsed.error}`,
         { op_index: null, field: null }
       ),
     ];
   }
 
-  if (Array.isArray(parsed)) {
-    return validateYOpsOps(parsed);
+  if (Array.isArray(parsed.value)) {
+    return validateYOpsOps(parsed.value);
   }
 
-  if (parsed === null || typeof parsed !== 'object') {
+  if (parsed.value === null || typeof parsed.value !== 'object') {
     return [
       diagnostic(
         'error',
         YOPS_DIAGNOSTIC_CODES.YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY,
-        `Top-level YAML value must be a mapping with a 'yops:' key or a bare array, got ${describeRuntimeType(parsed)}`,
+        `Top-level YAML value must be a mapping with a 'yops:' key or a bare array, got ${describeRuntimeType(parsed.value)}`,
         { op_index: null, field: null }
       ),
     ];
   }
 
-  const inner = (parsed as { yops?: unknown }).yops;
+  const inner = (parsed.value as { yops?: unknown }).yops;
   if (!Array.isArray(inner)) {
     return [
       diagnostic(

@@ -3,11 +3,12 @@
  *
  * Input: sourced ops + turns (turns are context for future validation needs).
  * Output: { tree, sourceIndex, partial? } — replay never throws on op-level
- * errors. When the engine fails partway, we return whatever applied + a
- * structured `partial` describing what blew up. Callers (initial load) can
- * render the partial tree and surface a banner; callers that want
- * fail-fast semantics (optimistic appends) can check `partial` and throw
- * themselves (see queries/loadConversation.ts:replayAppended).
+ * errors. When the engine fails partway, the atomic YOps contract returns
+ * the original baseline tree plus a structured `partial` describing what
+ * blew up. Callers (initial load) can render the baseline and surface a
+ * banner; callers that want fail-fast semantics (optimistic appends) can
+ * check `partial` and throw themselves (see queries/loadConversation.ts:
+ * replayAppended).
  *
  * sourceIndex maps each touched path to the Source that produced (or last
  * overwrote) that slot/node. Only successfully-applied ops appear here.
@@ -68,10 +69,11 @@ export function replay(
   const result = applySourcedYOps(baseContent, ops as SourcedYOp[]);
 
   const sourceIndex = new Map<string, Source>();
-  // Engine returns `applied` whether or not it succeeded. Index sources only
-  // for ops that actually landed in the tree.
-  const appliedCount = result.applied;
-  for (let i = 0; i < appliedCount; i++) {
+  // Engine returns `applied` as diagnostic progress. On failure the returned
+  // tree is the original baseline, so rollbacked op sources must not be
+  // indexed against nodes that are not present in the rendered tree.
+  const landedCount = result.ok ? result.applied : 0;
+  for (let i = 0; i < landedCount; i++) {
     const op = ops[i];
     const src = (op as unknown as { source: Source }).source;
     for (const p of indexPathsFor(op)) {
@@ -82,13 +84,13 @@ export function replay(
   const tree: SemanticContent = { trees: result.trees, relations: result.relations };
 
   if (!result.ok) {
-    const opIndex = result.error?.op_index ?? appliedCount;
+    const opIndex = result.error?.op_index ?? result.applied;
     return {
       tree,
       sourceIndex,
       partial: {
         opIndex,
-        appliedCount,
+        appliedCount: result.applied,
         code: result.error?.code ?? 'UNKNOWN',
         message: result.error?.message ?? `replay failed at op ${opIndex}`,
       },

@@ -29,8 +29,13 @@ YOps is part of the public alpha surface. Its runtime source of truth is
 `packages/yops/yops.yaml`.
 
 Contract-bearing YOps changes include operation names, operation families,
-fields, field types, enum values, path syntax, runtime error codes, validator
-diagnostic codes, conformance cases, recipes, and examples.
+fields, field types, enum values, path syntax, YAML declaration profile, parser
+behavior, canonical serialization, runtime error codes, validator diagnostic
+codes, conformance cases, recipes, and examples.
+
+New YOps operation names are not added directly to the frozen core surface.
+They start as experimental extensions and require conformance cases before
+promotion.
 
 See [`docs/release/stability-policy.md`](release/stability-policy.md) for
 the full policy, including the gate for future YOps spec-tightening PRs.
