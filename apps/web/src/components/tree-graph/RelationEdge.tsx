@@ -42,7 +42,13 @@ export function RelationEdge({
   const edgeData = data as RelationEdgeData | undefined;
   const relationType = edgeData?.relationType ?? 'follows';
   const isNew = edgeData?.isNew ?? false;
-  const relStyle = RELATION_STYLES[relationType] ?? RELATION_STYLES.follows;
+  const hasKnownStyle = relationType in RELATION_STYLES;
+  const relStyle = hasKnownStyle
+    ? RELATION_STYLES[relationType]
+    : {
+        ...RELATION_STYLES.follows,
+        label: relationType.replace('_', ' '),
+      };
   const strokeWidth = STROKE_WIDTHS[relationType] ?? 2;
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
@@ -112,7 +118,7 @@ export function RelationEdge({
           transition: 'stroke-width 150ms ease, opacity 150ms ease',
           ...newEdgeStyle,
         }}
-        markerEnd={`url(#${markerIdFor(relationType)})`}
+        markerEnd={`url(#${markerIdFor(hasKnownStyle ? relationType : 'follows')})`}
       />
 
       {/* Label on hover */}

@@ -57,3 +57,4 @@ export { usageRoutes } from './usage.openapi';
 export { webhooksRoutes } from './webhooks.openapi';
 export { yopsLogRoutes } from './yops-log.openapi';
 export { yopsValidateRoutes } from './yops-validate.openapi';
+export { yschemaPrdSmokeRoutes } from './yschema-prd-smoke.openapi';

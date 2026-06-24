@@ -64,12 +64,15 @@ const OapiTreeNodeSchema: z.ZodType<{
     },
   });
 
-const OapiRelationTypeSchema = z.enum(['causes', 'conditions', 'contrasts', 'follows', 'depends']);
+// SemanticContent transports relation keys. Schema-backed workflows validate
+// declaration/endpoints against YSchema before commit; this API schema only
+// enforces the shared machine-key shape.
+const OapiRelationTransportKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
 
 const OapiRelationSchema = z.object({
   from: z.string(),
   to: z.string(),
-  type: OapiRelationTypeSchema,
+  type: OapiRelationTransportKeySchema,
 });
 
 const OapiSemanticContentSchema = z.object({

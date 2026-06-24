@@ -222,7 +222,7 @@ export function ProjectDemoTourOverlay({
 }: ProjectDemoTourOverlayProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
-  const [advancingAfterTargetClick, setAdvancingAfterTargetClick] = useState(false);
+  const advancingAfterTargetClickRef = useRef(false);
   const coachRef = useRef<HTMLDivElement>(null);
   const [coachHeight, setCoachHeight] = useState(360);
   const steps = PROJECT_TOUR_STEPS_BY_STAGE[stage] ?? PROJECT_TOUR_STEPS_BY_STAGE.details;
@@ -239,7 +239,7 @@ export function ProjectDemoTourOverlay({
     if (!open) return;
     setStepIndex(0);
     setTargetRect(null);
-    setAdvancingAfterTargetClick(false);
+    advancingAfterTargetClickRef.current = false;
   }, [open, stage]);
 
   const coachPosition = useMemo(() => {
@@ -299,7 +299,7 @@ export function ProjectDemoTourOverlay({
     if (!open) {
       setStepIndex(0);
       setTargetRect(null);
-      setAdvancingAfterTargetClick(false);
+      advancingAfterTargetClickRef.current = false;
       return;
     }
 
@@ -341,7 +341,7 @@ export function ProjectDemoTourOverlay({
   useLayoutEffect(() => {
     if (!open || !step.advanceOnTargetClick || !step.target) return;
     const handleTargetClick = (event: MouseEvent) => {
-      if (advancingAfterTargetClick) return;
+      if (advancingAfterTargetClickRef.current) return;
       const node = findIntroTarget(step.target);
       if (!node || !node.contains(event.target as Node)) return;
       if (step.advanceClickSelector) {
@@ -350,26 +350,26 @@ export function ProjectDemoTourOverlay({
           eventTarget instanceof Element ? eventTarget.closest(step.advanceClickSelector) : null;
         if (!actionTarget || !node.contains(actionTarget)) return;
       }
-      setAdvancingAfterTargetClick(true);
+      advancingAfterTargetClickRef.current = true;
       window.setTimeout(async () => {
         if (atEnd) {
-          setAdvancingAfterTargetClick(false);
+          advancingAfterTargetClickRef.current = false;
           onDone?.();
           return;
         }
         const nextStep = steps[stepIndex + 1];
         const targetReady = await waitForReadyTarget(nextStep?.target ?? null);
         if (!targetReady) {
-          setAdvancingAfterTargetClick(false);
+          advancingAfterTargetClickRef.current = false;
           return;
         }
+        advancingAfterTargetClickRef.current = false;
         setStepIndex((current) => Math.min(current + 1, steps.length - 1));
-        setAdvancingAfterTargetClick(false);
       }, 0);
     };
     document.addEventListener('click', handleTargetClick, true);
     return () => document.removeEventListener('click', handleTargetClick, true);
-  }, [advancingAfterTargetClick, atEnd, onDone, open, step, stepIndex, steps]);
+  }, [atEnd, onDone, open, step, stepIndex, steps]);
 
   useEffect(() => {
     if (!open || interactionMode !== 'guided') return;

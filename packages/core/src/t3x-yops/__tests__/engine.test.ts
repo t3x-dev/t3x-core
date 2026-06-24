@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import { applySourcedYOps, applyYOps } from '../engine';
-import type { SourcedYOp } from '../types';
+import { YOpSchema } from '../schema';
+import type { SourcedYOp, YOp } from '../types';
 
 // ── Helpers ──
 
@@ -90,6 +91,36 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     expect(result.relations).toEqual([{ from: 'budget', to: 'trip', type: 'conditions' }]);
+  });
+
+  it('applies schema-defined relate operation without legacy relation enum coupling', () => {
+    const input = content([
+      node('requirements', {}, [
+        node('schema_contract', { title: 'Define schema contract' }),
+        node('review_gate', { title: 'Review schema verdict before commit' }),
+      ]),
+    ]);
+    const op: YOp = {
+      relate: {
+        from: 'requirements/review_gate',
+        to: 'requirements/schema_contract',
+        type: 'depends_on',
+      },
+    };
+
+    expect(YOpSchema.safeParse(op).success).toBe(true);
+
+    const result = applyYOps(input, [op]);
+
+    expect(result.ok).toBe(true);
+    expect(result.applied).toBe(1);
+    expect(result.relations).toEqual([
+      {
+        from: 'requirements/review_gate',
+        to: 'requirements/schema_contract',
+        type: 'depends_on',
+      },
+    ]);
   });
 
   it('applies unrelate operation', () => {

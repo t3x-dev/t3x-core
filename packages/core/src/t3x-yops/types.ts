@@ -28,7 +28,6 @@ export type {
 export { YOPS_ERRORS } from '@t3x-dev/yops';
 
 import type { YOp as GenericYOp, YOpsError } from '@t3x-dev/yops';
-import type { RelationType } from '../semantic/types';
 import type { Source } from './source';
 
 // ── T3X-Specific Operations ──
@@ -36,13 +35,13 @@ import type { Source } from './source';
 export interface RelateOp {
   from: string;
   to: string;
-  type: RelationType;
+  type: string;
 }
 
 export interface UnrelateOp {
   from: string;
   to: string;
-  type: RelationType;
+  type: string;
 }
 
 // ── T3X YOp Union (18 generic + 2 T3X extensions) ──

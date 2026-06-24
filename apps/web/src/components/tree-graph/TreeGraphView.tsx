@@ -229,8 +229,7 @@ function TreeGraphInner({
       if (selectedEdges.length > 0) {
         const removeRelations = selectedEdges
           .map((e) => {
-            const relationType = (e.data as { relationType?: SemanticRelationType } | undefined)
-              ?.relationType;
+            const relationType = (e.data as { relationType?: string } | undefined)?.relationType;
             if (!relationType) return null;
             return { from: e.source, to: e.target, type: relationType };
           })

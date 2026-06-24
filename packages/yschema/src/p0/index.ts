@@ -1,8 +1,10 @@
-// @t3x-dev/yschema — P0 schema contract validation
-
+export { normalizeYSchemaObject, parseYSchema } from './normalize';
+export { generatePromptContract } from './promptContract';
+export type { RenderYSchemaMarkdownInput } from './renderMarkdown';
+export { renderYSchemaMarkdown } from './renderMarkdown';
+export { t3xPrdP0Fixtures } from './t3xPrdFixture';
 export type {
   ContentKind,
-  DiffValidationResultsInput,
   FixProposal,
   NodeSchema,
   PromptContract,
@@ -14,7 +16,6 @@ export type {
   RelateYOp,
   RelationEndpointPattern,
   RelationTypeSchema,
-  RenderYSchemaMarkdownInput,
   ReservedRuleSchema,
   SlotSchema,
   SlotType,
@@ -32,14 +33,10 @@ export type {
   YSchemaKey,
   YSchemaPath,
   YSchemaRelation,
+} from './types';
+export { validateTree } from './validateTree';
+export type {
+  DiffValidationResultsInput,
   YSchemaValidationDelta,
-} from './p0';
-export {
-  diffValidationResults,
-  generatePromptContract,
-  normalizeYSchemaObject,
-  parseYSchema,
-  renderYSchemaMarkdown,
-  t3xPrdP0Fixtures,
-  validateTree,
-} from './p0';
+} from './validationDelta';
+export { diffValidationResults } from './validationDelta';
