@@ -11,6 +11,7 @@
 
 import * as yaml from 'js-yaml';
 import type { YOp } from './types';
+import { parseYamlDeclaration } from './yamlProfile';
 
 export interface ParseOk {
   ok: true;
@@ -25,19 +26,17 @@ export interface ParseError {
 export type ParseResult = ParseOk | ParseError;
 
 export function parseYOpsYaml(yamlStr: string): ParseResult {
-  let parsed: unknown;
-  try {
-    parsed = yaml.load(yamlStr);
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  const parsed = parseYamlDeclaration(yamlStr);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
   }
 
-  if (Array.isArray(parsed)) {
-    return { ok: true, ops: parsed as YOp[] };
+  if (Array.isArray(parsed.value)) {
+    return { ok: true, ops: parsed.value as YOp[] };
   }
 
-  if (parsed && typeof parsed === 'object') {
-    const inner = (parsed as { yops?: unknown }).yops;
+  if (parsed.value && typeof parsed.value === 'object') {
+    const inner = (parsed.value as { yops?: unknown }).yops;
     if (Array.isArray(inner)) {
       return { ok: true, ops: inner as YOp[] };
     }
@@ -45,7 +44,7 @@ export function parseYOpsYaml(yamlStr: string): ParseResult {
 
   return {
     ok: false,
-    error: 'Expected a YAML array of ops, or { yops: [...] }, got ' + typeof parsed,
+    error: 'Expected a YAML array of ops, or { yops: [...] }, got ' + typeof parsed.value,
   };
 }
 

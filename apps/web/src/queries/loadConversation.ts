@@ -6,8 +6,8 @@
  * `fetchConversationSnapshot` loads a conversation's turns + yops log,
  * runs the deterministic replay, and returns the full derived snapshot —
  * including a `partial` field when one of the persisted ops failed to
- * replay. Callers (useChatInit) write the partial tree to the store and
- * render a banner; they do *not* drop the rest of the conversation.
+ * replay. Callers (useChatInit) write the replayed baseline tree to the
+ * store and render a banner; they do *not* drop the rest of the conversation.
  *
  * `replayAppended` is the optimistic-update helper used by useGoldEdit.
  * It keeps fail-fast semantics: a bad append throws YOpsReplayError so

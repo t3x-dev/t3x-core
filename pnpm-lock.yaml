@@ -952,6 +952,9 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@20.19.27)(@vitest/coverage-v8@4.1.8)(jsdom@28.0.0)(vite@8.0.16(@types/node@20.19.27)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      yaml:
+        specifier: 2.8.3
+        version: 2.8.3
       zod:
         specifier: ^4.2.1
         version: 4.2.1

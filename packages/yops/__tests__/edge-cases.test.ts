@@ -3200,16 +3200,17 @@ describe('composition & shape transitions', () => {
     expect(r.error?.op_index).toBe(4);
   });
 
-  // 12. Document survives partial failure
-  it('partial failure preserves last good state', () => {
-    const r = applyYOps({}, [
+  // 12. Failure returns the original document
+  it('partial failure returns the original document state', () => {
+    const input: YValue = {};
+    const r = applyYOps(input, [
       { set: { path: 'a', value: 1 } },
       { set: { path: 'b', value: 2 } },
-      { drop: { path: 'nonexistent' } }, // fails
+      { drop: { path: 'nonexistent' } },
     ]);
     expect(r.ok).toBe(false);
-    expect((r.doc as any).a).toBe(1);
-    expect((r.doc as any).b).toBe(2);
+    expect(r.doc).toEqual({});
+    expect(input).toEqual({});
   });
 
   // 13. Path addressing: key + index + match in one path
