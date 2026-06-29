@@ -1,5 +1,29 @@
 # @t3x-dev/yops
 
+## 0.6.0
+
+### Minor Changes
+
+- [#1163](https://github.com/t3x-dev/t3x-core/pull/1163) [`896ef97`](https://github.com/t3x-dev/t3x-core/commit/896ef9749e6a1c90cc3926d4bd76e1d4f05acf78) Thanks [@etht3x](https://github.com/etht3x)! - Tighten the YOPS failure contract so failed apply results return the original
+  document state instead of exposing a partially applied working document.
+
+- [#1162](https://github.com/t3x-dev/t3x-core/pull/1162) [`73d147d`](https://github.com/t3x-dev/t3x-core/commit/73d147dece3306a7fc58aba9ef59ba80c31760af) Thanks [@etht3x](https://github.com/etht3x)! - Publish `canonicalJson` as the audit-facing YOPS canonical JSON serialization
+  helper while preserving `canonicalKey` for equality and ordering behavior.
+
+- [#1160](https://github.com/t3x-dev/t3x-core/pull/1160) [`7c80d16`](https://github.com/t3x-dev/t3x-core/commit/7c80d16eb4fa9ac17ac37e2fc9056b89b04ed084) Thanks [@etht3x](https://github.com/etht3x)! - Clarify YOPS as a declarative operation language over JSON-compatible YAML
+  documents. This documents the YAML declaration surface, the YOPS Document Model,
+  and canonical JSON as contract-bearing alpha surfaces.
+
+  Breaking declaration: @t3x-dev/yops alpha API surface changed as part of the
+  0.6.0 YOps contract hardening release.
+
+- [#1161](https://github.com/t3x-dev/t3x-core/pull/1161) [`ab019c7`](https://github.com/t3x-dev/t3x-core/commit/ab019c7773d91f50aef98441c8882193e016d5a6) Thanks [@etht3x](https://github.com/etht3x)! - Enforce the YOPS YAML Declaration Profile in `parseYOpsYaml` and `validateYOpsYaml`: JSON syntax and YAML 1.2 string scalars remain accepted, while anchors, aliases, merge keys, and multiple YAML documents are rejected.
+
+### Patch Changes
+
+- [#1164](https://github.com/t3x-dev/t3x-core/pull/1164) [`a37a3e2`](https://github.com/t3x-dev/t3x-core/commit/a37a3e2f0413332108f8def62be314077285c2b4) Thanks [@etht3x](https://github.com/etht3x)! - Document the YOPS extension lane for experimental namespaced operations before
+  promotion into the core 1.x conformance surface.
+
 ## 0.5.1
 
 ### Patch Changes
