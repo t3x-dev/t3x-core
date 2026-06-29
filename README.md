@@ -78,6 +78,16 @@ npm install @t3x-dev/yops
 
 The package is part of the public alpha npm release surface.
 
+### Use YSchema as a library
+
+Use this path when you want schema validation helpers for structured T3X state:
+
+```bash
+npm install @t3x-dev/yschema
+```
+
+The package is part of the public alpha npm release surface.
+
 ### Validate the self-hosted stack <sup>evaluation</sup>
 
 ```bash
@@ -341,6 +351,7 @@ The current npm release surface is intentionally narrow and declared in
 |:--------|:----|:------------|
 | [`@t3x-dev/local`](apps/local/) | public alpha | Local installer and no-key demo entrypoint |
 | [`@t3x-dev/yops`](packages/yops/) | public alpha | Declarative YAML operations |
+| [`@t3x-dev/yschema`](packages/yschema/) | public alpha | Schema validation candidate for structured state |
 
 Other packages remain internal or preview until they are promoted into the
 release surface.

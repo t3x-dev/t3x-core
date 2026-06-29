@@ -4,9 +4,9 @@ Command-line interface for T3X structured-state workflows.
 
 ## Preview status
 
-The CLI is a preview/internal surface. It is not part of the current restricted
-alpha package surface; the restricted alpha packages are `@t3x-dev/local` and
-`@t3x-dev/yops`.
+The CLI is a preview/internal surface. It is not part of the current public
+alpha package surface; the public alpha packages are `@t3x-dev/local`,
+`@t3x-dev/yops`, and `@t3x-dev/yschema`.
 
 ## First-Stage Scope
 

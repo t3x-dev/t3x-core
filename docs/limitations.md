@@ -10,6 +10,7 @@ The current release-facing npm package surface is limited to:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/yschema`
 
 Package access is public for the current release surface. Other packages in this
 repository are preview or internal until promoted through the release process in
@@ -59,3 +60,9 @@ public alpha surface. Its runtime source of truth is
 Spec changes are allowed during public alpha, but contract-bearing changes
 must follow the stability policy. Future YOps tightening work should proceed in
 small PRs, one spec contraction at a time, with executable conformance coverage.
+
+## YSchema Limitations
+
+YSchema is a public alpha validation candidate. It is useful for schema-backed
+state validation, but its API and supported schema profile may still change
+during alpha. Keep compatibility-sensitive changes documented with changesets.

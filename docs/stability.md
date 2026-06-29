@@ -9,6 +9,7 @@ The public alpha release surface is:
 
 - `@t3x-dev/local`
 - `@t3x-dev/yops`
+- `@t3x-dev/yschema`
 
 The source of truth is [`RELEASE.md`](../RELEASE.md) and
 [`release/surface.yaml`](../release/surface.yaml). Other packages remain internal
@@ -39,6 +40,12 @@ promotion.
 
 See [`docs/release/stability-policy.md`](release/stability-policy.md) for
 the full policy, including the gate for future YOps spec-tightening PRs.
+
+## YSchema Contract
+
+YSchema is part of the public alpha surface as a validation candidate for
+schema-backed structured state. Its public API can still evolve during alpha,
+but user-visible behavior changes require a changeset and release notes.
 
 ## Preview and Internal Surfaces
 
