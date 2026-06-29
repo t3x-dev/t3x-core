@@ -26,6 +26,7 @@ current npm publish surface and the target package versions:
 
 - `@t3x-dev/local`: 0.0.0
 - `@t3x-dev/yops`: 0.0.0
+- `@t3x-dev/yschema`: 0.0.0
 
 Use concrete package versions here, not changeset bump types like patch/minor.
 CI validates this section against .changeset/*.md.
@@ -48,8 +49,8 @@ CI validates this section against .changeset/*.md.
   use bump types such as patch/minor/major.
 - Code-only releases use `Package Releases: - None`; final GitHub Release notes
   omit package information.
-- Current package releases include both `@t3x-dev/local` and `@t3x-dev/yops`,
-  so runtime artifacts are required for package releases.
+- Current package releases include `@t3x-dev/local`, `@t3x-dev/yops`, and
+  `@t3x-dev/yschema`, so runtime artifacts are required for package releases.
 - Merging this PR to `main` does not publish by itself unless the follow-up
   Changesets version/publish flow determines a publish is required.
 

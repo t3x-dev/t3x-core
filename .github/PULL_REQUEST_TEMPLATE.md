@@ -29,6 +29,7 @@ Choose one:
 - [ ] No release impact
 - [ ] Changes public behavior for `@t3x-dev/local`
 - [ ] Changes public behavior for `@t3x-dev/yops`
+- [ ] Changes public behavior for `@t3x-dev/yschema`
 - [ ] Changes release, packaging, or publish behavior
 - [ ] Changes public documentation contract
 

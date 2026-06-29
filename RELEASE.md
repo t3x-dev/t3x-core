@@ -10,6 +10,7 @@ this file is the human-readable mirror.
 |---|---|---|---|---|---|
 | `@t3x-dev/local` | `apps/local` | public | alpha | applied | First-door local installer and no-key demo entrypoint. |
 | `@t3x-dev/yops` | `packages/yops` | public | alpha | applied | Deterministic YAML operation contract. |
+| `@t3x-dev/yschema` | `packages/yschema` | public | alpha | applied | Schema validation candidate for schema-backed structured state. |
 
 `npm_publish: true` means the package is part of the alpha npm release surface.
 `access: public` means the package is available through the public npm registry.
@@ -20,7 +21,6 @@ These packages exist in the repository but are not part of the alpha npm release
 surface. They may be promoted later after API stability review:
 
 - `@t3x-dev/core`
-- `@t3x-dev/yschema`
 - `@t3x-dev/api-client`
 - `@t3x-dev/cli`
 - `@t3x-dev/mcp`
@@ -39,6 +39,8 @@ surface. They may be promoted later after API stability review:
 
 ## Changelog
 
+- 2026-06-29: Promoted `@t3x-dev/yschema` into the public alpha npm release
+  surface alongside `@t3x-dev/local` and `@t3x-dev/yops`.
 - 2026-06-01: Kept the npm release surface to `@t3x-dev/local` and
   `@t3x-dev/yops`.
 - 2026-05-31: Initial alpha declaration.
