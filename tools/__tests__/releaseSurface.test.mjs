@@ -12,14 +12,23 @@ function readText(relativePath) {
   return readFileSync(new URL(relativePath, root), 'utf8');
 }
 
-test('release surface declares local and yops as the public alpha npm packages', () => {
+test('release surface declares local, yops, and yschema as the public alpha npm packages', () => {
   const result = validateReleaseSurface({ rootDir: root });
 
   assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.npmPublishPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
-  assert.deepEqual(result.releaseMarkdownNpmPackages, ['@t3x-dev/local', '@t3x-dev/yops']);
+  assert.deepEqual(result.npmPublishPackages, [
+    '@t3x-dev/local',
+    '@t3x-dev/yops',
+    '@t3x-dev/yschema',
+  ]);
+  assert.deepEqual(result.releaseMarkdownNpmPackages, [
+    '@t3x-dev/local',
+    '@t3x-dev/yops',
+    '@t3x-dev/yschema',
+  ]);
   assert.equal(result.packagesByName.get('@t3x-dev/local')?.publish_state, 'applied');
   assert.equal(result.packagesByName.get('@t3x-dev/yops')?.publish_state, 'applied');
+  assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.publish_state, 'applied');
 });
 
 test('release surface keeps candidate packages restricted until promoted', () => {
@@ -28,8 +37,8 @@ test('release surface keeps candidate packages restricted until promoted', () =>
   assert.deepEqual(result.errors, []);
   assert.equal(result.packagesByName.get('@t3x-dev/local')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/yops')?.access, 'public');
+  assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'public');
   assert.equal(result.packagesByName.get('@t3x-dev/core')?.access, 'restricted');
-  assert.equal(result.packagesByName.get('@t3x-dev/yschema')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/api-client')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/cli')?.access, 'restricted');
   assert.equal(result.packagesByName.get('@t3x-dev/mcp')?.access, 'restricted');
@@ -41,6 +50,7 @@ test('README mirrors the public alpha surface instead of the old broad package l
   assert.match(readme, /The current npm release surface is intentionally narrow/);
   assert.match(readme, /\| \[`@t3x-dev\/local`\]\(apps\/local\/\) \| public alpha \|/);
   assert.match(readme, /\| \[`@t3x-dev\/yops`\]\(packages\/yops\/\) \| public alpha \|/);
+  assert.match(readme, /\| \[`@t3x-dev\/yschema`\]\(packages\/yschema\/\) \| public alpha \|/);
   assert.match(readme, /npx -p @t3x-dev\/local t3x-local/);
   assert.doesNotMatch(readme, /npx -p @t3x-dev\/local t3x-local start/);
   assert.doesNotMatch(readme, /public npm surface is centered on `@t3x-dev\/core`/);

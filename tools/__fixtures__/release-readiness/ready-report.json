@@ -74,8 +74,8 @@
     }
   ],
   "release_surface": {
-    "package_count": 2,
-    "npm_publish_packages": ["@t3x-dev/local", "@t3x-dev/yops"],
+    "package_count": 3,
+    "npm_publish_packages": ["@t3x-dev/local", "@t3x-dev/yops", "@t3x-dev/yschema"],
     "warnings": []
   }
 }

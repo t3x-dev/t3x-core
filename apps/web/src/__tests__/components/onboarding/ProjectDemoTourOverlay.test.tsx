@@ -243,6 +243,7 @@ describe('ProjectDemoTourOverlay', () => {
     await waitFor(() => {
       expect(screen.getByText('Choose the Leaf destination')).toBeInTheDocument();
     });
+    await flushGuidedClick();
 
     fireEvent.click(screen.getByTestId('leaf-type-options'));
 

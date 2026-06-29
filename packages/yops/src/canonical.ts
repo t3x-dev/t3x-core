@@ -55,6 +55,20 @@ export function canonicalKey(value: YValue): string {
 }
 
 /**
+ * Audit-facing canonical JSON serialization for YOPS document-model values.
+ *
+ * This intentionally reuses the same codepoint-ordered mapping rule as
+ * `canonicalKey`, so equality/order helpers and audit serialization agree.
+ * Today it is deliberately the same serialization function as `canonicalKey`;
+ * changing one without the other would be a conscious contract change.
+ * It is a YOPS canonical form; do not label it RFC 8785/JCS unless the spec
+ * and tests explicitly adopt that external algorithm.
+ */
+export function canonicalJson(value: YValue): string {
+  return canonicalKey(value);
+}
+
+/**
  * Codepoint comparison for two YValues used by `sort`.
  *
  * Type rank: null < boolean < number < string < array < mapping. Within

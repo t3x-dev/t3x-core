@@ -4,10 +4,9 @@ import { AlertTriangle, Loader2, Trash2, Wrench, X } from 'lucide-react';
 import { useReplayWarningActions } from '@/hooks/conversations/useReplayWarningActions';
 
 /**
- * Non-fatal banner shown above the workspace when initial replay applied
- * some but not all persisted ops. Surfaces the failing op + code + message
- * and offers a one-click delete that drops the offending yops_log row and
- * re-hydrates the workspace.
+ * Non-fatal banner shown above the workspace when initial replay fails after
+ * partial progress. Surfaces the failing op + code + message and offers
+ * one-click repair/delete actions for the offending yops_log row.
  *
  * Renders nothing when there's no warning — safe to mount unconditionally.
  */
@@ -32,8 +31,9 @@ export function ReplayWarningBanner() {
           {replayWarning.message}
         </div>
         <div className="mt-1 opacity-70">
-          {replayWarning.appliedCount} earlier op{replayWarning.appliedCount === 1 ? '' : 's'} still
-          rendered above. Subsequent ops are skipped until this one is resolved.
+          Replay stayed at the original baseline. {replayWarning.appliedCount} earlier op
+          {replayWarning.appliedCount === 1 ? '' : 's'} passed before rollback; subsequent ops are
+          skipped until this one is resolved.
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">

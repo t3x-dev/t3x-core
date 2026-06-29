@@ -38,12 +38,18 @@ export const RelationTypeSchema = z.enum([
   'depends',
 ]);
 
+const RelationKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
 export const RelationSchema = z.object({
   from: z.string(),
   to: z.string(),
-  type: RelationTypeSchema,
+  type: RelationKeySchema,
   from_project: z.string().optional(),
   to_project: z.string().optional(),
+});
+
+export const LegacyRelationSchema = RelationSchema.extend({
+  type: RelationTypeSchema,
 });
 
 // ── SemanticContent ──
@@ -54,6 +60,10 @@ export const SemanticContentSchema = z.object({
     .min(1)
     .max(1000),
   relations: z.array(RelationSchema).max(5000).default([]),
+});
+
+export const LegacySemanticContentSchema = SemanticContentSchema.extend({
+  relations: z.array(LegacyRelationSchema).max(5000).default([]),
 });
 
 // ── Internal: FlatNode Schema (for diff/merge validation only) ──

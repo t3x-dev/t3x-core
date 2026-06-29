@@ -1,8 +1,7 @@
 import { YOpSchema as GenericYOpSchema, validateOps as genericValidateOps } from '@t3x-dev/yops';
 import { z } from 'zod';
-import { RELATION_TYPES } from '../semantic/types';
 
-const RelationTypeSchema = z.enum(RELATION_TYPES as unknown as [string, ...string[]]);
+const RelationKeySchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
 
 const RelateOpSchema = z
   .object({
@@ -10,7 +9,7 @@ const RelateOpSchema = z
       .object({
         from: z.string().min(1),
         to: z.string().min(1),
-        type: RelationTypeSchema,
+        type: RelationKeySchema,
       })
       .strict(),
   })
@@ -22,7 +21,7 @@ const UnrelateOpSchema = z
       .object({
         from: z.string().min(1),
         to: z.string().min(1),
-        type: RelationTypeSchema,
+        type: RelationKeySchema,
       })
       .strict(),
   })

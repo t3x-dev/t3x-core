@@ -12,7 +12,86 @@
 
 name: yops
 version: "1.0"
-description: Declarative YAML-to-YAML operations
+description: Declarative operations over JSON-compatible YAML documents
+
+# ----------------------------------------------------------------------------
+# Document model and serializations — what is normative
+# ----------------------------------------------------------------------------
+document_model:
+  name: YOPS Document Model
+  description: >
+    The normative machine contract for YOPS. Values are JSON-compatible:
+    string, number, boolean, null, sequence, or mapping with string keys.
+
+serializations:
+  yaml_declaration:
+    name: YOPS YAML Declaration
+    description: Human-readable YAML 1.2 profile accepted by YOPS parsers.
+  json_object:
+    name: YOPS JSON Object
+    description: Native JSON-compatible object form used by APIs and SDKs.
+  canonical_json:
+    name: YOPS Canonical JSON
+    description: Deterministic audit/hash serialization of the document model.
+    algorithm: yops-canonical-json-v1
+    rule: >
+      Serialize JSON-compatible YOPS values with mappings sorted by Unicode
+      codepoint order. This form is for audit and hash identity, not authoring.
+
+yaml_profile:
+  name: YOPS YAML Declaration Profile
+  description: >-
+    A JSON-compatible YAML 1.2 authoring profile for human-readable YOPS
+    declarations. It preserves plain strings such as on/off/yes/no, accepts
+    JSON syntax, and rejects YAML graph/document features that do not map
+    cleanly to the YOPS Document Model.
+  accepts:
+    - bare array of operations
+    - mapping envelope with yops array
+    - JSON syntax
+    - YAML 1.2 plain strings such as on, off, yes, and no
+  rejects:
+    - anchors
+    - aliases
+    - merge keys
+    - multiple YAML documents
+  conformance_cases:
+    - name: accepts JSON syntax
+      yaml: '[{ "set": { "path": "feature/enabled", "value": true } }]'
+      accepted: true
+    - name: treats YAML 1.1 boolean words as strings
+      yaml: |
+        yops:
+          - set: { path: flags/on, value: on }
+          - set: { path: flags/off, value: off }
+          - set: { path: flags/yes, value: yes }
+          - set: { path: flags/no, value: no }
+      accepted: true
+    - name: rejects anchors
+      yaml: |
+        yops:
+          - set: &set_payload { path: feature/enabled, value: true }
+      accepted: false
+    - name: rejects aliases
+      yaml: |
+        yops:
+          - set: &set_payload { path: feature/enabled, value: true }
+          - set: *set_payload
+      accepted: false
+    - name: rejects merge keys
+      yaml: |
+        yops:
+          - set:
+              <<: { path: feature/enabled }
+              value: true
+      accepted: false
+    - name: rejects multiple documents
+      yaml: |
+        ---
+        yops: []
+        ---
+        yops: []
+      accepted: false
 
 # ----------------------------------------------------------------------------
 # Value — what YOps operates on
@@ -20,8 +99,9 @@ description: Declarative YAML-to-YAML operations
 value:
   type: any
   description: >
-    Any valid YAML value. A YOps document is any YValue — scalar, sequence,
-    or mapping. Operations address locations within the document via paths.
+    Any JSON-compatible YAML value. A YOps document is any YValue — scalar,
+    sequence, or mapping with string keys. Operations address locations within
+    the document via paths.
   variants:
     - string
     - number
@@ -1091,6 +1171,11 @@ execution:
   order: sequential          # operations execute top to bottom
   on_error: stop             # stop at first failed operation
   immutable_input: true      # engine deep clones input, never mutates original
+  atomicity: >
+    A YOPS document is applied atomically. Operations apply in order against a
+    working copy. If any operation fails, application stops, the error reports
+    the failing op index, and the result document is the original document
+    state.
   idempotent_ops: [unset, omit]  # no error on missing target
   strict_ops:
     - define
@@ -1109,6 +1194,17 @@ execution:
     - unique
     - pick
   readonly_ops: [assert]     # never mutates the document
+
+extension_policy:
+  core_ops: frozen_for_1_x
+  rule: >
+    The 18 core operations are the stable conformance surface for YOPS 1.x.
+    New operations must start as namespaced extensions, marked experimental,
+    and excluded from core conformance until promoted by a later spec version.
+  promotion_requires:
+    - production usage evidence
+    - conformance cases
+    - stability review
 
 # ----------------------------------------------------------------------------
 # Document Format
@@ -1497,6 +1593,13 @@ diagnostic_codes:
   YOPS_INVALID_YAML:
     severity: error
     meaning: The input string failed to parse as YAML.
+
+  YOPS_YAML_PROFILE_UNSUPPORTED:
+    severity: error
+    meaning: >-
+      The input parsed as YAML but used a feature outside the YOPS YAML
+      Declaration Profile, such as anchors, aliases, merge keys, or multiple
+      YAML documents.
 
   YOPS_DOCUMENT_NOT_MAPPING_OR_ARRAY:
     severity: error

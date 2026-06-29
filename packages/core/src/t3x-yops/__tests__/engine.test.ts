@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Relation, SemanticContent, TreeNode } from '../../semantic/types';
 import { applySourcedYOps, applyYOps } from '../engine';
-import type { SourcedYOp } from '../types';
+import { YOpSchema } from '../schema';
+import type { SourcedYOp, YOp } from '../types';
 
 // ── Helpers ──
 
@@ -54,6 +55,29 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(result.applied).toBe(0);
   });
 
+  it('returns the original content when a later operation fails', () => {
+    const genericThenRelateFailure = applyYOps(content(), [
+      { define: { path: 'trip' } },
+      { relate: { from: 'trip', to: 'missing', type: 'depends' } },
+    ]);
+
+    expect(genericThenRelateFailure.ok).toBe(false);
+    expect(genericThenRelateFailure.applied).toBe(1);
+    expect(genericThenRelateFailure.trees).toEqual([]);
+    expect(genericThenRelateFailure.relations).toEqual([]);
+
+    const base = content([node('trip'), node('budget')]);
+    const relateThenGenericFailure = applyYOps(base, [
+      { relate: { from: 'budget', to: 'trip', type: 'conditions' } },
+      { populate: { path: 'missing', values: { amount: 5000 } } },
+    ]);
+
+    expect(relateThenGenericFailure.ok).toBe(false);
+    expect(relateThenGenericFailure.applied).toBe(1);
+    expect(relateThenGenericFailure.trees).toEqual(base.trees);
+    expect(relateThenGenericFailure.relations).toEqual(base.relations);
+  });
+
   it('applies relate operation', () => {
     const input = content([
       node('budget', { amount: 5000 }),
@@ -67,6 +91,36 @@ describe('applyYOps (t3x adapter engine)', () => {
     expect(result.ok).toBe(true);
     expect(result.applied).toBe(1);
     expect(result.relations).toEqual([{ from: 'budget', to: 'trip', type: 'conditions' }]);
+  });
+
+  it('applies schema-defined relate operation without legacy relation enum coupling', () => {
+    const input = content([
+      node('requirements', {}, [
+        node('schema_contract', { title: 'Define schema contract' }),
+        node('review_gate', { title: 'Review schema verdict before commit' }),
+      ]),
+    ]);
+    const op: YOp = {
+      relate: {
+        from: 'requirements/review_gate',
+        to: 'requirements/schema_contract',
+        type: 'depends_on',
+      },
+    };
+
+    expect(YOpSchema.safeParse(op).success).toBe(true);
+
+    const result = applyYOps(input, [op]);
+
+    expect(result.ok).toBe(true);
+    expect(result.applied).toBe(1);
+    expect(result.relations).toEqual([
+      {
+        from: 'requirements/review_gate',
+        to: 'requirements/schema_contract',
+        type: 'depends_on',
+      },
+    ]);
   });
 
   it('applies unrelate operation', () => {

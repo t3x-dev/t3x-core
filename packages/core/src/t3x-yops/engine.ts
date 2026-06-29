@@ -35,11 +35,13 @@ function isUnrelateOp(op: YOp): op is { unrelate: UnrelateOp } {
  *   `@t3x-dev/yops`'s `applyYOps`.
  * - `relate` and `unrelate` ops are handled locally on the relations array.
  * - Inputs are deep-cloned; the caller's content is never mutated.
+ * - Failures are atomic: the returned trees/relations are the original content.
  */
 export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
-  // Deep clone inputs for immutability
-  let currentDoc: YValue = structuredClone(treesToYValue(content.trees));
-  let relations: Relation[] = structuredClone(content.relations);
+  const originalTrees = structuredClone(content.trees);
+  const originalRelations = structuredClone(content.relations);
+  let currentDoc: YValue = treesToYValue(originalTrees);
+  let relations: Relation[] = structuredClone(originalRelations);
   let applied = 0;
 
   for (let i = 0; i < ops.length; i++) {
@@ -49,8 +51,8 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
       if (!result.ok) {
         return {
           ok: false,
-          trees: yvalueToTrees(currentDoc),
-          relations,
+          trees: originalTrees,
+          relations: originalRelations,
           applied,
           error: { ...result.error, op_index: i },
         };
@@ -66,8 +68,8 @@ export function applyYOps(content: SemanticContent, ops: YOp[]): YOpsResult {
       if (!genericResult.ok) {
         return {
           ok: false,
-          trees: yvalueToTrees(currentDoc),
-          relations,
+          trees: originalTrees,
+          relations: originalRelations,
           applied,
           error: genericResult.error ? { ...genericResult.error, op_index: i } : undefined,
         };

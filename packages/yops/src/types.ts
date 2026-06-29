@@ -1,7 +1,7 @@
 /**
  * @yops-dev/core — Type Definitions
  *
- * YValue: any valid YAML value (the document type)
+ * YValue: JSON-compatible YAML value in the YOPS Document Model
  * YOp: discriminated union of all 18 operations
  * YOpsResult/YOpsError: execution result types
  */
@@ -151,6 +151,8 @@ export interface YOpsWarning {
   replacement_field?: string;
 }
 
+// On failure, doc is the original document state. Partial working state is
+// never exposed as the result document.
 export interface YOpsResult {
   ok: boolean;
   doc: YValue;

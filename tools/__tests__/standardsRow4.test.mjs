@@ -17,7 +17,7 @@ test('standards row-4 runs the release surface check through the standards runne
       row_id: 'row-4',
       title: 'Each package this release claims as public stands on its own',
       status: 'pass',
-      summary: 'Release surface is consistent for @t3x-dev/local, @t3x-dev/yops.',
+      summary: 'Release surface is consistent for @t3x-dev/local, @t3x-dev/yops, @t3x-dev/yschema.',
       details: [],
     },
   ]);

@@ -81,10 +81,10 @@ describe('replay', () => {
     expect(sourceIndex.has('new_name')).toBe(true);
   });
 
-  it('returns partial state with engine error code instead of throwing', () => {
-    // Invalid: populate on a path that doesn't exist. The first op applies,
-    // the second blows up — replay reports the failure but keeps the partial
-    // tree so the workspace can still render it.
+  it('returns original state with engine error code instead of throwing', () => {
+    // Invalid: populate on a path that doesn't exist. The first op makes
+    // progress internally, the second blows up, and the atomic replay result
+    // returns the original tree plus structured failure metadata.
     const ops: SourcedYOp[] = [
       { define: { path: 'ok' }, source: humanSrc() },
       {
@@ -93,8 +93,8 @@ describe('replay', () => {
       },
     ];
     const { tree, sourceIndex, partial } = replay(ops, turns);
-    expect(tree.trees.length).toBeGreaterThan(0);
-    expect(sourceIndex.has('ok')).toBe(true);
+    expect(tree.trees).toEqual([]);
+    expect(sourceIndex.has('ok')).toBe(false);
     expect(partial).toBeDefined();
     expect(partial?.opIndex).toBe(1);
     expect(partial?.appliedCount).toBe(1);

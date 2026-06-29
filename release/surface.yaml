@@ -21,7 +21,7 @@ packages:
     stability_tier: alpha
     readme_required: true
     api_extractor: true
-    why: Public deterministic YAML operation contract.
+    why: Public deterministic operation contract for JSON-compatible YAML documents.
 
   - name: "@t3x-dev/core"
     path: packages/core
@@ -35,13 +35,13 @@ packages:
 
   - name: "@t3x-dev/yschema"
     path: packages/yschema
-    access: restricted
+    access: public
     publish_state: applied
-    npm_publish: false
-    stability_tier: internal
-    readme_required: false
+    npm_publish: true
+    stability_tier: alpha
+    readme_required: true
     api_extractor: false
-    why: Candidate schema package; not part of the alpha public surface.
+    why: Public alpha schema validation candidate for schema-backed structured state.
 
   - name: "@t3x-dev/api-client"
     path: packages/api-client
