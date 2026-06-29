@@ -1,11 +1,20 @@
 'use client';
 
-import { ArrowRight, GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
+import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
+import { ProjectEmptyState } from '@/components/project/ProjectEmptyState';
+import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
+import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
+import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
+import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
+import { ProjectShell } from '@/components/project/ProjectShell';
+import { ProjectStateTab } from '@/components/project/ProjectStateTab';
+import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
+import { type ProjectTabId, parseProjectTab } from '@/components/project/projectTabModel';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -47,6 +56,7 @@ export function ProjectDetailPageContent({
   const projectId = params.projectId as string;
 
   const searchParams = useSearchParams();
+  const activeTab = parseProjectTab(searchParams.get('tab'));
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
   const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
@@ -106,6 +116,20 @@ export function ProjectDetailPageContent({
   // Keep a stable ref to searchParams so callbacks don't re-create on every URL change
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
+
+  const handleProjectTabChange = useCallback(
+    (nextTab: ProjectTabId) => {
+      const params = new URLSearchParams(searchParamsRef.current.toString());
+      if (nextTab === 'state') {
+        params.delete('tab');
+      } else {
+        params.set('tab', nextTab);
+      }
+      const query = params.toString();
+      router.replace(query ? `?${query}` : '?', { scroll: false });
+    },
+    [router]
+  );
 
   // Debounced viewport → URL sync
   const viewportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -314,114 +338,86 @@ export function ProjectDetailPageContent({
     );
   }
 
-  // Show loading state
-  if (canvasLoading) {
-    return (
-      <div className="flex h-full flex-col">
-        <LoadingSpinner message="Loading project data..." />
-      </div>
-    );
-  }
+  const renderStateTab = () => {
+    if (canvasLoading) {
+      return (
+        <div className="flex h-full flex-col">
+          <LoadingSpinner message="Loading project data..." />
+        </div>
+      );
+    }
 
-  // Show error state
-  if (canvasError) {
-    return (
-      <div className="flex h-full flex-col">
-        <ErrorMessage error={canvasError} onRetry={() => projectId && void loadCanvas(projectId)} />
-      </div>
-    );
-  }
+    if (canvasError) {
+      return (
+        <div className="flex h-full flex-col">
+          <ErrorMessage
+            error={canvasError}
+            onRetry={() => projectId && void loadCanvas(projectId)}
+          />
+        </div>
+      );
+    }
 
-  // Chat is the producing layer. Canvas stays in place for empty projects,
-  // but its empty state should distinguish a project that has not started a
-  // conversation from one that has conversations but no committed state yet.
-  const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
-  if (isEmptyAfterLoad) {
-    const hasConversations = (project.drafts ?? 0) > 0;
-    return (
-      <div className="flex h-full flex-col bg-[var(--surface-app)]">
-        <CanvasEmptyState
-          actionLabel="Go to Chat"
+    const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
+    if (isEmptyAfterLoad) {
+      const hasConversations = (project.drafts ?? 0) > 0;
+      return (
+        <ProjectEmptyState
           description={
             hasConversations
-              ? 'Commit a project chat to make it appear on Canvas.'
-              : 'Start a chat in this project, then commit it to see the canvas.'
+              ? 'Review existing sources in a workspace, then commit structured state.'
+              : 'Create a workspace from sources, then commit it to populate State.'
           }
-          icon={
-            hasConversations ? (
-              <GitCommitHorizontal className="h-5 w-5" />
-            ) : (
-              <MessageSquare className="h-5 w-5" />
-            )
-          }
-          onAction={goToProjectChat}
-          title={hasConversations ? 'No commits yet' : 'No conversations yet'}
-          tone={hasConversations ? 'commit' : 'conversation'}
+          onAddSource={goToProjectChat}
+          onCreateWorkspace={() => handleProjectTabChange('workspaces')}
+          title="No committed state yet"
         />
-      </div>
+      );
+    }
+
+    return (
+      <ProjectStateTab>
+        <CanvasWorkspace
+          key={projectId}
+          projectName={project.name}
+          showChatSidebarToggle={showChatSidebarToggle}
+          initialViewport={initialViewport}
+          onViewportChange={handleViewportChange}
+        />
+        <ProjectDemoTourOverlay
+          open={projectTourOpen}
+          onClose={() => setProjectTourOpen(false)}
+          onDone={() => setProjectTourOpen(false)}
+          onSkip={() => void completeIntroDemo()}
+          interactionMode="guided"
+          stage={projectTourStage}
+        />
+      </ProjectStateTab>
     );
-  }
+  };
+
+  const activeContent = (() => {
+    switch (activeTab) {
+      case 'schemas':
+        return <ProjectSchemasTab projectId={projectId} />;
+      case 'workspaces':
+        return <ProjectWorkspacesTab projectId={projectId} />;
+      case 'reviews':
+        return <ProjectReviewsTab />;
+      case 'outputs':
+        return <ProjectOutputsTab />;
+      case 'community':
+        return <ProjectCommunityTab />;
+      case 'settings':
+        return <ProjectSettingsTab />;
+      default:
+        return renderStateTab();
+    }
+  })();
 
   return (
-    <div className="flex h-full flex-col">
-      <CanvasWorkspace
-        key={projectId}
-        projectName={project.name}
-        showChatSidebarToggle={showChatSidebarToggle}
-        initialViewport={initialViewport}
-        onViewportChange={handleViewportChange}
-      />
-      <ProjectDemoTourOverlay
-        open={projectTourOpen}
-        onClose={() => setProjectTourOpen(false)}
-        onDone={() => setProjectTourOpen(false)}
-        onSkip={() => void completeIntroDemo()}
-        interactionMode="guided"
-        stage={projectTourStage}
-      />
-    </div>
-  );
-}
-
-function CanvasEmptyState({
-  actionLabel,
-  description,
-  icon,
-  onAction,
-  title,
-  tone,
-}: {
-  actionLabel: string;
-  description: string;
-  icon: ReactNode;
-  onAction: () => void;
-  title: string;
-  tone: 'commit' | 'conversation';
-}) {
-  const toneClass =
-    tone === 'commit'
-      ? 'border-[var(--accent-commit)]/20 bg-[var(--status-info-muted)] text-[var(--accent-commit)]'
-      : 'border-[var(--accent-conversation)]/20 bg-[var(--status-info-muted)] text-[var(--accent-conversation)]';
-
-  return (
-    <main className="flex h-full items-center justify-center p-8">
-      <div className="max-w-sm p-6 text-center">
-        <div
-          className={`mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg border ${toneClass}`}
-        >
-          {icon}
-        </div>
-        <h1 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h1>
-        <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">{description}</p>
-        <button
-          className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--accent-conversation)] px-3.5 text-sm font-semibold text-[var(--on-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent-conversation)_88%,black)]"
-          onClick={onAction}
-          type="button"
-        >
-          <span>{actionLabel}</span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </main>
+    <ProjectShell activeTab={activeTab} onTabChange={handleProjectTabChange} project={project}>
+      {activeContent}
+    </ProjectShell>
   );
 }

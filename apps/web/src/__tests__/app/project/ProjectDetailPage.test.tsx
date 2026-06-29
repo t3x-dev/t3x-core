@@ -55,6 +55,7 @@ import { useProjectStore } from '@/store/projectStore';
 beforeEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
+  useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   vi.mocked(fetchProject).mockResolvedValue({
     project_id: 'proj_test',
     name: 'Test Project',
@@ -82,6 +83,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   useProjectStore.setState({ projects: [], initialized: false, loading: false });
   useCanvasStore.setState({
     nodes: [],
@@ -94,31 +96,39 @@ afterEach(() => {
   });
 });
 
-describe('ProjectDetailPage — empty canvas states', () => {
-  it('shows a no-conversations state and opens a project-aware chat URL', () => {
+describe('ProjectDetailPage — project-first shell states', () => {
+  it('shows a project-first empty State tab and can switch to the Workspaces preview', () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPage />);
 
-    expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
-      screen.getByText('Start a chat in this project, then commit it to see the canvas.')
+      screen.getByText('Create a workspace from sources, then commit it to populate State.')
     ).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Go to Chat/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Workspace/i }));
 
-    // URL preserves project context so a refresh on the chat page still knows
-    // which project to write into.
-    expect(pushMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
-    // Store is also primed synchronously so the next mount of ChatWorkspace
-    // reads the right project even if the URL handling is lazy.
-    expect(useChatStore.getState().activeProjectId).toBe('proj_test');
+    expect(replaceMock).toHaveBeenCalledWith('?tab=workspaces', { scroll: false });
+    expect(pushMock).not.toHaveBeenCalled();
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
   });
 
-  it('shows a no-commits state when the project has conversations but no canvas nodes', () => {
+  it('keeps chat available as a secondary source action without making it required', () => {
+    useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+
+    render(<ProjectDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
+    expect(useChatStore.getState().activeProjectId).toBe('proj_test');
+  });
+
+  it('shows a no-state state when the project has sources but no canvas nodes', () => {
     useProjectStore.setState({
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
@@ -127,12 +137,36 @@ describe('ProjectDetailPage — empty canvas states', () => {
 
     render(<ProjectDetailPage />);
 
-    expect(screen.getByText('No commits yet')).toBeInTheDocument();
+    expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
-      screen.getByText('Commit a project chat to make it appear on Canvas.')
+      screen.getByText('Review existing sources in a workspace, then commit structured state.')
     ).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the fixture-backed Workspaces tab preview from the query string', () => {
+    searchParamsValue = new URLSearchParams('tab=workspaces');
+
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByText('Workspace foundation preview')).toBeInTheDocument();
+    expect(screen.getByText('PRD audience handoff')).toBeInTheDocument();
+    expect(screen.getByText('1 chat, 1 doc')).toBeInTheDocument();
+  });
+
+  it('renders the fixture-backed Schemas tab preview from the query string', () => {
+    searchParamsValue = new URLSearchParams('tab=schemas');
+
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Schema release preview')).toBeInTheDocument();
+    expect(screen.getByText('PRD Schema v2')).toBeInTheDocument();
   });
 
   it('does NOT redirect while canvas is still loading', () => {
@@ -218,12 +252,12 @@ describe('ProjectDetailPage — empty canvas states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+      expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     });
     expect(screen.queryByText(/Project not found/i)).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Go to Chat/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
 
     expect(pushMock).toHaveBeenCalledWith('/chat/new?projectId=proj_test');
     expect(useChatStore.getState().activeProjectId).toBe('proj_test');
