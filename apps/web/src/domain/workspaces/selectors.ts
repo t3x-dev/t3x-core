@@ -69,6 +69,10 @@ export function summarizeSourceBundle(sources: SourceBundleItem[]): string {
     .join(', ');
 }
 
+export function formatSourceCount(sources: SourceBundleItem[]): string {
+  return `${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`;
+}
+
 export function getPrimarySchemaBinding(
   bindings: WorkspaceSchemaBinding[]
 ): WorkspaceSchemaBinding | null {
@@ -107,6 +111,8 @@ export function filterWorkspaceCandidates(
     const searchableText = [
       candidate.title,
       candidate.summary,
+      candidate.baseCommitHash ?? 'no base commit',
+      candidate.targetBranch,
       formatWorkspaceStatus(candidate.status),
       ...candidate.sourceBundle.flatMap((source) => [
         source.title,
@@ -120,6 +126,7 @@ export function filterWorkspaceCandidates(
         binding.version,
         binding.mode,
       ]),
+      ...candidate.outputTargets.flatMap((target) => [target.title, target.type, target.format]),
     ]
       .join(' ')
       .toLowerCase();

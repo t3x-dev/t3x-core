@@ -31,9 +31,48 @@ export interface WorkspaceCandidate {
   summary: string;
   status: WorkspaceStatus;
   updatedAt: string;
+  baseCommitHash: string | null;
+  targetBranch: string;
   sourceBundle: SourceBundleItem[];
   schemaBindings: WorkspaceSchemaBinding[];
+  schemaReview: WorkspaceSchemaReview;
+  yopsDraft: WorkspaceYOpsDraft;
+  outputTargets: WorkspaceOutputTarget[];
   lastCommitHash?: string;
 }
 
 export type WorkspaceStatusCounts = Record<WorkspaceStatusFilter, number>;
+
+export type WorkspaceSchemaReviewVerdict = 'ready' | 'needs_review';
+
+export interface WorkspaceSchemaReview {
+  verdict: WorkspaceSchemaReviewVerdict;
+  summary: string;
+  gaps: string[];
+}
+
+export interface WorkspaceYOpsDraftOperation {
+  id: string;
+  op: string;
+  path: string;
+  summary: string;
+}
+
+export interface WorkspaceYOpsDraft {
+  id: string;
+  operations: WorkspaceYOpsDraftOperation[];
+}
+
+export type WorkspaceOutputTargetType = 'document' | 'webhook' | 'export';
+
+export type WorkspaceOutputTargetFormat = 'markdown' | 'json' | 'yaml' | 'html';
+
+export type WorkspaceOutputTargetStatus = 'draft_target';
+
+export interface WorkspaceOutputTarget {
+  id: string;
+  title: string;
+  type: WorkspaceOutputTargetType;
+  format: WorkspaceOutputTargetFormat;
+  status: WorkspaceOutputTargetStatus;
+}

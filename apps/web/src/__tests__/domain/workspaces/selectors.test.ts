@@ -18,11 +18,38 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     summary: 'Ready source bundle for deterministic YOps apply.',
     status: 'ready_for_yops',
     updatedAt: '2026-06-29T09:30:00.000Z',
+    baseCommitHash: 'sha256:base-prd',
+    targetBranch: 'feature/prd-audience',
     sourceBundle: [
       { id: 'src_chat', type: 'chat', title: 'Audience chat', conversationId: 'conv_1' },
       { id: 'src_doc', type: 'document', title: 'PRD import', fileName: 'prd.md' },
     ],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+    schemaReview: {
+      verdict: 'ready',
+      summary: 'Ready for YOps apply after schema alignment.',
+      gaps: [],
+    },
+    yopsDraft: {
+      id: 'draft_prd',
+      operations: [
+        {
+          id: 'op_1',
+          op: 'set',
+          path: '/audience/primary',
+          summary: 'Set primary audience from source evidence.',
+        },
+      ],
+    },
+    outputTargets: [
+      {
+        id: 'target_prd_markdown',
+        title: 'PRD Markdown export',
+        type: 'document',
+        format: 'markdown',
+        status: 'draft_target',
+      },
+    ],
   },
   {
     id: 'workspace_draft',
@@ -31,6 +58,8 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     summary: 'Draft release note source collection.',
     status: 'draft',
     updatedAt: '2026-06-28T14:10:00.000Z',
+    baseCommitHash: null,
+    targetBranch: 'release/notes',
     sourceBundle: [
       {
         id: 'src_release_doc',
@@ -40,6 +69,31 @@ const workspaceCandidates: WorkspaceCandidate[] = [
       },
     ],
     schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: 'Needs schema confirmation before YOps apply.',
+      gaps: ['Confirm release-note required fields.'],
+    },
+    yopsDraft: {
+      id: 'draft_release',
+      operations: [
+        {
+          id: 'op_release_1',
+          op: 'add',
+          path: '/sections/-',
+          summary: 'Add release-note section placeholder.',
+        },
+      ],
+    },
+    outputTargets: [
+      {
+        id: 'target_release_notes',
+        title: 'Release notes preview',
+        type: 'document',
+        format: 'markdown',
+        status: 'draft_target',
+      },
+    ],
   },
   {
     id: 'workspace_review',
@@ -48,10 +102,37 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     summary: 'Candidate waiting on schema binding review.',
     status: 'schema_review',
     updatedAt: '2026-06-30T08:15:00.000Z',
+    baseCommitHash: 'sha256:base-review',
+    targetBranch: 'schema/review',
     sourceBundle: [
       { id: 'src_prompt', type: 'prompt_run', title: 'Review prompt', runId: 'run_1' },
     ],
     schemaBindings: [{ schemaName: 'Review Schema', version: 'v3', mode: 'draft_override' }],
+    schemaReview: {
+      verdict: 'needs_review',
+      summary: 'Candidate waiting on schema binding review.',
+      gaps: ['Review draft override impact.'],
+    },
+    yopsDraft: {
+      id: 'draft_review',
+      operations: [
+        {
+          id: 'op_review_1',
+          op: 'test',
+          path: '/review',
+          summary: 'Check review packet readiness.',
+        },
+      ],
+    },
+    outputTargets: [
+      {
+        id: 'target_review_json',
+        title: 'Review JSON packet',
+        type: 'export',
+        format: 'json',
+        status: 'draft_target',
+      },
+    ],
   },
 ];
 

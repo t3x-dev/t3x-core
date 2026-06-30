@@ -1,23 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   countWorkspaceStatuses,
   filterWorkspaceCandidates,
-  formatWorkspaceStatus,
-  getPrimarySchemaBinding,
-  getWorkspaceStatusBadgeTone,
   selectWorkspaceCandidate,
   sortWorkspaceCandidates,
-  summarizeSourceBundle,
 } from '@/domain/workspaces/selectors';
 import type {
-  SourceBundleItem,
   WorkspaceCandidate,
   WorkspaceSortKey,
   WorkspaceStatusFilter,
 } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
+import { WorkspaceSelector } from './WorkspaceSelector';
+import { WorkspaceTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
 
@@ -26,6 +24,8 @@ interface WorkspaceWorkbenchProps {
   projectId: string;
   viewState?: WorkspaceWorkbenchViewState;
   errorMessage?: string;
+  selectedWorkspaceId?: string | null;
+  onSelectedWorkspaceChange?: (workspaceId: string) => void;
 }
 
 const STATUS_FILTERS: { label: string; value: WorkspaceStatusFilter }[] = [
@@ -44,13 +44,21 @@ const SORT_OPTIONS: { label: string; value: WorkspaceSortKey }[] = [
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
+  onSelectedWorkspaceChange,
   projectId,
+  selectedWorkspaceId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
   const [query, setQuery] = useState('');
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  const [internalSelectedWorkspaceId, setInternalSelectedWorkspaceId] = useState<string | null>(
+    selectedWorkspaceId ?? null
+  );
   const [sortKey, setSortKey] = useState<WorkspaceSortKey>('updated_desc');
   const [statusFilter, setStatusFilter] = useState<WorkspaceStatusFilter>('all');
+
+  useEffect(() => {
+    setInternalSelectedWorkspaceId(selectedWorkspaceId ?? null);
+  }, [selectedWorkspaceId]);
 
   const statusCounts = useMemo(() => countWorkspaceStatuses(candidates), [candidates]);
   const visibleCandidates = useMemo(
@@ -61,7 +69,15 @@ export function WorkspaceWorkbench({
       ),
     [candidates, query, sortKey, statusFilter]
   );
-  const selectedWorkspace = selectWorkspaceCandidate(visibleCandidates, selectedWorkspaceId);
+  const selectedWorkspace = selectWorkspaceCandidate(
+    visibleCandidates,
+    internalSelectedWorkspaceId
+  );
+
+  const handleSelectWorkspace = (workspaceId: string) => {
+    setInternalSelectedWorkspaceId(workspaceId);
+    onSelectedWorkspaceChange?.(workspaceId);
+  };
 
   if (viewState === 'loading') {
     return (
@@ -89,7 +105,7 @@ export function WorkspaceWorkbench({
   return (
     <section className="h-full overflow-auto p-4" data-project-id={projectId}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <WorkspaceHeader count={statusCounts.all} />
+        <WorkspacesHeader count={statusCounts.all} />
 
         <WorkspaceToolbar
           query={query}
@@ -106,11 +122,11 @@ export function WorkspaceWorkbench({
         ) : visibleCandidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces match the current filters." />
         ) : (
-          <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid min-h-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
             <WorkspaceCandidateList
               candidates={visibleCandidates}
               selectedWorkspaceId={selectedWorkspace?.id ?? null}
-              onSelectWorkspace={setSelectedWorkspaceId}
+              onSelectWorkspace={handleSelectWorkspace}
             />
             <WorkspaceDetail candidate={selectedWorkspace} />
           </div>
@@ -120,7 +136,7 @@ export function WorkspaceWorkbench({
   );
 }
 
-function WorkspaceHeader({ count }: { count: number }) {
+function WorkspacesHeader({ count }: { count: number }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -210,69 +226,10 @@ function WorkspaceToolbar({
   );
 }
 
-function WorkspaceCandidateList({
-  candidates,
-  onSelectWorkspace,
-  selectedWorkspaceId,
-}: {
-  candidates: WorkspaceCandidate[];
-  onSelectWorkspace: (workspaceId: string) => void;
-  selectedWorkspaceId: string | null;
-}) {
-  return (
-    <ul aria-label="Workspace candidates" className="flex min-w-0 flex-col gap-2">
-      {candidates.map((candidate) => {
-        const selected = candidate.id === selectedWorkspaceId;
-        const schemaBinding = getPrimarySchemaBinding(candidate.schemaBindings);
-
-        return (
-          <li key={candidate.id}>
-            <button
-              aria-pressed={selected}
-              className={cn(
-                'w-full rounded-md border bg-[var(--surface-card)] p-3 text-left transition-colors',
-                selected
-                  ? 'border-[var(--accent-branch)] shadow-sm'
-                  : 'border-[var(--stroke-divider)] hover:border-[var(--stroke-strong)]'
-              )}
-              onClick={() => onSelectWorkspace(candidate.id)}
-              type="button"
-            >
-              <span className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-[var(--text-primary)]">
-                      {candidate.title}
-                    </span>
-                    <Badge variant={getWorkspaceStatusBadgeTone(candidate.status)}>
-                      {formatWorkspaceStatus(candidate.status)}
-                    </Badge>
-                  </span>
-                  <span className="mt-1 block text-sm leading-5 text-[var(--text-secondary)]">
-                    {candidate.summary}
-                  </span>
-                </span>
-                <span className="shrink-0 text-left text-xs text-[var(--text-secondary)] md:text-right">
-                  <span className="block">{summarizeSourceBundle(candidate.sourceBundle)}</span>
-                  {schemaBinding ? (
-                    <span className="mt-1 block">
-                      {schemaBinding.schemaName} {schemaBinding.version}
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+const WorkspaceCandidateList = WorkspaceSelector;
 
 function WorkspaceDetail({ candidate }: { candidate: WorkspaceCandidate | null }) {
   if (!candidate) return null;
-
-  const schemaBinding = getPrimarySchemaBinding(candidate.schemaBindings);
 
   return (
     <section
@@ -280,55 +237,10 @@ function WorkspaceDetail({ candidate }: { candidate: WorkspaceCandidate | null }
       className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
     >
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{candidate.title}</h3>
-          <Badge variant={getWorkspaceStatusBadgeTone(candidate.status)}>
-            {formatWorkspaceStatus(candidate.status)}
-          </Badge>
-        </div>
-        <p className="text-sm leading-5 text-[var(--text-secondary)]">{candidate.summary}</p>
-
-        <dl className="grid gap-3 text-sm">
-          <div>
-            <dt className="text-xs font-medium uppercase text-[var(--text-tertiary)]">
-              Source bundle
-            </dt>
-            <dd className="mt-1 text-[var(--text-primary)]">
-              {summarizeSourceBundle(candidate.sourceBundle)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase text-[var(--text-tertiary)]">
-              Schema binding
-            </dt>
-            <dd className="mt-1 text-[var(--text-primary)]">
-              {schemaBinding ? `${schemaBinding.schemaName} ${schemaBinding.version}` : 'No schema'}
-            </dd>
-          </div>
-        </dl>
-
-        <SourceList sources={candidate.sourceBundle} />
+        <WorkspaceCandidateHeader candidate={candidate} />
+        <WorkspaceTabs candidate={candidate} />
       </div>
     </section>
-  );
-}
-
-function SourceList({ sources }: { sources: SourceBundleItem[] }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-xs font-medium uppercase text-[var(--text-tertiary)]">Sources</h4>
-      <ul className="flex flex-col gap-2">
-        {sources.map((source) => (
-          <li
-            className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-subtle)] px-3 py-2"
-            key={source.id}
-          >
-            <p className="text-sm font-medium text-[var(--text-primary)]">{source.title}</p>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">{source.type}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
