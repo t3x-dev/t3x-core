@@ -107,6 +107,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: 'All 2' })).toHaveAttribute('aria-pressed', 'true');
 
     const list = screen.getByRole('list', { name: 'Workspace candidates' });
+    expect(list.parentElement?.className).toContain('lg:grid-cols-[360px_minmax(0,1fr)]');
     expect(within(list).getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
     expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
 
@@ -117,6 +118,25 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByText('1 doc')).toBeInTheDocument();
     expect(within(detail).getByText('Release Note Schema v1')).toBeInTheDocument();
     expect(within(detail).getByText('Release outline')).toBeInTheDocument();
+  });
+
+  it('moves focus with continuous arrow-key workspace navigation', () => {
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+
+    const list = screen.getByRole('list', { name: 'Workspace candidates' });
+    const firstWorkspace = within(list).getByRole('button', { name: /PRD audience handoff/ });
+    const secondWorkspace = within(list).getByRole('button', { name: /Release cleanup/ });
+
+    firstWorkspace.focus();
+    fireEvent.keyDown(firstWorkspace, { key: 'ArrowDown' });
+
+    expect(secondWorkspace).toHaveFocus();
+    expect(secondWorkspace).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.keyDown(secondWorkspace, { key: 'ArrowDown' });
+
+    expect(firstWorkspace).toHaveFocus();
+    expect(firstWorkspace).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {

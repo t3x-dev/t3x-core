@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import { type KeyboardEvent, useRef } from 'react';
 import { getPrimarySchemaBinding, summarizeSourceBundle } from '@/domain/workspaces/selectors';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
@@ -13,13 +13,18 @@ export function WorkspaceSelector({
   onSelectWorkspace: (workspaceId: string) => void;
   selectedWorkspaceId: string | null;
 }) {
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
     const offset = event.key === 'ArrowDown' ? 1 : -1;
     const nextIndex = (index + offset + candidates.length) % candidates.length;
     const nextCandidate = candidates[nextIndex];
-    if (nextCandidate) onSelectWorkspace(nextCandidate.id);
+    if (!nextCandidate) return;
+
+    onSelectWorkspace(nextCandidate.id);
+    buttonRefs.current[nextCandidate.id]?.focus();
   };
 
   return (
@@ -40,6 +45,9 @@ export function WorkspaceSelector({
               )}
               onClick={() => onSelectWorkspace(candidate.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
+              ref={(element) => {
+                buttonRefs.current[candidate.id] = element;
+              }}
               type="button"
             >
               <span className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

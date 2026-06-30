@@ -122,7 +122,7 @@ export function WorkspaceWorkbench({
         ) : visibleCandidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces match the current filters." />
         ) : (
-          <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid min-h-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
             <WorkspaceCandidateList
               candidates={visibleCandidates}
               selectedWorkspaceId={selectedWorkspace?.id ?? null}
