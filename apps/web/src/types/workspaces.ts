@@ -10,10 +10,20 @@ export interface SourceBundleItem {
   id: string;
   type: SourceBundleType;
   title: string;
+  description?: string;
   conversationId?: string;
   fileName?: string;
   runId?: string;
   format?: 'yaml' | 'json' | 'markdown' | 'text';
+  previewTurns?: SourceConversationTurn[];
+  previewText?: string;
+}
+
+export interface SourceConversationTurn {
+  id: string;
+  role: 'user' | 'assistant';
+  author: string;
+  content: string;
 }
 
 export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';

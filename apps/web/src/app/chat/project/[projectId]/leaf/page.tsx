@@ -156,10 +156,10 @@ export default function ChatProjectLeafIndexPage() {
         <LeafPageHeader leafCount={leaves.length} />
         <main className="min-h-0 flex-1 overflow-y-auto p-5" data-intro-target="leaf-index-body">
           <EmptyLeafState
-            actionLabel="Go to Chats"
+            actionLabel="Back to projects"
             description="This project does not exist or was deleted."
             icon={<MessageSquare className="h-5 w-5" />}
-            onAction={() => router.push('/chat')}
+            onAction={() => router.push('/')}
             title="Project not found"
             tone="conversation"
           />

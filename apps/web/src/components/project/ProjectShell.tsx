@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
 import type { ProjectTabId } from '@/components/project/projectTabModel';
 import { Badge } from '@/components/ui/badge';
@@ -21,39 +22,54 @@ export interface ProjectShellProps {
 
 export function ProjectShell({ activeTab, children, onTabChange, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
-  const statusTone = status === 'active' ? 'commit' : 'pending';
+  const validLabel = status === 'paused' ? 'valid paused' : 'valid true';
+  const schemaGapCount = status === 'active' ? 0 : Math.min(Math.max(project.drafts ?? 0, 1), 3);
+  const outputCount = Math.max(0, project.commitsCount ?? 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <header className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-base font-semibold">{project.name}</h1>
-              <Badge variant={statusTone}>{status}</Badge>
-            </div>
-            <p className="mt-1 max-w-3xl truncate text-xs text-[var(--text-secondary)]">
-              {project.description || 'Project workbench'}
-            </p>
+      <header className="shrink-0 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-4">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Link
+              aria-label="Back to project page"
+              className="inline-flex h-9 shrink-0 items-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
+              href="/"
+            >
+              t3x-dev
+            </Link>
+            <span
+              aria-hidden="true"
+              className="text-3xl font-semibold leading-none text-[var(--text-tertiary)]"
+            >
+              /
+            </span>
+            <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-[var(--text-primary)]">
+              {project.name}
+            </h1>
           </div>
-          <dl className="grid grid-cols-3 gap-2 text-xs sm:min-w-[320px]">
-            <ProjectStat label="Sources" value={project.drafts ?? 0} />
-            <ProjectStat label="Commits" value={project.commitsCount ?? 0} />
-            <ProjectStat label="Branches" value={project.branchesCount ?? 0} />
-          </dl>
+
+          <p className="mt-2 max-w-3xl truncate text-sm font-semibold text-[var(--text-secondary)]">
+            {project.description || 'Project workbench'}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge variant="commit">State-first project</Badge>
+            <Badge className="font-mono" variant="outline">
+              /t3x-dev/{project.name}
+            </Badge>
+            <Badge variant={status === 'paused' ? 'warning' : 'success'}>{validLabel}</Badge>
+            <Badge variant="outline">
+              {schemaGapCount} schema {schemaGapCount === 1 ? 'gap' : 'gaps'}
+            </Badge>
+            <Badge variant="outline">
+              {outputCount} {outputCount === 1 ? 'output' : 'outputs'}
+            </Badge>
+          </div>
         </div>
       </header>
       <ProjectTabs activeTab={activeTab} onTabChange={onTabChange} />
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
-    </div>
-  );
-}
-
-function ProjectStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-1.5">
-      <dt className="text-[10px] uppercase text-[var(--text-tertiary)]">{label}</dt>
-      <dd className="mt-0.5 font-mono text-sm text-[var(--text-primary)]">{value}</dd>
     </div>
   );
 }

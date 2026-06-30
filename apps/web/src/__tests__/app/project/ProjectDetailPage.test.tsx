@@ -103,6 +103,12 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     render(<ProjectDetailPage />);
 
+    expect(screen.getByRole('link', { name: 'Back to project page' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.getByText('t3x-dev')).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/Test Project')).toBeInTheDocument();
+    expect(screen.getByText('State-first project')).toBeInTheDocument();
+    expect(screen.getByText('valid true')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(

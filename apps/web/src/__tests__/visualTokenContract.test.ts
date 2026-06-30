@@ -17,7 +17,6 @@ const FORBIDDEN_RAW_RGBA = /rgba\([^)]*\)/g;
 const ALLOWED_FILES = new Set([
   // Logo glyphs are brand assets, not page or component color roles.
   'components/chat/sidebar/LogoIcon.tsx',
-  'components/layout/Sidebar.tsx',
   // Theme helpers are allowed to define the static brand palette they export.
   'utils/theme.ts',
 ]);

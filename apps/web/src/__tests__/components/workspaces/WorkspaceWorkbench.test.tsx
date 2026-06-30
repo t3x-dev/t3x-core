@@ -93,7 +93,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
   },
 ];
 
-function activateTab(name: string) {
+function activateTab(name: string | RegExp) {
   const tab = screen.getByRole('tab', { name });
   fireEvent.pointerDown(tab, { button: 0, ctrlKey: false });
   fireEvent.click(tab);
@@ -104,7 +104,9 @@ describe('WorkspaceWorkbench', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'All 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'All 2' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Draft 1' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
 
     const list = screen.getByRole('list', { name: 'Workspace candidates' });
     expect(list.parentElement?.className).toContain('lg:grid-cols-[360px_minmax(0,1fr)]');
@@ -117,7 +119,7 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByText('Release cleanup')).toBeInTheDocument();
     expect(within(detail).getByText('1 doc')).toBeInTheDocument();
     expect(within(detail).getByText('Release Note Schema v1')).toBeInTheDocument();
-    expect(within(detail).getByText('Release outline')).toBeInTheDocument();
+    expect(within(detail).getAllByText('Release outline').length).toBeGreaterThan(0);
   });
 
   it('moves focus with continuous arrow-key workspace navigation', () => {
@@ -150,13 +152,17 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByText('Schema version')).toBeInTheDocument();
     expect(within(detail).getByText('PRD Schema v2')).toBeInTheDocument();
     expect(within(detail).getByText('Source count')).toBeInTheDocument();
-    expect(within(detail).getByText('2 sources')).toBeInTheDocument();
+    expect(within(detail).getAllByText('2 sources').length).toBeGreaterThan(0);
 
-    expect(screen.getByRole('tab', { name: 'Sources' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Schema Review' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'YOps Draft' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /YSchema/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /YOps/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Canvas' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Output Targets' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Leaf config/ })).toBeInTheDocument();
+    expect(
+      within(detail).getByRole('complementary', { name: 'Source context' })
+    ).toBeInTheDocument();
+    expect(within(detail).getByRole('region', { name: 'Selected source' })).toBeInTheDocument();
     expect(within(detail).getByText('chat')).toBeInTheDocument();
     expect(within(detail).getByText('document')).toBeInTheDocument();
   });
@@ -164,10 +170,10 @@ describe('WorkspaceWorkbench', () => {
   it('renders schema review, read-only yops draft, canvas, and draft output target tabs', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    activateTab('Schema Review');
+    activateTab(/YSchema/);
     expect(screen.getByText('Ready for YOps apply after schema alignment.')).toBeInTheDocument();
 
-    activateTab('YOps Draft');
+    activateTab(/YOps/);
     expect(screen.getByText('Read-only YOps draft')).toBeInTheDocument();
     expect(screen.getByText('set')).toBeInTheDocument();
     expect(screen.getByText('/audience/primary')).toBeInTheDocument();
@@ -178,8 +184,8 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('YOps draft')).toBeInTheDocument();
     expect(screen.getByText('Commit target')).toBeInTheDocument();
 
-    activateTab('Output Targets');
-    expect(screen.getByRole('tab', { name: 'Output Targets' })).toHaveAttribute(
+    activateTab(/Leaf config/);
+    expect(screen.getByRole('tab', { name: /Leaf config/ })).toHaveAttribute(
       'aria-selected',
       'true'
     );
@@ -188,12 +194,17 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Not a committed artifact')).toBeInTheDocument();
   });
 
-  it('filters visible candidates by status and search query', () => {
+  it('filters visible candidates by search query', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Draft 1' }));
-
     const list = screen.getByRole('list', { name: 'Workspace candidates' });
+    expect(within(list).getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search workspaces' }), {
+      target: { value: 'release' },
+    });
+
     expect(
       within(list).queryByRole('button', { name: /PRD audience handoff/ })
     ).not.toBeInTheDocument();

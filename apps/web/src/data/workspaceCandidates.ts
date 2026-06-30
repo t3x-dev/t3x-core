@@ -11,8 +11,39 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     baseCommitHash: 'sha256:base-prd',
     targetBranch: 'feature/prd-audience',
     sourceBundle: [
-      { id: 'src_prd_chat', type: 'chat', title: 'Audience chat', conversationId: 'conv_prd' },
-      { id: 'src_prd_doc', type: 'document', title: 'PRD import', fileName: 'prd.md' },
+      {
+        id: 'src_prd_chat',
+        type: 'chat',
+        title: 'Audience chat',
+        description: 'Conversation evidence for audience and reviewer handoff.',
+        conversationId: 'conv_prd',
+        previewTurns: [
+          {
+            id: 'turn_prd_1',
+            role: 'user',
+            author: 'YX',
+            content:
+              'Keep req-yops-handoff as the same requirement identity. Only move its status to ready.',
+          },
+          {
+            id: 'turn_prd_2',
+            role: 'assistant',
+            author: 'Assistant',
+            content:
+              'The candidate should preserve req-yops-handoff, fill summary.audience from product and engineering reviewers, then mark it ready for YOps handoff.',
+          },
+        ],
+      },
+      {
+        id: 'src_prd_doc',
+        type: 'document',
+        title: 'PRD import',
+        description: 'Uploaded PRD notes used as structured source evidence.',
+        fileName: 'prd.md',
+        format: 'markdown',
+        previewText:
+          '# PRD notes\n\nAudience: product and engineering reviewers.\n\nRequirement req-yops-handoff must keep the same identity and move to ready after schema review.',
+      },
     ],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
     schemaReview: {
@@ -61,7 +92,11 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         id: 'src_release_doc',
         type: 'document',
         title: 'Release note outline',
+        description: 'Draft release note outline imported as source material.',
         fileName: 'notes.md',
+        format: 'markdown',
+        previewText:
+          '# Release note outline\n\nCollect source evidence before schema review.\n\n- Confirm release-note required fields\n- Preserve user-facing change summary',
       },
     ],
     schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],

@@ -2,22 +2,18 @@
 
 import { useParams, usePathname } from 'next/navigation';
 import { ThemeProvider } from 'next-themes';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/layout/KeyboardShortcutsDialog';
-import { Sidebar } from '@/components/layout/Sidebar';
 import { showToast } from '@/components/layout/Toast';
 import { SettingsModal } from '@/components/settings/SettingsModal';
-import { NotificationBell } from '@/components/shared/NotificationBell';
-import { VerificationBadge } from '@/components/shared/VerificationBadge';
 import { Toaster } from '@/components/ui/sonner';
 import { useCanvasStore } from '@/store/canvasStore';
 import { usePinsStore } from '@/store/pinsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { cn } from '@/utils/cn';
 
 export function isCommitDetailRoute(pathname: string): boolean {
   return /^\/project\/[^/]+\/commit\/[^/]+(?:\/)?$/.test(pathname);
@@ -44,9 +40,6 @@ export function isSettingsRoute(pathname: string): boolean {
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
-  const isChatRoute = pathname.startsWith('/chat');
-  const isShelllessRoute = isShelllessDetailRoute(pathname);
-  const hasGlobalShell = !isChatRoute && !isShelllessRoute && !isSettingsRoute(pathname);
   const setProjectNotify = useProjectStore((state) => state.setNotifyCallback);
   const setCanvasNotify = useCanvasStore((state) => state.setNotifyCallback);
   const setPinsNotify = usePinsStore((state) => state.setNotifyCallback);
@@ -64,38 +57,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);
   }, [density]);
-
-  // Sidebar collapsed state — lifted here so main content margin can follow
-  // Default to `true` (collapsed) on both server & client to avoid hydration mismatch,
-  // then sync from localStorage after mount.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('t3x-sidebar-collapsed');
-    if (stored === 'false') {
-      setSidebarCollapsed(false);
-    }
-  }, []);
-
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem('t3x-sidebar-collapsed', String(next));
-      return next;
-    });
-  }, []);
-
-  // Global ⌘+\ keyboard shortcut for sidebar toggle
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [toggleSidebar]);
 
   // Register toast callback with stores
   useEffect(() => {
@@ -128,21 +89,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           >
             Skip to content
           </a>
-          {hasGlobalShell && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
           <main
             id="main-content"
             aria-label="Main content"
-            className={cn(
-              'flex flex-1 flex-col overflow-hidden transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-out-soft)]',
-              hasGlobalShell && (sidebarCollapsed ? 'ml-16' : 'ml-52')
-            )}
+            className="flex flex-1 flex-col overflow-hidden"
           >
-            {hasGlobalShell && (
-              <div className="flex items-center justify-end gap-2 px-4 h-8 shrink-0">
-                {projectId && <VerificationBadge key={projectId} projectId={projectId} />}
-                <NotificationBell />
-              </div>
-            )}
             <div className="flex flex-1 flex-col min-h-0">{children}</div>
           </main>
           <Toaster position="bottom-right" richColors closeButton />

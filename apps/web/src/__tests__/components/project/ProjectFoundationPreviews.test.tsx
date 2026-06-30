@@ -18,6 +18,7 @@ describe('project foundation previews', () => {
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
     expect(screen.getAllByText('1 chat, 1 doc').length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders the Schemas preview for any project id during A0', () => {

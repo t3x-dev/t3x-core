@@ -1,9 +1,5 @@
-import { redirect } from 'next/navigation';
+import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
 
-/**
- * Root page — redirects to /chat (the primary interface).
- * Project management is accessible via the chat sidebar.
- */
 export default function RootPage() {
-  redirect('/chat');
+  return <ProjectDirectoryPage />;
 }

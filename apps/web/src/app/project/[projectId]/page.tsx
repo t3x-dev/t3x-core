@@ -327,11 +327,11 @@ export function ProjectDetailPageContent({
             does not exist or was deleted.
           </p>
           <button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.push('/')}
             className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             type="button"
           >
-            Go to Chats
+            Back to projects
           </button>
         </div>
       </div>
