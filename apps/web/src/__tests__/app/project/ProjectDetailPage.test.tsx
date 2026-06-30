@@ -145,7 +145,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it('renders the fixture-backed Workspaces tab preview from the query string', () => {
+  it('renders the fixture-backed Workspaces workbench from the query string', () => {
     searchParamsValue = new URLSearchParams('tab=workspaces');
 
     render(<ProjectDetailPage />);
@@ -154,9 +154,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-selected',
       'true'
     );
-    expect(screen.getByText('Workspace foundation preview')).toBeInTheDocument();
-    expect(screen.getByText('PRD audience handoff')).toBeInTheDocument();
-    expect(screen.getByText('1 chat, 1 doc')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
+    expect(screen.getAllByText('1 chat, 1 doc').length).toBeGreaterThan(0);
   });
 
   it('renders the fixture-backed Schemas tab preview from the query string', () => {
