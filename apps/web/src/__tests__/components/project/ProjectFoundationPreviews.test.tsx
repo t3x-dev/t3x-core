@@ -2,9 +2,14 @@
 
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams('tab=workspaces'),
+}));
 
 describe('project foundation previews', () => {
   it('renders the fixture-backed Workspaces workbench for any project id during W1', () => {
