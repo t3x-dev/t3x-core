@@ -1,5 +1,9 @@
 export type WorkspaceStatus = 'draft' | 'ready_for_yops' | 'schema_review' | 'committed';
 
+export type WorkspaceStatusFilter = 'all' | WorkspaceStatus;
+
+export type WorkspaceSortKey = 'updated_desc' | 'title_asc';
+
 export type SourceBundleType = 'chat' | 'document' | 'prompt_run' | 'import';
 
 export interface SourceBundleItem {
@@ -31,3 +35,5 @@ export interface WorkspaceCandidate {
   schemaBindings: WorkspaceSchemaBinding[];
   lastCommitHash?: string;
 }
+
+export type WorkspaceStatusCounts = Record<WorkspaceStatusFilter, number>;
