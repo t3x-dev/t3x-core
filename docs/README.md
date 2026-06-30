@@ -22,6 +22,7 @@ repository.
 - [Alpha limitations](limitations.md)
 - [Stability summary](stability.md)
 - [Stability policy](release/stability-policy.md)
+- [Project workbench boundaries](ui/project-workbench-boundaries.md)
 - [Branch protection](contributing/branch-protection.md)
 - [PR and release guards](contributing/pr-and-release-guards.md)
 

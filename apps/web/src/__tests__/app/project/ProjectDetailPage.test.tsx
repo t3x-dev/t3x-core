@@ -165,8 +165,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
     render(<ProjectDetailPage />);
 
     expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Schema release preview')).toBeInTheDocument();
-    expect(screen.getByText('PRD Schema v2')).toBeInTheDocument();
+    expect(screen.getByText('Schema registry')).toBeInTheDocument();
+    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
   });
 
   it('does NOT redirect while canvas is still loading', () => {
