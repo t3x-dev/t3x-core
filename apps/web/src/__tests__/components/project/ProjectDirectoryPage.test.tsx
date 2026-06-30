@@ -92,12 +92,30 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pinned projects' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Projects', current: 'page' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Setting' })).toHaveAttribute('href', '/settings');
+    expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
       '/project/proj_prd'
     );
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Canvas' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Type / to search t3x-dev')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Overview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Schema' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Sort' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Project-first workbench')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reviews' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Community' })).not.toBeInTheDocument();
+    expect(screen.queryByText('People')).not.toBeInTheDocument();
+    expect(screen.queryByText('Topics')).not.toBeInTheDocument();
   });
 
   it('filters project rows without leaving the directory', () => {

@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  CheckCircle2,
-  ChevronRight,
-  LayoutTemplate,
-  Menu,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
@@ -29,15 +19,7 @@ import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 
-const TOPICS = ['yschema', 'yops', 'structured-state', 'prd', 'version-control'] as const;
-
-const NAV_ITEMS = [
-  { label: 'Projects', href: '/', active: true },
-  { label: 'Templates', href: '/templates', active: false },
-  { label: 'Reviews', href: '/?view=reviews', active: false },
-  { label: 'Docs', href: '/settings/help', active: false },
-  { label: 'Community', href: '/?view=community', active: false },
-] as const;
+const NAV_ITEMS = [{ label: 'Setting', href: '/settings', active: false }] as const;
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
@@ -186,15 +168,6 @@ function DirectoryTopBar({
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
       <div className="flex h-16 items-center gap-3 px-6">
-        <Button
-          aria-label="Open navigation"
-          className="size-9 border border-[var(--stroke-default)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
-          size="icon"
-          type="button"
-          variant="ghost"
-        >
-          <Menu className="size-4" />
-        </Button>
         <div className="flex items-center gap-3 pr-4">
           <div className="flex size-9 items-center justify-center rounded-[var(--radius-control)] bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-card)]">
             T3
@@ -218,10 +191,7 @@ function DirectoryTopBar({
             </Link>
           ))}
         </nav>
-        <div className="ml-auto hidden min-w-[280px] max-w-[560px] flex-1 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 py-2 text-sm text-[var(--text-tertiary)] lg:flex">
-          <Search className="size-4 shrink-0" />
-          <span className="truncate font-semibold">Type / to search t3x-dev</span>
-        </div>
+        <div className="ml-auto" />
         <Button
           aria-label="New project"
           className="size-9"
@@ -243,47 +213,8 @@ function DirectoryTopBar({
         >
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
         </Button>
-        <div className="flex size-9 items-center justify-center rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] text-sm font-bold text-[var(--text-primary)]">
-          U
-        </div>
       </div>
     </header>
-  );
-}
-
-function DirectoryTabs({ projectCount }: { projectCount: number }) {
-  const tabs = [
-    { label: 'Overview', active: true },
-    { label: 'Projects', count: projectCount },
-    { label: 'Reviews', count: 2 },
-    { label: 'Members', count: 3 },
-  ];
-
-  return (
-    <div className="overflow-x-auto border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
-      <div className="mx-auto flex min-w-max max-w-[1560px] gap-5 px-6">
-        {tabs.map((tab) => (
-          <button
-            aria-current={tab.active ? 'page' : undefined}
-            className={cn(
-              'flex h-14 items-center gap-2 border-b-2 px-1 text-sm font-semibold transition-colors',
-              tab.active
-                ? 'border-[var(--accent-pending)] text-[var(--text-primary)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            )}
-            key={tab.label}
-            type="button"
-          >
-            {tab.label}
-            {typeof tab.count === 'number' && (
-              <span className="rounded-[var(--radius-pill)] bg-[var(--hover-bg-strong)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -305,7 +236,6 @@ function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
             <span>3 members</span>
             <span>{projects.length} projects</span>
             <span>{commits} commits</span>
-            <span>hi@t3x.dev</span>
           </div>
         </div>
       </div>
@@ -322,19 +252,6 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
   return (
     <aside className="space-y-7">
       <section>
-        <h2 className="text-base font-bold text-[var(--text-primary)]">People</h2>
-        <div className="mt-3 flex gap-2">
-          {['YX', 'LQ', 'ET'].map((person) => (
-            <span
-              className="flex size-8 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--hover-bg-strong)] text-xs font-bold text-[var(--text-secondary)]"
-              key={person}
-            >
-              {person}
-            </span>
-          ))}
-        </div>
-      </section>
-      <section className="border-t border-[var(--stroke-divider)] pt-6">
         <h2 className="text-base font-bold text-[var(--text-primary)]">Open work</h2>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
           <ProjectMetric label="reviews" value={openReviews} tone="schema" />
@@ -347,19 +264,6 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
         <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
           {recent ? `${recent.name} updated ${recent.updatedAt}.` : 'No recent project activity.'}
         </p>
-      </section>
-      <section className="border-t border-[var(--stroke-divider)] pt-6">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">Topics</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {TOPICS.map((topic) => (
-            <span
-              className="rounded-[var(--radius-pill)] bg-[var(--accent-commit-soft)] px-3 py-1 text-xs font-bold text-[var(--accent-commit)]"
-              key={topic}
-            >
-              {topic}
-            </span>
-          ))}
-        </div>
       </section>
     </aside>
   );
@@ -538,7 +442,6 @@ export function ProjectDirectoryPage() {
         onRefresh={handleRefreshProjects}
         refreshing={loading}
       />
-      <DirectoryTabs projectCount={projectSummaries.length} />
       <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-8">
           <OrganizationHeader projects={projectSummaries} />
@@ -584,7 +487,7 @@ export function ProjectDirectoryPage() {
                     {filteredProjects.length} projects
                   </span>
                 </div>
-                <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_140px_140px_140px_auto]">
+                <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
                   <label className="relative min-w-0">
                     <span className="sr-only">Find a project</span>
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
@@ -595,15 +498,6 @@ export function ProjectDirectoryPage() {
                       value={query}
                     />
                   </label>
-                  {['Status', 'Schema', 'Sort'].map((label) => (
-                    <select
-                      aria-label={label}
-                      className="h-10 rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm font-semibold text-[var(--text-secondary)] outline-none focus:border-[var(--stroke-strong)] focus:ring-2 focus:ring-[var(--ring)]/30"
-                      key={label}
-                    >
-                      <option>{label}</option>
-                    </select>
-                  ))}
                   <Button
                     disabled={creating}
                     onClick={openNewProjectDialog}
@@ -642,11 +536,6 @@ export function ProjectDirectoryPage() {
         </div>
         <DirectorySideRail projects={projectSummaries} />
       </main>
-      <div className="fixed bottom-4 right-4 hidden items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--stroke-default)] bg-[var(--surface-elevated)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] shadow-[var(--fx-shadow-sm)] lg:flex">
-        <CheckCircle2 className="size-4 text-[var(--status-success)]" />
-        Project-first workbench
-        <ChevronRight className="size-4" />
-      </div>
 
       <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">
