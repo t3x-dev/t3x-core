@@ -129,28 +129,17 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByRole('link', { name: /prd-workflow/i })).not.toBeInTheDocument();
   });
 
-  it('creates a backend project through the shared project hook', async () => {
-    createProject.mockResolvedValueOnce({
-      branches_count: 1,
-      commits_count: 0,
-      conversations_count: 0,
-      created_at: new Date().toISOString(),
-      metadata: { description: 'Created from directory.' },
-      name: 'Backend project',
-      project_id: 'proj_new',
-      turns_count: 0,
-    } satisfies Project);
-
+  it('links repository creation to the organization-scoped creation page', () => {
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'New repository' }));
-    fireEvent.change(screen.getByLabelText('Repository name'), {
-      target: { value: 'Backend project' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    const createLinks = screen.getAllByRole('link', { name: /new repository/i });
 
-    await waitFor(() => expect(createProject).toHaveBeenCalledWith('Backend project'));
-    expect(routerPush).toHaveBeenCalledWith('/project/proj_new');
+    expect(createLinks.length).toBeGreaterThan(0);
+    for (const link of createLinks) {
+      expect(link).toHaveAttribute('href', '/t3x-dev/new');
+    }
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(createProject).not.toHaveBeenCalled();
   });
 
   it('renames a backend project through the shared project hook', async () => {

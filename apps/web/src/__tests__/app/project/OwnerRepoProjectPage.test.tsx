@@ -35,6 +35,14 @@ vi.mock('@/app/project/[projectId]/page', () => ({
   ),
 }));
 
+vi.mock('@/components/project/ProjectDirectoryPage', () => ({
+  ProjectDirectoryPage: () => <div data-testid="org-directory">org directory</div>,
+}));
+
+vi.mock('@/components/project/NewRepositoryPage', () => ({
+  NewRepositoryPage: () => <div data-testid="new-repository-page">new repository page</div>,
+}));
+
 vi.mock('next/link', () => ({
   default: ({
     children,
@@ -89,6 +97,22 @@ describe('OwnerRepoProjectPage', () => {
 
     expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
     expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
+  });
+
+  it('renders the organization directory for owner-only paths', () => {
+    routeParamsValue = { owner: 't3x-dev' };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('org-directory')).toBeInTheDocument();
+  });
+
+  it('renders the organization repository creation page for /owner/new', () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['new'] };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('new-repository-page')).toBeInTheDocument();
   });
 
   it('shows a repository-level not found state for unmatched slugs', () => {

@@ -2,7 +2,6 @@
 
 import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,12 +14,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
-import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 
 const NAV_ITEMS = [{ label: 'Setting', href: '/settings', active: false }] as const;
+const NEW_REPOSITORY_PATH = `/${DEFAULT_OWNER_SLUG}/new`;
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
@@ -154,11 +154,9 @@ function ProjectCard({
 }
 
 function DirectoryTopBar({
-  onCreateProject,
   onRefresh,
   refreshing,
 }: {
-  onCreateProject: () => void;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
@@ -190,14 +188,14 @@ function DirectoryTopBar({
         </nav>
         <div className="ml-auto" />
         <Button
-          aria-label="New repository"
+          asChild
           className="size-9"
-          onClick={onCreateProject}
           size="icon"
-          type="button"
           variant="canvas-outline"
         >
-          <Plus className="size-4" />
+          <Link aria-label="New repository" href={NEW_REPOSITORY_PATH}>
+            <Plus className="size-4" />
+          </Link>
         </Button>
         <Button
           aria-label="Refresh repositories"
@@ -268,7 +266,7 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
   );
 }
 
-function EmptyDirectory({ onCreateProject }: { onCreateProject: () => void }) {
+function EmptyDirectory() {
   return (
     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-center">
       <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
@@ -279,20 +277,19 @@ function EmptyDirectory({ onCreateProject }: { onCreateProject: () => void }) {
         Create a repository first, then enter its workbench to collect sources, validate schema, apply
         YOps, and produce Leaf artifacts.
       </p>
-      <Button className="mt-5" onClick={onCreateProject} type="button" variant="commit">
-        <Plus className="size-4" /> New repository
+      <Button asChild className="mt-5" variant="commit">
+        <Link href={NEW_REPOSITORY_PATH}>
+          <Plus className="size-4" /> New repository
+        </Link>
       </Button>
     </div>
   );
 }
 
 export function ProjectDirectoryPage() {
-  const router = useRouter();
-  const projectStoreAdd = useProjectStore((state) => state.addToProjects);
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
-    create: createProject,
     error,
     loading,
     projects,
@@ -301,10 +298,6 @@ export function ProjectDirectoryPage() {
     rename: renameProject,
   } = useProjects();
   const [query, setQuery] = useState('');
-  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectError, setNewProjectError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -313,45 +306,6 @@ export function ProjectDirectoryPage() {
   const [deleting, setDeleting] = useState(false);
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
-
-  const openNewProjectDialog = useCallback(() => {
-    setNewProjectName('');
-    setNewProjectError(null);
-    setNewProjectDialogOpen(true);
-  }, []);
-
-  const handleNewProjectDialogOpenChange = useCallback(
-    (open: boolean) => {
-      if (creating) return;
-      setNewProjectDialogOpen(open);
-      if (!open) {
-        setNewProjectName('');
-        setNewProjectError(null);
-      }
-    },
-    [creating]
-  );
-
-  const handleCreateProject = useCallback(
-    async (event?: FormEvent<HTMLFormElement>) => {
-      event?.preventDefault();
-      if (creating) return;
-      setCreating(true);
-      setNewProjectError(null);
-      try {
-        const project = await createProject(newProjectName.trim() || DEFAULT_PROJECT_NAME);
-        projectStoreAdd(apiProjectToSummary(project));
-        setNewProjectDialogOpen(false);
-        setNewProjectName('');
-        router.push(`/project/${encodeURIComponent(project.project_id)}`);
-      } catch {
-        setNewProjectError('Failed to create repository');
-      } finally {
-        setCreating(false);
-      }
-    },
-    [createProject, creating, newProjectName, projectStoreAdd, router]
-  );
 
   const handleRefreshProjects = useCallback(async () => {
     await refreshProjects();
@@ -437,7 +391,6 @@ export function ProjectDirectoryPage() {
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
       <DirectoryTopBar
-        onCreateProject={openNewProjectDialog}
         onRefresh={handleRefreshProjects}
         refreshing={loading}
       />
@@ -456,7 +409,7 @@ export function ProjectDirectoryPage() {
               Loading repositories...
             </div>
           ) : projectSummaries.length === 0 ? (
-            <EmptyDirectory onCreateProject={openNewProjectDialog} />
+            <EmptyDirectory />
           ) : (
             <>
               <section>
@@ -500,12 +453,12 @@ export function ProjectDirectoryPage() {
                     />
                   </label>
                   <Button
-                    disabled={creating}
-                    onClick={openNewProjectDialog}
-                    type="button"
+                    asChild
                     variant="commit"
                   >
-                    <Plus className="size-4" /> New
+                    <Link href={NEW_REPOSITORY_PATH}>
+                      <Plus className="size-4" /> New repository
+                    </Link>
                   </Button>
                 </div>
                 <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]">
@@ -537,58 +490,6 @@ export function ProjectDirectoryPage() {
         </div>
         <DirectorySideRail projects={projectSummaries} />
       </main>
-
-      <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
-        <DialogContent className="sm:max-w-[400px]">
-          <form className="grid gap-4" onSubmit={handleCreateProject}>
-            <DialogHeader>
-              <DialogTitle>New Repository</DialogTitle>
-              <DialogDescription>
-                Create a structured state repository, then open its workbench.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium text-[var(--text-primary)]"
-                htmlFor="directory-new-project-name"
-              >
-                Repository name
-              </label>
-              <Input
-                aria-describedby={newProjectError ? 'directory-new-project-error' : undefined}
-                aria-invalid={newProjectError ? 'true' : undefined}
-                autoFocus
-                disabled={creating}
-                id="directory-new-project-name"
-                onChange={(event) => {
-                  setNewProjectName(event.target.value);
-                  if (newProjectError) setNewProjectError(null);
-                }}
-                placeholder={DEFAULT_PROJECT_NAME}
-                value={newProjectName}
-              />
-              {newProjectError && (
-                <p className="text-xs text-[var(--status-error)]" id="directory-new-project-error">
-                  {newProjectError}
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                disabled={creating}
-                onClick={() => handleNewProjectDialogOpenChange(false)}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <Button disabled={creating} type="submit" variant="commit">
-                {creating ? 'Creating...' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">
