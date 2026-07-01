@@ -7,9 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 let searchParamsValue = new URLSearchParams();
+let routeParamsValue: Record<string, string> = { projectId: 'proj_test' };
+let pathnameValue = '/t3x-dev/test-project';
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ projectId: 'proj_test' }),
+  useParams: () => routeParamsValue,
+  usePathname: () => pathnameValue,
   useSearchParams: () => searchParamsValue,
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
@@ -46,7 +49,7 @@ vi.mock('@/queries/project', () => ({
   fetchProject: vi.fn(),
 }));
 
-import ProjectDetailPage from '@/app/project/[projectId]/page';
+import ProjectDetailPage, { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { fetchProject } from '@/queries/project';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
@@ -55,6 +58,8 @@ import { useProjectStore } from '@/store/projectStore';
 beforeEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
+  pathnameValue = '/t3x-dev/test-project';
+  routeParamsValue = { projectId: 'proj_test' };
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   vi.mocked(fetchProject).mockResolvedValue({
     project_id: 'proj_test',
@@ -97,18 +102,44 @@ afterEach(() => {
 });
 
 describe('ProjectDetailPage — project-first shell states', () => {
+  const renderProjectContent = () =>
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+  it('canonicalizes project id routes to owner/repo routes', async () => {
+    searchParamsValue = new URLSearchParams('tab=workspaces&zoom=1.00&x=10&y=20');
+    pathnameValue = '/project/proj_test';
+
+    render(<ProjectDetailPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces');
+    });
+  });
+
+  it('renders project detail from an owner/repo route override', () => {
+    routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
+    useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
   it('shows a project-first empty State tab and can switch to the Workspaces preview', () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
-    expect(screen.getByRole('link', { name: 'Back to project page' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/Test Project')).toBeInTheDocument();
-    expect(screen.getByText('State-first project')).toBeInTheDocument();
-    expect(screen.getByText('valid true')).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.getByText('repo')).toBeInTheDocument();
+    expect(screen.getByText('valid')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
@@ -118,15 +149,19 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create Workspace/i }));
 
-    expect(replaceMock).toHaveBeenCalledWith('?tab=workspaces', { scroll: false });
-    expect(pushMock).not.toHaveBeenCalled();
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(pushMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', { scroll: false });
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
   });
 
   it('keeps chat available as a secondary source action without making it required', () => {
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
 
@@ -141,7 +176,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       loading: false,
     });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
@@ -151,10 +186,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it('renders the fixture-backed Workspaces workbench from the query string', () => {
+  it('renders the fixture-backed Workspaces workbench from the query string', async () => {
     searchParamsValue = new URLSearchParams('tab=workspaces');
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
       'aria-selected',
@@ -163,12 +198,17 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
     expect(screen.getAllByText('1 chat, 1 doc').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', {
+        scroll: false,
+      });
+    });
   });
 
   it('renders the fixture-backed Schemas tab preview from the query string', () => {
     searchParamsValue = new URLSearchParams('tab=schemas');
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Schema registry')).toBeInTheDocument();
@@ -184,7 +224,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       projectId: 'proj_test',
     });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -200,7 +240,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       projectId: 'proj_test',
     });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
@@ -220,7 +260,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       modalViewMode: null,
     });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
     await act(async () => {
       await Promise.resolve();
     });
@@ -240,7 +280,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       projectId: 'proj_other', // load completed for a different project
     });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -253,7 +293,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     });
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
-    render(<ProjectDetailPage />);
+    renderProjectContent();
 
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {

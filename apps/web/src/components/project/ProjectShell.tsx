@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
 import type { ProjectTabId } from '@/components/project/projectTabModel';
 import { Badge } from '@/components/ui/badge';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 
 export interface ProjectShellProject {
+  id?: string;
   name: string;
   description?: string;
   status?: 'draft' | 'active' | 'paused';
@@ -22,9 +24,10 @@ export interface ProjectShellProps {
 
 export function ProjectShell({ activeTab, children, onTabChange, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
-  const validLabel = status === 'paused' ? 'valid paused' : 'valid true';
+  const statusLabel = status === 'paused' ? 'paused' : 'valid';
   const schemaGapCount = status === 'active' ? 0 : Math.min(Math.max(project.drafts ?? 0, 1), 3);
   const outputCount = Math.max(0, project.commitsCount ?? 0);
+  const repoPath = getProjectRepoPath(project);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)] text-[var(--text-primary)]">
@@ -32,11 +35,11 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link
-              aria-label="Back to project page"
+              aria-label={`Back to ${DEFAULT_OWNER_SLUG}`}
               className="inline-flex h-9 shrink-0 items-center rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] px-3 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:border-[var(--stroke-strong)] hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
               href="/"
             >
-              t3x-dev
+              {DEFAULT_OWNER_SLUG}
             </Link>
             <span
               aria-hidden="true"
@@ -50,15 +53,15 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
           </div>
 
           <p className="mt-2 max-w-3xl truncate text-sm font-semibold text-[var(--text-secondary)]">
-            {project.description || 'Project workbench'}
+            {project.description || 'Structured state repository'}
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Badge variant="commit">State-first project</Badge>
+            <Badge variant="commit">repo</Badge>
             <Badge className="font-mono" variant="outline">
-              /t3x-dev/{project.name}
+              {repoPath}
             </Badge>
-            <Badge variant={status === 'paused' ? 'warning' : 'success'}>{validLabel}</Badge>
+            <Badge variant={status === 'paused' ? 'warning' : 'success'}>{statusLabel}</Badge>
             <Badge variant="outline">
               {schemaGapCount} schema {schemaGapCount === 1 ? 'gap' : 'gaps'}
             </Badge>

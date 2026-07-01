@@ -86,23 +86,27 @@ describe('ProjectDirectoryPage', () => {
     });
   });
 
-  it('renders the organization-level project directory as the app entrypoint', () => {
+  it('renders the organization-level repository directory as the app entrypoint', () => {
     render(<ProjectDirectoryPage />);
 
     expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pinned projects' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pinned repositories' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Setting' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/settings'
+    );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /prd-workflow/i })[0]).toHaveAttribute(
       'href',
-      '/project/proj_prd'
+      '/t3x-dev/prd-workflow'
     );
+    expect(screen.getAllByText('/t3x-dev/prd-workflow').length).toBeGreaterThan(0);
     expect(screen.queryByRole('link', { name: 'Chats' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Canvas' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
@@ -121,35 +125,24 @@ describe('ProjectDirectoryPage', () => {
   it('filters project rows without leaving the directory', () => {
     render(<ProjectDirectoryPage />);
 
-    const search = screen.getByPlaceholderText('Find a project...');
+    const search = screen.getByPlaceholderText('Find a repository...');
     fireEvent.change(search, { target: { value: 'core' } });
 
     expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(2);
     expect(screen.queryByRole('link', { name: /prd-workflow/i })).not.toBeInTheDocument();
   });
 
-  it('creates a backend project through the shared project hook', async () => {
-    createProject.mockResolvedValueOnce({
-      branches_count: 1,
-      commits_count: 0,
-      conversations_count: 0,
-      created_at: new Date().toISOString(),
-      metadata: { description: 'Created from directory.' },
-      name: 'Backend project',
-      project_id: 'proj_new',
-      turns_count: 0,
-    } satisfies Project);
-
+  it('links repository creation to the organization-scoped creation page', () => {
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
-    fireEvent.change(screen.getByLabelText('Project name'), {
-      target: { value: 'Backend project' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    const createLinks = screen.getAllByRole('link', { name: /new repository/i });
 
-    await waitFor(() => expect(createProject).toHaveBeenCalledWith('Backend project'));
-    expect(routerPush).toHaveBeenCalledWith('/project/proj_new');
+    expect(createLinks.length).toBeGreaterThan(0);
+    for (const link of createLinks) {
+      expect(link).toHaveAttribute('href', '/t3x-dev/new');
+    }
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(createProject).not.toHaveBeenCalled();
   });
 
   it('renames a backend project through the shared project hook', async () => {
@@ -160,8 +153,8 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Rename project prd-workflow' })[0]);
-    fireEvent.change(screen.getByLabelText('Project name'), {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename repository prd-workflow' })[0]);
+    fireEvent.change(screen.getByLabelText('Repository name'), {
       target: { value: 'Renamed PRD' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -174,7 +167,7 @@ describe('ProjectDirectoryPage', () => {
 
     render(<ProjectDirectoryPage />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Delete project prd-workflow' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete repository prd-workflow' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(removeProject).toHaveBeenCalledWith('proj_prd'));
