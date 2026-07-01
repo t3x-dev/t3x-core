@@ -15,7 +15,7 @@ export function ProjectEmptyState({
 }: ProjectEmptyStateProps) {
   return (
     <section className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-md text-center">
+      <div className="w-full max-w-md -translate-y-6 text-center sm:-translate-y-8">
         <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-[var(--accent-branch)]/25 bg-[var(--surface-card)] text-[var(--accent-branch)]">
           <Boxes aria-hidden="true" className="h-5 w-5" />
         </div>

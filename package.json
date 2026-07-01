@@ -6,7 +6,7 @@
   "description": "Version control for structured state.",
   "packageManager": "pnpm@10.26.2",
   "scripts": {
-    "prepare": "sh tools/hooks/install-hooks.sh",
+    "prepare": "node tools/hooks/install-hooks.mjs",
     "build": "turbo run build",
     "build:core": "turbo run build --filter=@t3x-dev/core",
     "build:storage": "turbo run build --filter=@t3x-dev/storage",
@@ -73,20 +73,6 @@
   },
   "engines": {
     "node": ">=20.9.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@embedded-postgres/darwin-arm64",
-      "@embedded-postgres/darwin-x64",
-      "@embedded-postgres/linux-arm64",
-      "@embedded-postgres/linux-x64",
-      "@swc/core"
-    ],
-    "overrides": {
-      "fast-uri@3.1.0": "3.1.2",
-      "picomatch@2.3.1": "2.3.2",
-      "picomatch@4.0.3": "4.0.4"
-    }
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
