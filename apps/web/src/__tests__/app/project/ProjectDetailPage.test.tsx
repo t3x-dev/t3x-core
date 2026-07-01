@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 let searchParamsValue = new URLSearchParams();
+let routeParamsValue: Record<string, string> = { projectId: 'proj_test' };
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ projectId: 'proj_test' }),
+  useParams: () => routeParamsValue,
   useSearchParams: () => searchParamsValue,
   useRouter: () => ({ replace: replaceMock, push: pushMock }),
 }));
@@ -46,7 +47,7 @@ vi.mock('@/queries/project', () => ({
   fetchProject: vi.fn(),
 }));
 
-import ProjectDetailPage from '@/app/project/[projectId]/page';
+import ProjectDetailPage, { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { fetchProject } from '@/queries/project';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
@@ -55,6 +56,7 @@ import { useProjectStore } from '@/store/projectStore';
 beforeEach(() => {
   vi.clearAllMocks();
   searchParamsValue = new URLSearchParams();
+  routeParamsValue = { projectId: 'proj_test' };
   useChatStore.setState({ activeProjectId: null, activeConversationId: null });
   vi.mocked(fetchProject).mockResolvedValue({
     project_id: 'proj_test',
@@ -97,18 +99,30 @@ afterEach(() => {
 });
 
 describe('ProjectDetailPage — project-first shell states', () => {
+  it('renders project detail from an owner/repo route override', () => {
+    routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
+    useChatStore.setState({ activeProjectId: null, activeConversationId: null });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
   it('shows a project-first empty State tab and can switch to the Workspaces preview', () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPage />);
 
-    expect(screen.getByRole('link', { name: 'Back to project page' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Back to t3x-dev' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/Test Project')).toBeInTheDocument();
-    expect(screen.getByText('State-first project')).toBeInTheDocument();
-    expect(screen.getByText('valid true')).toBeInTheDocument();
+    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.getByText('repo')).toBeInTheDocument();
+    expect(screen.getByText('valid')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(

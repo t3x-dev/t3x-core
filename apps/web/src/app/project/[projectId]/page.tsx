@@ -39,6 +39,7 @@ export default function ProjectDetailPage() {
 }
 
 interface ProjectDetailPageContentProps {
+  projectIdOverride?: string;
   showChatSidebarToggle?: boolean;
 }
 
@@ -49,11 +50,13 @@ function isNotFoundError(error: Error | null): boolean {
 }
 
 export function ProjectDetailPageContent({
+  projectIdOverride,
   showChatSidebarToggle = false,
 }: ProjectDetailPageContentProps = {}) {
-  const params = useParams();
+  const params = useParams<{ projectId?: string }>();
   const router = useRouter();
-  const projectId = params.projectId as string;
+  const routeProjectId = typeof params.projectId === 'string' ? params.projectId : '';
+  const projectId = projectIdOverride ?? routeProjectId;
 
   const searchParams = useSearchParams();
   const activeTab = parseProjectTab(searchParams.get('tab'));
