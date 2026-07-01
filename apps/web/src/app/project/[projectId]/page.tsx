@@ -29,6 +29,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
+import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
 export default function ProjectDetailPage() {
   return (
@@ -80,6 +81,12 @@ export function ProjectDetailPageContent({
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
   useCanvasDeletionWiring();
+
+  useEffect(() => {
+    if (project) {
+      recordRecentProjectOpen(project.id);
+    }
+  }, [project?.id]);
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);

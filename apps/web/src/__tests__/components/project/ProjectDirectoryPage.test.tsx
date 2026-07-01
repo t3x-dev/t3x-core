@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
@@ -77,6 +77,7 @@ describe('ProjectDirectoryPage', () => {
     refreshProjects.mockReset();
     removeProject.mockReset();
     renameProject.mockReset();
+    window.localStorage.clear();
     hookProjects = projects;
     useProjectStore.setState({
       error: null,
@@ -90,7 +91,6 @@ describe('ProjectDirectoryPage', () => {
     render(<ProjectDirectoryPage />);
 
     expect(screen.getByRole('heading', { name: 't3x-dev' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pinned projects' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
@@ -118,13 +118,28 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('Topics')).not.toBeInTheDocument();
   });
 
+  it('shows recently opened projects from local storage', () => {
+    window.localStorage.setItem('t3x:recent-projects', JSON.stringify(['proj_core', 'proj_prd']));
+
+    render(<ProjectDirectoryPage />);
+
+    const recentSection = screen
+      .getByRole('heading', { name: 'Recent projects' })
+      .closest('section');
+    expect(recentSection).not.toBeNull();
+
+    const recentLinks = within(recentSection as HTMLElement).getAllByRole('link');
+    expect(recentLinks[0]).toHaveAttribute('href', '/project/proj_core');
+    expect(recentLinks[1]).toHaveAttribute('href', '/project/proj_prd');
+  });
+
   it('filters project rows without leaving the directory', () => {
     render(<ProjectDirectoryPage />);
 
     const search = screen.getByPlaceholderText('Find a project...');
     fireEvent.change(search, { target: { value: 'core' } });
 
-    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /t3x-core/i })).toHaveLength(1);
     expect(screen.queryByRole('link', { name: /prd-workflow/i })).not.toBeInTheDocument();
   });
 

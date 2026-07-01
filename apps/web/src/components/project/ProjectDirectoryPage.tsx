@@ -18,6 +18,11 @@ import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
+import {
+  orderProjectsByRecentOpen,
+  readRecentProjectIds,
+  recordRecentProjectOpen,
+} from '@/utils/recentProjects';
 
 const NAV_ITEMS = [{ label: 'Setting', href: '/settings', active: false }] as const;
 
@@ -109,6 +114,7 @@ function ProjectCard({
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
           href={`/project/${encodeURIComponent(project.id)}`}
+          onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
           <h3 className="truncate text-lg font-semibold leading-tight text-[var(--accent-commit)]">
@@ -312,6 +318,7 @@ export function ProjectDirectoryPage() {
   const [renaming, setRenaming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [recentProjectIds] = useState(() => readRecentProjectIds());
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
@@ -342,6 +349,7 @@ export function ProjectDirectoryPage() {
       try {
         const project = await createProject(newProjectName.trim() || DEFAULT_PROJECT_NAME);
         projectStoreAdd(apiProjectToSummary(project));
+        recordRecentProjectOpen(project.project_id);
         setNewProjectDialogOpen(false);
         setNewProjectName('');
         router.push(`/project/${encodeURIComponent(project.project_id)}`);
@@ -433,7 +441,10 @@ export function ProjectDirectoryPage() {
       return text.includes(normalized);
     });
   }, [projectSummaries, query]);
-  const pinnedProjects = filteredProjects.slice(0, 2);
+  const recentProjects = useMemo(
+    () => orderProjectsByRecentOpen(filteredProjects, recentProjectIds).slice(0, 2),
+    [filteredProjects, recentProjectIds]
+  );
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
@@ -460,25 +471,29 @@ export function ProjectDirectoryPage() {
             <EmptyDirectory onCreateProject={openNewProjectDialog} />
           ) : (
             <>
-              <section>
-                <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">Pinned projects</h2>
-                  <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
-                    Organization projects with shareable URLs
-                  </span>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {pinnedProjects.map((project) => (
-                    <ProjectCard
-                      compact
-                      key={project.id}
-                      onDelete={setDeleteTarget}
-                      onRename={openRenameDialog}
-                      project={project}
-                    />
-                  ))}
-                </div>
-              </section>
+              {recentProjects.length > 0 && (
+                <section>
+                  <div className="mb-4 flex items-end justify-between gap-4">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                      Recent projects
+                    </h2>
+                    <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
+                      Recently opened projects
+                    </span>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {recentProjects.map((project) => (
+                      <ProjectCard
+                        compact
+                        key={project.id}
+                        onDelete={setDeleteTarget}
+                        onRename={openRenameDialog}
+                        project={project}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section>
                 <div className="mb-4 flex items-end justify-between gap-4">
