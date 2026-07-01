@@ -1,34 +1,29 @@
-"use client";
+'use client';
 
-import { Copy, KeyRound, Loader2, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import type { CreatedT3xApiKey, T3xApiKey } from "@/domain/apiKeys";
-import type {
-  LocalAccessCheckResult,
-  LocalConfigState,
-} from "@/domain/accessConfig";
-import { formatUserFacingError } from "@/domain/format/errors";
-import { formatDate, relativeTime } from "@/domain/format/formatters";
-import { useAccessSettings } from "@/hooks/access/useAccessSettings";
+import { Copy, KeyRound, Loader2, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import type { LocalAccessCheckResult, LocalConfigState } from '@/domain/accessConfig';
+import type { CreatedT3xApiKey, T3xApiKey } from '@/domain/apiKeys';
+import { formatUserFacingError } from '@/domain/format/errors';
+import { formatDate, relativeTime } from '@/domain/format/formatters';
+import { useAccessSettings } from '@/hooks/access/useAccessSettings';
 
 function formatSourceLabel(
-  source:
-    | LocalConfigState["api_url_source"]
-    | LocalConfigState["api_key_source"]
+  source: LocalConfigState['api_url_source'] | LocalConfigState['api_key_source']
 ): string {
   switch (source) {
-    case "env":
-      return "Environment variable";
-    case "file":
-      return "Shared local config";
-    case "default":
-      return "Built-in default";
-    case "none":
-      return "Not configured";
+    case 'env':
+      return 'Environment variable';
+    case 'file':
+      return 'Shared local config';
+    case 'default':
+      return 'Built-in default';
+    case 'none':
+      return 'Not configured';
   }
 }
 
@@ -43,15 +38,13 @@ export function AccessSettingsPanel() {
     checkLocalAccess,
   } = useAccessSettings();
   const [config, setConfig] = useState<LocalConfigState | null>(null);
-  const [accessCheck, setAccessCheck] = useState<LocalAccessCheckResult | null>(
-    null
-  );
+  const [accessCheck, setAccessCheck] = useState<LocalAccessCheckResult | null>(null);
   const [apiKeys, setApiKeys] = useState<T3xApiKey[]>([]);
   const [createdKey, setCreatedKey] = useState<CreatedT3xApiKey | null>(null);
-  const [apiUrl, setApiUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [newKeyName, setNewKeyName] = useState("");
-  const [newKeyProjectId, setNewKeyProjectId] = useState("");
+  const [apiUrl, setApiUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyProjectId, setNewKeyProjectId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +59,7 @@ export function AccessSettingsPanel() {
       const keys = await listApiKeys();
       setApiKeys(keys);
     } catch (error) {
-      toast.error(formatUserFacingError(error, "Failed to load API keys."));
+      toast.error(formatUserFacingError(error, 'Failed to load API keys.'));
     } finally {
       setIsLoadingKeys(false);
     }
@@ -81,13 +74,11 @@ export function AccessSettingsPanel() {
         if (cancelled) return;
         setConfig(nextConfig);
         setApiUrl(nextConfig.api_url);
-        setApiKey("");
+        setApiKey('');
       })
       .catch((error) => {
         if (cancelled) return;
-        toast.error(
-          formatUserFacingError(error, "Failed to load shared access.")
-        );
+        toast.error(formatUserFacingError(error, 'Failed to load shared access.'));
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -107,10 +98,7 @@ export function AccessSettingsPanel() {
         const result = await checkLocalAccess();
         if (!cancelled) setAccessCheck(result);
       } catch (error) {
-        if (!cancelled)
-          toast.error(
-            formatUserFacingError(error, "Failed to test shared access.")
-          );
+        if (!cancelled) toast.error(formatUserFacingError(error, 'Failed to test shared access.'));
       } finally {
         if (!cancelled) setIsChecking(false);
       }
@@ -136,12 +124,10 @@ export function AccessSettingsPanel() {
       setConfig(nextConfig);
       setAccessCheck(null);
       setApiUrl(nextConfig.api_url);
-      setApiKey("");
-      toast.success("Shared access updated");
+      setApiKey('');
+      toast.success('Shared access updated');
     } catch (error) {
-      toast.error(
-        formatUserFacingError(error, "Failed to save shared access.")
-      );
+      toast.error(formatUserFacingError(error, 'Failed to save shared access.'));
     } finally {
       setIsSaving(false);
     }
@@ -155,12 +141,10 @@ export function AccessSettingsPanel() {
       setConfig(nextConfig);
       setAccessCheck(null);
       setApiUrl(nextConfig.api_url);
-      setApiKey("");
-      toast.success("Stored API key cleared");
+      setApiKey('');
+      toast.success('Stored API key cleared');
     } catch (error) {
-      toast.error(
-        formatUserFacingError(error, "Failed to clear stored API key.")
-      );
+      toast.error(formatUserFacingError(error, 'Failed to clear stored API key.'));
     } finally {
       setIsClearing(false);
     }
@@ -177,9 +161,7 @@ export function AccessSettingsPanel() {
         toast.error(result.message);
       }
     } catch (error) {
-      toast.error(
-        formatUserFacingError(error, "Failed to test shared access.")
-      );
+      toast.error(formatUserFacingError(error, 'Failed to test shared access.'));
     } finally {
       setIsChecking(false);
     }
@@ -198,12 +180,12 @@ export function AccessSettingsPanel() {
         ...(projectId ? { project_id: projectId } : {}),
       });
       setCreatedKey(nextKey);
-      setNewKeyName("");
-      setNewKeyProjectId("");
+      setNewKeyName('');
+      setNewKeyProjectId('');
       await loadApiKeys();
-      toast.success("API key created");
+      toast.success('API key created');
     } catch (error) {
-      toast.error(formatUserFacingError(error, "Failed to create API key."));
+      toast.error(formatUserFacingError(error, 'Failed to create API key.'));
     } finally {
       setIsCreatingKey(false);
     }
@@ -214,49 +196,43 @@ export function AccessSettingsPanel() {
 
     try {
       await navigator.clipboard.writeText(createdKey.key);
-      toast.success("API key copied");
+      toast.success('API key copied');
     } catch {
-      toast.error("Could not copy API key");
+      toast.error('Could not copy API key');
     }
   }
 
   async function handleRevokeApiKey(key: T3xApiKey) {
-    if (
-      !window.confirm(`Revoke API key "${key.name}"? This cannot be undone.`)
-    ) {
+    if (!window.confirm(`Revoke API key "${key.name}"? This cannot be undone.`)) {
       return;
     }
 
     setRevokingKeyId(key.id);
     try {
       await revokeApiKey(key.id);
-      setApiKeys((current) =>
-        current.filter((candidate) => candidate.id !== key.id)
-      );
+      setApiKeys((current) => current.filter((candidate) => candidate.id !== key.id));
       await loadApiKeys();
-      toast.success("API key revoked");
+      toast.success('API key revoked');
     } catch (error) {
-      toast.error(formatUserFacingError(error, "Failed to revoke API key."));
+      toast.error(formatUserFacingError(error, 'Failed to revoke API key.'));
     } finally {
       setRevokingKeyId(null);
     }
   }
 
   const accessModeLabel =
-    accessCheck?.auth_mode === "open"
-      ? "Open local API"
-      : accessCheck?.auth_mode === "protected"
-      ? "Protected API"
-      : accessCheck?.auth_mode === "unreachable"
-      ? "Unreachable API"
-      : "Checking access";
+    accessCheck?.auth_mode === 'open'
+      ? 'Open local API'
+      : accessCheck?.auth_mode === 'protected'
+        ? 'Protected API'
+        : accessCheck?.auth_mode === 'unreachable'
+          ? 'Unreachable API'
+          : 'Checking access';
 
   return (
     <section className="space-y-6">
       <div className="space-y-1">
-        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-          Access control
-        </h2>
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Access control</h2>
         <p className="text-xs text-[var(--text-tertiary)]">
           Manage T3X API access separately from model provider credentials.
         </p>
@@ -265,16 +241,14 @@ export function AccessSettingsPanel() {
       <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-medium text-[var(--text-primary)]">
-              Runtime access mode
-            </p>
+            <p className="font-medium text-[var(--text-primary)]">Runtime access mode</p>
             <p className="mt-1 text-xs text-[var(--text-secondary)]">
               {accessCheck?.message ??
-                "Checking whether the configured API currently requires authentication."}
+                'Checking whether the configured API currently requires authentication.'}
             </p>
           </div>
           <span className="rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-secondary)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)]">
-            {isChecking && !accessCheck ? "Checking" : accessModeLabel}
+            {isChecking && !accessCheck ? 'Checking' : accessModeLabel}
           </span>
         </div>
       </div>
@@ -290,19 +264,15 @@ export function AccessSettingsPanel() {
               Create keys for WebUI sessions, CLI, MCP, and automation.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void loadApiKeys()}
-          >
+          <Button type="button" variant="outline" onClick={() => void loadApiKeys()}>
             Refresh
           </Button>
         </div>
 
-        {accessCheck?.auth_mode === "open" ? (
+        {accessCheck?.auth_mode === 'open' ? (
           <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-            Source development is currently open. Keys here are mainly for CLI,
-            MCP, and self-hosted simulation.
+            Source development is currently open. Keys here are mainly for CLI, MCP, and self-hosted
+            simulation.
           </div>
         ) : null}
 
@@ -341,13 +311,8 @@ export function AccessSettingsPanel() {
             />
           </div>
           <div className="flex items-end">
-            <Button
-              type="submit"
-              disabled={isCreatingKey || !newKeyName.trim()}
-            >
-              {isCreatingKey ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
+            <Button type="submit" disabled={isCreatingKey || !newKeyName.trim()}>
+              {isCreatingKey ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Create API key
             </Button>
           </div>
@@ -357,27 +322,17 @@ export function AccessSettingsPanel() {
           <div className="rounded-xl border border-[var(--stroke-divider)] bg-[var(--surface-secondary)] p-3 text-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-[var(--text-primary)]">
-                  Created key
-                </p>
+                <p className="font-medium text-[var(--text-primary)]">Created key</p>
                 <p className="mt-1 break-all font-mono text-xs text-[var(--text-primary)]">
                   {createdKey.key}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleCopyCreatedKey()}
-                >
+                <Button type="button" variant="outline" onClick={() => void handleCopyCreatedKey()}>
                   <Copy className="h-4 w-4" />
                   Copy
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCreatedKey(null)}
-                >
+                <Button type="button" variant="outline" onClick={() => setCreatedKey(null)}>
                   Dismiss created key
                 </Button>
               </div>
@@ -402,29 +357,21 @@ export function AccessSettingsPanel() {
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-[var(--text-primary)]">
-                      {key.name}
-                    </p>
+                    <p className="font-medium text-[var(--text-primary)]">{key.name}</p>
                     <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5 font-mono text-xs text-[var(--text-secondary)]">
                       {key.key_prefix}
                     </span>
                     <span className="rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-                      {key.project_id
-                        ? `Project ${key.project_id}`
-                        : "User-level key"}
+                      {key.project_id ? `Project ${key.project_id}` : 'User-level key'}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-[var(--text-tertiary)]">
                     Created {relativeTime(key.created_at)}
-                    {key.last_used_at
-                      ? `; last used ${relativeTime(key.last_used_at)}`
-                      : ""}
+                    {key.last_used_at ? `; last used ${relativeTime(key.last_used_at)}` : ''}
                   </p>
                   <p className="sr-only">
                     Created at {formatDate(key.created_at)}
-                    {key.last_used_at
-                      ? `; last used at ${formatDate(key.last_used_at)}`
-                      : ""}
+                    {key.last_used_at ? `; last used at ${formatDate(key.last_used_at)}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center md:justify-end">
@@ -450,34 +397,26 @@ export function AccessSettingsPanel() {
 
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
           <span>Provider keys stay in Settings / Providers.</span>
-          <Link
-            href="/settings/providers"
-            className="font-medium text-[var(--text-primary)]"
-          >
+          <Link href="/settings/providers" className="font-medium text-[var(--text-primary)]">
             Open providers settings
           </Link>
         </div>
       </section>
 
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-          Local Shared Access
-        </h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Local Shared Access</h3>
         <p className="text-xs text-[var(--text-tertiary)]">
-          This page manages the standalone API host&apos;s local API URL and
-          key. In a one-machine setup, CLI and MCP can point at the same shared
-          file.
+          This page manages the standalone API host&apos;s local API URL and key. In a one-machine
+          setup, CLI and MCP can point at the same shared file.
         </p>
       </div>
 
       <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]">
         <p className="font-medium text-[var(--text-primary)]">CLI fallback</p>
         <p className="mt-1">
-          You can set the same shared values from the terminal with{" "}
-          <span className="font-mono text-[var(--text-primary)]">
-            t3x auth use-key &lt;key&gt;
-          </span>{" "}
-          and{" "}
+          You can set the same shared values from the terminal with{' '}
+          <span className="font-mono text-[var(--text-primary)]">t3x auth use-key &lt;key&gt;</span>{' '}
+          and{' '}
           <span className="font-mono text-[var(--text-primary)]">
             t3x config set api-url &lt;url&gt;
           </span>
@@ -533,32 +472,24 @@ export function AccessSettingsPanel() {
               />
               <p className="text-xs text-[var(--text-secondary)]">
                 {config?.api_key_present
-                  ? `API key active (${formatSourceLabel(
-                      config.api_key_source
-                    )})${
-                      config.api_key_preview
-                        ? `: ${config.api_key_preview}`
-                        : ""
+                  ? `API key active (${formatSourceLabel(config.api_key_source)})${
+                      config.api_key_preview ? `: ${config.api_key_preview}` : ''
                     }`
-                  : "API key not configured"}
+                  : 'API key not configured'}
               </p>
             </div>
           </div>
 
-          {config?.api_key_source === "env" ||
-          config?.api_url_source === "env" ? (
+          {config?.api_key_source === 'env' || config?.api_url_source === 'env' ? (
             <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-              Environment variables currently override part of this local
-              config. File changes stay saved, but they will not take effect
-              until the override is removed.
+              Environment variables currently override part of this local config. File changes stay
+              saved, but they will not take effect until the override is removed.
             </div>
           ) : null}
 
           <div className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-            Config path:{" "}
-            <span className="font-mono text-[var(--text-primary)]">
-              {config?.config_path}
-            </span>
+            Config path:{' '}
+            <span className="font-mono text-[var(--text-primary)]">{config?.config_path}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

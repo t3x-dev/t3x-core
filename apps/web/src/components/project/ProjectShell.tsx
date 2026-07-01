@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
 import type { ProjectTabId } from '@/components/project/projectTabModel';
 import { Badge } from '@/components/ui/badge';

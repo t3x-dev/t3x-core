@@ -22,6 +22,10 @@ import { dispatchProjectDeleted } from '@/hooks/shared/deleteEvents';
 import { fetchProjects } from '@/queries/projects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 
+interface AddProjectOptions {
+  description?: string;
+}
+
 export function useProjectCrud() {
   const list = useCallback(async (): Promise<void> => {
     const store = useProjectStore.getState();
@@ -42,46 +46,53 @@ export function useProjectCrud() {
     }
   }, []);
 
-  const add = useCallback(async (rawName = DEFAULT_PROJECT_NAME): Promise<ProjectSummary> => {
-    const store = useProjectStore.getState();
-    const name = rawName.trim() || DEFAULT_PROJECT_NAME;
-    const notify = store.notifyCallback;
+  const add = useCallback(
+    async (
+      rawName = DEFAULT_PROJECT_NAME,
+      options?: AddProjectOptions
+    ): Promise<ProjectSummary> => {
+      const store = useProjectStore.getState();
+      const name = rawName.trim() || DEFAULT_PROJECT_NAME;
+      const description = options?.description?.trim() || 'Fresh project awaiting conversations.';
+      const notify = store.notifyCallback;
 
-    try {
-      const project = await createProject(name, {
-        description: 'Fresh project awaiting conversations.',
-      });
-      const summary = apiProjectToSummary(project);
-      store.addToProjects(summary);
-      notify?.(`Created project "${name}"`, 'success');
-      return summary;
-    } catch (err) {
-      // Only create a local offline project for network errors. The command
-      // wraps everything in ProjectPersistenceError; the underlying TypeError
-      // (fetch network failure) is preserved on `.cause`.
-      const isNetworkError =
-        err instanceof ProjectPersistenceError && err.cause instanceof TypeError;
-      if (!isNetworkError) {
-        throw err;
+      try {
+        const project = await createProject(name, {
+          description,
+        });
+        const summary = apiProjectToSummary(project);
+        store.addToProjects(summary);
+        notify?.(`Created project "${name}"`, 'success');
+        return summary;
+      } catch (err) {
+        // Only create a local offline project for network errors. The command
+        // wraps everything in ProjectPersistenceError; the underlying TypeError
+        // (fetch network failure) is preserved on `.cause`.
+        const isNetworkError =
+          err instanceof ProjectPersistenceError && err.cause instanceof TypeError;
+        if (!isNetworkError) {
+          throw err;
+        }
+
+        notify?.(`API unavailable - created offline project "${name}"`, 'warning');
+        const summary: ProjectSummary = {
+          id: `local-${Date.now()}`,
+          name: `${name} (offline)`,
+          description,
+          updatedAt: 'just now',
+          owner: 'You',
+          status: 'draft',
+          nodes: 0,
+          drafts: 0,
+          commitsCount: 0,
+          branchesCount: 0,
+        };
+        store.addToProjects(summary);
+        return summary;
       }
-
-      notify?.(`API unavailable - created offline project "${name}"`, 'warning');
-      const summary: ProjectSummary = {
-        id: `local-${Date.now()}`,
-        name: `${name} (offline)`,
-        description: 'Created offline - will sync when API is available.',
-        updatedAt: 'just now',
-        owner: 'You',
-        status: 'draft',
-        nodes: 0,
-        drafts: 0,
-        commitsCount: 0,
-        branchesCount: 0,
-      };
-      store.addToProjects(summary);
-      return summary;
-    }
-  }, []);
+    },
+    []
+  );
 
   const remove = useCallback(async (id: string): Promise<void> => {
     const store = useProjectStore.getState();

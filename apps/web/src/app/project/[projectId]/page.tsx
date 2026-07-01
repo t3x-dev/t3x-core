@@ -66,8 +66,14 @@ function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectT
   return tab === 'state' ? basePath : `${basePath}/${tab}`;
 }
 
-function getProjectCanonicalPath(project: { id?: string; name: string }, searchParams: URLSearchParams) {
-  return withCurrentQuery(getProjectTabPath(project, parseProjectTab(searchParams.get('tab'))), searchParams);
+function getProjectCanonicalPath(
+  project: { id?: string; name: string },
+  searchParams: URLSearchParams
+) {
+  return withCurrentQuery(
+    getProjectTabPath(project, parseProjectTab(searchParams.get('tab'))),
+    searchParams
+  );
 }
 
 function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
@@ -93,7 +99,9 @@ function ProjectIdCanonicalRedirect() {
     if (!projectId) return;
 
     const replaceWithProject = (project: ProjectSummary) => {
-      router.replace(getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString())));
+      router.replace(
+        getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
+      );
     };
 
     if (projectFromStore) {
@@ -143,8 +151,8 @@ export function ProjectDetailPageContent({
   const projectId = projectIdOverride ?? routeProjectId;
 
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<ProjectTabId>(() =>
-    initialTabOverride ?? parseProjectTab(searchParams.get('tab'))
+  const [activeTab, setActiveTab] = useState<ProjectTabId>(
+    () => initialTabOverride ?? parseProjectTab(searchParams.get('tab'))
   );
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');

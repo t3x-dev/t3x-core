@@ -6,14 +6,14 @@ import {
   Blocks,
   Building2,
   GitBranch,
+  type LucideIcon,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
   Users,
-  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -132,27 +132,39 @@ export function OrganizationSettingsPage({ ownerSlug }: OrganizationSettingsPage
             title="Organization profile"
           >
             <div className="grid gap-4 p-5">
-              <label className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+              <label
+                className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]"
+                htmlFor="organization-display-name"
+              >
                 Organization display name
                 <Input
+                  id="organization-display-name"
                   value={profile.displayName}
                   onChange={(event) =>
                     setProfile((current) => ({ ...current, displayName: event.target.value }))
                   }
                 />
               </label>
-              <label className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+              <label
+                className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]"
+                htmlFor="organization-slug"
+              >
                 Organization slug
                 <Input
+                  id="organization-slug"
                   value={profile.slug}
                   onChange={(event) =>
                     setProfile((current) => ({ ...current, slug: event.target.value }))
                   }
                 />
               </label>
-              <label className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+              <label
+                className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]"
+                htmlFor="organization-description"
+              >
                 Organization description
                 <Textarea
+                  id="organization-description"
                   value={profile.description}
                   onChange={(event) =>
                     setProfile((current) => ({ ...current, description: event.target.value }))

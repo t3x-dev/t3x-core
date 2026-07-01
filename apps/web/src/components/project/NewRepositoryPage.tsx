@@ -7,13 +7,8 @@ import { type FormEvent, type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { createProject } from '@/commands/projects';
-import {
-  DEFAULT_OWNER_SLUG,
-  getProjectRepoPath,
-  toRepoSlug,
-} from '@/domain/project/repoPath';
-import { apiProjectToSummary, useProjectStore } from '@/store/projectStore';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath, toRepoSlug } from '@/domain/project/repoPath';
+import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { cn } from '@/utils/cn';
 
 type SetupMode = 'blank' | 'source';
@@ -70,7 +65,7 @@ export function NewRepositoryPage() {
   const params = useParams<{ owner?: string | string[] }>();
   const ownerSlug = firstParam(params.owner).toLowerCase() || DEFAULT_OWNER_SLUG;
   const router = useRouter();
-  const projectStoreAdd = useProjectStore((state) => state.addToProjects);
+  const { add: createRepository } = useProjectCrud();
   const [repoName, setRepoName] = useState('');
   const [description, setDescription] = useState('');
   const [setupMode, setSetupMode] = useState<SetupMode>('blank');
@@ -88,9 +83,10 @@ export function NewRepositoryPage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const project = await createProject(normalizedName);
-      projectStoreAdd(apiProjectToSummary(project));
-      const repoPath = getProjectRepoPath({ id: project.project_id, name: project.name });
+      const project = await createRepository(normalizedName, {
+        description: description.trim() || 'Structured state repository.',
+      });
+      const repoPath = getProjectRepoPath(project);
       router.push(setupMode === 'source' ? `${repoPath}/workspaces` : repoPath);
     } catch {
       setCreateError('Failed to create repository');

@@ -4,11 +4,11 @@ import {
   Database,
   FileText,
   KeyRound,
-  SlidersHorizontal,
   type LucideIcon,
+  SlidersHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -114,13 +114,24 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
             title="General"
           >
             <div className="grid gap-4 border-t border-[var(--stroke-divider)] p-5">
-              <label className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+              <label
+                className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]"
+                htmlFor="repository-name"
+              >
                 Repository name
-                <Input value={repoName} onChange={(event) => setRepoName(event.target.value)} />
+                <Input
+                  id="repository-name"
+                  value={repoName}
+                  onChange={(event) => setRepoName(event.target.value)}
+                />
               </label>
-              <label className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+              <label
+                className="grid gap-1.5 text-sm font-medium text-[var(--text-primary)]"
+                htmlFor="repository-description"
+              >
                 Repository description
                 <Textarea
+                  id="repository-description"
                   value={repoDescription}
                   onChange={(event) => setRepoDescription(event.target.value)}
                   rows={3}

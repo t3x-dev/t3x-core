@@ -189,12 +189,7 @@ function DirectoryTopBar({
           ))}
         </nav>
         <div className="ml-auto" />
-        <Button
-          asChild
-          className="size-9"
-          size="icon"
-          variant="canvas-outline"
-        >
+        <Button asChild className="size-9" size="icon" variant="canvas-outline">
           <Link aria-label="New repository" href={NEW_REPOSITORY_PATH}>
             <Plus className="size-4" />
           </Link>
@@ -276,8 +271,8 @@ function EmptyDirectory() {
       </div>
       <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No repositories yet</h2>
       <p className="mt-2 max-w-[420px] text-sm leading-normal text-[var(--text-secondary)]">
-        Create a repository first, then enter its workbench to collect sources, validate schema, apply
-        YOps, and produce Leaf artifacts.
+        Create a repository first, then enter its workbench to collect sources, validate schema,
+        apply YOps, and produce Leaf artifacts.
       </p>
       <Button asChild className="mt-5" variant="commit">
         <Link href={NEW_REPOSITORY_PATH}>
@@ -392,10 +387,7 @@ export function ProjectDirectoryPage() {
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <DirectoryTopBar
-        onRefresh={handleRefreshProjects}
-        refreshing={loading}
-      />
+      <DirectoryTopBar onRefresh={handleRefreshProjects} refreshing={loading} />
       <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-8">
           <OrganizationHeader projects={projectSummaries} />
@@ -454,10 +446,7 @@ export function ProjectDirectoryPage() {
                       value={query}
                     />
                   </label>
-                  <Button
-                    asChild
-                    variant="commit"
-                  >
+                  <Button asChild variant="commit">
                     <Link href={NEW_REPOSITORY_PATH}>
                       <Plus className="size-4" /> New repository
                     </Link>

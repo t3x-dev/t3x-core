@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo } from 'react';
-import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
+import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
 import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
@@ -102,7 +102,9 @@ function OwnerRepoProjectPageContent() {
     );
   }
 
-  return <ProjectDetailPageContent initialTabOverride={initialTab} projectIdOverride={project.id} />;
+  return (
+    <ProjectDetailPageContent initialTabOverride={initialTab} projectIdOverride={project.id} />
+  );
 }
 
 export default function OwnerRepoProjectPage() {
