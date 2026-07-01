@@ -9,8 +9,12 @@ function slugify(value: string): string {
     .replace(/-{2,}/g, '-');
 }
 
+function stripGeneratedNumericSuffix(slug: string): string {
+  return slug.replace(/-\d{10,}$/, '');
+}
+
 export function toRepoSlug(name: string, fallbackId?: string): string {
-  const nameSlug = slugify(name);
+  const nameSlug = stripGeneratedNumericSuffix(slugify(name));
   if (nameSlug) return nameSlug;
 
   const fallbackSlug = fallbackId ? slugify(fallbackId) : '';

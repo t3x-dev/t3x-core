@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
+import { parseProjectTab } from '@/components/project/projectTabModel';
 import { DEFAULT_OWNER_SLUG, toRepoSlug } from '@/domain/project/repoPath';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { useProjectStore } from '@/store/projectStore';
@@ -14,9 +15,11 @@ function firstParam(value: string | string[] | undefined): string {
 }
 
 function OwnerRepoProjectPageContent() {
-  const params = useParams<{ owner?: string | string[]; repo?: string | string[] }>();
+  const params = useParams<{ owner?: string | string[]; repoPath?: string[] }>();
   const ownerSlug = firstParam(params.owner).toLowerCase();
-  const repoSlug = firstParam(params.repo).toLowerCase();
+  const repoSegments = params.repoPath ?? [];
+  const repoSlug = (repoSegments[0] ?? '').toLowerCase();
+  const initialTab = parseProjectTab(repoSegments[1] ?? null);
   const projects = useProjectStore((state) => state.projects);
   const initialized = useProjectStore((state) => state.initialized);
   const loading = useProjectStore((state) => state.loading);
@@ -71,7 +74,7 @@ function OwnerRepoProjectPageContent() {
     );
   }
 
-  return <ProjectDetailPageContent projectIdOverride={project.id} />;
+  return <ProjectDetailPageContent initialTabOverride={initialTab} projectIdOverride={project.id} />;
 }
 
 export default function OwnerRepoProjectPage() {

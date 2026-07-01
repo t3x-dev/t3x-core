@@ -4,12 +4,12 @@ import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import OwnerRepoProjectPage from '@/app/[owner]/[repo]/page';
+import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
 import { useProjectStore } from '@/store/projectStore';
 
-let routeParamsValue: Record<string, string> = {
+let routeParamsValue: Record<string, string | string[]> = {
   owner: 't3x-dev',
-  repo: 'prd-workflow',
+  repoPath: ['mobile-click-audit'],
 };
 const fetchProjects = vi.fn();
 
@@ -22,8 +22,16 @@ vi.mock('@/hooks/projects/useProjectCrud', () => ({
 }));
 
 vi.mock('@/app/project/[projectId]/page', () => ({
-  ProjectDetailPageContent: ({ projectIdOverride }: { projectIdOverride?: string }) => (
-    <div data-testid="project-detail">{projectIdOverride}</div>
+  ProjectDetailPageContent: ({
+    initialTabOverride,
+    projectIdOverride,
+  }: {
+    initialTabOverride?: string;
+    projectIdOverride?: string;
+  }) => (
+    <div data-tab={initialTabOverride ?? 'state'} data-testid="project-detail">
+      {projectIdOverride}
+    </div>
   ),
 }));
 
@@ -42,7 +50,7 @@ vi.mock('next/link', () => ({
 describe('OwnerRepoProjectPage', () => {
   beforeEach(() => {
     fetchProjects.mockReset();
-    routeParamsValue = { owner: 't3x-dev', repo: 'prd-workflow' };
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit'] };
     useProjectStore.setState({
       error: null,
       initialized: true,
@@ -53,10 +61,10 @@ describe('OwnerRepoProjectPage', () => {
           commitsCount: 1,
           defaultModel: null,
           defaultProvider: null,
-          description: 'PRD workflow',
+          description: 'Click audit workflow',
           drafts: 1,
-          id: 'proj_prd',
-          name: 'PRD Workflow',
+          id: 'proj_audit',
+          name: 'Mobile Click Audit 1780972749777',
           nodes: 2,
           owner: 'You',
           status: 'active',
@@ -69,12 +77,22 @@ describe('OwnerRepoProjectPage', () => {
   it('resolves owner/repo slugs to the internal project id', () => {
     render(<OwnerRepoProjectPage />);
 
-    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_prd');
+    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
     expect(fetchProjects).not.toHaveBeenCalled();
   });
 
+  it('resolves repository tab path segments', () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'workspaces'] };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
+  });
+
   it('shows a repository-level not found state for unmatched slugs', () => {
-    routeParamsValue = { owner: 't3x-dev', repo: 'missing-repo' };
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['missing-repo'] };
 
     render(<OwnerRepoProjectPage />);
 
