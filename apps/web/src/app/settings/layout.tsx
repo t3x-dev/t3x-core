@@ -35,7 +35,7 @@ interface SettingsNavGroup {
 const NAV_GROUPS: SettingsNavGroup[] = [
   {
     label: 'OVERVIEW',
-    items: [{ href: '/settings', label: 'Health', icon: Activity, exact: true }],
+    items: [{ href: '/settings', label: 'Overview', icon: Activity, exact: true }],
   },
   {
     label: 'LOCAL',

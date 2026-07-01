@@ -49,7 +49,7 @@ describe('SettingsLayout', () => {
     expect(screen.getByText('PROJECT')).toBeInTheDocument();
 
     expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: /Health/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: /Overview/i })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',
       '/settings/profile'

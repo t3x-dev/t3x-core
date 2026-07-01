@@ -30,7 +30,7 @@ export default function SettingsPage() {
           icon={KeyRound}
           label="API Access"
           title="Connection and keys"
-          detail="Configure the local API URL and key used by WebUI, CLI, and MCP."
+          detail="Manage T3X API keys plus local API URL/key for WebUI, CLI, and MCP."
           meta="May use env override"
           action="Configure"
         />
@@ -39,7 +39,7 @@ export default function SettingsPage() {
           icon={SlidersHorizontal}
           label="Workspace Defaults"
           title="Local preferences"
-          detail="Open density, default view, profile, and developer mode."
+          detail="Open density, default view, and developer mode."
           meta="Local"
           action="Open"
         />

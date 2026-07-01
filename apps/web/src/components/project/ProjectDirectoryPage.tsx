@@ -2,7 +2,6 @@
 
 import { LayoutTemplate, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { type FormEvent, useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_PROJECT_NAME } from '@/domain/project/defaults';
+import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
@@ -24,7 +24,10 @@ import {
   recordRecentProjectOpen,
 } from '@/utils/recentProjects';
 
-const NAV_ITEMS = [{ label: 'Setting', href: '/settings', active: false }] as const;
+const NAV_ITEMS = [
+  { label: 'Settings', href: `/${DEFAULT_OWNER_SLUG}/settings`, active: false },
+] as const;
+const NEW_REPOSITORY_PATH = `/${DEFAULT_OWNER_SLUG}/new`;
 
 function metricValue(value: number | undefined): number {
   return value ?? 0;
@@ -42,10 +45,6 @@ function yopsCount(project: ProjectSummary): number {
 
 function outputCount(project: ProjectSummary): number {
   return Math.max(0, project.commitsCount > 0 ? Math.min(project.commitsCount + 1, 6) : 0);
-}
-
-function projectPath(project: ProjectSummary): string {
-  return `/t3x-dev/${project.name}`;
 }
 
 function ProjectMetric({
@@ -113,7 +112,7 @@ function ProjectCard({
     >
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
-          href={`/project/${encodeURIComponent(project.id)}`}
+          href={getProjectRepoPath(project)}
           onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
@@ -121,10 +120,10 @@ function ProjectCard({
             {project.name}
           </h3>
           <p className="mt-3 line-clamp-2 text-sm font-medium leading-snug text-[var(--text-secondary)]">
-            {project.description || 'Structured state workflow.'}
+            {project.description || 'Structured state repository.'}
           </p>
           <p className="mt-3 truncate text-sm font-semibold text-[var(--text-tertiary)]">
-            {projectPath(project)}
+            {getProjectRepoPath(project)}
           </p>
         </Link>
         {!compact && (
@@ -134,7 +133,7 @@ function ProjectCard({
         )}
         <div className="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
           <Button
-            aria-label={`Rename project ${project.name}`}
+            aria-label={`Rename repository ${project.name}`}
             className="size-8"
             onClick={() => onRename(project)}
             size="icon-sm"
@@ -144,7 +143,7 @@ function ProjectCard({
             <Pencil className="size-4" />
           </Button>
           <Button
-            aria-label={`Delete project ${project.name}`}
+            aria-label={`Delete repository ${project.name}`}
             className="size-8 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)]"
             onClick={() => onDelete(project)}
             size="icon-sm"
@@ -163,11 +162,9 @@ function ProjectCard({
 }
 
 function DirectoryTopBar({
-  onCreateProject,
   onRefresh,
   refreshing,
 }: {
-  onCreateProject: () => void;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
@@ -198,18 +195,13 @@ function DirectoryTopBar({
           ))}
         </nav>
         <div className="ml-auto" />
-        <Button
-          aria-label="New project"
-          className="size-9"
-          onClick={onCreateProject}
-          size="icon"
-          type="button"
-          variant="canvas-outline"
-        >
-          <Plus className="size-4" />
+        <Button asChild className="size-9" size="icon" variant="canvas-outline">
+          <Link aria-label="New repository" href={NEW_REPOSITORY_PATH}>
+            <Plus className="size-4" />
+          </Link>
         </Button>
         <Button
-          aria-label="Refresh projects"
+          aria-label="Refresh repositories"
           className="size-9"
           disabled={refreshing}
           onClick={onRefresh}
@@ -236,11 +228,11 @@ function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
         <div className="min-w-0">
           <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">t3x-dev</h1>
           <p className="mt-2 text-base font-semibold text-[var(--text-secondary)]">
-            Organization-level project directory for structured state workflows.
+            Organization namespace for structured state repositories.
           </p>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
             <span>3 members</span>
-            <span>{projects.length} projects</span>
+            <span>{projects.length} repos</span>
             <span>{commits} commits</span>
           </div>
         </div>
@@ -268,38 +260,39 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
       <section className="border-t border-[var(--stroke-divider)] pt-6">
         <h2 className="text-base font-bold text-[var(--text-primary)]">Recent activity</h2>
         <p className="mt-3 text-sm font-semibold leading-snug text-[var(--text-secondary)]">
-          {recent ? `${recent.name} updated ${recent.updatedAt}.` : 'No recent project activity.'}
+          {recent
+            ? `${recent.name} updated ${recent.updatedAt}.`
+            : 'No recent repository activity.'}
         </p>
       </section>
     </aside>
   );
 }
 
-function EmptyDirectory({ onCreateProject }: { onCreateProject: () => void }) {
+function EmptyDirectory() {
   return (
     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-center">
       <div className="flex size-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--accent-commit)]/20 bg-[var(--accent-commit-soft)] text-[var(--accent-commit)]">
         <LayoutTemplate className="size-5" />
       </div>
-      <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No projects yet</h2>
+      <h2 className="mt-4 text-lg font-bold text-[var(--text-primary)]">No repositories yet</h2>
       <p className="mt-2 max-w-[420px] text-sm leading-normal text-[var(--text-secondary)]">
-        Create a project first, then enter its workbench to collect sources, validate schema, apply
-        YOps, and produce Leaf artifacts.
+        Create a repository first, then enter its workbench to collect sources, validate schema,
+        apply YOps, and produce Leaf artifacts.
       </p>
-      <Button className="mt-5" onClick={onCreateProject} type="button" variant="commit">
-        <Plus className="size-4" /> New project
+      <Button asChild className="mt-5" variant="commit">
+        <Link href={NEW_REPOSITORY_PATH}>
+          <Plus className="size-4" /> New repository
+        </Link>
       </Button>
     </div>
   );
 }
 
 export function ProjectDirectoryPage() {
-  const router = useRouter();
-  const projectStoreAdd = useProjectStore((state) => state.addToProjects);
   const projectStoreRemove = useProjectStore((state) => state.removeProject);
   const projectStoreUpdate = useProjectStore((state) => state.updateProject);
   const {
-    create: createProject,
     error,
     loading,
     projects,
@@ -308,10 +301,6 @@ export function ProjectDirectoryPage() {
     rename: renameProject,
   } = useProjects();
   const [query, setQuery] = useState('');
-  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectError, setNewProjectError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ProjectSummary | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -321,46 +310,6 @@ export function ProjectDirectoryPage() {
   const [recentProjectIds] = useState(() => readRecentProjectIds());
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
-
-  const openNewProjectDialog = useCallback(() => {
-    setNewProjectName('');
-    setNewProjectError(null);
-    setNewProjectDialogOpen(true);
-  }, []);
-
-  const handleNewProjectDialogOpenChange = useCallback(
-    (open: boolean) => {
-      if (creating) return;
-      setNewProjectDialogOpen(open);
-      if (!open) {
-        setNewProjectName('');
-        setNewProjectError(null);
-      }
-    },
-    [creating]
-  );
-
-  const handleCreateProject = useCallback(
-    async (event?: FormEvent<HTMLFormElement>) => {
-      event?.preventDefault();
-      if (creating) return;
-      setCreating(true);
-      setNewProjectError(null);
-      try {
-        const project = await createProject(newProjectName.trim() || DEFAULT_PROJECT_NAME);
-        projectStoreAdd(apiProjectToSummary(project));
-        recordRecentProjectOpen(project.project_id);
-        setNewProjectDialogOpen(false);
-        setNewProjectName('');
-        router.push(`/project/${encodeURIComponent(project.project_id)}`);
-      } catch {
-        setNewProjectError('Failed to create project');
-      } finally {
-        setCreating(false);
-      }
-    },
-    [createProject, creating, newProjectName, projectStoreAdd, router]
-  );
 
   const handleRefreshProjects = useCallback(async () => {
     await refreshProjects();
@@ -406,7 +355,7 @@ export function ProjectDirectoryPage() {
         setRenameTarget(null);
         setRenameValue('');
       } catch {
-        setRenameError('Failed to rename project');
+        setRenameError('Failed to rename repository');
       } finally {
         setRenaming(false);
       }
@@ -445,14 +394,11 @@ export function ProjectDirectoryPage() {
     () => orderProjectsByRecentOpen(filteredProjects, recentProjectIds).slice(0, 2),
     [filteredProjects, recentProjectIds]
   );
+  const pinnedProjects = recentProjects.length > 0 ? recentProjects : filteredProjects.slice(0, 2);
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">
-      <DirectoryTopBar
-        onCreateProject={openNewProjectDialog}
-        onRefresh={handleRefreshProjects}
-        refreshing={loading}
-      />
+      <DirectoryTopBar onRefresh={handleRefreshProjects} refreshing={loading} />
       <main className="mx-auto grid max-w-[1560px] grid-cols-1 gap-8 px-6 py-10 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-8">
           <OrganizationHeader projects={projectSummaries} />
@@ -465,61 +411,56 @@ export function ProjectDirectoryPage() {
 
           {loading && projectSummaries.length === 0 ? (
             <div className="rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)] p-8 text-sm font-semibold text-[var(--text-secondary)]">
-              Loading projects...
+              Loading repositories...
             </div>
           ) : projectSummaries.length === 0 ? (
-            <EmptyDirectory onCreateProject={openNewProjectDialog} />
+            <EmptyDirectory />
           ) : (
             <>
-              {recentProjects.length > 0 && (
-                <section>
-                  <div className="mb-4 flex items-end justify-between gap-4">
-                    <h2 className="text-xl font-bold text-[var(--text-primary)]">
-                      Recent projects
-                    </h2>
-                    <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
-                      Recently opened projects
-                    </span>
-                  </div>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    {recentProjects.map((project) => (
-                      <ProjectCard
-                        compact
-                        key={project.id}
-                        onDelete={setDeleteTarget}
-                        onRename={openRenameDialog}
-                        project={project}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+              <section>
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <h2 className="text-xl font-bold text-[var(--text-primary)]">
+                    Pinned repositories
+                  </h2>
+                  <span className="hidden text-xs font-bold text-[var(--text-tertiary)] md:block">
+                    Organization repositories with shareable paths
+                  </span>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {pinnedProjects.map((project) => (
+                    <ProjectCard
+                      compact
+                      key={project.id}
+                      onDelete={setDeleteTarget}
+                      onRename={openRenameDialog}
+                      project={project}
+                    />
+                  ))}
+                </div>
+              </section>
 
               <section>
                 <div className="mb-4 flex items-end justify-between gap-4">
-                  <h2 className="text-xl font-bold text-[var(--text-primary)]">Projects</h2>
+                  <h2 className="text-xl font-bold text-[var(--text-primary)]">Repositories</h2>
                   <span className="text-xs font-bold text-[var(--text-tertiary)]">
-                    {filteredProjects.length} projects
+                    {filteredProjects.length} repos
                   </span>
                 </div>
                 <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
                   <label className="relative min-w-0">
-                    <span className="sr-only">Find a project</span>
+                    <span className="sr-only">Find a repository</span>
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
                     <input
                       className="h-10 w-full rounded-[var(--radius-control)] border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-sm font-semibold text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-[var(--stroke-strong)] focus:ring-2 focus:ring-[var(--ring)]/30"
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Find a project..."
+                      placeholder="Find a repository..."
                       value={query}
                     />
                   </label>
-                  <Button
-                    disabled={creating}
-                    onClick={openNewProjectDialog}
-                    type="button"
-                    variant="commit"
-                  >
-                    <Plus className="size-4" /> New
+                  <Button asChild variant="commit">
+                    <Link href={NEW_REPOSITORY_PATH}>
+                      <Plus className="size-4" /> New repository
+                    </Link>
                   </Button>
                 </div>
                 <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--stroke-default)] bg-[var(--surface-card)]">
@@ -538,7 +479,7 @@ export function ProjectDirectoryPage() {
                     ))
                   ) : (
                     <div className="flex items-center justify-between gap-4 p-5 text-sm font-semibold text-[var(--text-secondary)]">
-                      <span>No projects match this filter.</span>
+                      <span>No repositories match this filter.</span>
                       <Button onClick={() => setQuery('')} type="button" variant="canvas-outline">
                         Clear
                       </Button>
@@ -552,71 +493,19 @@ export function ProjectDirectoryPage() {
         <DirectorySideRail projects={projectSummaries} />
       </main>
 
-      <Dialog open={newProjectDialogOpen} onOpenChange={handleNewProjectDialogOpenChange}>
-        <DialogContent className="sm:max-w-[400px]">
-          <form className="grid gap-4" onSubmit={handleCreateProject}>
-            <DialogHeader>
-              <DialogTitle>New Project</DialogTitle>
-              <DialogDescription>
-                Create a backend project, then open its project workbench.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-2">
-              <label
-                className="text-sm font-medium text-[var(--text-primary)]"
-                htmlFor="directory-new-project-name"
-              >
-                Project name
-              </label>
-              <Input
-                aria-describedby={newProjectError ? 'directory-new-project-error' : undefined}
-                aria-invalid={newProjectError ? 'true' : undefined}
-                autoFocus
-                disabled={creating}
-                id="directory-new-project-name"
-                onChange={(event) => {
-                  setNewProjectName(event.target.value);
-                  if (newProjectError) setNewProjectError(null);
-                }}
-                placeholder={DEFAULT_PROJECT_NAME}
-                value={newProjectName}
-              />
-              {newProjectError && (
-                <p className="text-xs text-[var(--status-error)]" id="directory-new-project-error">
-                  {newProjectError}
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                disabled={creating}
-                onClick={() => handleNewProjectDialogOpenChange(false)}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <Button disabled={creating} type="submit" variant="commit">
-                {creating ? 'Creating...' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={Boolean(renameTarget)} onOpenChange={handleRenameDialogOpenChange}>
         <DialogContent className="sm:max-w-[400px]">
           <form className="grid gap-4" onSubmit={handleRenameProject}>
             <DialogHeader>
-              <DialogTitle>Rename Project</DialogTitle>
-              <DialogDescription>Rename the backend project.</DialogDescription>
+              <DialogTitle>Rename Repository</DialogTitle>
+              <DialogDescription>Rename this structured state repository.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
               <label
                 className="text-sm font-medium text-[var(--text-primary)]"
                 htmlFor="directory-rename-project-name"
               >
-                Project name
+                Repository name
               </label>
               <Input
                 aria-describedby={renameError ? 'directory-rename-project-error' : undefined}
@@ -664,7 +553,7 @@ export function ProjectDirectoryPage() {
       >
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Delete Project</DialogTitle>
+            <DialogTitle>Delete Repository</DialogTitle>
             <DialogDescription>
               Delete "{deleteTarget?.name ?? DEFAULT_PROJECT_NAME}" from the backend? This cannot be
               undone.
