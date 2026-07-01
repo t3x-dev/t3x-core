@@ -484,7 +484,7 @@ export function ProjectDetailPageContent({
       case 'community':
         return <ProjectCommunityTab />;
       case 'settings':
-        return <ProjectSettingsTab />;
+        return <ProjectSettingsTab project={project} />;
       default:
         return renderStateTab();
     }

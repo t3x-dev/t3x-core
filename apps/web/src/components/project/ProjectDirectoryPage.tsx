@@ -19,7 +19,9 @@ import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
 
-const NAV_ITEMS = [{ label: 'Setting', href: '/settings', active: false }] as const;
+const NAV_ITEMS = [
+  { label: 'Settings', href: `/${DEFAULT_OWNER_SLUG}/settings`, active: false },
+] as const;
 const NEW_REPOSITORY_PATH = `/${DEFAULT_OWNER_SLUG}/new`;
 
 function metricValue(value: number | undefined): number {

@@ -52,7 +52,7 @@ describe('SettingsLayout', () => {
       'href',
       '/chat'
     );
-    expect(screen.getByRole('link', { name: /Health/i })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: /Overview/i })).toHaveAttribute('href', '/settings');
     expect(screen.getByRole('link', { name: /Profile/i })).toHaveAttribute(
       'href',
       '/settings/profile'

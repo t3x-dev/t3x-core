@@ -95,7 +95,10 @@ describe('ProjectDirectoryPage', () => {
     expect(
       screen.queryByRole('link', { name: 'Projects', current: 'page' })
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Setting' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/settings'
+    );
     expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
     expect(screen.queryByText('hi@t3x.dev')).not.toBeInTheDocument();

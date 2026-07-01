@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo } from 'react';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { NewRepositoryPage } from '@/components/project/NewRepositoryPage';
+import { OrganizationSettingsPage } from '@/components/project/OrganizationSettingsPage';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
 import { parseProjectTab } from '@/components/project/projectTabModel';
 import { DEFAULT_OWNER_SLUG, toRepoSlug } from '@/domain/project/repoPath';
@@ -25,6 +26,8 @@ function OwnerRepoProjectPageContent() {
   const isDefaultOwner = ownerSlug === DEFAULT_OWNER_SLUG;
   const isOrganizationDirectory = isDefaultOwner && repoSegments.length === 0;
   const isNewRepositoryPage = isDefaultOwner && repoSlug === 'new' && repoSegments.length === 1;
+  const isOrganizationSettingsPage =
+    isDefaultOwner && repoSlug === 'settings' && repoSegments.length === 1;
   const projects = useProjectStore((state) => state.projects);
   const initialized = useProjectStore((state) => state.initialized);
   const loading = useProjectStore((state) => state.loading);
@@ -32,9 +35,16 @@ function OwnerRepoProjectPageContent() {
   const { list: fetchProjects } = useProjectCrud();
 
   useEffect(() => {
-    if (isOrganizationDirectory || isNewRepositoryPage) return;
+    if (isOrganizationDirectory || isNewRepositoryPage || isOrganizationSettingsPage) return;
     if (!initialized && !loading) void fetchProjects();
-  }, [fetchProjects, initialized, isNewRepositoryPage, isOrganizationDirectory, loading]);
+  }, [
+    fetchProjects,
+    initialized,
+    isNewRepositoryPage,
+    isOrganizationDirectory,
+    isOrganizationSettingsPage,
+    loading,
+  ]);
 
   const project = useMemo(() => {
     if (ownerSlug !== DEFAULT_OWNER_SLUG || !repoSlug) return undefined;
@@ -47,6 +57,10 @@ function OwnerRepoProjectPageContent() {
 
   if (isNewRepositoryPage) {
     return <NewRepositoryPage />;
+  }
+
+  if (isOrganizationSettingsPage) {
+    return <OrganizationSettingsPage ownerSlug={ownerSlug} />;
   }
 
   if (!initialized || loading) {

@@ -43,6 +43,12 @@ vi.mock('@/components/project/NewRepositoryPage', () => ({
   NewRepositoryPage: () => <div data-testid="new-repository-page">new repository page</div>,
 }));
 
+vi.mock('@/components/project/OrganizationSettingsPage', () => ({
+  OrganizationSettingsPage: ({ ownerSlug }: { ownerSlug: string }) => (
+    <div data-testid="org-settings">org settings for {ownerSlug}</div>
+  ),
+}));
+
 vi.mock('next/link', () => ({
   default: ({
     children,
@@ -113,6 +119,15 @@ describe('OwnerRepoProjectPage', () => {
     render(<OwnerRepoProjectPage />);
 
     expect(screen.getByTestId('new-repository-page')).toBeInTheDocument();
+  });
+
+  it('renders organization settings for /owner/settings without loading repositories', () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['settings'] };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('org-settings')).toHaveTextContent('org settings for t3x-dev');
+    expect(fetchProjects).not.toHaveBeenCalled();
   });
 
   it('shows a repository-level not found state for unmatched slugs', () => {
