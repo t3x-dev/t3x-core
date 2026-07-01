@@ -26,7 +26,7 @@ export {
   type VerifyResult,
   verifyCommitHash,
   verifyHashChain,
-} from './backup';
+} from './backup/verify';
 // Query functions (driver-agnostic, work with any AnyDB)
 export * from './queries';
 // Schema (table definitions and types)

@@ -26,9 +26,34 @@
  */
 
 // Database adapters
-export * from './adapters';
+export {
+  closePostgresStorage,
+  createPostgresStorage,
+  getPostgresClient,
+  getPostgresDB,
+  type PostgresConfig,
+  type PostgresDB,
+} from './adapters/postgres';
+export {
+  closeSupabaseStorage,
+  createSupabaseStorage,
+  getSupabaseDB,
+  type SupabaseConfig,
+  type SupabaseDB,
+} from './adapters/supabase';
+import type { PostgresDB } from './adapters/postgres';
+import type { SupabaseDB } from './adapters/supabase';
+export type AnyDB = PostgresDB | SupabaseDB;
 // Backup / verify utilities
-export * from './backup';
+export { backupAllProjects, backupAsCfpack, type CfpackData } from './backup/backup';
+export { type RestoreResult, restoreFromCfpack } from './backup/restore';
+export {
+  type VerifyChainResult,
+  type VerifyResult,
+  verifyCommitHash,
+  verifyHashChain,
+} from './backup/verify';
+export { getTimedOutRuns, markRunAsTimeout } from './queries/runs';
 // recordEvent helper + event type whitelist (realtime sync)
 export {
   ALLOWED_EVENT_TYPES,
