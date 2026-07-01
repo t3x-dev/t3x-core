@@ -85,7 +85,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--stroke-divider)] px-3 py-5">
         <div className="mb-3 px-1">
           <Link
-            href="/chat"
+            href="/"
             className={cn(
               'inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium',
               'text-[var(--text-secondary)] transition-colors duration-150',
@@ -93,7 +93,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
             )}
           >
             <ArrowLeft className="h-4 w-4 shrink-0" />
-            <span>Back to workspace</span>
+            <span>Back</span>
           </Link>
         </div>
         <div className="mb-5 flex items-center gap-2 px-3">
