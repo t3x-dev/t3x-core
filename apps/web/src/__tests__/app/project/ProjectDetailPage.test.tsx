@@ -137,18 +137,23 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getAllByText('/t3x-dev/test-project').length).toBeGreaterThan(0);
-    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', { name: 'Repository overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Use repository' })).toBeDisabled();
-    expect(screen.getByText('Not checked')).toBeInTheDocument();
-    expect(
-      screen.getByText('Run YSchema validation before using this repository.')
-    ).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Overview' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(screen.getByText('0 outputs')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it('renders a verified YSchema badge from the latest validation run', async () => {
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:abcdef12', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: 'sha256:abcdef1234567890',
       created_at: '2026-07-02T00:00:00.000Z',
@@ -174,11 +179,24 @@ describe('ProjectDetailPage — project-first shell states', () => {
     await waitFor(() => {
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Verified abcdef12')).toBeInTheDocument();
-    expect(screen.getByText('Validated')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getAllByText('Verified abcdef12').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
   });
 
-  it('shows failed YSchema gaps and can rerun validation from the repository overview', async () => {
+  it('shows failed YSchema gaps and can rerun validation from State', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:5fbfafd8', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: 'sha256:5fbfafd8fa2fec3e',
       created_at: '2026-07-02T00:00:00.000Z',
@@ -235,15 +253,26 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Schema')).toBeInTheDocument();
-    expect(screen.getByText('t3x/prd')).toBeInTheDocument();
-    expect(screen.getByText('Blocked until YSchema passes')).toBeInTheDocument();
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getByText('Schema t3x/prd')).toBeInTheDocument();
+    expect(screen.getByText('Use blocked until YSchema passes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.queryByText('summary is required before commit.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'View gaps' }));
+    fireEvent.click(screen.getByRole('button', { name: '2 validation gaps' }));
 
+    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
     expect(screen.getAllByText('Missing required node')).toHaveLength(2);
     expect(screen.getByText('summary is required before commit.')).toBeInTheDocument();
     expect(screen.getByText('requirements is required before commit.')).toBeInTheDocument();
@@ -254,7 +283,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test');
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Validated')).toBeInTheDocument();
+    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
   });
 
   it('shows a project-first empty State tab and can switch to the Workspaces preview', async () => {
@@ -277,7 +306,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       screen.getByText('Create a workspace from sources, then commit it to populate State.')
     ).toBeInTheDocument();
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
     });
     replaceMock.mockClear();
 
@@ -317,7 +346,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(
       screen.getByText('Review existing sources in a workspace, then commit structured state.')
     ).toBeInTheDocument();
-    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -350,6 +379,27 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
   });
 
+  it('canonicalizes stale YSchema query tabs back to State', () => {
+    searchParamsValue = new URLSearchParams('tab=yschema');
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:abcdef12', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
+
+    renderProjectContent();
+
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getByText('Run YSchema validation before use')).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
+  });
+
   it('does NOT redirect while canvas is still loading', () => {
     useCanvasStore.setState({
       nodes: [],
@@ -379,7 +429,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
-    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
   });
 
   it('ignores selected-node deep links while the intro demo canvas tour is active', async () => {
@@ -438,7 +489,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     });
     expect(screen.queryByText(/Project not found/i)).toBeNull();
-    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
 

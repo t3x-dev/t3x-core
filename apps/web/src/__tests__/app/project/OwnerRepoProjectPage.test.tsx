@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OwnerRepoProjectPage from '@/app/[owner]/[[...repoPath]]/page';
@@ -12,9 +12,11 @@ let routeParamsValue: Record<string, string | string[]> = {
   repoPath: ['mobile-click-audit'],
 };
 const fetchProjects = vi.fn();
+const replaceMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useParams: () => routeParamsValue,
+  useRouter: () => ({ replace: replaceMock }),
 }));
 
 vi.mock('@/hooks/projects/useProjectCrud', () => ({
@@ -64,6 +66,7 @@ vi.mock('next/link', () => ({
 describe('OwnerRepoProjectPage', () => {
   beforeEach(() => {
     fetchProjects.mockReset();
+    replaceMock.mockReset();
     routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit'] };
     useProjectStore.setState({
       error: null,
@@ -92,7 +95,7 @@ describe('OwnerRepoProjectPage', () => {
     render(<OwnerRepoProjectPage />);
 
     expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'overview');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
     expect(fetchProjects).not.toHaveBeenCalled();
   });
 
@@ -103,6 +106,18 @@ describe('OwnerRepoProjectPage', () => {
 
     expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
     expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'workspaces');
+  });
+
+  it('canonicalizes stale state-like tab segments back to the repository root', async () => {
+    routeParamsValue = { owner: 't3x-dev', repoPath: ['mobile-click-audit', 'yschema'] };
+
+    render(<OwnerRepoProjectPage />);
+
+    expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/mobile-click-audit');
+    });
   });
 
   it('renders the organization directory for owner-only paths', () => {

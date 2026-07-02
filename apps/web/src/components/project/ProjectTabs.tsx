@@ -1,21 +1,19 @@
 import {
-  BookOpen,
   Boxes,
   FileCheck2,
+  FileCode2,
   GitCommitHorizontal,
   MessageCircle,
   PanelTop,
   Settings,
-  ShieldCheck,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { PROJECT_TABS, type ProjectTabId } from '@/components/project/projectTabModel';
 import { cn } from '@/utils/cn';
 
 const tabIcons: Record<ProjectTabId, ComponentType<{ className?: string }>> = {
-  overview: BookOpen,
   state: GitCommitHorizontal,
-  schemas: ShieldCheck,
+  schemas: FileCode2,
   workspaces: Boxes,
   reviews: FileCheck2,
   outputs: PanelTop,

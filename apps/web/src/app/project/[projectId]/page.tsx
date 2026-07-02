@@ -8,7 +8,6 @@ import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourO
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 import { ProjectEmptyState } from '@/components/project/ProjectEmptyState';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
-import { ProjectOverviewTab } from '@/components/project/ProjectOverviewTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
@@ -66,7 +65,7 @@ function withCurrentQuery(path: string, searchParams: { toString: () => string }
 
 function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectTabId) {
   const basePath = getProjectRepoPath(project);
-  return tab === 'overview' ? basePath : `${basePath}/${tab}`;
+  return tab === 'state' ? basePath : `${basePath}/${tab}`;
 }
 
 function getProjectCanonicalPath(
@@ -509,7 +508,12 @@ export function ProjectDetailPageContent({
     }
 
     return (
-      <ProjectStateTab>
+      <ProjectStateTab
+        onRunValidation={handleRunYSchemaValidation}
+        validation={project.yschemaValidation}
+        validationError={yschemaValidationError}
+        validationRunning={yschemaValidationRunning}
+      >
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
@@ -531,17 +535,6 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
-      case 'overview':
-        return (
-          <ProjectOverviewTab
-            onOpenState={() => handleProjectTabChange('state')}
-            onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
-            onRunValidation={handleRunYSchemaValidation}
-            project={project}
-            validationError={yschemaValidationError}
-            validationRunning={yschemaValidationRunning}
-          />
-        );
       case 'state':
         return renderStateTab();
       case 'schemas':
@@ -557,16 +550,7 @@ export function ProjectDetailPageContent({
       case 'settings':
         return <ProjectSettingsTab project={project} />;
       default:
-        return (
-          <ProjectOverviewTab
-            onOpenState={() => handleProjectTabChange('state')}
-            onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
-            onRunValidation={handleRunYSchemaValidation}
-            project={project}
-            validationError={yschemaValidationError}
-            validationRunning={yschemaValidationRunning}
-          />
-        );
+        return renderStateTab();
     }
   })();
 

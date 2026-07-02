@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useMemo } from 'react';
 import { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
@@ -19,10 +19,12 @@ function firstParam(value: string | string[] | undefined): string {
 
 function OwnerRepoProjectPageContent() {
   const params = useParams<{ owner?: string | string[]; repoPath?: string[] }>();
+  const router = useRouter();
   const ownerSlug = firstParam(params.owner).toLowerCase();
   const repoSegments = params.repoPath ?? [];
   const repoSlug = (repoSegments[0] ?? '').toLowerCase();
   const initialTab = parseProjectTab(repoSegments[1] ?? null);
+  const hasStateLikeTabSegment = repoSegments.length > 1 && initialTab === 'state';
   const isDefaultOwner = ownerSlug === DEFAULT_OWNER_SLUG;
   const isOrganizationDirectory = isDefaultOwner && repoSegments.length === 0;
   const isNewRepositoryPage = isDefaultOwner && repoSlug === 'new' && repoSegments.length === 1;
@@ -50,6 +52,11 @@ function OwnerRepoProjectPageContent() {
     if (ownerSlug !== DEFAULT_OWNER_SLUG || !repoSlug) return undefined;
     return projects.find((item) => toRepoSlug(item.name, item.id) === repoSlug);
   }, [ownerSlug, projects, repoSlug]);
+
+  useEffect(() => {
+    if (!project || !hasStateLikeTabSegment) return;
+    router.replace(`/${ownerSlug}/${repoSlug}`);
+  }, [hasStateLikeTabSegment, ownerSlug, project, repoSlug, router]);
 
   if (isOrganizationDirectory) {
     return <ProjectDirectoryPage />;
