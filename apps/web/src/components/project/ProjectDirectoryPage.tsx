@@ -18,6 +18,11 @@ import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPat
 import { useProjects } from '@/hooks/projects/useProjects';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { cn } from '@/utils/cn';
+import {
+  orderProjectsByRecentOpen,
+  readRecentProjectIds,
+  recordRecentProjectOpen,
+} from '@/utils/recentProjects';
 
 const NAV_ITEMS = [
   { label: 'Settings', href: `/${DEFAULT_OWNER_SLUG}/settings`, active: false },
@@ -98,6 +103,7 @@ function ProjectCard({
       <div className="flex min-w-0 items-start justify-between gap-4">
         <Link
           href={getProjectRepoPath(project)}
+          onClick={() => recordRecentProjectOpen(project.id)}
           className="min-w-0 flex-1 rounded-[var(--radius-control)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50"
         >
           <h3 className="truncate text-lg font-semibold leading-tight text-[var(--accent-commit)]">
@@ -290,6 +296,7 @@ export function ProjectDirectoryPage() {
   const [renaming, setRenaming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [recentProjectIds] = useState(() => readRecentProjectIds());
 
   const projectSummaries = useMemo(() => projects.map(apiProjectToSummary), [projects]);
 
@@ -372,7 +379,11 @@ export function ProjectDirectoryPage() {
       return text.includes(normalized);
     });
   }, [projectSummaries, query]);
-  const pinnedProjects = filteredProjects.slice(0, 2);
+  const recentProjects = useMemo(
+    () => orderProjectsByRecentOpen(filteredProjects, recentProjectIds).slice(0, 2),
+    [filteredProjects, recentProjectIds]
+  );
+  const pinnedProjects = recentProjects.length > 0 ? recentProjects : filteredProjects.slice(0, 2);
 
   return (
     <div className="min-h-screen bg-[var(--surface-app)] text-[var(--text-primary)]">

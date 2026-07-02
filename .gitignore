@@ -33,6 +33,7 @@ build/
 
 # Claude Code local settings
 .claude/settings.local.json
+.codex/
 
 # OS files
 .DS_Store

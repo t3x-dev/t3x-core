@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDirectoryPage } from '@/components/project/ProjectDirectoryPage';
@@ -79,6 +79,7 @@ describe('ProjectDirectoryPage', () => {
     refreshProjects.mockReset();
     removeProject.mockReset();
     renameProject.mockReset();
+    window.localStorage.clear();
     hookProjects = projects;
     useProjectStore.setState({
       error: null,
@@ -126,6 +127,21 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByText('Outputs 19')).not.toBeInTheDocument();
     expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
     expect(screen.queryByText('YSchema 3')).not.toBeInTheDocument();
+  });
+
+  it('orders pinned repositories from local recent-open state', () => {
+    window.localStorage.setItem('t3x:recent-projects', JSON.stringify(['proj_core', 'proj_prd']));
+
+    render(<ProjectDirectoryPage />);
+
+    const recentSection = screen
+      .getByRole('heading', { name: 'Pinned repositories' })
+      .closest('section');
+    expect(recentSection).not.toBeNull();
+
+    const recentLinks = within(recentSection as HTMLElement).getAllByRole('link');
+    expect(recentLinks[0]).toHaveAttribute('href', '/t3x-dev/t3x-core');
+    expect(recentLinks[1]).toHaveAttribute('href', '/t3x-dev/prd-workflow');
   });
 
   it('filters project rows without leaving the directory', () => {
