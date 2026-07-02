@@ -7,10 +7,11 @@ import {
   Play,
   ScrollText,
 } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getPrimarySchemaBinding } from '@/domain/workspaces/selectors';
+import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
@@ -21,20 +22,30 @@ import type {
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 
-export function YOpsDraftTab({ candidate }: { candidate: WorkspaceCandidate }) {
+export function YOpsDraftTab({
+  candidate,
+  onCommitted,
+  yopsDraftSent,
+}: {
+  candidate: WorkspaceCandidate;
+  onCommitted?: (commitHash: string) => void;
+  yopsDraftSent?: boolean;
+}) {
   const draft = candidate.yopsDraft;
   const schemaBinding = getPrimarySchemaBinding(candidate.schemaBindings);
   const schemaName = schemaBinding
     ? schemaBinding.schemaName.replace(/\s+Schema$/i, '')
     : 'Candidate';
   const [status, setStatus] = useState<
-    'idle' | 'generating' | 'generated' | 'applying' | 'applied'
-  >('idle');
+    'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed'
+  >(candidate.lastCommitHash ? 'committed' : 'idle');
   const [generatedYOps, setGeneratedYOps] = useState<WorkspaceYOp[] | null>(null);
   const [materializedTrees, setMaterializedTrees] = useState<WorkspaceYOpsTreeNode[] | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
+  const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const { commit } = useWorkspaceCommit(candidate);
   const { rootKey, validate } = useWorkspaceYOps(candidate);
   const yopsLines = generatedYOps
     ? buildYOpsCommandLines(generatedYOps)
@@ -52,8 +63,14 @@ export function YOpsDraftTab({ candidate }: { candidate: WorkspaceCandidate }) {
     ? buildTreeNodeLines(materializedTrees, changedPaths)
     : buildYamlTreeLines(candidate, schemaName);
   const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
-  const isBusy = status === 'generating' || status === 'applying';
+  const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
   const statusText = getYOpsStatusText(status);
+
+  useEffect(() => {
+    if (!candidate.lastCommitHash) return;
+    setCommittedHash(candidate.lastCommitHash);
+    setStatus('committed');
+  }, [candidate.lastCommitHash]);
 
   async function handleGenerate() {
     setStatus('generating');
@@ -99,6 +116,22 @@ export function YOpsDraftTab({ candidate }: { candidate: WorkspaceCandidate }) {
     }
   }
 
+  async function handleCommit() {
+    if (!materializedTrees || appliedCount === 0 || committedHash) return;
+    setStatus('committing');
+    setErrorMessage(null);
+
+    try {
+      const hash = await commit(materializedTrees);
+      setCommittedHash(hash);
+      setStatus('committed');
+      onCommitted?.(hash);
+    } catch (error) {
+      setStatus('applied');
+      setErrorMessage(error instanceof Error ? error.message : 'Workspace commit failed');
+    }
+  }
+
   return (
     <div className="flex min-h-[620px] flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)]">
       <header className="flex min-h-10 items-center gap-3 border-b border-[var(--stroke-divider)] px-3">
@@ -108,6 +141,8 @@ export function YOpsDraftTab({ candidate }: { candidate: WorkspaceCandidate }) {
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Badge variant="commit-subtle">Materialized {appliedCount}</Badge>
           <Badge variant="pending-subtle">Pending {pendingCount}</Badge>
+          {yopsDraftSent ? <Badge variant="pending-subtle">Draft sent</Badge> : null}
+          {committedHash ? <Badge variant="commit">{shortHash(committedHash)}</Badge> : null}
           <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
             {statusText}
           </span>
@@ -180,9 +215,19 @@ export function YOpsDraftTab({ candidate }: { candidate: WorkspaceCandidate }) {
             <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
               {appliedCount} applied
             </span>
-            <Button disabled={appliedCount === 0} size="sm" type="button" variant="commit">
+            <Button
+              disabled={appliedCount === 0 || isBusy || Boolean(committedHash)}
+              onClick={handleCommit}
+              size="sm"
+              type="button"
+              variant="commit"
+            >
               <GitCommitHorizontal aria-hidden="true" className="size-4" />
-              Commit · main
+              {committedHash
+                ? 'Committed'
+                : status === 'committing'
+                  ? 'Committing'
+                  : 'Commit · main'}
             </Button>
           </footer>
         </section>
@@ -270,11 +315,15 @@ function LegendItem({ className, label }: { className: string; label: string }) 
   );
 }
 
-function getYOpsStatusText(status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied') {
+function getYOpsStatusText(
+  status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed'
+) {
   if (status === 'generating') return 'Backend dry-run';
   if (status === 'generated') return 'Validated by backend';
   if (status === 'applying') return 'Applying preview';
   if (status === 'applied') return 'Preview materialized';
+  if (status === 'committing') return 'Creating commit';
+  if (status === 'committed') return 'Committed to state';
   return 'Backend ready';
 }
 
@@ -323,6 +372,11 @@ function quoteYamlValue(value: string): string {
 
 function quoteYamlUnknown(value: unknown): string {
   return typeof value === 'string' ? JSON.stringify(value) : JSON.stringify(value);
+}
+
+function shortHash(hash: string): string {
+  if (hash.length <= 14) return hash;
+  return `${hash.slice(0, 11)}...`;
 }
 
 interface YamlTreeLine {

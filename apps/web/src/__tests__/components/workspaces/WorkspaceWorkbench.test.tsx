@@ -366,6 +366,186 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
   });
 
+  it('connects extract candidate, send to yops, apply, commit, and leaf config gates', async () => {
+    const extractedWorkspace: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      schemaCandidate: {
+        summary: 'Backend extracted candidate fields from stored source material.',
+        fields: [
+          {
+            id: 'field_backend_summary',
+            path: 'summary',
+            label: 'Summary',
+            type: 'object',
+            required: true,
+            status: 'covered',
+            sourceRefs: 2,
+            children: [
+              {
+                id: 'field_backend_summary_audience',
+                path: 'summary.audience',
+                label: 'Audience',
+                type: 'string',
+                required: true,
+                status: 'covered',
+                value: 'Backend product reviewers',
+                evidence: 'PRD import: audience is backend product reviewers.',
+                sourceRefs: 2,
+              },
+            ],
+          },
+        ],
+      },
+      schemaReview: {
+        verdict: 'ready',
+        summary: 'Candidate extracted from backend source material.',
+        gaps: [],
+      },
+    };
+    const yopsWorkspace: WorkspaceCandidate = {
+      ...extractedWorkspace,
+      yopsDraft: {
+        id: 'draft:candidate:backend',
+        operations: [
+          {
+            id: 'op_backend_1',
+            op: 'set',
+            path: 'prd/summary/audience',
+            summary: 'Set audience from backend candidate extraction.',
+            beforeValue: '',
+            afterValue: 'Backend product reviewers',
+            reason: 'Backend candidate covered summary.audience from included source material.',
+            sourceRefs: ['src_doc'],
+          },
+        ],
+      },
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              candidate_id: 'candidate:backend',
+              workspace: extractedWorkspace,
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              candidate_id: 'candidate:backend',
+              workspace: yopsWorkspace,
+              yops_draft_id: 'draft:candidate:backend',
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              ok: true,
+              applied: 1,
+              preview: {
+                trees: [
+                  {
+                    key: 'prd',
+                    slots: { title: 'PRD audience handoff' },
+                    children: [
+                      {
+                        key: 'summary',
+                        slots: { audience: 'Backend product reviewers' },
+                        children: [],
+                      },
+                    ],
+                  },
+                ],
+                relations: [],
+              },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { commit: { hash: 'sha256:workspace-commit' } },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Extract candidate' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate'
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      sources: [{ id: 'src_chat' }, { id: 'src_doc', materialId: 'mat_prd' }],
+      workspace: { id: 'workspace_ready', projectId: 'proj_1' },
+    });
+    expect(await screen.findByText('Extracted candidate')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /YSchema/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('audience: Backend product reviewers')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send to YOps' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft'
+    );
+    expect(await screen.findByText('Draft sent')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+    await screen.findByText('Materialized 1');
+
+    fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[2][0]).toBe('http://localhost:8000/api/v1/yops/validate');
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      yops: [
+        {
+          set: {
+            path: 'prd/summary/audience',
+            value: 'Backend product reviewers',
+          },
+        },
+      ],
+    });
+    const [commitUrl, commitInit] = fetchMock.mock.calls[3];
+    expect(commitUrl).toBe('http://localhost:8000/api/v1/commits');
+    expect(JSON.parse(String(commitInit?.body))).toMatchObject({
+      branch: 'feature/prd-audience',
+      message: 'Workspace commit: PRD audience handoff',
+      parents: ['sha256:base-prd'],
+      project_id: 'proj_1',
+      provenance: { method: 'workspace_yops' },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Leaf config/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+    expect(screen.getByText('Ready from sha256:workspace-commit')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Leaf' })).toBeEnabled();
+  });
+
   it('renders loading, error, and no-candidate states explicitly', () => {
     const { rerender } = render(
       <WorkspaceWorkbench candidates={[]} projectId="proj_1" viewState="loading" />

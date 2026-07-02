@@ -15,6 +15,7 @@ import { cn } from '@/utils/cn';
 
 export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate }) {
   const targets = candidate.outputTargets;
+  const committedHash = candidate.lastCommitHash ?? null;
   const [selectedTargetId, setSelectedTargetId] = useState(() => targets[0]?.id ?? '');
   const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? targets[0];
 
@@ -94,9 +95,9 @@ export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate 
                 Define the Leaf that will be created from the committed YOps result.
               </p>
             </div>
-            <Button disabled size="sm" variant="leaf">
+            <Button disabled={!committedHash} size="sm" variant="leaf">
               <Leaf className="size-4" />
-              Create after commit
+              {committedHash ? 'Create Leaf' : 'Create after commit'}
             </Button>
           </div>
 
@@ -149,7 +150,7 @@ export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate 
           </div>
         </div>
 
-        <LeafPreview target={selectedTarget} candidate={candidate} />
+        <LeafPreview target={selectedTarget} candidate={candidate} committedHash={committedHash} />
       </section>
     </div>
   );
@@ -169,9 +170,11 @@ function ConfigRow({ icon, label, value }: { icon: ReactNode; label: string; val
 
 function LeafPreview({
   candidate,
+  committedHash,
   target,
 }: {
   candidate: WorkspaceCandidate;
+  committedHash: string | null;
   target: WorkspaceOutputTarget;
 }) {
   return (
@@ -219,12 +222,14 @@ function LeafPreview({
         <div className="mt-auto rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
             <GitCommitHorizontal className="size-4 text-[var(--accent-commit)]" />
-            Commit first
+            {committedHash ? 'Commit ready' : 'Commit first'}
             <ArrowRight className="size-4 text-[var(--text-tertiary)]" />
             <Leaf className="size-4 text-[var(--accent-leaf)]" />
           </div>
           <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">
-            Leaf creation stays after commit so output can cite a stable state hash.
+            {committedHash
+              ? `Leaf creation can cite ${committedHash}.`
+              : 'Leaf creation stays after commit so output can cite a stable state hash.'}
           </p>
         </div>
       </div>

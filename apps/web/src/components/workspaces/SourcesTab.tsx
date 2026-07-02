@@ -62,9 +62,17 @@ const IMPORT_ACTIONS = [
 
 export function SourcesTab({
   candidate,
+  candidateExtracted,
+  extracting,
+  flowError,
+  onExtractCandidate,
   onMaterialUploaded,
 }: {
   candidate: WorkspaceCandidate;
+  candidateExtracted?: boolean;
+  extracting?: boolean;
+  flowError?: string;
+  onExtractCandidate?: () => Promise<void> | void;
   onMaterialUploaded?: () => Promise<void> | void;
 }) {
   const sources = candidate.sourceBundle;
@@ -226,17 +234,21 @@ export function SourcesTab({
             </span>
           </div>
         </div>
-        <Button type="button" variant="commit">
-          Extract candidate
+        <Button disabled={extracting} onClick={onExtractCandidate} type="button" variant="commit">
+          {extracting
+            ? 'Extracting...'
+            : candidateExtracted
+              ? 'Review candidate'
+              : 'Extract candidate'}
         </Button>
       </header>
 
-      {sourceError ? (
+      {sourceError || flowError ? (
         <div
           className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]"
           role="alert"
         >
-          {sourceError}
+          {sourceError ?? flowError}
         </div>
       ) : null}
 

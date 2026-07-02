@@ -86,24 +86,92 @@ export function WorkspaceWorkflowTabs({
 export function WorkspaceTabs({
   activeTab,
   candidate,
+  candidateExtracted,
+  extractingCandidate,
+  flowError,
+  onExtractCandidate,
   onSourceMaterialUploaded,
+  onSendToYOps,
+  onYOpsCommitted,
+  sendingToYOps,
+  yopsDraftSent,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate;
+  candidateExtracted?: boolean;
+  extractingCandidate?: boolean;
+  flowError?: string;
+  onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onSendToYOps?: () => Promise<void> | void;
+  onYOpsCommitted?: (commitHash: string) => void;
+  sendingToYOps?: boolean;
+  yopsDraftSent?: boolean;
 }) {
   return (
-    <div role="tabpanel">{renderWorkspaceTab(activeTab, candidate, onSourceMaterialUploaded)}</div>
+    <div role="tabpanel">
+      {renderWorkspaceTab(activeTab, candidate, {
+        candidateExtracted,
+        extractingCandidate,
+        flowError,
+        onExtractCandidate,
+        onSendToYOps,
+        onSourceMaterialUploaded,
+        onYOpsCommitted,
+        sendingToYOps,
+        yopsDraftSent,
+      })}
+    </div>
   );
+}
+
+interface RenderWorkspaceTabOptions {
+  candidateExtracted?: boolean;
+  extractingCandidate?: boolean;
+  flowError?: string;
+  onExtractCandidate?: () => Promise<void> | void;
+  onSendToYOps?: () => Promise<void> | void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsCommitted?: (commitHash: string) => void;
+  sendingToYOps?: boolean;
+  yopsDraftSent?: boolean;
 }
 
 function renderWorkspaceTab(
   activeTab: WorkspaceTabId,
   candidate: WorkspaceCandidate,
-  onSourceMaterialUploaded?: () => Promise<void> | void
+  options: RenderWorkspaceTabOptions
 ) {
-  if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
-  if (activeTab === 'yops') return <YOpsDraftTab candidate={candidate} />;
+  if (activeTab === 'yschema') {
+    return (
+      <SchemaReviewTab
+        candidate={candidate}
+        candidateExtracted={options.candidateExtracted}
+        flowError={options.flowError}
+        onSendToYOps={options.onSendToYOps}
+        sendingToYOps={options.sendingToYOps}
+        yopsDraftSent={options.yopsDraftSent}
+      />
+    );
+  }
+  if (activeTab === 'yops') {
+    return (
+      <YOpsDraftTab
+        candidate={candidate}
+        onCommitted={options.onYOpsCommitted}
+        yopsDraftSent={options.yopsDraftSent}
+      />
+    );
+  }
   if (activeTab === 'leaf-config') return <OutputTargetsTab candidate={candidate} />;
-  return <SourcesTab candidate={candidate} onMaterialUploaded={onSourceMaterialUploaded} />;
+  return (
+    <SourcesTab
+      candidate={candidate}
+      candidateExtracted={options.candidateExtracted}
+      extracting={options.extractingCandidate}
+      flowError={options.flowError}
+      onExtractCandidate={options.onExtractCandidate}
+      onMaterialUploaded={options.onSourceMaterialUploaded}
+    />
+  );
 }

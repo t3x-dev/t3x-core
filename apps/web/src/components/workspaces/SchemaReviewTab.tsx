@@ -7,7 +7,21 @@ import type {
   WorkspaceSchemaFieldStatus,
 } from '@/types/workspaces';
 
-export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }) {
+export function SchemaReviewTab({
+  candidate,
+  candidateExtracted,
+  flowError,
+  onSendToYOps,
+  sendingToYOps,
+  yopsDraftSent,
+}: {
+  candidate: WorkspaceCandidate;
+  candidateExtracted?: boolean;
+  flowError?: string;
+  onSendToYOps?: () => Promise<void> | void;
+  sendingToYOps?: boolean;
+  yopsDraftSent?: boolean;
+}) {
   const schemaBinding = getPrimarySchemaBinding(candidate.schemaBindings);
   const fields = flattenFields(candidate.schemaCandidate.fields);
   const reviewFields = fields.filter((field) => field.status !== 'covered');
@@ -34,6 +48,15 @@ export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }
         </div>
       </div>
 
+      {flowError ? (
+        <div
+          className="rounded-md border border-[var(--status-error)]/30 bg-[var(--status-error-muted)] px-3 py-2 text-sm text-[var(--status-error)]"
+          role="alert"
+        >
+          {flowError}
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_296px]">
         <section
           aria-label="Candidate tree"
@@ -49,6 +72,16 @@ export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }
               </h4>
             </div>
             <Badge variant="secondary">YAML</Badge>
+          </div>
+          <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <Badge variant={candidateExtracted ? 'commit-subtle' : 'pending-subtle'}>
+              {candidateExtracted ? 'Extracted candidate' : 'Fixture candidate'}
+            </Badge>
+            <span>
+              {candidateExtracted
+                ? 'Generated from the current source bundle.'
+                : 'Candidate tree is ready for review.'}
+            </span>
           </div>
           <div className="overflow-x-auto py-3">
             <div className="min-w-[560px] font-mono text-[13px] leading-6">
@@ -120,9 +153,11 @@ export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }
 
           <Button
             className="w-full bg-[var(--accent-extract)] text-[var(--on-accent)] hover:bg-[var(--accent-extract)]/90"
+            disabled={sendingToYOps}
+            onClick={onSendToYOps}
             type="button"
           >
-            Send to YOps
+            {sendingToYOps ? 'Sending...' : yopsDraftSent ? 'Open YOps draft' : 'Send to YOps'}
           </Button>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
