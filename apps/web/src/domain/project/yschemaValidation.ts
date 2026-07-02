@@ -12,6 +12,14 @@ export interface YSchemaValidationRunLike {
   fix_count: number;
   finished_at: string | null;
   created_at: string;
+  result?: Record<string, unknown>;
+}
+
+export interface YSchemaValidationGap {
+  code: string;
+  label: string;
+  message: string;
+  path: string;
 }
 
 export interface YSchemaValidationSummary {
@@ -20,6 +28,7 @@ export interface YSchemaValidationSummary {
   errorCount: number;
   fixCount: number;
   gapCount: number;
+  gaps: YSchemaValidationGap[];
   ready: boolean;
   runId?: string;
   schemaName?: string;
@@ -38,6 +47,7 @@ export function toYSchemaValidationSummary(
     errorCount: run.error_count,
     fixCount: run.fix_count,
     gapCount: run.gap_count,
+    gaps: extractValidationGaps(run.result),
     ready: run.ready,
     runId: run.id,
     schemaName: run.schema_name,
@@ -80,4 +90,49 @@ function deriveYSchemaValidationStatus(run: YSchemaValidationRunLike): YSchemaVa
   if (run.status === 'stale') return 'stale';
   if (run.status === 'passed' && run.valid && run.ready) return 'verified';
   return 'failed';
+}
+
+function extractValidationGaps(
+  result: Record<string, unknown> | undefined
+): YSchemaValidationGap[] {
+  const validation =
+    result && typeof result.validation === 'object' && result.validation !== null
+      ? (result.validation as Record<string, unknown>)
+      : null;
+  const gaps = Array.isArray(validation?.gaps) ? validation.gaps : [];
+
+  return gaps.flatMap((gap) => {
+    if (!gap || typeof gap !== 'object') return [];
+    const row = gap as Record<string, unknown>;
+    const path = typeof row.path === 'string' ? row.path : '';
+    const code = typeof row.code === 'string' ? row.code : 'VALIDATION_GAP';
+    const message =
+      typeof row.message === 'string' && row.message.trim()
+        ? row.message
+        : path
+          ? `${path} needs review.`
+          : 'Validation needs review.';
+
+    return [
+      {
+        code,
+        label: gapCodeToLabel(code),
+        message,
+        path,
+      },
+    ];
+  });
+}
+
+function gapCodeToLabel(code: string) {
+  switch (code) {
+    case 'REQUIRED_NODE_MISSING':
+      return 'Missing required node';
+    case 'REQUIRED_SLOT_MISSING':
+      return 'Missing required field';
+    case 'PROVENANCE_MISSING':
+      return 'Missing source evidence';
+    default:
+      return 'Validation gap';
+  }
 }

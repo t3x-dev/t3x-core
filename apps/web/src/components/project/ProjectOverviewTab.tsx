@@ -1,5 +1,5 @@
-import { Boxes, GitCommitHorizontal, ShieldCheck } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Boxes, GitCommitHorizontal, RotateCw, ShieldCheck } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
@@ -12,7 +12,10 @@ import type { ProjectShellProject } from './ProjectShell';
 interface ProjectOverviewTabProps {
   onOpenState: () => void;
   onOpenWorkspaces: () => void;
+  onRunValidation?: () => Promise<void> | void;
   project: ProjectShellProject;
+  validationError?: string | null;
+  validationRunning?: boolean;
 }
 
 function OverviewMetric({ label, value }: { label: string; value: string | number }) {
@@ -49,14 +52,31 @@ function RegistrySection({
 export function ProjectOverviewTab({
   onOpenState,
   onOpenWorkspaces,
+  onRunValidation,
   project,
+  validationError,
+  validationRunning = false,
 }: ProjectOverviewTabProps) {
+  const [showGaps, setShowGaps] = useState(false);
   const repoPath = getProjectRepoPath(project);
   const commits = Math.max(0, project.commitsCount ?? 0);
   const branches = Math.max(0, project.branchesCount ?? 0);
   const outputs = Math.max(0, project.outputsCount ?? 0);
   const yschemaBadge = getYSchemaBadge(project.yschemaValidation);
+  const validationGaps = project.yschemaValidation?.gaps ?? [];
+  const validationHasRun = Boolean(project.yschemaValidation?.runId);
   const validationReady = project.yschemaValidation?.status === 'verified';
+  const validationResultLabel = validationReady
+    ? 'Ready to use'
+    : validationHasRun
+      ? 'Needs review'
+      : 'Not checked';
+  const validationUseMessage = validationReady
+    ? 'YSchema passed for the checked commit.'
+    : validationHasRun
+      ? 'Blocked until YSchema passes'
+      : 'Run YSchema validation before using this repository.';
+  const schemaName = project.yschemaValidation?.schemaName ?? 't3x/prd';
 
   return (
     <section className="h-full overflow-auto bg-[var(--surface-app)]">
@@ -100,11 +120,83 @@ export function ProjectOverviewTab({
             icon={<ShieldCheck aria-hidden="true" className="size-4" />}
             title="Validation"
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={yschemaBadge.variant}>{yschemaBadge.label}</Badge>
-              <Badge variant="outline">
-                {getYSchemaValidationCommitLabel(project.yschemaValidation)}
-              </Badge>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={yschemaBadge.variant}>{yschemaBadge.label}</Badge>
+                  <Badge variant="outline">
+                    {getYSchemaValidationCommitLabel(project.yschemaValidation)}
+                  </Badge>
+                </div>
+                <Button
+                  disabled={!onRunValidation || validationRunning}
+                  onClick={onRunValidation}
+                  size="sm"
+                  type="button"
+                  variant="canvas-outline"
+                >
+                  <RotateCw className={validationRunning ? 'size-4 animate-spin' : 'size-4'} />
+                  {validationRunning ? 'Running...' : 'Run validation'}
+                </Button>
+              </div>
+
+              <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs font-semibold text-[var(--text-tertiary)]">Schema</dt>
+                  <dd className="mt-1 font-semibold text-[var(--text-primary)]">{schemaName}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-[var(--text-tertiary)]">Run</dt>
+                  <dd className="mt-1 font-semibold text-[var(--text-primary)]">
+                    {project.yschemaValidation?.runId ?? 'No run yet'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-[var(--text-tertiary)]">Result</dt>
+                  <dd className="mt-1 font-semibold text-[var(--text-primary)]">
+                    {validationResultLabel}
+                  </dd>
+                </div>
+              </dl>
+
+              {validationGaps.length > 0 ? (
+                <div className="space-y-3 border-t border-[var(--stroke-divider)] pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[var(--text-secondary)]">
+                      {validationGaps.length} validation gaps block use.
+                    </span>
+                    <Button
+                      onClick={() => setShowGaps((value) => !value)}
+                      size="sm"
+                      type="button"
+                      variant="canvas-outline"
+                    >
+                      {showGaps ? 'Hide gaps' : 'View gaps'}
+                    </Button>
+                  </div>
+                  {showGaps ? (
+                    <div className="divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)]">
+                      {validationGaps.map((gap) => (
+                        <div className="px-3 py-2" key={`${gap.code}:${gap.path}:${gap.message}`}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-bold text-[var(--text-primary)]">
+                              {gap.label}
+                            </span>
+                            {gap.path ? <Badge variant="outline">{gap.path}</Badge> : null}
+                          </div>
+                          <p className="mt-1 text-sm text-[var(--text-secondary)]">{gap.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {validationError ? (
+                <p className="text-sm font-semibold text-[var(--status-warning)]">
+                  {validationError}
+                </p>
+              ) : null}
             </div>
           </RegistrySection>
 
@@ -120,6 +212,9 @@ export function ProjectOverviewTab({
                 {validationReady ? 'Validated' : 'Requires validation'}
               </Badge>
             </div>
+            <p className="mt-3 text-sm font-medium leading-6 text-[var(--text-secondary)]">
+              {validationUseMessage}
+            </p>
           </RegistrySection>
         </div>
       </div>

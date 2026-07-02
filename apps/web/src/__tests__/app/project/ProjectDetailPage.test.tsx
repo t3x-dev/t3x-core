@@ -51,11 +51,12 @@ vi.mock('@/queries/project', () => ({
 
 vi.mock('@/queries/yschemaValidation', () => ({
   fetchLatestYSchemaValidation: vi.fn(),
+  runYSchemaValidation: vi.fn(),
 }));
 
 import ProjectDetailPage, { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { fetchProject } from '@/queries/project';
-import { fetchLatestYSchemaValidation } from '@/queries/yschemaValidation';
+import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -77,6 +78,7 @@ beforeEach(() => {
     metadata: {},
   } as never);
   vi.mocked(fetchLatestYSchemaValidation).mockResolvedValue(null);
+  vi.mocked(runYSchemaValidation).mockReset();
   useProjectStore.setState({
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
@@ -138,6 +140,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', { name: 'Repository overview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Use repository' })).toBeDisabled();
+    expect(screen.getByText('Not checked')).toBeInTheDocument();
+    expect(
+      screen.getByText('Run YSchema validation before using this repository.')
+    ).toBeInTheDocument();
     expect(screen.getByText('0 outputs')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
@@ -169,6 +175,85 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
     expect(screen.getByText('Verified abcdef12')).toBeInTheDocument();
+    expect(screen.getByText('Validated')).toBeInTheDocument();
+  });
+
+  it('shows failed YSchema gaps and can rerun validation from the repository overview', async () => {
+    vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:5fbfafd8fa2fec3e',
+      created_at: '2026-07-02T00:00:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:00:01.000Z',
+      fix_count: 2,
+      gap_count: 2,
+      id: 'ysvr_failed',
+      project_id: 'proj_test',
+      ready: false,
+      result: {
+        validation: {
+          gaps: [
+            {
+              code: 'REQUIRED_NODE_MISSING',
+              message: 'summary is required before commit.',
+              path: 'summary',
+            },
+            {
+              code: 'REQUIRED_NODE_MISSING',
+              message: 'requirements is required before commit.',
+              path: 'requirements',
+            },
+          ],
+        },
+      },
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:00:00.000Z',
+      status: 'failed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+    vi.mocked(runYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:abcdef1234567890',
+      created_at: '2026-07-02T00:01:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:01:01.000Z',
+      fix_count: 0,
+      gap_count: 0,
+      id: 'ysvr_passed',
+      project_id: 'proj_test',
+      ready: true,
+      result: { validation: { gaps: [] } },
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:01:00.000Z',
+      status: 'passed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('Schema')).toBeInTheDocument();
+    expect(screen.getByText('t3x/prd')).toBeInTheDocument();
+    expect(screen.getByText('Blocked until YSchema passes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View gaps' }));
+
+    expect(screen.getAllByText('Missing required node')).toHaveLength(2);
+    expect(screen.getByText('summary is required before commit.')).toBeInTheDocument();
+    expect(screen.getByText('requirements is required before commit.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
+
+    await waitFor(() => {
+      expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test');
+      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
+    });
     expect(screen.getByText('Validated')).toBeInTheDocument();
   });
 

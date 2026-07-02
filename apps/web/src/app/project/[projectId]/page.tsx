@@ -28,7 +28,7 @@ import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletio
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
-import { fetchLatestYSchemaValidation } from '@/queries/yschemaValidation';
+import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
@@ -178,6 +178,8 @@ export function ProjectDetailPageContent({
   const [yschemaValidation, setYschemaValidation] = useState(() =>
     toYSchemaValidationSummary(null)
   );
+  const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
+  const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
   const projectBase = projectFromStore ?? fetchedProject;
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
@@ -307,6 +309,22 @@ export function ProjectDetailPageContent({
     return () => {
       cancelled = true;
     };
+  }, [projectBase?.id]);
+
+  const handleRunYSchemaValidation = useCallback(async () => {
+    if (!projectBase?.id) return;
+    setYschemaValidationRunning(true);
+    setYschemaValidationError(null);
+
+    try {
+      const run = await runYSchemaValidation(projectBase.id);
+      setYschemaValidation(toYSchemaValidationSummary(run));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Validation run failed';
+      setYschemaValidationError(message);
+    } finally {
+      setYschemaValidationRunning(false);
+    }
   }, [projectBase?.id]);
 
   // Load fresh project data whenever this page is entered. The canvas store
@@ -518,7 +536,10 @@ export function ProjectDetailPageContent({
           <ProjectOverviewTab
             onOpenState={() => handleProjectTabChange('state')}
             onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
+            onRunValidation={handleRunYSchemaValidation}
             project={project}
+            validationError={yschemaValidationError}
+            validationRunning={yschemaValidationRunning}
           />
         );
       case 'state':
@@ -540,7 +561,10 @@ export function ProjectDetailPageContent({
           <ProjectOverviewTab
             onOpenState={() => handleProjectTabChange('state')}
             onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
+            onRunValidation={handleRunYSchemaValidation}
             project={project}
+            validationError={yschemaValidationError}
+            validationRunning={yschemaValidationRunning}
           />
         );
     }
