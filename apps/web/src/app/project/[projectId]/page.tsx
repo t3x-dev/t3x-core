@@ -17,6 +17,7 @@ import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import { type ProjectTabId, parseProjectTab } from '@/components/project/projectTabModel';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -27,6 +28,7 @@ import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletio
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
+import { fetchLatestYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
@@ -173,7 +175,14 @@ export function ProjectDetailPageContent({
   const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
   const [projectLookupLoading, setProjectLookupLoading] = useState(false);
   const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
-  const project = projectFromStore ?? fetchedProject;
+  const [yschemaValidation, setYschemaValidation] = useState(() =>
+    toYSchemaValidationSummary(null)
+  );
+  const projectBase = projectFromStore ?? fetchedProject;
+  const project = useMemo(
+    () => (projectBase ? { ...projectBase, yschemaValidation } : null),
+    [projectBase, yschemaValidation]
+  );
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
@@ -277,6 +286,28 @@ export function ProjectDetailPageContent({
       cancelled = true;
     };
   }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
+
+  useEffect(() => {
+    if (!projectBase?.id) {
+      setYschemaValidation(null);
+      return;
+    }
+
+    let cancelled = false;
+    setYschemaValidation(null);
+
+    fetchLatestYSchemaValidation(projectBase.id)
+      .then((run) => {
+        if (!cancelled) setYschemaValidation(toYSchemaValidationSummary(run));
+      })
+      .catch(() => {
+        if (!cancelled) setYschemaValidation(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectBase?.id]);
 
   // Load fresh project data whenever this page is entered. The canvas store
   // persists across routes, so returning from Chat after a commit must not

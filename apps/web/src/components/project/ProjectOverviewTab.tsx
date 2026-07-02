@@ -3,6 +3,10 @@ import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
+import {
+  getYSchemaValidationCommitLabel,
+  getYSchemaValidationPrimaryLabel,
+} from '@/domain/project/yschemaValidation';
 import type { ProjectShellProject } from './ProjectShell';
 
 interface ProjectOverviewTabProps {
@@ -51,6 +55,8 @@ export function ProjectOverviewTab({
   const commits = Math.max(0, project.commitsCount ?? 0);
   const branches = Math.max(0, project.branchesCount ?? 0);
   const outputs = Math.max(0, project.outputsCount ?? 0);
+  const yschemaBadge = getYSchemaBadge(project.yschemaValidation);
+  const validationReady = project.yschemaValidation?.status === 'verified';
 
   return (
     <section className="h-full overflow-auto bg-[var(--surface-app)]">
@@ -95,8 +101,10 @@ export function ProjectOverviewTab({
             title="Validation"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="pending">YSchema pending</Badge>
-              <Badge variant="outline">No verified commit</Badge>
+              <Badge variant={yschemaBadge.variant}>{yschemaBadge.label}</Badge>
+              <Badge variant="outline">
+                {getYSchemaValidationCommitLabel(project.yschemaValidation)}
+              </Badge>
             </div>
           </RegistrySection>
 
@@ -108,11 +116,26 @@ export function ProjectOverviewTab({
               <span className="text-sm font-semibold text-[var(--text-secondary)]">
                 Provision target
               </span>
-              <Badge variant="outline">Requires validation</Badge>
+              <Badge variant={validationReady ? 'success' : 'outline'}>
+                {validationReady ? 'Validated' : 'Requires validation'}
+              </Badge>
             </div>
           </RegistrySection>
         </div>
       </div>
     </section>
   );
+}
+
+function getYSchemaBadge(validation: ProjectShellProject['yschemaValidation']) {
+  if (!validation) {
+    return { label: 'YSchema pending', variant: 'pending' as const };
+  }
+  if (validation.status === 'verified') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'success' as const };
+  }
+  if (validation.status === 'failed' || validation.status === 'stale') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'warning' as const };
+  }
+  return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'pending' as const };
 }

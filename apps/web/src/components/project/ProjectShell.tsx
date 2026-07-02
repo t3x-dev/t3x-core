@@ -4,6 +4,10 @@ import { ProjectTabs } from '@/components/project/ProjectTabs';
 import type { ProjectTabId } from '@/components/project/projectTabModel';
 import { Badge } from '@/components/ui/badge';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import {
+  getYSchemaValidationPrimaryLabel,
+  type YSchemaValidationSummary,
+} from '@/domain/project/yschemaValidation';
 
 export interface ProjectShellProject {
   id?: string;
@@ -14,6 +18,7 @@ export interface ProjectShellProject {
   commitsCount?: number;
   branchesCount?: number;
   outputsCount?: number;
+  yschemaValidation?: YSchemaValidationSummary | null;
 }
 
 export interface ProjectShellProps {
@@ -29,6 +34,7 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
     status === 'active' ? 'success' : status === 'paused' ? 'warning' : 'pending';
   const outputCount = Math.max(0, project.outputsCount ?? 0);
   const repoPath = getProjectRepoPath(project);
+  const yschemaBadge = getYSchemaBadge(project.yschemaValidation);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)] text-[var(--text-primary)]">
@@ -63,7 +69,7 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
               {repoPath}
             </Badge>
             <Badge variant={statusVariant}>{status}</Badge>
-            <Badge variant="pending">YSchema pending</Badge>
+            <Badge variant={yschemaBadge.variant}>{yschemaBadge.label}</Badge>
             <Badge variant="outline">
               {outputCount} {outputCount === 1 ? 'output' : 'outputs'}
             </Badge>
@@ -74,4 +80,17 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );
+}
+
+function getYSchemaBadge(validation: YSchemaValidationSummary | null | undefined) {
+  if (!validation) {
+    return { label: 'YSchema pending', variant: 'pending' as const };
+  }
+  if (validation.status === 'verified') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'success' as const };
+  }
+  if (validation.status === 'failed' || validation.status === 'stale') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'warning' as const };
+  }
+  return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'pending' as const };
 }

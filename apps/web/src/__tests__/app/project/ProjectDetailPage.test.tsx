@@ -49,8 +49,13 @@ vi.mock('@/queries/project', () => ({
   fetchProject: vi.fn(),
 }));
 
+vi.mock('@/queries/yschemaValidation', () => ({
+  fetchLatestYSchemaValidation: vi.fn(),
+}));
+
 import ProjectDetailPage, { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { fetchProject } from '@/queries/project';
+import { fetchLatestYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -71,6 +76,7 @@ beforeEach(() => {
     branches_count: 0,
     metadata: {},
   } as never);
+  vi.mocked(fetchLatestYSchemaValidation).mockResolvedValue(null);
   useProjectStore.setState({
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
@@ -134,6 +140,36 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('button', { name: 'Use repository' })).toBeDisabled();
     expect(screen.getByText('0 outputs')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('renders a verified YSchema badge from the latest validation run', async () => {
+    vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:abcdef1234567890',
+      created_at: '2026-07-02T00:00:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:00:01.000Z',
+      fix_count: 0,
+      gap_count: 0,
+      id: 'ysvr_test',
+      project_id: 'proj_test',
+      ready: true,
+      result: {},
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:00:00.000Z',
+      status: 'passed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('Verified abcdef12')).toBeInTheDocument();
+    expect(screen.getByText('Validated')).toBeInTheDocument();
   });
 
   it('shows a project-first empty State tab and can switch to the Workspaces preview', async () => {
