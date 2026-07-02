@@ -86,6 +86,7 @@ export function useProjectCrud() {
           drafts: 0,
           commitsCount: 0,
           branchesCount: 0,
+          outputsCount: 0,
         };
         store.addToProjects(summary);
         return summary;

@@ -25,6 +25,7 @@ export interface ProjectSummary {
   drafts: number;
   commitsCount: number;
   branchesCount: number;
+  outputsCount?: number;
   defaultProvider?: string | null;
   defaultModel?: string | null;
 }
@@ -80,6 +81,7 @@ export const apiProjectToSummary = (project: Project): ProjectSummary => ({
   drafts: project.conversations_count || 0,
   commitsCount: project.commits_count || 0,
   branchesCount: project.branches_count || 0,
+  outputsCount: 0,
   defaultProvider: project.default_provider ?? null,
   defaultModel: project.default_model ?? null,
 });

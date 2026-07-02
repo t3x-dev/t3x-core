@@ -118,17 +118,26 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
   it('renders project detail from an owner/repo route override', () => {
     routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
+    useProjectStore.setState({
+      projects: [{ id: 'proj_test', name: 'Test Project', commitsCount: 1 } as never],
+      initialized: true,
+      loading: false,
+    });
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByText('/t3x-dev/test-project').length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Repository overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use repository' })).toBeDisabled();
+    expect(screen.getByText('0 outputs')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('shows a project-first empty State tab and can switch to the Workspaces preview', () => {
+  it('shows a project-first empty State tab and can switch to the Workspaces preview', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
@@ -139,17 +148,20 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
     expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
     expect(screen.getByText('repo')).toBeInTheDocument();
-    expect(screen.getByText('valid')).toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('YSchema pending')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
       screen.getByText('Create a workspace from sources, then commit it to populate State.')
     ).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
+    });
+    replaceMock.mockClear();
 
     fireEvent.click(screen.getByRole('button', { name: /Create Workspace/i }));
 
-    expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', { scroll: false });
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
     expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
@@ -159,6 +171,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('keeps chat available as a secondary source action without making it required', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     renderProjectContent();
@@ -170,6 +183,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('shows a no-state state when the project has sources but no canvas nodes', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useProjectStore.setState({
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
@@ -182,7 +196,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(
       screen.getByText('Review existing sources in a workspace, then commit structured state.')
     ).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -230,6 +244,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('renders the canvas workspace when the project has nodes', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useCanvasStore.setState({
       nodes: [
         { id: 'n1', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -243,11 +258,11 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
   });
 
   it('ignores selected-node deep links while the intro demo canvas tour is active', async () => {
-    searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
+    searchParamsValue = new URLSearchParams('tab=state&introDemo=1&selected=sha256%3Aabc123');
     useCanvasStore.setState({
       nodes: [
         { id: 'sha256:abc123', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -286,6 +301,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('confirms a direct empty project before showing not found', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useProjectStore.setState({
       projects: [],
       initialized: true,
@@ -301,7 +317,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     });
     expect(screen.queryByText(/Project not found/i)).toBeNull();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/state', { scroll: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
 

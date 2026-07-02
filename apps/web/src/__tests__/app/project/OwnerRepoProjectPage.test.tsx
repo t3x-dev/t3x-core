@@ -92,7 +92,7 @@ describe('OwnerRepoProjectPage', () => {
     render(<OwnerRepoProjectPage />);
 
     expect(screen.getByTestId('project-detail')).toHaveTextContent('proj_audit');
-    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'state');
+    expect(screen.getByTestId('project-detail')).toHaveAttribute('data-tab', 'overview');
     expect(fetchProjects).not.toHaveBeenCalled();
   });
 

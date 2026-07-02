@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Boxes,
   FileCheck2,
   GitCommitHorizontal,
@@ -12,6 +13,7 @@ import { PROJECT_TABS, type ProjectTabId } from '@/components/project/projectTab
 import { cn } from '@/utils/cn';
 
 const tabIcons: Record<ProjectTabId, ComponentType<{ className?: string }>> = {
+  overview: BookOpen,
   state: GitCommitHorizontal,
   schemas: ShieldCheck,
   workspaces: Boxes,

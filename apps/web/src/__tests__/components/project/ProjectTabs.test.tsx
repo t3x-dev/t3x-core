@@ -12,13 +12,13 @@ describe('ProjectTabs', () => {
 
     expect(typeof ProjectTabs).toBe('function');
 
-    render(<ProjectTabs activeTab="state" onTabChange={onTabChange} />);
+    render(<ProjectTabs activeTab="overview" onTabChange={onTabChange} />);
 
     for (const tab of PROJECT_TABS) {
       expect(screen.getByRole('tab', { name: tab.label })).toBeInTheDocument();
     }
 
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Workspaces' }));
 
@@ -27,6 +27,7 @@ describe('ProjectTabs', () => {
 
   it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {
     expect(PROJECT_TABS.map((tab) => tab.id)).toEqual([
+      'overview',
       'state',
       'schemas',
       'workspaces',

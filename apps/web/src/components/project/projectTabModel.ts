@@ -1,4 +1,5 @@
 export type ProjectTabId =
+  | 'overview'
   | 'state'
   | 'schemas'
   | 'workspaces'
@@ -13,6 +14,7 @@ export interface ProjectTabDefinition {
 }
 
 export const PROJECT_TABS: ProjectTabDefinition[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'state', label: 'State' },
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
@@ -26,5 +28,5 @@ const PROJECT_TAB_IDS = new Set<ProjectTabId>(PROJECT_TABS.map((tab) => tab.id))
 
 export function parseProjectTab(value: string | null): ProjectTabId {
   if (value && PROJECT_TAB_IDS.has(value as ProjectTabId)) return value as ProjectTabId;
-  return 'state';
+  return 'overview';
 }

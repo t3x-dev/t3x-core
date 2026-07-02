@@ -13,6 +13,7 @@ export interface ProjectShellProject {
   drafts?: number;
   commitsCount?: number;
   branchesCount?: number;
+  outputsCount?: number;
 }
 
 export interface ProjectShellProps {
@@ -24,9 +25,9 @@ export interface ProjectShellProps {
 
 export function ProjectShell({ activeTab, children, onTabChange, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
-  const statusLabel = status === 'paused' ? 'paused' : 'valid';
-  const schemaGapCount = status === 'active' ? 0 : Math.min(Math.max(project.drafts ?? 0, 1), 3);
-  const outputCount = Math.max(0, project.commitsCount ?? 0);
+  const statusVariant =
+    status === 'active' ? 'success' : status === 'paused' ? 'warning' : 'pending';
+  const outputCount = Math.max(0, project.outputsCount ?? 0);
   const repoPath = getProjectRepoPath(project);
 
   return (
@@ -61,10 +62,8 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
             <Badge className="font-mono" variant="outline">
               {repoPath}
             </Badge>
-            <Badge variant={status === 'paused' ? 'warning' : 'success'}>{statusLabel}</Badge>
-            <Badge variant="outline">
-              {schemaGapCount} schema {schemaGapCount === 1 ? 'gap' : 'gaps'}
-            </Badge>
+            <Badge variant={statusVariant}>{status}</Badge>
+            <Badge variant="pending">YSchema pending</Badge>
             <Badge variant="outline">
               {outputCount} {outputCount === 1 ? 'output' : 'outputs'}
             </Badge>

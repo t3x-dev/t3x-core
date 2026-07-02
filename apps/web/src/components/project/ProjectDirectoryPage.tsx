@@ -39,7 +39,7 @@ function yopsCount(project: ProjectSummary): number {
 }
 
 function outputCount(project: ProjectSummary): number {
-  return Math.max(0, project.commitsCount > 0 ? Math.min(project.commitsCount + 1, 6) : 0);
+  return Math.max(0, project.outputsCount ?? 0);
 }
 
 function ProjectMetric({

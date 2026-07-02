@@ -8,6 +8,7 @@ import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourO
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
 import { ProjectEmptyState } from '@/components/project/ProjectEmptyState';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
+import { ProjectOverviewTab } from '@/components/project/ProjectOverviewTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 import { ProjectSettingsTab } from '@/components/project/ProjectSettingsTab';
@@ -63,7 +64,7 @@ function withCurrentQuery(path: string, searchParams: { toString: () => string }
 
 function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectTabId) {
   const basePath = getProjectRepoPath(project);
-  return tab === 'state' ? basePath : `${basePath}/${tab}`;
+  return tab === 'overview' ? basePath : `${basePath}/${tab}`;
 }
 
 function getProjectCanonicalPath(
@@ -481,6 +482,16 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
+      case 'overview':
+        return (
+          <ProjectOverviewTab
+            onOpenState={() => handleProjectTabChange('state')}
+            onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
+            project={project}
+          />
+        );
+      case 'state':
+        return renderStateTab();
       case 'schemas':
         return <ProjectSchemasTab projectId={projectId} />;
       case 'workspaces':
@@ -494,7 +505,13 @@ export function ProjectDetailPageContent({
       case 'settings':
         return <ProjectSettingsTab project={project} />;
       default:
-        return renderStateTab();
+        return (
+          <ProjectOverviewTab
+            onOpenState={() => handleProjectTabChange('state')}
+            onOpenWorkspaces={() => handleProjectTabChange('workspaces')}
+            project={project}
+          />
+        );
     }
   })();
 
