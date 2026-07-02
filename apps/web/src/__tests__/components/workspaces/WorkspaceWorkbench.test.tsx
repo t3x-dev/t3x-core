@@ -27,6 +27,33 @@ const workspaceCandidates: WorkspaceCandidate[] = [
       },
     ],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+    schemaCandidate: {
+      summary: 'Source evidence supports the PRD audience handoff fields.',
+      fields: [
+        {
+          id: 'field_prd_summary',
+          path: 'summary',
+          label: 'Summary',
+          type: 'object',
+          required: true,
+          status: 'covered',
+          sourceRefs: 2,
+          children: [
+            {
+              id: 'field_prd_summary_audience',
+              path: 'summary.audience',
+              label: 'Audience',
+              type: 'string',
+              required: true,
+              status: 'covered',
+              value: 'Product and engineering reviewers',
+              evidence: 'Audience chat and PRD import both name product and engineering reviewers.',
+              sourceRefs: 2,
+            },
+          ],
+        },
+      ],
+    },
     schemaReview: {
       verdict: 'ready',
       summary: 'Ready for YOps apply after schema alignment.',
@@ -71,6 +98,20 @@ const workspaceCandidates: WorkspaceCandidate[] = [
       },
     ],
     schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaCandidate: {
+      summary: 'Release-note candidate still needs required release metadata.',
+      fields: [
+        {
+          id: 'field_release_version',
+          path: 'release.version',
+          label: 'Release version',
+          type: 'string',
+          required: true,
+          status: 'missing',
+          sourceRefs: 0,
+        },
+      ],
+    },
     schemaReview: {
       verdict: 'needs_review',
       summary: 'Needs schema confirmation before YOps apply.',
@@ -106,7 +147,7 @@ function activateTab(name: string | RegExp) {
 }
 
 describe('WorkspaceWorkbench', () => {
-  it('renders a selectable workspace list with source and schema detail', () => {
+  it('renders current workspace detail without an internal workspace selector', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
@@ -118,39 +159,28 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
 
     activateTab(/YSchema/);
-    const list = screen.getByRole('list', { name: 'Workspace candidates' });
-    expect(list.parentElement?.className).toContain('lg:grid-cols-[360px_minmax(0,1fr)]');
-    expect(within(list).getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
-    expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
 
-    fireEvent.click(within(list).getByRole('button', { name: /Release cleanup/ }));
-    activateTab('Source');
+    const detail = screen.getByRole('region', { name: 'Workspace detail' });
+    expect(within(detail).getAllByText('PRD audience handoff').length).toBeGreaterThan(0);
+    expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(within(detail).getByText('YSchema PRD Review')).toBeInTheDocument();
+  });
+
+  it('uses the externally selected workspace id for the current workspace', () => {
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        projectId="proj_1"
+        selectedWorkspaceId="workspace_draft"
+      />
+    );
 
     const detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(within(detail).getAllByText('Release cleanup').length).toBeGreaterThan(0);
-    expect(within(detail).getAllByText('1 doc').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('Release Note Schema v1').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('Release outline').length).toBeGreaterThan(0);
-  });
-
-  it('moves focus with continuous arrow-key workspace navigation', () => {
-    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
-
-    activateTab(/YSchema/);
-    const list = screen.getByRole('list', { name: 'Workspace candidates' });
-    const firstWorkspace = within(list).getByRole('button', { name: /PRD audience handoff/ });
-    const secondWorkspace = within(list).getByRole('button', { name: /Release cleanup/ });
-
-    firstWorkspace.focus();
-    fireEvent.keyDown(firstWorkspace, { key: 'ArrowDown' });
-
-    expect(secondWorkspace).toHaveFocus();
-    expect(secondWorkspace).toHaveAttribute('aria-pressed', 'true');
-
-    fireEvent.keyDown(secondWorkspace, { key: 'ArrowDown' });
-
-    expect(firstWorkspace).toHaveFocus();
-    expect(firstWorkspace).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
   });
 
   it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {
@@ -209,7 +239,16 @@ describe('WorkspaceWorkbench', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     activateTab(/YSchema/);
-    expect(screen.getByText('Ready for YOps apply after schema alignment.')).toBeInTheDocument();
+    expect(screen.getByText('YSchema PRD Review')).toBeInTheDocument();
+    expect(
+      screen.getByText('Validate candidate structure before YOps extraction.')
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Candidate tree').length).toBeGreaterThan(0);
+    expect(screen.getByText('Candidate PRD')).toBeInTheDocument();
+    expect(screen.getByText('audience: Product and engineering reviewers')).toBeInTheDocument();
+    expect(screen.getByText('YOps suggestions')).toBeInTheDocument();
+    expect(screen.getByText('1 suggested operation from this candidate.')).toBeInTheDocument();
+    expect(screen.getByText('Proposed YOps')).toBeInTheDocument();
 
     activateTab(/YOps/);
     expect(screen.getByText('Read-only YOps draft')).toBeInTheDocument();

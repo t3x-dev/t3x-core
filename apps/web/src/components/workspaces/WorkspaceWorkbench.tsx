@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
-import { WorkspaceSelector } from './WorkspaceSelector';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -21,27 +20,14 @@ interface WorkspaceWorkbenchProps {
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
-  onSelectedWorkspaceChange,
   onSourceMaterialUploaded,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
-  const [internalSelectedWorkspaceId, setInternalSelectedWorkspaceId] = useState<string | null>(
-    selectedWorkspaceId ?? null
-  );
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
 
-  useEffect(() => {
-    setInternalSelectedWorkspaceId(selectedWorkspaceId ?? null);
-  }, [selectedWorkspaceId]);
-
-  const selectedWorkspace = selectWorkspaceCandidate(candidates, internalSelectedWorkspaceId);
-
-  const handleSelectWorkspace = (workspaceId: string) => {
-    setInternalSelectedWorkspaceId(workspaceId);
-    onSelectedWorkspaceChange?.(workspaceId);
-  };
+  const selectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
 
   if (viewState === 'loading') {
     return (
@@ -79,25 +65,12 @@ export function WorkspaceWorkbench({
 
         {candidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces yet." />
-        ) : activeWorkflowTab === 'chat' ? (
+        ) : (
           <WorkspaceDetail
             activeTab={activeWorkflowTab}
             candidate={selectedWorkspace}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
-        ) : (
-          <div className="grid min-h-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <WorkspaceCandidateList
-              candidates={candidates}
-              selectedWorkspaceId={selectedWorkspace?.id ?? null}
-              onSelectWorkspace={handleSelectWorkspace}
-            />
-            <WorkspaceDetail
-              activeTab={activeWorkflowTab}
-              candidate={selectedWorkspace}
-              onSourceMaterialUploaded={onSourceMaterialUploaded}
-            />
-          </div>
         )}
       </div>
     </section>
@@ -134,8 +107,6 @@ function WorkspaceToolbar({
     </div>
   );
 }
-
-const WorkspaceCandidateList = WorkspaceSelector;
 
 function WorkspaceDetail({
   activeTab,

@@ -51,6 +51,7 @@ export interface WorkspaceCandidate {
   targetBranch: string;
   sourceBundle: SourceBundleItem[];
   schemaBindings: WorkspaceSchemaBinding[];
+  schemaCandidate: WorkspaceSchemaCandidate;
   schemaReview: WorkspaceSchemaReview;
   yopsDraft: WorkspaceYOpsDraft;
   outputTargets: WorkspaceOutputTarget[];
@@ -65,6 +66,31 @@ export interface WorkspaceSchemaReview {
   verdict: WorkspaceSchemaReviewVerdict;
   summary: string;
   gaps: string[];
+}
+
+export type WorkspaceSchemaFieldStatus =
+  | 'covered'
+  | 'missing'
+  | 'needs_confirmation'
+  | 'type_mismatch'
+  | 'extra';
+
+export interface WorkspaceSchemaCandidateField {
+  id: string;
+  path: string;
+  label: string;
+  type: string;
+  required: boolean;
+  status: WorkspaceSchemaFieldStatus;
+  value?: string;
+  evidence?: string;
+  sourceRefs?: number;
+  children?: WorkspaceSchemaCandidateField[];
+}
+
+export interface WorkspaceSchemaCandidate {
+  summary: string;
+  fields: WorkspaceSchemaCandidateField[];
 }
 
 export interface WorkspaceYOpsDraftOperation {
