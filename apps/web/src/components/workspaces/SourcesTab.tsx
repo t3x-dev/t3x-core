@@ -23,12 +23,15 @@ import {
   getPrimarySchemaBinding,
   summarizeSourceBundle,
 } from '@/domain/workspaces/selectors';
+import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialDetail } from '@/hooks/materials/useMaterialDetail';
 import { useMaterialUpload } from '@/hooks/materials/useMaterialUpload';
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
+import { useChatModelSelection } from '@/hooks/shared/useChatModelSelection';
 import { usePinsStore } from '@/store/pinsStore';
 import type { MaterialDetail } from '@/types/api';
+import type { AttachedImage } from '@/types/chat';
 import type {
   SourceBundleItem,
   SourceConversationTurn,
@@ -44,6 +47,8 @@ interface ParsedPreviewBlock {
   text: string;
   state: SourceEvidenceState;
 }
+
+const SOURCE_CHAT_CONVERSATION_STORAGE_PREFIX = 't3x:workspace-source-chat:';
 
 const IMPORT_ACTIONS = [
   { label: 'Import doc', icon: FileUp },
@@ -61,7 +66,6 @@ export function SourcesTab({
 }) {
   const sources = candidate.sourceBundle;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(sources[0]?.id ?? null);
-  const [draftRevision, setDraftRevision] = useState(0);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { archiveMaterial, archiving: materialArchiving } = useMaterialArchive();
@@ -296,12 +300,7 @@ export function SourcesTab({
             aria-label="Source chat"
             className="flex h-[680px] min-h-0 flex-col bg-[var(--surface-card)]"
           >
-            <SourceChatPanel
-              candidate={candidate}
-              selectedSource={selectedSource}
-              onDraftSend={() => setDraftRevision((revision) => revision + 1)}
-              draftRevision={draftRevision}
-            />
+            <SourceChatPanel candidate={candidate} selectedSource={selectedSource} />
           </section>
         </TabsContent>
       </Tabs>
@@ -620,19 +619,69 @@ function ParsedTextPreview({
 
 function SourceChatPanel({
   candidate,
-  draftRevision,
-  onDraftSend,
   selectedSource,
 }: {
   candidate: WorkspaceCandidate;
-  draftRevision: number;
-  onDraftSend: () => void;
   selectedSource: SourceBundleItem | null;
 }) {
-  const chatTurns = useMemo(
-    () => getSourceChatTurns(candidate, selectedSource),
-    [candidate, selectedSource]
+  const [sourceConversationId, setSourceConversationId] = useState<string | undefined>(() =>
+    readStoredSourceChatConversationId(candidate.projectId, candidate.id)
   );
+  const {
+    selectedProvider,
+    selectedModel,
+    handleModelChange,
+    loading: modelsLoading,
+    isSelectionReady,
+  } = useChatModelSelection({});
+
+  useEffect(() => {
+    setSourceConversationId(readStoredSourceChatConversationId(candidate.projectId, candidate.id));
+  }, [candidate.id, candidate.projectId]);
+
+  const handleConversationCreated = useCallback(
+    (conversationId: string) => {
+      setSourceConversationId(conversationId);
+      writeStoredSourceChatConversationId(candidate.projectId, candidate.id, conversationId);
+    },
+    [candidate.id, candidate.projectId]
+  );
+
+  const chat = useConversationChat({
+    projectId: candidate.projectId,
+    conversationId: sourceConversationId,
+    title: `${candidate.title} source chat`,
+    provider: selectedProvider ?? undefined,
+    model: selectedModel ?? undefined,
+    onConversationCreated: handleConversationCreated,
+  });
+
+  const chatTurns = useMemo(() => {
+    const messageTurns = chat.messages.map((message, index) =>
+      chatMessageToSourceTurn(message, index)
+    );
+
+    if (chat.streamingContent.trim().length > 0) {
+      messageTurns.push({
+        id: `${sourceConversationId ?? candidate.id}_streaming_assistant`,
+        role: 'assistant',
+        author: 'Assistant',
+        content: chat.streamingContent,
+      });
+    }
+
+    if (messageTurns.length > 0) return messageTurns;
+    return getSourceChatTurns(candidate, selectedSource);
+  }, [candidate, chat.messages, chat.streamingContent, selectedSource, sourceConversationId]);
+
+  const handleSourceSend = useCallback(
+    (message: string, images?: AttachedImage[]) => {
+      chat.sendMessage(message, images ? { images } : undefined);
+    },
+    [chat]
+  );
+
+  const chatDisabled = chat.isLoading || modelsLoading || !isSelectionReady;
 
   return (
     <>
@@ -652,6 +701,15 @@ function SourceChatPanel({
           Mark latest turn as source
         </Button>
       </header>
+
+      {chat.error || chat.warning ? (
+        <div
+          className="border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2 text-sm text-[var(--status-error)]"
+          role={chat.error ? 'alert' : 'status'}
+        >
+          {chat.error ?? chat.warning}
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <section
@@ -673,17 +731,69 @@ function SourceChatPanel({
         <div className="border-t border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-4 py-3">
           <div className="mx-auto max-w-3xl">
             <ChatInput
-              conversationId={candidate.id}
+              conversationId={sourceConversationId ?? null}
               draftKey={`workspace-source:${candidate.id}`}
-              onSend={onDraftSend}
+              disabled={chatDisabled}
+              isStreaming={chat.isStreaming}
+              onModelChange={handleModelChange}
+              onSend={handleSourceSend}
+              onStop={chat.stopGenerating}
               placeholder="Ask the model, paste source text, or describe a requirement change..."
-              prefillRevision={draftRevision}
+              selectedModel={selectedModel ?? ''}
+              selectedProvider={selectedProvider ?? ''}
             />
           </div>
         </div>
       </div>
     </>
   );
+}
+
+function sourceChatConversationStorageKey(projectId: string, workspaceId: string): string {
+  return `${SOURCE_CHAT_CONVERSATION_STORAGE_PREFIX}${projectId}:${workspaceId}`;
+}
+
+function readStoredSourceChatConversationId(
+  projectId: string,
+  workspaceId: string
+): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    return (
+      window.localStorage.getItem(sourceChatConversationStorageKey(projectId, workspaceId)) ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredSourceChatConversationId(
+  projectId: string,
+  workspaceId: string,
+  conversationId: string
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      sourceChatConversationStorageKey(projectId, workspaceId),
+      conversationId
+    );
+  } catch {
+    // Source chat can still work for the current session without persisted localStorage.
+  }
+}
+
+function chatMessageToSourceTurn(
+  message: { id: string; role: 'user' | 'assistant'; content: string },
+  index: number
+): SourceConversationTurn {
+  return {
+    id: message.id || `source_chat_turn_${index}`,
+    role: message.role,
+    author: message.role === 'user' ? 'You' : 'Assistant',
+    content: message.content,
+  };
 }
 
 function SourceTurnBubble({ index, turn }: { index: number; turn: SourceConversationTurn }) {
