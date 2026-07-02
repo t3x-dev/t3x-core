@@ -13,6 +13,7 @@ import {
   findProjectWithStats,
   getBusinessRules,
   insertProject,
+  leaves,
   permanentDeleteProject,
   projects,
   putBusinessRules,
@@ -21,7 +22,7 @@ import {
   updateProject,
   verifyHashChain,
 } from '@t3x-dev/storage';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { getDB } from '../lib/db';
 import {
   assertProjectAccess,
@@ -39,6 +40,7 @@ import {
   CreateProjectSchema,
   ListProjectsResponseSchema,
   ProjectSchema,
+  ProjectWithCountsSchema,
   ProjectWithStatsSchema,
   UpdateProjectSchema,
 } from '../schemas/projects';
@@ -87,7 +89,7 @@ const listProjectsRoute = createRoute({
       content: {
         'application/json': {
           schema: SuccessResponseSchema(
-            z.union([CursorPageResponseSchema(ProjectSchema), ListProjectsResponseSchema])
+            z.union([CursorPageResponseSchema(ProjectWithCountsSchema), ListProjectsResponseSchema])
           ),
         },
       },
@@ -111,7 +113,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
     db: Awaited<ReturnType<typeof getDB>>,
     p: { projectId: string; name: string; createdAt: Date; metadataJson: string | null }
   ) => {
-    const [convCountRow, commitCountRow, branchCountRow] = await Promise.all([
+    const [convCountRow, commitCountRow, branchCountRow, outputCountRow] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(conversations)
@@ -127,6 +129,11 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
         .from(branches)
         .where(eq(branches.projectId, p.projectId))
         .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(leaves)
+        .where(and(eq(leaves.projectId, p.projectId), isNotNull(leaves.generatedAt)))
+        .then((rows) => rows[0]),
     ]);
     return {
       project_id: p.projectId,
@@ -136,6 +143,7 @@ projectRoutes.openapi(listProjectsRoute, async (c) => {
       conversations_count: Number(convCountRow?.count ?? 0),
       commits_count: Number(commitCountRow?.count ?? 0),
       branches_count: Number(branchCountRow?.count ?? 0),
+      outputs_count: Number(outputCountRow?.count ?? 0),
     };
   };
 
@@ -386,11 +394,20 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
     }
 
     // Count commits for this project
-    const [commitCountRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(commits)
-      .where(eq(commits.projectId, id));
+    const [commitCountRow, outputCountRow] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(commits)
+        .where(eq(commits.projectId, id))
+        .then((rows) => rows[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(leaves)
+        .where(and(eq(leaves.projectId, id), isNotNull(leaves.generatedAt)))
+        .then((rows) => rows[0]),
+    ]);
     const commitsCount = Number(commitCountRow?.count ?? 0);
+    const outputsCount = Number(outputCountRow?.count ?? 0);
 
     const apiProject = {
       project_id: project.projectId,
@@ -403,6 +420,7 @@ projectRoutes.openapi(getProjectRoute, async (c) => {
       commits_count: commitsCount || project.stats.commitsCount,
       branches_count: project.stats.branchesCount,
       drafts_count: project.stats.draftsCount,
+      outputs_count: outputsCount,
       extraction_style: project.extractionStyle ?? null,
     };
 

@@ -41,6 +41,7 @@ export {
   type SupabaseConfig,
   type SupabaseDB,
 } from './adapters/supabase';
+
 import type { PostgresDB } from './adapters/postgres';
 import type { SupabaseDB } from './adapters/supabase';
 export type AnyDB = PostgresDB | SupabaseDB;
@@ -53,7 +54,6 @@ export {
   verifyCommitHash,
   verifyHashChain,
 } from './backup/verify';
-export { getTimedOutRuns, markRunAsTimeout } from './queries/runs';
 // recordEvent helper + event type whitelist (realtime sync)
 export {
   ALLOWED_EVENT_TYPES,
@@ -76,6 +76,7 @@ export {
   updateProviderCredentialTestResult,
   upsertProviderCredential,
 } from './queries/provider-credentials';
+export { getTimedOutRuns, markRunAsTimeout } from './queries/runs';
 // Schema (table definitions and types)
 // (events outbox is already re-exported via schema.ts; do not add a duplicate line here)
 export * from './schema';

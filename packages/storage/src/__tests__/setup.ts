@@ -330,6 +330,33 @@ CREATE TABLE IF NOT EXISTS saved_comparisons (
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_project ON saved_comparisons(project_id);
 CREATE INDEX IF NOT EXISTS idx_saved_comparisons_created_at ON saved_comparisons(created_at);
 
+-- YSchema validation runs
+CREATE TABLE IF NOT EXISTS yschema_validation_runs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  commit_hash TEXT NOT NULL,
+  schema_name TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  schema_hash TEXT NOT NULL,
+  validator_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  valid BOOLEAN NOT NULL,
+  ready BOOLEAN NOT NULL,
+  error_count INTEGER NOT NULL,
+  gap_count INTEGER NOT NULL,
+  fix_count INTEGER NOT NULL,
+  result_json JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_project
+  ON yschema_validation_runs(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_commit
+  ON yschema_validation_runs(project_id, commit_hash);
+CREATE INDEX IF NOT EXISTS idx_yschema_validation_runs_schema
+  ON yschema_validation_runs(schema_name, schema_hash);
+
 -- Templates
 CREATE TABLE IF NOT EXISTS templates (
   template_id TEXT PRIMARY KEY,

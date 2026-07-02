@@ -52,6 +52,7 @@ const projects: Project[] = [
     conversations_count: 1,
     commits_count: 1,
     branches_count: 1,
+    outputs_count: 2,
     metadata: {
       description: 'PRD source review, YSchema validation, YOps commit, and output generation.',
     },
@@ -64,6 +65,7 @@ const projects: Project[] = [
     conversations_count: 2,
     commits_count: 18,
     branches_count: 1,
+    outputs_count: 0,
     metadata: {
       description: 'Version control for structured state.',
     },
@@ -121,6 +123,10 @@ describe('ProjectDirectoryPage', () => {
     expect(screen.queryByRole('link', { name: 'Community' })).not.toBeInTheDocument();
     expect(screen.queryByText('People')).not.toBeInTheDocument();
     expect(screen.queryByText('Topics')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Outputs 2').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Outputs 19')).not.toBeInTheDocument();
+    expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
+    expect(screen.queryByText('YSchema 3')).not.toBeInTheDocument();
   });
 
   it('orders pinned repositories from local recent-open state', () => {

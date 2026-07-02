@@ -452,6 +452,43 @@ export const templates = pgTable(
   ]
 );
 
+/**
+ * YSchema Validation Runs - Internal deterministic validation records
+ *
+ * Binds a validation result to a T3X commit, schema identity, and validator
+ * version. External CI integrations should mirror this table later instead
+ * of becoming the source of truth.
+ */
+export const yschemaValidationRuns = pgTable(
+  'yschema_validation_runs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.projectId, { onDelete: 'cascade' }),
+    commitHash: text('commit_hash').notNull(),
+    schemaName: text('schema_name').notNull(),
+    schemaVersion: text('schema_version').notNull(),
+    schemaHash: text('schema_hash').notNull(),
+    validatorVersion: text('validator_version').notNull(),
+    status: text('status').notNull(),
+    valid: boolean('valid').notNull(),
+    ready: boolean('ready').notNull(),
+    errorCount: integer('error_count').notNull(),
+    gapCount: integer('gap_count').notNull(),
+    fixCount: integer('fix_count').notNull(),
+    resultJson: jsonb('result_json').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_yschema_validation_runs_project').on(table.projectId, table.createdAt),
+    index('idx_yschema_validation_runs_commit').on(table.projectId, table.commitHash),
+    index('idx_yschema_validation_runs_schema').on(table.schemaName, table.schemaHash),
+  ]
+);
+
 // ============================================================
 // Type Exports (for use in application code)
 // ============================================================
@@ -488,6 +525,9 @@ export type NewMergeDraft = typeof mergeDrafts.$inferInsert;
 
 export type SavedComparison = typeof savedComparisons.$inferSelect;
 export type NewSavedComparison = typeof savedComparisons.$inferInsert;
+
+export type YSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferSelect;
+export type NewYSchemaValidationRunRecord = typeof yschemaValidationRuns.$inferInsert;
 
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;

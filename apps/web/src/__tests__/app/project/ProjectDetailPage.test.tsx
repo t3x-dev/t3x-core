@@ -49,8 +49,14 @@ vi.mock('@/queries/project', () => ({
   fetchProject: vi.fn(),
 }));
 
+vi.mock('@/queries/yschemaValidation', () => ({
+  fetchLatestYSchemaValidation: vi.fn(),
+  runYSchemaValidation: vi.fn(),
+}));
+
 import ProjectDetailPage, { ProjectDetailPageContent } from '@/app/project/[projectId]/page';
 import { fetchProject } from '@/queries/project';
+import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -71,6 +77,8 @@ beforeEach(() => {
     branches_count: 0,
     metadata: {},
   } as never);
+  vi.mocked(fetchLatestYSchemaValidation).mockResolvedValue(null);
+  vi.mocked(runYSchemaValidation).mockReset();
   useProjectStore.setState({
     projects: [{ id: 'proj_test', name: 'Test Project' } as never],
     initialized: true,
@@ -118,17 +126,168 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
   it('renders project detail from an owner/repo route override', () => {
     routeParamsValue = { owner: 't3x-dev', repo: 'test-project' };
+    useProjectStore.setState({
+      projects: [{ id: 'proj_test', name: 'Test Project', commitsCount: 1 } as never],
+      initialized: true,
+      loading: false,
+    });
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
-    expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
+    expect(screen.getAllByText('/t3x-dev/test-project').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('tab', { name: 'Overview' })).toBeNull();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No committed state yet')).toBeInTheDocument();
+    expect(screen.getByText('0 outputs')).toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('shows a project-first empty State tab and can switch to the Workspaces preview', () => {
+  it('renders a verified YSchema badge from the latest validation run', async () => {
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:abcdef12', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
+    vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:abcdef1234567890',
+      created_at: '2026-07-02T00:00:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:00:01.000Z',
+      fix_count: 0,
+      gap_count: 0,
+      id: 'ysvr_test',
+      project_id: 'proj_test',
+      ready: true,
+      result: {},
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:00:00.000Z',
+      status: 'passed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getAllByText('Verified abcdef12').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
+  });
+
+  it('shows failed YSchema gaps and can rerun validation from State', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:5fbfafd8', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
+    vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:5fbfafd8fa2fec3e',
+      created_at: '2026-07-02T00:00:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:00:01.000Z',
+      fix_count: 2,
+      gap_count: 2,
+      id: 'ysvr_failed',
+      project_id: 'proj_test',
+      ready: false,
+      result: {
+        validation: {
+          gaps: [
+            {
+              code: 'REQUIRED_NODE_MISSING',
+              message: 'summary is required before commit.',
+              path: 'summary',
+            },
+            {
+              code: 'REQUIRED_NODE_MISSING',
+              message: 'requirements is required before commit.',
+              path: 'requirements',
+            },
+          ],
+        },
+      },
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:00:00.000Z',
+      status: 'failed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+    vi.mocked(runYSchemaValidation).mockResolvedValueOnce({
+      commit_hash: 'sha256:abcdef1234567890',
+      created_at: '2026-07-02T00:01:00.000Z',
+      error_count: 0,
+      finished_at: '2026-07-02T00:01:01.000Z',
+      fix_count: 0,
+      gap_count: 0,
+      id: 'ysvr_passed',
+      project_id: 'proj_test',
+      ready: true,
+      result: { validation: { gaps: [] } },
+      schema_hash: 'sha256:schema',
+      schema_name: 't3x/prd',
+      schema_version: 'PRD Schema v2',
+      started_at: '2026-07-02T00:01:00.000Z',
+      status: 'passed',
+      valid: true,
+      validator_version: 'yschema-p0@0.1',
+    });
+
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
+
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getByText('Schema t3x/prd')).toBeInTheDocument();
+    expect(screen.getByText('Use blocked until YSchema passes')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.queryByText('summary is required before commit.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '2 validation gaps' }));
+
+    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(screen.getAllByText('Missing required node')).toHaveLength(2);
+    expect(screen.getByText('summary is required before commit.')).toBeInTheDocument();
+    expect(screen.getByText('requirements is required before commit.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
+
+    await waitFor(() => {
+      expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test');
+      expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
+  });
+
+  it('shows a project-first empty State tab and can switch to the Workspaces preview', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
@@ -139,17 +298,20 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('t3x-dev')).toBeInTheDocument();
     expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
     expect(screen.getByText('repo')).toBeInTheDocument();
-    expect(screen.getByText('valid')).toBeInTheDocument();
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.getByText('YSchema pending')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     expect(
       screen.getByText('Create a workspace from sources, then commit it to populate State.')
     ).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
+    });
+    replaceMock.mockClear();
 
     fireEvent.click(screen.getByRole('button', { name: /Create Workspace/i }));
 
-    expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', { scroll: false });
     expect(screen.queryByTestId('canvas-workspace')).toBeNull();
     expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
@@ -159,6 +321,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('keeps chat available as a secondary source action without making it required', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
     renderProjectContent();
@@ -170,6 +333,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('shows a no-state state when the project has sources but no canvas nodes', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useProjectStore.setState({
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
@@ -182,7 +346,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(
       screen.getByText('Review existing sources in a workspace, then commit structured state.')
     ).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -215,6 +379,27 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
   });
 
+  it('canonicalizes stale YSchema query tabs back to State', () => {
+    searchParamsValue = new URLSearchParams('tab=yschema');
+    useCanvasStore.setState({
+      nodes: [
+        { id: 'sha256:abcdef12', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
+      ] as never,
+      edges: [],
+      loading: false,
+      loadError: null,
+      projectId: 'proj_test',
+    });
+
+    renderProjectContent();
+
+    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(screen.getByText('Run YSchema validation before use')).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
+  });
+
   it('does NOT redirect while canvas is still loading', () => {
     useCanvasStore.setState({
       nodes: [],
@@ -230,6 +415,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('renders the canvas workspace when the project has nodes', () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useCanvasStore.setState({
       nodes: [
         { id: 'n1', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -243,11 +429,12 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(screen.getByText('State status')).toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
   });
 
   it('ignores selected-node deep links while the intro demo canvas tour is active', async () => {
-    searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
+    searchParamsValue = new URLSearchParams('tab=state&introDemo=1&selected=sha256%3Aabc123');
     useCanvasStore.setState({
       nodes: [
         { id: 'sha256:abc123', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -286,6 +473,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('confirms a direct empty project before showing not found', async () => {
+    searchParamsValue = new URLSearchParams('tab=state');
     useProjectStore.setState({
       projects: [],
       initialized: true,
@@ -301,7 +489,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getByText('No committed state yet')).toBeInTheDocument();
     });
     expect(screen.queryByText(/Project not found/i)).toBeNull();
-    expect(replaceMock).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project', { scroll: false });
 
     fireEvent.click(screen.getByRole('button', { name: /Add Chat Source/i }));
 

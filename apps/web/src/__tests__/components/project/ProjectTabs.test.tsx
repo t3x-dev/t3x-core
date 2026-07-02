@@ -19,6 +19,7 @@ describe('ProjectTabs', () => {
     }
 
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Workspaces' }));
 

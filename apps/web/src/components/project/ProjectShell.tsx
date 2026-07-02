@@ -4,6 +4,10 @@ import { ProjectTabs } from '@/components/project/ProjectTabs';
 import type { ProjectTabId } from '@/components/project/projectTabModel';
 import { Badge } from '@/components/ui/badge';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
+import {
+  getYSchemaValidationPrimaryLabel,
+  type YSchemaValidationSummary,
+} from '@/domain/project/yschemaValidation';
 
 export interface ProjectShellProject {
   id?: string;
@@ -13,6 +17,8 @@ export interface ProjectShellProject {
   drafts?: number;
   commitsCount?: number;
   branchesCount?: number;
+  outputsCount?: number;
+  yschemaValidation?: YSchemaValidationSummary | null;
 }
 
 export interface ProjectShellProps {
@@ -24,10 +30,11 @@ export interface ProjectShellProps {
 
 export function ProjectShell({ activeTab, children, onTabChange, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
-  const statusLabel = status === 'paused' ? 'paused' : 'valid';
-  const schemaGapCount = status === 'active' ? 0 : Math.min(Math.max(project.drafts ?? 0, 1), 3);
-  const outputCount = Math.max(0, project.commitsCount ?? 0);
+  const statusVariant =
+    status === 'active' ? 'success' : status === 'paused' ? 'warning' : 'pending';
+  const outputCount = Math.max(0, project.outputsCount ?? 0);
   const repoPath = getProjectRepoPath(project);
+  const yschemaBadge = getYSchemaBadge(project.yschemaValidation);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--surface-app)] text-[var(--text-primary)]">
@@ -61,10 +68,8 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
             <Badge className="font-mono" variant="outline">
               {repoPath}
             </Badge>
-            <Badge variant={status === 'paused' ? 'warning' : 'success'}>{statusLabel}</Badge>
-            <Badge variant="outline">
-              {schemaGapCount} schema {schemaGapCount === 1 ? 'gap' : 'gaps'}
-            </Badge>
+            <Badge variant={statusVariant}>{status}</Badge>
+            <Badge variant={yschemaBadge.variant}>{yschemaBadge.label}</Badge>
             <Badge variant="outline">
               {outputCount} {outputCount === 1 ? 'output' : 'outputs'}
             </Badge>
@@ -75,4 +80,17 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );
+}
+
+function getYSchemaBadge(validation: YSchemaValidationSummary | null | undefined) {
+  if (!validation) {
+    return { label: 'YSchema pending', variant: 'pending' as const };
+  }
+  if (validation.status === 'verified') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'success' as const };
+  }
+  if (validation.status === 'failed' || validation.status === 'stale') {
+    return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'warning' as const };
+  }
+  return { label: getYSchemaValidationPrimaryLabel(validation), variant: 'pending' as const };
 }
