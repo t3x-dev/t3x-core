@@ -77,10 +77,17 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     outputTargets: [
       {
         id: 'target_prd_markdown',
-        title: 'PRD Markdown export',
+        title: 'PRD review brief',
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction: 'Generate a concise PRD review brief from the committed candidate tree.',
+        constraints: ['Include summary.audience exactly as committed.'],
+        sourceScope: 'Committed PRD candidate plus included source evidence.',
+        previewTitle: 'PRD audience handoff leaf',
+        previewBody:
+          'A markdown brief for reviewers after YOps materializes the PRD audience candidate.',
       },
     ],
   },
@@ -143,6 +150,12 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction: 'Generate a release-note preview after commit.',
+        constraints: ['Do not invent a release version.'],
+        sourceScope: 'Committed release-note candidate.',
+        previewTitle: 'Release notes leaf',
+        previewBody: 'A markdown release-note draft generated from the committed release tree.',
       },
     ],
   },
@@ -289,9 +302,15 @@ describe('WorkspaceWorkbench', () => {
       'aria-selected',
       'true'
     );
-    expect(screen.getByText('Draft target')).toBeInTheDocument();
-    expect(screen.getByText('PRD Markdown export')).toBeInTheDocument();
-    expect(screen.getByText('Not a committed artifact')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Leaf draft configs' })).toBeInTheDocument();
+    expect(screen.getByText('Pre-commit config')).toBeInTheDocument();
+    expect(screen.getAllByText('PRD review brief').length).toBeGreaterThan(0);
+    expect(screen.getByText('Waiting for workspace commit')).toBeInTheDocument();
+    expect(
+      screen.getByText('Generate a concise PRD review brief from the committed candidate tree.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Include summary.audience exactly as committed.')).toBeInTheDocument();
+    expect(screen.getByText('PRD audience handoff leaf')).toBeInTheDocument();
   });
 
   it('applies the yops preview through the backend validator', async () => {

@@ -104,6 +104,6 @@ function renderWorkspaceTab(
 ) {
   if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
   if (activeTab === 'yops') return <YOpsDraftTab candidate={candidate} />;
-  if (activeTab === 'leaf-config') return <OutputTargetsTab targets={candidate.outputTargets} />;
+  if (activeTab === 'leaf-config') return <OutputTargetsTab candidate={candidate} />;
   return <SourcesTab candidate={candidate} onMaterialUploaded={onSourceMaterialUploaded} />;
 }

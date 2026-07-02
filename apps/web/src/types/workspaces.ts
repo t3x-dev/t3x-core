@@ -115,10 +115,18 @@ export type WorkspaceOutputTargetFormat = 'markdown' | 'json' | 'yaml' | 'html';
 
 export type WorkspaceOutputTargetStatus = 'draft_target';
 
+export type WorkspaceOutputTargetLeafType = 'document' | 'api' | 'report';
+
 export interface WorkspaceOutputTarget {
   id: string;
   title: string;
   type: WorkspaceOutputTargetType;
   format: WorkspaceOutputTargetFormat;
   status: WorkspaceOutputTargetStatus;
+  leafType?: WorkspaceOutputTargetLeafType;
+  instruction?: string;
+  constraints?: string[];
+  sourceScope?: string;
+  previewTitle?: string;
+  previewBody?: string;
 }

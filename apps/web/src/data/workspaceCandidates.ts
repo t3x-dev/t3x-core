@@ -107,10 +107,22 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     outputTargets: [
       {
         id: 'target_prd_markdown',
-        title: 'PRD Markdown export',
+        title: 'PRD review brief',
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction:
+          'Generate a concise PRD review brief from the committed candidate tree. Keep source-backed audience notes visible and avoid adding unsupported scope.',
+        constraints: [
+          'Include summary.audience exactly as committed.',
+          'List non-goals only when they are present in the candidate tree.',
+          'Call out unresolved schema gaps before final recommendations.',
+        ],
+        sourceScope: 'Committed PRD candidate plus included source evidence.',
+        previewTitle: 'PRD audience handoff leaf',
+        previewBody:
+          'A markdown brief for reviewers after YOps materializes the PRD audience candidate.',
       },
     ],
   },
@@ -190,6 +202,16 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction:
+          'Generate a release-note preview only after the release metadata is committed.',
+        constraints: [
+          'Do not invent a release version.',
+          'Keep uncertain sections marked as draft until schema review is complete.',
+        ],
+        sourceScope: 'Committed release-note candidate.',
+        previewTitle: 'Release notes leaf',
+        previewBody: 'A markdown release-note draft generated from the committed release tree.',
       },
     ],
   },

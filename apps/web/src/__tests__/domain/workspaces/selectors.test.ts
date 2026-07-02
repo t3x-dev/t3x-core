@@ -44,10 +44,11 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     outputTargets: [
       {
         id: 'target_prd_markdown',
-        title: 'PRD Markdown export',
+        title: 'PRD review brief',
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
       },
     ],
   },
