@@ -65,11 +65,11 @@ describe('ProjectSettingsTab', () => {
     expect(screen.getByRole('button', { name: 'Reset repository profile' })).toBeEnabled();
     expect(screen.getByRole('link', { name: 'Provider setup' })).toHaveAttribute(
       'href',
-      '/settings/providers'
+      '/settings/providers?returnTo=%2Ft3x-dev%2Fmobile-click-audit%2Fsettings'
     );
     expect(screen.getByRole('link', { name: 'API / CLI / MCP access' })).toHaveAttribute(
       'href',
-      '/settings/access'
+      '/settings/access?returnTo=%2Ft3x-dev%2Fmobile-click-audit%2Fsettings'
     );
   });
 });

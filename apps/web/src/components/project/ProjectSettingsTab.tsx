@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DEFAULT_OWNER_SLUG, getProjectRepoPath } from '@/domain/project/repoPath';
 import type { ProjectSummary } from '@/store/projectStore';
+import { withReturnTo } from '@/utils/navigationReturn';
 
 interface ProjectSettingsTabProps {
   project: ProjectSummary;
@@ -60,6 +61,7 @@ function SetupLink({ href, label }: { href: string; label: string }) {
 
 export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   const repoPath = getProjectRepoPath(project);
+  const returnTo = `${repoPath}/settings`;
   const [repoName, setRepoName] = useState(project.name);
   const [repoDescription, setRepoDescription] = useState(project.description);
   const [defaultSchema, setDefaultSchema] = useState('prd-schema-v2');
@@ -290,8 +292,14 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <SetupLink href="/settings/providers" label="Provider setup" />
-            <SetupLink href="/settings/access" label="API / CLI / MCP access" />
+            <SetupLink
+              href={withReturnTo('/settings/providers', returnTo)}
+              label="Provider setup"
+            />
+            <SetupLink
+              href={withReturnTo('/settings/access', returnTo)}
+              label="API / CLI / MCP access"
+            />
           </div>
         </div>
       </div>
