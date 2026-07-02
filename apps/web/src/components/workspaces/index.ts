@@ -1,7 +1,6 @@
 export { OutputTargetsTab } from './OutputTargetsTab';
 export { SchemaReviewTab } from './SchemaReviewTab';
 export { SourcesTab } from './SourcesTab';
-export { WorkspaceCanvasTab } from './WorkspaceCanvasTab';
 export { WorkspaceHeader } from './WorkspaceHeader';
 export { WorkspaceStatusBadge } from './WorkspaceStatusBadge';
 export { WorkspaceTabs } from './WorkspaceTabs';

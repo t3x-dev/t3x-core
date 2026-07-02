@@ -14,7 +14,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('ProjectWorkspacesTab', () => {
-  it('selects the workspace from the URL and preserves project context when selection changes', () => {
+  it('selects the workspace from the URL without showing an internal workspace selector', () => {
     searchParamsValue = new URLSearchParams('tab=workspaces&workspace=workspace_release_notes');
     replaceMock.mockClear();
 
@@ -43,15 +43,9 @@ describe('ProjectWorkspacesTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));
 
-    expect(screen.getByRole('button', { name: /Release note cleanup/ })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /PRD audience handoff/ }));
-
-    expect(replaceMock).toHaveBeenCalledWith('?tab=workspaces&workspace=workspace_prd_handoff', {
-      scroll: false,
-    });
+    expect(screen.getByRole('heading', { name: 'Release note cleanup' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Release note cleanup/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /PRD audience handoff/ })).not.toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });

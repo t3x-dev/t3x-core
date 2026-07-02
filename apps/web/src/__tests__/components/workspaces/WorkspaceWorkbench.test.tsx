@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -65,7 +65,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_1',
           op: 'set',
-          path: '/audience/primary',
+          path: 'prd/summary/audience',
           summary: 'Set primary audience from source evidence.',
           beforeValue: 'Internal reviewers',
           afterValue: 'Product and engineering reviewers',
@@ -127,7 +127,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_release_1',
           op: 'add',
-          path: '/sections/-',
+          path: 'release_note/sections/-',
           summary: 'Add release-note section placeholder.',
           beforeValue: 'No section placeholder',
           afterValue: 'One draft release-note section',
@@ -147,6 +147,10 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     ],
   },
 ];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function activateTab(name: string | RegExp) {
   const tab = screen.getByRole('tab', { name });
@@ -198,7 +202,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /YSchema/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YOps/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Canvas' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Canvas' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Leaf config/ })).toBeInTheDocument();
 
     activateTab(/YSchema/);
@@ -243,7 +247,7 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders schema review, split yops workspace, canvas, and draft output target tabs', () => {
+  it('renders schema review, split yops workspace, and draft output target tabs', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     activateTab(/YSchema/);
@@ -271,7 +275,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Pending 1')).toBeInTheDocument();
     expect(screen.getByText('yops:')).toBeInTheDocument();
     expect(screen.getByText('- set:')).toBeInTheDocument();
-    expect(screen.getByText('path: /audience/primary')).toBeInTheDocument();
+    expect(screen.getByText('path: prd/summary/audience')).toBeInTheDocument();
     expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
     const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
     expect(yopsTree).toHaveTextContent('prd:');
@@ -279,12 +283,6 @@ describe('WorkspaceWorkbench', () => {
     expect(yopsTree).toHaveTextContent('audience: Product and engineering reviewers');
     expect(screen.getByText('Human')).toBeInTheDocument();
     expect(screen.getByText('Changed')).toBeInTheDocument();
-
-    activateTab('Canvas');
-    expect(screen.getByText('Source bundle')).toBeInTheDocument();
-    expect(screen.getByText('Candidate')).toBeInTheDocument();
-    expect(screen.getByText('YOps draft')).toBeInTheDocument();
-    expect(screen.getByText('Commit target')).toBeInTheDocument();
 
     activateTab(/Leaf config/);
     expect(screen.getByRole('tab', { name: /Leaf config/ })).toHaveAttribute(
@@ -294,6 +292,59 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Draft target')).toBeInTheDocument();
     expect(screen.getByText('PRD Markdown export')).toBeInTheDocument();
     expect(screen.getByText('Not a committed artifact')).toBeInTheDocument();
+  });
+
+  it('applies the yops preview through the backend validator', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            ok: true,
+            applied: 1,
+            preview: {
+              trees: [
+                {
+                  key: 'prd',
+                  slots: { title: 'PRD audience handoff' },
+                  children: [
+                    {
+                      key: 'summary',
+                      slots: { audience: 'Product and engineering reviewers' },
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+              relations: [],
+            },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+    activateTab(/YOps/);
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://localhost:8000/api/v1/yops/validate');
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      yops: [
+        {
+          set: {
+            path: 'prd/summary/audience',
+            value: 'Product and engineering reviewers',
+          },
+        },
+      ],
+    });
+    expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
+    expect(screen.getByText('Pending 0')).toBeInTheDocument();
+    expect(screen.getByText('Preview materialized')).toBeInTheDocument();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {

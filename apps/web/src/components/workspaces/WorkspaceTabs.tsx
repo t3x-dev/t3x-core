@@ -3,10 +3,9 @@ import { cn } from '@/utils/cn';
 import { OutputTargetsTab } from './OutputTargetsTab';
 import { SchemaReviewTab } from './SchemaReviewTab';
 import { SourcesTab } from './SourcesTab';
-import { WorkspaceCanvasTab } from './WorkspaceCanvasTab';
 import { YOpsDraftTab } from './YOpsDraftTab';
 
-export type WorkspaceTabId = 'chat' | 'yschema' | 'yops' | 'canvas' | 'leaf-config';
+export type WorkspaceTabId = 'chat' | 'yschema' | 'yops' | 'leaf-config';
 
 export const WORKSPACE_TABS: {
   id: WorkspaceTabId;
@@ -27,7 +26,6 @@ export const WORKSPACE_TABS: {
     label: 'YOps',
     count: (candidate) => candidate.yopsDraft.operations.length,
   },
-  { id: 'canvas', keyLabel: '', label: 'Canvas' },
   {
     id: 'leaf-config',
     keyLabel: '',
@@ -106,7 +104,6 @@ function renderWorkspaceTab(
 ) {
   if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
   if (activeTab === 'yops') return <YOpsDraftTab candidate={candidate} />;
-  if (activeTab === 'canvas') return <WorkspaceCanvasTab candidate={candidate} />;
   if (activeTab === 'leaf-config') return <OutputTargetsTab targets={candidate.outputTargets} />;
   return <SourcesTab candidate={candidate} onMaterialUploaded={onSourceMaterialUploaded} />;
 }

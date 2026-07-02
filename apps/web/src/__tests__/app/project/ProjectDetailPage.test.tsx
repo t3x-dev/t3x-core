@@ -360,8 +360,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'true'
     );
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
-    expect(screen.getAllByText('1 chat, 1 doc').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
+    expect(screen.getByText('No source material yet.')).toBeInTheDocument();
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', {
         scroll: false,

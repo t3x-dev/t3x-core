@@ -84,7 +84,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_prd_audience',
           op: 'set',
-          path: '/audience/primary',
+          path: 'prd/summary/audience',
           summary: 'Set primary audience from source evidence.',
           beforeValue: 'Internal reviewers',
           afterValue: 'Product and engineering reviewers',
@@ -94,7 +94,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_prd_scope',
           op: 'add',
-          path: '/scope/non_goals/-',
+          path: 'prd/scope/non_goals/-',
           summary: 'Add non-goal from PRD import notes.',
           beforeValue: 'No non-goal recorded',
           afterValue: 'Keep requirement identity stable while moving status to ready.',
@@ -173,7 +173,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_release_section',
           op: 'add',
-          path: '/sections/-',
+          path: 'release_note/sections/-',
           summary: 'Add release-note section placeholder.',
           beforeValue: 'No section placeholder',
           afterValue: 'One draft release-note section',
