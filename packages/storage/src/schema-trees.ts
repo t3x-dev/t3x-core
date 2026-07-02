@@ -391,7 +391,7 @@ export const pins = pgTable(
       .notNull()
       .references(() => projects.projectId, { onDelete: 'cascade' }),
 
-    /** Type of pinned item: 'conversation' | 'leaf' | 'import' */
+    /** Type of pinned item: 'conversation' | 'conversation_turn' | 'leaf' | 'import' */
     type: text('type').notNull(),
 
     /** ID of the pinned item */

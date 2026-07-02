@@ -27,6 +27,9 @@ export interface SourceConversationTurn {
   role: 'user' | 'assistant';
   author: string;
   content: string;
+  conversationId?: string;
+  projectId?: string;
+  pinnable?: boolean;
 }
 
 export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';

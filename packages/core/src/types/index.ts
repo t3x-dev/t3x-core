@@ -339,7 +339,7 @@ export interface CreateLeafHistoryInput {
 /**
  * What can be pinned.
  */
-export type PinType = 'conversation' | 'leaf' | 'import';
+export type PinType = 'conversation' | 'conversation_turn' | 'leaf' | 'import';
 
 /**
  * A Pin marks an item as selected for:
@@ -358,7 +358,7 @@ export interface Pin {
   /** Type of pinned item */
   type: PinType;
 
-  /** ID of the pinned item (conversation_id, leaf_id, or material/import id) */
+  /** ID of the pinned item (conversation_id, turn_hash, leaf_id, or material/import id) */
   ref_id: string;
 
   /**

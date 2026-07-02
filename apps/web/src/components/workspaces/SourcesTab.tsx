@@ -1,3 +1,4 @@
+import type { Pin } from '@t3x-dev/core';
 import {
   ClipboardPaste,
   FileText,
@@ -23,6 +24,7 @@ import {
   getPrimarySchemaBinding,
   summarizeSourceBundle,
 } from '@/domain/workspaces/selectors';
+import type { ChatMessage } from '@/hooks/conversations/useConversationChat';
 import { useConversationChat } from '@/hooks/conversations/useConversationChat';
 import { useMaterialArchive } from '@/hooks/materials/useMaterialArchive';
 import { useMaterialDetail } from '@/hooks/materials/useMaterialDetail';
@@ -49,6 +51,7 @@ interface ParsedPreviewBlock {
 }
 
 const SOURCE_CHAT_CONVERSATION_STORAGE_PREFIX = 't3x:workspace-source-chat:';
+const SOURCE_CHAT_TURN_PIN_TYPE = 'conversation_turn' as const;
 
 const IMPORT_ACTIONS = [
   { label: 'Import doc', icon: FileUp },
@@ -300,7 +303,13 @@ export function SourcesTab({
             aria-label="Source chat"
             className="flex h-[680px] min-h-0 flex-col bg-[var(--surface-card)]"
           >
-            <SourceChatPanel candidate={candidate} selectedSource={selectedSource} />
+            <SourceChatPanel
+              addPin={addPin}
+              candidate={candidate}
+              pins={pins}
+              removePin={removePin}
+              selectedSource={selectedSource}
+            />
           </section>
         </TabsContent>
       </Tabs>
@@ -618,15 +627,23 @@ function ParsedTextPreview({
 }
 
 function SourceChatPanel({
+  addPin,
   candidate,
+  pins,
+  removePin,
   selectedSource,
 }: {
+  addPin: (projectId: string, type: Pin['type'], refId: string) => Promise<Pin | null>;
   candidate: WorkspaceCandidate;
+  pins: Pin[];
+  removePin: (pinId: string) => Promise<void>;
   selectedSource: SourceBundleItem | null;
 }) {
   const [sourceConversationId, setSourceConversationId] = useState<string | undefined>(() =>
     readStoredSourceChatConversationId(candidate.projectId, candidate.id)
   );
+  const [turnSourceError, setTurnSourceError] = useState<string | null>(null);
+  const [pinningTurnId, setPinningTurnId] = useState<string | null>(null);
   const {
     selectedProvider,
     selectedModel,
@@ -667,12 +684,50 @@ function SourceChatPanel({
         role: 'assistant',
         author: 'Assistant',
         content: chat.streamingContent,
+        pinnable: false,
       });
     }
 
     if (messageTurns.length > 0) return messageTurns;
     return getSourceChatTurns(candidate, selectedSource);
   }, [candidate, chat.messages, chat.streamingContent, selectedSource, sourceConversationId]);
+
+  const turnPinsByRefId = useMemo(() => {
+    const map = new Map<string, Pin>();
+    for (const pin of pins) {
+      if (pin.type === SOURCE_CHAT_TURN_PIN_TYPE) {
+        map.set(pin.ref_id, pin);
+      }
+    }
+    return map;
+  }, [pins]);
+  const selectedTurnCount = useMemo(
+    () => chatTurns.filter((turn) => turnPinsByRefId.has(turn.id)).length,
+    [chatTurns, turnPinsByRefId]
+  );
+
+  const handleToggleTurnSource = useCallback(
+    async (turn: SourceConversationTurn) => {
+      if (!turn.pinnable) return;
+
+      setTurnSourceError(null);
+      setPinningTurnId(turn.id);
+
+      try {
+        const existingPin = turnPinsByRefId.get(turn.id);
+        if (existingPin) {
+          await removePin(existingPin.id);
+        } else {
+          await addPin(candidate.projectId, SOURCE_CHAT_TURN_PIN_TYPE, turn.id);
+        }
+      } catch (err) {
+        setTurnSourceError(err instanceof Error ? err.message : 'Source turn update failed.');
+      } finally {
+        setPinningTurnId(null);
+      }
+    },
+    [addPin, candidate.projectId, removePin, turnPinsByRefId]
+  );
 
   const handleSourceSend = useCallback(
     (message: string, images?: AttachedImage[]) => {
@@ -692,22 +747,25 @@ function SourceChatPanel({
               Source chat
             </h3>
             <Badge variant="outline">{chatTurns.length} turns</Badge>
+            <Badge
+              className="border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)]"
+              variant="outline"
+            >
+              {selectedTurnCount} selected source turns
+            </Badge>
           </div>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Ask for clarification, capture useful turns, and decide what becomes source evidence.
           </p>
         </div>
-        <Button type="button" variant="canvas-outline">
-          Mark latest turn as source
-        </Button>
       </header>
 
-      {chat.error || chat.warning ? (
+      {chat.error || chat.warning || turnSourceError ? (
         <div
           className="border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2 text-sm text-[var(--status-error)]"
           role={chat.error ? 'alert' : 'status'}
         >
-          {chat.error ?? chat.warning}
+          {chat.error ?? chat.warning ?? turnSourceError}
         </div>
       ) : null}
 
@@ -719,7 +777,14 @@ function SourceChatPanel({
           {chatTurns.length > 0 ? (
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {chatTurns.map((turn, index) => (
-                <SourceTurnBubble index={index + 1} key={turn.id} turn={turn} />
+                <SourceTurnBubble
+                  index={index + 1}
+                  key={turn.id}
+                  onToggleSource={() => void handleToggleTurnSource(turn)}
+                  sourcePinned={turnPinsByRefId.has(turn.id)}
+                  turn={turn}
+                  turnSourceBusy={pinningTurnId === turn.id}
+                />
               ))}
             </div>
           ) : (
@@ -784,19 +849,37 @@ function writeStoredSourceChatConversationId(
   }
 }
 
-function chatMessageToSourceTurn(
-  message: { id: string; role: 'user' | 'assistant'; content: string },
-  index: number
-): SourceConversationTurn {
+function chatMessageToSourceTurn(message: ChatMessage, index: number): SourceConversationTurn {
+  const id = message.id || `source_chat_turn_${index}`;
+
   return {
-    id: message.id || `source_chat_turn_${index}`,
+    id,
     role: message.role,
     author: message.role === 'user' ? 'You' : 'Assistant',
     content: message.content,
+    conversationId: message.conversationId,
+    projectId: message.projectId,
+    pinnable: isPersistedTurnId(id),
   };
 }
 
-function SourceTurnBubble({ index, turn }: { index: number; turn: SourceConversationTurn }) {
+function isPersistedTurnId(id: string): boolean {
+  return Boolean(id) && !id.startsWith('msg-') && !id.endsWith('_streaming_assistant');
+}
+
+function SourceTurnBubble({
+  index,
+  onToggleSource,
+  sourcePinned,
+  turn,
+  turnSourceBusy,
+}: {
+  index: number;
+  onToggleSource: () => void;
+  sourcePinned: boolean;
+  turn: SourceConversationTurn;
+  turnSourceBusy: boolean;
+}) {
   const isUser = turn.role === 'user';
 
   return (
@@ -815,18 +898,40 @@ function SourceTurnBubble({ index, turn }: { index: number; turn: SourceConversa
           <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5 text-[10px] text-[var(--text-secondary)]">
             turn {index}
           </span>
-          <span className="rounded-full border border-[var(--source)]/25 bg-[var(--source)]/10 px-2 py-0.5 text-[10px] text-[var(--source)]">
-            source candidate
+          <span
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-[10px]',
+              sourcePinned
+                ? 'border-[var(--source)]/30 bg-[var(--source)]/10 text-[var(--source)]'
+                : 'border-[var(--stroke-divider)] text-[var(--text-secondary)]'
+            )}
+          >
+            {sourcePinned ? 'included source' : 'source candidate'}
           </span>
           {isUser ? (
             <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5 text-[10px] text-[var(--text-secondary)]">
-              mark/include evidence
+              requirement input
             </span>
           ) : (
             <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5 text-[10px] text-[var(--text-secondary)]">
               analysis helper
             </span>
           )}
+          <Button
+            className="ml-auto h-6 px-2 text-[10px]"
+            disabled={!turn.pinnable || turnSourceBusy}
+            onClick={onToggleSource}
+            type="button"
+            variant={sourcePinned ? 'canvas-outline' : 'commit'}
+          >
+            {turnSourceBusy
+              ? 'Saving'
+              : sourcePinned
+                ? 'Remove source'
+                : turn.pinnable
+                  ? 'Include turn'
+                  : 'Saving turn'}
+          </Button>
         </div>
         <p>{turn.content}</p>
       </div>
@@ -864,15 +969,11 @@ function getSourceChatTurns(
   selectedSource: SourceBundleItem | null
 ): SourceConversationTurn[] {
   if (selectedSource?.type === 'chat') {
-    return selectedSource.previewTurns?.length
-      ? selectedSource.previewTurns
-      : fallbackConversation(selectedSource);
+    return selectedSource.previewTurns ?? [];
   }
 
   const chatSources = candidate.sourceBundle.filter((source) => source.type === 'chat');
-  const turns = chatSources.flatMap((source) =>
-    source.previewTurns?.length ? source.previewTurns : fallbackConversation(source)
-  );
+  const turns = chatSources.flatMap((source) => source.previewTurns ?? []);
 
   return turns;
 }
@@ -915,7 +1016,7 @@ function getParsedPreviewBlocks(
   }
 
   if (source.type === 'chat') {
-    const turns = source.previewTurns?.length ? source.previewTurns : fallbackConversation(source);
+    const turns = source.previewTurns ?? [];
 
     return turns.slice(0, 3).map((turn, index) => ({
       id: `${source.id}_turn_${turn.id}`,
@@ -962,23 +1063,6 @@ function getMaterialParserLabel(material: MaterialDetail): string {
   }
   if (material.mime_type?.toLowerCase().includes('csv')) return `csv parser / ${quality}`;
   return `document parser / ${quality}`;
-}
-
-function fallbackConversation(source: SourceBundleItem): SourceConversationTurn[] {
-  return [
-    {
-      id: `${source.id}_user`,
-      role: 'user',
-      author: 'YX',
-      content: `Use ${source.title} as source evidence before schema review.`,
-    },
-    {
-      id: `${source.id}_assistant`,
-      role: 'assistant',
-      author: 'Assistant',
-      content: 'Captured as source context for YSchema and YOps review.',
-    },
-  ];
 }
 
 function formatSourceReference(source: SourceBundleItem): string {

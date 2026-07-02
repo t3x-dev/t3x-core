@@ -152,7 +152,11 @@ const INTRO_DEMO_ASSISTANT_REPLY = [
 function materialPinSourceItems(manifest: ConversationContextManifest | null) {
   return (
     manifest?.source_items.filter(
-      (item) => item.role === 'evidence' && item.pinned && Boolean(item.pin_id)
+      (item) =>
+        item.role === 'evidence' &&
+        item.pinned &&
+        Boolean(item.pin_id) &&
+        item.kind !== 'conversation_turn'
     ) ?? []
   );
 }
