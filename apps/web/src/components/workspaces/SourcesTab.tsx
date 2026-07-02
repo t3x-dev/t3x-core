@@ -658,11 +658,17 @@ function SourceChatPanel({
           aria-label="Source conversation"
           className="chat-scrollbar min-h-0 flex-1 overflow-auto bg-[var(--chat-panel)] px-4 py-4"
         >
-          <div className="mx-auto flex max-w-3xl flex-col gap-3">
-            {chatTurns.map((turn, index) => (
-              <SourceTurnBubble index={index + 1} key={turn.id} turn={turn} />
-            ))}
-          </div>
+          {chatTurns.length > 0 ? (
+            <div className="mx-auto flex max-w-3xl flex-col gap-3">
+              {chatTurns.map((turn, index) => (
+                <SourceTurnBubble index={index + 1} key={turn.id} turn={turn} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
+              No source chat turns yet.
+            </div>
+          )}
         </section>
         <div className="border-t border-[var(--stroke-divider)] bg-[var(--chat-panel)] px-4 py-3">
           <div className="mx-auto max-w-3xl">
@@ -758,23 +764,7 @@ function getSourceChatTurns(
     source.previewTurns?.length ? source.previewTurns : fallbackConversation(source)
   );
 
-  if (turns.length > 0) return turns;
-
-  return [
-    {
-      id: `${candidate.id}_seed_user`,
-      role: 'user',
-      author: 'YX',
-      content: 'Start by importing a document, pasting source text, or adding a manual note.',
-    },
-    {
-      id: `${candidate.id}_seed_assistant`,
-      role: 'assistant',
-      author: 'Assistant',
-      content:
-        'I will keep analysis separate until you mark a turn or material as source evidence.',
-    },
-  ];
+  return turns;
 }
 
 function getSourceEvidenceState(
