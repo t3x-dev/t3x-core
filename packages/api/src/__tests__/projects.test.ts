@@ -8,11 +8,13 @@ import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
 import {
   createCommit,
+  createLeaf,
   deleteGlobalSetting,
   deleteProject,
   findProjects,
   getDemoWorkspaceSeedKey,
   insertProject,
+  updateLeafOutput,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -91,6 +93,37 @@ describe('Projects Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.projects.length).toBe(2);
+    });
+
+    it('returns output counts from generated project leaves only', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Output Project' }));
+      const otherProject = await insertProject(mockDB, testData.project({ name: 'Other Project' }));
+      const generatedLeaf = await createLeaf(mockDB, {
+        commit_hash: 'sha256:output-a',
+        project_id: project.projectId,
+        type: 'tweet',
+      });
+      await createLeaf(mockDB, {
+        commit_hash: 'sha256:ungenerated-output-target',
+        project_id: project.projectId,
+        type: 'slack',
+      });
+      const otherProjectLeaf = await createLeaf(mockDB, {
+        commit_hash: 'sha256:other-output',
+        project_id: otherProject.projectId,
+        type: 'tweet',
+      });
+      await updateLeafOutput(mockDB, generatedLeaf.id, 'Generated project output.');
+      await updateLeafOutput(mockDB, otherProjectLeaf.id, 'Generated output for another project.');
+
+      const res = await app.request('/v1/projects');
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      const outputProject = data.data.projects.find(
+        (item: ApiResponse) => item.project_id === project.projectId
+      );
+      expect(outputProject.outputs_count).toBe(1);
     });
 
     it('respects limit parameter', async () => {
@@ -195,6 +228,28 @@ describe('Projects Routes', () => {
       const data: ApiResponse = await res.json();
       expect(data.success).toBe(true);
       expect(data.data.name).toBe('Find Me');
+    });
+
+    it('returns generated output count in project detail stats', async () => {
+      const project = await insertProject(mockDB, testData.project({ name: 'Output Detail' }));
+      const generatedLeaf = await createLeaf(mockDB, {
+        commit_hash: 'sha256:detail-output',
+        project_id: project.projectId,
+        type: 'tweet',
+      });
+      await createLeaf(mockDB, {
+        commit_hash: 'sha256:detail-output-target',
+        project_id: project.projectId,
+        type: 'slack',
+      });
+      await updateLeafOutput(mockDB, generatedLeaf.id, 'Generated detail output.');
+
+      const res = await app.request(`/v1/projects/${project.projectId}`);
+      expect(res.status).toBe(200);
+
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.data.outputs_count).toBe(1);
     });
 
     it('returns 404 for non-existent project', async () => {

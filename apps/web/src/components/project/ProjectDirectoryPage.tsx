@@ -28,16 +28,6 @@ function metricValue(value: number | undefined): number {
   return value ?? 0;
 }
 
-function schemaCount(project: ProjectSummary): number {
-  if (project.commitsCount > 0) return Math.max(1, Math.min(3, project.branchesCount + 1));
-  if (project.drafts > 0) return 1;
-  return 0;
-}
-
-function yopsCount(project: ProjectSummary): number {
-  return Math.max(project.drafts, project.commitsCount > 0 ? 1 : 0);
-}
-
 function outputCount(project: ProjectSummary): number {
   return Math.max(0, project.outputsCount ?? 0);
 }
@@ -48,7 +38,7 @@ function ProjectMetric({
   tone,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   tone: 'source' | 'schema' | 'yops' | 'state' | 'leaf';
 }) {
   const toneVar = {
@@ -77,8 +67,8 @@ function ProjectMetrics({ project }: { project: ProjectSummary }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-2">
       <ProjectMetric label="Sources" value={metricValue(project.nodes)} tone="source" />
-      <ProjectMetric label="YSchema" value={schemaCount(project)} tone="schema" />
-      <ProjectMetric label="YOps" value={yopsCount(project)} tone="yops" />
+      <ProjectMetric label="YSchema" value="pending" tone="schema" />
+      <ProjectMetric label="YOps" value="pending" tone="yops" />
       <ProjectMetric label="State" value={metricValue(project.commitsCount)} tone="state" />
       <ProjectMetric label="Outputs" value={outputCount(project)} tone="leaf" />
     </div>
@@ -237,7 +227,6 @@ function OrganizationHeader({ projects }: { projects: ProjectSummary[] }) {
 
 function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
   const openReviews = projects.filter((project) => project.status === 'draft').length;
-  const yopsDrafts = projects.reduce((sum, project) => sum + yopsCount(project), 0);
   const outputs = projects.reduce((sum, project) => sum + outputCount(project), 0);
   const recent = projects[0];
 
@@ -247,7 +236,7 @@ function DirectorySideRail({ projects }: { projects: ProjectSummary[] }) {
         <h2 className="text-base font-bold text-[var(--text-primary)]">Open work</h2>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-sm font-semibold text-[var(--text-secondary)]">
           <ProjectMetric label="reviews" value={openReviews} tone="schema" />
-          <ProjectMetric label="YOps draft" value={yopsDrafts} tone="yops" />
+          <ProjectMetric label="YOps" value="pending" tone="yops" />
           <ProjectMetric label="outputs" value={outputs} tone="leaf" />
         </div>
       </section>

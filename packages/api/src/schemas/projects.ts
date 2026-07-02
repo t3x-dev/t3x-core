@@ -41,6 +41,7 @@ export const ProjectWithStatsSchema = ProjectSchema.extend({
   commits_count: z.number().int(),
   branches_count: z.number().int(),
   drafts_count: z.number().int(),
+  outputs_count: z.number().int(),
 });
 
 // Create project request
@@ -64,6 +65,7 @@ export const ProjectWithCountsSchema = ProjectSchema.extend({
   conversations_count: z.number().int(),
   commits_count: z.number().int(),
   branches_count: z.number().int(),
+  outputs_count: z.number().int(),
 });
 
 // List projects response
