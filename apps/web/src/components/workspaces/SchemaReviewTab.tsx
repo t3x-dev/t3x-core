@@ -23,7 +23,7 @@ export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 border-b border-[var(--stroke-divider)] pb-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="border-b border-[var(--stroke-divider)] pb-4">
         <div className="min-w-0">
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
             YSchema {schemaReviewName} Review
@@ -31,18 +31,6 @@ export function SchemaReviewTab({ candidate }: { candidate: WorkspaceCandidate }
           <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
             Validate candidate structure before YOps extraction.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" type="button" variant="canvas-outline">
-            Diff
-          </Button>
-          <Button
-            className="bg-[var(--accent-extract)] text-[var(--on-accent)] hover:bg-[var(--accent-extract)]/90"
-            size="sm"
-            type="button"
-          >
-            Send to YOps
-          </Button>
         </div>
       </div>
 

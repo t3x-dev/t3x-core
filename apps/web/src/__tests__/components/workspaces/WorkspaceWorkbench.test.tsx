@@ -67,6 +67,10 @@ const workspaceCandidates: WorkspaceCandidate[] = [
           op: 'set',
           path: '/audience/primary',
           summary: 'Set primary audience from source evidence.',
+          beforeValue: 'Internal reviewers',
+          afterValue: 'Product and engineering reviewers',
+          reason: 'Source evidence confirms product and engineering reviewers as the PRD audience.',
+          sourceRefs: ['src_chat', 'src_doc'],
         },
       ],
     },
@@ -125,6 +129,10 @@ const workspaceCandidates: WorkspaceCandidate[] = [
           op: 'add',
           path: '/sections/-',
           summary: 'Add release-note section placeholder.',
+          beforeValue: 'No section placeholder',
+          afterValue: 'One draft release-note section',
+          reason: 'The release outline suggests a section, but the required shape needs review.',
+          sourceRefs: ['src_release_doc'],
         },
       ],
     },
@@ -196,14 +204,14 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/YSchema/);
     detail = screen.getByRole('region', { name: 'Workspace detail' });
 
-    expect(within(detail).getByText('Base commit')).toBeInTheDocument();
+    expect(within(detail).getByText('Base')).toBeInTheDocument();
     expect(within(detail).getByText('sha256:base-prd')).toBeInTheDocument();
-    expect(within(detail).getByText('Target branch')).toBeInTheDocument();
+    expect(within(detail).getByText('Branch')).toBeInTheDocument();
     expect(within(detail).getByText('feature/prd-audience')).toBeInTheDocument();
-    expect(within(detail).getByText('Schema version')).toBeInTheDocument();
+    expect(within(detail).getByText('Schema')).toBeInTheDocument();
     expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
-    expect(within(detail).getByText('Source count')).toBeInTheDocument();
-    expect(within(detail).getAllByText('2 sources').length).toBeGreaterThan(0);
+    expect(within(detail).getByText('Sources')).toBeInTheDocument();
+    expect(within(detail).getByText('1 chat, 1 doc')).toBeInTheDocument();
 
     activateTab('Source');
     detail = screen.getByRole('region', { name: 'Workspace detail' });
@@ -235,7 +243,7 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders schema review, read-only yops draft, canvas, and draft output target tabs', () => {
+  it('renders schema review, split yops workspace, canvas, and draft output target tabs', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     activateTab(/YSchema/);
@@ -249,11 +257,28 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('YOps suggestions')).toBeInTheDocument();
     expect(screen.getByText('1 suggested operation from this candidate.')).toBeInTheDocument();
     expect(screen.getByText('Proposed YOps')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Send to YOps' })).toHaveLength(1);
 
     activateTab(/YOps/);
-    expect(screen.getByText('Read-only YOps draft')).toBeInTheDocument();
-    expect(screen.getByText('set')).toBeInTheDocument();
-    expect(screen.getByText('/audience/primary')).toBeInTheDocument();
+    expect(screen.getByText('YOps workspace')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'YOps editor' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Generate ops/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeInTheDocument();
+    expect(screen.getByText('Materialized 0')).toBeInTheDocument();
+    expect(screen.getByText('Pending 1')).toBeInTheDocument();
+    expect(screen.getByText('yops:')).toBeInTheDocument();
+    expect(screen.getByText('- set:')).toBeInTheDocument();
+    expect(screen.getByText('path: /audience/primary')).toBeInTheDocument();
+    expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
+    const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
+    expect(yopsTree).toHaveTextContent('prd:');
+    expect(yopsTree).toHaveTextContent('summary:');
+    expect(yopsTree).toHaveTextContent('audience: Product and engineering reviewers');
+    expect(screen.getByText('Human')).toBeInTheDocument();
+    expect(screen.getByText('Changed')).toBeInTheDocument();
 
     activateTab('Canvas');
     expect(screen.getByText('Source bundle')).toBeInTheDocument();

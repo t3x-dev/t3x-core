@@ -105,7 +105,7 @@ function renderWorkspaceTab(
   onSourceMaterialUploaded?: () => Promise<void> | void
 ) {
   if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
-  if (activeTab === 'yops') return <YOpsDraftTab draft={candidate.yopsDraft} />;
+  if (activeTab === 'yops') return <YOpsDraftTab candidate={candidate} />;
   if (activeTab === 'canvas') return <WorkspaceCanvasTab candidate={candidate} />;
   if (activeTab === 'leaf-config') return <OutputTargetsTab targets={candidate.outputTargets} />;
   return <SourcesTab candidate={candidate} onMaterialUploaded={onSourceMaterialUploaded} />;

@@ -86,12 +86,21 @@ const workspaceCandidates: WorkspaceCandidate[] = [
           op: 'set',
           path: '/audience/primary',
           summary: 'Set primary audience from source evidence.',
+          beforeValue: 'Internal reviewers',
+          afterValue: 'Product and engineering reviewers',
+          reason: 'Source evidence confirms product and engineering reviewers as the PRD audience.',
+          sourceRefs: [],
         },
         {
           id: 'op_prd_scope',
           op: 'add',
           path: '/scope/non_goals/-',
           summary: 'Add non-goal from PRD import notes.',
+          beforeValue: 'No non-goal recorded',
+          afterValue: 'Keep requirement identity stable while moving status to ready.',
+          reason:
+            'The candidate includes an identity constraint that should be preserved in state.',
+          sourceRefs: [],
         },
       ],
     },
@@ -166,6 +175,11 @@ const workspaceCandidates: WorkspaceCandidate[] = [
           op: 'add',
           path: '/sections/-',
           summary: 'Add release-note section placeholder.',
+          beforeValue: 'No section placeholder',
+          afterValue: 'One draft release-note section',
+          reason:
+            'The release-note source outline suggests a section, but still needs confirmation.',
+          sourceRefs: [],
         },
       ],
     },
@@ -192,6 +206,18 @@ export function getWorkspacePreviewCandidates(
     projectId,
     sourceBundle:
       candidate.id === 'workspace_prd_handoff' ? materialSources : candidate.sourceBundle,
+    yopsDraft:
+      candidate.id === 'workspace_prd_handoff'
+        ? {
+            ...candidate.yopsDraft,
+            operations: candidate.yopsDraft.operations.map((operation) => ({
+              ...operation,
+              sourceRefs: operation.sourceRefs?.length
+                ? operation.sourceRefs
+                : materialSources.map((source) => source.id),
+            })),
+          }
+        : candidate.yopsDraft,
   }));
 }
 

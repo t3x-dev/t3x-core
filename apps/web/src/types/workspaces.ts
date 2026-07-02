@@ -98,6 +98,10 @@ export interface WorkspaceYOpsDraftOperation {
   op: string;
   path: string;
   summary: string;
+  beforeValue?: string;
+  afterValue?: string;
+  reason?: string;
+  sourceRefs?: string[];
 }
 
 export interface WorkspaceYOpsDraft {
