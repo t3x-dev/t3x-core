@@ -88,17 +88,25 @@ export function WorkspaceWorkflowTabs({
 export function WorkspaceTabs({
   activeTab,
   candidate,
+  onSourceMaterialUploaded,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
 }) {
-  return <div role="tabpanel">{renderWorkspaceTab(activeTab, candidate)}</div>;
+  return (
+    <div role="tabpanel">{renderWorkspaceTab(activeTab, candidate, onSourceMaterialUploaded)}</div>
+  );
 }
 
-function renderWorkspaceTab(activeTab: WorkspaceTabId, candidate: WorkspaceCandidate) {
+function renderWorkspaceTab(
+  activeTab: WorkspaceTabId,
+  candidate: WorkspaceCandidate,
+  onSourceMaterialUploaded?: () => Promise<void> | void
+) {
   if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
   if (activeTab === 'yops') return <YOpsDraftTab draft={candidate.yopsDraft} />;
   if (activeTab === 'canvas') return <WorkspaceCanvasTab candidate={candidate} />;
   if (activeTab === 'leaf-config') return <OutputTargetsTab targets={candidate.outputTargets} />;
-  return <SourcesTab sources={candidate.sourceBundle} />;
+  return <SourcesTab candidate={candidate} onMaterialUploaded={onSourceMaterialUploaded} />;
 }

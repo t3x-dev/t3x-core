@@ -1,11 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import {
-  filterWorkspaceCandidates,
-  selectWorkspaceCandidate,
-  sortWorkspaceCandidates,
-} from '@/domain/workspaces/selectors';
-import type { WorkspaceCandidate, WorkspaceSortKey } from '@/types/workspaces';
+import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
 import { WorkspaceSelector } from './WorkspaceSelector';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
@@ -19,44 +15,28 @@ interface WorkspaceWorkbenchProps {
   errorMessage?: string;
   selectedWorkspaceId?: string | null;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
 }
-
-const SORT_OPTIONS: { label: string; value: WorkspaceSortKey }[] = [
-  { label: 'Recently updated', value: 'updated_desc' },
-  { label: 'Title A-Z', value: 'title_asc' },
-];
 
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
   onSelectedWorkspaceChange,
+  onSourceMaterialUploaded,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
-  const [query, setQuery] = useState('');
   const [internalSelectedWorkspaceId, setInternalSelectedWorkspaceId] = useState<string | null>(
     selectedWorkspaceId ?? null
   );
-  const [sortKey, setSortKey] = useState<WorkspaceSortKey>('updated_desc');
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
 
   useEffect(() => {
     setInternalSelectedWorkspaceId(selectedWorkspaceId ?? null);
   }, [selectedWorkspaceId]);
 
-  const visibleCandidates = useMemo(
-    () =>
-      sortWorkspaceCandidates(
-        filterWorkspaceCandidates(candidates, { query, status: 'all' }),
-        sortKey
-      ),
-    [candidates, query, sortKey]
-  );
-  const selectedWorkspace = selectWorkspaceCandidate(
-    visibleCandidates,
-    internalSelectedWorkspaceId
-  );
+  const selectedWorkspace = selectWorkspaceCandidate(candidates, internalSelectedWorkspaceId);
 
   const handleSelectWorkspace = (workspaceId: string) => {
     setInternalSelectedWorkspaceId(workspaceId);
@@ -94,25 +74,29 @@ export function WorkspaceWorkbench({
         <WorkspaceToolbar
           activeWorkflowTab={activeWorkflowTab}
           selectedWorkspace={selectedWorkspace}
-          query={query}
-          sortKey={sortKey}
           onWorkflowTabChange={setActiveWorkflowTab}
-          onQueryChange={setQuery}
-          onSortKeyChange={setSortKey}
         />
 
         {candidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces yet." />
-        ) : visibleCandidates.length === 0 ? (
-          <WorkspaceEmptyState message="No workspaces match the current filters." />
+        ) : activeWorkflowTab === 'chat' ? (
+          <WorkspaceDetail
+            activeTab={activeWorkflowTab}
+            candidate={selectedWorkspace}
+            onSourceMaterialUploaded={onSourceMaterialUploaded}
+          />
         ) : (
           <div className="grid min-h-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
             <WorkspaceCandidateList
-              candidates={visibleCandidates}
+              candidates={candidates}
               selectedWorkspaceId={selectedWorkspace?.id ?? null}
               onSelectWorkspace={handleSelectWorkspace}
             />
-            <WorkspaceDetail activeTab={activeWorkflowTab} candidate={selectedWorkspace} />
+            <WorkspaceDetail
+              activeTab={activeWorkflowTab}
+              candidate={selectedWorkspace}
+              onSourceMaterialUploaded={onSourceMaterialUploaded}
+            />
           </div>
         )}
       </div>
@@ -133,56 +117,20 @@ function WorkspacesHeader({ count }: { count: number }) {
 
 function WorkspaceToolbar({
   activeWorkflowTab,
-  onQueryChange,
-  onSortKeyChange,
   onWorkflowTabChange,
-  query,
   selectedWorkspace,
-  sortKey,
 }: {
   activeWorkflowTab: WorkspaceTabId;
-  onQueryChange: (query: string) => void;
-  onSortKeyChange: (sortKey: WorkspaceSortKey) => void;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
-  query: string;
   selectedWorkspace: WorkspaceCandidate | null;
-  sortKey: WorkspaceSortKey;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-y border-[var(--stroke-divider)] py-3">
+    <div className="border-y border-[var(--stroke-divider)] py-3">
       <WorkspaceWorkflowTabs
         activeTab={activeWorkflowTab}
         candidate={selectedWorkspace}
         onTabChange={onWorkflowTabChange}
       />
-
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
-        <label className="flex flex-col gap-1 text-xs font-medium text-[var(--text-secondary)]">
-          <span>Search workspaces</span>
-          <input
-            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-branch)]"
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Chat, document, schema"
-            type="search"
-            value={query}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs font-medium text-[var(--text-secondary)]">
-          <span>Sort workspaces</span>
-          <select
-            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-branch)]"
-            onChange={(event) => onSortKeyChange(event.target.value as WorkspaceSortKey)}
-            value={sortKey}
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
     </div>
   );
 }
@@ -192,9 +140,11 @@ const WorkspaceCandidateList = WorkspaceSelector;
 function WorkspaceDetail({
   activeTab,
   candidate,
+  onSourceMaterialUploaded,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate | null;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
 }) {
   if (!candidate) return null;
 
@@ -204,8 +154,12 @@ function WorkspaceDetail({
       className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
     >
       <div className="flex flex-col gap-3">
-        <WorkspaceCandidateHeader candidate={candidate} />
-        <WorkspaceTabs activeTab={activeTab} candidate={candidate} />
+        {activeTab !== 'chat' ? <WorkspaceCandidateHeader candidate={candidate} /> : null}
+        <WorkspaceTabs
+          activeTab={activeTab}
+          candidate={candidate}
+          onSourceMaterialUploaded={onSourceMaterialUploaded}
+        />
       </div>
     </section>
   );

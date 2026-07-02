@@ -20,6 +20,13 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
+    expect(screen.getByRole('heading', { name: 'Release note cleanup' })).toBeInTheDocument();
+    expect(screen.queryByText('Audience chat')).not.toBeInTheDocument();
+    expect(screen.queryByText('PRD import')).not.toBeInTheDocument();
+    expect(screen.queryByText('Release note outline')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));
+
     expect(screen.getByRole('button', { name: /Release note cleanup/ })).toHaveAttribute(
       'aria-pressed',
       'true'

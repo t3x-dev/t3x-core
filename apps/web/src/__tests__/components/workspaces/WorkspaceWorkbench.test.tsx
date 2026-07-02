@@ -18,7 +18,13 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     targetBranch: 'feature/prd-audience',
     sourceBundle: [
       { id: 'src_chat', type: 'chat', title: 'Audience chat', conversationId: 'conv_1' },
-      { id: 'src_doc', type: 'document', title: 'PRD import', fileName: 'prd.md' },
+      {
+        id: 'src_doc',
+        type: 'document',
+        title: 'PRD import',
+        fileName: 'prd.md',
+        materialId: 'mat_prd',
+      },
     ],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
     schemaReview: {
@@ -106,25 +112,31 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All 2' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Draft 1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Search workspaces' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Sort workspaces')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
 
+    activateTab(/YSchema/);
     const list = screen.getByRole('list', { name: 'Workspace candidates' });
     expect(list.parentElement?.className).toContain('lg:grid-cols-[360px_minmax(0,1fr)]');
     expect(within(list).getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
     expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
 
     fireEvent.click(within(list).getByRole('button', { name: /Release cleanup/ }));
+    activateTab('Source');
 
     const detail = screen.getByRole('region', { name: 'Workspace detail' });
-    expect(within(detail).getByText('Release cleanup')).toBeInTheDocument();
-    expect(within(detail).getByText('1 doc')).toBeInTheDocument();
-    expect(within(detail).getByText('Release Note Schema v1')).toBeInTheDocument();
+    expect(within(detail).getAllByText('Release cleanup').length).toBeGreaterThan(0);
+    expect(within(detail).getAllByText('1 doc').length).toBeGreaterThan(0);
+    expect(within(detail).getAllByText('Release Note Schema v1').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('Release outline').length).toBeGreaterThan(0);
   });
 
   it('moves focus with continuous arrow-key workspace navigation', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
+    activateTab(/YSchema/);
     const list = screen.getByRole('list', { name: 'Workspace candidates' });
     const firstWorkspace = within(list).getByRole('button', { name: /PRD audience handoff/ });
     const secondWorkspace = within(list).getByRole('button', { name: /Release cleanup/ });
@@ -144,27 +156,53 @@ describe('WorkspaceWorkbench', () => {
   it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    const detail = screen.getByRole('region', { name: 'Workspace detail' });
-    expect(within(detail).getByText('Base commit')).toBeInTheDocument();
-    expect(within(detail).getByText('sha256:base-prd')).toBeInTheDocument();
-    expect(within(detail).getByText('Target branch')).toBeInTheDocument();
-    expect(within(detail).getByText('feature/prd-audience')).toBeInTheDocument();
-    expect(within(detail).getByText('Schema version')).toBeInTheDocument();
-    expect(within(detail).getByText('PRD Schema v2')).toBeInTheDocument();
-    expect(within(detail).getByText('Source count')).toBeInTheDocument();
-    expect(within(detail).getAllByText('2 sources').length).toBeGreaterThan(0);
-
+    let detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /YSchema/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YOps/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Canvas' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Leaf config/ })).toBeInTheDocument();
+
+    activateTab(/YSchema/);
+    detail = screen.getByRole('region', { name: 'Workspace detail' });
+
+    expect(within(detail).getByText('Base commit')).toBeInTheDocument();
+    expect(within(detail).getByText('sha256:base-prd')).toBeInTheDocument();
+    expect(within(detail).getByText('Target branch')).toBeInTheDocument();
+    expect(within(detail).getByText('feature/prd-audience')).toBeInTheDocument();
+    expect(within(detail).getByText('Schema version')).toBeInTheDocument();
+    expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(within(detail).getByText('Source count')).toBeInTheDocument();
+    expect(within(detail).getAllByText('2 sources').length).toBeGreaterThan(0);
+
+    activateTab('Source');
+    detail = screen.getByRole('region', { name: 'Workspace detail' });
+
     expect(
-      within(detail).getByRole('complementary', { name: 'Source context' })
+      within(detail).getByRole('complementary', { name: 'Source imports and bundle' })
     ).toBeInTheDocument();
-    expect(within(detail).getByRole('region', { name: 'Selected source' })).toBeInTheDocument();
-    expect(within(detail).getByText('chat')).toBeInTheDocument();
+    expect(within(detail).getByRole('tab', { name: /Materials/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(detail).queryByRole('tab', { name: 'Parsed text' })).not.toBeInTheDocument();
+    expect(within(detail).getAllByText('chat').length).toBeGreaterThan(0);
     expect(within(detail).getByText('document')).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Import doc' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Upload PDF/doc' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Delete PRD import' })).toBeInTheDocument();
+    expect(within(detail).getByRole('region', { name: 'Parsed text preview' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Include preview' })).toBeInTheDocument();
+
+    const chatTab = within(detail).getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+    expect(within(detail).getByRole('region', { name: 'Source chat' })).toBeInTheDocument();
+    expect(
+      within(detail).getByPlaceholderText(
+        'Ask the model, paste source text, or describe a requirement change...'
+      )
+    ).toBeInTheDocument();
   });
 
   it('renders schema review, read-only yops draft, canvas, and draft output target tabs', () => {
@@ -192,29 +230,6 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Draft target')).toBeInTheDocument();
     expect(screen.getByText('PRD Markdown export')).toBeInTheDocument();
     expect(screen.getByText('Not a committed artifact')).toBeInTheDocument();
-  });
-
-  it('filters visible candidates by search query', () => {
-    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
-
-    const list = screen.getByRole('list', { name: 'Workspace candidates' });
-    expect(within(list).getByRole('button', { name: /PRD audience handoff/ })).toBeInTheDocument();
-    expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search workspaces' }), {
-      target: { value: 'release' },
-    });
-
-    expect(
-      within(list).queryByRole('button', { name: /PRD audience handoff/ })
-    ).not.toBeInTheDocument();
-    expect(within(list).getByRole('button', { name: /Release cleanup/ })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search workspaces' }), {
-      target: { value: 'schema packet' },
-    });
-
-    expect(screen.getByText('No workspaces match the current filters.')).toBeInTheDocument();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {

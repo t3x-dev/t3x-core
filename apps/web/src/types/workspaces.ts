@@ -12,6 +12,9 @@ export interface SourceBundleItem {
   title: string;
   description?: string;
   conversationId?: string;
+  materialId?: string;
+  contentHash?: string;
+  tokenEstimate?: number;
   fileName?: string;
   runId?: string;
   format?: 'yaml' | 'json' | 'markdown' | 'text';
