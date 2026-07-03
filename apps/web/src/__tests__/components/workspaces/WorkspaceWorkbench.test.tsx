@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
+import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 function countFetchCalls(calls: Parameters<typeof fetch>[], expectedUrl: string) {
@@ -179,6 +180,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
 ];
 
 afterEach(() => {
+  usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
   vi.restoreAllMocks();
 });
 
@@ -706,6 +708,18 @@ describe('WorkspaceWorkbench', () => {
       throw new Error(`Unhandled fetch ${url}`);
     });
 
+    usePinsStore.setState({
+      pins: [
+        {
+          id: 'pin_mat_prd',
+          project_id: 'proj_1',
+          type: 'import',
+          ref_id: 'mat_prd',
+          pinned_at: '2026-07-03T00:00:00.000Z',
+        },
+      ],
+    });
+
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
@@ -714,8 +728,12 @@ describe('WorkspaceWorkbench', () => {
     );
     const [, extractCandidateInit] = findFetchCall(fetchMock.mock.calls, extractCandidateUrl);
     expect(JSON.parse(String(extractCandidateInit?.body))).toMatchObject({
-      sources: [{ id: 'src_chat' }, { id: 'src_doc', materialId: 'mat_prd' }],
-      workspace: { id: 'workspace_ready', projectId: 'proj_1' },
+      sources: [{ id: 'src_doc', materialId: 'mat_prd' }],
+      workspace: {
+        id: 'workspace_ready',
+        projectId: 'proj_1',
+        sourceBundle: [{ id: 'src_doc', materialId: 'mat_prd' }],
+      },
     });
     expect(
       await screen.findByText('deterministic scaffold mapped from the current source bundle.')

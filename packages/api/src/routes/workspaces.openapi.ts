@@ -227,18 +227,7 @@ function mergeSourceTexts(
     return [{ id: source.id, title: source.title, text }];
   });
 
-  const sourceMaterialIds = new Set(
-    sources.flatMap((source) => (source.materialId ? [source.materialId] : []))
-  );
-  const extraMaterials = materials
-    .filter((material) => !sourceMaterialIds.has(material.id))
-    .map((material) => ({
-      id: `material:${material.id}`,
-      title: material.title ?? material.filename ?? material.id,
-      text: material.content_text,
-    }));
-
-  return [...fromSources, ...extraMaterials];
+  return fromSources;
 }
 
 function buildExtractedWorkspace(

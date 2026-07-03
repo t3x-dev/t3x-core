@@ -993,11 +993,10 @@ function getSourceChatTurns(
 
 function getSourceEvidenceState(
   source: SourceBundleItem,
-  candidate: WorkspaceCandidate
+  _candidate: WorkspaceCandidate
 ): SourceEvidenceState {
-  if (candidate.schemaReview.gaps.length > 0 && source.type === 'document') return 'candidate';
   if (source.type === 'prompt_run') return 'stale';
-  return 'included';
+  return 'candidate';
 }
 
 function getParsedPreviewBlocks(

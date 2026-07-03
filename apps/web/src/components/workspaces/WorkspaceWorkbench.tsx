@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
@@ -43,6 +44,7 @@ export function WorkspaceWorkbench({
   const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
     {}
   );
+  const pins = usePinsStore((state) => state.pins);
   const { extractCandidate, sendToYOps } = useWorkspaceFlow();
 
   const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
@@ -75,7 +77,7 @@ export function WorkspaceWorkbench({
 
     updateSelectedFlow({ error: undefined, extracting: true });
     try {
-      const result = await extractCandidate(selectedWorkspace);
+      const result = await extractCandidate(selectWorkspaceSourceBundle(selectedWorkspace, pins));
       setWorkspaceOverrides((current) => ({
         ...current,
         [result.workspace.id]: result.workspace,
@@ -311,6 +313,26 @@ function mergeWorkspaceOverride(
     schemaBindings: candidate.schemaBindings,
     sourceBundle: candidate.sourceBundle,
   };
+}
+
+function selectWorkspaceSourceBundle(
+  candidate: WorkspaceCandidate,
+  pins: Array<{ type: string; ref_id: string }>
+): WorkspaceCandidate {
+  const importRefs = new Set(pins.filter((pin) => pin.type === 'import').map((pin) => pin.ref_id));
+  const turnRefs = new Set(
+    pins.filter((pin) => pin.type === 'conversation_turn').map((pin) => pin.ref_id)
+  );
+
+  const sourceBundle = candidate.sourceBundle.flatMap((source) => {
+    if (source.materialId) return importRefs.has(source.materialId) ? [source] : [];
+    if (source.type !== 'chat') return [];
+
+    const previewTurns = source.previewTurns?.filter((turn) => turnRefs.has(turn.id)) ?? [];
+    return previewTurns.length > 0 ? [{ ...source, previewTurns }] : [];
+  });
+
+  return { ...candidate, sourceBundle };
 }
 
 function WorkspaceEmptyState({ message }: { message: string }) {
