@@ -481,6 +481,8 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
       committed_as TEXT,
       committed_leaf_id TEXT,
       target_branch TEXT DEFAULT 'main',
+      workspace_id TEXT,
+      workspace_state_json JSONB,
       revision INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
@@ -492,6 +494,11 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_mode TEXT;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS semantic_points_json JSONB;
     ALTER TABLE drafts ADD COLUMN IF NOT EXISTS extraction_cursor_json JSONB;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
 
     -- Migration: Add foreign key constraints to existing deploy_agents/runs tables (v1.2)
     -- Note: These constraints are in CREATE TABLE for new databases, but existing databases

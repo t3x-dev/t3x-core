@@ -136,16 +136,20 @@ export {
   deleteDraft,
   findAutoDraftsByConversation,
   findDraftById,
+  findWorkspaceDraft,
   forkDraft,
   insertAutoDraft,
   insertDraft,
   type ListDraftOptions,
   listDraftsByProject,
+  listWorkspaceDrafts,
   NotFoundError,
   promoteDraft,
   type UpdateDraftInput,
   updateDraft,
   updateDraftPreview,
+  upsertWorkspaceDraft,
+  type WorkspaceDraftInput,
 } from './drafts';
 // Extraction Feedback (Anchoring L4)
 export {
