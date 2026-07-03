@@ -113,7 +113,7 @@ export function WorkspaceWorkbench({
       setActiveWorkflowTab('yops');
     } catch (err) {
       updateSelectedFlow({
-        error: err instanceof Error ? err.message : 'YOps draft generation failed.',
+        error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
         sendingToYOps: false,
       });
     }
@@ -222,8 +222,9 @@ function WorkspaceFlowRail({
 }) {
   const steps = [
     { label: 'Source', done: candidate.sourceBundle.length > 0 },
-    { label: 'Candidate', done: Boolean(flowState?.candidateId) },
-    { label: 'YOps draft', done: Boolean(flowState?.yopsDraftId) },
+    { label: 'Candidate proposal', done: Boolean(flowState?.candidateId) },
+    { label: 'YSchema check', done: candidate.schemaReview.verdict === 'ready' },
+    { label: 'YOps proposal', done: Boolean(flowState?.yopsDraftId) },
     { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
   ];
 

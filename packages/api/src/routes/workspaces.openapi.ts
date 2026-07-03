@@ -2,8 +2,9 @@
  * Workspace flow routes.
  *
  * These endpoints bridge the WebUI workspace review flow with backend-owned
- * candidate/YOps draft state. The first implementation is deterministic and
- * source-text based so local workspace review works without an LLM key.
+ * candidate/YOps proposal state. The target product path uses LLM proposals
+ * before deterministic validation/apply. This preview implementation keeps a
+ * deterministic scaffold so local workspace review works without an LLM key.
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
@@ -63,7 +64,7 @@ const extractCandidateRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/extract-candidate',
   tags: ['Workspaces'],
-  summary: 'Extract a workspace candidate from backend source materials',
+  summary: 'Extract a workspace candidate proposal from source materials',
   request: {
     params: workspaceParams,
     body: {
@@ -96,7 +97,7 @@ const sendYOpsDraftRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/workspaces/{workspaceId}/yops-draft',
   tags: ['Workspaces'],
-  summary: 'Create a YOps draft from the extracted workspace candidate',
+  summary: 'Create a YOps proposal from the reviewed workspace candidate',
   request: {
     params: workspaceParams,
     body: {
@@ -109,7 +110,7 @@ const sendYOpsDraftRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Workspace YOps draft',
+      description: 'Workspace YOps proposal',
       content: {
         'application/json': {
           schema: SuccessResponseSchema(WorkspaceResponseSchema),
@@ -256,19 +257,20 @@ function buildExtractedWorkspace(
     ...workspace,
     projectId,
     schemaCandidate: {
+      proposalMode: 'deterministic_scaffold',
       summary:
         sourceTexts.length > 0
-          ? `Backend mapped ${countFields(fields)} schema fields from ${sourceTexts.length} source${sourceTexts.length === 1 ? '' : 's'}.`
-          : 'No backend source text available for candidate extraction.',
+          ? `Deterministic scaffold mapped ${countFields(fields)} schema fields from ${sourceTexts.length} source${sourceTexts.length === 1 ? '' : 's'}.`
+          : 'No source text available for candidate proposal.',
       fields,
     },
     schemaReview: {
       verdict: gaps.length === 0 && sourceTexts.length > 0 ? 'ready' : 'needs_review',
       summary:
         sourceTexts.length > 0 && gaps.length === 0
-          ? 'Candidate extracted from backend source material and mapped to schema fields.'
+          ? 'Candidate proposal mapped from source material and ready for deterministic YSchema validation.'
           : 'Add source material before YOps handoff.',
-      gaps: sourceTexts.length > 0 ? gaps : ['No backend source material.'],
+      gaps: sourceTexts.length > 0 ? gaps : ['No source material.'],
     },
   };
 }
@@ -518,18 +520,19 @@ function buildYOpsDraft(workspace: Record<string, unknown>, candidateId: string)
         id: `op_backend_${index + 1}`,
         op: appendsArrayValue ? 'add' : 'set',
         path: appendsArrayValue ? `${path}/-` : path,
-        summary: `Set ${field.path} from backend candidate extraction.`,
+        summary: `Set ${field.path} from reviewed candidate proposal.`,
         beforeValue: appendsArrayValue ? 'No value recorded' : '',
         afterValue: field.value,
         reason:
           field.evidence ??
-          `Backend candidate ${candidateId} covered ${field.path} from included source material.`,
+          `Deterministic scaffold proposal ${candidateId} covered ${field.path} from included source material.`,
         sourceRefs: extractWorkspaceSourceRefs(workspace),
       };
     });
 
   return {
     id: `draft:${candidateId}`,
+    proposalMode: 'deterministic_scaffold',
     operations,
   };
 }
@@ -780,7 +783,7 @@ function trimSentence(value: string): string {
 }
 
 function evidenceFor(value: string, sources: WorkspaceSourceText[]): string {
-  const sourceTitle = sources[0]?.title ?? 'backend source material';
+  const sourceTitle = sources[0]?.title ?? 'source material';
   return `${sourceTitle}: ${value}`;
 }
 

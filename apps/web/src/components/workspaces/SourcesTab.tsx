@@ -218,7 +218,8 @@ export function SourcesTab({
             </Badge>
           </div>
           <p className="mt-1 max-w-3xl text-sm font-medium text-[var(--text-secondary)]">
-            Collect documents, notes, URLs, and useful chat turns before YSchema and YOps review.
+            Collect evidence before generating a candidate proposal. Production proposal steps use
+            LLMs; this local preview can fall back to a deterministic scaffold.
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
             <span className="rounded-full border border-[var(--stroke-divider)] px-2 py-0.5">
@@ -236,10 +237,10 @@ export function SourcesTab({
         </div>
         <Button disabled={extracting} onClick={onExtractCandidate} type="button" variant="commit">
           {extracting
-            ? 'Extracting...'
+            ? 'Generating...'
             : candidateExtracted
               ? 'Review candidate'
-              : 'Extract candidate'}
+              : 'Generate candidate proposal'}
         </Button>
       </header>
 
@@ -1052,7 +1053,7 @@ function getParsedPreviewBlocks(
     {
       id: `${source.id}_preview_2`,
       locator: source.fileName ? 'page 1 / paragraph 2' : 'paragraph 2',
-      text: 'Parsed text should be reviewed, split, included, or excluded before Extract candidate uses it.',
+      text: 'Parsed text should be reviewed, split, included, or excluded before generating a candidate proposal.',
       state: 'candidate',
     },
   ];
