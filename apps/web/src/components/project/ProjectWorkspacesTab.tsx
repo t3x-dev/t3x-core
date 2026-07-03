@@ -4,15 +4,31 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
+import {
+  applyProjectWorkspaceSchemaBindings,
+  type ProjectWorkspaceSchemaBindings,
+} from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 
-export function ProjectWorkspacesTab({ projectId }: { projectId: string }) {
+interface ProjectWorkspacesTabProps {
+  projectId: string;
+  schemaBindings?: ProjectWorkspaceSchemaBindings;
+}
+
+export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorkspacesTabProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectMaterials = useProjectMaterials(projectId);
-  const candidates = useMemo(
+  const previewCandidates = useMemo(
     () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
     [projectId, projectMaterials.materials]
+  );
+  const candidates = useMemo(
+    () =>
+      schemaBindings
+        ? applyProjectWorkspaceSchemaBindings(previewCandidates, schemaBindings)
+        : previewCandidates,
+    [previewCandidates, schemaBindings]
   );
   const selectedWorkspaceId = searchParams.get('workspace');
 

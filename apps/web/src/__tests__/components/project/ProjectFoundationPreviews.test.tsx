@@ -25,7 +25,26 @@ describe('project foundation previews', () => {
   it('renders the Schemas preview for any project id during A0', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByText('Schema registry')).toBeInTheDocument();
+    expect(screen.getByText('Schema templates')).toBeInTheDocument();
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+  });
+
+  it('reflects schema bindings from the schema tab in the workspace preview', () => {
+    render(
+      <ProjectWorkspacesTab
+        projectId="proj_other"
+        schemaBindings={{
+          byWorkspaceId: {
+            workspace_prd_handoff: {
+              schemaName: 'Docker Compose',
+              version: 'v2',
+              mode: 'pinned',
+            },
+          },
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('Docker Compose v2').length).toBeGreaterThan(0);
   });
 });
