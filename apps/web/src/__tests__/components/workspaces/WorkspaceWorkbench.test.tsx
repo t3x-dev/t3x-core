@@ -16,6 +16,13 @@ function findFetchCall(calls: Parameters<typeof fetch>[], expectedUrl: string, o
   return matches[occurrence];
 }
 
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 const workspaceCandidates: WorkspaceCandidate[] = [
   {
     id: 'workspace_ready',
@@ -605,118 +612,94 @@ describe('WorkspaceWorkbench', () => {
         ],
       },
     };
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              candidate_id: 'candidate:backend',
-              workspace: extractedWorkspace,
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              candidate_id: 'candidate:backend',
-              workspace: yopsWorkspace,
-              yops_draft_id: 'draft:candidate:backend',
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              ok: true,
-              applied: 0,
-              preview: { trees: [], relations: [] },
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              ok: true,
-              applied: 5,
-              preview: {
-                trees: [
-                  {
-                    key: 'prd',
-                    slots: { title: 'PRD audience handoff' },
-                    children: [
-                      {
-                        key: 'summary',
-                        slots: {
-                          audience: 'Backend product reviewers',
-                          outcome:
-                            'Send reviewed PRD candidates to YOps with deterministic operations.',
-                          problem: 'Backend PRD import lacks a confirmed reviewer handoff.',
-                        },
-                        children: [],
-                      },
-                      {
-                        key: 'requirements',
-                        slots: {},
-                        children: [
-                          {
-                            key: 'backend_prd_handoff',
-                            slots: {
-                              acceptance: [
-                                'YOps receives reviewed candidate fields from backend source evidence.',
-                              ],
-                              title: 'Backend PRD handoff',
-                            },
-                            children: [],
-                          },
-                        ],
-                      },
-                      {
-                        key: 'milestones',
-                        slots: {},
-                        children: [],
-                      },
-                    ],
-                  },
-                ],
-                relations: [],
-              },
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: { commit: { hash: 'sha256:workspace-commit' } },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      );
-
-    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
-
     const extractCandidateUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
     const yopsDraftUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const commitsUrl = 'http://localhost:8000/api/v1/commits';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === extractCandidateUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:backend',
+            workspace: extractedWorkspace,
+          },
+        });
+      }
+      if (url === yopsDraftUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:backend',
+            workspace: yopsWorkspace,
+            yops_draft_id: 'draft:candidate:backend',
+          },
+        });
+      }
+      if (url === yopsValidateUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            ok: true,
+            applied: 5,
+            preview: {
+              trees: [
+                {
+                  key: 'prd',
+                  slots: { title: 'PRD audience handoff' },
+                  children: [
+                    {
+                      key: 'summary',
+                      slots: {
+                        audience: 'Backend product reviewers',
+                        outcome:
+                          'Send reviewed PRD candidates to YOps with deterministic operations.',
+                        problem: 'Backend PRD import lacks a confirmed reviewer handoff.',
+                      },
+                      children: [],
+                    },
+                    {
+                      key: 'requirements',
+                      slots: {},
+                      children: [
+                        {
+                          key: 'backend_prd_handoff',
+                          slots: {
+                            acceptance: [
+                              'YOps receives reviewed candidate fields from backend source evidence.',
+                            ],
+                            title: 'Backend PRD handoff',
+                          },
+                          children: [],
+                        },
+                      ],
+                    },
+                    {
+                      key: 'milestones',
+                      slots: {},
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+              relations: [],
+            },
+          },
+        });
+      }
+      if (url === commitsUrl) {
+        return jsonResponse({
+          success: true,
+          data: { commit: { hash: 'sha256:workspace-commit' } },
+        });
+      }
+      throw new Error(`Unhandled fetch ${url}`);
+    });
+
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Extract candidate' }));
     await waitFor(() =>
