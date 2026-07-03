@@ -3,10 +3,9 @@ import { cn } from '@/utils/cn';
 import { OutputTargetsTab } from './OutputTargetsTab';
 import { SchemaReviewTab } from './SchemaReviewTab';
 import { SourcesTab } from './SourcesTab';
-import { WorkspaceCanvasTab } from './WorkspaceCanvasTab';
 import { YOpsDraftTab } from './YOpsDraftTab';
 
-export type WorkspaceTabId = 'chat' | 'yschema' | 'yops' | 'canvas' | 'leaf-config';
+export type WorkspaceTabId = 'chat' | 'yschema' | 'yops' | 'leaf-config';
 
 export const WORKSPACE_TABS: {
   id: WorkspaceTabId;
@@ -27,7 +26,6 @@ export const WORKSPACE_TABS: {
     label: 'YOps',
     count: (candidate) => candidate.yopsDraft.operations.length,
   },
-  { id: 'canvas', keyLabel: '', label: 'Canvas' },
   {
     id: 'leaf-config',
     keyLabel: '',
@@ -88,17 +86,92 @@ export function WorkspaceWorkflowTabs({
 export function WorkspaceTabs({
   activeTab,
   candidate,
+  candidateExtracted,
+  extractingCandidate,
+  flowError,
+  onExtractCandidate,
+  onSourceMaterialUploaded,
+  onSendToYOps,
+  onYOpsCommitted,
+  sendingToYOps,
+  yopsDraftSent,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate;
+  candidateExtracted?: boolean;
+  extractingCandidate?: boolean;
+  flowError?: string;
+  onExtractCandidate?: () => Promise<void> | void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
+  onSendToYOps?: () => Promise<void> | void;
+  onYOpsCommitted?: (commitHash: string) => void;
+  sendingToYOps?: boolean;
+  yopsDraftSent?: boolean;
 }) {
-  return <div role="tabpanel">{renderWorkspaceTab(activeTab, candidate)}</div>;
+  return (
+    <div role="tabpanel">
+      {renderWorkspaceTab(activeTab, candidate, {
+        candidateExtracted,
+        extractingCandidate,
+        flowError,
+        onExtractCandidate,
+        onSendToYOps,
+        onSourceMaterialUploaded,
+        onYOpsCommitted,
+        sendingToYOps,
+        yopsDraftSent,
+      })}
+    </div>
+  );
 }
 
-function renderWorkspaceTab(activeTab: WorkspaceTabId, candidate: WorkspaceCandidate) {
-  if (activeTab === 'yschema') return <SchemaReviewTab candidate={candidate} />;
-  if (activeTab === 'yops') return <YOpsDraftTab draft={candidate.yopsDraft} />;
-  if (activeTab === 'canvas') return <WorkspaceCanvasTab candidate={candidate} />;
-  if (activeTab === 'leaf-config') return <OutputTargetsTab targets={candidate.outputTargets} />;
-  return <SourcesTab sources={candidate.sourceBundle} />;
+interface RenderWorkspaceTabOptions {
+  candidateExtracted?: boolean;
+  extractingCandidate?: boolean;
+  flowError?: string;
+  onExtractCandidate?: () => Promise<void> | void;
+  onSendToYOps?: () => Promise<void> | void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsCommitted?: (commitHash: string) => void;
+  sendingToYOps?: boolean;
+  yopsDraftSent?: boolean;
+}
+
+function renderWorkspaceTab(
+  activeTab: WorkspaceTabId,
+  candidate: WorkspaceCandidate,
+  options: RenderWorkspaceTabOptions
+) {
+  if (activeTab === 'yschema') {
+    return (
+      <SchemaReviewTab
+        candidate={candidate}
+        candidateExtracted={options.candidateExtracted}
+        flowError={options.flowError}
+        onSendToYOps={options.onSendToYOps}
+        sendingToYOps={options.sendingToYOps}
+        yopsDraftSent={options.yopsDraftSent}
+      />
+    );
+  }
+  if (activeTab === 'yops') {
+    return (
+      <YOpsDraftTab
+        candidate={candidate}
+        onCommitted={options.onYOpsCommitted}
+        yopsDraftSent={options.yopsDraftSent}
+      />
+    );
+  }
+  if (activeTab === 'leaf-config') return <OutputTargetsTab candidate={candidate} />;
+  return (
+    <SourcesTab
+      candidate={candidate}
+      candidateExtracted={options.candidateExtracted}
+      extracting={options.extractingCandidate}
+      flowError={options.flowError}
+      onExtractCandidate={options.onExtractCandidate}
+      onMaterialUploaded={options.onSourceMaterialUploaded}
+    />
+  );
 }

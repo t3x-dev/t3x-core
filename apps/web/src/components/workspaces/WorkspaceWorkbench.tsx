@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import {
-  filterWorkspaceCandidates,
-  selectWorkspaceCandidate,
-  sortWorkspaceCandidates,
-} from '@/domain/workspaces/selectors';
-import type { WorkspaceCandidate, WorkspaceSortKey } from '@/types/workspaces';
+import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
+import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import type { WorkspaceCandidate } from '@/types/workspaces';
+import { cn } from '@/utils/cn';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
-import { WorkspaceSelector } from './WorkspaceSelector';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
+
+interface WorkspaceFlowState {
+  candidateId?: string;
+  yopsDraftId?: string;
+  commitHash?: string;
+  extracting?: boolean;
+  sendingToYOps?: boolean;
+  error?: string;
+}
 
 interface WorkspaceWorkbenchProps {
   candidates: WorkspaceCandidate[];
@@ -19,48 +25,103 @@ interface WorkspaceWorkbenchProps {
   errorMessage?: string;
   selectedWorkspaceId?: string | null;
   onSelectedWorkspaceChange?: (workspaceId: string) => void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
 }
-
-const SORT_OPTIONS: { label: string; value: WorkspaceSortKey }[] = [
-  { label: 'Recently updated', value: 'updated_desc' },
-  { label: 'Title A-Z', value: 'title_asc' },
-];
 
 export function WorkspaceWorkbench({
   candidates,
   errorMessage,
-  onSelectedWorkspaceChange,
+  onSourceMaterialUploaded,
   projectId,
   selectedWorkspaceId,
   viewState = 'ready',
 }: WorkspaceWorkbenchProps) {
-  const [query, setQuery] = useState('');
-  const [internalSelectedWorkspaceId, setInternalSelectedWorkspaceId] = useState<string | null>(
-    selectedWorkspaceId ?? null
-  );
-  const [sortKey, setSortKey] = useState<WorkspaceSortKey>('updated_desc');
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkspaceTabId>('chat');
-
-  useEffect(() => {
-    setInternalSelectedWorkspaceId(selectedWorkspaceId ?? null);
-  }, [selectedWorkspaceId]);
-
-  const visibleCandidates = useMemo(
-    () =>
-      sortWorkspaceCandidates(
-        filterWorkspaceCandidates(candidates, { query, status: 'all' }),
-        sortKey
-      ),
-    [candidates, query, sortKey]
+  const [flowByWorkspaceId, setFlowByWorkspaceId] = useState<Record<string, WorkspaceFlowState>>(
+    {}
   );
-  const selectedWorkspace = selectWorkspaceCandidate(
-    visibleCandidates,
-    internalSelectedWorkspaceId
+  const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
+    {}
   );
+  const { extractCandidate, sendToYOps } = useWorkspaceFlow();
 
-  const handleSelectWorkspace = (workspaceId: string) => {
-    setInternalSelectedWorkspaceId(workspaceId);
-    onSelectedWorkspaceChange?.(workspaceId);
+  const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
+  const selectedWorkspace = baseSelectedWorkspace
+    ? mergeWorkspaceOverride(baseSelectedWorkspace, workspaceOverrides[baseSelectedWorkspace.id])
+    : null;
+  const selectedFlow = selectedWorkspace ? flowByWorkspaceId[selectedWorkspace.id] : undefined;
+  const selectedWorkspaceWithFlow =
+    selectedWorkspace && selectedFlow?.commitHash
+      ? {
+          ...selectedWorkspace,
+          lastCommitHash: selectedFlow.commitHash,
+          status: 'committed' as const,
+        }
+      : selectedWorkspace;
+
+  const updateSelectedFlow = (patch: WorkspaceFlowState) => {
+    if (!selectedWorkspace) return;
+    setFlowByWorkspaceId((current) => ({
+      ...current,
+      [selectedWorkspace.id]: {
+        ...current[selectedWorkspace.id],
+        ...patch,
+      },
+    }));
+  };
+
+  const handleExtractCandidate = async () => {
+    if (!selectedWorkspace) return;
+
+    updateSelectedFlow({ error: undefined, extracting: true });
+    try {
+      const result = await extractCandidate(selectedWorkspace);
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [result.workspace.id]: result.workspace,
+      }));
+      updateSelectedFlow({
+        candidateId: result.candidate_id,
+        error: undefined,
+        extracting: false,
+      });
+      setActiveWorkflowTab('yschema');
+    } catch (err) {
+      updateSelectedFlow({
+        error: err instanceof Error ? err.message : 'Candidate extraction failed.',
+        extracting: false,
+      });
+    }
+  };
+
+  const handleSendToYOps = async () => {
+    if (!selectedWorkspace) return;
+
+    updateSelectedFlow({ error: undefined, sendingToYOps: true });
+    try {
+      const result = await sendToYOps(selectedWorkspace);
+      setWorkspaceOverrides((current) => ({
+        ...current,
+        [result.workspace.id]: result.workspace,
+      }));
+      updateSelectedFlow({
+        candidateId: result.candidate_id,
+        error: undefined,
+        sendingToYOps: false,
+        yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
+      });
+      setActiveWorkflowTab('yops');
+    } catch (err) {
+      updateSelectedFlow({
+        error: err instanceof Error ? err.message : 'YOps draft generation failed.',
+        sendingToYOps: false,
+      });
+    }
+  };
+
+  const handleCommitted = (commitHash: string) => {
+    updateSelectedFlow({ commitHash });
+    setActiveWorkflowTab('leaf-config');
   };
 
   if (viewState === 'loading') {
@@ -93,27 +154,23 @@ export function WorkspaceWorkbench({
 
         <WorkspaceToolbar
           activeWorkflowTab={activeWorkflowTab}
-          selectedWorkspace={selectedWorkspace}
-          query={query}
-          sortKey={sortKey}
+          flowState={selectedFlow}
+          selectedWorkspace={selectedWorkspaceWithFlow}
           onWorkflowTabChange={setActiveWorkflowTab}
-          onQueryChange={setQuery}
-          onSortKeyChange={setSortKey}
         />
 
         {candidates.length === 0 ? (
           <WorkspaceEmptyState message="No workspaces yet." />
-        ) : visibleCandidates.length === 0 ? (
-          <WorkspaceEmptyState message="No workspaces match the current filters." />
         ) : (
-          <div className="grid min-h-0 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <WorkspaceCandidateList
-              candidates={visibleCandidates}
-              selectedWorkspaceId={selectedWorkspace?.id ?? null}
-              onSelectWorkspace={handleSelectWorkspace}
-            />
-            <WorkspaceDetail activeTab={activeWorkflowTab} candidate={selectedWorkspace} />
-          </div>
+          <WorkspaceDetail
+            activeTab={activeWorkflowTab}
+            candidate={selectedWorkspaceWithFlow}
+            flowState={selectedFlow}
+            onExtractCandidate={handleExtractCandidate}
+            onSendToYOps={handleSendToYOps}
+            onYOpsCommitted={handleCommitted}
+            onSourceMaterialUploaded={onSourceMaterialUploaded}
+          />
         )}
       </div>
     </section>
@@ -133,68 +190,85 @@ function WorkspacesHeader({ count }: { count: number }) {
 
 function WorkspaceToolbar({
   activeWorkflowTab,
-  onQueryChange,
-  onSortKeyChange,
+  flowState,
   onWorkflowTabChange,
-  query,
   selectedWorkspace,
-  sortKey,
 }: {
   activeWorkflowTab: WorkspaceTabId;
-  onQueryChange: (query: string) => void;
-  onSortKeyChange: (sortKey: WorkspaceSortKey) => void;
+  flowState?: WorkspaceFlowState;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
-  query: string;
   selectedWorkspace: WorkspaceCandidate | null;
-  sortKey: WorkspaceSortKey;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-y border-[var(--stroke-divider)] py-3">
+    <div className="flex flex-col gap-2 border-y border-[var(--stroke-divider)] py-3">
       <WorkspaceWorkflowTabs
         activeTab={activeWorkflowTab}
         candidate={selectedWorkspace}
         onTabChange={onWorkflowTabChange}
       />
-
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
-        <label className="flex flex-col gap-1 text-xs font-medium text-[var(--text-secondary)]">
-          <span>Search workspaces</span>
-          <input
-            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-branch)]"
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Chat, document, schema"
-            type="search"
-            value={query}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs font-medium text-[var(--text-secondary)]">
-          <span>Sort workspaces</span>
-          <select
-            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[var(--accent-branch)]"
-            onChange={(event) => onSortKeyChange(event.target.value as WorkspaceSortKey)}
-            value={sortKey}
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {selectedWorkspace ? (
+        <WorkspaceFlowRail candidate={selectedWorkspace} flowState={flowState} />
+      ) : null}
     </div>
   );
 }
 
-const WorkspaceCandidateList = WorkspaceSelector;
+function WorkspaceFlowRail({
+  candidate,
+  flowState,
+}: {
+  candidate: WorkspaceCandidate;
+  flowState?: WorkspaceFlowState;
+}) {
+  const steps = [
+    { label: 'Source', done: candidate.sourceBundle.length > 0 },
+    { label: 'Candidate', done: Boolean(flowState?.candidateId) },
+    { label: 'YOps draft', done: Boolean(flowState?.yopsDraftId) },
+    { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
+  ];
+
+  return (
+    <fieldset className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+      <legend className="sr-only">Workspace flow status</legend>
+      {steps.map((step, index) => (
+        <span className="inline-flex items-center gap-1.5" key={step.label}>
+          <span
+            className={cn(
+              'inline-flex h-6 items-center rounded-full border px-2 font-medium',
+              step.done
+                ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]'
+                : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]'
+            )}
+          >
+            {step.label}
+          </span>
+          {index < steps.length - 1 ? (
+            <span className="text-[var(--text-quaternary)]" aria-hidden="true">
+              /
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </fieldset>
+  );
+}
 
 function WorkspaceDetail({
   activeTab,
   candidate,
+  flowState,
+  onExtractCandidate,
+  onSendToYOps,
+  onSourceMaterialUploaded,
+  onYOpsCommitted,
 }: {
   activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate | null;
+  flowState?: WorkspaceFlowState;
+  onExtractCandidate: () => void;
+  onSendToYOps: () => void;
+  onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsCommitted: (commitHash: string) => void;
 }) {
   if (!candidate) return null;
 
@@ -204,11 +278,38 @@ function WorkspaceDetail({
       className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
     >
       <div className="flex flex-col gap-3">
-        <WorkspaceCandidateHeader candidate={candidate} />
-        <WorkspaceTabs activeTab={activeTab} candidate={candidate} />
+        {activeTab !== 'chat' ? <WorkspaceCandidateHeader candidate={candidate} /> : null}
+        <WorkspaceTabs
+          activeTab={activeTab}
+          candidate={candidate}
+          candidateExtracted={Boolean(flowState?.candidateId)}
+          extractingCandidate={Boolean(flowState?.extracting)}
+          flowError={flowState?.error}
+          onSourceMaterialUploaded={onSourceMaterialUploaded}
+          onExtractCandidate={onExtractCandidate}
+          onSendToYOps={onSendToYOps}
+          onYOpsCommitted={onYOpsCommitted}
+          sendingToYOps={Boolean(flowState?.sendingToYOps)}
+          yopsDraftSent={Boolean(flowState?.yopsDraftId)}
+        />
       </div>
     </section>
   );
+}
+
+function mergeWorkspaceOverride(
+  candidate: WorkspaceCandidate,
+  override?: WorkspaceCandidate
+): WorkspaceCandidate {
+  if (!override) return candidate;
+
+  return {
+    ...candidate,
+    ...override,
+    outputTargets: candidate.outputTargets,
+    schemaBindings: candidate.schemaBindings,
+    sourceBundle: candidate.sourceBundle,
+  };
 }
 
 function WorkspaceEmptyState({ message }: { message: string }) {

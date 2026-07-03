@@ -46,11 +46,11 @@ describe('OrganizationSettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Reset profile form' })).toBeEnabled();
     expect(screen.getByRole('link', { name: 'Open provider setup' })).toHaveAttribute(
       'href',
-      '/settings/providers'
+      '/settings/providers?returnTo=%2Ft3x-dev%2Fsettings'
     );
     expect(screen.getByRole('link', { name: 'Open API / CLI / MCP access' })).toHaveAttribute(
       'href',
-      '/settings/access'
+      '/settings/access?returnTo=%2Ft3x-dev%2Fsettings'
     );
   });
 });

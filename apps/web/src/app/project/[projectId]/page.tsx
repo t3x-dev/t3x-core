@@ -6,7 +6,6 @@ import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
-import { ProjectEmptyState } from '@/components/project/ProjectEmptyState';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
@@ -29,7 +28,6 @@ import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
@@ -250,11 +248,6 @@ export function ProjectDetailPageContent({
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
-
-  const goToProjectChat = useCallback(() => {
-    useChatStore.getState().setActiveConversation(null, projectId);
-    router.push(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
-  }, [projectId, router]);
 
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
@@ -497,26 +490,11 @@ export function ProjectDetailPageContent({
       );
     }
 
-    const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
-    if (isEmptyAfterLoad) {
-      const hasConversations = (project.drafts ?? 0) > 0;
-      return (
-        <ProjectEmptyState
-          description={
-            hasConversations
-              ? 'Review existing sources in a workspace, then commit structured state.'
-              : 'Create a workspace from sources, then commit it to populate State.'
-          }
-          onAddSource={goToProjectChat}
-          onCreateWorkspace={() => handleProjectTabChange('workspaces')}
-          title="No committed state yet"
-        />
-      );
-    }
-
     return (
       <ProjectStateTab
         onRunValidation={handleRunYSchemaValidation}
+        projectId={projectId}
+        projectName={project.name}
         validation={project.yschemaValidation}
         validationError={yschemaValidationError}
         validationRunning={yschemaValidationRunning}
@@ -542,8 +520,6 @@ export function ProjectDetailPageContent({
 
   const activeContent = (() => {
     switch (activeTab) {
-      case 'state':
-        return renderStateTab();
       case 'schemas':
         return <ProjectSchemasTab projectId={projectId} />;
       case 'workspaces':

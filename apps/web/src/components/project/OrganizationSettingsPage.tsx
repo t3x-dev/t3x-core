@@ -17,6 +17,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { withReturnTo } from '@/utils/navigationReturn';
 
 interface OrganizationSettingsPageProps {
   ownerSlug: string;
@@ -62,6 +63,7 @@ function SharedSetupLink({ href, label }: { href: string; label: string }) {
 }
 
 export function OrganizationSettingsPage({ ownerSlug }: OrganizationSettingsPageProps) {
+  const returnTo = `/${ownerSlug}/settings`;
   const initialProfile = useMemo(
     () => ({
       description: 'Organization namespace for structured state repositories.',
@@ -265,8 +267,14 @@ export function OrganizationSettingsPage({ ownerSlug }: OrganizationSettingsPage
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <SharedSetupLink href="/settings/providers" label="Open provider setup" />
-            <SharedSetupLink href="/settings/access" label="Open API / CLI / MCP access" />
+            <SharedSetupLink
+              href={withReturnTo('/settings/providers', returnTo)}
+              label="Open provider setup"
+            />
+            <SharedSetupLink
+              href={withReturnTo('/settings/access', returnTo)}
+              label="Open API / CLI / MCP access"
+            />
           </div>
         </section>
 

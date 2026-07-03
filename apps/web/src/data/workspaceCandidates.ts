@@ -1,3 +1,4 @@
+import type { Material } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const workspaceCandidates: WorkspaceCandidate[] = [
@@ -10,42 +11,68 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     updatedAt: '2026-06-29T09:30:00.000Z',
     baseCommitHash: 'sha256:base-prd',
     targetBranch: 'feature/prd-audience',
-    sourceBundle: [
-      {
-        id: 'src_prd_chat',
-        type: 'chat',
-        title: 'Audience chat',
-        description: 'Conversation evidence for audience and reviewer handoff.',
-        conversationId: 'conv_prd',
-        previewTurns: [
-          {
-            id: 'turn_prd_1',
-            role: 'user',
-            author: 'YX',
-            content:
-              'Keep req-yops-handoff as the same requirement identity. Only move its status to ready.',
-          },
-          {
-            id: 'turn_prd_2',
-            role: 'assistant',
-            author: 'Assistant',
-            content:
-              'The candidate should preserve req-yops-handoff, fill summary.audience from product and engineering reviewers, then mark it ready for YOps handoff.',
-          },
-        ],
-      },
-      {
-        id: 'src_prd_doc',
-        type: 'document',
-        title: 'PRD import',
-        description: 'Uploaded PRD notes used as structured source evidence.',
-        fileName: 'prd.md',
-        format: 'markdown',
-        previewText:
-          '# PRD notes\n\nAudience: product and engineering reviewers.\n\nRequirement req-yops-handoff must keep the same identity and move to ready after schema review.',
-      },
-    ],
+    sourceBundle: [],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
+    schemaCandidate: {
+      summary: 'Source evidence supports the PRD audience handoff fields.',
+      fields: [
+        {
+          id: 'field_prd_summary',
+          path: 'summary',
+          label: 'Summary',
+          type: 'object',
+          required: true,
+          status: 'covered',
+          sourceRefs: 2,
+          children: [
+            {
+              id: 'field_prd_summary_audience',
+              path: 'summary.audience',
+              label: 'Audience',
+              type: 'string',
+              required: true,
+              status: 'covered',
+              value: 'Product and engineering reviewers',
+              evidence: 'Audience chat and PRD import both name product and engineering reviewers.',
+              sourceRefs: 2,
+            },
+            {
+              id: 'field_prd_summary_goal',
+              path: 'summary.goal',
+              label: 'Goal',
+              type: 'string',
+              required: true,
+              status: 'covered',
+              value: 'Prepare a YSchema-ready PRD candidate before YOps handoff.',
+              evidence: 'The chat asks to turn the PRD draft into a YSchema-ready candidate.',
+              sourceRefs: 1,
+            },
+          ],
+        },
+        {
+          id: 'field_prd_scope',
+          path: 'scope',
+          label: 'Scope',
+          type: 'object',
+          required: true,
+          status: 'covered',
+          sourceRefs: 1,
+          children: [
+            {
+              id: 'field_prd_scope_non_goals',
+              path: 'scope.non_goals',
+              label: 'Non-goals',
+              type: 'string[]',
+              required: false,
+              status: 'covered',
+              value: 'Keep requirement identity stable while moving status to ready.',
+              evidence: 'The source chat explicitly keeps req-yops-handoff identity unchanged.',
+              sourceRefs: 1,
+            },
+          ],
+        },
+      ],
+    },
     schemaReview: {
       verdict: 'ready',
       summary: 'Ready for YOps apply after schema alignment.',
@@ -57,24 +84,45 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_prd_audience',
           op: 'set',
-          path: '/audience/primary',
+          path: 'prd/summary/audience',
           summary: 'Set primary audience from source evidence.',
+          beforeValue: 'Internal reviewers',
+          afterValue: 'Product and engineering reviewers',
+          reason: 'Source evidence confirms product and engineering reviewers as the PRD audience.',
+          sourceRefs: [],
         },
         {
           id: 'op_prd_scope',
           op: 'add',
-          path: '/scope/non_goals/-',
+          path: 'prd/scope/non_goals/-',
           summary: 'Add non-goal from PRD import notes.',
+          beforeValue: 'No non-goal recorded',
+          afterValue: 'Keep requirement identity stable while moving status to ready.',
+          reason:
+            'The candidate includes an identity constraint that should be preserved in state.',
+          sourceRefs: [],
         },
       ],
     },
     outputTargets: [
       {
         id: 'target_prd_markdown',
-        title: 'PRD Markdown export',
+        title: 'PRD review brief',
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction:
+          'Generate a concise PRD review brief from the committed candidate tree. Keep source-backed audience notes visible and avoid adding unsupported scope.',
+        constraints: [
+          'Include summary.audience exactly as committed.',
+          'List non-goals only when they are present in the candidate tree.',
+          'Call out unresolved schema gaps before final recommendations.',
+        ],
+        sourceScope: 'Committed PRD candidate plus included source evidence.',
+        previewTitle: 'PRD audience handoff leaf',
+        previewBody:
+          'A markdown brief for reviewers after YOps materializes the PRD audience candidate.',
       },
     ],
   },
@@ -87,19 +135,45 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     updatedAt: '2026-06-28T14:10:00.000Z',
     baseCommitHash: null,
     targetBranch: 'release/notes',
-    sourceBundle: [
-      {
-        id: 'src_release_doc',
-        type: 'document',
-        title: 'Release note outline',
-        description: 'Draft release note outline imported as source material.',
-        fileName: 'notes.md',
-        format: 'markdown',
-        previewText:
-          '# Release note outline\n\nCollect source evidence before schema review.\n\n- Confirm release-note required fields\n- Preserve user-facing change summary',
-      },
-    ],
+    sourceBundle: [],
     schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
+    schemaCandidate: {
+      summary: 'Release-note candidate still needs required release metadata.',
+      fields: [
+        {
+          id: 'field_release_title',
+          path: 'title',
+          label: 'Title',
+          type: 'string',
+          required: true,
+          status: 'covered',
+          value: 'Release note cleanup',
+          evidence: 'Workspace title and release outline provide the candidate title.',
+          sourceRefs: 1,
+        },
+        {
+          id: 'field_release_version',
+          path: 'release.version',
+          label: 'Release version',
+          type: 'string',
+          required: true,
+          status: 'missing',
+          sourceRefs: 0,
+        },
+        {
+          id: 'field_release_sections',
+          path: 'sections',
+          label: 'Sections',
+          type: 'array',
+          required: true,
+          status: 'needs_confirmation',
+          value: 'One placeholder section',
+          evidence:
+            'The imported outline suggests a section, but the required section type is not confirmed.',
+          sourceRefs: 1,
+        },
+      ],
+    },
     schemaReview: {
       verdict: 'needs_review',
       summary: 'Needs schema confirmation before YOps apply.',
@@ -111,8 +185,13 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         {
           id: 'op_release_section',
           op: 'add',
-          path: '/sections/-',
+          path: 'release_note/sections/-',
           summary: 'Add release-note section placeholder.',
+          beforeValue: 'No section placeholder',
+          afterValue: 'One draft release-note section',
+          reason:
+            'The release-note source outline suggests a section, but still needs confirmation.',
+          sourceRefs: [],
         },
       ],
     },
@@ -123,11 +202,61 @@ const workspaceCandidates: WorkspaceCandidate[] = [
         type: 'document',
         format: 'markdown',
         status: 'draft_target',
+        leafType: 'document',
+        instruction:
+          'Generate a release-note preview only after the release metadata is committed.',
+        constraints: [
+          'Do not invent a release version.',
+          'Keep uncertain sections marked as draft until schema review is complete.',
+        ],
+        sourceScope: 'Committed release-note candidate.',
+        previewTitle: 'Release notes leaf',
+        previewBody: 'A markdown release-note draft generated from the committed release tree.',
       },
     ],
   },
 ];
 
-export function getWorkspacePreviewCandidates(projectId: string): WorkspaceCandidate[] {
-  return workspaceCandidates.map((candidate) => ({ ...candidate, projectId }));
+export function getWorkspacePreviewCandidates(
+  projectId: string,
+  materials: Material[] = []
+): WorkspaceCandidate[] {
+  const materialSources = materials.map(materialToSourceBundleItem);
+
+  return workspaceCandidates.map((candidate) => ({
+    ...candidate,
+    projectId,
+    sourceBundle:
+      candidate.id === 'workspace_prd_handoff' ? materialSources : candidate.sourceBundle,
+    yopsDraft:
+      candidate.id === 'workspace_prd_handoff'
+        ? {
+            ...candidate.yopsDraft,
+            operations: candidate.yopsDraft.operations.map((operation) => ({
+              ...operation,
+              sourceRefs: operation.sourceRefs?.length
+                ? operation.sourceRefs
+                : materialSources.map((source) => source.id),
+            })),
+          }
+        : candidate.yopsDraft,
+  }));
+}
+
+function materialToSourceBundleItem(material: Material) {
+  return {
+    id: materialSourceId(material.id),
+    type: material.source_type === 'document' ? ('document' as const) : ('import' as const),
+    title: material.title,
+    description: material.content_excerpt,
+    materialId: material.id,
+    contentHash: material.content_hash,
+    tokenEstimate: material.token_estimate,
+    fileName: material.filename ?? undefined,
+    previewText: material.content_excerpt,
+  };
+}
+
+export function materialSourceId(materialId: string): string {
+  return `material:${materialId}`;
 }

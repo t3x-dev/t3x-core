@@ -106,7 +106,7 @@ export const adminDef: ToolDef = {
       },
       type: {
         type: 'string',
-        enum: ['conversation', 'leaf', 'import'],
+        enum: ['conversation', 'conversation_turn', 'leaf', 'import'],
         description: 'Pin type (for create_pin).',
       },
       ref_id: {
@@ -295,11 +295,13 @@ async function handleCreatePin(args: Record<string, unknown>) {
 
   if (!projectId) return fail('"project_id" is required for create_pin.');
   if (!type) {
-    return fail('"type" is required for create_pin. Use "conversation", "leaf", or "import".');
+    return fail(
+      '"type" is required for create_pin. Use "conversation", "conversation_turn", "leaf", or "import".'
+    );
   }
   if (!refId) return fail('"ref_id" is required for create_pin.');
 
-  const validTypes = ['conversation', 'leaf', 'import'];
+  const validTypes = ['conversation', 'conversation_turn', 'leaf', 'import'];
   if (!validTypes.includes(type)) {
     return fail(`Invalid pin type "${type}". Must be one of: ${validTypes.join(', ')}.`);
   }
