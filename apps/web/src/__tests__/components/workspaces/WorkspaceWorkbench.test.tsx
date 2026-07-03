@@ -967,7 +967,7 @@ describe('WorkspaceWorkbench', () => {
       message: 'Workspace commit: PRD audience handoff',
       parents: ['sha256:base-prd'],
       project_id: 'proj_1',
-      provenance: { method: 'workspace_yops' },
+      provenance: { method: 'human_curation' },
     });
 
     await waitFor(() =>
