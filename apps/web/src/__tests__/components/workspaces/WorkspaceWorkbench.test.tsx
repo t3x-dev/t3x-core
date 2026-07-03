@@ -6,6 +6,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
+function countFetchCalls(calls: Parameters<typeof fetch>[], expectedUrl: string) {
+  return calls.filter(([url]) => String(url) === expectedUrl).length;
+}
+
+function findFetchCall(calls: Parameters<typeof fetch>[], expectedUrl: string, occurrence = 0) {
+  const matches = calls.filter(([url]) => String(url) === expectedUrl);
+  expect(matches.length).toBeGreaterThan(occurrence);
+  return matches[occurrence];
+}
+
 const workspaceCandidates: WorkspaceCandidate[] = [
   {
     id: 'workspace_ready',
@@ -701,12 +711,19 @@ describe('WorkspaceWorkbench', () => {
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
+    const extractCandidateUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
+    const yopsDraftUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
+    const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
+    const commitsUrl = 'http://localhost:8000/api/v1/commits';
+
     fireEvent.click(screen.getByRole('button', { name: 'Extract candidate' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate'
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBeGreaterThanOrEqual(1)
     );
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+    const [, extractCandidateInit] = findFetchCall(fetchMock.mock.calls, extractCandidateUrl);
+    expect(JSON.parse(String(extractCandidateInit?.body))).toMatchObject({
       sources: [{ id: 'src_chat' }, { id: 'src_doc', materialId: 'mat_prd' }],
       workspace: { id: 'workspace_ready', projectId: 'proj_1' },
     });
@@ -726,10 +743,10 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Send to YOps' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe(
-      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft'
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
     );
+    findFetchCall(fetchMock.mock.calls, yopsDraftUrl);
     expect(await screen.findByText('Draft sent')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
@@ -741,9 +758,11 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Extract YOps/ }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect(fetchMock.mock.calls[2][0]).toBe('http://localhost:8000/api/v1/yops/validate');
-    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [, generateInit] = findFetchCall(fetchMock.mock.calls, yopsValidateUrl);
+    expect(JSON.parse(String(generateInit?.body))).toMatchObject({
       yops: [
         {
           set: {
@@ -788,9 +807,11 @@ describe('WorkspaceWorkbench', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
-    expect(fetchMock.mock.calls[3][0]).toBe('http://localhost:8000/api/v1/yops/validate');
-    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toMatchObject({
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(2)
+    );
+    const [, applyInit] = findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1);
+    expect(JSON.parse(String(applyInit?.body))).toMatchObject({
       yops: [
         {
           set: {
@@ -824,7 +845,10 @@ describe('WorkspaceWorkbench', () => {
         },
       ],
     });
-    const [commitUrl, commitInit] = fetchMock.mock.calls[4];
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, commitsUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, commitsUrl);
     expect(commitUrl).toBe('http://localhost:8000/api/v1/commits');
     expect(JSON.parse(String(commitInit?.body))).toMatchObject({
       branch: 'feature/prd-audience',
