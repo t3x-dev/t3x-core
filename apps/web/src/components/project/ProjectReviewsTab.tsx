@@ -33,10 +33,7 @@ const REVIEW_KIND_LABELS: Record<ProjectReviewKind, string> = {
   merge_review: 'Merge review',
 };
 
-const REVIEW_STATUS_BADGES: Record<
-  ProjectReviewRow['status'],
-  'branch' | 'pending' | 'warning'
-> = {
+const REVIEW_STATUS_BADGES: Record<ProjectReviewRow['status'], 'branch' | 'pending' | 'warning'> = {
   ready: 'branch',
   reviewing: 'pending',
   blocked: 'warning',

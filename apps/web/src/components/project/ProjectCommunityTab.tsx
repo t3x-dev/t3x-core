@@ -145,9 +145,7 @@ export function ProjectCommunityTab() {
               aria-hidden="true"
               className="h-4 w-4 text-[var(--accent-conversation)]"
             />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-              Project community
-            </h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Project community</h2>
           </div>
           <p className="text-sm leading-5 text-[var(--text-secondary)]">
             Human handoff notes, collaborators, and external context stay linked to project objects
@@ -162,9 +160,7 @@ export function ProjectCommunityTab() {
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-3">
               <div>
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                  Handoff notes
-                </h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Handoff notes</h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)]">
                   Discussion that references state, reviews, and outputs but does not mutate them.
                 </p>
@@ -236,9 +232,7 @@ function CollaboratorsPanel() {
     <section className="overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]">
       <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] px-3 py-3">
         <Users aria-hidden="true" className="h-4 w-4 text-[var(--accent-conversation)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-          Project collaborators
-        </h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Project collaborators</h3>
       </div>
       <div className="divide-y divide-[var(--stroke-divider)]">
         {COLLABORATORS.map((collaborator) => (

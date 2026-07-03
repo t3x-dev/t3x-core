@@ -177,7 +177,10 @@ function OutputReadiness({ artifact }: { artifact: ProjectOutputArtifact }) {
 
       <div className="mt-3 flex items-start gap-2">
         {constraintsPassed ? (
-          <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 text-[var(--status-success)]" />
+          <CheckCircle2
+            aria-hidden="true"
+            className="mt-0.5 h-4 w-4 text-[var(--status-success)]"
+          />
         ) : (
           <AlertTriangle
             aria-hidden="true"
