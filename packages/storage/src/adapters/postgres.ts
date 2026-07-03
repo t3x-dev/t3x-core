@@ -81,7 +81,7 @@ export async function closePostgresStorage(): Promise<void> {
 /**
  * Schema version — bump this number whenever you add migrations below.
  */
-const SCHEMA_VERSION = 49;
+const SCHEMA_VERSION = 50;
 
 /**
  * Initialize database schema (skips if already at current version)
@@ -1406,6 +1406,15 @@ async function initializeSchema(sql: postgres.Sql): Promise<void> {
   await sql.unsafe(`
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_materials_archived_at ON materials(archived_at);
+  `);
+
+  // ── Schema v50: Workspace staged state persisted through drafts ──
+  await sql.unsafe(`
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+    ALTER TABLE drafts ADD COLUMN IF NOT EXISTS workspace_state_json JSONB;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+      ON drafts(project_id, workspace_id)
+      WHERE workspace_id IS NOT NULL;
   `);
 
   await ensureSourceTextRevisionsSchema(sql);
