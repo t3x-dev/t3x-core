@@ -354,7 +354,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Schema registry')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Schema templates' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Templates' })).toBeInTheDocument();
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
   });
 
