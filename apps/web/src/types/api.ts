@@ -86,7 +86,14 @@ export type {
 // instanceof / numeric comparison; hook-化 applies to functions only).
 export { STREAMING_IMPORT_THRESHOLD } from '@/infrastructure/misc';
 export type { ConversationContext } from '@/infrastructure/pins';
-export type { QuickVerifyResult, VerifyResult } from '@/infrastructure/projects';
+export type {
+  CreateYSchemaValidationRunPayload,
+  LatestYSchemaValidationRunOptions,
+  QuickVerifyResult,
+  VerifyResult,
+  YSchemaValidationRun,
+  YSchemaValidationRunStatus,
+} from '@/infrastructure/projects';
 export type {
   CreateRecipeInput,
   Recipe,

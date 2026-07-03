@@ -55,6 +55,8 @@ export { treeExtractRoutes } from './tree-extract.openapi';
 export { turnRoutes } from './turns.openapi';
 export { usageRoutes } from './usage.openapi';
 export { webhooksRoutes } from './webhooks.openapi';
+export { workspaceRoutes } from './workspaces.openapi';
 export { yopsLogRoutes } from './yops-log.openapi';
 export { yopsValidateRoutes } from './yops-validate.openapi';
 export { yschemaPrdSmokeRoutes } from './yschema-prd-smoke.openapi';
+export { yschemaValidationRoutes } from './yschema-validation.openapi';

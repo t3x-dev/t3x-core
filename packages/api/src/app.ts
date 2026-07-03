@@ -80,9 +80,11 @@ import {
   turnRoutes,
   usageRoutes,
   webhooksRoutes,
+  workspaceRoutes,
   yopsLogRoutes,
   yopsValidateRoutes,
   yschemaPrdSmokeRoutes,
+  yschemaValidationRoutes,
 } from './routes';
 import { createWsRoute } from './routes/ws';
 
@@ -177,6 +179,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', gateRoutes); // /v1/gate/check
   api.route('/', yopsLogRoutes); // /v1/conversations/:conversationId/yops
   api.route('/', yopsValidateRoutes); // /v1/yops/validate
+  api.route('/', yschemaValidationRoutes); // /v1/projects/:projectId/yschema-validation/*
   api.route('/', yschemaPrdSmokeRoutes); // /v1/dev/yschema/prd-smoke
   api.route('/', docsYopsRoutes); // /v1/docs/yops
   api.route('/', runsRoutes);
@@ -210,6 +213,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   api.route('/', extractIncrementalRoutes); // /v1/extract/incremental
   api.route('/', extractionFeedbackRoutes);
   api.route('/', topicsRoutes);
+  api.route('/', workspaceRoutes);
 
   // Auth /me route (always available — works with any auth provider)
   api.route('/', authMeRoutes);
@@ -246,9 +250,11 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
       { name: 'Projects', description: 'Project management' },
       { name: 'Conversations', description: 'Conversation management' },
       { name: 'Turns', description: 'Turn (message) management' },
+      { name: 'Workspaces', description: 'Workspace review and YOps handoff workflows' },
       { name: 'Commits', description: 'Version control commits' },
       { name: 'Branches', description: 'Branch management' },
       { name: 'Drafts', description: 'Draft management' },
+      { name: 'YSchema', description: 'YSchema validation workflows' },
       { name: 'YOps', description: 'YOps validation and mutation operations' },
       { name: 'YOps Log', description: 'Structured-state change log (incremental tree changes)' },
       { name: 'Diff', description: 'Structured diff operations' },

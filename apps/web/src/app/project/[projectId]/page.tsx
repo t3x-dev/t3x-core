@@ -1,12 +1,11 @@
 'use client';
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasWorkspace } from '@/components/canvas';
 import { ErrorMessage, LoadingSpinner } from '@/components/layout/ApiStatus';
 import { ProjectDemoTourOverlay } from '@/components/onboarding/ProjectDemoTourOverlay';
 import { ProjectCommunityTab } from '@/components/project/ProjectCommunityTab';
-import { ProjectEmptyState } from '@/components/project/ProjectEmptyState';
 import { ProjectOutputsTab } from '@/components/project/ProjectOutputsTab';
 import { ProjectReviewsTab } from '@/components/project/ProjectReviewsTab';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
@@ -15,6 +14,8 @@ import { ProjectShell } from '@/components/project/ProjectShell';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab';
 import { type ProjectTabId, parseProjectTab } from '@/components/project/projectTabModel';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
+import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -25,20 +26,23 @@ import { useIntroDemoCompletion } from '@/hooks/onboarding/useIntroDemoCompletio
 import { usePinsCrud } from '@/hooks/pins/usePinsCrud';
 import { useProjectCrud } from '@/hooks/projects/useProjectCrud';
 import { fetchProject } from '@/queries/project';
+import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import { useChatStore } from '@/store/chatStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
+import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
 export default function ProjectDetailPage() {
   return (
     <Suspense>
-      <ProjectDetailPageContent />
+      <ProjectIdCanonicalRedirect />
     </Suspense>
   );
 }
 
 interface ProjectDetailPageContentProps {
+  initialTabOverride?: ProjectTabId;
+  projectIdOverride?: string;
   showChatSidebarToggle?: boolean;
 }
 
@@ -48,15 +52,109 @@ function isNotFoundError(error: Error | null): boolean {
   return normalized.includes('404') || normalized.includes('not found');
 }
 
+function withCurrentQuery(path: string, searchParams: { toString: () => string }) {
+  const params = new URLSearchParams(searchParams.toString());
+  params.delete('tab');
+  params.delete('zoom');
+  params.delete('x');
+  params.delete('y');
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function getProjectTabPath(project: { id?: string; name: string }, tab: ProjectTabId) {
+  const basePath = getProjectRepoPath(project);
+  return tab === 'state' ? basePath : `${basePath}/${tab}`;
+}
+
+function getProjectCanonicalPath(
+  project: { id?: string; name: string },
+  searchParams: URLSearchParams
+) {
+  return withCurrentQuery(
+    getProjectTabPath(project, parseProjectTab(searchParams.get('tab'))),
+    searchParams
+  );
+}
+
+function hasProjectUiQuery(searchParams: { has: (key: string) => boolean }) {
+  return (
+    searchParams.has('tab') ||
+    searchParams.has('zoom') ||
+    searchParams.has('x') ||
+    searchParams.has('y')
+  );
+}
+
+function ProjectIdCanonicalRedirect() {
+  const params = useParams<{ projectId?: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectId = typeof params.projectId === 'string' ? params.projectId : '';
+  const projectFromStore = useProjectStore((state) =>
+    state.projects.find((item) => item.id === projectId)
+  );
+  const [lookupError, setLookupError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const replaceWithProject = (project: ProjectSummary) => {
+      router.replace(
+        getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
+      );
+    };
+
+    if (projectFromStore) {
+      replaceWithProject(projectFromStore);
+      return;
+    }
+
+    let cancelled = false;
+    setLookupError(null);
+    fetchProject(projectId)
+      .then((detail) => {
+        if (!cancelled) replaceWithProject(apiProjectToSummary(detail));
+      })
+      .catch((err) => {
+        if (!cancelled) setLookupError(err instanceof Error ? err : new Error(String(err)));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectFromStore, projectId, router, searchParams]);
+
+  if (lookupError) {
+    return (
+      <div className="flex h-full flex-col">
+        <ErrorMessage error={lookupError} onRetry={() => setLookupError(null)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <LoadingSpinner message="Opening repository..." />
+    </div>
+  );
+}
+
 export function ProjectDetailPageContent({
+  initialTabOverride,
+  projectIdOverride,
   showChatSidebarToggle = false,
 }: ProjectDetailPageContentProps = {}) {
-  const params = useParams();
+  const params = useParams<{ projectId?: string }>();
+  const pathname = usePathname();
   const router = useRouter();
-  const projectId = params.projectId as string;
+  const routeProjectId = typeof params.projectId === 'string' ? params.projectId : '';
+  const projectId = projectIdOverride ?? routeProjectId;
 
   const searchParams = useSearchParams();
-  const activeTab = parseProjectTab(searchParams.get('tab'));
+  const [activeTab, setActiveTab] = useState<ProjectTabId>(
+    () => initialTabOverride ?? parseProjectTab(searchParams.get('tab'))
+  );
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
   const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
@@ -75,11 +173,26 @@ export function ProjectDetailPageContent({
   const [fetchedProject, setFetchedProject] = useState<ProjectSummary | null>(null);
   const [projectLookupLoading, setProjectLookupLoading] = useState(false);
   const [projectLookupError, setProjectLookupError] = useState<Error | null>(null);
-  const project = projectFromStore ?? fetchedProject;
+  const [yschemaValidation, setYschemaValidation] = useState(() =>
+    toYSchemaValidationSummary(null)
+  );
+  const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
+  const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
+  const projectBase = projectFromStore ?? fetchedProject;
+  const project = useMemo(
+    () => (projectBase ? { ...projectBase, yschemaValidation } : null),
+    [projectBase, yschemaValidation]
+  );
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
   useCanvasDeletionWiring();
+
+  useEffect(() => {
+    if (project) {
+      recordRecentProjectOpen(project.id);
+    }
+  }, [project?.id]);
 
   // Canvas store for loading project data
   const canvasLoading = useCanvasStore((state) => state.loading);
@@ -113,47 +226,28 @@ export function ProjectDetailPageContent({
     closeNodeModal();
   }, [closeNodeModal, showIntroDemo]);
 
-  // Keep a stable ref to searchParams so callbacks don't re-create on every URL change
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+  useEffect(() => {
+    if (!hasProjectUiQuery(searchParams)) return;
+    if (searchParams.has('tab') && !project) return;
+
+    const nextPath =
+      project && searchParams.has('tab')
+        ? getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
+        : withCurrentQuery(pathname, searchParams);
+    router.replace(nextPath, { scroll: false });
+  }, [pathname, project, router, searchParams]);
 
   const handleProjectTabChange = useCallback(
     (nextTab: ProjectTabId) => {
-      const params = new URLSearchParams(searchParamsRef.current.toString());
-      if (nextTab === 'state') {
-        params.delete('tab');
-      } else {
-        params.set('tab', nextTab);
-      }
-      const query = params.toString();
-      router.replace(query ? `?${query}` : '?', { scroll: false });
+      setActiveTab(nextTab);
+      if (project) router.push(getProjectTabPath(project, nextTab), { scroll: false });
     },
-    [router]
+    [project, router]
   );
 
-  // Debounced viewport → URL sync
-  const viewportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => {
-    return () => clearTimeout(viewportTimerRef.current);
+  const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
+    // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
-  const handleViewportChange = useCallback(
-    (viewport: { x: number; y: number; zoom: number }) => {
-      clearTimeout(viewportTimerRef.current);
-      viewportTimerRef.current = setTimeout(() => {
-        const params = new URLSearchParams(searchParamsRef.current.toString());
-        params.set('zoom', viewport.zoom.toFixed(2));
-        params.set('x', Math.round(viewport.x).toString());
-        params.set('y', Math.round(viewport.y).toString());
-        router.replace(`?${params.toString()}`, { scroll: false });
-      }, 500);
-    },
-    [router]
-  );
-
-  const goToProjectChat = useCallback(() => {
-    useChatStore.getState().setActiveConversation(null, projectId);
-    router.push(`/chat/new?projectId=${encodeURIComponent(projectId)}`);
-  }, [projectId, router]);
 
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
@@ -193,6 +287,44 @@ export function ProjectDetailPageContent({
       cancelled = true;
     };
   }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
+
+  useEffect(() => {
+    if (!projectBase?.id) {
+      setYschemaValidation(null);
+      return;
+    }
+
+    let cancelled = false;
+    setYschemaValidation(null);
+
+    fetchLatestYSchemaValidation(projectBase.id)
+      .then((run) => {
+        if (!cancelled) setYschemaValidation(toYSchemaValidationSummary(run));
+      })
+      .catch(() => {
+        if (!cancelled) setYschemaValidation(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectBase?.id]);
+
+  const handleRunYSchemaValidation = useCallback(async () => {
+    if (!projectBase?.id) return;
+    setYschemaValidationRunning(true);
+    setYschemaValidationError(null);
+
+    try {
+      const run = await runYSchemaValidation(projectBase.id);
+      setYschemaValidation(toYSchemaValidationSummary(run));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Validation run failed';
+      setYschemaValidationError(message);
+    } finally {
+      setYschemaValidationRunning(false);
+    }
+  }, [projectBase?.id]);
 
   // Load fresh project data whenever this page is entered. The canvas store
   // persists across routes, so returning from Chat after a commit must not
@@ -327,11 +459,11 @@ export function ProjectDetailPageContent({
             does not exist or was deleted.
           </p>
           <button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.push('/')}
             className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             type="button"
           >
-            Go to Chats
+            Back to projects
           </button>
         </div>
       </div>
@@ -358,25 +490,15 @@ export function ProjectDetailPageContent({
       );
     }
 
-    const isEmptyAfterLoad = loadedProjectId === projectId && canvasNodeCount === 0;
-    if (isEmptyAfterLoad) {
-      const hasConversations = (project.drafts ?? 0) > 0;
-      return (
-        <ProjectEmptyState
-          description={
-            hasConversations
-              ? 'Review existing sources in a workspace, then commit structured state.'
-              : 'Create a workspace from sources, then commit it to populate State.'
-          }
-          onAddSource={goToProjectChat}
-          onCreateWorkspace={() => handleProjectTabChange('workspaces')}
-          title="No committed state yet"
-        />
-      );
-    }
-
     return (
-      <ProjectStateTab>
+      <ProjectStateTab
+        onRunValidation={handleRunYSchemaValidation}
+        projectId={projectId}
+        projectName={project.name}
+        validation={project.yschemaValidation}
+        validationError={yschemaValidationError}
+        validationRunning={yschemaValidationRunning}
+      >
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
@@ -409,7 +531,7 @@ export function ProjectDetailPageContent({
       case 'community':
         return <ProjectCommunityTab />;
       case 'settings':
-        return <ProjectSettingsTab />;
+        return <ProjectSettingsTab project={project} />;
       default:
         return renderStateTab();
     }

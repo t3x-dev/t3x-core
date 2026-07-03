@@ -127,7 +127,7 @@ const listPinsByProjectRoute = createRoute({
       projectId: z.string().min(1),
     }),
     query: z.object({
-      type: z.enum(['conversation', 'leaf', 'import']).optional(),
+      type: z.enum(['conversation', 'conversation_turn', 'leaf', 'import']).optional(),
       limit: z.coerce.number().int().min(1).max(1000).default(100),
       offset: z.coerce.number().int().min(0).default(0),
     }),

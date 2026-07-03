@@ -10,10 +10,26 @@ export interface SourceBundleItem {
   id: string;
   type: SourceBundleType;
   title: string;
+  description?: string;
   conversationId?: string;
+  materialId?: string;
+  contentHash?: string;
+  tokenEstimate?: number;
   fileName?: string;
   runId?: string;
   format?: 'yaml' | 'json' | 'markdown' | 'text';
+  previewTurns?: SourceConversationTurn[];
+  previewText?: string;
+}
+
+export interface SourceConversationTurn {
+  id: string;
+  role: 'user' | 'assistant';
+  author: string;
+  content: string;
+  conversationId?: string;
+  projectId?: string;
+  pinnable?: boolean;
 }
 
 export type SchemaBindingMode = 'project_default' | 'pinned' | 'draft_override';
@@ -35,6 +51,7 @@ export interface WorkspaceCandidate {
   targetBranch: string;
   sourceBundle: SourceBundleItem[];
   schemaBindings: WorkspaceSchemaBinding[];
+  schemaCandidate: WorkspaceSchemaCandidate;
   schemaReview: WorkspaceSchemaReview;
   yopsDraft: WorkspaceYOpsDraft;
   outputTargets: WorkspaceOutputTarget[];
@@ -51,11 +68,40 @@ export interface WorkspaceSchemaReview {
   gaps: string[];
 }
 
+export type WorkspaceSchemaFieldStatus =
+  | 'covered'
+  | 'missing'
+  | 'needs_confirmation'
+  | 'type_mismatch'
+  | 'extra';
+
+export interface WorkspaceSchemaCandidateField {
+  id: string;
+  path: string;
+  label: string;
+  type: string;
+  required: boolean;
+  status: WorkspaceSchemaFieldStatus;
+  value?: string;
+  evidence?: string;
+  sourceRefs?: number;
+  children?: WorkspaceSchemaCandidateField[];
+}
+
+export interface WorkspaceSchemaCandidate {
+  summary: string;
+  fields: WorkspaceSchemaCandidateField[];
+}
+
 export interface WorkspaceYOpsDraftOperation {
   id: string;
   op: string;
   path: string;
   summary: string;
+  beforeValue?: string;
+  afterValue?: string;
+  reason?: string;
+  sourceRefs?: string[];
 }
 
 export interface WorkspaceYOpsDraft {
@@ -69,10 +115,18 @@ export type WorkspaceOutputTargetFormat = 'markdown' | 'json' | 'yaml' | 'html';
 
 export type WorkspaceOutputTargetStatus = 'draft_target';
 
+export type WorkspaceOutputTargetLeafType = 'document' | 'api' | 'report';
+
 export interface WorkspaceOutputTarget {
   id: string;
   title: string;
   type: WorkspaceOutputTargetType;
   format: WorkspaceOutputTargetFormat;
   status: WorkspaceOutputTargetStatus;
+  leafType?: WorkspaceOutputTargetLeafType;
+  instruction?: string;
+  constraints?: string[];
+  sourceScope?: string;
+  previewTitle?: string;
+  previewBody?: string;
 }

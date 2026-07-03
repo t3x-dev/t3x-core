@@ -22,7 +22,7 @@ export interface ContextManifestBaseline {
 }
 
 export interface ContextManifestReference {
-  type: 'conversation' | 'leaf' | 'import';
+  type: 'conversation' | 'conversation_turn' | 'leaf' | 'import';
   id: string;
   pin_id: string;
   included: boolean;
@@ -44,6 +44,7 @@ export interface ContextManifestFeedback {
 export type ContextManifestSourceKind =
   | 'baseline'
   | 'conversation'
+  | 'conversation_turn'
   | 'leaf'
   | 'commit'
   | 'import'

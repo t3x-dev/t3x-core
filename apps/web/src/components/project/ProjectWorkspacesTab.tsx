@@ -1,14 +1,19 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { getWorkspacePreviewCandidates } from '@/data/workspaceCandidates';
+import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 
 export function ProjectWorkspacesTab({ projectId }: { projectId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const candidates = getWorkspacePreviewCandidates(projectId);
+  const projectMaterials = useProjectMaterials(projectId);
+  const candidates = useMemo(
+    () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
+    [projectId, projectMaterials.materials]
+  );
   const selectedWorkspaceId = searchParams.get('workspace');
 
   const handleWorkspaceSelect = useCallback(
@@ -27,6 +32,7 @@ export function ProjectWorkspacesTab({ projectId }: { projectId: string }) {
       projectId={projectId}
       selectedWorkspaceId={selectedWorkspaceId}
       onSelectedWorkspaceChange={handleWorkspaceSelect}
+      onSourceMaterialUploaded={projectMaterials.refresh}
     />
   );
 }

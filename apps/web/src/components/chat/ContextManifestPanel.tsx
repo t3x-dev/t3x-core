@@ -94,7 +94,7 @@ function sourceItemLabel(item: ContextManifestSourceItem): string {
 }
 
 function isMaterialSourceItem(item: ContextManifestSourceItem): boolean {
-  return item.role === 'evidence' && item.pinned;
+  return item.role === 'evidence' && item.pinned && item.kind !== 'conversation_turn';
 }
 
 function isLessonSourceItem(item: ContextManifestSourceItem): boolean {
@@ -113,6 +113,7 @@ function sourceItemPassed(item: ContextManifestSourceItem): boolean | undefined 
 function sourceKindLabel(kind: ContextManifestSourceItem['kind']): string {
   if (kind === 'baseline') return 'baseline';
   if (kind === 'conversation') return 'conversation';
+  if (kind === 'conversation_turn') return 'chat turn';
   if (kind === 'leaf') return 'leaf';
   if (kind === 'commit') return 'commit';
   if (kind === 'import') return 'import';
@@ -136,7 +137,7 @@ function SourceItemIcon({ kind }: { kind: ContextManifestSourceItem['kind'] }) {
   if (kind === 'leaf') {
     return <LeafIcon size={13} className="text-[var(--accent-leaf)]" />;
   }
-  if (kind === 'conversation') {
+  if (kind === 'conversation' || kind === 'conversation_turn') {
     return <MessageSquare size={13} className="text-[var(--accent-conversation)]" />;
   }
   if (kind === 'lesson') {
@@ -523,7 +524,9 @@ function PreviewPanel({
               ? 'Baseline YAML is inherited from the parent commit. It is automatically included and does not require pinning the parent conversation.'
               : item.role === 'guidance'
                 ? 'Lessons are not evidence sources. They summarize prior output or result feedback and affect extraction context when selected.'
-                : 'Pinned materials are available in the project library and can be added to or removed from the current conversation context.'}
+                : item.kind === 'conversation_turn'
+                  ? 'This chat turn is selected as source evidence for extraction and later diff review.'
+                  : 'Pinned materials are available in the project library and can be added to or removed from the current conversation context.'}
           </p>
           <dl className="grid grid-cols-2 gap-2 text-[10px]">
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-elevated)] p-2">

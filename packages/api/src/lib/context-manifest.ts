@@ -18,6 +18,7 @@ import {
   findConversationById,
   findMaterialsByIds,
   findPinsByProject,
+  findTurnByHash,
   findTurnsByConversation,
   getCommitUnified,
   getConversationContext,
@@ -59,9 +60,17 @@ export interface ContextManifestFeedback {
   lesson?: string;
 }
 
+interface SourceTurnEvidence {
+  turn_hash: string;
+  conversation_id: string;
+  role: string;
+  content: string;
+}
+
 export type ContextManifestSourceKind =
   | 'baseline'
   | 'conversation'
+  | 'conversation_turn'
   | 'leaf'
   | 'commit'
   | 'import'
@@ -124,19 +133,20 @@ export async function buildConversationContextManifest(
     conversation.projectId
   );
   const baseline = toBaseline(baselineContent);
-  const materialPins = filterMaterialPins(projectPins);
-  const contextPins = normalizePinsForContext(materialPins);
+  const sourcePins = filterSourcePins(projectPins);
+  const contextPins = normalizePinsForContext(sourcePins);
   const activePinIds = new Set(
     filterActivePins(contextPins, effectiveContextConfig).map((p) => p.id)
   );
 
   const { conversations, conversationTitles } = await loadPinnedConversations(
     db,
-    materialPins,
+    sourcePins,
     conversationId
   );
-  const leaves = await loadPinnedLeaves(db, materialPins);
-  const materials = await loadPinnedMaterials(db, materialPins);
+  const leaves = await loadPinnedLeaves(db, sourcePins);
+  const materials = await loadPinnedMaterials(db, sourcePins);
+  const sourceTurns = await loadPinnedSourceTurns(db, sourcePins, conversation.projectId);
 
   const builtPinContext = buildConversationContext({
     knowledge: undefined,
@@ -153,9 +163,10 @@ export async function buildConversationContextManifest(
   const chat_context_text = [baselineText, builtPinContext.text].filter(Boolean).join('\n\n');
   const feedback = buildFeedback(contextPins, leaves, activePinIds);
   const references = buildReferences(
-    materialPins,
+    sourcePins,
     leaves,
     materials,
+    sourceTurns,
     conversationTitles,
     activePinIds
   );
@@ -163,9 +174,10 @@ export async function buildConversationContextManifest(
     feedback,
     contextPins,
     materials,
+    sourceTurns,
     activePinIds
   );
-  const source_items = buildSourceItems(baseline, references, feedback, materials);
+  const source_items = buildSourceItems(baseline, references, feedback, materials, sourceTurns);
 
   return {
     conversation_id: conversationId,
@@ -194,8 +206,10 @@ function normalizePinsForContext(projectPins: Pin[]): Pin[] {
   });
 }
 
-function filterMaterialPins(projectPins: Pin[]): Pin[] {
-  return projectPins.filter((pin) => pin.type === 'leaf' || pin.type === 'import');
+function filterSourcePins(projectPins: Pin[]): Pin[] {
+  return projectPins.filter(
+    (pin) => pin.type === 'leaf' || pin.type === 'import' || pin.type === 'conversation_turn'
+  );
 }
 
 function getEffectiveContextConfig(
@@ -309,16 +323,42 @@ async function loadPinnedMaterials(db: AnyDB, projectPins: Pin[]): Promise<Map<s
   return new Map(materialRecords.map((material) => [material.id, material]));
 }
 
+async function loadPinnedSourceTurns(
+  db: AnyDB,
+  projectPins: Pin[],
+  projectId: string
+): Promise<Map<string, SourceTurnEvidence>> {
+  const sourceTurns = new Map<string, SourceTurnEvidence>();
+
+  for (const pin of projectPins) {
+    if (pin.type !== 'conversation_turn') continue;
+
+    const turn = await findTurnByHash(db, pin.ref_id);
+    if (!turn || turn.projectId !== projectId) continue;
+
+    sourceTurns.set(pin.ref_id, {
+      turn_hash: turn.turnHash,
+      conversation_id: turn.conversationId,
+      role: turn.role,
+      content: turn.content,
+    });
+  }
+
+  return sourceTurns;
+}
+
 function buildReferences(
   projectPins: Pin[],
   leaves: Map<string, Leaf>,
   materials: Map<string, Material>,
+  sourceTurns: Map<string, SourceTurnEvidence>,
   conversationTitles: Map<string, string>,
   activePinIds: Set<string>
 ): ContextManifestReference[] {
   return projectPins.map((pin) => {
     const leaf = pin.type === 'leaf' ? leaves.get(pin.ref_id) : undefined;
     const material = pin.type === 'import' ? materials.get(pin.ref_id) : undefined;
+    const sourceTurn = pin.type === 'conversation_turn' ? sourceTurns.get(pin.ref_id) : undefined;
     const conversationTitle =
       pin.type === 'conversation' ? conversationTitles.get(pin.ref_id) : undefined;
 
@@ -327,7 +367,8 @@ function buildReferences(
       id: pin.ref_id,
       pin_id: pin.id,
       included: activePinIds.has(pin.id),
-      title: leaf?.title ?? materialTitle(material) ?? conversationTitle,
+      title:
+        leaf?.title ?? materialTitle(material) ?? sourceTurnTitle(sourceTurn) ?? conversationTitle,
     };
   });
 }
@@ -371,7 +412,8 @@ function buildSourceItems(
   baseline: ContextManifestBaseline,
   references: ContextManifestReference[],
   feedback: ContextManifestFeedback[],
-  materials: Map<string, Material>
+  materials: Map<string, Material>,
+  sourceTurns: Map<string, SourceTurnEvidence>
 ): ContextManifestSourceItem[] {
   const items: ContextManifestSourceItem[] = [];
 
@@ -397,6 +439,8 @@ function buildSourceItems(
 
   for (const reference of references) {
     const material = reference.type === 'import' ? materials.get(reference.id) : undefined;
+    const sourceTurn =
+      reference.type === 'conversation_turn' ? sourceTurns.get(reference.id) : undefined;
     items.push({
       id: reference.id,
       kind: reference.type,
@@ -416,7 +460,14 @@ function buildSourceItems(
               tokens: material.token_estimate,
             },
           }
-        : {}),
+        : sourceTurn
+          ? {
+              metadata: {
+                conversation_id: sourceTurn.conversation_id,
+                role: sourceTurn.role,
+              },
+            }
+          : {}),
     });
   }
 
@@ -449,6 +500,7 @@ function buildExtractionContextText(
   feedback: ContextManifestFeedback[],
   projectPins: Pin[],
   materials: Map<string, Material>,
+  sourceTurns: Map<string, SourceTurnEvidence>,
   activePinIds: Set<string>
 ): string {
   const lines: string[] = [];
@@ -472,6 +524,30 @@ function buildExtractionContextText(
     }
   }
 
+  const selectedTurnPins = projectPins.filter(
+    (pin) =>
+      pin.type === 'conversation_turn' && activePinIds.has(pin.id) && sourceTurns.has(pin.ref_id)
+  );
+  if (selectedTurnPins.length > 0) {
+    lines.push(
+      '## Selected Source Chat Turns',
+      '',
+      'Use these chat turns as source evidence when extracting meaning from the conversation.',
+      ''
+    );
+
+    for (const pin of selectedTurnPins) {
+      const turn = sourceTurns.get(pin.ref_id);
+      if (!turn) continue;
+      lines.push(
+        `### ${sourceTurnTitle(turn)}`,
+        '',
+        `**${turn.role}**: ${truncateForPrompt(turn.content, MAX_MATERIAL_CONTEXT_CHARS)}`,
+        ''
+      );
+    }
+  }
+
   const selectedLessons = feedback.filter((item) => item.included && item.lesson);
   if (selectedLessons.length === 0) return lines.join('\n').trim();
 
@@ -491,6 +567,11 @@ function buildExtractionContextText(
 
 function materialTitle(material: Material | undefined): string | undefined {
   return material?.title ?? material?.filename;
+}
+
+function sourceTurnTitle(turn: SourceTurnEvidence | undefined): string | undefined {
+  if (!turn) return undefined;
+  return `${turn.role} turn ${turn.turn_hash.slice(0, 12)}`;
 }
 
 function truncateForPrompt(text: string, maxChars: number): string {

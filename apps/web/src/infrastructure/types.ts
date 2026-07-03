@@ -26,6 +26,7 @@ export interface Project {
   turns_count?: number;
   commits_count?: number;
   branches_count?: number;
+  outputs_count?: number;
   drafts_count?: number;
   default_provider?: string | null;
   default_model?: string | null;

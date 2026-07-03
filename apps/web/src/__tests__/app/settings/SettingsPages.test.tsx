@@ -53,7 +53,7 @@ describe('settings pages', () => {
     expect(screen.getByRole('heading', { name: 'API Access' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Configure the standalone API host's local API URL and key. In a one-machine setup, WebUI, CLI, and MCP can share the same file."
+        'Manage T3X API keys plus the local API URL/key used by WebUI, CLI, and MCP.'
       )
     ).toBeInTheDocument();
     expect(screen.getByText('Mock Access Settings Panel')).toBeInTheDocument();

@@ -502,3 +502,12 @@ export {
   supersedeActiveUncommittedYOpsLogEntries,
   supersedeYOpsLogEntryForRepair,
 } from './yops-log';
+// YSchema Validation Runs
+export {
+  type CreateYSchemaValidationRunInput,
+  createYSchemaValidationRun,
+  findLatestYSchemaValidationRun,
+  findYSchemaValidationRunById,
+  type YSchemaValidationRunOutput,
+  type YSchemaValidationRunStatus,
+} from './yschema-validation-runs';
