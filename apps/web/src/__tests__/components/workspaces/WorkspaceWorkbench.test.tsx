@@ -281,8 +281,8 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('YOps workspace')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'YOps editor' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Generate ops/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Extract YOps/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Commit · main/ })).toBeInTheDocument();
     expect(screen.getByText('Materialized 0')).toBeInTheDocument();
     expect(screen.getByText('Pending 1')).toBeInTheDocument();
@@ -291,9 +291,9 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('path: prd/summary/audience')).toBeInTheDocument();
     expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
     const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
-    expect(yopsTree).toHaveTextContent('prd:');
-    expect(yopsTree).toHaveTextContent('summary:');
-    expect(yopsTree).toHaveTextContent('audience: Product and engineering reviewers');
+    expect(yopsTree).toHaveTextContent('No materialized YAML yet');
+    expect(yopsTree).toHaveTextContent('Extract YOps first');
+    expect(yopsTree).not.toHaveTextContent('audience: Product and engineering reviewers');
     expect(screen.getByText('Human')).toBeInTheDocument();
     expect(screen.getByText('Changed')).toBeInTheDocument();
 
@@ -313,8 +313,8 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('PRD audience handoff leaf')).toBeInTheDocument();
   });
 
-  it('applies the yops preview through the backend validator', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+  it('extracts yops before applying the backend preview', async () => {
+    const createValidateResponse = () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -340,13 +340,17 @@ describe('WorkspaceWorkbench', () => {
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+      );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(createValidateResponse())
+      .mockResolvedValueOnce(createValidateResponse());
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/YOps/);
 
-    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Extract YOps/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0];
@@ -361,6 +365,17 @@ describe('WorkspaceWorkbench', () => {
         },
       ],
     });
+
+    expect(await screen.findByText('Validated by backend')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
+      '1 YOps ready'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe('http://localhost:8000/api/v1/yops/validate');
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Pending 0')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
@@ -370,10 +385,10 @@ describe('WorkspaceWorkbench', () => {
     const extractedWorkspace: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       schemaCandidate: {
-        summary: 'Backend extracted candidate fields from stored source material.',
+        summary: 'Backend mapped 10 schema fields from stored source material.',
         fields: [
           {
-            id: 'field_backend_summary',
+            id: 'field_summary',
             path: 'summary',
             label: 'Summary',
             type: 'object',
@@ -382,7 +397,18 @@ describe('WorkspaceWorkbench', () => {
             sourceRefs: 2,
             children: [
               {
-                id: 'field_backend_summary_audience',
+                id: 'field_summary_problem',
+                path: 'summary.problem',
+                label: 'Problem',
+                type: 'string',
+                required: true,
+                status: 'covered',
+                value: 'Backend PRD import lacks a confirmed reviewer handoff.',
+                evidence: 'PRD import: Backend PRD import lacks a confirmed reviewer handoff.',
+                sourceRefs: 2,
+              },
+              {
+                id: 'field_summary_audience',
                 path: 'summary.audience',
                 label: 'Audience',
                 type: 'string',
@@ -391,6 +417,113 @@ describe('WorkspaceWorkbench', () => {
                 value: 'Backend product reviewers',
                 evidence: 'PRD import: audience is backend product reviewers.',
                 sourceRefs: 2,
+              },
+              {
+                id: 'field_summary_outcome',
+                path: 'summary.outcome',
+                label: 'Outcome',
+                type: 'string',
+                required: true,
+                status: 'covered',
+                value: 'Send reviewed PRD candidates to YOps with deterministic operations.',
+                evidence:
+                  'PRD import: Send reviewed PRD candidates to YOps with deterministic operations.',
+                sourceRefs: 2,
+              },
+            ],
+          },
+          {
+            id: 'field_requirements',
+            path: 'requirements',
+            label: 'Requirements',
+            type: 'object',
+            required: true,
+            status: 'needs_confirmation',
+            sourceRefs: 2,
+            children: [
+              {
+                id: 'field_requirements_backend_prd_handoff',
+                path: 'requirements.backend_prd_handoff',
+                label: 'Backend Prd Handoff',
+                type: 'object',
+                required: true,
+                status: 'needs_confirmation',
+                sourceRefs: 2,
+                children: [
+                  {
+                    id: 'field_requirements_backend_prd_handoff_title',
+                    path: 'requirements.backend_prd_handoff.title',
+                    label: 'Title',
+                    type: 'string',
+                    required: true,
+                    status: 'covered',
+                    value: 'Backend PRD handoff',
+                    evidence: 'PRD import: Backend PRD handoff.',
+                    sourceRefs: 2,
+                  },
+                  {
+                    id: 'field_requirements_backend_prd_handoff_priority',
+                    path: 'requirements.backend_prd_handoff.priority',
+                    label: 'Priority',
+                    type: 'enum',
+                    required: true,
+                    status: 'needs_confirmation',
+                    value: 'should',
+                    sourceRefs: 0,
+                  },
+                  {
+                    id: 'field_requirements_backend_prd_handoff_acceptance',
+                    path: 'requirements.backend_prd_handoff.acceptance',
+                    label: 'Acceptance',
+                    type: 'array',
+                    required: true,
+                    status: 'covered',
+                    value: 'YOps receives reviewed candidate fields from backend source evidence.',
+                    evidence:
+                      'PRD import: YOps receives reviewed candidate fields from backend source evidence.',
+                    sourceRefs: 2,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'field_milestones',
+            path: 'milestones',
+            label: 'Milestones',
+            type: 'object',
+            required: false,
+            status: 'needs_confirmation',
+            sourceRefs: 0,
+            children: [
+              {
+                id: 'field_milestones_candidate_milestone',
+                path: 'milestones.candidate_milestone',
+                label: 'Candidate Milestone',
+                type: 'object',
+                required: false,
+                status: 'needs_confirmation',
+                sourceRefs: 0,
+                children: [
+                  {
+                    id: 'field_milestones_candidate_milestone_title',
+                    path: 'milestones.candidate_milestone.title',
+                    label: 'Title',
+                    type: 'string',
+                    required: false,
+                    status: 'needs_confirmation',
+                    sourceRefs: 0,
+                  },
+                  {
+                    id: 'field_milestones_candidate_milestone_sequence',
+                    path: 'milestones.candidate_milestone.sequence',
+                    label: 'Sequence',
+                    type: 'integer',
+                    required: false,
+                    status: 'needs_confirmation',
+                    sourceRefs: 0,
+                  },
+                ],
               },
             ],
           },
@@ -410,11 +543,53 @@ describe('WorkspaceWorkbench', () => {
           {
             id: 'op_backend_1',
             op: 'set',
+            path: 'prd/summary/problem',
+            summary: 'Set problem from backend candidate extraction.',
+            beforeValue: '',
+            afterValue: 'Backend PRD import lacks a confirmed reviewer handoff.',
+            reason: 'Backend candidate covered summary.problem from included source material.',
+            sourceRefs: ['src_doc'],
+          },
+          {
+            id: 'op_backend_2',
+            op: 'set',
             path: 'prd/summary/audience',
             summary: 'Set audience from backend candidate extraction.',
             beforeValue: '',
             afterValue: 'Backend product reviewers',
             reason: 'Backend candidate covered summary.audience from included source material.',
+            sourceRefs: ['src_doc'],
+          },
+          {
+            id: 'op_backend_3',
+            op: 'set',
+            path: 'prd/summary/outcome',
+            summary: 'Set outcome from backend candidate extraction.',
+            beforeValue: '',
+            afterValue: 'Send reviewed PRD candidates to YOps with deterministic operations.',
+            reason: 'Backend candidate covered summary.outcome from included source material.',
+            sourceRefs: ['src_doc'],
+          },
+          {
+            id: 'op_backend_4',
+            op: 'set',
+            path: 'prd/requirements/backend_prd_handoff/title',
+            summary: 'Set requirement title from backend candidate extraction.',
+            beforeValue: '',
+            afterValue: 'Backend PRD handoff',
+            reason:
+              'Backend candidate covered requirements.backend_prd_handoff.title from included source material.',
+            sourceRefs: ['src_doc'],
+          },
+          {
+            id: 'op_backend_5',
+            op: 'add',
+            path: 'prd/requirements/backend_prd_handoff/acceptance/-',
+            summary: 'Append requirement acceptance from backend candidate extraction.',
+            beforeValue: 'No value recorded',
+            afterValue: 'YOps receives reviewed candidate fields from backend source evidence.',
+            reason:
+              'Backend candidate covered requirements.backend_prd_handoff.acceptance from included source material.',
             sourceRefs: ['src_doc'],
           },
         ],
@@ -453,7 +628,20 @@ describe('WorkspaceWorkbench', () => {
             success: true,
             data: {
               ok: true,
-              applied: 1,
+              applied: 0,
+              preview: { trees: [], relations: [] },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              ok: true,
+              applied: 5,
               preview: {
                 trees: [
                   {
@@ -462,7 +650,33 @@ describe('WorkspaceWorkbench', () => {
                     children: [
                       {
                         key: 'summary',
-                        slots: { audience: 'Backend product reviewers' },
+                        slots: {
+                          audience: 'Backend product reviewers',
+                          outcome:
+                            'Send reviewed PRD candidates to YOps with deterministic operations.',
+                          problem: 'Backend PRD import lacks a confirmed reviewer handoff.',
+                        },
+                        children: [],
+                      },
+                      {
+                        key: 'requirements',
+                        slots: {},
+                        children: [
+                          {
+                            key: 'backend_prd_handoff',
+                            slots: {
+                              acceptance: [
+                                'YOps receives reviewed candidate fields from backend source evidence.',
+                              ],
+                              title: 'Backend PRD handoff',
+                            },
+                            children: [],
+                          },
+                        ],
+                      },
+                      {
+                        key: 'milestones',
+                        slots: {},
                         children: [],
                       },
                     ],
@@ -498,7 +712,18 @@ describe('WorkspaceWorkbench', () => {
     });
     expect(await screen.findByText('Extracted candidate')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YSchema/ })).toHaveAttribute('aria-selected', 'true');
+    expect(
+      screen.getByText('problem: Backend PRD import lacks a confirmed reviewer handoff.')
+    ).toBeInTheDocument();
     expect(screen.getByText('audience: Backend product reviewers')).toBeInTheDocument();
+    expect(screen.getByText('requirements:')).toBeInTheDocument();
+    expect(screen.getByText('backend_prd_handoff:')).toBeInTheDocument();
+    expect(screen.getByText('priority: should')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'acceptance: YOps receives reviewed candidate fields from backend source evidence.'
+      )
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Send to YOps' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -508,25 +733,98 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByText('Draft sent')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'value: "YOps receives reviewed candidate fields from backend source evidence."'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
-    await screen.findByText('Materialized 1');
-
-    fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    fireEvent.click(screen.getByRole('button', { name: /Extract YOps/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock.mock.calls[2][0]).toBe('http://localhost:8000/api/v1/yops/validate');
     expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
       yops: [
+        {
+          set: {
+            path: 'prd/summary/problem',
+            value: 'Backend PRD import lacks a confirmed reviewer handoff.',
+          },
+        },
         {
           set: {
             path: 'prd/summary/audience',
             value: 'Backend product reviewers',
           },
         },
+        {
+          set: {
+            path: 'prd/summary/outcome',
+            value: 'Send reviewed PRD candidates to YOps with deterministic operations.',
+          },
+        },
+        {
+          set: {
+            path: 'prd/requirements/backend_prd_handoff/title',
+            value: 'Backend PRD handoff',
+          },
+        },
+        {
+          append: {
+            path: 'prd/requirements/backend_prd_handoff/acceptance',
+            value: 'YOps receives reviewed candidate fields from backend source evidence.',
+          },
+        },
       ],
     });
-    const [commitUrl, commitInit] = fetchMock.mock.calls[3];
+    expect(await screen.findByText('Validated by backend')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
+      '5 YOps ready'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+    await screen.findByText('Materialized 5');
+
+    fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(fetchMock.mock.calls[3][0]).toBe('http://localhost:8000/api/v1/yops/validate');
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toMatchObject({
+      yops: [
+        {
+          set: {
+            path: 'prd/summary/problem',
+            value: 'Backend PRD import lacks a confirmed reviewer handoff.',
+          },
+        },
+        {
+          set: {
+            path: 'prd/summary/audience',
+            value: 'Backend product reviewers',
+          },
+        },
+        {
+          set: {
+            path: 'prd/summary/outcome',
+            value: 'Send reviewed PRD candidates to YOps with deterministic operations.',
+          },
+        },
+        {
+          set: {
+            path: 'prd/requirements/backend_prd_handoff/title',
+            value: 'Backend PRD handoff',
+          },
+        },
+        {
+          append: {
+            path: 'prd/requirements/backend_prd_handoff/acceptance',
+            value: 'YOps receives reviewed candidate fields from backend source evidence.',
+          },
+        },
+      ],
+    });
+    const [commitUrl, commitInit] = fetchMock.mock.calls[4];
     expect(commitUrl).toBe('http://localhost:8000/api/v1/commits');
     expect(JSON.parse(String(commitInit?.body))).toMatchObject({
       branch: 'feature/prd-audience',

@@ -10,12 +10,10 @@ import {
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getPrimarySchemaBinding } from '@/domain/workspaces/selectors';
 import { useWorkspaceCommit } from '@/hooks/workspaces/useWorkspaceCommit';
 import { useWorkspaceYOps } from '@/hooks/workspaces/useWorkspaceYOps';
 import type {
   WorkspaceCandidate,
-  WorkspaceSchemaCandidateField,
   WorkspaceSchemaFieldStatus,
   WorkspaceYOpsDraftOperation,
 } from '@/types/workspaces';
@@ -32,10 +30,6 @@ export function YOpsDraftTab({
   yopsDraftSent?: boolean;
 }) {
   const draft = candidate.yopsDraft;
-  const schemaBinding = getPrimarySchemaBinding(candidate.schemaBindings);
-  const schemaName = schemaBinding
-    ? schemaBinding.schemaName.replace(/\s+Schema$/i, '')
-    : 'Candidate';
   const [status, setStatus] = useState<
     'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed'
   >(candidate.lastCommitHash ? 'committed' : 'idle');
@@ -59,11 +53,11 @@ export function YOpsDraftTab({
       ),
     [draft.operations, generatedYOps, rootKey]
   );
-  const treeLines = materializedTrees
-    ? buildTreeNodeLines(materializedTrees, changedPaths)
-    : buildYamlTreeLines(candidate, schemaName);
+  const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
   const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
   const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
+  const canExtractYOps = draft.operations.length > 0 && !isBusy && !committedHash;
+  const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
 
   useEffect(() => {
@@ -147,7 +141,7 @@ export function YOpsDraftTab({
             {statusText}
           </span>
           <Button
-            disabled={isBusy}
+            disabled={!canExtractYOps}
             onClick={handleGenerate}
             size="sm"
             type="button"
@@ -158,9 +152,15 @@ export function YOpsDraftTab({
             ) : (
               <Play aria-hidden="true" className="size-4" />
             )}
-            Generate ops
+            Extract YOps
           </Button>
-          <Button disabled={isBusy} onClick={handleApply} size="sm" type="button" variant="commit">
+          <Button
+            disabled={!canApplyYOps}
+            onClick={handleApply}
+            size="sm"
+            type="button"
+            variant="commit"
+          >
             {status === 'applying' ? (
               <Loader2 aria-hidden="true" className="size-4 animate-spin" />
             ) : (
@@ -204,12 +204,19 @@ export function YOpsDraftTab({
             meta={
               materializedTrees
                 ? `${appliedCount} applied`
-                : schemaBinding
-                  ? `${schemaBinding.schemaName} ${schemaBinding.version}`
-                  : 'No schema'
+                : generatedYOps
+                  ? 'Ready to apply'
+                  : 'Waiting for apply'
             }
           />
-          <TreePane lines={treeLines} />
+          {materializedTrees ? (
+            <TreePane lines={treeLines} />
+          ) : (
+            <YOpsTreePendingState
+              operationCount={generatedYOps?.length ?? draft.operations.length}
+              yopsExtracted={Boolean(generatedYOps)}
+            />
+          )}
           <footer className="flex min-h-10 items-center gap-3 border-t border-[var(--stroke-divider)] px-3">
             <TreeLegend />
             <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
@@ -289,6 +296,32 @@ function TreePane({ lines }: { lines: YamlTreeLine[] }) {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function YOpsTreePendingState({
+  operationCount,
+  yopsExtracted,
+}: {
+  operationCount: number;
+  yopsExtracted: boolean;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-[var(--editor-bg)] px-6 py-10">
+      <div className="max-w-[320px] text-center">
+        <div className="mx-auto flex size-10 items-center justify-center rounded-full border border-[var(--stroke-divider)] bg-[var(--surface-panel)] text-[var(--text-tertiary)]">
+          <Braces aria-hidden="true" className="size-5" />
+        </div>
+        <p className="mt-3 text-sm font-semibold text-[var(--text-primary)]">
+          No materialized YAML yet
+        </p>
+        <p className="mt-1 text-xs font-medium leading-5 text-[var(--text-secondary)]">
+          {yopsExtracted
+            ? `${operationCount} YOps ready. Apply them to preview the materialized tree.`
+            : 'Extract YOps first, then apply them to preview the materialized tree.'}
+        </p>
       </div>
     </div>
   );
@@ -387,20 +420,6 @@ interface YamlTreeLine {
   status?: WorkspaceSchemaFieldStatus | 'changed';
 }
 
-function buildYamlTreeLines(candidate: WorkspaceCandidate, schemaName: string): YamlTreeLine[] {
-  const rootKey = schemaName.toLowerCase().replaceAll(/\s+/g, '_');
-  const lines: YamlTreeLine[] = [
-    { id: 'root', indent: 0, key: rootKey },
-    { id: 'title', indent: 1, key: 'title', value: candidate.title },
-  ];
-
-  for (const field of candidate.schemaCandidate.fields) {
-    lines.push(...fieldToTreeLines(field, 1));
-  }
-
-  return lines;
-}
-
 function buildTreeNodeLines(
   trees: WorkspaceYOpsTreeNode[],
   changedPaths: Set<string>
@@ -474,26 +493,6 @@ function operationPreviewPath(operation: WorkspaceYOpsDraftOperation, rootKey: s
 function yopPreviewPath(yop: WorkspaceYOp) {
   const payload = Object.values(yop)[0] as { path?: string };
   return payload.path ?? '';
-}
-
-function fieldToTreeLines(field: WorkspaceSchemaCandidateField, indent: number): YamlTreeLine[] {
-  const key = field.path.split('.').at(-1) ?? field.path;
-  if (field.children?.length) {
-    return [
-      { id: field.id, indent, key, status: field.status },
-      ...field.children.flatMap((child) => fieldToTreeLines(child, indent + 1)),
-    ];
-  }
-
-  return [
-    {
-      id: field.id,
-      indent,
-      key,
-      status: field.status,
-      value: field.value,
-    },
-  ];
 }
 
 function treeLineClassName(status: YamlTreeLine['status']) {
