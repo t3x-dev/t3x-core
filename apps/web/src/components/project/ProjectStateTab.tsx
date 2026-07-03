@@ -292,9 +292,7 @@ function StateValidationBar({
       ) : null}
 
       {validationError ? (
-        <p className="mt-2 text-xs font-semibold text-[var(--status-warning)]">
-          {validationError}
-        </p>
+        <p className="mt-2 text-xs font-semibold text-[var(--status-warning)]">{validationError}</p>
       ) : null}
     </div>
   );
