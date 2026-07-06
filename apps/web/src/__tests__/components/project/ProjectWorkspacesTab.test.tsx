@@ -83,9 +83,7 @@ describe('ProjectWorkspacesTab', () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: 'Restored backend draft' })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));

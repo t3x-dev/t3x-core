@@ -272,4 +272,165 @@ describe('Workspace routes', () => {
     const getBody: ApiResponse = await getRes.json();
     expect(getBody.data.workspace.id).toBe('workspace_prd_handoff');
   });
+
+  it('saves reviewed workspace draft state for later recovery', async () => {
+    const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'client_side_id_is_ignored',
+          projectId: 'client_project_is_ignored',
+          title: 'Reviewed PRD workspace',
+          status: 'schema_review',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          targetBranch: 'feature/reviewed-prd',
+          baseCommitHash: 'sha256:review-base',
+          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          schemaCandidate: {
+            summary: 'User reviewed candidate.',
+            fields: [],
+          },
+          schemaReview: {
+            verdict: 'ready',
+            summary: 'Ready after user review.',
+            gaps: [],
+          },
+          yopsDraft: {
+            id: 'draft:reviewed',
+            operations: [],
+          },
+          outputTargets: [],
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.workspace).toEqual(
+      expect.objectContaining({
+        id: 'workspace_prd_handoff',
+        projectId: 'proj_sources',
+        title: 'Reviewed PRD workspace',
+        status: 'schema_review',
+      })
+    );
+    expect(body.data.workspace.updatedAt).toEqual(expect.any(String));
+    expect(body.data.workspace.updatedAt).not.toBe('2026-01-01T00:00:00.000Z');
+    expect(Number.isNaN(Date.parse(body.data.workspace.updatedAt))).toBe(false);
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        project_id: 'proj_sources',
+        workspace_id: 'workspace_prd_handoff',
+        title: 'Reviewed PRD workspace',
+        parent_commit_hash: 'sha256:review-base',
+        target_branch: 'feature/reviewed-prd',
+      })
+    );
+
+    const getRes = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff');
+    expect(getRes.status).toBe(200);
+    const getBody: ApiResponse = await getRes.json();
+    expect(getBody.data.workspace.schemaCandidate.summary).toBe('User reviewed candidate.');
+  });
+
+  it('preserves backend workspace metadata when saving reviewed state', async () => {
+    const extractRes = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            title: 'Backend extracted workspace',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [],
+            yopsDraft: { id: 'draft:stable-extracted', operations: [] },
+          },
+          sources: [
+            {
+              id: 'src_backend',
+              type: 'document',
+              title: 'Backend source',
+              previewText: 'Problem: Backend extracted problem',
+            },
+          ],
+        }),
+      }
+    );
+    const extractBody: ApiResponse = await extractRes.json();
+    const extractedCandidateId = extractBody.data.candidate_id;
+
+    const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'Reviewed without backend fields',
+          backendCandidateId: 'candidate:client-forged',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [],
+          yopsDraft: { id: 'draft:stable-extracted', operations: [] },
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.candidate_id).toBe(extractedCandidateId);
+    expect(body.data.workspace.backendCandidateId).toBe(extractedCandidateId);
+  });
+
+  it('does not let review saves mark the workspace committed', async () => {
+    const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'Reviewed but not committed',
+          status: 'committed',
+          lastCommitHash: 'sha256:client-forged-commit',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [],
+          yopsDraft: { id: 'draft:review-save', operations: [] },
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.workspace.status).toBe('schema_review');
+    expect(body.data.workspace.lastCommitHash).toBeUndefined();
+  });
+
+  it('normalizes invalid review save statuses before persisting', async () => {
+    const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'Invalid status workspace',
+          status: 'not_a_real_workspace_status',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [],
+          yopsDraft: { id: 'draft:invalid-status', operations: [] },
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.workspace.status).toBe('draft');
+  });
 });

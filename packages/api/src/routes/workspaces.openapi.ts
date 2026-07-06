@@ -52,6 +52,10 @@ const SendYOpsRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
 });
 
+const SaveWorkspaceRequestSchema = z.object({
+  workspace: z.record(z.string(), z.unknown()),
+});
+
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
   yops_draft_id: z.string().optional(),
@@ -61,6 +65,8 @@ const WorkspaceResponseSchema = z.object({
 const ListWorkspacesResponseSchema = z.object({
   workspaces: z.array(z.record(z.string(), z.unknown())),
 });
+
+const REVIEW_SAVE_STATUSES = new Set(['draft', 'ready_for_yops', 'schema_review']);
 
 const projectWorkspacesParams = z.object({
   projectId: z.string(),
@@ -183,6 +189,33 @@ const sendYOpsDraftRoute = createRoute({
   },
 });
 
+const saveWorkspaceRoute = createRoute({
+  method: 'patch',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}',
+  tags: ['Workspaces'],
+  summary: 'Save a reviewed workspace staged state',
+  request: {
+    params: workspaceParams,
+    body: {
+      content: {
+        'application/json': {
+          schema: SaveWorkspaceRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Saved workspace staged state',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceResponseSchema),
+        },
+      },
+    },
+  },
+});
+
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -215,6 +248,69 @@ workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
     data: envelopeFromDraft(draft, workspaceId),
   });
 });
+
+workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { workspace } = c.req.valid('json');
+  const db = await getDB();
+  const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const storedWorkspace = storedDraft?.workspace_state ?? {};
+  const {
+    backendCandidateId: _storedBackendCandidateId,
+    lastCommitHash: _storedLastCommitHash,
+    status: storedStatus,
+    ...storedEditableWorkspace
+  } = storedWorkspace;
+  const {
+    backendCandidateId: _ignoredBackendCandidateId,
+    lastCommitHash: _ignoredLastCommitHash,
+    status,
+    ...clientWorkspace
+  } = workspace;
+  const storedBackendCandidateId = resolveStoredBackendCandidateId(storedWorkspace);
+  const nextStatus = resolveReviewSaveStatus(status, storedStatus);
+  const savedAt = new Date().toISOString();
+  const persistedWorkspace = {
+    ...storedEditableWorkspace,
+    ...clientWorkspace,
+    id: workspaceId,
+    projectId,
+    updatedAt: savedAt,
+    ...(typeof nextStatus === 'string' ? { status: nextStatus } : {}),
+    ...(storedBackendCandidateId ? { backendCandidateId: storedBackendCandidateId } : {}),
+  };
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: projectId,
+    workspace_id: workspaceId,
+    title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
+    parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
+    target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+    workspace_state: persistedWorkspace,
+  });
+
+  return c.json({
+    success: true as const,
+    data: envelopeFromDraft(draft, workspaceId),
+  });
+});
+
+function resolveReviewSaveStatus(status: unknown, storedStatus: unknown): string {
+  if (status === 'committed') return 'schema_review';
+  if (typeof status === 'string' && REVIEW_SAVE_STATUSES.has(status)) return status;
+  if (typeof storedStatus === 'string' && REVIEW_SAVE_STATUSES.has(storedStatus)) {
+    return storedStatus;
+  }
+  return 'draft';
+}
+
+function resolveStoredBackendCandidateId(
+  storedWorkspace: Record<string, unknown>
+): string | undefined {
+  if (typeof storedWorkspace.backendCandidateId === 'string') {
+    return storedWorkspace.backendCandidateId;
+  }
+  return undefined;
+}
 
 workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');

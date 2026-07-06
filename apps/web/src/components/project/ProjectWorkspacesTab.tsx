@@ -98,6 +98,8 @@ function mergeWorkspaceCandidate(
     outputTargets:
       persistedOutputTargets.length > 0 ? persistedOutputTargets : previewCandidate.outputTargets,
     schemaBindings:
-      persistedSchemaBindings.length > 0 ? persistedSchemaBindings : previewCandidate.schemaBindings,
+      persistedSchemaBindings.length > 0
+        ? persistedSchemaBindings
+        : previewCandidate.schemaBindings,
   };
 }
