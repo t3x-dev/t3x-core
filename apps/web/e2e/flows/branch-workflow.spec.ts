@@ -10,6 +10,10 @@ import {
 import { expect, test } from '../fixtures/test';
 import { generateNodes } from '../fixtures/test-data-factory';
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Branch Workflow E2E Tests
  *
@@ -115,9 +119,10 @@ test.describe('Branch Workflow', () => {
     const canvas = page.locator('.react-flow');
     await expect(canvas).toBeVisible({ timeout: 15000 });
 
-    // Try to find branch name text on the canvas (badge or node card)
-    const branchBadge = page.getByText(featureBranchName);
-    await expect(branchBadge.first()).toBeVisible({ timeout: 15000 });
+    const branchCommit = canvas.getByRole('treeitem', {
+      name: new RegExp(`Committed on branch ${escapeRegExp(featureBranchName)}`),
+    });
+    await expect(branchCommit).toBeVisible({ timeout: 15000 });
   });
 
   // BR-08: Switch back to main
