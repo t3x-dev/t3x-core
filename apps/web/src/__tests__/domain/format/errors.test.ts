@@ -49,6 +49,18 @@ describe('formatUserFacingError', () => {
     );
   });
 
+  it('maps raw provider invalid x-api-key errors to key replacement guidance', () => {
+    expect(
+      formatUserFacingError(
+        new Error(
+          'Provider generation failed: [claude] API request failed: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'
+        )
+      )
+    ).toBe(
+      'Provider key was rejected. Open Provider settings, update or remove the key, then test it again.'
+    );
+  });
+
   it('does not treat generic app auth errors as provider key failures', () => {
     expect(formatUserFacingError(new Error('Unauthorized'))).toBe('Unauthorized');
   });

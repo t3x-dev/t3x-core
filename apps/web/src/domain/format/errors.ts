@@ -95,7 +95,7 @@ export function formatUserFacingError(
   }
 
   if (
-    /\b(unauthorized|authentication failed|invalid api key|invalid key|forbidden)\b/i.test(
+    /\b(unauthorized|authentication(?: failed|_error)?|invalid api key|invalid x-api-key|invalid key|forbidden)\b/i.test(
       message
     ) &&
     /\b(provider|api key|key)\b/i.test(message)
