@@ -220,11 +220,13 @@ describe('AccessSettingsPanel', () => {
     await waitFor(() => {
       expect(createApiKey).toHaveBeenCalledWith({ name: 'CLI key' });
     });
-    expect(screen.getByText('t3xk_created_secret')).toBeInTheDocument();
+    expect(await screen.findByText('t3xk_created_secret')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss created key' }));
 
-    expect(screen.queryByText('t3xk_created_secret')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('t3xk_created_secret')).not.toBeInTheDocument();
+    });
   });
 
   it('revokes a T3X API key and refreshes the list', async () => {
