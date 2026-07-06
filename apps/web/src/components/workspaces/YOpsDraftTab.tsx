@@ -60,6 +60,21 @@ export function YOpsDraftTab({
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
+  const extractYOpsTitle = getExtractYOpsTitle({
+    committedHash,
+    isBusy,
+    operationCount: draft.operations.length,
+  });
+  const applyYOpsTitle = getApplyYOpsTitle({
+    committedHash,
+    generated: Boolean(generatedYOps),
+    isBusy,
+  });
+  const commitTitle = getCommitTitle({
+    appliedCount,
+    committedHash,
+    isBusy,
+  });
 
   useEffect(() => {
     if (!candidate.lastCommitHash) return;
@@ -153,6 +168,7 @@ export function YOpsDraftTab({
             disabled={!canValidateProposal}
             onClick={handleGenerate}
             size="sm"
+            title={extractYOpsTitle}
             type="button"
             variant="canvas-outline"
           >
@@ -167,6 +183,7 @@ export function YOpsDraftTab({
             disabled={!canApplyYOps}
             onClick={handleApply}
             size="sm"
+            title={applyYOpsTitle}
             type="button"
             variant="commit"
           >
@@ -235,6 +252,7 @@ export function YOpsDraftTab({
               disabled={appliedCount === 0 || isBusy || Boolean(committedHash)}
               onClick={handleCommit}
               size="sm"
+              title={commitTitle}
               type="button"
               variant="commit"
             >
@@ -250,6 +268,51 @@ export function YOpsDraftTab({
       </div>
     </div>
   );
+}
+
+function getExtractYOpsTitle({
+  committedHash,
+  isBusy,
+  operationCount,
+}: {
+  committedHash: string | null;
+  isBusy: boolean;
+  operationCount: number;
+}): string {
+  if (committedHash) return 'This workspace is already committed.';
+  if (isBusy) return 'A workspace operation is already in progress.';
+  if (operationCount === 0) return 'No proposed YOps operations are available yet.';
+  return 'Validate the proposed YOps before applying it.';
+}
+
+function getApplyYOpsTitle({
+  committedHash,
+  generated,
+  isBusy,
+}: {
+  committedHash: string | null;
+  generated: boolean;
+  isBusy: boolean;
+}): string {
+  if (committedHash) return 'This workspace is already committed.';
+  if (isBusy) return 'A workspace operation is already in progress.';
+  if (!generated) return 'Extract YOps before applying the YAML preview.';
+  return 'Apply validated YOps into a YAML preview.';
+}
+
+function getCommitTitle({
+  appliedCount,
+  committedHash,
+  isBusy,
+}: {
+  appliedCount: number;
+  committedHash: string | null;
+  isBusy: boolean;
+}): string {
+  if (committedHash) return 'Workspace result is already committed.';
+  if (isBusy) return 'A workspace operation is already in progress.';
+  if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
+  return 'Commit the materialized YAML result.';
 }
 
 function PaneHeader({ icon, label, meta }: { icon: ReactNode; label: string; meta: string }) {

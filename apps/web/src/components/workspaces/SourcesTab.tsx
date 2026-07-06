@@ -60,6 +60,9 @@ const IMPORT_ACTIONS = [
   { label: 'Upload PDF/doc', icon: ImagePlus },
 ];
 
+const SOURCE_SEGMENT_EDITING_DISABLED_TITLE =
+  'Block-level source editing needs persisted source segment operations before enabling.';
+
 export function SourcesTab({
   candidate,
   candidateExtracted,
@@ -371,7 +374,9 @@ function SourceBundlePanel({
         <div className="flex items-center gap-1">
           <Button
             aria-label="Add manual note source"
+            disabled
             size="icon-sm"
+            title="Manual note sources need a persisted workspace source endpoint before enabling."
             type="button"
             variant="canvas-ghost"
           >
@@ -403,6 +408,7 @@ function SourceBundlePanel({
               onClick={() => {
                 if (uploadsMaterial) onUploadClick();
               }}
+              title={getImportActionTitle(action.label, uploadsMaterial, materialUploading)}
               type="button"
               variant="canvas-outline"
             >
@@ -547,7 +553,12 @@ function ParsedTextPreview({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="canvas-outline">
+            <Button
+              disabled
+              title="Re-parse needs a persisted material parse job before enabling."
+              type="button"
+              variant="canvas-outline"
+            >
               Re-parse
             </Button>
             {source.materialId ? (
@@ -619,13 +630,31 @@ function ParsedTextPreview({
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm" type="button" variant="canvas-outline">
+                  <Button
+                    disabled
+                    size="sm"
+                    title={SOURCE_SEGMENT_EDITING_DISABLED_TITLE}
+                    type="button"
+                    variant="canvas-outline"
+                  >
                     Include
                   </Button>
-                  <Button size="sm" type="button" variant="canvas-outline">
+                  <Button
+                    disabled
+                    size="sm"
+                    title={SOURCE_SEGMENT_EDITING_DISABLED_TITLE}
+                    type="button"
+                    variant="canvas-outline"
+                  >
                     Exclude
                   </Button>
-                  <Button size="sm" type="button" variant="canvas-outline">
+                  <Button
+                    disabled
+                    size="sm"
+                    title={SOURCE_SEGMENT_EDITING_DISABLED_TITLE}
+                    type="button"
+                    variant="canvas-outline"
+                  >
                     Split
                   </Button>
                 </div>
@@ -880,6 +909,21 @@ function isPersistedTurnId(id: string): boolean {
   return Boolean(id) && !id.startsWith('msg-') && !id.endsWith('_streaming_assistant');
 }
 
+function getImportActionTitle(
+  label: string,
+  uploadsMaterial: boolean,
+  materialUploading: boolean
+): string | undefined {
+  if (materialUploading && uploadsMaterial) return 'Upload is already in progress.';
+  if (label === 'Paste text') {
+    return 'Paste text sources need a persisted workspace source endpoint before enabling.';
+  }
+  if (label === 'Add URL') {
+    return 'URL sources need a persisted workspace source endpoint before enabling.';
+  }
+  return undefined;
+}
+
 function SourceTurnBubble({
   index,
   onToggleSource,
@@ -934,6 +978,7 @@ function SourceTurnBubble({
             className="ml-auto h-6 px-2 text-[10px]"
             disabled={!turn.pinnable || turnSourceBusy}
             onClick={onToggleSource}
+            title={getTurnSourceButtonTitle(turn, sourcePinned, turnSourceBusy)}
             type="button"
             variant={sourcePinned ? 'canvas-outline' : 'commit'}
           >
@@ -951,6 +996,19 @@ function SourceTurnBubble({
       {isUser && <SourceAvatar label="YX" tone="user" />}
     </article>
   );
+}
+
+function getTurnSourceButtonTitle(
+  turn: SourceConversationTurn,
+  sourcePinned: boolean,
+  turnSourceBusy: boolean
+): string {
+  if (turnSourceBusy) return 'Saving this source turn update.';
+  if (!turn.pinnable) {
+    return 'This chat turn must finish saving before it can become source evidence.';
+  }
+  if (sourcePinned) return 'Remove this chat turn from source evidence.';
+  return 'Include this saved chat turn as source evidence.';
 }
 
 function SourceAvatar({ label, tone }: { label: string; tone: 'assistant' | 'user' }) {

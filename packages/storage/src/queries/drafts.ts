@@ -12,9 +12,9 @@
  * - Fork creates a new draft from a committed draft
  */
 
-import type { CreateDraftInput, Draft, DraftConstraint } from '@t3x-dev/core';
+import type { CreateDraftInput, Draft, DraftConstraint, DraftStatus } from '@t3x-dev/core';
 import { generateDraftId } from '@t3x-dev/core';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import { type DraftRecord, drafts } from '../schema-trees';
 
@@ -61,14 +61,26 @@ export interface ListDraftOptions {
 export interface UpdateDraftInput {
   title?: string;
   goal?: string;
+  parent_commit_hash?: string;
   nodes?: unknown[];
   constraints?: DraftConstraint[];
   instructions?: string;
   preview_type?: string;
   target_branch?: string;
+  status?: DraftStatus;
+  workspace_state?: Record<string, unknown>;
   extraction_mode?: 'deterministic' | 'llm';
   semantic_points?: unknown[];
   extraction_cursor?: unknown;
+}
+
+export interface WorkspaceDraftInput {
+  project_id: string;
+  workspace_id: string;
+  title: string;
+  parent_commit_hash?: string | null;
+  target_branch?: string | null;
+  workspace_state: Record<string, unknown>;
 }
 
 // ============================================================
@@ -96,6 +108,8 @@ function rowToDraft(row: DraftRecord): Draft {
     committed_as: row.committedAs ?? undefined,
     committed_leaf_id: row.committedLeafId ?? undefined,
     target_branch: row.targetBranch ?? undefined,
+    workspace_id: row.workspaceId ?? undefined,
+    workspace_state: (row.workspaceStateJson ?? undefined) as Record<string, unknown> | undefined,
     revision: row.revision,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
@@ -135,6 +149,8 @@ export async function insertDraft(db: AnyDB, input: CreateDraftInput): Promise<D
       committedAs: null,
       committedLeafId: null,
       targetBranch: input.target_branch ?? 'main',
+      workspaceId: input.workspace_id ?? null,
+      workspaceStateJson: input.workspace_state ?? null,
       revision: 1,
       createdAt: now,
       updatedAt: now,
@@ -206,11 +222,15 @@ export async function updateDraft(
 
   if (input.title !== undefined) updateData.title = input.title;
   if (input.goal !== undefined) updateData.goal = input.goal;
+  if (input.parent_commit_hash !== undefined)
+    updateData.parentCommitHash = input.parent_commit_hash;
   if (input.nodes !== undefined) updateData.nodesJson = input.nodes;
   if (input.constraints !== undefined) updateData.constraintsJson = input.constraints;
   if (input.instructions !== undefined) updateData.instructions = input.instructions;
   if (input.preview_type !== undefined) updateData.previewType = input.preview_type;
   if (input.target_branch !== undefined) updateData.targetBranch = input.target_branch;
+  if (input.status !== undefined) updateData.status = input.status;
+  if (input.workspace_state !== undefined) updateData.workspaceStateJson = input.workspace_state;
   if (input.extraction_mode !== undefined) updateData.extractionMode = input.extraction_mode;
   if (input.semantic_points !== undefined) updateData.semanticPointsJson = input.semantic_points;
   if (input.extraction_cursor !== undefined)
@@ -334,6 +354,67 @@ export async function forkDraft(db: AnyDB, sourceDraftId: string): Promise<Draft
     .returning();
 
   return rowToDraft(row);
+}
+
+/**
+ * Find the Draft that backs a Project Workspaces staged state.
+ */
+export async function findWorkspaceDraft(
+  db: AnyDB,
+  projectId: string,
+  workspaceId: string
+): Promise<Draft | null> {
+  const [row] = await db
+    .select()
+    .from(drafts)
+    .where(and(eq(drafts.projectId, projectId), eq(drafts.workspaceId, workspaceId)))
+    .limit(1);
+
+  return row ? rowToDraft(row) : null;
+}
+
+/**
+ * List Drafts that back Project Workspaces staged states.
+ */
+export async function listWorkspaceDrafts(db: AnyDB, projectId: string): Promise<Draft[]> {
+  const rows = await db
+    .select()
+    .from(drafts)
+    .where(and(eq(drafts.projectId, projectId), isNotNull(drafts.workspaceId)))
+    .orderBy(desc(drafts.updatedAt));
+
+  return rows.map(rowToDraft);
+}
+
+/**
+ * Create or update the Draft that backs a Workspace staged state.
+ */
+export async function upsertWorkspaceDraft(db: AnyDB, input: WorkspaceDraftInput): Promise<Draft> {
+  const existing = await findWorkspaceDraft(db, input.project_id, input.workspace_id);
+  if (!existing) {
+    return insertDraft(db, {
+      project_id: input.project_id,
+      title: input.title,
+      parent_commit_hash: input.parent_commit_hash ?? undefined,
+      target_branch: input.target_branch ?? 'main',
+      preview_type: 'workspace',
+      workspace_id: input.workspace_id,
+      workspace_state: input.workspace_state,
+    });
+  }
+
+  return updateDraft(
+    db,
+    existing.id,
+    {
+      title: input.title,
+      parent_commit_hash: input.parent_commit_hash ?? undefined,
+      target_branch: input.target_branch ?? 'main',
+      status: 'editing',
+      workspace_state: input.workspace_state,
+    },
+    existing.revision
+  );
 }
 
 /**

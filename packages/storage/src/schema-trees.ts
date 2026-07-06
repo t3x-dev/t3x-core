@@ -772,6 +772,12 @@ export const drafts = pgTable(
     /** Target branch for commit */
     targetBranch: text('target_branch').default('main'),
 
+    /** Stable Workspace ID for Project Workspaces staged state */
+    workspaceId: text('workspace_id'),
+
+    /** Current Workspace staged state */
+    workspaceStateJson: jsonb('workspace_state_json').$type<Record<string, unknown>>(),
+
     /** Optimistic lock revision counter */
     revision: integer('revision').notNull().default(1),
 
@@ -793,6 +799,9 @@ export const drafts = pgTable(
   (table) => ({
     projectIdx: index('idx_drafts_project').on(table.projectId),
     statusIdx: index('idx_drafts_status').on(table.status),
+    workspaceIdx: uniqueIndex('idx_drafts_workspace')
+      .on(table.projectId, table.workspaceId)
+      .where(sql`${table.workspaceId} IS NOT NULL`),
   })
 );
 

@@ -752,6 +752,12 @@ export interface Draft {
   /** Target branch for commit */
   target_branch?: string;
 
+  /** Stable Workspace ID when a draft backs the Project Workspaces flow */
+  workspace_id?: string;
+
+  /** Current Workspace staged state for the Project Workspaces flow */
+  workspace_state?: Record<string, unknown>;
+
   /** Optimistic lock revision counter */
   revision: number;
 
@@ -781,6 +787,8 @@ export interface CreateDraftInput {
   parent_commit_hash?: string;
   target_branch?: string;
   preview_type?: string;
+  workspace_id?: string;
+  workspace_state?: Record<string, unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

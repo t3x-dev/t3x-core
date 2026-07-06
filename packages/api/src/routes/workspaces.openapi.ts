@@ -8,14 +8,17 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Material } from '@t3x-dev/core';
-import { findMaterialsByProject } from '@t3x-dev/storage';
+import type { Draft, Material } from '@t3x-dev/core';
+import {
+  findMaterialsByProject,
+  findWorkspaceDraft,
+  listWorkspaceDrafts,
+  upsertWorkspaceDraft,
+} from '@t3x-dev/storage';
 import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
 import { getDB } from '../lib/db';
 import { zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
-
-const workspaceCache = new Map<string, WorkspaceEnvelope>();
 
 const SourceBundleItemSchema = z.object({
   id: z.string(),
@@ -55,9 +58,63 @@ const WorkspaceResponseSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
 });
 
+const ListWorkspacesResponseSchema = z.object({
+  workspaces: z.array(z.record(z.string(), z.unknown())),
+});
+
+const projectWorkspacesParams = z.object({
+  projectId: z.string(),
+});
+
 const workspaceParams = z.object({
   projectId: z.string(),
   workspaceId: z.string(),
+});
+
+const listWorkspacesRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces',
+  tags: ['Workspaces'],
+  summary: 'List persisted workspace staged states',
+  request: {
+    params: projectWorkspacesParams,
+  },
+  responses: {
+    200: {
+      description: 'Persisted workspace staged states',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(ListWorkspacesResponseSchema),
+        },
+      },
+    },
+  },
+});
+
+const getWorkspaceRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}',
+  tags: ['Workspaces'],
+  summary: 'Read persisted workspace staged state',
+  request: {
+    params: workspaceParams,
+  },
+  responses: {
+    200: {
+      description: 'Persisted workspace staged state',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Workspace not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
 });
 
 const extractCandidateRoute = createRoute({
@@ -130,6 +187,35 @@ export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
 
+workspaceRoutes.openapi(listWorkspacesRoute, async (c) => {
+  const { projectId } = c.req.valid('param');
+  const db = await getDB();
+  const drafts = await listWorkspaceDrafts(db, projectId);
+  const workspaces = drafts.flatMap((draft) =>
+    draft.workspace_state ? [draft.workspace_state] : []
+  );
+
+  return c.json({
+    success: true as const,
+    data: { workspaces },
+  });
+});
+
+workspaceRoutes.openapi(getWorkspaceRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const db = await getDB();
+  const draft = await findWorkspaceDraft(db, projectId, workspaceId);
+
+  if (!draft?.workspace_state) {
+    return c.json(notFoundError('Workspace not found'), 404);
+  }
+
+  return c.json({
+    success: true as const,
+    data: envelopeFromDraft(draft, workspaceId),
+  });
+});
+
 workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { sources, workspace } = c.req.valid('json');
@@ -138,35 +224,53 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const sourceTexts = mergeSourceTexts(sources, materials);
   const nextWorkspace = buildExtractedWorkspace(workspace, projectId, sourceTexts);
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
-  const envelope = { candidate_id: candidateId, workspace: nextWorkspace };
-  workspaceCache.set(cacheKey(projectId, workspaceId), envelope);
+  const persistedWorkspace = {
+    ...nextWorkspace,
+    id: stringFromWorkspace(nextWorkspace, 'id', workspaceId),
+    projectId,
+    backendCandidateId: candidateId,
+  };
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: projectId,
+    workspace_id: workspaceId,
+    title: stringFromWorkspace(persistedWorkspace, 'title', workspaceId),
+    parent_commit_hash: nullableStringFromWorkspace(persistedWorkspace, 'baseCommitHash'),
+    target_branch: stringFromWorkspace(persistedWorkspace, 'targetBranch', 'main'),
+    workspace_state: persistedWorkspace,
+  });
 
   return c.json({
     success: true as const,
-    data: envelope,
+    data: envelopeFromDraft(draft, workspaceId),
   });
 });
 
 workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
   const { projectId, workspaceId } = c.req.valid('param');
   const { workspace } = c.req.valid('json');
-  const cached = workspaceCache.get(cacheKey(projectId, workspaceId));
-  const sourceWorkspace = workspace;
-  const candidateId = cached?.candidate_id ?? `candidate:${workspaceId}`;
+  const db = await getDB();
+  const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
+  const sourceWorkspace = storedDraft?.workspace_state ?? workspace;
+  const candidateId = candidateIdFromWorkspace(sourceWorkspace, workspaceId);
   const nextWorkspace = {
     ...sourceWorkspace,
+    id: stringFromWorkspace(sourceWorkspace, 'id', workspaceId),
+    projectId,
+    backendCandidateId: candidateId,
     yopsDraft: buildYOpsDraft(sourceWorkspace, candidateId),
   };
-  const envelope = {
-    candidate_id: candidateId,
-    yops_draft_id: nextWorkspace.yopsDraft.id,
-    workspace: nextWorkspace,
-  };
-  workspaceCache.set(cacheKey(projectId, workspaceId), envelope);
+  const draft = await upsertWorkspaceDraft(db, {
+    project_id: projectId,
+    workspace_id: workspaceId,
+    title: stringFromWorkspace(nextWorkspace, 'title', workspaceId),
+    parent_commit_hash: nullableStringFromWorkspace(nextWorkspace, 'baseCommitHash'),
+    target_branch: stringFromWorkspace(nextWorkspace, 'targetBranch', 'main'),
+    workspace_state: nextWorkspace,
+  });
 
   return c.json({
     success: true as const,
-    data: envelope,
+    data: envelopeFromDraft(draft, workspaceId),
   });
 });
 
@@ -174,6 +278,47 @@ interface WorkspaceEnvelope {
   candidate_id: string;
   yops_draft_id?: string;
   workspace: Record<string, unknown>;
+}
+
+function envelopeFromDraft(draft: Draft, workspaceId: string): WorkspaceEnvelope {
+  const workspace = draft.workspace_state ?? { id: workspaceId, projectId: draft.project_id };
+  const yopsDraft = workspace.yopsDraft as { id?: unknown } | undefined;
+
+  return {
+    candidate_id: candidateIdFromWorkspace(workspace, workspaceId),
+    yops_draft_id: typeof yopsDraft?.id === 'string' ? yopsDraft.id : undefined,
+    workspace,
+  };
+}
+
+function candidateIdFromWorkspace(workspace: Record<string, unknown>, workspaceId: string): string {
+  return typeof workspace.backendCandidateId === 'string'
+    ? workspace.backendCandidateId
+    : `candidate:${workspaceId}`;
+}
+
+function stringFromWorkspace(
+  workspace: Record<string, unknown>,
+  key: string,
+  fallback: string
+): string {
+  const value = workspace[key];
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function nullableStringFromWorkspace(
+  workspace: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = workspace[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function notFoundError(message: string) {
+  return {
+    success: false as const,
+    error: { code: 'NOT_FOUND', message },
+  };
 }
 
 interface WorkspaceSourceText {
@@ -778,10 +923,6 @@ function evidenceFor(value: string, sources: WorkspaceSourceText[]): string {
 
 function joinSourceTexts(sources: WorkspaceSourceText[]): string {
   return sources.map((source) => source.text).join('\n\n');
-}
-
-function cacheKey(projectId: string, workspaceId: string): string {
-  return `${projectId}:${workspaceId}`;
 }
 
 function candidateIdFor(workspaceId: string, sources: WorkspaceSourceText[]): string {

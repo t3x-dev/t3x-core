@@ -395,6 +395,8 @@ CREATE TABLE IF NOT EXISTS drafts (
   committed_as TEXT,
   committed_leaf_id TEXT,
   target_branch TEXT DEFAULT 'main',
+  workspace_id TEXT,
+  workspace_state_json JSONB,
   revision INTEGER NOT NULL DEFAULT 1,
   extraction_mode TEXT,
   semantic_points_json JSONB,
@@ -404,6 +406,9 @@ CREATE TABLE IF NOT EXISTS drafts (
 );
 CREATE INDEX IF NOT EXISTS idx_drafts_project ON drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_workspace
+  ON drafts(project_id, workspace_id)
+  WHERE workspace_id IS NOT NULL;
 
 -- Extraction Feedback (Anchoring L4)
 CREATE TABLE IF NOT EXISTS extraction_feedback (

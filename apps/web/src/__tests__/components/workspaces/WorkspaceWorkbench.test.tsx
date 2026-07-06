@@ -35,7 +35,28 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     baseCommitHash: 'sha256:base-prd',
     targetBranch: 'feature/prd-audience',
     sourceBundle: [
-      { id: 'src_chat', type: 'chat', title: 'Audience chat', conversationId: 'conv_1' },
+      {
+        id: 'src_chat',
+        type: 'chat',
+        title: 'Audience chat',
+        conversationId: 'conv_1',
+        previewTurns: [
+          {
+            id: 'msg-local-draft',
+            role: 'user',
+            author: 'You',
+            content: 'Draft audience note that is still saving.',
+            pinnable: false,
+          },
+          {
+            id: 'turn_persisted_1',
+            role: 'assistant',
+            author: 'Assistant',
+            content: 'Persisted turn ready to include as source evidence.',
+            pinnable: true,
+          },
+        ],
+      },
       {
         id: 'src_doc',
         type: 'document',
@@ -264,8 +285,53 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByText('document')).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Import doc' })).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Upload PDF/doc' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Add manual note source' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Paste text' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Paste text' })).toHaveAttribute(
+      'title',
+      'Paste text sources need a persisted workspace source endpoint before enabling.'
+    );
+    expect(within(detail).getByRole('button', { name: 'Add URL' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Add URL' })).toHaveAttribute(
+      'title',
+      'URL sources need a persisted workspace source endpoint before enabling.'
+    );
     expect(within(detail).getByRole('button', { name: 'Delete PRD import' })).toBeInTheDocument();
     expect(within(detail).getByRole('region', { name: 'Parsed text preview' })).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Re-parse' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Re-parse' })).toHaveAttribute(
+      'title',
+      'Re-parse needs a persisted material parse job before enabling.'
+    );
+    const sourceList = within(detail).getByRole('list', { name: 'Source list' });
+    fireEvent.click(within(sourceList).getByRole('button', { name: /^PRD import/ }));
+    const includeButtons = within(detail).getAllByRole('button', { name: 'Include' });
+    const excludeButtons = within(detail).getAllByRole('button', { name: 'Exclude' });
+    const splitButtons = within(detail).getAllByRole('button', { name: 'Split' });
+    expect(includeButtons.length).toBeGreaterThan(0);
+    expect(excludeButtons.length).toBeGreaterThan(0);
+    expect(splitButtons.length).toBeGreaterThan(0);
+    includeButtons.forEach((button) => expect(button).toBeDisabled());
+    excludeButtons.forEach((button) => expect(button).toBeDisabled());
+    splitButtons.forEach((button) => expect(button).toBeDisabled());
+    includeButtons.forEach((button) =>
+      expect(button).toHaveAttribute(
+        'title',
+        'Block-level source editing needs persisted source segment operations before enabling.'
+      )
+    );
+    excludeButtons.forEach((button) =>
+      expect(button).toHaveAttribute(
+        'title',
+        'Block-level source editing needs persisted source segment operations before enabling.'
+      )
+    );
+    splitButtons.forEach((button) =>
+      expect(button).toHaveAttribute(
+        'title',
+        'Block-level source editing needs persisted source segment operations before enabling.'
+      )
+    );
     expect(within(detail).getByRole('button', { name: 'Include preview' })).toBeInTheDocument();
 
     const chatTab = within(detail).getByRole('tab', { name: 'Chat' });
@@ -277,6 +343,12 @@ describe('WorkspaceWorkbench', () => {
         'Ask the model, paste source text, or describe a requirement change...'
       )
     ).toBeInTheDocument();
+    expect(within(detail).getByRole('button', { name: 'Saving turn' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Saving turn' })).toHaveAttribute(
+      'title',
+      'This chat turn must finish saving before it can become source evidence.'
+    );
+    expect(within(detail).getByRole('button', { name: 'Include turn' })).toBeEnabled();
   });
 
   it('renders schema review, split yops workspace, and draft output target tabs', () => {
@@ -303,8 +375,20 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
+      'title',
+      'Validate the proposed YOps before applying it.'
+    );
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toHaveAttribute(
+      'title',
+      'Extract YOps before applying the YAML preview.'
+    );
     expect(screen.getByRole('button', { name: /Commit · main/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Commit · main/ })).toHaveAttribute(
+      'title',
+      'Apply YOps before committing the workspace result.'
+    );
     expect(screen.getByText('Materialized 0')).toBeInTheDocument();
     expect(screen.getByText('Pending 1')).toBeInTheDocument();
     expect(screen.getByText('yops:')).toBeInTheDocument();
@@ -327,6 +411,10 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('Pre-commit config')).toBeInTheDocument();
     expect(screen.getAllByText('PRD review brief').length).toBeGreaterThan(0);
     expect(screen.getByText('Waiting for workspace commit')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create after commit' })).toHaveAttribute(
+      'title',
+      'Commit this workspace before creating a Leaf.'
+    );
     expect(
       screen.getByText('Generate a concise PRD review brief from the committed candidate tree.')
     ).toBeInTheDocument();
@@ -627,6 +715,7 @@ describe('WorkspaceWorkbench', () => {
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const commitsUrl = 'http://localhost:8000/api/v1/commits';
+    const leavesUrl = 'http://localhost:8000/api/v1/leaves';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url === extractCandidateUrl) {
@@ -704,6 +793,29 @@ describe('WorkspaceWorkbench', () => {
           success: true,
           data: { commit: { hash: 'sha256:workspace-commit' } },
         });
+      }
+      if (url === leavesUrl) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              id: 'leaf_workspace_prd',
+              commit_hash: 'sha256:workspace-commit',
+              type: 'article',
+              title: 'PRD review brief',
+              constraints: [],
+              config: {},
+              output: null,
+              generated_at: null,
+              assertions: null,
+              runner_assertions: null,
+              project_id: 'proj_1',
+              created_at: '2026-07-03T00:00:00.000Z',
+              created_by: null,
+            },
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        );
       }
       throw new Error(`Unhandled fetch ${url}`);
     });
@@ -865,7 +977,7 @@ describe('WorkspaceWorkbench', () => {
       message: 'Workspace commit: PRD audience handoff',
       parents: ['sha256:base-prd'],
       project_id: 'proj_1',
-      provenance: { method: 'workspace_yops' },
+      provenance: { method: 'human_curation' },
     });
 
     await waitFor(() =>
@@ -875,7 +987,34 @@ describe('WorkspaceWorkbench', () => {
       )
     );
     expect(screen.getByText('Ready from sha256:workspace-commit')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Leaf' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf' }));
+
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, leavesUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [, leafInit] = findFetchCall(fetchMock.mock.calls, leavesUrl);
+    expect(JSON.parse(String(leafInit?.body))).toMatchObject({
+      commit_hash: 'sha256:workspace-commit',
+      config: {
+        format: 'markdown',
+        instruction: 'Generate a concise PRD review brief from the committed candidate tree.',
+        source_scope: 'Committed PRD candidate plus included source evidence.',
+        workspace_id: 'workspace_ready',
+      },
+      constraints: [
+        {
+          id: 'constraint_target_prd_markdown_1',
+          match_mode: 'semantic',
+          type: 'require',
+          value: 'Include summary.audience exactly as committed.',
+        },
+      ],
+      project_id: 'proj_1',
+      source: { type: 'user' },
+      title: 'PRD review brief',
+      type: 'article',
+    });
+    expect(await screen.findByText('Created leaf leaf_workspace_prd')).toBeInTheDocument();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {
