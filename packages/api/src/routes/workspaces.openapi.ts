@@ -10,14 +10,17 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Draft, Material } from '@t3x-dev/core';
 import {
+  createCommit,
   findMaterialsByProject,
   findWorkspaceDraft,
   listWorkspaceDrafts,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
+import { mapBranchLinearityError } from '../lib/commit-linearity';
+import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
-import { zodErrorHook } from '../lib/errors';
+import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 const SourceBundleItemSchema = z.object({
@@ -56,10 +59,22 @@ const SaveWorkspaceRequestSchema = z.object({
   workspace: z.record(z.string(), z.unknown()),
 });
 
+const CommitWorkspaceRequestSchema = z.object({
+  content: z.object({
+    trees: z.any(),
+    relations: z.any().optional(),
+  }),
+  message: z.string().optional(),
+});
+
 const WorkspaceResponseSchema = z.object({
   candidate_id: z.string(),
   yops_draft_id: z.string().optional(),
   workspace: z.record(z.string(), z.unknown()),
+});
+
+const WorkspaceCommitResponseSchema = WorkspaceResponseSchema.extend({
+  commit: z.any(),
 });
 
 const ListWorkspacesResponseSchema = z.object({
@@ -67,6 +82,8 @@ const ListWorkspacesResponseSchema = z.object({
 });
 
 const REVIEW_SAVE_STATUSES = new Set(['draft', 'ready_for_yops', 'schema_review']);
+
+type TxRunner = { transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> };
 
 const projectWorkspacesParams = z.object({
   projectId: z.string(),
@@ -216,6 +233,51 @@ const saveWorkspaceRoute = createRoute({
   },
 });
 
+const commitWorkspaceRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/workspaces/{workspaceId}/commit',
+  tags: ['Workspaces'],
+  summary: 'Commit a reviewed workspace staged state',
+  request: {
+    params: workspaceParams,
+    body: {
+      content: {
+        'application/json': {
+          schema: CommitWorkspaceRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Workspace committed',
+      content: {
+        'application/json': {
+          schema: SuccessResponseSchema(WorkspaceCommitResponseSchema),
+        },
+      },
+    },
+    404: {
+      description: 'Workspace not found',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+    409: {
+      description: 'Branch is not at the expected head',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+    500: {
+      description: 'Commit failed',
+      content: {
+        'application/json': { schema: ErrorResponseSchema },
+      },
+    },
+  },
+});
+
 export const workspaceRoutes = new OpenAPIHono({
   defaultHook: zodErrorHook,
 });
@@ -292,6 +354,90 @@ workspaceRoutes.openapi(saveWorkspaceRoute, async (c) => {
     success: true as const,
     data: envelopeFromDraft(draft, workspaceId),
   });
+});
+
+workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
+  const { projectId, workspaceId } = c.req.valid('param');
+  const { content, message } = c.req.valid('json');
+
+  try {
+    const db = await getDB();
+    const commitWorkspace = async (txOrDb: typeof db) => {
+      const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
+
+      if (!storedDraft?.workspace_state) {
+        return null;
+      }
+
+      const storedWorkspace = storedDraft.workspace_state;
+      const targetBranch = stringFromWorkspace(storedWorkspace, 'targetBranch', 'main');
+      const parents = await resolveDefaultCommitParents(
+        txOrDb,
+        projectId,
+        targetBranch,
+        nullableStringFromWorkspace(storedWorkspace, 'baseCommitHash') ?? undefined
+      );
+      const commit = await createCommit(txOrDb, {
+        author: { type: 'human' as const, name: 'api' },
+        branch: targetBranch,
+        content: {
+          // biome-ignore lint/suspicious/noExplicitAny: workspace preview trees are validated by YOps apply before commit.
+          trees: content.trees as any,
+          // biome-ignore lint/suspicious/noExplicitAny: relations are optional preview payload metadata.
+          relations: (content.relations ?? []) as any,
+        },
+        enforceBranchLinearity: true,
+        message:
+          message ??
+          `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`,
+        parents,
+        project_id: projectId,
+        provenance: { method: 'human_curation' },
+        sources: commitSourcesFromWorkspace(storedWorkspace),
+      });
+      const committedAt = new Date().toISOString();
+      const committedWorkspace = {
+        ...storedWorkspace,
+        id: workspaceId,
+        projectId,
+        lastCommitHash: commit.hash,
+        status: 'committed',
+        updatedAt: committedAt,
+      };
+      const draft = await upsertWorkspaceDraft(txOrDb, {
+        project_id: projectId,
+        workspace_id: workspaceId,
+        title: stringFromWorkspace(committedWorkspace, 'title', workspaceId),
+        parent_commit_hash: nullableStringFromWorkspace(committedWorkspace, 'baseCommitHash'),
+        target_branch: targetBranch,
+        workspace_state: committedWorkspace,
+      });
+
+      return { commit, draft };
+    };
+    const runner = db as unknown as Partial<TxRunner>;
+    const result =
+      typeof runner.transaction === 'function'
+        ? await runner.transaction((tx) => commitWorkspace(tx as typeof db))
+        : await commitWorkspace(db);
+
+    if (!result) {
+      return c.json(notFoundError('Workspace not found'), 404);
+    }
+
+    return c.json({
+      success: true as const,
+      data: {
+        ...envelopeFromDraft(result.draft, workspaceId),
+        commit: result.commit,
+      },
+    });
+  } catch (err) {
+    const linearity = mapBranchLinearityError(c, err);
+    if (linearity) return linearity;
+    const message_ = err instanceof Error ? err.message : 'Failed to commit workspace';
+    return errorResponse(c, 'COMMIT_FAILED', message_);
+  }
 });
 
 function resolveReviewSaveStatus(status: unknown, storedStatus: unknown): string {
@@ -415,6 +561,36 @@ function notFoundError(message: string) {
     success: false as const,
     error: { code: 'NOT_FOUND', message },
   };
+}
+
+type CommitSourceRef = { type: 'conversation' | 'import' | 'leaf'; id: string; title?: string };
+
+function commitSourcesFromWorkspace(workspace: Record<string, unknown>): CommitSourceRef[] {
+  const sources = workspace.sourceBundle;
+  if (!Array.isArray(sources)) return [];
+
+  return sources.flatMap((source): CommitSourceRef[] => {
+    if (!isRecord(source)) return [];
+    const id = commitSourceId(source);
+    if (!id) return [];
+    const type =
+      source.type === 'chat' ? 'conversation' : source.type === 'leaf' ? 'leaf' : 'import';
+    const title =
+      typeof source.title === 'string' && source.title.trim() ? source.title : undefined;
+    return [{ type, id, ...(title ? { title } : {}) }];
+  });
+}
+
+function commitSourceId(source: Record<string, unknown>): string | null {
+  for (const key of ['conversationId', 'materialId', 'contentHash', 'id']) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 interface WorkspaceSourceText {

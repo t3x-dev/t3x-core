@@ -72,6 +72,20 @@ const storageMock = vi.hoisted(() => {
         });
       }
     ),
+    createCommit: vi.fn(() =>
+      Promise.resolve({
+        hash: 'sha256:workspace-commit',
+        schema: 't3x/commit',
+        parents: ['sha256:review-base'],
+        author: { type: 'human', name: 'api' },
+        committed_at: '2026-07-03T00:00:00.000Z',
+        content: { trees: [], relations: [] },
+        project_id: 'proj_sources',
+        message: 'Workspace commit: PRD audience handoff',
+        branch: 'feature/reviewed-prd',
+        provenance: { method: 'human_curation' },
+      })
+    ),
   };
 });
 
@@ -81,6 +95,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    createCommit: storageMock.createCommit,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
@@ -99,6 +114,7 @@ describe('Workspace routes', () => {
     storageMock.reset();
     storageMock.findMaterialsByProject.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
+    storageMock.createCommit.mockClear();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
   });
@@ -432,5 +448,76 @@ describe('Workspace routes', () => {
     expect(res.status).toBe(200);
     const body: ApiResponse = await res.json();
     expect(body.data.workspace.status).toBe('draft');
+  });
+
+  it('creates a commit and marks the workspace staged state committed', async () => {
+    await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'PRD audience handoff',
+          status: 'schema_review',
+          baseCommitHash: 'sha256:review-base',
+          targetBranch: 'feature/reviewed-prd',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+          yopsDraft: { id: 'draft:reviewed', operations: [] },
+        },
+      }),
+    });
+
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: {
+            trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+            relations: [],
+          },
+        }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.commit.hash).toBe('sha256:workspace-commit');
+    expect(body.data.workspace).toEqual(
+      expect.objectContaining({
+        id: 'workspace_prd_handoff',
+        projectId: 'proj_sources',
+        status: 'committed',
+        lastCommitHash: 'sha256:workspace-commit',
+      })
+    );
+    expect(storageMock.createCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        branch: 'feature/reviewed-prd',
+        content: {
+          trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+          relations: [],
+        },
+        message: 'Workspace commit: PRD audience handoff',
+        parents: ['sha256:review-base'],
+        project_id: 'proj_sources',
+        provenance: { method: 'human_curation' },
+      })
+    );
+    expect(storageMock.upsertWorkspaceDraft).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        project_id: 'proj_sources',
+        workspace_id: 'workspace_prd_handoff',
+        workspace_state: expect.objectContaining({
+          status: 'committed',
+          lastCommitHash: 'sha256:workspace-commit',
+        }),
+      })
+    );
   });
 });

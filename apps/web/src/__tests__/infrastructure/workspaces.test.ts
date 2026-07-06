@@ -10,7 +10,11 @@ vi.mock('@/infrastructure/core', () => ({
   handleResponse: (...args: unknown[]) => handleResponseMock(...args),
 }));
 
-import { listProjectWorkspaces, saveProjectWorkspace } from '@/infrastructure/workspaces';
+import {
+  commitProjectWorkspace,
+  listProjectWorkspaces,
+  saveProjectWorkspace,
+} from '@/infrastructure/workspaces';
 
 describe('infrastructure/workspaces', () => {
   beforeEach(() => {
@@ -65,6 +69,44 @@ describe('infrastructure/workspaces', () => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspace }),
+      })
+    );
+    expect(handleResponseMock).toHaveBeenCalledWith(response);
+  });
+
+  it('commits a workspace through the workspace-scoped route', async () => {
+    const response = new Response('{}');
+    const content = {
+      relations: [],
+      trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+    };
+
+    fetchWithTimeoutMock.mockResolvedValueOnce(response);
+    handleResponseMock.mockResolvedValueOnce({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      commit: { hash: 'sha256:workspace-commit' },
+      workspace: { id: 'workspace_prd_handoff' },
+    });
+
+    await expect(
+      commitProjectWorkspace(
+        'proj/with space',
+        'workspace/prd handoff',
+        content,
+        'Workspace commit: PRD audience handoff'
+      )
+    ).resolves.toEqual({
+      candidate_id: 'candidate:workspace_prd_handoff',
+      commit: { hash: 'sha256:workspace-commit' },
+      workspace: { id: 'workspace_prd_handoff' },
+    });
+
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      'https://api.test/api/v1/projects/proj%2Fwith%20space/workspaces/workspace%2Fprd%20handoff/commit',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, message: 'Workspace commit: PRD audience handoff' }),
       })
     );
     expect(handleResponseMock).toHaveBeenCalledWith(response);

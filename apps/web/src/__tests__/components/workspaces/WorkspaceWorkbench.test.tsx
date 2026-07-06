@@ -714,7 +714,8 @@ describe('WorkspaceWorkbench', () => {
     const yopsDraftUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
-    const commitsUrl = 'http://localhost:8000/api/v1/commits';
+    const workspaceCommitUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit';
     const leavesUrl = 'http://localhost:8000/api/v1/leaves';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -788,10 +789,19 @@ describe('WorkspaceWorkbench', () => {
           },
         });
       }
-      if (url === commitsUrl) {
+      if (url === workspaceCommitUrl) {
         return jsonResponse({
           success: true,
-          data: { commit: { hash: 'sha256:workspace-commit' } },
+          data: {
+            candidate_id: 'candidate:backend',
+            commit: { hash: 'sha256:workspace-commit' },
+            workspace: {
+              ...yopsWorkspace,
+              lastCommitHash: 'sha256:workspace-commit',
+              status: 'committed',
+            },
+            yops_draft_id: 'draft:candidate:backend',
+          },
         });
       }
       if (url === leavesUrl) {
@@ -968,16 +978,24 @@ describe('WorkspaceWorkbench', () => {
       ],
     });
     await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, commitsUrl)).toBeGreaterThanOrEqual(1)
+      expect(countFetchCalls(fetchMock.mock.calls, workspaceCommitUrl)).toBeGreaterThanOrEqual(1)
     );
-    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, commitsUrl);
-    expect(commitUrl).toBe('http://localhost:8000/api/v1/commits');
+    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, workspaceCommitUrl);
+    expect(commitUrl).toBe(
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit'
+    );
     expect(JSON.parse(String(commitInit?.body))).toMatchObject({
-      branch: 'feature/prd-audience',
+      content: {
+        relations: [],
+        trees: [
+          {
+            children: expect.any(Array),
+            key: 'prd',
+            slots: { title: 'PRD audience handoff' },
+          },
+        ],
+      },
       message: 'Workspace commit: PRD audience handoff',
-      parents: ['sha256:base-prd'],
-      project_id: 'proj_1',
-      provenance: { method: 'human_curation' },
     });
 
     await waitFor(() =>
