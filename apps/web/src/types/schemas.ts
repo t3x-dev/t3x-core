@@ -7,12 +7,19 @@ export interface SchemaRelease {
   projectId: string;
   name: string;
   version: string;
+  description: string;
   status: SchemaReleaseStatus;
   releasedAt?: string;
   releasedBy?: string;
   usedByCommitCount: number;
   usedByWorkspaceCount: number;
   breakingChangeLevel: SchemaBreakingChangeLevel;
+  source: 'official' | 'team' | 'community';
+  category: string;
+  rootKey: string;
+  requiredFields: string[];
+  compatibleWith: string[];
+  migrationSummary: string;
 }
 
 export interface SchemaReleaseFamily {

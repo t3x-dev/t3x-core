@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
+import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
 function countFetchCalls(calls: Parameters<typeof fetch>[], expectedUrl: string) {
@@ -200,6 +201,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
 ];
 
 afterEach(() => {
+  usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
   vi.restoreAllMocks();
 });
 
@@ -227,7 +229,7 @@ describe('WorkspaceWorkbench', () => {
     const detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(within(detail).getAllByText('PRD audience handoff').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
-    expect(within(detail).getByText('YSchema PRD Review')).toBeInTheDocument();
+    expect(within(detail).getByText('YSchema PRD Check')).toBeInTheDocument();
   });
 
   it('uses the externally selected workspace id for the current workspace', () => {
@@ -353,25 +355,27 @@ describe('WorkspaceWorkbench', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     activateTab(/YSchema/);
-    expect(screen.getByText('YSchema PRD Review')).toBeInTheDocument();
+    expect(screen.getByText('YSchema PRD Check')).toBeInTheDocument();
     expect(
-      screen.getByText('Validate candidate structure before YOps extraction.')
+      screen.getByText(
+        'Review the candidate proposal, then run deterministic schema checks before YOps proposal.'
+      )
     ).toBeInTheDocument();
     expect(screen.getAllByText('Candidate tree').length).toBeGreaterThan(0);
     expect(screen.getByText('Candidate PRD')).toBeInTheDocument();
     expect(screen.getByText('audience: Product and engineering reviewers')).toBeInTheDocument();
-    expect(screen.getByText('YOps suggestions')).toBeInTheDocument();
-    expect(screen.getByText('1 suggested operation from this candidate.')).toBeInTheDocument();
-    expect(screen.getByText('Proposed YOps')).toBeInTheDocument();
+    expect(screen.getAllByText('YOps proposal').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 operation staged by fixture proposal.')).toBeInTheDocument();
+    expect(screen.getByText('Current YOps proposal')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Send to YOps' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Generate YOps proposal' })).toHaveLength(1);
 
     activateTab(/YOps/);
-    expect(screen.getByText('YOps workspace')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'YOps editor' })).toBeInTheDocument();
+    expect(screen.getByText('YOps proposal workspace')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Extract YOps/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Extract YOps/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
       'title',
       'Validate the proposed YOps before applying it.'
     );
@@ -393,7 +397,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
     const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
     expect(yopsTree).toHaveTextContent('No materialized YAML yet');
-    expect(yopsTree).toHaveTextContent('Extract YOps first');
+    expect(yopsTree).toHaveTextContent('Validate the YOps proposal first');
     expect(yopsTree).not.toHaveTextContent('audience: Product and engineering reviewers');
     expect(screen.getByText('Human')).toBeInTheDocument();
     expect(screen.getByText('Changed')).toBeInTheDocument();
@@ -455,7 +459,7 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/YOps/);
 
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: /Extract YOps/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0];
@@ -471,7 +475,7 @@ describe('WorkspaceWorkbench', () => {
       ],
     });
 
-    expect(await screen.findByText('Validated by backend')).toBeInTheDocument();
+    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       '1 YOps ready'
@@ -490,7 +494,8 @@ describe('WorkspaceWorkbench', () => {
     const extractedWorkspace: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       schemaCandidate: {
-        summary: 'Backend mapped 10 schema fields from stored source material.',
+        proposalMode: 'deterministic_scaffold',
+        summary: 'Deterministic scaffold mapped 10 schema fields from stored source material.',
         fields: [
           {
             id: 'field_summary',
@@ -636,65 +641,69 @@ describe('WorkspaceWorkbench', () => {
       },
       schemaReview: {
         verdict: 'ready',
-        summary: 'Candidate extracted from backend source material.',
+        summary: 'Candidate proposal mapped from source material.',
         gaps: [],
       },
     };
     const yopsWorkspace: WorkspaceCandidate = {
       ...extractedWorkspace,
       yopsDraft: {
+        proposalMode: 'deterministic_scaffold',
         id: 'draft:candidate:backend',
         operations: [
           {
             id: 'op_backend_1',
             op: 'set',
             path: 'prd/summary/problem',
-            summary: 'Set problem from backend candidate extraction.',
+            summary: 'Set problem from reviewed candidate proposal.',
             beforeValue: '',
             afterValue: 'Backend PRD import lacks a confirmed reviewer handoff.',
-            reason: 'Backend candidate covered summary.problem from included source material.',
+            reason:
+              'Deterministic scaffold proposal covered summary.problem from included source material.',
             sourceRefs: ['src_doc'],
           },
           {
             id: 'op_backend_2',
             op: 'set',
             path: 'prd/summary/audience',
-            summary: 'Set audience from backend candidate extraction.',
+            summary: 'Set audience from reviewed candidate proposal.',
             beforeValue: '',
             afterValue: 'Backend product reviewers',
-            reason: 'Backend candidate covered summary.audience from included source material.',
+            reason:
+              'Deterministic scaffold proposal covered summary.audience from included source material.',
             sourceRefs: ['src_doc'],
           },
           {
             id: 'op_backend_3',
             op: 'set',
             path: 'prd/summary/outcome',
-            summary: 'Set outcome from backend candidate extraction.',
+            summary: 'Set outcome from reviewed candidate proposal.',
             beforeValue: '',
             afterValue: 'Send reviewed PRD candidates to YOps with deterministic operations.',
-            reason: 'Backend candidate covered summary.outcome from included source material.',
+            reason:
+              'Deterministic scaffold proposal covered summary.outcome from included source material.',
             sourceRefs: ['src_doc'],
           },
           {
             id: 'op_backend_4',
             op: 'set',
             path: 'prd/requirements/backend_prd_handoff/title',
-            summary: 'Set requirement title from backend candidate extraction.',
+            summary: 'Set requirement title from reviewed candidate proposal.',
             beforeValue: '',
             afterValue: 'Backend PRD handoff',
             reason:
-              'Backend candidate covered requirements.backend_prd_handoff.title from included source material.',
+              'Deterministic scaffold proposal covered requirements.backend_prd_handoff.title from included source material.',
             sourceRefs: ['src_doc'],
           },
           {
             id: 'op_backend_5',
             op: 'add',
             path: 'prd/requirements/backend_prd_handoff/acceptance/-',
-            summary: 'Append requirement acceptance from backend candidate extraction.',
+            summary: 'Append requirement acceptance from reviewed candidate proposal.',
             beforeValue: 'No value recorded',
             afterValue: 'YOps receives reviewed candidate fields from backend source evidence.',
             reason:
-              'Backend candidate covered requirements.backend_prd_handoff.acceptance from included source material.',
+              'Deterministic scaffold proposal covered requirements.backend_prd_handoff.acceptance from included source material.',
             sourceRefs: ['src_doc'],
           },
         ],
@@ -811,18 +820,36 @@ describe('WorkspaceWorkbench', () => {
       throw new Error(`Unhandled fetch ${url}`);
     });
 
+    usePinsStore.setState({
+      pins: [
+        {
+          id: 'pin_mat_prd',
+          project_id: 'proj_1',
+          type: 'import',
+          ref_id: 'mat_prd',
+          pinned_at: '2026-07-03T00:00:00.000Z',
+        },
+      ],
+    });
+
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Extract candidate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBeGreaterThanOrEqual(1)
     );
     const [, extractCandidateInit] = findFetchCall(fetchMock.mock.calls, extractCandidateUrl);
     expect(JSON.parse(String(extractCandidateInit?.body))).toMatchObject({
-      sources: [{ id: 'src_chat' }, { id: 'src_doc', materialId: 'mat_prd' }],
-      workspace: { id: 'workspace_ready', projectId: 'proj_1' },
+      sources: [{ id: 'src_doc', materialId: 'mat_prd' }],
+      workspace: {
+        id: 'workspace_ready',
+        projectId: 'proj_1',
+        sourceBundle: [{ id: 'src_doc', materialId: 'mat_prd' }],
+      },
     });
-    expect(await screen.findByText('Extracted candidate')).toBeInTheDocument();
+    expect(
+      await screen.findByText('deterministic scaffold mapped from the current source bundle.')
+    ).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YSchema/ })).toHaveAttribute('aria-selected', 'true');
     expect(
       screen.getByText('problem: Backend PRD import lacks a confirmed reviewer handoff.')
@@ -837,12 +864,12 @@ describe('WorkspaceWorkbench', () => {
       )
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send to YOps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
     );
     findFetchCall(fetchMock.mock.calls, yopsDraftUrl);
-    expect(await screen.findByText('Draft sent')).toBeInTheDocument();
+    expect(await screen.findByText('Proposal ready')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
     expect(
@@ -852,7 +879,7 @@ describe('WorkspaceWorkbench', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Extract YOps/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBeGreaterThanOrEqual(1)
     );
@@ -891,7 +918,7 @@ describe('WorkspaceWorkbench', () => {
         },
       ],
     });
-    expect(await screen.findByText('Validated by backend')).toBeInTheDocument();
+    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       '5 YOps ready'

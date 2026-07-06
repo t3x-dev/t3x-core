@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
+import { usePinsStore } from '@/store/pinsStore';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
@@ -43,6 +44,7 @@ export function WorkspaceWorkbench({
   const [workspaceOverrides, setWorkspaceOverrides] = useState<Record<string, WorkspaceCandidate>>(
     {}
   );
+  const pins = usePinsStore((state) => state.pins);
   const { extractCandidate, sendToYOps } = useWorkspaceFlow();
 
   const baseSelectedWorkspace = selectWorkspaceCandidate(candidates, selectedWorkspaceId ?? null);
@@ -75,7 +77,7 @@ export function WorkspaceWorkbench({
 
     updateSelectedFlow({ error: undefined, extracting: true });
     try {
-      const result = await extractCandidate(selectedWorkspace);
+      const result = await extractCandidate(selectWorkspaceSourceBundle(selectedWorkspace, pins));
       setWorkspaceOverrides((current) => ({
         ...current,
         [result.workspace.id]: result.workspace,
@@ -113,7 +115,7 @@ export function WorkspaceWorkbench({
       setActiveWorkflowTab('yops');
     } catch (err) {
       updateSelectedFlow({
-        error: err instanceof Error ? err.message : 'YOps draft generation failed.',
+        error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
         sendingToYOps: false,
       });
     }
@@ -222,8 +224,9 @@ function WorkspaceFlowRail({
 }) {
   const steps = [
     { label: 'Source', done: candidate.sourceBundle.length > 0 },
-    { label: 'Candidate', done: Boolean(flowState?.candidateId) },
-    { label: 'YOps draft', done: Boolean(flowState?.yopsDraftId) },
+    { label: 'Candidate proposal', done: Boolean(flowState?.candidateId) },
+    { label: 'YSchema check', done: candidate.schemaReview.verdict === 'ready' },
+    { label: 'YOps proposal', done: Boolean(flowState?.yopsDraftId) },
     { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
   ];
 
@@ -310,6 +313,26 @@ function mergeWorkspaceOverride(
     schemaBindings: candidate.schemaBindings,
     sourceBundle: candidate.sourceBundle,
   };
+}
+
+function selectWorkspaceSourceBundle(
+  candidate: WorkspaceCandidate,
+  pins: Array<{ type: string; ref_id: string }>
+): WorkspaceCandidate {
+  const importRefs = new Set(pins.filter((pin) => pin.type === 'import').map((pin) => pin.ref_id));
+  const turnRefs = new Set(
+    pins.filter((pin) => pin.type === 'conversation_turn').map((pin) => pin.ref_id)
+  );
+
+  const sourceBundle = candidate.sourceBundle.flatMap((source) => {
+    if (source.materialId) return importRefs.has(source.materialId) ? [source] : [];
+    if (source.type !== 'chat') return [];
+
+    const previewTurns = source.previewTurns?.filter((turn) => turnRefs.has(turn.id)) ?? [];
+    return previewTurns.length > 0 ? [{ ...source, previewTurns }] : [];
+  });
+
+  return { ...candidate, sourceBundle };
 }
 
 function WorkspaceEmptyState({ message }: { message: string }) {

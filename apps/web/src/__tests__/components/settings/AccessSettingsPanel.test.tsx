@@ -188,7 +188,7 @@ describe('AccessSettingsPanel', () => {
       expect(screen.getByText('T3X API keys')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('WebUI session')).toBeInTheDocument();
+    expect(await screen.findByText('WebUI session')).toBeInTheDocument();
     expect(screen.getByText('t3xk_web')).toBeInTheDocument();
     expect(screen.getByText('User-level key')).toBeInTheDocument();
     expect(screen.getByText('Provider keys stay in Settings / Providers.')).toBeInTheDocument();

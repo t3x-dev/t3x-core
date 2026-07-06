@@ -14,6 +14,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     sourceBundle: [],
     schemaBindings: [{ schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' }],
     schemaCandidate: {
+      proposalMode: 'fixture',
       summary: 'Source evidence supports the PRD audience handoff fields.',
       fields: [
         {
@@ -80,6 +81,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     },
     yopsDraft: {
       id: 'draft_prd_handoff',
+      proposalMode: 'fixture',
       operations: [
         {
           id: 'op_prd_audience',
@@ -138,6 +140,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     sourceBundle: [],
     schemaBindings: [{ schemaName: 'Release Note Schema', version: 'v1', mode: 'project_default' }],
     schemaCandidate: {
+      proposalMode: 'fixture',
       summary: 'Release-note candidate still needs required release metadata.',
       fields: [
         {
@@ -181,6 +184,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
     },
     yopsDraft: {
       id: 'draft_release_notes',
+      proposalMode: 'fixture',
       operations: [
         {
           id: 'op_release_section',

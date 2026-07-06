@@ -68,6 +68,8 @@ export interface WorkspaceSchemaReview {
   gaps: string[];
 }
 
+export type WorkspaceProposalMode = 'fixture' | 'deterministic_scaffold' | 'llm';
+
 export type WorkspaceSchemaFieldStatus =
   | 'covered'
   | 'missing'
@@ -90,6 +92,7 @@ export interface WorkspaceSchemaCandidateField {
 
 export interface WorkspaceSchemaCandidate {
   summary: string;
+  proposalMode?: WorkspaceProposalMode;
   fields: WorkspaceSchemaCandidateField[];
 }
 
@@ -106,6 +109,7 @@ export interface WorkspaceYOpsDraftOperation {
 
 export interface WorkspaceYOpsDraft {
   id: string;
+  proposalMode?: WorkspaceProposalMode;
   operations: WorkspaceYOpsDraftOperation[];
 }
 

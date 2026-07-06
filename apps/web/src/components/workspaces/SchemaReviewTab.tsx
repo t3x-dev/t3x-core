@@ -27,6 +27,8 @@ export function SchemaReviewTab({
   const reviewFields = fields.filter((field) => field.status !== 'covered');
   const schemaErrorFields = fields.filter((field) => field.status === 'type_mismatch');
   const yopsOperations = candidate.yopsDraft.operations;
+  const proposalMode = candidate.schemaCandidate.proposalMode ?? 'fixture';
+  const yopsProposalMode = candidate.yopsDraft.proposalMode ?? 'fixture';
   const schemaReviewName = schemaBinding
     ? schemaBinding.schemaName.replace(/\s+Schema$/i, '')
     : 'Candidate';
@@ -40,10 +42,11 @@ export function SchemaReviewTab({
       <div className="border-b border-[var(--stroke-divider)] pb-4">
         <div className="min-w-0">
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-            YSchema {schemaReviewName} Review
+            YSchema {schemaReviewName} Check
           </h3>
           <p className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
-            Validate candidate structure before YOps extraction.
+            Review the candidate proposal, then run deterministic schema checks before YOps
+            proposal.
           </p>
         </div>
       </div>
@@ -75,12 +78,12 @@ export function SchemaReviewTab({
           </div>
           <div className="flex items-center gap-2 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 text-xs text-[var(--text-secondary)]">
             <Badge variant={candidateExtracted ? 'commit-subtle' : 'pending-subtle'}>
-              {candidateExtracted ? 'Extracted candidate' : 'Fixture candidate'}
+              {candidateExtracted ? 'Candidate proposal' : 'Fixture proposal'}
             </Badge>
             <span>
               {candidateExtracted
-                ? 'Generated from the current source bundle.'
-                : 'Candidate tree is ready for review.'}
+                ? `${formatProposalMode(proposalMode)} mapped from the current source bundle.`
+                : 'Preview fixture only; generate a candidate proposal from source before handoff.'}
             </span>
           </div>
           <div className="overflow-x-auto py-3">
@@ -113,22 +116,22 @@ export function SchemaReviewTab({
             }`}
           >
             {schemaErrorFields.length > 0
-              ? 'Fix typed fields before creating the YOps draft.'
+              ? 'Fix typed fields before creating the YOps proposal.'
               : `Candidate shape matches ${schemaReviewName} schema.`}
           </ReviewCard>
 
-          <ReviewCard status="extract" title="YOps suggestions">
+          <ReviewCard status="extract" title="YOps proposal">
             {yopsOperations.length > 0
-              ? `${yopsOperations.length} suggested ${
+              ? `${yopsOperations.length} ${
                   yopsOperations.length === 1 ? 'operation' : 'operations'
-                } from this candidate.`
-              : 'No YOps suggestions yet.'}
+                } staged by ${formatProposalMode(yopsProposalMode)}.`
+              : 'No YOps proposal yet. Generate one after the candidate passes YSchema checks.'}
           </ReviewCard>
 
           {yopsOperations.length > 0 ? (
             <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Proposed YOps
+                Current YOps proposal
               </p>
               <ul className="mt-3 flex flex-col gap-2">
                 {yopsOperations.map((operation) => (
@@ -157,7 +160,11 @@ export function SchemaReviewTab({
             onClick={onSendToYOps}
             type="button"
           >
-            {sendingToYOps ? 'Sending...' : yopsDraftSent ? 'Open YOps draft' : 'Send to YOps'}
+            {sendingToYOps
+              ? 'Generating proposal...'
+              : yopsDraftSent
+                ? 'Open YOps proposal'
+                : 'Generate YOps proposal'}
           </Button>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
@@ -168,6 +175,7 @@ export function SchemaReviewTab({
               {schemaBinding ? `${schemaBinding.schemaName} ${schemaBinding.version}` : 'No schema'}
             </span>
             {schemaBinding ? <span>{formatBindingMode(schemaBinding.mode)}</span> : null}
+            <span>YSchema check is deterministic</span>
           </div>
         </aside>
       </div>
@@ -290,4 +298,10 @@ function flattenFields(fields: WorkspaceSchemaCandidateField[]): WorkspaceSchema
 
 function formatBindingMode(mode: string): string {
   return mode.replaceAll('_', ' ');
+}
+
+function formatProposalMode(mode: string): string {
+  if (mode === 'llm') return 'LLM proposal';
+  if (mode === 'deterministic_scaffold') return 'deterministic scaffold';
+  return 'fixture proposal';
 }

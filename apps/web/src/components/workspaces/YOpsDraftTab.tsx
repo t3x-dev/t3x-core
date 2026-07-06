@@ -56,9 +56,10 @@ export function YOpsDraftTab({
   const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
   const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
   const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
-  const canExtractYOps = draft.operations.length > 0 && !isBusy && !committedHash;
+  const canValidateProposal = draft.operations.length > 0 && !isBusy && !committedHash;
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
+  const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
     isBusy,
@@ -145,18 +146,26 @@ export function YOpsDraftTab({
     <div className="flex min-h-[620px] flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)]">
       <header className="flex min-h-10 items-center gap-3 border-b border-[var(--stroke-divider)] px-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOps workspace</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            YOps proposal workspace
+          </h3>
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+          <Badge
+            className="border-[var(--accent-extract)]/30 bg-[var(--accent-extract)]/10 text-[var(--accent-extract)]"
+            variant="outline"
+          >
+            {proposalMode}
+          </Badge>
           <Badge variant="commit-subtle">Materialized {appliedCount}</Badge>
           <Badge variant="pending-subtle">Pending {pendingCount}</Badge>
-          {yopsDraftSent ? <Badge variant="pending-subtle">Draft sent</Badge> : null}
+          {yopsDraftSent ? <Badge variant="pending-subtle">Proposal ready</Badge> : null}
           {committedHash ? <Badge variant="commit">{shortHash(committedHash)}</Badge> : null}
           <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
             {statusText}
           </span>
           <Button
-            disabled={!canExtractYOps}
+            disabled={!canValidateProposal}
             onClick={handleGenerate}
             size="sm"
             title={extractYOpsTitle}
@@ -168,7 +177,7 @@ export function YOpsDraftTab({
             ) : (
               <Play aria-hidden="true" className="size-4" />
             )}
-            Extract YOps
+            Validate proposal
           </Button>
           <Button
             disabled={!canApplyYOps}
@@ -203,12 +212,12 @@ export function YOpsDraftTab({
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
         <section
-          aria-label="YOps editor"
+          aria-label="YOps proposal"
           className="flex min-h-[360px] min-w-0 flex-col border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
         >
           <PaneHeader
             icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
-            label="YOps editor"
+            label="YOps proposal"
             meta={`${generatedYOps?.length ?? draft.operations.length} ops`}
           />
           <CodePane lines={yopsLines} />
@@ -383,7 +392,7 @@ function YOpsTreePendingState({
         <p className="mt-1 text-xs font-medium leading-5 text-[var(--text-secondary)]">
           {yopsExtracted
             ? `${operationCount} YOps ready. Apply them to preview the materialized tree.`
-            : 'Extract YOps first, then apply them to preview the materialized tree.'}
+            : 'Validate the YOps proposal first, then apply it to preview the materialized tree.'}
         </p>
       </div>
     </div>
@@ -414,13 +423,19 @@ function LegendItem({ className, label }: { className: string; label: string }) 
 function getYOpsStatusText(
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed'
 ) {
-  if (status === 'generating') return 'Backend dry-run';
-  if (status === 'generated') return 'Validated by backend';
+  if (status === 'generating') return 'Running deterministic validation';
+  if (status === 'generated') return 'Proposal validated';
   if (status === 'applying') return 'Applying preview';
   if (status === 'applied') return 'Preview materialized';
   if (status === 'committing') return 'Creating commit';
   if (status === 'committed') return 'Committed to state';
-  return 'Backend ready';
+  return 'Deterministic validator ready';
+}
+
+function formatProposalMode(mode: string): string {
+  if (mode === 'llm') return 'LLM proposal';
+  if (mode === 'deterministic_scaffold') return 'Deterministic scaffold';
+  return 'Fixture proposal';
 }
 
 function buildYOpsScriptLines(
