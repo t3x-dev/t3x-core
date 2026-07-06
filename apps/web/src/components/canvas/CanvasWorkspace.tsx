@@ -281,7 +281,8 @@ function CanvasWorkspaceInner({
   const useVersionPathLayout = useMemo(
     () =>
       nodes.length > 1 &&
-      nodes.every((node) => node.data.kind === 'unit' && node.data.commitStatus === 'committed'),
+      nodes.every((node) => node.data.kind === 'unit') &&
+      nodes.some((node) => node.data.commitStatus === 'committed'),
     [nodes]
   );
 
