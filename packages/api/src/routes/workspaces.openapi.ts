@@ -8,17 +8,19 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Draft, Material } from '@t3x-dev/core';
+import type { Draft, Material, SemanticContent } from '@t3x-dev/core';
 import {
+  type AnyDB,
   createCommit,
   findMaterialsByProject,
   findWorkspaceDraft,
+  getCommit,
+  getLatestCommit,
   listWorkspaceDrafts,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
 import { type NodeSchema, type SlotSchema, t3xPrdP0Fixtures, type YSchema } from '@t3x-dev/yschema';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
-import { resolveDefaultCommitParents } from '../lib/commit-parents';
 import { getDB } from '../lib/db';
 import { errorResponse, zodErrorHook } from '../lib/errors';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
@@ -362,7 +364,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
 
   try {
     const db = await getDB();
-    const commitWorkspace = async (txOrDb: typeof db) => {
+    const commitWorkspace = async (txOrDb: AnyDB) => {
       const storedDraft = await findWorkspaceDraft(txOrDb, projectId, workspaceId);
 
       if (!storedDraft?.workspace_state) {
@@ -371,30 +373,29 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
 
       const storedWorkspace = storedDraft.workspace_state;
       const targetBranch = stringFromWorkspace(storedWorkspace, 'targetBranch', 'main');
-      const parents = await resolveDefaultCommitParents(
-        txOrDb,
-        projectId,
-        targetBranch,
-        nullableStringFromWorkspace(storedWorkspace, 'baseCommitHash') ?? undefined
-      );
-      const commit = await createCommit(txOrDb, {
-        author: { type: 'human' as const, name: 'api' },
-        branch: targetBranch,
-        content: {
-          // biome-ignore lint/suspicious/noExplicitAny: workspace preview trees are validated by YOps apply before commit.
-          trees: content.trees as any,
-          // biome-ignore lint/suspicious/noExplicitAny: relations are optional preview payload metadata.
-          relations: (content.relations ?? []) as any,
-        },
-        enforceBranchLinearity: true,
-        message:
-          message ??
-          `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`,
-        parents,
-        project_id: projectId,
-        provenance: { method: 'human_curation' },
-        sources: commitSourcesFromWorkspace(storedWorkspace),
-      });
+      const commitContent = workspaceCommitContent(content);
+      const branchHead = await getLatestCommit(txOrDb, projectId, targetBranch);
+      const commit = contentMatches(branchHead?.content, commitContent)
+        ? branchHead
+        : await createCommit(txOrDb, {
+            author: { type: 'human' as const, name: 'api' },
+            branch: targetBranch,
+            content: commitContent,
+            enforceBranchLinearity: true,
+            message:
+              message ??
+              `Workspace commit: ${stringFromWorkspace(storedWorkspace, 'title', workspaceId)}`,
+            parents: await resolveWorkspaceCommitParents(
+              txOrDb,
+              projectId,
+              targetBranch,
+              nullableStringFromWorkspace(storedWorkspace, 'baseCommitHash') ?? undefined,
+              branchHead
+            ),
+            project_id: projectId,
+            provenance: { method: 'human_curation' },
+            sources: commitSourcesFromWorkspace(storedWorkspace),
+          });
       const committedAt = new Date().toISOString();
       const committedWorkspace = {
         ...storedWorkspace,
@@ -418,7 +419,7 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
     const runner = db as unknown as Partial<TxRunner>;
     const result =
       typeof runner.transaction === 'function'
-        ? await runner.transaction((tx) => commitWorkspace(tx as typeof db))
+        ? await runner.transaction((tx) => commitWorkspace(tx as AnyDB))
         : await commitWorkspace(db);
 
     if (!result) {
@@ -456,6 +457,42 @@ function resolveStoredBackendCandidateId(
     return storedWorkspace.backendCandidateId;
   }
   return undefined;
+}
+
+function workspaceCommitContent(
+  content: z.infer<typeof CommitWorkspaceRequestSchema>['content']
+): SemanticContent {
+  return {
+    trees: content.trees,
+    relations: content.relations ?? [],
+  };
+}
+
+async function resolveWorkspaceCommitParents(
+  db: AnyDB,
+  projectId: string,
+  targetBranch: string,
+  preferredParentHash: string | undefined,
+  branchHead: { hash: string } | null
+): Promise<string[]> {
+  if (branchHead) return [branchHead.hash];
+
+  if (preferredParentHash) {
+    const preferredParent = await getCommit(db, preferredParentHash);
+    if (preferredParent?.project_id === projectId) return [preferredParent.hash];
+  }
+
+  if (targetBranch !== 'main') {
+    const mainHead = await getLatestCommit(db, projectId, 'main');
+    if (mainHead) return [mainHead.hash];
+  }
+
+  return [];
+}
+
+function contentMatches(left: unknown, right: unknown): boolean {
+  if (!left) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 workspaceRoutes.openapi(extractCandidateRoute, async (c) => {

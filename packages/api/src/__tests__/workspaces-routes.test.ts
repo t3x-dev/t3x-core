@@ -8,6 +8,19 @@ vi.mock('../lib/db', () => ({
 
 const storageMock = vi.hoisted(() => {
   let workspaceDraft: Record<string, unknown> | null = null;
+  const commitRecord = (hash: string, overrides: Record<string, unknown> = {}) => ({
+    hash,
+    schema: 't3x/commit',
+    parents: [],
+    author: { type: 'human', name: 'api' },
+    committed_at: '2026-07-03T00:00:00.000Z',
+    content: { trees: [], relations: [] },
+    project_id: 'proj_sources',
+    message: 'Existing commit',
+    branch: 'main',
+    provenance: { method: 'human_curation' },
+    ...overrides,
+  });
 
   return {
     reset: () => {
@@ -86,6 +99,12 @@ const storageMock = vi.hoisted(() => {
         provenance: { method: 'human_curation' },
       })
     ),
+    getCommit: vi.fn((_db, hash: string) =>
+      Promise.resolve(
+        hash === 'sha256:review-base' || hash === 'sha256:base' ? commitRecord(hash) : null
+      )
+    ),
+    getLatestCommit: vi.fn(() => Promise.resolve(null)),
   };
 });
 
@@ -95,6 +114,8 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     ...actual,
     findMaterialsByProject: storageMock.findMaterialsByProject,
     findWorkspaceDraft: storageMock.findWorkspaceDraft,
+    getCommit: storageMock.getCommit,
+    getLatestCommit: storageMock.getLatestCommit,
     createCommit: storageMock.createCommit,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
@@ -115,6 +136,8 @@ describe('Workspace routes', () => {
     storageMock.findMaterialsByProject.mockClear();
     storageMock.findWorkspaceDraft.mockClear();
     storageMock.createCommit.mockClear();
+    storageMock.getCommit.mockClear();
+    storageMock.getLatestCommit.mockClear();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
   });
@@ -519,5 +542,129 @@ describe('Workspace routes', () => {
         }),
       })
     );
+  });
+
+  it('uses the current branch head instead of a stale workspace base commit', async () => {
+    await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'PRD audience handoff',
+          status: 'schema_review',
+          baseCommitHash: 'sha256:stale-base',
+          targetBranch: 'feature/reviewed-prd',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+          yopsDraft: { id: 'draft:reviewed', operations: [] },
+        },
+      }),
+    });
+    storageMock.getLatestCommit.mockImplementation((_db, projectId: string, branch: string) =>
+      Promise.resolve(
+        projectId === 'proj_sources' && branch === 'feature/reviewed-prd'
+          ? {
+              hash: 'sha256:feature-head',
+              schema: 't3x/commit',
+              parents: ['sha256:review-base'],
+              author: { type: 'human', name: 'api' },
+              committed_at: '2026-07-03T00:00:00.000Z',
+              content: { trees: [{ key: 'old-prd' }], relations: [] },
+              project_id: 'proj_sources',
+              message: 'Previous workspace commit',
+              branch: 'feature/reviewed-prd',
+              provenance: { method: 'human_curation' },
+            }
+          : null
+      )
+    );
+
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: {
+            trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+            relations: [],
+          },
+        }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    expect(storageMock.createCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        branch: 'feature/reviewed-prd',
+        parents: ['sha256:feature-head'],
+      })
+    );
+  });
+
+  it('marks an already materialized branch head committed without creating another commit', async () => {
+    const committedContent = {
+      trees: [{ key: 'prd', slots: { title: 'PRD audience handoff' }, children: [] }],
+      relations: [],
+    };
+    await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: {
+          id: 'workspace_prd_handoff',
+          projectId: 'proj_sources',
+          title: 'PRD audience handoff',
+          status: 'schema_review',
+          baseCommitHash: 'sha256:stale-base',
+          targetBranch: 'feature/reviewed-prd',
+          schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+          yopsDraft: { id: 'draft:reviewed', operations: [] },
+        },
+      }),
+    });
+    storageMock.createCommit.mockClear();
+    storageMock.getLatestCommit.mockImplementation((_db, projectId: string, branch: string) =>
+      Promise.resolve(
+        projectId === 'proj_sources' && branch === 'feature/reviewed-prd'
+          ? {
+              hash: 'sha256:feature-head',
+              schema: 't3x/commit',
+              parents: ['sha256:review-base'],
+              author: { type: 'human', name: 'api' },
+              committed_at: '2026-07-03T00:00:00.000Z',
+              content: committedContent,
+              project_id: 'proj_sources',
+              message: 'Previous workspace commit',
+              branch: 'feature/reviewed-prd',
+              provenance: { method: 'human_curation' },
+            }
+          : null
+      )
+    );
+
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/commit',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: committedContent }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.commit.hash).toBe('sha256:feature-head');
+    expect(body.data.workspace).toEqual(
+      expect.objectContaining({
+        status: 'committed',
+        lastCommitHash: 'sha256:feature-head',
+      })
+    );
+    expect(storageMock.createCommit).not.toHaveBeenCalled();
   });
 });
