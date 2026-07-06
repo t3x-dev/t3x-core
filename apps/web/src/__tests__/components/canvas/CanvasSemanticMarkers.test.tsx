@@ -7,6 +7,7 @@ import { canvasNodeTypes } from '@/components/canvas/CanvasNodes';
 import type { CanvasNodeData } from '@/types/nodes';
 
 const navigationMocks = vi.hoisted(() => ({
+  params: { projectId: 'proj_canvas' } as Record<string, string>,
   routerPush: vi.fn(),
   searchParams: new URLSearchParams(),
 }));
@@ -38,9 +39,21 @@ vi.mock('framer-motion', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ projectId: 'proj_canvas' }),
+  useParams: () => navigationMocks.params,
   useRouter: () => ({ push: navigationMocks.routerPush }),
   useSearchParams: () => navigationMocks.searchParams,
+}));
+
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('@/components/canvas/AutoDraftBadge', () => ({
@@ -109,6 +122,7 @@ vi.mock('@/store/canvasStore', () => ({
       hasMainCommit: false,
       openLeafPanel: openLeafPanelMock,
       openNodeModal: vi.fn(),
+      projectId: 'proj_store',
       updateNode: vi.fn(),
     }),
 }));
@@ -200,6 +214,7 @@ function renderSelectedUnitNode(data: CanvasNodeData) {
 describe('Canvas node semantic markers', () => {
   beforeEach(() => {
     openLeafPanelMock.mockClear();
+    navigationMocks.params = { projectId: 'proj_canvas' };
     navigationMocks.routerPush.mockClear();
     navigationMocks.searchParams = new URLSearchParams();
   });
@@ -295,11 +310,24 @@ describe('Canvas node semantic markers', () => {
   it('shows a local new leaf action after expanding existing leaf output', () => {
     renderUnitNode(makeNodeData());
 
-    fireEvent.click(screen.getByRole('button', { name: /Launch brief/i }));
+    const leafLink = screen.getByRole('link', { name: /Open leaf Launch brief/i });
+    expect(leafLink).toHaveAttribute('href', '/chat/project/proj_canvas/leaf/leaf_canvas');
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand leaf list/i }));
 
     fireEvent.click(screen.getByRole('button', { name: /New Leaf/i }));
 
     expect(openLeafPanelMock).toHaveBeenCalledWith('unit_canvas');
+  });
+
+  it('uses the canvas project id for leaf detail links when the route has no projectId param', () => {
+    navigationMocks.params = {};
+    renderUnitNode(makeNodeData());
+
+    expect(screen.getByRole('link', { name: /Open leaf Launch brief/i })).toHaveAttribute(
+      'href',
+      '/chat/project/proj_store/leaf/leaf_canvas'
+    );
   });
 
   it('keeps the empty leaf state informational without a local new leaf action', () => {

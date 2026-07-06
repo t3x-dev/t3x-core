@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
@@ -72,6 +72,35 @@ export function WorkspaceWorkbench({
     }));
   };
 
+  const handleChatSourceEvidenceChange = useCallback(
+    (sourceId: string, source: SourceBundleItem | null) => {
+      if (!baseSelectedWorkspace) return;
+
+      setWorkspaceOverrides((current) => {
+        const existingOverride = current[baseSelectedWorkspace.id];
+        const currentWorkspace = existingOverride
+          ? mergeWorkspaceOverride(baseSelectedWorkspace, existingOverride)
+          : baseSelectedWorkspace;
+        const sourceBundle = upsertWorkspaceSourceBundle(
+          currentWorkspace.sourceBundle,
+          sourceId,
+          source
+        );
+
+        if (sourceBundlesEqual(currentWorkspace.sourceBundle, sourceBundle)) return current;
+
+        return {
+          ...current,
+          [baseSelectedWorkspace.id]: {
+            ...(existingOverride ?? baseSelectedWorkspace),
+            sourceBundle,
+          },
+        };
+      });
+    },
+    [baseSelectedWorkspace]
+  );
+
   const handleExtractCandidate = async () => {
     if (!selectedWorkspace) return;
 
@@ -102,15 +131,20 @@ export function WorkspaceWorkbench({
     updateSelectedFlow({ error: undefined, sendingToYOps: true });
     try {
       const result = await sendToYOps(selectedWorkspace);
+      const hasOperations = hasYOpsOperations(result.workspace);
       setWorkspaceOverrides((current) => ({
         ...current,
         [result.workspace.id]: result.workspace,
       }));
       updateSelectedFlow({
         candidateId: result.candidate_id,
-        error: undefined,
+        error: hasOperations
+          ? undefined
+          : 'No YOps operations were generated. Add source evidence, regenerate the candidate proposal, then send it to YOps.',
         sendingToYOps: false,
-        yopsDraftId: result.yops_draft_id ?? result.workspace.yopsDraft.id,
+        yopsDraftId: hasOperations
+          ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
+          : undefined,
       });
       setActiveWorkflowTab('yops');
     } catch (err) {
@@ -169,6 +203,7 @@ export function WorkspaceWorkbench({
             candidate={selectedWorkspaceWithFlow}
             flowState={selectedFlow}
             onExtractCandidate={handleExtractCandidate}
+            onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onSendToYOps={handleSendToYOps}
             onYOpsCommitted={handleCommitted}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
@@ -222,11 +257,12 @@ function WorkspaceFlowRail({
   candidate: WorkspaceCandidate;
   flowState?: WorkspaceFlowState;
 }) {
+  const hasReadyYOpsDraft = hasYOpsOperations(candidate);
   const steps = [
     { label: 'Source', done: candidate.sourceBundle.length > 0 },
     { label: 'Candidate proposal', done: Boolean(flowState?.candidateId) },
     { label: 'YSchema check', done: candidate.schemaReview.verdict === 'ready' },
-    { label: 'YOps proposal', done: Boolean(flowState?.yopsDraftId) },
+    { label: 'YOps proposal', done: hasReadyYOpsDraft },
     { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
   ];
 
@@ -261,6 +297,7 @@ function WorkspaceDetail({
   candidate,
   flowState,
   onExtractCandidate,
+  onChatSourceEvidenceChange,
   onSendToYOps,
   onSourceMaterialUploaded,
   onYOpsCommitted,
@@ -269,6 +306,7 @@ function WorkspaceDetail({
   candidate: WorkspaceCandidate | null;
   flowState?: WorkspaceFlowState;
   onExtractCandidate: () => void;
+  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onYOpsCommitted: (commitHash: string) => void;
@@ -289,15 +327,20 @@ function WorkspaceDetail({
           extractingCandidate={Boolean(flowState?.extracting)}
           flowError={flowState?.error}
           onSourceMaterialUploaded={onSourceMaterialUploaded}
+          onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onExtractCandidate={onExtractCandidate}
           onSendToYOps={onSendToYOps}
           onYOpsCommitted={onYOpsCommitted}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
-          yopsDraftSent={Boolean(flowState?.yopsDraftId)}
+          yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
         />
       </div>
     </section>
   );
+}
+
+function hasYOpsOperations(candidate: WorkspaceCandidate | null | undefined): boolean {
+  return Boolean(candidate?.yopsDraft.operations.length);
 }
 
 function mergeWorkspaceOverride(
@@ -311,8 +354,23 @@ function mergeWorkspaceOverride(
     ...override,
     outputTargets: candidate.outputTargets,
     schemaBindings: candidate.schemaBindings,
-    sourceBundle: candidate.sourceBundle,
+    sourceBundle: override.sourceBundle ?? candidate.sourceBundle,
   };
+}
+
+function upsertWorkspaceSourceBundle(
+  sourceBundle: SourceBundleItem[],
+  sourceId: string,
+  source: SourceBundleItem | null
+): SourceBundleItem[] {
+  const next = sourceBundle.filter((item) => item.id !== sourceId);
+  if (!source) return next;
+  return [...next, source];
+}
+
+function sourceBundlesEqual(left: SourceBundleItem[], right: SourceBundleItem[]): boolean {
+  if (left.length !== right.length) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function selectWorkspaceSourceBundle(
