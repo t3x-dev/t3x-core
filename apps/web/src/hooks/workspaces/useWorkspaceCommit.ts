@@ -13,7 +13,7 @@ export function useWorkspaceCommit(candidate: WorkspaceCandidate) {
           branch: candidate.targetBranch || 'main',
           message: `Workspace commit: ${candidate.title}`,
           parents: candidate.baseCommitHash ? [candidate.baseCommitHash] : [],
-          provenance: { method: 'workspace_yops' },
+          provenance: { method: 'human_curation' },
           sources: candidate.sourceBundle.map(sourceToCommitRef),
         }
       );
