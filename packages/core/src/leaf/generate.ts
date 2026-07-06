@@ -205,10 +205,11 @@ export async function generateLeafOutput(options: GenerateOptions): Promise<Gene
         totalUsage.outputTokens += result.usage.outputTokens;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        const providerError = mapProviderGenerationError(error, message);
         throw new GenerationError(
           `Provider generation failed: ${message}`,
-          'API_ERROR',
-          undefined,
+          providerError.code,
+          providerError.statusCode,
           error
         );
       }
@@ -422,4 +423,56 @@ function mapErrorType(anthropicType: string, statusCode: number): string {
       if (statusCode >= 500) return 'SERVER_ERROR';
       return 'API_ERROR';
   }
+}
+
+function mapProviderGenerationError(
+  error: unknown,
+  message: string
+): { code: string; statusCode?: number } {
+  const statusCode = providerStatusCode(error);
+  const rawCode = providerErrorCode(error);
+  const code = normalizeProviderErrorCode(rawCode, statusCode, message);
+  return { code, ...(statusCode !== undefined ? { statusCode } : {}) };
+}
+
+function providerStatusCode(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  return typeof statusCode === 'number' ? statusCode : undefined;
+}
+
+function providerErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code.trim() ? code : undefined;
+}
+
+function normalizeProviderErrorCode(
+  rawCode: string | undefined,
+  statusCode: number | undefined,
+  message: string
+): string {
+  const code = rawCode?.toUpperCase();
+  if (
+    code &&
+    [
+      'AUTH_ERROR',
+      'RATE_LIMIT',
+      'OVERLOADED',
+      'PERMISSION_ERROR',
+      'INVALID_REQUEST',
+      'NOT_FOUND',
+      'SERVER_ERROR',
+      'NETWORK_ERROR',
+    ].includes(code)
+  ) {
+    return code;
+  }
+
+  if (/\b(authentication_error|invalid x-api-key|invalid api key|invalid key)\b/i.test(message)) {
+    return 'AUTH_ERROR';
+  }
+  if (/\b(rate_limit_error|rate limit|rate limited)\b/i.test(message)) return 'RATE_LIMIT';
+  if (statusCode !== undefined) return mapErrorType('provider_error', statusCode);
+  return code ?? 'API_ERROR';
 }

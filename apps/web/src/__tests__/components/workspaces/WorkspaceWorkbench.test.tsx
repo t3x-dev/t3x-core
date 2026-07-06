@@ -201,6 +201,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
 ];
 
 afterEach(() => {
+  window.localStorage.removeItem('t3x:workspace-source-chat:proj_1:workspace_ready');
   usePinsStore.setState({ pins: [], initialized: false, currentProjectId: null });
   vi.restoreAllMocks();
 });
@@ -384,8 +385,13 @@ describe('WorkspaceWorkbench', () => {
       'title',
       'Extract YOps before applying the YAML preview.'
     );
-    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commit · main/ })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue(
+      'feature/prd-audience'
+    );
+    expect(
+      screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toHaveAttribute(
       'title',
       'Apply YOps before committing the workspace result.'
     );
@@ -488,6 +494,193 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Pending 0')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
+  });
+
+  it('sends included source chat turns to candidate extraction', async () => {
+    const chatOnlyCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      sourceBundle: [],
+    };
+    const extractCandidateUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
+    const pinsUrl = 'http://localhost:8000/api/v1/projects/proj_1/pins';
+    const turnsUrl = 'http://localhost:8000/api/v1/turns?';
+    window.localStorage.setItem('t3x:workspace-source-chat:proj_1:workspace_ready', 'conv_1');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith(turnsUrl)) {
+        return jsonResponse({
+          success: true,
+          data: {
+            turns: [
+              {
+                turn_hash: 'turn_persisted_1',
+                project_id: 'proj_1',
+                conversation_id: 'conv_1',
+                role: 'assistant',
+                content: 'Persisted turn ready to include as source evidence.',
+                created_at: '2026-07-03T00:00:00.000Z',
+              },
+            ],
+            limit: 100,
+            offset: 0,
+          },
+        });
+      }
+      if (url === pinsUrl && init?.method !== 'POST') {
+        return jsonResponse({
+          success: true,
+          data: [],
+        });
+      }
+      if (url === pinsUrl && init?.method === 'POST') {
+        return jsonResponse({
+          success: true,
+          data: {
+            id: 'pin_turn_1',
+            project_id: 'proj_1',
+            type: 'conversation_turn',
+            ref_id: 'turn_persisted_1',
+            selected_assertion_ids: null,
+            pinned_at: '2026-07-03T00:00:00.000Z',
+            pinned_by: null,
+          },
+        });
+      }
+      if (url === extractCandidateUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate_chat',
+            workspace: chatOnlyCandidate,
+          },
+        });
+      }
+      return jsonResponse({ success: true, data: {} });
+    });
+
+    render(<WorkspaceWorkbench candidates={[chatOnlyCandidate]} projectId="proj_1" />);
+
+    const detail = screen.getByRole('region', { name: 'Workspace detail' });
+    const chatTab = within(detail).getByRole('tab', { name: 'Chat' });
+    fireEvent.mouseDown(chatTab, { button: 0, ctrlKey: false });
+    fireEvent.click(chatTab);
+    expect(
+      await within(detail).findByText('Persisted turn ready to include as source evidence.')
+    ).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole('button', { name: 'Include turn' }));
+
+    await screen.findByText('1 selected source turns');
+    fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
+
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, extractCandidateUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [, extractCandidateInit] = findFetchCall(fetchMock.mock.calls, extractCandidateUrl);
+    expect(JSON.parse(String(extractCandidateInit?.body))).toMatchObject({
+      sources: [
+        {
+          id: 'source_chat:conv_1',
+          type: 'chat',
+          conversationId: 'conv_1',
+          previewTurns: [
+            {
+              id: 'turn_persisted_1',
+              content: 'Persisted turn ready to include as source evidence.',
+            },
+          ],
+        },
+      ],
+      workspace: {
+        id: 'workspace_ready',
+        sourceBundle: [
+          {
+            id: 'source_chat:conv_1',
+            type: 'chat',
+            conversationId: 'conv_1',
+            previewTurns: [
+              {
+                id: 'turn_persisted_1',
+                content: 'Persisted turn ready to include as source evidence.',
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('shows an honest empty state when no YOps operations are available', () => {
+    const emptyYOpsCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      sourceBundle: [],
+      schemaReview: {
+        gaps: ['No source material.'],
+        summary: 'Add source material before YOps handoff.',
+        verdict: 'needs_review',
+      },
+      yopsDraft: {
+        id: 'draft_empty',
+        operations: [],
+        proposalMode: 'deterministic_scaffold',
+      },
+    };
+
+    render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
+    activateTab(/YOps/);
+
+    expect(screen.getByText('0 ops')).toBeInTheDocument();
+    expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
+    expect(screen.getAllByText(/Add source evidence and generate a YOps proposal/).length).toBe(2);
+    expect(screen.queryByText('path: node/slot')).not.toBeInTheDocument();
+    expect(screen.queryByText('value: "new value"')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
+      'title',
+      'No proposed YOps operations are available yet.'
+    );
+  });
+
+  it('does not mark an empty generated YOps draft as proposal ready', async () => {
+    const emptyYOpsCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      sourceBundle: [],
+      schemaReview: {
+        gaps: ['No source material.'],
+        summary: 'Add source material before YOps handoff.',
+        verdict: 'needs_review',
+      },
+      yopsDraft: {
+        id: 'draft_empty',
+        operations: [],
+        proposalMode: 'deterministic_scaffold',
+      },
+    };
+    const yopsDraftUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        success: true,
+        data: {
+          candidate_id: 'candidate_empty',
+          yops_draft_id: 'draft_empty',
+          workspace: emptyYOpsCandidate,
+        },
+      })
+    );
+
+    render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
+    activateTab(/YSchema/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
+    );
+
+    expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
+    expect(screen.getByText(/No YOps operations were generated/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeDisabled();
   });
 
   it('connects extract candidate, send to yops, apply, commit, and leaf config gates', async () => {
@@ -713,8 +906,11 @@ describe('WorkspaceWorkbench', () => {
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
     const yopsDraftUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
+    const saveWorkspaceUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
-    const commitsUrl = 'http://localhost:8000/api/v1/commits';
+    const workspaceCommitUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit';
     const leavesUrl = 'http://localhost:8000/api/v1/leaves';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -728,6 +924,16 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === yopsDraftUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:backend',
+            workspace: yopsWorkspace,
+            yops_draft_id: 'draft:candidate:backend',
+          },
+        });
+      }
+      if (url === saveWorkspaceUrl) {
         return jsonResponse({
           success: true,
           data: {
@@ -788,10 +994,19 @@ describe('WorkspaceWorkbench', () => {
           },
         });
       }
-      if (url === commitsUrl) {
+      if (url === workspaceCommitUrl) {
         return jsonResponse({
           success: true,
-          data: { commit: { hash: 'sha256:workspace-commit' } },
+          data: {
+            candidate_id: 'candidate:backend',
+            commit: { hash: 'sha256:workspace-commit' },
+            workspace: {
+              ...yopsWorkspace,
+              lastCommitHash: 'sha256:workspace-commit',
+              status: 'committed',
+            },
+            yops_draft_id: 'draft:candidate:backend',
+          },
         });
       }
       if (url === leavesUrl) {
@@ -927,6 +1142,12 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
     await screen.findByText('Materialized 5');
 
+    expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
+      target: { value: 'main' },
+    });
+    expect(screen.getByRole('button', { name: /Commit · main/ })).toBeEnabled();
+
     fireEvent.click(screen.getByRole('button', { name: /Commit · main/ }));
 
     await waitFor(() =>
@@ -968,16 +1189,37 @@ describe('WorkspaceWorkbench', () => {
       ],
     });
     await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, commitsUrl)).toBeGreaterThanOrEqual(1)
+      expect(countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl)).toBeGreaterThanOrEqual(1)
     );
-    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, commitsUrl);
-    expect(commitUrl).toBe('http://localhost:8000/api/v1/commits');
+    const [, saveInit] = findFetchCall(fetchMock.mock.calls, saveWorkspaceUrl);
+    expect(saveInit?.method).toBe('PATCH');
+    expect(JSON.parse(String(saveInit?.body))).toMatchObject({
+      workspace: {
+        id: 'workspace_ready',
+        projectId: 'proj_1',
+        targetBranch: 'main',
+        yopsDraft: { id: 'draft:candidate:backend' },
+      },
+    });
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, workspaceCommitUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [commitUrl, commitInit] = findFetchCall(fetchMock.mock.calls, workspaceCommitUrl);
+    expect(commitUrl).toBe(
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit'
+    );
     expect(JSON.parse(String(commitInit?.body))).toMatchObject({
-      branch: 'feature/prd-audience',
+      content: {
+        relations: [],
+        trees: [
+          {
+            children: expect.any(Array),
+            key: 'prd',
+            slots: { title: 'PRD audience handoff' },
+          },
+        ],
+      },
       message: 'Workspace commit: PRD audience handoff',
-      parents: ['sha256:base-prd'],
-      project_id: 'proj_1',
-      provenance: { method: 'human_curation' },
     });
 
     await waitFor(() =>

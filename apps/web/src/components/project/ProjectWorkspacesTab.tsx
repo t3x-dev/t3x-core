@@ -9,6 +9,8 @@ import {
   type ProjectWorkspaceSchemaBindings,
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
+import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
+import type { WorkspaceCandidate } from '@/types/workspaces';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
@@ -19,16 +21,21 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectMaterials = useProjectMaterials(projectId);
+  const projectWorkspaces = useProjectWorkspaces(projectId);
   const previewCandidates = useMemo(
     () => getWorkspacePreviewCandidates(projectId, projectMaterials.materials),
     [projectId, projectMaterials.materials]
   );
+  const workspaceCandidates = useMemo(
+    () => mergePersistedWorkspaceCandidates(previewCandidates, projectWorkspaces.workspaces),
+    [previewCandidates, projectWorkspaces.workspaces]
+  );
   const candidates = useMemo(
     () =>
       schemaBindings
-        ? applyProjectWorkspaceSchemaBindings(previewCandidates, schemaBindings)
-        : previewCandidates,
-    [previewCandidates, schemaBindings]
+        ? applyProjectWorkspaceSchemaBindings(workspaceCandidates, schemaBindings)
+        : workspaceCandidates,
+    [workspaceCandidates, schemaBindings]
   );
   const selectedWorkspaceId = searchParams.get('workspace');
 
@@ -51,4 +58,48 @@ export function ProjectWorkspacesTab({ projectId, schemaBindings }: ProjectWorks
       onSourceMaterialUploaded={projectMaterials.refresh}
     />
   );
+}
+
+function mergePersistedWorkspaceCandidates(
+  previewCandidates: WorkspaceCandidate[],
+  persistedCandidates: WorkspaceCandidate[]
+): WorkspaceCandidate[] {
+  if (persistedCandidates.length === 0) return previewCandidates;
+
+  const persistedById = new Map(
+    persistedCandidates.map((candidate) => [candidate.id, candidate] as const)
+  );
+  const previewIds = new Set(previewCandidates.map((candidate) => candidate.id));
+  const mergedCandidates = previewCandidates.map((candidate) => {
+    const persisted = persistedById.get(candidate.id);
+    return persisted ? mergeWorkspaceCandidate(candidate, persisted) : candidate;
+  });
+  const extraPersistedCandidates = persistedCandidates.filter(
+    (candidate) => !previewIds.has(candidate.id)
+  );
+
+  return [...mergedCandidates, ...extraPersistedCandidates];
+}
+
+function mergeWorkspaceCandidate(
+  previewCandidate: WorkspaceCandidate,
+  persistedCandidate: WorkspaceCandidate
+): WorkspaceCandidate {
+  const persistedOutputTargets = Array.isArray(persistedCandidate.outputTargets)
+    ? persistedCandidate.outputTargets
+    : [];
+  const persistedSchemaBindings = Array.isArray(persistedCandidate.schemaBindings)
+    ? persistedCandidate.schemaBindings
+    : [];
+
+  return {
+    ...previewCandidate,
+    ...persistedCandidate,
+    outputTargets:
+      persistedOutputTargets.length > 0 ? persistedOutputTargets : previewCandidate.outputTargets,
+    schemaBindings:
+      persistedSchemaBindings.length > 0
+        ? persistedSchemaBindings
+        : previewCandidate.schemaBindings,
+  };
 }

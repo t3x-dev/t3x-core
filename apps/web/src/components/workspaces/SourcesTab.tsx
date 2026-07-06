@@ -42,6 +42,7 @@ import type {
 import { cn } from '@/utils/cn';
 
 type SourceEvidenceState = 'candidate' | 'included' | 'excluded' | 'stale';
+type ChatSourceEvidenceChange = (sourceId: string, source: SourceBundleItem | null) => void;
 
 interface ParsedPreviewBlock {
   id: string;
@@ -68,6 +69,7 @@ export function SourcesTab({
   candidateExtracted,
   extracting,
   flowError,
+  onChatSourceEvidenceChange,
   onExtractCandidate,
   onMaterialUploaded,
 }: {
@@ -75,6 +77,7 @@ export function SourcesTab({
   candidateExtracted?: boolean;
   extracting?: boolean;
   flowError?: string;
+  onChatSourceEvidenceChange?: ChatSourceEvidenceChange;
   onExtractCandidate?: () => Promise<void> | void;
   onMaterialUploaded?: () => Promise<void> | void;
 }) {
@@ -322,6 +325,7 @@ export function SourcesTab({
             <SourceChatPanel
               addPin={addPin}
               candidate={candidate}
+              onChatSourceEvidenceChange={onChatSourceEvidenceChange}
               pins={pins}
               removePin={removePin}
               selectedSource={selectedSource}
@@ -671,12 +675,14 @@ function ParsedTextPreview({
 function SourceChatPanel({
   addPin,
   candidate,
+  onChatSourceEvidenceChange,
   pins,
   removePin,
   selectedSource,
 }: {
   addPin: (projectId: string, type: Pin['type'], refId: string) => Promise<Pin | null>;
   candidate: WorkspaceCandidate;
+  onChatSourceEvidenceChange?: ChatSourceEvidenceChange;
   pins: Pin[];
   removePin: (pinId: string) => Promise<void>;
   selectedSource: SourceBundleItem | null;
@@ -743,10 +749,57 @@ function SourceChatPanel({
     }
     return map;
   }, [pins]);
-  const selectedTurnCount = useMemo(
-    () => chatTurns.filter((turn) => turnPinsByRefId.has(turn.id)).length,
-    [chatTurns, turnPinsByRefId]
+
+  const selectedSourceTurns = useMemo(
+    () =>
+      chatTurns
+        .filter((turn) => turn.pinnable && turnPinsByRefId.has(turn.id))
+        .map((turn) => ({
+          ...turn,
+          conversationId:
+            turn.conversationId ?? sourceConversationId ?? selectedSource?.conversationId,
+          projectId: turn.projectId ?? candidate.projectId,
+          pinnable: true,
+        })),
+    [
+      candidate.projectId,
+      chatTurns,
+      selectedSource?.conversationId,
+      sourceConversationId,
+      turnPinsByRefId,
+    ]
   );
+  const selectedTurnCount = selectedSourceTurns.length;
+
+  useEffect(() => {
+    if (!onChatSourceEvidenceChange) return;
+
+    const sourceId = getSourceChatSourceId(candidate.id, selectedSource, sourceConversationId);
+    if (selectedSourceTurns.length === 0) {
+      onChatSourceEvidenceChange(sourceId, null);
+      return;
+    }
+
+    const conversationId = sourceConversationId ?? selectedSource?.conversationId;
+    onChatSourceEvidenceChange(sourceId, {
+      id: sourceId,
+      type: 'chat',
+      title:
+        selectedSource?.type === 'chat' ? selectedSource.title : `${candidate.title} source chat`,
+      ...(conversationId ? { conversationId } : {}),
+      previewTurns: selectedSourceTurns,
+    });
+  }, [
+    candidate.id,
+    candidate.title,
+    onChatSourceEvidenceChange,
+    selectedSource?.conversationId,
+    selectedSource?.id,
+    selectedSource?.title,
+    selectedSource?.type,
+    selectedSourceTurns,
+    sourceConversationId,
+  ]);
 
   const handleToggleTurnSource = useCallback(
     async (turn: SourceConversationTurn) => {
@@ -889,6 +942,15 @@ function writeStoredSourceChatConversationId(
   } catch {
     // Source chat can still work for the current session without persisted localStorage.
   }
+}
+
+function getSourceChatSourceId(
+  candidateId: string,
+  selectedSource: SourceBundleItem | null,
+  conversationId: string | undefined
+): string {
+  if (selectedSource?.type === 'chat') return selectedSource.id;
+  return `source_chat:${conversationId ?? candidateId}`;
 }
 
 function chatMessageToSourceTurn(message: ChatMessage, index: number): SourceConversationTurn {

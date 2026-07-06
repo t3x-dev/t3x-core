@@ -371,6 +371,41 @@ describe('CanvasWorkspace initial fit view', () => {
     });
   });
 
+  it('lays out version workspaces with pending unit nodes even when DB positions exist', async () => {
+    const committed = {
+      ...unitNode('sha256:parent'),
+      data: { ...unitNode('sha256:parent').data, commitHash: 'sha256:parent' },
+    };
+    const draft = {
+      ...unitNode('draft_1'),
+      data: {
+        ...unitNode('draft_1').data,
+        branchType: undefined,
+        commitStatus: 'draft' as const,
+        draftId: 'draft_1',
+      },
+    };
+    const nodes = [committed, draft];
+    useCanvasStore.setState({
+      edges: [],
+      hasDbPositions: true,
+      nodes,
+    } as Partial<ReturnType<typeof useCanvasStore.getState>>);
+    flowMocks.getNodes.mockImplementation(() => useCanvasStore.getState().nodes);
+    flowMocks.getEdges.mockImplementation(() => useCanvasStore.getState().edges);
+    layoutMocks.getLayoutedElements.mockResolvedValue(nodes);
+
+    render(<CanvasWorkspace projectName="Trust Gate" />);
+
+    await waitFor(() => {
+      expect(layoutMocks.getLayoutedElements).toHaveBeenCalledWith(
+        nodes,
+        useCanvasStore.getState().edges,
+        expect.objectContaining({ direction: 'RIGHT' })
+      );
+    });
+  });
+
   it('reanchors an open commit action panel after dragging the selected node', async () => {
     layoutMocks.getLayoutedElements.mockResolvedValue(useCanvasStore.getState().nodes);
     render(<CanvasWorkspace projectName="Trust Gate" />);

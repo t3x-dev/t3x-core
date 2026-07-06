@@ -1,4 +1,4 @@
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 import { OutputTargetsTab } from './OutputTargetsTab';
 import { SchemaReviewTab } from './SchemaReviewTab';
@@ -89,6 +89,7 @@ export function WorkspaceTabs({
   candidateExtracted,
   extractingCandidate,
   flowError,
+  onChatSourceEvidenceChange,
   onExtractCandidate,
   onSourceMaterialUploaded,
   onSendToYOps,
@@ -101,6 +102,7 @@ export function WorkspaceTabs({
   candidateExtracted?: boolean;
   extractingCandidate?: boolean;
   flowError?: string;
+  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
@@ -114,6 +116,7 @@ export function WorkspaceTabs({
         candidateExtracted,
         extractingCandidate,
         flowError,
+        onChatSourceEvidenceChange,
         onExtractCandidate,
         onSendToYOps,
         onSourceMaterialUploaded,
@@ -129,6 +132,7 @@ interface RenderWorkspaceTabOptions {
   candidateExtracted?: boolean;
   extractingCandidate?: boolean;
   flowError?: string;
+  onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onExtractCandidate?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
@@ -158,6 +162,7 @@ function renderWorkspaceTab(
     return (
       <YOpsDraftTab
         candidate={candidate}
+        flowError={options.flowError}
         onCommitted={options.onYOpsCommitted}
         yopsDraftSent={options.yopsDraftSent}
       />
@@ -170,6 +175,7 @@ function renderWorkspaceTab(
       candidateExtracted={options.candidateExtracted}
       extracting={options.extractingCandidate}
       flowError={options.flowError}
+      onChatSourceEvidenceChange={options.onChatSourceEvidenceChange}
       onExtractCandidate={options.onExtractCandidate}
       onMaterialUploaded={options.onSourceMaterialUploaded}
     />

@@ -135,7 +135,9 @@ const UnitNode = memo(function UnitNode(props: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const params = useParams();
-  const projectId = params?.projectId as string | undefined;
+  const routeProjectId = params?.projectId as string | undefined;
+  const canvasProjectId = useCanvasStore((state) => state.projectId);
+  const projectId = routeProjectId || canvasProjectId || undefined;
   const introDemoActive = searchParams.get('introDemo') === '1';
   const prefersReducedMotion = useReducedMotion();
   const zoomTier = useSemanticZoom();

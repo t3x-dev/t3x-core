@@ -22,10 +22,12 @@ import { cn } from '@/utils/cn';
 
 export function YOpsDraftTab({
   candidate,
+  flowError,
   onCommitted,
   yopsDraftSent,
 }: {
   candidate: WorkspaceCandidate;
+  flowError?: string;
   onCommitted?: (commitHash: string) => void;
   yopsDraftSent?: boolean;
 }) {
@@ -38,9 +40,15 @@ export function YOpsDraftTab({
   const [appliedCount, setAppliedCount] = useState(0);
   const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
 
-  const { commit } = useWorkspaceCommit(candidate);
+  const commitCandidate = useMemo(
+    () => ({ ...candidate, targetBranch }),
+    [candidate, targetBranch]
+  );
+  const { commit } = useWorkspaceCommit(commitCandidate);
   const { rootKey, validate } = useWorkspaceYOps(candidate);
+  const branchOptions = useMemo(() => getCommitBranchOptions(candidate), [candidate]);
   const yopsLines = generatedYOps
     ? buildYOpsCommandLines(generatedYOps)
     : buildYOpsScriptLines(draft.operations, rootKey);
@@ -59,6 +67,7 @@ export function YOpsDraftTab({
   const canValidateProposal = draft.operations.length > 0 && !isBusy && !committedHash;
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
+  const visibleErrorMessage = errorMessage ?? flowError ?? null;
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
@@ -74,6 +83,7 @@ export function YOpsDraftTab({
     appliedCount,
     committedHash,
     isBusy,
+    targetBranch,
   });
 
   useEffect(() => {
@@ -81,6 +91,10 @@ export function YOpsDraftTab({
     setCommittedHash(candidate.lastCommitHash);
     setStatus('committed');
   }, [candidate.lastCommitHash]);
+
+  useEffect(() => {
+    setTargetBranch(getInitialTargetBranch(candidate));
+  }, [candidate.id, candidate.targetBranch]);
 
   async function handleGenerate() {
     setStatus('generating');
@@ -197,7 +211,7 @@ export function YOpsDraftTab({
         </div>
       </header>
 
-      {errorMessage ? (
+      {visibleErrorMessage ? (
         <div
           className="flex items-start gap-2 border-b border-[var(--stroke-divider)] bg-[var(--diff-modified-bg)] px-3 py-2 text-xs text-[var(--text-secondary)]"
           role="alert"
@@ -206,7 +220,7 @@ export function YOpsDraftTab({
             aria-hidden="true"
             className="mt-0.5 size-4 shrink-0 text-[var(--status-warning)]"
           />
-          <span className="min-w-0 break-words">{errorMessage}</span>
+          <span className="min-w-0 break-words">{visibleErrorMessage}</span>
         </div>
       ) : null}
 
@@ -248,6 +262,23 @@ export function YOpsDraftTab({
             <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
               {appliedCount} applied
             </span>
+            <label className="sr-only" htmlFor={`commit-target-branch-${candidate.id}`}>
+              Commit target branch
+            </label>
+            <select
+              aria-label="Commit target branch"
+              className="h-8 max-w-[180px] rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm outline-none transition-colors hover:border-[var(--stroke-strong)] focus:border-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy || Boolean(committedHash)}
+              id={`commit-target-branch-${candidate.id}`}
+              onChange={(event) => setTargetBranch(event.target.value)}
+              value={targetBranch}
+            >
+              {branchOptions.map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
             <Button
               disabled={appliedCount === 0 || isBusy || Boolean(committedHash)}
               onClick={handleCommit}
@@ -261,7 +292,7 @@ export function YOpsDraftTab({
                 ? 'Committed'
                 : status === 'committing'
                   ? 'Committing'
-                  : 'Commit · main'}
+                  : `Commit · ${targetBranch}`}
             </Button>
           </footer>
         </section>
@@ -304,15 +335,33 @@ function getCommitTitle({
   appliedCount,
   committedHash,
   isBusy,
+  targetBranch,
 }: {
   appliedCount: number;
   committedHash: string | null;
   isBusy: boolean;
+  targetBranch: string;
 }): string {
   if (committedHash) return 'Workspace result is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
-  return 'Commit the materialized YAML result.';
+  return `Commit the materialized YAML result to ${targetBranch}.`;
+}
+
+function getInitialTargetBranch(candidate: WorkspaceCandidate): string {
+  return normalizeBranchName(candidate.targetBranch) ?? 'main';
+}
+
+function getCommitBranchOptions(candidate: WorkspaceCandidate): string[] {
+  const options = new Set<string>(['main']);
+  const targetBranch = normalizeBranchName(candidate.targetBranch);
+  if (targetBranch) options.add(targetBranch);
+  return Array.from(options);
+}
+
+function normalizeBranchName(branch: string | null | undefined): string | null {
+  const trimmed = branch?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function PaneHeader({ icon, label, meta }: { icon: ReactNode; label: string; meta: string }) {
@@ -390,9 +439,11 @@ function YOpsTreePendingState({
           No materialized YAML yet
         </p>
         <p className="mt-1 text-xs font-medium leading-5 text-[var(--text-secondary)]">
-          {yopsExtracted
-            ? `${operationCount} YOps ready. Apply them to preview the materialized tree.`
-            : 'Validate the YOps proposal first, then apply it to preview the materialized tree.'}
+          {operationCount === 0
+            ? 'Add source evidence and generate a YOps proposal before validating or applying.'
+            : yopsExtracted
+              ? `${operationCount} YOps ready. Apply them to preview the materialized tree.`
+              : 'Validate the YOps proposal first, then apply it to preview the materialized tree.'}
         </p>
       </div>
     </div>
@@ -443,7 +494,10 @@ function buildYOpsScriptLines(
   rootKey: string
 ): string[] {
   if (operations.length === 0) {
-    return ['yops:', '  - set:', '      path: node/slot', '      value: "new value"'];
+    return [
+      'No proposed YOps operations yet.',
+      'Add source evidence and generate a YOps proposal before validating.',
+    ];
   }
 
   const lines = ['yops:'];
