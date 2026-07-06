@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
-import { commitWorkspaceDraft } from '@/queries/workspaces';
+import { commitWorkspaceDraft, saveWorkspaceDraft } from '@/queries/workspaces';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 
 export function useWorkspaceCommit(candidate: WorkspaceCandidate) {
   const commit = useCallback(
     async (materializedTrees: WorkspaceYOpsTreeNode[]) => {
+      await saveWorkspaceDraft(candidate.projectId, candidate.id, candidate);
       const result = await commitWorkspaceDraft(
         candidate.projectId,
         candidate.id,

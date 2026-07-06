@@ -713,6 +713,8 @@ describe('WorkspaceWorkbench', () => {
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/extract-candidate';
     const yopsDraftUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
+    const saveWorkspaceUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready';
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const workspaceCommitUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit';
@@ -729,6 +731,16 @@ describe('WorkspaceWorkbench', () => {
         });
       }
       if (url === yopsDraftUrl) {
+        return jsonResponse({
+          success: true,
+          data: {
+            candidate_id: 'candidate:backend',
+            workspace: yopsWorkspace,
+            yops_draft_id: 'draft:candidate:backend',
+          },
+        });
+      }
+      if (url === saveWorkspaceUrl) {
         return jsonResponse({
           success: true,
           data: {
@@ -976,6 +988,18 @@ describe('WorkspaceWorkbench', () => {
           },
         },
       ],
+    });
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, saveWorkspaceUrl)).toBeGreaterThanOrEqual(1)
+    );
+    const [, saveInit] = findFetchCall(fetchMock.mock.calls, saveWorkspaceUrl);
+    expect(saveInit?.method).toBe('PATCH');
+    expect(JSON.parse(String(saveInit?.body))).toMatchObject({
+      workspace: {
+        id: 'workspace_ready',
+        projectId: 'proj_1',
+        yopsDraft: { id: 'draft:candidate:backend' },
+      },
     });
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, workspaceCommitUrl)).toBeGreaterThanOrEqual(1)
