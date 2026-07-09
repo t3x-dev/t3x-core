@@ -2,8 +2,7 @@
  * Events outbox table — cross-process realtime sync.
  *
  * Writers INSERT into this table (often via triggers); readers SELECT
- * and relay to LISTEN/NOTIFY subscribers. See
- * docs/superpowers/plans/2026-04-15-realtime-sync-mcp.md.
+ * and relay to LISTEN/NOTIFY subscribers.
  */
 
 import { sql } from 'drizzle-orm';

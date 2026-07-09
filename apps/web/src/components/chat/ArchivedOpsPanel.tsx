@@ -7,14 +7,13 @@
  * (active_dirty Apply with `replaceActiveScript: true`) or Repair
  * (`repairYopsLogId`) flow runs. Re-extracting a staged Extract draft
  * no longer fills this panel — the WebUI Apply path for staged drafts
- * is append-only as of the review-first mechanism flip; see
- * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+ * is append-only as of the review-first mechanism flip.
  * Superseded rows are not part of the live tree (replay walks active
  * rows only) but they are audit-relevant. This panel renders them as
  * a faded timeline so users can see what got replaced and when.
  *
  * Visually quieter than the active op cards: muted colors, no chevron,
- * no click-to-edit. The plan §11 first-iteration scope intentionally
+ * no click-to-edit. The first-iteration scope intentionally
  * avoids "Replaced by yl_…" links — that requires a durable
  * superseded-by id that the API doesn't currently expose on list
  * responses. We show `Archived at <time>` only.

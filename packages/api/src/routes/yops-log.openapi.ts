@@ -102,8 +102,7 @@ const CreateYOpsRequest = z.object({
    * Note (2026-05-04): the WebUI Apply path for staged Extract drafts
    * sends `false` here — re-extract semantics are review-first append,
    * not replace. This `true` branch is retained for non-WebUI callers
-   * that want explicit-supersede semantics. See
-   * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+   * that want explicit-supersede semantics.
    */
   replace_active_llm_draft: z.boolean().optional().default(false),
   /**

@@ -29,8 +29,7 @@
  * applied LLM rows stay active and are only superseded by an explicit
  * Replace (active_dirty Apply) or Repair flow. The parameter itself is
  * retained for non-WebUI callers that want explicit-supersede
- * semantics. See
- * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+ * semantics.
  */
 
 /** biome-ignore-all lint/suspicious/noExplicitAny: yops apply op persists dynamic logs through loosely typed DB transactions pending stricter repository types */
