@@ -1,5 +1,4 @@
 -- Migration: Create events outbox table for cross-process realtime sync.
--- See: docs/superpowers/plans/2026-04-15-realtime-sync-mcp.md
 
 BEGIN;
 

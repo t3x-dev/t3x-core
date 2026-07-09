@@ -124,8 +124,7 @@ export interface CreateYOpsEntryOptions {
    * explicit `false`, so re-extract appends rather than stacking-then-
    * replacing. This option is retained for non-WebUI callers (legacy
    * clients, future agent flows) that genuinely want explicit-supersede
-   * semantics. See
-   * `docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md`.
+   * semantics.
    *
    * Default omitted = API treats as `false`, preserving append-only
    * behaviour for every existing caller (gold edits, compression,

@@ -2,8 +2,7 @@
  * Event trigger integration tests.
  *
  * Verifies that CRUD on core tables automatically inserts into the
- * `events` outbox table. See
- * docs/superpowers/plans/2026-04-15-realtime-sync-mcp.md.
+ * `events` outbox table.
  */
 
 import { asc, eq, sql } from 'drizzle-orm';

@@ -371,7 +371,6 @@ describe('useScriptExecution', () => {
     // applied YOps log, it does not supersede prior LLM rows.
     // Only an explicit Replace (active_dirty) or Repair
     // (replay_failed) flow may set replaceActiveLLMDraft: true.
-    // Spec: docs/superpowers/specs/2026-05-04-yops-append-apply-mechanism-design.md
     useWorkspaceStore.getState().setDraft({
       ops: [
         {
