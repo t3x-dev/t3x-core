@@ -82,6 +82,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('state-canvas-child')).toBeInTheDocument();
     expect(screen.queryByText('State tree')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Change Review Dock' })).not.toBeInTheDocument();
   });
 
   it('opens the State tree as a focused repo inspection view', () => {

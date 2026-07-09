@@ -5,6 +5,7 @@ import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { ChangeReviewDock } from './ChangeReviewDock';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
@@ -116,7 +117,7 @@ export function WorkspaceWorkbench({
         error: undefined,
         extracting: false,
       });
-      setActiveWorkflowTab('yschema');
+      setActiveWorkflowTab('ops');
     } catch (err) {
       updateSelectedFlow({
         error: err instanceof Error ? err.message : 'Candidate extraction failed.',
@@ -146,7 +147,7 @@ export function WorkspaceWorkbench({
           ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
           : undefined,
       });
-      setActiveWorkflowTab('yops');
+      setActiveWorkflowTab('ops');
     } catch (err) {
       updateSelectedFlow({
         error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
@@ -157,7 +158,7 @@ export function WorkspaceWorkbench({
 
   const handleCommitted = (commitHash: string) => {
     updateSelectedFlow({ commitHash });
-    setActiveWorkflowTab('leaf-config');
+    setActiveWorkflowTab('commit');
   };
 
   if (viewState === 'loading') {
@@ -209,6 +210,10 @@ export function WorkspaceWorkbench({
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
         )}
+
+        {selectedWorkspaceWithFlow ? (
+          <ChangeReviewDock candidate={selectedWorkspaceWithFlow} flowState={selectedFlow} />
+        ) : null}
       </div>
     </section>
   );
@@ -260,9 +265,9 @@ function WorkspaceFlowRail({
   const hasReadyYOpsDraft = hasYOpsOperations(candidate);
   const steps = [
     { label: 'Source', done: candidate.sourceBundle.length > 0 },
-    { label: 'Candidate proposal', done: Boolean(flowState?.candidateId) },
-    { label: 'YSchema check', done: candidate.schemaReview.verdict === 'ready' },
-    { label: 'YOps proposal', done: hasReadyYOpsDraft },
+    { label: 'Ops', done: hasReadyYOpsDraft },
+    { label: 'Validation', done: candidate.schemaReview.verdict === 'ready' },
+    { label: 'Preview', done: false },
     { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
   ];
 

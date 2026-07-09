@@ -1,11 +1,9 @@
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { OutputTargetsTab } from './OutputTargetsTab';
-import { SchemaReviewTab } from './SchemaReviewTab';
 import { SourcesTab } from './SourcesTab';
-import { YOpsDraftTab } from './YOpsDraftTab';
+import { type WorkspaceYOpsFlowView, YOpsDraftTab } from './YOpsDraftTab';
 
-export type WorkspaceTabId = 'chat' | 'yschema' | 'yops' | 'leaf-config';
+export type WorkspaceTabId = 'chat' | WorkspaceYOpsFlowView;
 
 export const WORKSPACE_TABS: {
   id: WorkspaceTabId;
@@ -15,22 +13,26 @@ export const WORKSPACE_TABS: {
 }[] = [
   { id: 'chat', keyLabel: '', label: 'Source' },
   {
-    id: 'yschema',
+    id: 'ops',
     keyLabel: '',
-    label: 'YSchema',
-    count: (candidate) => candidate.schemaBindings.length,
-  },
-  {
-    id: 'yops',
-    keyLabel: '',
-    label: 'YOps',
+    label: 'Ops',
     count: (candidate) => candidate.yopsDraft.operations.length,
   },
   {
-    id: 'leaf-config',
+    id: 'validation',
     keyLabel: '',
-    label: 'Leaf config',
-    count: (candidate) => candidate.outputTargets.length,
+    label: 'Validation',
+    count: (candidate) => candidate.schemaReview.gaps.length,
+  },
+  {
+    id: 'preview',
+    keyLabel: '',
+    label: 'Preview',
+  },
+  {
+    id: 'commit',
+    keyLabel: '',
+    label: 'Commit',
   },
 ];
 
@@ -146,29 +148,19 @@ function renderWorkspaceTab(
   candidate: WorkspaceCandidate,
   options: RenderWorkspaceTabOptions
 ) {
-  if (activeTab === 'yschema') {
-    return (
-      <SchemaReviewTab
-        candidate={candidate}
-        candidateExtracted={options.candidateExtracted}
-        flowError={options.flowError}
-        onSendToYOps={options.onSendToYOps}
-        sendingToYOps={options.sendingToYOps}
-        yopsDraftSent={options.yopsDraftSent}
-      />
-    );
-  }
-  if (activeTab === 'yops') {
+  if (activeTab !== 'chat') {
     return (
       <YOpsDraftTab
         candidate={candidate}
         flowError={options.flowError}
+        onSendToYOps={options.onSendToYOps}
         onCommitted={options.onYOpsCommitted}
+        sendingToYOps={options.sendingToYOps}
+        view={activeTab}
         yopsDraftSent={options.yopsDraftSent}
       />
     );
   }
-  if (activeTab === 'leaf-config') return <OutputTargetsTab candidate={candidate} />;
   return (
     <SourcesTab
       candidate={candidate}

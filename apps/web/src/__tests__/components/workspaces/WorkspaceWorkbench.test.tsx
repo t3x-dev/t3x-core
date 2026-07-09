@@ -153,7 +153,7 @@ const workspaceCandidates: WorkspaceCandidate[] = [
       fields: [
         {
           id: 'field_release_version',
-          path: 'release.version',
+          path: 'metadata.version',
           label: 'Release version',
           type: 'string',
           required: true,
@@ -224,13 +224,13 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
 
-    activateTab(/YSchema/);
+    activateTab(/Validation/);
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
 
     const detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(within(detail).getAllByText('PRD audience handoff').length).toBeGreaterThan(0);
     expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
-    expect(within(detail).getByText('YSchema PRD Check')).toBeInTheDocument();
+    expect(within(detail).getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
   });
 
   it('uses the externally selected workspace id for the current workspace', () => {
@@ -249,17 +249,117 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
   });
 
+  it('shows a bottom change track dock with overview, issues, and node diff tabs', () => {
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        projectId="proj_1"
+        selectedWorkspaceId="workspace_draft"
+      />
+    );
+
+    const detail = screen.getByRole('region', { name: 'Workspace detail' });
+    const dock = screen.getByRole('region', { name: 'Change Review Dock' });
+    expect(detail.compareDocumentPosition(dock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(within(dock).getByRole('heading', { name: 'Change Track Dock' })).toBeInTheDocument();
+    expect(within(dock).getByRole('tablist', { name: 'Change track views' })).toBeInTheDocument();
+    expect(within(dock).getByRole('tab', { name: 'Overview' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(dock).getByRole('tab', { name: 'Issues 1' })).toBeInTheDocument();
+    expect(within(dock).getByRole('tab', { name: 'Diff' })).toBeInTheDocument();
+    expect(within(dock).queryByRole('tab', { name: /YOps stack/ })).not.toBeInTheDocument();
+    expect(within(dock).queryByRole('tab', { name: /Evidence/ })).not.toBeInTheDocument();
+    expect(within(dock).queryByRole('tab', { name: /Replay/ })).not.toBeInTheDocument();
+    expect(within(dock).getByText('Commit readiness')).toBeInTheDocument();
+    expect(within(dock).getAllByText('Review schema').length).toBeGreaterThan(0);
+    expect(within(dock).getByRole('region', { name: 'Overview summary' })).toBeInTheDocument();
+    expect(within(dock).getByRole('region', { name: 'YAML overview map' })).toBeInTheDocument();
+    expect(
+      within(dock).getByRole('complementary', { name: 'Review side panels' })
+    ).toBeInTheDocument();
+    expect(within(dock).getByRole('region', { name: 'State change timeline' })).toBeInTheDocument();
+    const yamlMap = within(dock).getByRole('tree', { name: 'YAML change map' });
+    expect(within(yamlMap).getByText('release_note')).toBeInTheDocument();
+    expect(within(yamlMap).getByText('sections')).toBeInTheDocument();
+    expect(within(yamlMap).getByText('-')).toBeInTheDocument();
+    expect(within(yamlMap).getByText('metadata')).toBeInTheDocument();
+    expect(within(yamlMap).queryByText('version')).not.toBeInTheDocument();
+    expect(within(yamlMap).getByText('add')).toBeInTheDocument();
+
+    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Collapse release_note' }));
+    expect(within(yamlMap).queryByText('sections')).not.toBeInTheDocument();
+    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Expand release_note' }));
+    expect(within(yamlMap).getByText('sections')).toBeInTheDocument();
+    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Expand release_note/metadata' }));
+    expect(within(yamlMap).getByText('version')).toBeInTheDocument();
+
+    fireEvent.click(
+      within(yamlMap).getByRole('button', { name: 'Review diff for release_note/sections/-' })
+    );
+    expect(within(dock).getByRole('tab', { name: 'Diff' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    fireEvent.click(within(dock).getByRole('tab', { name: 'Issues 1' }));
+
+    expect(within(dock).getByRole('tab', { name: 'Issues 1' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(dock).getByRole('button', { name: /Review diff for add/ })).toBeInTheDocument();
+    expect(within(dock).getByText('release_note/sections/-')).toBeInTheDocument();
+    expect(within(dock).getByText('Confirm release-note required fields.')).toBeInTheDocument();
+
+    fireEvent.click(within(dock).getByRole('button', { name: /Review diff for add/ }));
+
+    expect(within(dock).getByRole('tab', { name: 'Diff' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(within(dock).getByRole('region', { name: 'Node diff detail' })).toBeInTheDocument();
+    expect(within(dock).getByText('release_note/sections/-')).toBeInTheDocument();
+    expect(within(dock).getByText('add')).toBeInTheDocument();
+    expect(within(dock).getByText('Before')).toBeInTheDocument();
+    expect(within(dock).getByText('After')).toBeInTheDocument();
+    expect(within(dock).getByText('No section placeholder')).toBeInTheDocument();
+    expect(within(dock).getByText('One draft release-note section')).toBeInTheDocument();
+    expect(
+      within(dock).getByText(
+        'The release outline suggests a section, but the required shape needs review.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('uses Source, Ops, Validation, Preview, and Commit as the workspace workflow tabs', () => {
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+
+    expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Ops/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Commit/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /YSchema/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /YOps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
+  });
+
   it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     let detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /YSchema/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /YOps/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Ops/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Commit/ })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Canvas' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Leaf config/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
 
-    activateTab(/YSchema/);
+    activateTab(/Validation/);
     detail = screen.getByRole('region', { name: 'Workspace detail' });
 
     expect(within(detail).getByText('Base')).toBeInTheDocument();
@@ -352,29 +452,24 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByRole('button', { name: 'Include turn' })).toBeEnabled();
   });
 
-  it('renders schema review, split yops workspace, and draft output target tabs', () => {
+  it('renders Ops, Validation, Preview, and Commit workflow panels', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    activateTab(/YSchema/);
-    expect(screen.getByText('YSchema PRD Check')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Review the candidate proposal, then run deterministic schema checks before YOps proposal.'
-      )
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('Candidate tree').length).toBeGreaterThan(0);
-    expect(screen.getByText('Candidate PRD')).toBeInTheDocument();
-    expect(screen.getByText('audience: Product and engineering reviewers')).toBeInTheDocument();
+    activateTab(/Ops/);
+    expect(screen.getByRole('heading', { name: 'Ops' })).toBeInTheDocument();
     expect(screen.getAllByText('YOps proposal').length).toBeGreaterThan(0);
-    expect(screen.getByText('1 operation staged by fixture proposal.')).toBeInTheDocument();
-    expect(screen.getByText('Current YOps proposal')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Ops cards' })).toBeInTheDocument();
+    expect(screen.getByText('Set primary audience from source evidence.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Generate YOps proposal' })).toHaveLength(1);
+    expect(screen.getByText('yops:')).toBeInTheDocument();
+    expect(screen.getByText('- set:')).toBeInTheDocument();
+    expect(screen.getByText('path: prd/summary/audience')).toBeInTheDocument();
+    expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
 
-    activateTab(/YOps/);
-    expect(screen.getByText('YOps proposal workspace')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toBeInTheDocument();
+    activateTab(/Validation/);
+    expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
+    expect(screen.getByText('Schema gate')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
       'title',
@@ -385,6 +480,17 @@ describe('WorkspaceWorkbench', () => {
       'title',
       'Extract YOps before applying the YAML preview.'
     );
+
+    activateTab(/Preview/);
+    const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
+    expect(yopsTree).toHaveTextContent('No materialized YAML yet');
+    expect(yopsTree).toHaveTextContent('Validate the YOps proposal first');
+    expect(yopsTree).not.toHaveTextContent('audience: Product and engineering reviewers');
+    expect(screen.getByText('Human')).toBeInTheDocument();
+    expect(screen.getByText('Changed')).toBeInTheDocument();
+
+    activateTab(/Commit/);
+    expect(screen.getByRole('region', { name: 'Commit readiness' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Commit target branch' })).toHaveValue(
       'feature/prd-audience'
     );
@@ -396,36 +502,7 @@ describe('WorkspaceWorkbench', () => {
       'Apply YOps before committing the workspace result.'
     );
     expect(screen.getByText('Materialized 0')).toBeInTheDocument();
-    expect(screen.getByText('Pending 1')).toBeInTheDocument();
-    expect(screen.getByText('yops:')).toBeInTheDocument();
-    expect(screen.getByText('- set:')).toBeInTheDocument();
-    expect(screen.getByText('path: prd/summary/audience')).toBeInTheDocument();
-    expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
-    const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
-    expect(yopsTree).toHaveTextContent('No materialized YAML yet');
-    expect(yopsTree).toHaveTextContent('Validate the YOps proposal first');
-    expect(yopsTree).not.toHaveTextContent('audience: Product and engineering reviewers');
-    expect(screen.getByText('Human')).toBeInTheDocument();
-    expect(screen.getByText('Changed')).toBeInTheDocument();
-
-    activateTab(/Leaf config/);
-    expect(screen.getByRole('tab', { name: /Leaf config/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(screen.getByRole('complementary', { name: 'Leaf draft configs' })).toBeInTheDocument();
-    expect(screen.getByText('Pre-commit config')).toBeInTheDocument();
-    expect(screen.getAllByText('PRD review brief').length).toBeGreaterThan(0);
-    expect(screen.getByText('Waiting for workspace commit')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create after commit' })).toHaveAttribute(
-      'title',
-      'Commit this workspace before creating a Leaf.'
-    );
-    expect(
-      screen.getByText('Generate a concise PRD review brief from the committed candidate tree.')
-    ).toBeInTheDocument();
-    expect(screen.getByText('Include summary.audience exactly as committed.')).toBeInTheDocument();
-    expect(screen.getByText('PRD audience handoff leaf')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
   it('extracts yops before applying the backend preview', async () => {
@@ -462,7 +539,7 @@ describe('WorkspaceWorkbench', () => {
       .mockResolvedValueOnce(createValidateResponse());
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
-    activateTab(/YOps/);
+    activateTab(/Validation/);
 
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
@@ -483,17 +560,22 @@ describe('WorkspaceWorkbench', () => {
 
     expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       '1 YOps ready'
     );
+    activateTab(/Validation/);
 
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[1][0]).toBe('http://localhost:8000/api/v1/yops/validate');
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
-    expect(screen.getByText('Pending 0')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
+    activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
+      'audience: Product and engineering reviewers'
+    );
   });
 
   it('sends included source chat turns to candidate extraction', async () => {
@@ -627,13 +709,14 @@ describe('WorkspaceWorkbench', () => {
     };
 
     render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
-    activateTab(/YOps/);
+    activateTab(/Ops/);
 
     expect(screen.getByText('0 ops')).toBeInTheDocument();
-    expect(screen.getByText('No proposed YOps operations yet.')).toBeInTheDocument();
-    expect(screen.getAllByText(/Add source evidence and generate a YOps proposal/).length).toBe(2);
+    expect(screen.getAllByText('No proposed YOps operations yet.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Add source evidence and generate a YOps proposal/).length).toBe(1);
     expect(screen.queryByText('path: node/slot')).not.toBeInTheDocument();
     expect(screen.queryByText('value: "new value"')).not.toBeInTheDocument();
+    activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
       'title',
@@ -670,20 +753,21 @@ describe('WorkspaceWorkbench', () => {
     );
 
     render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
-    activateTab(/YSchema/);
+    activateTab(/Ops/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
     );
 
-    expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
-    expect(screen.getByText(/No YOps operations were generated/)).toBeInTheDocument();
+    expect(screen.getAllByText(/No YOps operations were generated/).length).toBeGreaterThan(0);
+    activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeDisabled();
   });
 
-  it('connects extract candidate, send to yops, apply, commit, and leaf config gates', async () => {
+  it('connects extract candidate, send to ops, validate, preview, and commit gates', async () => {
     const extractedWorkspace: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       schemaCandidate: {
@@ -911,7 +995,6 @@ describe('WorkspaceWorkbench', () => {
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const workspaceCommitUrl =
       'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/commit';
-    const leavesUrl = 'http://localhost:8000/api/v1/leaves';
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url === extractCandidateUrl) {
@@ -1009,29 +1092,6 @@ describe('WorkspaceWorkbench', () => {
           },
         });
       }
-      if (url === leavesUrl) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              id: 'leaf_workspace_prd',
-              commit_hash: 'sha256:workspace-commit',
-              type: 'article',
-              title: 'PRD review brief',
-              constraints: [],
-              config: {},
-              output: null,
-              generated_at: null,
-              assertions: null,
-              runner_assertions: null,
-              project_id: 'proj_1',
-              created_at: '2026-07-03T00:00:00.000Z',
-              created_by: null,
-            },
-          }),
-          { status: 201, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
       throw new Error(`Unhandled fetch ${url}`);
     });
 
@@ -1062,22 +1122,8 @@ describe('WorkspaceWorkbench', () => {
         sourceBundle: [{ id: 'src_doc', materialId: 'mat_prd' }],
       },
     });
-    expect(
-      await screen.findByText('deterministic scaffold mapped from the current source bundle.')
-    ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /YSchema/ })).toHaveAttribute('aria-selected', 'true');
-    expect(
-      screen.getByText('problem: Backend PRD import lacks a confirmed reviewer handoff.')
-    ).toBeInTheDocument();
-    expect(screen.getByText('audience: Backend product reviewers')).toBeInTheDocument();
-    expect(screen.getByText('requirements:')).toBeInTheDocument();
-    expect(screen.getByText('backend_prd_handoff:')).toBeInTheDocument();
-    expect(screen.getByText('priority: should')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'acceptance: YOps receives reviewed candidate fields from backend source evidence.'
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
     await waitFor(() =>
@@ -1085,13 +1131,15 @@ describe('WorkspaceWorkbench', () => {
     );
     findFetchCall(fetchMock.mock.calls, yopsDraftUrl);
     expect(await screen.findByText('Proposal ready')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /YOps/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
     expect(
       screen.getByText(
         'value: "YOps receives reviewed candidate fields from backend source evidence."'
       )
     ).toBeInTheDocument();
+
+    activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
@@ -1135,13 +1183,16 @@ describe('WorkspaceWorkbench', () => {
     });
     expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
-    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
-      '5 YOps ready'
-    );
 
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
     await screen.findByText('Materialized 5');
 
+    activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
+      'Backend product reviewers'
+    );
+
+    activateTab(/Commit/);
     expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();
     fireEvent.change(screen.getByRole('combobox', { name: 'Commit target branch' }), {
       target: { value: 'main' },
@@ -1223,40 +1274,10 @@ describe('WorkspaceWorkbench', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /Leaf config/ })).toHaveAttribute(
-        'aria-selected',
-        'true'
-      )
+      expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true')
     );
-    expect(screen.getByText('Ready from sha256:workspace-commit')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Create Leaf' }));
-
-    await waitFor(() =>
-      expect(countFetchCalls(fetchMock.mock.calls, leavesUrl)).toBeGreaterThanOrEqual(1)
-    );
-    const [, leafInit] = findFetchCall(fetchMock.mock.calls, leavesUrl);
-    expect(JSON.parse(String(leafInit?.body))).toMatchObject({
-      commit_hash: 'sha256:workspace-commit',
-      config: {
-        format: 'markdown',
-        instruction: 'Generate a concise PRD review brief from the committed candidate tree.',
-        source_scope: 'Committed PRD candidate plus included source evidence.',
-        workspace_id: 'workspace_ready',
-      },
-      constraints: [
-        {
-          id: 'constraint_target_prd_markdown_1',
-          match_mode: 'semantic',
-          type: 'require',
-          value: 'Include summary.audience exactly as committed.',
-        },
-      ],
-      project_id: 'proj_1',
-      source: { type: 'user' },
-      title: 'PRD review brief',
-      type: 'article',
-    });
-    expect(await screen.findByText('Created leaf leaf_workspace_prd')).toBeInTheDocument();
+    expect(screen.getAllByText('sha256:workspace-commit').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
   it('renders loading, error, and no-candidate states explicitly', () => {

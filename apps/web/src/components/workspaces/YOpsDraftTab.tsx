@@ -20,15 +20,23 @@ import type {
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 
+export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
+
 export function YOpsDraftTab({
   candidate,
   flowError,
   onCommitted,
+  onSendToYOps,
+  sendingToYOps,
+  view = 'ops',
   yopsDraftSent,
 }: {
   candidate: WorkspaceCandidate;
   flowError?: string;
   onCommitted?: (commitHash: string) => void;
+  onSendToYOps?: () => Promise<void> | void;
+  sendingToYOps?: boolean;
+  view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
 }) {
   const draft = candidate.yopsDraft;
@@ -40,6 +48,7 @@ export function YOpsDraftTab({
   const [appliedCount, setAppliedCount] = useState(0);
   const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [forceCommit, setForceCommit] = useState(false);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
 
   const commitCandidate = useMemo(
@@ -68,6 +77,13 @@ export function YOpsDraftTab({
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
   const visibleErrorMessage = errorMessage ?? flowError ?? null;
+  const hasCommitWarnings = candidate.schemaReview.gaps.length > 0 || Boolean(visibleErrorMessage);
+  const canCommit =
+    appliedCount > 0 &&
+    Boolean(materializedTrees) &&
+    !isBusy &&
+    !committedHash &&
+    (!hasCommitWarnings || forceCommit);
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
@@ -82,6 +98,8 @@ export function YOpsDraftTab({
   const commitTitle = getCommitTitle({
     appliedCount,
     committedHash,
+    forceCommit,
+    hasWarnings: hasCommitWarnings,
     isBusy,
     targetBranch,
   });
@@ -141,7 +159,7 @@ export function YOpsDraftTab({
   }
 
   async function handleCommit() {
-    if (!materializedTrees || appliedCount === 0 || committedHash) return;
+    if (!materializedTrees || !canCommit) return;
     setStatus('committing');
     setErrorMessage(null);
 
@@ -161,8 +179,11 @@ export function YOpsDraftTab({
       <header className="flex min-h-10 items-center gap-3 border-b border-[var(--stroke-divider)] px-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-            YOps proposal workspace
+            {getYOpsViewTitle(view)}
           </h3>
+          <p className="truncate text-xs text-[var(--text-tertiary)]">
+            {getYOpsViewDescription(view)}
+          </p>
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Badge
@@ -178,36 +199,6 @@ export function YOpsDraftTab({
           <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
             {statusText}
           </span>
-          <Button
-            disabled={!canValidateProposal}
-            onClick={handleGenerate}
-            size="sm"
-            title={extractYOpsTitle}
-            type="button"
-            variant="canvas-outline"
-          >
-            {status === 'generating' ? (
-              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-            ) : (
-              <Play aria-hidden="true" className="size-4" />
-            )}
-            Validate proposal
-          </Button>
-          <Button
-            disabled={!canApplyYOps}
-            onClick={handleApply}
-            size="sm"
-            title={applyYOpsTitle}
-            type="button"
-            variant="commit"
-          >
-            {status === 'applying' ? (
-              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-            ) : (
-              <CheckCircle2 aria-hidden="true" className="size-4" />
-            )}
-            Apply YOps
-          </Button>
         </div>
       </header>
 
@@ -224,79 +215,501 @@ export function YOpsDraftTab({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-        <section
-          aria-label="YOps proposal"
-          className="flex min-h-[360px] min-w-0 flex-col border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
-        >
-          <PaneHeader
-            icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
-            label="YOps proposal"
-            meta={`${generatedYOps?.length ?? draft.operations.length} ops`}
-          />
-          <CodePane lines={yopsLines} />
-        </section>
+      {view === 'ops' ? (
+        <OpsReviewView
+          draftOperations={draft.operations}
+          onSendToYOps={onSendToYOps}
+          proposalMode={proposalMode}
+          sendingToYOps={Boolean(sendingToYOps)}
+          yopsDraftSent={Boolean(yopsDraftSent)}
+          yopsLines={yopsLines}
+        />
+      ) : null}
 
-        <section aria-label="YOps YAML tree" className="flex min-h-[360px] min-w-0 flex-col">
-          <PaneHeader
-            icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
-            label="YAML tree"
-            meta={
-              materializedTrees
-                ? `${appliedCount} applied`
-                : generatedYOps
-                  ? 'Ready to apply'
-                  : 'Waiting for apply'
-            }
-          />
-          {materializedTrees ? (
-            <TreePane lines={treeLines} />
+      {view === 'validation' ? (
+        <ValidationReviewView
+          applyYOpsTitle={applyYOpsTitle}
+          canApplyYOps={canApplyYOps}
+          canValidateProposal={canValidateProposal}
+          candidate={candidate}
+          extractYOpsTitle={extractYOpsTitle}
+          generatedYOpsCount={generatedYOps?.length ?? 0}
+          onApply={handleApply}
+          onValidate={handleGenerate}
+          status={status}
+          visibleErrorMessage={visibleErrorMessage}
+        />
+      ) : null}
+
+      {view === 'preview' ? (
+        <PreviewReviewView
+          appliedCount={appliedCount}
+          generatedYOpsCount={generatedYOps?.length ?? draft.operations.length}
+          yopsExtracted={Boolean(generatedYOps)}
+          materializedTrees={materializedTrees}
+          treeLines={treeLines}
+        />
+      ) : null}
+
+      {view === 'commit' ? (
+        <CommitReviewView
+          appliedCount={appliedCount}
+          branchOptions={branchOptions}
+          candidate={candidate}
+          canCommit={canCommit}
+          commitTitle={commitTitle}
+          committedHash={committedHash}
+          forceCommit={forceCommit}
+          hasCommitWarnings={hasCommitWarnings}
+          isBusy={isBusy}
+          onCommit={handleCommit}
+          onForceCommitChange={setForceCommit}
+          onTargetBranchChange={setTargetBranch}
+          status={status}
+          targetBranch={targetBranch}
+          visibleErrorMessage={visibleErrorMessage}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function OpsReviewView({
+  draftOperations,
+  onSendToYOps,
+  proposalMode,
+  sendingToYOps,
+  yopsDraftSent,
+  yopsLines,
+}: {
+  draftOperations: WorkspaceYOpsDraftOperation[];
+  onSendToYOps?: () => Promise<void> | void;
+  proposalMode: string;
+  sendingToYOps: boolean;
+  yopsDraftSent: boolean;
+  yopsLines: string[];
+}) {
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section
+        aria-label="YOps proposal"
+        className="flex min-h-[360px] min-w-0 flex-col border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
+      >
+        <PaneHeader
+          icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
+          label="YOps proposal"
+          meta={`${draftOperations.length} ops`}
+        />
+        <CodePane lines={yopsLines} />
+      </section>
+
+      <aside aria-label="Ops cards" className="flex min-h-[360px] min-w-0 flex-col">
+        <PaneHeader
+          icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
+          label="Ops cards"
+          meta={proposalMode}
+        />
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-3">
+          {draftOperations.length > 0 ? (
+            draftOperations.map((operation) => (
+              <article
+                className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
+                key={operation.id}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{operation.op}</Badge>
+                  <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">
+                    {operation.path}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+                  {operation.summary}
+                </p>
+                {operation.reason ? (
+                  <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
+                    {operation.reason}
+                  </p>
+                ) : null}
+              </article>
+            ))
           ) : (
-            <YOpsTreePendingState
-              operationCount={generatedYOps?.length ?? draft.operations.length}
-              yopsExtracted={Boolean(generatedYOps)}
-            />
+            <div className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 text-center text-sm text-[var(--text-secondary)]">
+              No proposed YOps operations yet.
+            </div>
           )}
-          <footer className="flex min-h-10 items-center gap-3 border-t border-[var(--stroke-divider)] px-3">
-            <TreeLegend />
-            <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
-              {appliedCount} applied
-            </span>
-            <label className="sr-only" htmlFor={`commit-target-branch-${candidate.id}`}>
-              Commit target branch
-            </label>
-            <select
-              aria-label="Commit target branch"
-              className="h-8 max-w-[180px] rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm outline-none transition-colors hover:border-[var(--stroke-strong)] focus:border-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isBusy || Boolean(committedHash)}
-              id={`commit-target-branch-${candidate.id}`}
-              onChange={(event) => setTargetBranch(event.target.value)}
-              value={targetBranch}
-            >
-              {branchOptions.map((branch) => (
-                <option key={branch} value={branch}>
-                  {branch}
-                </option>
-              ))}
-            </select>
+        </div>
+        {onSendToYOps ? (
+          <footer className="border-t border-[var(--stroke-divider)] p-3">
             <Button
-              disabled={appliedCount === 0 || isBusy || Boolean(committedHash)}
-              onClick={handleCommit}
-              size="sm"
-              title={commitTitle}
+              className="w-full bg-[var(--accent-extract)] text-[var(--on-accent)] hover:bg-[var(--accent-extract)]/90"
+              disabled={sendingToYOps}
+              onClick={onSendToYOps}
               type="button"
-              variant="commit"
             >
-              <GitCommitHorizontal aria-hidden="true" className="size-4" />
-              {committedHash
-                ? 'Committed'
-                : status === 'committing'
-                  ? 'Committing'
-                  : `Commit · ${targetBranch}`}
+              {sendingToYOps
+                ? 'Generating proposal...'
+                : yopsDraftSent
+                  ? 'Regenerate YOps proposal'
+                  : 'Generate YOps proposal'}
             </Button>
           </footer>
-        </section>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
+function ValidationReviewView({
+  applyYOpsTitle,
+  canApplyYOps,
+  canValidateProposal,
+  candidate,
+  extractYOpsTitle,
+  generatedYOpsCount,
+  onApply,
+  onValidate,
+  status,
+  visibleErrorMessage,
+}: {
+  applyYOpsTitle: string;
+  canApplyYOps: boolean;
+  canValidateProposal: boolean;
+  candidate: WorkspaceCandidate;
+  extractYOpsTitle: string;
+  generatedYOpsCount: number;
+  onApply: () => void;
+  onValidate: () => void;
+  status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
+  visibleErrorMessage: string | null;
+}) {
+  const blockingIssues = [
+    ...candidate.schemaReview.gaps.map((gap) => ({ label: 'Schema review gap', message: gap })),
+    ...(visibleErrorMessage ? [{ label: 'Flow error', message: visibleErrorMessage }] : []),
+  ];
+  const passedCount =
+    (candidate.sourceBundle.length > 0 ? 1 : 0) +
+    (candidate.schemaReview.verdict === 'ready' ? 1 : 0) +
+    (candidate.yopsDraft.operations.length > 0 ? 1 : 0) +
+    (generatedYOpsCount > 0 || status === 'applied' || status === 'committed' ? 1 : 0);
+
+  return (
+    <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <section
+        aria-label="Validation gates"
+        className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
+      >
+        <div className="grid gap-2 sm:grid-cols-4">
+          <ValidationMetric
+            label="Blocking"
+            tone={blockingIssues.length > 0 ? 'warning' : 'success'}
+            value={`${blockingIssues.length}`}
+          />
+          <ValidationMetric label="Passed" tone="success" value={`${passedCount}`} />
+          <ValidationMetric
+            label="Review"
+            tone={candidate.schemaReview.verdict === 'ready' ? 'success' : 'warning'}
+            value={candidate.schemaReview.verdict === 'ready' ? '0' : '1'}
+          />
+          <ValidationMetric
+            label="Info"
+            tone="neutral"
+            value={`${candidate.sourceBundle.length}`}
+          />
+        </div>
+
+        <div className="mt-3 grid gap-2">
+          <GateRow
+            label="Schema gate"
+            passed={
+              candidate.schemaReview.verdict === 'ready' && candidate.schemaReview.gaps.length === 0
+            }
+          />
+          <GateRow label="Evidence gate" passed={candidate.sourceBundle.length > 0} />
+          <GateRow label="Replay gate" passed={candidate.yopsDraft.operations.length > 0} />
+          <GateRow
+            label="YOps validation"
+            passed={generatedYOpsCount > 0 || status === 'applied' || status === 'committed'}
+          />
+        </div>
+
+        <div className="mt-4 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Schema review</h4>
+          <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
+            {candidate.schemaCandidate.summary}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
+            {candidate.schemaReview.summary}
+          </p>
+        </div>
+
+        <div className="mt-4">
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Blocking issues</h4>
+          {blockingIssues.length > 0 ? (
+            <div className="mt-2 divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)]">
+              {blockingIssues.map((issue) => (
+                <article className="grid gap-1 px-3 py-2" key={`${issue.label}-${issue.message}`}>
+                  <div className="text-xs font-semibold text-[var(--status-warning)]">
+                    {issue.label}
+                  </div>
+                  <p className="text-sm text-[var(--text-primary)]">{issue.message}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 rounded-md border border-dashed border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
+              No blocking issues detected.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <aside
+        aria-label="Validation actions"
+        className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
+      >
+        <div>
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">What to do next?</h4>
+          <ul className="mt-2 grid gap-1 text-xs leading-5 text-[var(--text-secondary)]">
+            <li>Resolve blocking issues before a normal commit.</li>
+            <li>Validate the Ops proposal, then apply it for Preview.</li>
+          </ul>
+        </div>
+        <Button
+          disabled={!canValidateProposal}
+          onClick={onValidate}
+          size="sm"
+          title={extractYOpsTitle}
+          type="button"
+          variant="canvas-outline"
+        >
+          {status === 'generating' ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <Play aria-hidden="true" className="size-4" />
+          )}
+          Validate proposal
+        </Button>
+        <Button
+          disabled={!canApplyYOps}
+          onClick={onApply}
+          size="sm"
+          title={applyYOpsTitle}
+          type="button"
+          variant="commit"
+        >
+          {status === 'applying' ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" className="size-4" />
+          )}
+          Apply YOps
+        </Button>
+      </aside>
+    </div>
+  );
+}
+
+function PreviewReviewView({
+  appliedCount,
+  generatedYOpsCount,
+  materializedTrees,
+  treeLines,
+  yopsExtracted,
+}: {
+  appliedCount: number;
+  generatedYOpsCount: number;
+  materializedTrees: WorkspaceYOpsTreeNode[] | null;
+  treeLines: YamlTreeLine[];
+  yopsExtracted: boolean;
+}) {
+  return (
+    <section aria-label="YOps YAML tree" className="flex min-h-0 flex-1 flex-col">
+      <PaneHeader
+        icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
+        label="Rendered PRD YAML"
+        meta={materializedTrees ? `${appliedCount} applied` : 'Waiting for validation'}
+      />
+      {materializedTrees ? (
+        <TreePane lines={treeLines} />
+      ) : (
+        <YOpsTreePendingState operationCount={generatedYOpsCount} yopsExtracted={yopsExtracted} />
+      )}
+      <footer className="flex min-h-10 items-center gap-3 border-t border-[var(--stroke-divider)] px-3">
+        <TreeLegend />
+        <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
+          {appliedCount} applied
+        </span>
+      </footer>
+    </section>
+  );
+}
+
+function CommitReviewView({
+  appliedCount,
+  branchOptions,
+  candidate,
+  canCommit,
+  commitTitle,
+  committedHash,
+  forceCommit,
+  hasCommitWarnings,
+  isBusy,
+  onCommit,
+  onForceCommitChange,
+  onTargetBranchChange,
+  status,
+  targetBranch,
+  visibleErrorMessage,
+}: {
+  appliedCount: number;
+  branchOptions: string[];
+  candidate: WorkspaceCandidate;
+  canCommit: boolean;
+  commitTitle: string;
+  committedHash: string | null;
+  forceCommit: boolean;
+  hasCommitWarnings: boolean;
+  isBusy: boolean;
+  onCommit: () => void;
+  onForceCommitChange: (force: boolean) => void;
+  onTargetBranchChange: (branch: string) => void;
+  status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
+  targetBranch: string;
+  visibleErrorMessage: string | null;
+}) {
+  return (
+    <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section
+        aria-label="Commit readiness"
+        className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
+      >
+        <div className="grid gap-2 sm:grid-cols-3">
+          <ValidationMetric
+            label="Materialized"
+            tone={appliedCount > 0 ? 'success' : 'warning'}
+            value={`${appliedCount}`}
+          />
+          <ValidationMetric
+            label="Issues"
+            tone={hasCommitWarnings ? 'warning' : 'success'}
+            value={`${candidate.schemaReview.gaps.length + (visibleErrorMessage ? 1 : 0)}`}
+          />
+          <ValidationMetric
+            label="Commit"
+            tone={committedHash ? 'success' : canCommit ? 'success' : 'warning'}
+            value={committedHash ? 'Done' : canCommit ? 'Ready' : 'Blocked'}
+          />
+        </div>
+        <dl className="mt-3 grid gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs">
+          <div className="min-w-0">
+            <dt className="text-[var(--text-tertiary)]">Commit result</dt>
+            <dd className="mt-0.5 truncate font-semibold text-[var(--text-primary)]">
+              {committedHash ?? 'Pending'}
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-[var(--text-tertiary)]">Target branch</dt>
+            <dd className="mt-0.5 truncate font-semibold text-[var(--text-primary)]">
+              {targetBranch}
+            </dd>
+          </div>
+        </dl>
+        {hasCommitWarnings ? (
+          <div className="mt-3 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--status-warning)]">
+            Commit has unresolved validation warnings. Resolve them for a normal commit or force
+            commit with warning.
+          </div>
+        ) : null}
+      </section>
+
+      <aside
+        aria-label="Commit controls"
+        className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
+      >
+        <label
+          className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]"
+          htmlFor={`commit-target-branch-${candidate.id}`}
+        >
+          Commit target branch
+          <select
+            aria-label="Commit target branch"
+            className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)] px-2 text-xs font-medium text-[var(--text-secondary)] shadow-sm outline-none transition-colors hover:border-[var(--stroke-strong)] focus:border-[var(--accent-commit)] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isBusy || Boolean(committedHash)}
+            id={`commit-target-branch-${candidate.id}`}
+            onChange={(event) => onTargetBranchChange(event.target.value)}
+            value={targetBranch}
+          >
+            {branchOptions.map((branch) => (
+              <option key={branch} value={branch}>
+                {branch}
+              </option>
+            ))}
+          </select>
+        </label>
+        {hasCommitWarnings && !committedHash ? (
+          <label className="flex items-start gap-2 rounded-md border border-[var(--stroke-divider)] p-3 text-xs text-[var(--text-secondary)]">
+            <input
+              checked={forceCommit}
+              className="mt-0.5"
+              onChange={(event) => onForceCommitChange(event.target.checked)}
+              type="checkbox"
+            />
+            <span>Force commit with unresolved warnings</span>
+          </label>
+        ) : null}
+        <Button
+          disabled={!canCommit}
+          onClick={onCommit}
+          size="sm"
+          title={commitTitle}
+          type="button"
+          variant="commit"
+        >
+          <GitCommitHorizontal aria-hidden="true" className="size-4" />
+          {committedHash
+            ? 'Committed'
+            : status === 'committing'
+              ? 'Committing'
+              : `Commit · ${targetBranch}`}
+        </Button>
+      </aside>
+    </div>
+  );
+}
+
+function ValidationMetric({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: 'neutral' | 'success' | 'warning';
+  value: string;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
+      <div className="text-[11px] font-semibold uppercase text-[var(--text-tertiary)]">{label}</div>
+      <div
+        className={cn(
+          'mt-1 text-lg font-bold',
+          tone === 'success'
+            ? 'text-[var(--status-success)]'
+            : tone === 'warning'
+              ? 'text-[var(--status-warning)]'
+              : 'text-[var(--text-primary)]'
+        )}
+      >
+        {value}
       </div>
+    </div>
+  );
+}
+
+function GateRow({ label, passed }: { label: string; passed: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2 text-sm">
+      <span className="font-medium text-[var(--text-primary)]">{label}</span>
+      <Badge variant={passed ? 'success' : 'warning'}>{passed ? 'PASS' : 'REVIEW'}</Badge>
     </div>
   );
 }
@@ -334,18 +747,39 @@ function getApplyYOpsTitle({
 function getCommitTitle({
   appliedCount,
   committedHash,
+  forceCommit,
+  hasWarnings,
   isBusy,
   targetBranch,
 }: {
   appliedCount: number;
   committedHash: string | null;
+  forceCommit: boolean;
+  hasWarnings: boolean;
   isBusy: boolean;
   targetBranch: string;
 }): string {
   if (committedHash) return 'Workspace result is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
+  if (hasWarnings && !forceCommit) {
+    return 'Resolve validation warnings or enable force commit before committing.';
+  }
   return `Commit the materialized YAML result to ${targetBranch}.`;
+}
+
+function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
+  if (view === 'validation') return 'Validation';
+  if (view === 'preview') return 'Preview';
+  if (view === 'commit') return 'Commit';
+  return 'Ops';
+}
+
+function getYOpsViewDescription(view: WorkspaceYOpsFlowView): string {
+  if (view === 'validation') return 'Check Ops against schema, evidence, replay, and readiness.';
+  if (view === 'preview') return 'Review the materialized YAML before commit.';
+  if (view === 'commit') return 'Commit the validated workspace result.';
+  return 'Review proposed YOps operations and node-level changes.';
 }
 
 function getInitialTargetBranch(candidate: WorkspaceCandidate): string {
