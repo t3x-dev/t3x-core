@@ -58,7 +58,7 @@ describe('ProjectWorkspacesTab', () => {
       )
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
     expect(screen.getByRole('heading', { name: 'Release note cleanup' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Release note cleanup/ })).not.toBeInTheDocument();
@@ -86,9 +86,9 @@ describe('ProjectWorkspacesTab', () => {
       expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
-    expect(screen.getByText('Schema review')).toBeInTheDocument();
+    expect(screen.getAllByText('Schema review').length).toBeGreaterThan(0);
     expect(screen.getByText('Loaded from persisted workspace state.')).toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe('ProjectWorkspacesTab', () => {
       expect(screen.getByRole('heading', { name: 'Legacy backend draft' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: /YSchema/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
     expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
   });

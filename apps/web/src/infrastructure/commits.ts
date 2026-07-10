@@ -63,6 +63,22 @@ export interface CommitSourceRef {
 // Tree-based Commits
 // ============================================================================
 
+/** Tree-based commit operations from API response */
+
+export interface ApiCommitOperation {
+  created_at: string;
+  id: string;
+  model: string | null;
+  source: string;
+  turn_hash: string | null;
+  yops: unknown;
+}
+
+export interface ApiCommitOperationsResponse {
+  commit_hash: string;
+  operations: ApiCommitOperation[];
+}
+
 /** Tree-based commit from API response */
 export interface ApiCommit {
   hash: string;
@@ -171,6 +187,18 @@ export async function updateCommitMessage(commitHash: string, message: string): 
     }
   );
   return handleResponse<ApiCommit>(res);
+}
+
+/**
+ * Get committed YOps log entries for a commit.
+ */
+export async function getApiCommitOperations(
+  commitHash: string
+): Promise<ApiCommitOperationsResponse> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/commits/${encodeURIComponent(commitHash)}/operations`
+  );
+  return handleResponse<ApiCommitOperationsResponse>(res);
 }
 
 /**

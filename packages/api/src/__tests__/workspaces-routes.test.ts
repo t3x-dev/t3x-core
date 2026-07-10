@@ -105,6 +105,17 @@ const storageMock = vi.hoisted(() => {
       )
     ),
     getLatestCommit: vi.fn(() => Promise.resolve(null)),
+    insertYOpsLogEntry: vi.fn(() =>
+      Promise.resolve({
+        id: 'yl_workspace',
+        projectId: 'proj_sources',
+        conversationId: 'conv_prd',
+        source: 'workspace_draft',
+        turnHash: null,
+        yops: [],
+        createdAt: '2026-07-03T00:00:00.000Z',
+      })
+    ),
   };
 });
 
@@ -117,6 +128,7 @@ vi.mock('@t3x-dev/storage', async (importOriginal) => {
     getCommit: storageMock.getCommit,
     getLatestCommit: storageMock.getLatestCommit,
     createCommit: storageMock.createCommit,
+    insertYOpsLogEntry: storageMock.insertYOpsLogEntry,
     listWorkspaceDrafts: storageMock.listWorkspaceDrafts,
     upsertWorkspaceDraft: storageMock.upsertWorkspaceDraft,
   };
@@ -138,6 +150,7 @@ describe('Workspace routes', () => {
     storageMock.createCommit.mockClear();
     storageMock.getCommit.mockClear();
     storageMock.getLatestCommit.mockClear();
+    storageMock.insertYOpsLogEntry.mockClear();
     storageMock.listWorkspaceDrafts.mockClear();
     storageMock.upsertWorkspaceDraft.mockClear();
   });
@@ -486,8 +499,26 @@ describe('Workspace routes', () => {
           baseCommitHash: 'sha256:review-base',
           targetBranch: 'feature/reviewed-prd',
           schemaBindings: [{ schemaName: 'PRD Schema v2' }],
-          sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
-          yopsDraft: { id: 'draft:reviewed', operations: [] },
+          sourceBundle: [
+            {
+              conversationId: 'conv_prd',
+              id: 'source_chat:conv_prd',
+              type: 'chat',
+              title: 'Reviewed source',
+            },
+          ],
+          yopsDraft: {
+            id: 'draft:reviewed',
+            operations: [
+              {
+                afterValue: 'PRD audience handoff',
+                id: 'op_backend_1',
+                op: 'set',
+                path: 'prd/title',
+                summary: 'Set title',
+              },
+            ],
+          },
         },
       }),
     });
@@ -517,6 +548,19 @@ describe('Workspace routes', () => {
         lastCommitHash: 'sha256:workspace-commit',
       })
     );
+    expect(storageMock.insertYOpsLogEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        conversationId: 'conv_prd',
+        projectId: 'proj_sources',
+        source: 'workspace_draft',
+        yops: [
+          expect.objectContaining({
+            set: { path: 'prd/title', value: 'PRD audience handoff' },
+          }),
+        ],
+      })
+    );
     expect(storageMock.createCommit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -529,6 +573,7 @@ describe('Workspace routes', () => {
         parents: ['sha256:review-base'],
         project_id: 'proj_sources',
         provenance: { method: 'human_curation' },
+        yops_log_ids: ['yl_workspace'],
       })
     );
     expect(storageMock.upsertWorkspaceDraft).toHaveBeenLastCalledWith(

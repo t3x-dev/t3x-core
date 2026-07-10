@@ -14,7 +14,11 @@ export type {
   AutopilotConfig,
 } from '@/infrastructure/autopilot';
 export type { Citation } from '@/infrastructure/chat';
-export type { ApiCommit } from '@/infrastructure/commits';
+export type {
+  ApiCommit,
+  ApiCommitOperation,
+  ApiCommitOperationsResponse,
+} from '@/infrastructure/commits';
 export type {
   ContextManifestBaseline,
   ContextManifestFeedback,
