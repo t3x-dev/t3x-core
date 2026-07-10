@@ -8,7 +8,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Draft, Material, SemanticContent } from '@t3x-dev/core';
+import type { Draft, Material, SemanticContent, SourcedYOp } from '@t3x-dev/core';
 import {
   type AnyDB,
   createCommit,
@@ -16,6 +16,7 @@ import {
   findWorkspaceDraft,
   getCommit,
   getLatestCommit,
+  insertYOpsLogEntry,
   listWorkspaceDrafts,
   upsertWorkspaceDraft,
 } from '@t3x-dev/storage';
@@ -395,6 +396,12 @@ workspaceRoutes.openapi(commitWorkspaceRoute, async (c) => {
             project_id: projectId,
             provenance: { method: 'human_curation' },
             sources: commitSourcesFromWorkspace(storedWorkspace),
+            yops_log_ids: await materializeWorkspaceYOpsLog(
+              txOrDb,
+              projectId,
+              workspaceId,
+              storedWorkspace
+            ),
           });
       const committedAt = new Date().toISOString();
       const committedWorkspace = {
@@ -616,6 +623,95 @@ function commitSourcesFromWorkspace(workspace: Record<string, unknown>): CommitS
       typeof source.title === 'string' && source.title.trim() ? source.title : undefined;
     return [{ type, id, ...(title ? { title } : {}) }];
   });
+}
+
+async function materializeWorkspaceYOpsLog(
+  db: AnyDB,
+  projectId: string,
+  workspaceId: string,
+  workspace: Record<string, unknown>
+): Promise<string[]> {
+  const operations = workspaceDraftOperations(workspace);
+  if (operations.length === 0) return [];
+  const conversationId = workspaceConversationId(workspace);
+  if (!conversationId) return [];
+  const at = new Date().toISOString();
+  const yops = operations.flatMap((operation) =>
+    workspaceDraftOperationToSourcedYOp(operation, at)
+  );
+  if (yops.length === 0) return [];
+
+  const record = await insertYOpsLogEntry(db, {
+    conversationId,
+    metadata: {
+      source: 'workspace_commit',
+      workspace_id: workspaceId,
+      yops_draft_id: workspaceDraftId(workspace),
+    },
+    pipelineState: 'completed',
+    projectId,
+    source: 'workspace_draft',
+    version: 1,
+    yops,
+  });
+  return [record.id];
+}
+
+function workspaceDraftOperations(workspace: Record<string, unknown>): Record<string, unknown>[] {
+  const yopsDraft = workspace.yopsDraft;
+  if (!isRecord(yopsDraft) || !Array.isArray(yopsDraft.operations)) return [];
+  return yopsDraft.operations.filter(isRecord);
+}
+
+function workspaceDraftId(workspace: Record<string, unknown>): string | undefined {
+  const yopsDraft = workspace.yopsDraft;
+  if (!isRecord(yopsDraft)) return undefined;
+  return typeof yopsDraft.id === 'string' ? yopsDraft.id : undefined;
+}
+
+function workspaceConversationId(workspace: Record<string, unknown>): string | null {
+  const sources = workspace.sourceBundle;
+  if (!Array.isArray(sources)) return null;
+  for (const source of sources) {
+    if (!isRecord(source)) continue;
+    if (typeof source.conversationId === 'string' && source.conversationId.trim()) {
+      return source.conversationId;
+    }
+    if (source.type === 'chat' && typeof source.id === 'string') {
+      const match = source.id.match(/(?:^|:)conv_[A-Za-z0-9_-]+$/);
+      if (match) return match[0].replace(/^.*:/, '');
+    }
+  }
+  return null;
+}
+
+function workspaceDraftOperationToSourcedYOp(
+  operation: Record<string, unknown>,
+  at: string
+): SourcedYOp[] {
+  const opName = typeof operation.op === 'string' ? operation.op.trim().toLowerCase() : '';
+  const path = typeof operation.path === 'string' ? operation.path.trim() : '';
+  if (!opName || !path) return [];
+  const source = { type: 'human' as const, author: 'workspace', at, surface: 'script' as const };
+  const value = operation.afterValue ?? '';
+
+  if (opName === 'set') return [{ set: { path, value }, source } as SourcedYOp];
+  if (opName === 'add' || opName === 'append') {
+    return [
+      {
+        append: { path: path.replace(/(?:\/|\.)-$/, ''), value },
+        source,
+      } as SourcedYOp,
+    ];
+  }
+  if (opName === 'populate' && isRecord(operation.afterValue)) {
+    return [{ populate: { path, values: operation.afterValue }, source } as SourcedYOp];
+  }
+  if (opName === 'create' || opName === 'define')
+    return [{ define: { path }, source } as SourcedYOp];
+  if (opName === 'delete' || opName === 'drop') return [{ drop: { path }, source } as SourcedYOp];
+  if (opName === 'unset') return [{ unset: { path }, source } as SourcedYOp];
+  return [];
 }
 
 function commitSourceId(source: Record<string, unknown>): string | null {

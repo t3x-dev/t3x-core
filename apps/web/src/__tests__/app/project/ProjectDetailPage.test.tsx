@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const stateHookMocks = vi.hoisted(() => ({
+  loadCommits: vi.fn(),
+  loadLeaves: vi.fn(),
+  loadOperations: vi.fn(),
+  refreshBranches: vi.fn(),
+  refreshWorkspaces: vi.fn(),
+}));
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
@@ -46,8 +54,29 @@ vi.mock('@/hooks/shared/useBranches', () => ({
     branches: ['main'],
     create: vi.fn(),
     loading: false,
-    refresh: vi.fn(),
+    refresh: stateHookMocks.refreshBranches,
   }),
+}));
+
+vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
+  useProjectWorkspaces: () => ({
+    error: null,
+    loading: false,
+    refresh: stateHookMocks.refreshWorkspaces,
+    workspaces: [],
+  }),
+}));
+
+vi.mock('@/hooks/commits/useCommitsList', () => ({
+  useCommitsList: () => ({ loadCommits: stateHookMocks.loadCommits }),
+}));
+
+vi.mock('@/hooks/commits/useLeavesByCommit', () => ({
+  useLeavesByCommit: () => ({ loadLeaves: stateHookMocks.loadLeaves }),
+}));
+
+vi.mock('@/hooks/commits/useCommitOperations', () => ({
+  useCommitOperations: () => ({ loadOperations: stateHookMocks.loadOperations }),
 }));
 
 vi.mock('@/hooks/projects/useProjectCrud', () => ({
@@ -69,9 +98,49 @@ import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/ys
 import { useCanvasStore } from '@/store/canvasStore';
 import { useChatStore } from '@/store/chatStore';
 import { useProjectStore } from '@/store/projectStore';
+import type { ApiCommit } from '@/types/api';
+
+const STATE_COMMIT: ApiCommit = {
+  author: { type: 'agent', name: 'T3X' },
+  branch: 'main',
+  committed_at: '2026-07-02T00:00:00.000Z',
+  content: {
+    trees: [
+      {
+        key: 'prd',
+        slots: { title: 'Committed PRD state' },
+        children: [
+          {
+            key: 'summary',
+            slots: { problem: 'A problem', audience: 'A team', outcome: 'A result' },
+            children: [],
+          },
+          { key: 'requirements', slots: {}, children: [] },
+        ],
+      },
+    ],
+    relations: [],
+  },
+  hash: 'sha256:abcdef1234567890',
+  message: 'Committed PRD state',
+  parents: [],
+  project_id: 'proj_test',
+  provenance: { method: 'workspace' },
+  schema: 't3x/commit',
+  sources: [],
+  yops_log_ids: [],
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
+  stateHookMocks.loadCommits.mockResolvedValue([]);
+  stateHookMocks.loadLeaves.mockResolvedValue([]);
+  stateHookMocks.loadOperations.mockResolvedValue({
+    commit_hash: STATE_COMMIT.hash,
+    operations: [],
+  });
+  stateHookMocks.refreshBranches.mockResolvedValue(undefined);
+  stateHookMocks.refreshWorkspaces.mockResolvedValue(undefined);
   searchParamsValue = new URLSearchParams();
   pathnameValue = '/t3x-dev/test-project';
   routeParamsValue = { projectId: 'proj_test' };
@@ -146,15 +215,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
   });
 
   it('renders a verified YSchema badge from the latest validation run', async () => {
-    useCanvasStore.setState({
-      nodes: [
-        { id: 'sha256:abcdef12', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
-      ] as never,
-      edges: [],
-      loading: false,
-      loadError: null,
-      projectId: 'proj_test',
-    });
+    stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
       commit_hash: 'sha256:abcdef1234567890',
       created_at: '2026-07-02T00:00:00.000Z',
@@ -181,24 +242,17 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('State status')).toBeInTheDocument();
-    expect(screen.getAllByText('Verified abcdef12').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
+    const stateOverview = await screen.findByRole('region', { name: 'State overview' });
+    expect(within(stateOverview).getByText('YSchema verified')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Committed PRD state' })).toBeInTheDocument();
+    expect(screen.getByText('output-ready')).toBeInTheDocument();
   });
 
   it('shows failed YSchema gaps and can rerun validation from State', async () => {
     searchParamsValue = new URLSearchParams('tab=state');
-    useCanvasStore.setState({
-      nodes: [
-        { id: 'sha256:5fbfafd8', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
-      ] as never,
-      edges: [],
-      loading: false,
-      loadError: null,
-      projectId: 'proj_test',
-    });
+    stateHookMocks.loadCommits.mockResolvedValue([STATE_COMMIT]);
     vi.mocked(fetchLatestYSchemaValidation).mockResolvedValueOnce({
-      commit_hash: 'sha256:5fbfafd8fa2fec3e',
+      commit_hash: STATE_COMMIT.hash,
       created_at: '2026-07-02T00:00:00.000Z',
       error_count: 0,
       finished_at: '2026-07-02T00:00:01.000Z',
@@ -257,24 +311,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     await waitFor(() => {
       expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('State status')).toBeInTheDocument();
-    expect(screen.getByText('Schema t3x/prd')).toBeInTheDocument();
-    expect(screen.getByText('Use blocked until YSchema passes')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
-    expect(screen.queryByText('summary is required before commit.')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '2 validation gaps' }));
-
-    expect(screen.getByRole('button', { name: '2 validation gaps' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    );
-    expect(screen.getAllByText('Missing required node')).toHaveLength(2);
-    expect(screen.getByText('summary is required before commit.')).toBeInTheDocument();
-    expect(screen.getByText('requirements is required before commit.')).toBeInTheDocument();
+    const stateOverview = await screen.findByRole('region', { name: 'State overview' });
+    expect(within(stateOverview).getByText('2 required fields missing')).toBeInTheDocument();
+    expect(screen.getByText('2 validation gap')).toBeInTheDocument();
+    expect(screen.getByText('output blocked')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
@@ -282,10 +322,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
       expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test');
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText('Ready to use').length).toBeGreaterThan(0);
+    expect(screen.getByText('output-ready')).toBeInTheDocument();
   });
 
-  it('shows the repo Canvas on an empty State tab and can switch to Workspaces', () => {
+  it('shows an empty committed State and can switch to Workspaces', async () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
@@ -299,8 +339,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('draft')).toBeInTheDocument();
     expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Workspaces' }));
@@ -313,7 +354,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     );
   });
 
-  it('keeps the repo Canvas visible when the project has sources but no canvas nodes', () => {
+  it('keeps committed State visible when the project has sources but no commit', async () => {
     useProjectStore.setState({
       projects: [{ id: 'proj_test', name: 'Test Project', drafts: 1 } as never],
       initialized: true,
@@ -322,8 +363,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -373,7 +415,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('renders the repo Canvas first when the project has nodes, then opens State tree', () => {
+  it('keeps the committed State view when legacy canvas nodes exist', async () => {
     useCanvasStore.setState({
       nodes: [
         { id: 'n1', type: 'unit', position: { x: 0, y: 0 }, data: { kind: 'unit' } },
@@ -386,16 +428,13 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('tab', { name: 'Canvas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Tree' }));
-
-    expect(screen.getByText('State tree')).toBeInTheDocument();
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('ignores selected-node deep links while the intro demo canvas tour is active', async () => {
+  it('ignores selected-node deep links while the intro demo opens committed State', async () => {
     searchParamsValue = new URLSearchParams('introDemo=1&selected=sha256%3Aabc123');
     useCanvasStore.setState({
       nodes: [
@@ -410,12 +449,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     });
 
     renderProjectContent();
-    await act(async () => {
-      await Promise.resolve();
-    });
 
-    expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
-    expect(screen.getByTestId('project-demo-tour')).toHaveAttribute('data-open', 'true');
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(useCanvasStore.getState().openNodeId).toBeNull();
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
   });
@@ -447,8 +484,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText(/Loading project/i)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchProject).toHaveBeenCalledWith('proj_test');
-      expect(screen.getByTestId('canvas-workspace')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'State overview' })).toBeInTheDocument();
     });
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(screen.queryByText(/Project not found/i)).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
   });
