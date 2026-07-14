@@ -1,20 +1,29 @@
-import { ChevronDown, ChevronRight, CircleAlert, GitCompareArrows, Rows3 } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  FileWarning,
+  GitCompareArrows,
+  Rows3,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import type {
-  WorkspaceCandidate,
-  WorkspaceSchemaCandidateField,
-  WorkspaceYOpsDraftOperation,
-} from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
+import type { WorkspaceYOpsTreeNode, WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 
-type ChangeReviewView = 'overview' | 'issues' | 'diff';
+type ChangeReviewView = 'overview' | 'diff';
 
 interface ChangeReviewFlowState {
   candidateId?: string;
   yopsDraftId?: string;
   commitHash?: string;
   error?: string;
+  appliedCount?: number;
+  baselineTrees?: WorkspaceYOpsTreeNode[] | null;
+  previewReady?: boolean;
+  previewTrees?: WorkspaceYOpsTreeNode[] | null;
+  validationPassed?: boolean;
 }
 
 interface ChangeReviewDockProps {
@@ -23,32 +32,27 @@ interface ChangeReviewDockProps {
 }
 
 const CHANGE_REVIEW_TABS: {
-  count?: (summary: ChangeReviewSummary) => number;
   icon: typeof Rows3;
   id: ChangeReviewView;
   label: string;
 }[] = [
   { id: 'overview', icon: Rows3, label: 'Overview' },
-  { id: 'issues', icon: CircleAlert, label: 'Issues', count: (summary) => summary.issueCount },
   { id: 'diff', icon: GitCompareArrows, label: 'Diff' },
 ];
 
 interface ChangeReviewSummary {
-  evidenceCount: number;
-  issueCount: number;
   readinessLabel: string;
   readinessVariant: 'success' | 'warning' | 'commit';
+  touchedPathCount: number;
   yopsCount: number;
 }
 
 interface YamlChangeNode {
   changeCount: number;
   children: YamlChangeNode[];
-  issueCount: number;
   key: string;
   ops: WorkspaceYOpsDraftOperation[];
   path: string;
-  schemaCount: number;
 }
 
 export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps) {
@@ -79,9 +83,9 @@ export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Change Track Dock</h3>
-            <Badge variant="commit-subtle">{summary.yopsCount} YOps</Badge>
-            <Badge variant={summary.issueCount > 0 ? 'warning' : 'success'}>
-              {summary.issueCount} Issues
+            <Badge variant="commit-subtle">{summary.touchedPathCount} changes</Badge>
+            <Badge variant={flowState?.validationPassed ? 'success' : 'pending-subtle'}>
+              {flowState?.validationPassed ? 'YOps valid' : 'Not validated'}
             </Badge>
             <Badge variant={summary.readinessVariant}>{summary.readinessLabel}</Badge>
           </div>
@@ -94,9 +98,7 @@ export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps
         >
           {CHANGE_REVIEW_TABS.map((tab) => {
             const Icon = tab.icon;
-            const count = tab.count?.(summary);
             const selected = activeView === tab.id;
-            const label = count === undefined ? tab.label : `${tab.label} ${count}`;
 
             return (
               <button
@@ -115,7 +117,7 @@ export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps
                 type="button"
               >
                 <Icon aria-hidden="true" className="h-3.5 w-3.5" />
-                <span>{label}</span>
+                <span>{tab.label}</span>
               </button>
             );
           })}
@@ -149,14 +151,15 @@ function ChangeReviewPanel({
   selectedOperation: WorkspaceYOpsDraftOperation | null;
   summary: ChangeReviewSummary;
 }) {
-  if (activeView === 'issues') {
-    return (
-      <ChangeIssuesPanel candidate={candidate} flowState={flowState} onReviewDiff={onReviewDiff} />
-    );
-  }
-
   if (activeView === 'diff') {
-    return <ChangeDiffPanel candidate={candidate} operation={selectedOperation} />;
+    return (
+      <ChangeDiffPanel
+        candidate={candidate}
+        flowState={flowState}
+        onSelectOperation={onReviewDiff}
+        operation={selectedOperation}
+      />
+    );
   }
 
   return (
@@ -181,10 +184,11 @@ function ChangeOverviewPanel({
   summary: ChangeReviewSummary;
 }) {
   const yamlTree = useMemo(() => buildYamlChangeTree(candidate), [candidate]);
+  const currentState = getCurrentStateLabel(candidate, flowState);
+  const baselineState = getBaselineStateLabel(candidate);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set(getDefaultExpandedYamlPaths(yamlTree))
   );
-  const topIssues = [flowState?.error, ...candidate.schemaReview.gaps].filter(Boolean) as string[];
   const timelineSteps = [
     {
       label: 'Base state',
@@ -198,7 +202,7 @@ function ChangeOverviewPanel({
     })),
     {
       label: 'Current state',
-      value: flowState?.commitHash ?? candidate.lastCommitHash ?? 'Pending',
+      value: currentState,
       tone: 'ready' as const,
     },
   ];
@@ -222,34 +226,54 @@ function ChangeOverviewPanel({
       id="change-track-overview"
       role="tabpanel"
     >
-      <div className="grid gap-3 xl:grid-cols-[minmax(11rem,0.38fr)_minmax(28rem,1.25fr)_minmax(18rem,0.75fr)]">
-        <section
-          aria-label="Overview summary"
-          className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
-        >
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Summary</h4>
-          <dl className="mt-3 grid gap-2 text-xs">
-            <ChangeMeta term="Base" value={candidate.baseCommitHash ?? 'No base commit'} />
-            <ChangeMeta
-              term="Current"
-              value={flowState?.commitHash ?? candidate.lastCommitHash ?? 'Pending'}
-            />
-            <ChangeMeta term="Change since base" value={`${summary.yopsCount} changes`} />
-            <ChangeMeta term="Touched paths" value={`${countYamlLeafChanges(yamlTree)}`} />
-            <ChangeMeta term="YOps proposed" value={`${summary.yopsCount}`} />
-            <ChangeMeta term="Blocking issues" value={`${summary.issueCount}`} />
-            <ChangeMeta term="Replay status" value="Stable" />
-            <ChangeMeta term="Commit readiness" value={summary.readinessLabel} />
-          </dl>
-        </section>
+      <section aria-label="Review status" className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <ReviewStatusCard
+          detail={candidate.baseCommitHash ?? 'No persisted commit'}
+          label="Baseline"
+          status={baselineState}
+          tone="neutral"
+        />
+        <ReviewStatusCard
+          detail={flowState?.yopsDraftId ?? candidate.yopsDraft.id}
+          label="YOps proposal"
+          status={`${summary.yopsCount} operations`}
+          tone="change"
+        />
+        <ReviewStatusCard
+          detail={
+            flowState?.validationPassed
+              ? `${summary.yopsCount}/${summary.yopsCount} operations executable`
+              : 'Run validation to compute the dry-run preview'
+          }
+          label="YOps validation"
+          status={flowState?.validationPassed ? 'Passed' : 'Not run'}
+          tone={flowState?.validationPassed ? 'success' : 'neutral'}
+        />
+        <ReviewStatusCard
+          detail={
+            flowState?.previewReady
+              ? `${flowState.appliedCount ?? summary.yopsCount} operations materialized`
+              : 'Apply validated YOps to materialize the preview'
+          }
+          label="Preview"
+          status={flowState?.previewReady ? 'Materialized' : 'Pending'}
+          tone={flowState?.previewReady ? 'success' : 'neutral'}
+        />
+      </section>
 
+      <div className="grid gap-3 xl:grid-cols-[minmax(28rem,1.3fr)_minmax(19rem,0.7fr)]">
         <section
           aria-label="YAML overview map"
           className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
         >
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)]">YAML change map</h4>
-            <Badge variant="branch">{countYamlLeafChanges(yamlTree)} touched</Badge>
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">Changed paths</h4>
+              <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                Only YAML paths changed by the proposal are shown here.
+              </p>
+            </div>
+            <Badge variant="branch">{summary.touchedPathCount} touched</Badge>
           </div>
           {yamlTree.length > 0 ? (
             <div
@@ -275,59 +299,40 @@ function ChangeOverviewPanel({
         </section>
 
         <aside
-          aria-label="Review side panels"
-          className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-1"
+          aria-label="Review gate"
+          className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
         >
-          <section className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)]">Top issues</h4>
-            {topIssues.length > 0 ? (
-              <ul className="mt-2 grid gap-2">
-                {topIssues.map((issue) => (
-                  <li
-                    className="min-w-0 rounded-md border border-[var(--status-warning)]/20 bg-[var(--status-warning-muted)] px-3 py-2 text-sm text-[var(--text-primary)]"
-                    key={issue}
-                    title={issue}
-                  >
-                    <span className="block truncate font-mono text-xs">{issue}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyPanel message="No blocking issues for this workspace." />
-            )}
-          </section>
-
-          <section className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)]">Recent YOps</h4>
-            {candidate.yopsDraft.operations.length > 0 ? (
-              <ol className="mt-2 grid gap-2">
-                {candidate.yopsDraft.operations.map((operation, index) => (
-                  <li
-                    className="grid min-w-0 grid-cols-[1.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 py-2"
-                    key={operation.id}
-                  >
-                    <span className="font-mono text-xs font-semibold text-[var(--accent-branch)]">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <Badge variant="outline">{operation.op}</Badge>
-                    <span
-                      className="truncate font-mono text-xs font-semibold text-[var(--accent-branch)]"
-                      title={operation.path}
-                    >
-                      {operation.path}
-                    </span>
-                    <Badge
-                      variant={candidate.schemaReview.verdict === 'ready' ? 'success' : 'warning'}
-                    >
-                      {candidate.schemaReview.verdict === 'ready' ? 'Ready' : 'Review'}
-                    </Badge>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <EmptyPanel message="No YOps operations proposed yet." />
-            )}
-          </section>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+                Pre-commit status
+              </h4>
+              <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                Validation is resolved before this final change review.
+              </p>
+            </div>
+            <Badge variant={summary.readinessVariant}>{summary.readinessLabel}</Badge>
+          </div>
+          <div className="mt-3 grid gap-2">
+            <GateRow
+              detail={
+                flowState?.validationPassed
+                  ? `${summary.yopsCount} operations passed deterministic dry-run`
+                  : 'Return to Validation before reviewing this change'
+              }
+              label="YOps validation"
+              passed={Boolean(flowState?.validationPassed)}
+            />
+            <GateRow
+              detail={
+                flowState?.previewReady
+                  ? 'The validated result is materialized and ready for commit review'
+                  : 'Apply validated YOps before committing'
+              }
+              label="Materialized preview"
+              passed={Boolean(flowState?.previewReady)}
+            />
+          </div>
         </aside>
       </div>
 
@@ -336,7 +341,7 @@ function ChangeOverviewPanel({
         className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
       >
         <h4 className="text-sm font-semibold text-[var(--text-primary)]">
-          State change timeline <span className="text-[var(--text-tertiary)]">(replay)</span>
+          Replay sequence <span className="text-[var(--text-tertiary)]">(operation order)</span>
         </h4>
         <ol className="mt-3 flex items-start gap-2 overflow-x-auto pb-1">
           {timelineSteps.map((step, index) => (
@@ -377,6 +382,62 @@ function ChangeOverviewPanel({
   );
 }
 
+function ReviewStatusCard({
+  detail,
+  label,
+  status,
+  tone,
+}: {
+  detail: string;
+  label: string;
+  status: string;
+  tone: 'change' | 'neutral' | 'success' | 'warning';
+}) {
+  return (
+    <article className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-[var(--text-tertiary)]">{label}</span>
+        <span
+          className={cn(
+            'size-2 rounded-full',
+            tone === 'success'
+              ? 'bg-[var(--status-success)]'
+              : tone === 'warning'
+                ? 'bg-[var(--status-warning)]'
+                : tone === 'change'
+                  ? 'bg-[var(--accent-branch)]'
+                  : 'bg-[var(--text-tertiary)]'
+          )}
+          aria-hidden="true"
+        />
+      </div>
+      <div className="mt-2 text-sm font-semibold text-[var(--text-primary)]">{status}</div>
+      <p className="mt-1 truncate text-xs text-[var(--text-secondary)]" title={detail}>
+        {detail}
+      </p>
+    </article>
+  );
+}
+
+function GateRow({ detail, label, passed }: { detail: string; label: string; passed: boolean }) {
+  const Icon = passed ? CheckCircle2 : FileWarning;
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-2.5">
+      <Icon
+        aria-hidden="true"
+        className={cn(
+          'mt-0.5 size-4 shrink-0',
+          passed ? 'text-[var(--status-success)]' : 'text-[var(--status-warning)]'
+        )}
+      />
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-[var(--text-primary)]">{label}</div>
+        <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
 function YamlTreeNode({
   expandedPaths,
   node,
@@ -391,11 +452,6 @@ function YamlTreeNode({
   const hasChildren = node.children.length > 0;
   const expanded = expandedPaths.has(node.path);
   const operation = node.ops[0];
-  const unchangedSchema =
-    node.schemaCount > 0 &&
-    node.changeCount === 0 &&
-    node.issueCount === 0 &&
-    node.ops.length === 0;
 
   return (
     <div aria-expanded={hasChildren ? expanded : undefined} role="treeitem" tabIndex={-1}>
@@ -432,8 +488,6 @@ function YamlTreeNode({
         )}
         {operation ? <Badge variant="outline">{operation.op}</Badge> : null}
         {node.changeCount > 0 ? <Badge variant="branch-subtle">{node.changeCount}</Badge> : null}
-        {node.issueCount > 0 ? <Badge variant="warning">{node.issueCount}</Badge> : null}
-        {unchangedSchema ? <Badge variant="outline">unchanged</Badge> : null}
       </div>
       {hasChildren && expanded ? (
         // biome-ignore lint/a11y/useSemanticElements: ARIA tree child containers use role="group".
@@ -453,89 +507,15 @@ function YamlTreeNode({
   );
 }
 
-function ChangeIssuesPanel({
-  candidate,
-  flowState,
-  onReviewDiff,
-}: {
-  candidate: WorkspaceCandidate;
-  flowState?: ChangeReviewFlowState;
-  onReviewDiff: (operation: WorkspaceYOpsDraftOperation) => void;
-}) {
-  const hasIssues = candidate.schemaReview.gaps.length > 0 || Boolean(flowState?.error);
-
-  return (
-    <div
-      aria-labelledby="change-track-tab-issues"
-      className="grid gap-3 p-4"
-      id="change-track-issues"
-      role="tabpanel"
-    >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-          <PanelHeader
-            count={candidate.schemaReview.gaps.length + (flowState?.error ? 1 : 0)}
-            title="Issues"
-          />
-          {hasIssues ? (
-            <div className="mt-2 grid gap-2">
-              {flowState?.error ? (
-                <IssueNotice label="Flow error" message={flowState.error} />
-              ) : null}
-              {candidate.schemaReview.gaps.map((gap) => (
-                <IssueNotice key={gap} label="Schema review gap" message={gap} />
-              ))}
-            </div>
-          ) : (
-            <EmptyPanel message="No blocking issues for this workspace." />
-          )}
-        </section>
-
-        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
-          <PanelHeader count={candidate.yopsDraft.operations.length} title="Ops cards" />
-          {candidate.yopsDraft.operations.length > 0 ? (
-            <div className="mt-2 grid gap-2">
-              {candidate.yopsDraft.operations.map((operation) => (
-                <article
-                  className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
-                  key={operation.id}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{operation.op}</Badge>
-                    <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">
-                      {operation.path}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-                    {operation.summary}
-                  </p>
-                  {operation.reason ? (
-                    <p className="mt-1 text-xs text-[var(--text-secondary)]">{operation.reason}</p>
-                  ) : null}
-                  <button
-                    className="mt-3 inline-flex h-8 items-center rounded-md border border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/10 px-3 text-xs font-semibold text-[var(--accent-branch)] transition-colors hover:bg-[var(--accent-branch)]/15"
-                    onClick={() => onReviewDiff(operation)}
-                    type="button"
-                  >
-                    Review diff for {operation.op}
-                  </button>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <EmptyPanel message="No YOps operations proposed yet." />
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
-
 function ChangeDiffPanel({
   candidate,
+  flowState,
+  onSelectOperation,
   operation,
 }: {
   candidate: WorkspaceCandidate;
+  flowState?: ChangeReviewFlowState;
+  onSelectOperation: (operation: WorkspaceYOpsDraftOperation) => void;
   operation: WorkspaceYOpsDraftOperation | null;
 }) {
   if (!operation) {
@@ -551,55 +531,118 @@ function ChangeDiffPanel({
     );
   }
 
+  const { after, before, source } = getOperationDiffValues(operation, flowState);
+
   return (
     <div
       aria-labelledby="change-track-tab-diff"
-      className="grid gap-3 p-4"
+      className="p-4"
       id="change-track-diff"
       role="tabpanel"
     >
-      <section
-        aria-label="Node diff detail"
-        className="grid gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+      <div className="grid min-h-[440px] overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
+        <aside
+          className="border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
+          aria-label="Changed paths"
+        >
+          <div className="border-b border-[var(--stroke-divider)] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">Changed paths</h4>
+              <Badge variant="branch-subtle">{candidate.yopsDraft.operations.length}</Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">Select a path to inspect.</p>
+          </div>
+          <ol className="grid gap-1 p-2">
+            {candidate.yopsDraft.operations.map((candidateOperation, index) => {
+              const selected = candidateOperation.id === operation.id;
+              return (
+                <li key={candidateOperation.id}>
+                  <button
+                    aria-current={selected ? 'true' : undefined}
+                    className={cn(
+                      'grid w-full grid-cols-[1.5rem_minmax(0,1fr)] gap-2 rounded-md border px-2.5 py-2 text-left transition-colors',
+                      selected
+                        ? 'border-[var(--accent-branch)]/30 bg-[var(--accent-branch)]/10'
+                        : 'border-transparent hover:border-[var(--stroke-divider)] hover:bg-[var(--surface-card)]'
+                    )}
+                    onClick={() => onSelectOperation(candidateOperation)}
+                    type="button"
+                  >
+                    <span className="font-mono text-xs font-semibold text-[var(--accent-branch)]">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5">
+                        <Badge variant="outline">{candidateOperation.op}</Badge>
+                      </span>
+                      <span className="mt-1 block break-all font-mono text-[11px] leading-4 text-[var(--text-primary)]">
+                        {candidateOperation.path}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </aside>
+
+        <section
+          aria-label="Node diff detail"
+          className="min-w-0 border-b border-[var(--stroke-divider)] lg:border-b-0 xl:border-r"
+        >
+          <div className="border-b border-[var(--stroke-divider)] px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="branch">{operation.op}</Badge>
-              <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
+              <span className="break-all font-mono text-sm font-semibold text-[var(--text-primary)]">
                 {operation.path}
               </span>
             </div>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">{operation.summary}</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">{operation.summary}</p>
           </div>
-          <Badge variant={candidate.schemaReview.verdict === 'ready' ? 'success' : 'warning'}>
-            {candidate.schemaReview.verdict === 'ready' ? 'Ready' : 'Review'}
-          </Badge>
-        </div>
+          {!flowState?.validationPassed ? (
+            <div className="border-b border-[var(--status-warning)]/20 bg-[var(--status-warning-muted)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+              Run validation to replace proposal metadata with the deterministic dry-run values.
+            </div>
+          ) : null}
+          <div className="grid gap-3 p-4 md:grid-cols-2">
+            <DiffValue meta="Candidate baseline" title="Before" value={before} variant="before" />
+            <DiffValue meta="Dry-run preview" title="After" value={after} variant="after" />
+          </div>
+        </section>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <DiffValue title="Before" value={operation.beforeValue ?? 'empty'} variant="before" />
-          <DiffValue title="After" value={operation.afterValue ?? 'empty'} variant="after" />
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
-          <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
+        <aside
+          aria-label="Change context"
+          className="min-w-0 bg-[var(--surface-card)] p-3 lg:col-span-2 lg:border-t lg:border-[var(--stroke-divider)] xl:col-span-1 xl:border-t-0"
+        >
+          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Change context</h4>
+          <section className="mt-3">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
               Why this changes
-            </h4>
-            <p className="mt-2 text-sm text-[var(--text-primary)]">
+            </h5>
+            <p className="mt-2 text-sm leading-5 text-[var(--text-primary)]">
               {operation.reason ?? 'No operation rationale provided.'}
             </p>
           </section>
-          <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-            <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
+          <section className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
               Source evidence
-            </h4>
+            </h5>
             {operation.sourceRefs && operation.sourceRefs.length > 0 ? (
-              <ul className="mt-2 flex flex-wrap gap-1.5">
+              <ul className="mt-2 grid gap-2">
                 {operation.sourceRefs.map((sourceRef) => (
-                  <li key={sourceRef}>
-                    <Badge variant="conversation">{sourceRef}</Badge>
+                  <li
+                    className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-2.5 py-2"
+                    key={sourceRef}
+                  >
+                    <div className="text-xs font-medium text-[var(--text-primary)]">
+                      {getSourceTitle(candidate, sourceRef)}
+                    </div>
+                    <div
+                      className="mt-0.5 truncate font-mono text-[10px] text-[var(--text-tertiary)]"
+                      title={sourceRef}
+                    >
+                      {sourceRef}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -609,42 +652,33 @@ function ChangeDiffPanel({
               </p>
             )}
           </section>
-        </div>
-
-        <section className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-          <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">Raw YOp</h4>
-          <pre className="mt-2 overflow-auto rounded border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)]">
-            {formatRawYOp(operation)}
-          </pre>
-        </section>
-      </section>
+          <section className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+              Value source
+            </h5>
+            <p className="mt-2 text-xs text-[var(--text-secondary)]">{source}</p>
+          </section>
+          <section className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+              Raw YOp
+            </h5>
+            <pre className="mt-2 overflow-auto rounded border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)]">
+              {formatRawYOp(operation)}
+            </pre>
+          </section>
+        </aside>
+      </div>
     </div>
-  );
-}
-
-function PanelHeader({ count, title }: { count: number; title: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <h4 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h4>
-      <Badge variant={count > 0 ? 'warning' : 'success'}>{count}</Badge>
-    </div>
-  );
-}
-
-function IssueNotice({ label, message }: { label: string; message: string }) {
-  return (
-    <article className="rounded-md border border-[var(--status-warning)]/20 bg-[var(--status-warning-muted)] px-3 py-2">
-      <div className="text-xs font-semibold text-[var(--status-warning)]">{label}</div>
-      <p className="mt-1 text-sm text-[var(--text-primary)]">{message}</p>
-    </article>
   );
 }
 
 function DiffValue({
+  meta,
   title,
   value,
   variant,
 }: {
+  meta: string;
   title: string;
   value: string;
   variant: 'after' | 'before';
@@ -658,20 +692,14 @@ function DiffValue({
           : 'border-[var(--status-warning)]/20 bg-[var(--surface-card)]'
       )}
     >
-      <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">{title}</h4>
-      <p className="mt-2 whitespace-pre-wrap break-words font-mono text-sm text-[var(--text-primary)]">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">{title}</h4>
+        <span className="text-[10px] text-[var(--text-tertiary)]">{meta}</span>
+      </div>
+      <pre className="mt-3 min-h-28 whitespace-pre-wrap break-words font-mono text-sm leading-6 text-[var(--text-primary)]">
         {value}
-      </p>
+      </pre>
     </section>
-  );
-}
-
-function ChangeMeta({ term, value }: { term: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[var(--text-tertiary)]">{term}</dt>
-      <dd className="mt-0.5 truncate font-semibold text-[var(--text-primary)]">{value}</dd>
-    </div>
   );
 }
 
@@ -695,21 +723,11 @@ function formatRawYOp(operation: WorkspaceYOpsDraftOperation): string {
 
 function buildYamlChangeTree(candidate: WorkspaceCandidate): YamlChangeNode[] {
   const root: YamlChangeNode[] = [];
-  const documentRoot = inferYamlRoot(candidate);
 
   candidate.yopsDraft.operations.forEach((operation) => {
     const path = normalizeYamlPath(operation.path);
     if (path) {
       addYamlPath(root, path, { operation });
-    }
-  });
-
-  addSchemaFieldPaths(root, candidate.schemaCandidate.fields, documentRoot);
-
-  candidate.schemaReview.gaps.forEach((gap) => {
-    const path = normalizeIssuePath(gap, documentRoot);
-    if (path) {
-      addYamlPath(root, path, { issueCount: 1 });
     }
   });
 
@@ -720,9 +738,7 @@ function addYamlPath(
   root: YamlChangeNode[],
   rawPath: string,
   options: {
-    issueCount?: number;
     operation?: WorkspaceYOpsDraftOperation;
-    schemaCount?: number;
   } = {}
 ) {
   const parts = rawPath
@@ -742,7 +758,6 @@ function addYamlPath(
     }
 
     node.changeCount += options.operation ? 1 : 0;
-    node.schemaCount += options.schemaCount ?? 0;
 
     if (index === parts.length - 1) {
       if (
@@ -751,7 +766,6 @@ function addYamlPath(
       ) {
         node.ops.push(options.operation);
       }
-      node.issueCount += options.issueCount ?? 0;
     }
 
     siblings = node.children;
@@ -762,50 +776,10 @@ function createYamlNode(key: string, path: string): YamlChangeNode {
   return {
     changeCount: 0,
     children: [],
-    issueCount: 0,
     key,
     ops: [],
     path,
-    schemaCount: 0,
   };
-}
-
-function addSchemaFieldPaths(
-  root: YamlChangeNode[],
-  fields: WorkspaceSchemaCandidateField[],
-  documentRoot: string | null,
-  parentPath?: string
-) {
-  fields.forEach((field) => {
-    const fieldPath =
-      parentPath && !(field.path.includes('.') || field.path.includes('/'))
-        ? `${parentPath}.${field.path}`
-        : field.path;
-    const path = normalizeYamlPath(fieldPath, documentRoot);
-    if (path) {
-      addYamlPath(root, path, { schemaCount: 1 });
-    }
-    addSchemaFieldPaths(root, field.children ?? [], documentRoot, fieldPath);
-  });
-}
-
-function inferYamlRoot(candidate: WorkspaceCandidate): string | null {
-  const roots = candidate.yopsDraft.operations
-    .map((operation) => normalizeYamlPath(operation.path)?.split('/')[0])
-    .filter((part): part is string => Boolean(part) && part !== '-');
-  const uniqueRoots = Array.from(new Set(roots));
-  return uniqueRoots.length === 1 ? uniqueRoots[0] : null;
-}
-
-function normalizeIssuePath(issue: string, documentRoot: string | null): string | null {
-  const trimmed = issue.trim();
-  if (!trimmed || /\s/.test(trimmed)) {
-    return null;
-  }
-  if (!(trimmed.includes('/') || trimmed.includes('.'))) {
-    return null;
-  }
-  return normalizeYamlPath(trimmed, documentRoot);
 }
 
 function normalizeYamlPath(rawPath: string, documentRoot?: string | null): string | null {
@@ -829,83 +803,136 @@ function normalizeYamlPath(rawPath: string, documentRoot?: string | null): strin
 
 function getDefaultExpandedYamlPaths(nodes: YamlChangeNode[], depth = 0): string[] {
   return nodes.flatMap((node) => [
-    ...(node.children.length > 0 && (depth === 0 || node.changeCount > 0 || node.issueCount > 0)
-      ? [node.path]
-      : []),
+    ...(node.children.length > 0 && (depth === 0 || node.changeCount > 0) ? [node.path] : []),
     ...getDefaultExpandedYamlPaths(node.children, depth + 1),
   ]);
-}
-
-function countYamlLeafChanges(nodes: YamlChangeNode[]): number {
-  return nodes.reduce((count, node) => {
-    const nodeTouches = node.ops.length > 0 || node.issueCount > 0 ? 1 : 0;
-    return count + nodeTouches + countYamlLeafChanges(node.children);
-  }, 0);
 }
 
 function getChangeReviewSummary(
   candidate: WorkspaceCandidate,
   flowState?: ChangeReviewFlowState
 ): ChangeReviewSummary {
-  const issueCount = candidate.schemaReview.gaps.length + (flowState?.error ? 1 : 0);
   const yopsCount = candidate.yopsDraft.operations.length;
-  const evidenceCount = candidate.sourceBundle.length;
+  const touchedPathCount = new Set(
+    candidate.yopsDraft.operations
+      .map((operation) => normalizeYamlPath(operation.path))
+      .filter((path): path is string => Boolean(path))
+  ).size;
 
   if (flowState?.error) {
     return {
-      evidenceCount,
-      issueCount,
-      readinessLabel: 'Blocked',
+      readinessLabel: 'Return to validation',
       readinessVariant: 'warning',
+      touchedPathCount,
       yopsCount,
     };
   }
 
-  if (candidate.sourceBundle.length === 0) {
+  if (!flowState?.validationPassed) {
     return {
-      evidenceCount,
-      issueCount,
-      readinessLabel: 'Needs source',
+      readinessLabel: 'Validation required',
       readinessVariant: 'warning',
-      yopsCount,
-    };
-  }
-
-  if (candidate.schemaReview.verdict !== 'ready' || candidate.schemaReview.gaps.length > 0) {
-    return {
-      evidenceCount,
-      issueCount,
-      readinessLabel: 'Review schema',
-      readinessVariant: 'warning',
+      touchedPathCount,
       yopsCount,
     };
   }
 
   if (candidate.yopsDraft.operations.length === 0) {
     return {
-      evidenceCount,
-      issueCount,
       readinessLabel: 'Needs YOps',
       readinessVariant: 'warning',
+      touchedPathCount,
       yopsCount,
     };
   }
 
   if (flowState?.commitHash ?? candidate.lastCommitHash) {
     return {
-      evidenceCount,
-      issueCount,
       readinessLabel: 'Committed',
       readinessVariant: 'commit',
+      touchedPathCount,
+      yopsCount,
+    };
+  }
+
+  if (flowState?.previewReady) {
+    return {
+      readinessLabel: 'Ready to commit',
+      readinessVariant: 'success',
+      touchedPathCount,
       yopsCount,
     };
   }
 
   return {
-    evidenceCount,
-    issueCount,
-    readinessLabel: 'YOps review',
-    readinessVariant: 'success',
+    readinessLabel: 'Preview pending',
+    readinessVariant: 'warning',
+    touchedPathCount,
     yopsCount,
   };
+}
+
+function getCurrentStateLabel(
+  candidate: WorkspaceCandidate,
+  flowState?: ChangeReviewFlowState
+): string {
+  return (
+    flowState?.commitHash ??
+    candidate.lastCommitHash ??
+    (flowState?.previewReady ? 'Materialized preview' : 'Pending')
+  );
+}
+
+function getBaselineStateLabel(candidate: WorkspaceCandidate): string {
+  return candidate.lastCommitHash ? 'Committed baseline' : 'Candidate baseline';
+}
+
+function getOperationDiffValues(
+  operation: WorkspaceYOpsDraftOperation,
+  flowState?: ChangeReviewFlowState
+): { after: string; before: string; source: string } {
+  const beforeValue = resolveTreePathValue(flowState?.baselineTrees ?? null, operation.path);
+  const afterValue = resolveTreePathValue(flowState?.previewTrees ?? null, operation.path);
+  const hasValidatedValues = beforeValue !== undefined || afterValue !== undefined;
+
+  return {
+    after: formatDiffValue(afterValue ?? operation.afterValue),
+    before: formatDiffValue(beforeValue ?? operation.beforeValue),
+    source: hasValidatedValues
+      ? 'Deterministic YOps dry-run'
+      : 'Proposal metadata — validate to confirm the actual preview value',
+  };
+}
+
+function resolveTreePathValue(
+  trees: WorkspaceYOpsTreeNode[] | null,
+  rawPath: string
+): WorkspaceYOpsValue | undefined {
+  if (!trees) return undefined;
+  const path = normalizeYamlPath(rawPath.replace(/\/-$/, ''));
+  const parts = path?.split('/').filter(Boolean) ?? [];
+  if (parts.length < 2) return undefined;
+
+  let node = trees.find((tree) => tree.key === parts[0]);
+  if (!node) return undefined;
+
+  for (const childKey of parts.slice(1, -1)) {
+    node = node.children.find((child) => child.key === childKey);
+    if (!node) return undefined;
+  }
+
+  return node.slots[parts.at(-1) ?? ''];
+}
+
+function formatDiffValue(value: WorkspaceYOpsValue | string | undefined): string {
+  if (value === undefined) return '∅ Not present';
+  if (value === '') return '∅ Empty string';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
+}
+
+function getSourceTitle(candidate: WorkspaceCandidate, sourceRef: string): string {
+  return (
+    candidate.sourceBundle.find((source) => source.id === sourceRef)?.title ?? 'Source evidence'
+  );
 }
