@@ -5,7 +5,7 @@
  */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createLeafHistory, insertProject } from '@t3x-dev/storage';
+import { createCommit, createLeafHistory, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -41,7 +41,15 @@ describe('Leaf History Routes', () => {
     const project = await insertProject(mockDB, testData.project({ name: 'History Test Project' }));
     testProjectId = project.projectId;
 
-    testCommitHash = 'sha256:test_commit_for_history';
+    const commit = await createCommit(mockDB, {
+      project_id: testProjectId,
+      author: { type: 'human', name: 'Leaf History Test User' },
+      content: {
+        trees: [{ key: 'history-source', slots: { text: 'Leaf history source' }, children: [] }],
+        relations: [],
+      },
+    });
+    testCommitHash = commit.hash;
   });
 
   afterAll(async () => {
