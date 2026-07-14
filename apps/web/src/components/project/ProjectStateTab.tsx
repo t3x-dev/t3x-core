@@ -24,11 +24,7 @@ import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
-import { useCanvasStore } from '@/store/canvasStore';
-import { useChatStore } from '@/store/chatStore';
-import { useCommitStore } from '@/store/commitStore';
 import type { ApiCommit, Leaf } from '@/types/api';
-import type { CanvasNodeData } from '@/types/nodes';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 
@@ -36,7 +32,6 @@ export type ProjectStateView = 'points' | 'render' | 'code';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
-  children: ReactNode;
   initialView?: ProjectStateView;
   onRunValidation?: () => Promise<void> | void;
   projectId: string;
@@ -54,16 +49,6 @@ interface StateSnapshot {
   loading: boolean;
   operations: StateOperationEntry[];
   primaryError: string | null;
-}
-
-interface StateCommitFallback {
-  branch: string;
-  hash: string;
-  id: string;
-  leafCount: number;
-  summary: string;
-  timestamp: string;
-  title: string;
 }
 
 const STATE_VIEWS: Array<{
@@ -86,15 +71,8 @@ export function ProjectStateTab({
   validationError,
   validationRunning = false,
 }: ProjectStateTabProps) {
-  const activeChatBranch = useChatStore((state) => state.activeBranch);
-  const setActiveBranch = useChatStore((state) => state.setActiveBranch);
-  const commitBranch = useCommitStore((state) => state.commitBranch);
-  const setCommitBranch = useCommitStore((state) => state.setCommitBranch);
-  const nodes = useCanvasStore((state) => state.nodes);
-  const edges = useCanvasStore((state) => state.edges);
-  const fallbackBranch = activeChatBranch || commitBranch || 'main';
   const [activeView, setActiveView] = useState<ProjectStateView>(initialView);
-  const [branchFocus, setBranchFocus] = useState<BranchFocus>(fallbackBranch);
+  const [branchFocus, setBranchFocus] = useState<BranchFocus>('main');
   const [pathQuery, setPathQuery] = useState('');
   const { branches, loading: branchesLoading, refresh } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -111,30 +89,23 @@ export function ProjectStateTab({
     primaryError: null,
   });
 
-  const canvasCommits = useMemo(() => collectStateCommits(nodes), [nodes]);
   const branchOptions = useMemo(
     () =>
       mergeBranchNames([
         'main',
-        fallbackBranch,
         branchFocus,
         ...branches,
-        ...canvasCommits.map((commit) => commit.branch),
         ...snapshot.commits.map((commit) => commit.branch),
       ]),
-    [branchFocus, branches, canvasCommits, fallbackBranch, snapshot.commits]
+    [branchFocus, branches, snapshot.commits]
   );
-
-  useEffect(() => {
-    if (!branchFocus && fallbackBranch) setBranchFocus(fallbackBranch);
-  }, [branchFocus, fallbackBranch]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setSnapshot((current) => ({ ...current, loading: true, primaryError: null }));
       try {
-        const requestedBranch = branchFocus || fallbackBranch;
+        const requestedBranch = branchFocus || 'main';
         let commits = await loadCommits(projectId, requestedBranch, 100);
         if (commits.length === 0 && requestedBranch === 'main') {
           const latestCommits = await loadCommits(projectId, undefined, 100);
@@ -143,8 +114,6 @@ export function ProjectStateTab({
             commits = latestCommits.filter((commit) => commit.branch === latestBranch);
             if (latestBranch !== requestedBranch) {
               setBranchFocus(latestBranch);
-              setActiveBranch(latestBranch);
-              setCommitBranch(latestBranch);
             }
           }
         }
@@ -200,7 +169,7 @@ export function ProjectStateTab({
     return () => {
       cancelled = true;
     };
-  }, [branchFocus, fallbackBranch, loadCommits, loadLeaves, loadOperations, projectId]);
+  }, [branchFocus, loadCommits, loadLeaves, loadOperations, projectId]);
 
   const headCommit = snapshot.headCommit;
   const committedWorkspace = useMemo(
@@ -242,7 +211,7 @@ export function ProjectStateTab({
   const validationGapCount = validation?.gapCount ?? validationGaps.length;
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
-  const commitCount = snapshot.commits.length || canvasCommits.length;
+  const commitCount = snapshot.commits.length;
   const yopsCount = visibleYOpsCount(headCommit, effectiveOperations);
   const commitSummary = commitSummaryFor(headCommit, yopsCount);
   const branchCount = branchOptions.length;
@@ -250,8 +219,6 @@ export function ProjectStateTab({
 
   const handleBranchFocusChange = (focus: BranchFocus) => {
     setBranchFocus(focus);
-    setActiveBranch(focus);
-    setCommitBranch(focus);
   };
 
   return (
@@ -260,7 +227,7 @@ export function ProjectStateTab({
       data-state-view={activeView}
     >
       <StateOverviewHeader
-        branch={branchFocus || fallbackBranch}
+        branch={branchFocus || 'main'}
         headCommit={headCommit}
         onOpenWorkspace={() => undefined}
         onRunValidation={onRunValidation}
@@ -275,7 +242,7 @@ export function ProjectStateTab({
       <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
         <main className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
           <StateRepositoryToolbar
-            branch={branchFocus || fallbackBranch}
+            branch={branchFocus || 'main'}
             branchCount={branchCount}
             branchOptions={branchOptions}
             commitCount={commitCount}
@@ -290,10 +257,8 @@ export function ProjectStateTab({
           />
           <StateCommitRow
             commitCount={commitCount}
-            hash={headCommit?.hash ?? canvasCommits[0]?.hash ?? null}
-            relativeTime={formatRelativeTime(
-              headCommit?.committed_at ?? canvasCommits[0]?.timestamp
-            )}
+            hash={headCommit?.hash ?? null}
+            relativeTime={formatRelativeTime(headCommit?.committed_at)}
             summary={commitSummary}
             title={commitTitle}
             yopsCount={yopsCount}
@@ -339,9 +304,9 @@ export function ProjectStateTab({
         </main>
 
         <StateContextRail
-          branch={branchFocus || fallbackBranch}
+          branch={branchFocus || 'main'}
           commitCount={commitCount}
-          edgeCount={edges.length}
+          edgeCount={headCommit?.content.relations.length ?? 0}
           headCommit={headCommit}
           leaves={snapshot.leaves}
           operations={effectiveOperations}
@@ -1064,28 +1029,6 @@ function GraphLine({
   );
 }
 
-function collectStateCommits(
-  nodes: Array<{ id: string; data: CanvasNodeData }>
-): StateCommitFallback[] {
-  return nodes
-    .filter((node) => node.data.kind === 'unit' && node.data.commitStatus === 'committed')
-    .map((node) => ({
-      branch: branchNameForNode(node.data),
-      hash: node.data.commitHash ?? node.data.commit?.hash ?? node.id,
-      id: node.id,
-      leafCount: node.data.leaves?.length ?? 0,
-      summary: node.data.summary || node.data.commit?.message || 'Committed state update',
-      timestamp: String(node.data.commit?.committed_at ?? node.data.timestamp ?? ''),
-      title: node.data.title || node.data.commit?.message || 'State commit',
-    }))
-    .sort((a, b) => parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp));
-}
-
-function branchNameForNode(data: CanvasNodeData): string {
-  if (data.branchType === 'branch') return data.branchName?.trim() || 'branch';
-  return 'main';
-}
-
 function mergeBranchNames(names: string[]): string[] {
   return Array.from(new Set(names.filter(Boolean))).sort((a, b) => {
     if (a === 'main') return -1;
@@ -1180,11 +1123,6 @@ function formatRelativeTime(value: string | undefined): string {
   const diffDays = Math.round(diffHours / 24);
   if (diffDays < 14) return String(diffDays) + ' days ago';
   return new Date(timestamp).toLocaleDateString();
-}
-
-function parseTimestamp(value: string): number {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function formatError(error: unknown, fallback: string): string {

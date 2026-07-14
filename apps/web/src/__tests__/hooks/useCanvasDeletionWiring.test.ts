@@ -56,6 +56,13 @@ afterEach(() => {
 });
 
 describe('useCanvasDeletionWiring', () => {
+  it('does not register Canvas deletion I/O on repository surfaces', async () => {
+    renderHook(() => useCanvasDeletionWiring(false));
+    await waitForHook();
+
+    expect(useCanvasStore.getState().deleteConversationCallback).toBeNull();
+  });
+
   it('registers a callback that calls deleteConversation', async () => {
     useCanvasStore.setState({ nodes: [unit('n1', 'conv_1')] });
 

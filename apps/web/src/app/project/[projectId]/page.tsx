@@ -44,6 +44,7 @@ interface ProjectDetailPageContentProps {
   initialTabOverride?: ProjectTabId;
   projectIdOverride?: string;
   showChatSidebarToggle?: boolean;
+  surface?: 'canvas' | 'repository';
 }
 
 function isNotFoundError(error: Error | null): boolean {
@@ -144,6 +145,7 @@ export function ProjectDetailPageContent({
   initialTabOverride,
   projectIdOverride,
   showChatSidebarToggle = false,
+  surface = 'repository',
 }: ProjectDetailPageContentProps = {}) {
   const params = useParams<{ projectId?: string }>();
   const pathname = usePathname();
@@ -152,6 +154,7 @@ export function ProjectDetailPageContent({
   const projectId = projectIdOverride ?? routeProjectId;
 
   const searchParams = useSearchParams();
+  const isCanvasSurface = surface === 'canvas';
   const [activeTab, setActiveTab] = useState<ProjectTabId>(
     () => initialTabOverride ?? parseProjectTab(searchParams.get('tab'))
   );
@@ -186,7 +189,7 @@ export function ProjectDetailPageContent({
   const { list: fetchProjects } = useProjectCrud();
   const { fetch: fetchPins } = usePinsCrud();
   const { load: loadCanvas } = useCanvasNodeActions();
-  useCanvasDeletionWiring();
+  useCanvasDeletionWiring(isCanvasSurface);
 
   useEffect(() => {
     if (project) {
@@ -215,19 +218,19 @@ export function ProjectDetailPageContent({
   // Open selected node from URL on first load
   const selectedFromUrl = useRef(showIntroDemo ? null : searchParams.get('selected'));
   useEffect(() => {
-    if (selectedFromUrl.current && !canvasLoading && !canvasError) {
+    if (isCanvasSurface && selectedFromUrl.current && !canvasLoading && !canvasError) {
       useCanvasStore.getState().openNodeModal(selectedFromUrl.current, 'commit');
       selectedFromUrl.current = null;
     }
-  }, [canvasLoading, canvasError]);
+  }, [canvasLoading, canvasError, isCanvasSurface]);
   useEffect(() => {
-    if (!showIntroDemo) return;
+    if (!isCanvasSurface || !showIntroDemo) return;
     selectedFromUrl.current = null;
     closeNodeModal();
-  }, [closeNodeModal, showIntroDemo]);
+  }, [closeNodeModal, isCanvasSurface, showIntroDemo]);
 
   useEffect(() => {
-    if (!hasProjectUiQuery(searchParams)) return;
+    if (isCanvasSurface || !hasProjectUiQuery(searchParams)) return;
     if (searchParams.has('tab') && !project) return;
 
     const nextPath =
@@ -235,7 +238,7 @@ export function ProjectDetailPageContent({
         ? getProjectCanonicalPath(project, new URLSearchParams(searchParams.toString()))
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
-  }, [pathname, project, router, searchParams]);
+  }, [isCanvasSurface, pathname, project, router, searchParams]);
 
   const handleProjectTabChange = useCallback(
     (nextTab: ProjectTabId) => {
@@ -289,7 +292,7 @@ export function ProjectDetailPageContent({
   }, [projectId, projectFromStore, projectsInitialized, projectsLoading]);
 
   useEffect(() => {
-    if (!projectBase?.id) {
+    if (isCanvasSurface || !projectBase?.id) {
       setYschemaValidation(null);
       return;
     }
@@ -308,7 +311,7 @@ export function ProjectDetailPageContent({
     return () => {
       cancelled = true;
     };
-  }, [projectBase?.id]);
+  }, [isCanvasSurface, projectBase?.id]);
 
   const handleRunYSchemaValidation = useCallback(async () => {
     if (!projectBase?.id) return;
@@ -330,13 +333,20 @@ export function ProjectDetailPageContent({
   // persists across routes, so returning from Chat after a commit must not
   // reuse a stale draft/staging view for the same project.
   useEffect(() => {
-    if (projectId) {
+    if (isCanvasSurface && projectId) {
       void loadCanvas(projectId);
     }
-  }, [projectId, loadCanvas]);
+  }, [isCanvasSurface, projectId, loadCanvas]);
 
   useEffect(() => {
-    if (!showIntroDemo || canvasLoading || canvasError || loadedProjectId !== projectId) return;
+    if (
+      !isCanvasSurface ||
+      !showIntroDemo ||
+      canvasLoading ||
+      canvasError ||
+      loadedProjectId !== projectId
+    )
+      return;
     const localCommit = readIntroDemoLocalCommit(projectId);
     if (!localCommit) return;
 
@@ -356,13 +366,21 @@ export function ProjectDetailPageContent({
           localCommit.branch === 'main' ? localCommit.hash : state.latestMainCommitId,
       };
     });
-  }, [canvasError, canvasLoading, canvasNodeCount, loadedProjectId, projectId, showIntroDemo]);
+  }, [
+    canvasError,
+    canvasLoading,
+    canvasNodeCount,
+    isCanvasSurface,
+    loadedProjectId,
+    projectId,
+    showIntroDemo,
+  ]);
 
   // Refresh project data when page becomes visible OR on a 30s polling interval.
   // This ensures canvas stays up-to-date when commits are created from Chat.
   const lastRefreshRef = useRef(0);
   useEffect(() => {
-    if (!projectId) return;
+    if (!isCanvasSurface || !projectId) return;
 
     const refreshIfStale = () => {
       const now = Date.now();
@@ -401,14 +419,14 @@ export function ProjectDetailPageContent({
       clearInterval(interval);
       channel?.close();
     };
-  }, [projectId, loadCanvas]);
+  }, [isCanvasSurface, projectId, loadCanvas]);
 
   // Initialize pins store for the project
   useEffect(() => {
-    if (projectId) {
+    if (isCanvasSurface && projectId) {
       void fetchPins(projectId);
     }
-  }, [projectId, fetchPins]);
+  }, [isCanvasSurface, projectId, fetchPins]);
 
   // Show loading while projects list is still loading, or while confirming a
   // direct/new project URL that is not present in the list cache yet.
@@ -470,8 +488,8 @@ export function ProjectDetailPageContent({
     );
   }
 
-  const renderStateTab = () => {
-    if (canvasLoading) {
+  if (isCanvasSurface) {
+    if (canvasLoading || loadedProjectId !== projectId) {
       return (
         <div className="flex h-full flex-col">
           <LoadingSpinner message="Loading project data..." />
@@ -491,14 +509,7 @@ export function ProjectDetailPageContent({
     }
 
     return (
-      <ProjectStateTab
-        onRunValidation={handleRunYSchemaValidation}
-        projectId={projectId}
-        projectName={project.name}
-        validation={project.yschemaValidation}
-        validationError={yschemaValidationError}
-        validationRunning={yschemaValidationRunning}
-      >
+      <div className="flex h-full min-h-0 flex-col">
         <CanvasWorkspace
           key={projectId}
           projectName={project.name}
@@ -514,7 +525,21 @@ export function ProjectDetailPageContent({
           interactionMode="guided"
           stage={projectTourStage}
         />
-      </ProjectStateTab>
+      </div>
+    );
+  }
+
+  const renderStateTab = () => {
+    return (
+      <ProjectStateTab
+        key={projectId}
+        onRunValidation={handleRunYSchemaValidation}
+        projectId={projectId}
+        projectName={project.name}
+        validation={project.yschemaValidation}
+        validationError={yschemaValidationError}
+        validationRunning={yschemaValidationRunning}
+      />
     );
   };
 

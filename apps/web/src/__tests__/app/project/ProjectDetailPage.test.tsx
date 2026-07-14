@@ -12,6 +12,12 @@ const stateHookMocks = vi.hoisted(() => ({
   refreshWorkspaces: vi.fn(),
 }));
 
+const canvasSurfaceMocks = vi.hoisted(() => ({
+  fetchPins: vi.fn(),
+  loadCanvas: vi.fn(),
+  wireDeletion: vi.fn(),
+}));
+
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 let searchParamsValue = new URLSearchParams();
@@ -38,15 +44,15 @@ vi.mock('@/components/onboarding/ProjectDemoTourOverlay', () => ({
 }));
 
 vi.mock('@/hooks/canvas/useCanvasDeletionWiring', () => ({
-  useCanvasDeletionWiring: () => undefined,
+  useCanvasDeletionWiring: canvasSurfaceMocks.wireDeletion,
 }));
 
 vi.mock('@/hooks/canvas/useCanvasNodeActions', () => ({
-  useCanvasNodeActions: () => ({ load: vi.fn().mockResolvedValue(undefined) }),
+  useCanvasNodeActions: () => ({ load: canvasSurfaceMocks.loadCanvas }),
 }));
 
 vi.mock('@/hooks/pins/usePinsCrud', () => ({
-  usePinsCrud: () => ({ fetch: vi.fn() }),
+  usePinsCrud: () => ({ fetch: canvasSurfaceMocks.fetchPins }),
 }));
 
 vi.mock('@/hooks/shared/useBranches', () => ({
@@ -133,6 +139,8 @@ const STATE_COMMIT: ApiCommit = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  canvasSurfaceMocks.fetchPins.mockResolvedValue(undefined);
+  canvasSurfaceMocks.loadCanvas.mockResolvedValue(undefined);
   stateHookMocks.loadCommits.mockResolvedValue([]);
   stateHookMocks.loadLeaves.mockResolvedValue([]);
   stateHookMocks.loadOperations.mockResolvedValue({
@@ -212,6 +220,34 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('renders Canvas only on the independent Canvas surface', async () => {
+    render(
+      <ProjectDetailPageContent
+        projectIdOverride="proj_test"
+        showChatSidebarToggle
+        surface="canvas"
+      />
+    );
+
+    expect(screen.getByTestId('canvas-workspace')).toHaveTextContent('Test Project');
+    expect(screen.getByTestId('project-demo-tour')).toHaveAttribute('data-open', 'false');
+    expect(screen.queryByRole('region', { name: 'State overview' })).not.toBeInTheDocument();
+    expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(true);
+    await waitFor(() => {
+      expect(canvasSurfaceMocks.loadCanvas).toHaveBeenCalledWith('proj_test');
+      expect(canvasSurfaceMocks.fetchPins).toHaveBeenCalledWith('proj_test');
+    });
+  });
+
+  it('does not start Canvas I/O on repository surfaces', async () => {
+    renderProjectContent();
+
+    expect(await screen.findByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(canvasSurfaceMocks.wireDeletion).toHaveBeenLastCalledWith(false);
+    expect(canvasSurfaceMocks.loadCanvas).not.toHaveBeenCalled();
+    expect(canvasSurfaceMocks.fetchPins).not.toHaveBeenCalled();
   });
 
   it('renders a verified YSchema badge from the latest validation run', async () => {
@@ -402,7 +438,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
-  it('does NOT redirect while canvas is still loading', () => {
+  it('keeps repository State visible while Canvas is loading', async () => {
     useCanvasStore.setState({
       nodes: [],
       edges: [],
@@ -413,6 +449,8 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
+    expect(await screen.findByRole('region', { name: 'State overview' })).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -458,7 +496,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(useCanvasStore.getState().modalViewMode).toBeNull();
   });
 
-  it('does NOT redirect when load is for a different project (race guard)', () => {
+  it('waits for matching project data before rendering Canvas', () => {
     useCanvasStore.setState({
       nodes: [],
       edges: [],
@@ -467,8 +505,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
       projectId: 'proj_other', // load completed for a different project
     });
 
-    renderProjectContent();
+    render(<ProjectDetailPageContent projectIdOverride="proj_test" surface="canvas" />);
 
+    expect(screen.getByText('Loading project data...')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
