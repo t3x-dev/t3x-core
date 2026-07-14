@@ -263,8 +263,12 @@ describe('WorkspaceWorkbench', () => {
 
     activateTab(/Preview/);
     expect(within(detail).getByRole('region', { name: 'Preview unavailable' })).toBeInTheDocument();
-    expect(within(detail).getByText('Complete Validation before reviewing the preview')).toBeInTheDocument();
-    expect(within(detail).queryByRole('region', { name: 'Change Review Dock' })).not.toBeInTheDocument();
+    expect(
+      within(detail).getByText('Complete Validation before reviewing the preview')
+    ).toBeInTheDocument();
+    expect(
+      within(detail).queryByRole('region', { name: 'Change Review Dock' })
+    ).not.toBeInTheDocument();
   });
 
   it('uses Source, Ops, Validation, Preview, and Commit as the workspace workflow tabs', () => {
@@ -416,7 +420,9 @@ describe('WorkspaceWorkbench', () => {
 
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'Preview unavailable' })).toBeInTheDocument();
-    expect(screen.getByText('Complete Validation before reviewing the preview')).toBeInTheDocument();
+    expect(
+      screen.getByText('Complete Validation before reviewing the preview')
+    ).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
 
     activateTab(/Commit/);
@@ -517,9 +523,10 @@ describe('WorkspaceWorkbench', () => {
         name: 'Diff',
       })
     );
-    const diffDetail = within(
-      screen.getByRole('region', { name: 'Change Review Dock' })
-    ).getByRole('region', { name: 'Node diff detail' });
+    const diffDetail = within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole(
+      'region',
+      { name: 'Node diff detail' }
+    );
     expect(diffDetail).toHaveTextContent('Internal reviewers');
     expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(

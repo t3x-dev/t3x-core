@@ -8,10 +8,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import type {
-  WorkspaceCandidate,
-  WorkspaceYOpsDraftOperation,
-} from '@/types/workspaces';
+import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode, WorkspaceYOpsValue } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 
@@ -301,10 +298,15 @@ function ChangeOverviewPanel({
           )}
         </section>
 
-        <aside aria-label="Review gate" className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3">
+        <aside
+          aria-label="Review gate"
+          className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h4 className="text-sm font-semibold text-[var(--text-primary)]">Pre-commit status</h4>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+                Pre-commit status
+              </h4>
               <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
                 Validation is resolved before this final change review.
               </p>
@@ -539,7 +541,10 @@ function ChangeDiffPanel({
       role="tabpanel"
     >
       <div className="grid min-h-[440px] overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px]">
-        <aside className="border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0" aria-label="Changed paths">
+        <aside
+          className="border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
+          aria-label="Changed paths"
+        >
           <div className="border-b border-[var(--stroke-divider)] px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-[var(--text-primary)]">Changed paths</h4>
@@ -581,7 +586,10 @@ function ChangeDiffPanel({
           </ol>
         </aside>
 
-        <section aria-label="Node diff detail" className="min-w-0 border-b border-[var(--stroke-divider)] lg:border-b-0 xl:border-r">
+        <section
+          aria-label="Node diff detail"
+          className="min-w-0 border-b border-[var(--stroke-divider)] lg:border-b-0 xl:border-r"
+        >
           <div className="border-b border-[var(--stroke-divider)] px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="branch">{operation.op}</Badge>
@@ -629,14 +637,19 @@ function ChangeDiffPanel({
                     <div className="text-xs font-medium text-[var(--text-primary)]">
                       {getSourceTitle(candidate, sourceRef)}
                     </div>
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-[var(--text-tertiary)]" title={sourceRef}>
+                    <div
+                      className="mt-0.5 truncate font-mono text-[10px] text-[var(--text-tertiary)]"
+                      title={sourceRef}
+                    >
                       {sourceRef}
                     </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">No source references attached.</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                No source references attached.
+              </p>
             )}
           </section>
           <section className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
@@ -646,7 +659,9 @@ function ChangeDiffPanel({
             <p className="mt-2 text-xs text-[var(--text-secondary)]">{source}</p>
           </section>
           <section className="mt-4 border-t border-[var(--stroke-divider)] pt-4">
-            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">Raw YOp</h5>
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">
+              Raw YOp
+            </h5>
             <pre className="mt-2 overflow-auto rounded border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)]">
               {formatRawYOp(operation)}
             </pre>
@@ -788,9 +803,7 @@ function normalizeYamlPath(rawPath: string, documentRoot?: string | null): strin
 
 function getDefaultExpandedYamlPaths(nodes: YamlChangeNode[], depth = 0): string[] {
   return nodes.flatMap((node) => [
-    ...(node.children.length > 0 && (depth === 0 || node.changeCount > 0)
-      ? [node.path]
-      : []),
+    ...(node.children.length > 0 && (depth === 0 || node.changeCount > 0) ? [node.path] : []),
     ...getDefaultExpandedYamlPaths(node.children, depth + 1),
   ]);
 }
@@ -919,5 +932,7 @@ function formatDiffValue(value: WorkspaceYOpsValue | string | undefined): string
 }
 
 function getSourceTitle(candidate: WorkspaceCandidate, sourceRef: string): string {
-  return candidate.sourceBundle.find((source) => source.id === sourceRef)?.title ?? 'Source evidence';
+  return (
+    candidate.sourceBundle.find((source) => source.id === sourceRef)?.title ?? 'Source evidence'
+  );
 }
