@@ -1,40 +1,31 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import { ProjectSchemasTab } from '@/components/project/ProjectSchemasTab';
 
 describe('ProjectSchemasTab', () => {
-  it('renders the S1 schema registry surface from fixtures', () => {
+  it('renders the single-family schema version browser from fixtures', () => {
     render(<ProjectSchemasTab projectId="proj_test" />);
 
-    expect(screen.getByText('Schema templates')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Choose a structured-state template, pick a version, then bind it as the project default or pin it to a workspace.'
+        "One versioned contract defines the shape of this repository's structured state. New workspaces use the current version; existing commits keep their original version."
       )
     ).toBeInTheDocument();
-    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
-    expect(screen.getByText('Docker Compose')).toBeInTheDocument();
+    expect(screen.getAllByText('PRD Schema').length).toBeGreaterThan(0);
+    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
+    expect(screen.queryByText('Docker Compose')).not.toBeInTheDocument();
   });
 
-  it('binds the selected schema release to the current workspace target', () => {
-    const onWorkspaceSchemaBindingChange = vi.fn();
-    render(
-      <ProjectSchemasTab
-        onWorkspaceSchemaBindingChange={onWorkspaceSchemaBindingChange}
-        projectId="proj_test"
-      />
-    );
+  it('uses the registry current pointer independently of workspace preview bindings', () => {
+    render(<ProjectSchemasTab projectId="proj_test" />);
 
-    expect(screen.getByText('PRD audience handoff')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Use for current workspace' }));
-
-    expect(onWorkspaceSchemaBindingChange).toHaveBeenCalledWith({
-      binding: { schemaName: 'PRD Schema', version: 'v2', mode: 'pinned' },
-      scope: 'current_workspace',
-      workspaceId: 'workspace_prd_handoff',
-    });
+    const currentVersionFact = screen.getByText('Current version').parentElement;
+    expect(currentVersionFact).not.toBeNull();
+    expect(within(currentVersionFact as HTMLElement).getByText('v2')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 });

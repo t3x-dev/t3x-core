@@ -1,204 +1,105 @@
-import {
-  CalendarDays,
-  GitCommitHorizontal,
-  Link2,
-  Pin,
-  ShieldCheck,
-  Split,
-  UsersRound,
-} from 'lucide-react';
-import type { ReactNode } from 'react';
+import { SchemaChangesView } from '@/components/schemas/SchemaChangesView';
+import { SchemaStructureView } from '@/components/schemas/SchemaStructureView';
 import { SchemaVersionBadge } from '@/components/schemas/SchemaVersionBadge';
-import { Badge } from '@/components/ui/badge';
+import { SchemaYamlView } from '@/components/schemas/SchemaYamlView';
 import { Button } from '@/components/ui/button';
-import type { WorkspaceSchemaBindingScope } from '@/domain/workspaces/schemaBindings';
-import type { SchemaRelease } from '@/types/schemas';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { SchemaReleasePreview } from '@/types/schemas';
+
+export type SchemaDetailView = 'changes' | 'structure' | 'yaml';
+
+const DETAIL_VIEWS: Array<{ id: SchemaDetailView; label: string }> = [
+  { id: 'structure', label: 'Structure' },
+  { id: 'yaml', label: 'Canonical YAML' },
+  { id: 'changes', label: 'Changes' },
+];
 
 interface SchemaReleaseDetailProps {
-  bindingTargetLabel?: string;
-  currentWorkspaceBindingLabel?: string;
-  onBindRelease?: (release: SchemaRelease, scope: WorkspaceSchemaBindingScope) => void;
-  projectDefaultBindingLabel?: string;
-  release: SchemaRelease;
+  activeView: SchemaDetailView;
+  currentRelease: SchemaReleasePreview | null;
+  onCompareWithCurrent: () => void;
+  onViewChange: (view: SchemaDetailView) => void;
+  release: SchemaReleasePreview;
 }
 
 export function SchemaReleaseDetail({
-  bindingTargetLabel,
-  currentWorkspaceBindingLabel,
-  onBindRelease,
-  projectDefaultBindingLabel,
+  activeView,
+  currentRelease,
+  onCompareWithCurrent,
+  onViewChange,
   release,
 }: SchemaReleaseDetailProps) {
-  const isDraft = release.status === 'draft';
+  const isCurrent = release.id === currentRelease?.id;
+  const canCompare =
+    currentRelease !== null && !isCurrent && release.changesBaseReleaseId === currentRelease.id;
+  const activeViewLabel = DETAIL_VIEWS.find((view) => view.id === activeView)?.label ?? activeView;
 
   return (
     <section
-      aria-label="Schema release detail"
-      className="min-w-0 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)]"
+      aria-label="Selected schema version"
+      className="flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-card)] shadow-sm"
     >
-      <header className="border-b border-[var(--stroke-divider)] px-4 py-3">
-        <div className="flex flex-col gap-2">
-          <SchemaVersionBadge release={release} />
-          <p className="text-sm leading-5 text-[var(--text-secondary)]">{release.description}</p>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={release.source === 'official' ? 'commit' : 'outline'}>
-              {release.source}
-            </Badge>
-            <Badge variant="outline">{release.category}</Badge>
-            <Badge variant="branch">root: {release.rootKey}</Badge>
+      <header className="flex flex-col items-start justify-between gap-5 border-b border-[var(--stroke-divider)] p-4 min-[721px]:flex-row">
+        <div className="min-w-0">
+          <p className="mb-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+            Selected version
+          </p>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold leading-[1.35] text-[var(--text-primary)]">
+              <SchemaVersionBadge isCurrent={isCurrent} release={release} />
+            </h3>
           </div>
-        </div>
-      </header>
-
-      <div className="space-y-4 p-4">
-        <dl className="grid gap-2 sm:grid-cols-2">
-          <DetailMetric
-            icon={<GitCommitHorizontal aria-hidden="true" className="h-4 w-4" />}
-            label="Used by commits"
-            value={release.usedByCommitCount}
-          />
-          <DetailMetric
-            icon={<UsersRound aria-hidden="true" className="h-4 w-4" />}
-            label="Used by workspaces"
-            value={release.usedByWorkspaceCount}
-          />
-          <DetailMetric
-            icon={<ShieldCheck aria-hidden="true" className="h-4 w-4" />}
-            label="Breaking level"
-            value={release.breakingChangeLevel}
-          />
-          <DetailMetric
-            icon={<CalendarDays aria-hidden="true" className="h-4 w-4" />}
-            label="Released"
-            value={release.releasedAt ? release.releasedAt.slice(0, 10) : 'Not released'}
-          />
-        </dl>
-
-        <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-          <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-            Required fields
-          </h4>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {release.requiredFields.map((field) => (
-              <Badge className="font-mono" key={field} variant="outline">
-                {field}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-          <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-            Compatible with
-          </h4>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {release.compatibleWith.map((target) => (
-              <Badge key={target} variant="success">
-                {target}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-[var(--text-primary)]">
-              Version and migration
-            </span>
-            <Badge variant={isDraft ? 'pending' : 'commit'}>
-              {isDraft ? 'Draft can be reviewed' : 'Published version is immutable'}
-            </Badge>
-          </div>
-          <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">
-            {release.migrationSummary}
+          <p className="mt-[7px] max-w-[760px] text-[13px] leading-5 text-[var(--text-secondary)]">
+            {release.description}
           </p>
         </div>
 
-        <div>
-          <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-            Bind this version
-          </h4>
-          <div className="mt-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-              <span className="inline-flex items-center gap-1 font-medium text-[var(--text-primary)]">
-                <Pin aria-hidden="true" className="h-3.5 w-3.5 text-[var(--accent-commit)]" />
-                {bindingTargetLabel ?? 'Current workspace'}
-              </span>
-              <Badge variant="outline">
-                Workspace: {currentWorkspaceBindingLabel ?? 'No pinned schema'}
-              </Badge>
-              <Badge variant="outline">
-                Project default: {projectDefaultBindingLabel ?? 'No override'}
-              </Badge>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button
-              onClick={() => onBindRelease?.(release, 'current_workspace')}
-              size="sm"
-              type="button"
-              variant="commit"
-            >
-              <Link2 aria-hidden="true" className="h-4 w-4" />
-              Use this version
-            </Button>
-            <Button
-              onClick={() => onBindRelease?.(release, 'project_default')}
-              size="sm"
-              type="button"
-              variant="canvas-outline"
-            >
-              Set as project default
-            </Button>
-            <Button
-              onClick={() => onBindRelease?.(release, 'current_workspace')}
-              size="sm"
-              type="button"
-              variant="canvas-outline"
-            >
-              Use for current workspace
-            </Button>
-            <Button size="sm" type="button" variant="canvas-outline">
-              Create workspace with template
-            </Button>
-          </div>
-        </div>
+        {canCompare ? (
+          <Button
+            className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650]"
+            onClick={onCompareWithCurrent}
+            type="button"
+            variant="commit"
+          >
+            Compare with {currentRelease.version}
+          </Button>
+        ) : null}
+      </header>
 
-        <div>
-          <h4 className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-            Review actions
-          </h4>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button size="sm" type="button" variant="canvas-outline">
-              <Split aria-hidden="true" className="h-4 w-4" />
-              Compare with current
-            </Button>
-            <Button size="sm" type="button" variant="canvas-outline">
-              View workspace impact
-            </Button>
-          </div>
-        </div>
-      </div>
+      <p aria-live="polite" className="sr-only">
+        {release.version} {activeViewLabel} view
+      </p>
+
+      <Tabs
+        className="min-h-0 flex-1 gap-0"
+        onValueChange={(value) => onViewChange(value as SchemaDetailView)}
+        value={activeView}
+      >
+        <TabsList
+          aria-label="Schema version views"
+          className="flex min-h-[45px] w-full justify-start gap-[18px] overflow-x-auto rounded-none border-b border-[var(--stroke-divider)] bg-transparent px-4 py-0 text-[var(--text-secondary)] shadow-none dark:rounded-none dark:border-b dark:border-[var(--stroke-divider)] dark:bg-transparent dark:p-0"
+        >
+          {DETAIL_VIEWS.map((view) => (
+            <TabsTrigger
+              className="h-[45px] flex-none rounded-none border-0 border-b-2 border-b-transparent bg-transparent px-0 py-0 text-[13px] [font-weight:650] text-[var(--text-secondary)] shadow-none hover:text-[var(--text-primary)] data-[state=active]:border-b-[var(--accent-commit)] data-[state=active]:bg-transparent data-[state=active]:text-[var(--text-primary)] data-[state=active]:shadow-none dark:px-0 dark:py-0 dark:text-[var(--text-secondary)] dark:hover:text-[var(--text-primary)]"
+              key={view.id}
+              value={view.id}
+            >
+              {view.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent className="m-0 min-h-0 flex-1 p-4" value="structure">
+          <SchemaStructureView currentRelease={currentRelease} release={release} />
+        </TabsContent>
+        <TabsContent className="m-0 min-h-0 flex-1 p-4" value="yaml">
+          <SchemaYamlView release={release} />
+        </TabsContent>
+        <TabsContent className="m-0 min-h-0 flex-1 p-4" value="changes">
+          <SchemaChangesView currentRelease={currentRelease} release={release} />
+        </TabsContent>
+      </Tabs>
     </section>
-  );
-}
-
-function DetailMetric({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2">
-      <dt className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-        <span className="text-[var(--text-tertiary)]">{icon}</span>
-        {label}
-      </dt>
-      <dd className="mt-1 truncate font-mono text-sm text-[var(--text-primary)]">{value}</dd>
-    </div>
   );
 }

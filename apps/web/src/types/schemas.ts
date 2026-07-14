@@ -22,6 +22,39 @@ export interface SchemaRelease {
   migrationSummary: string;
 }
 
+export interface SchemaContractPath {
+  path: string;
+  type: string;
+  required: boolean;
+  constraint: string;
+  depth: 0 | 1 | 2;
+}
+
+export type SchemaContractChangeKind = 'ADD' | 'CHANGE' | 'KEEP' | 'REMOVE';
+
+export interface SchemaContractChange {
+  kind: SchemaContractChangeKind;
+  path: string;
+  summary: string;
+}
+
+/** Fixture-backed view model for the Schemas version browser. */
+export interface SchemaReleasePreview extends SchemaRelease {
+  canonicalName: string;
+  schemaHash: string;
+  updatedLabel: string;
+  canonicalYaml: string;
+  structure: SchemaContractPath[];
+  changesBaseReleaseId: string;
+  changes: SchemaContractChange[];
+}
+
+/** Fixture-backed registry payload with an explicit published-version pointer. */
+export interface SchemaRegistryPreview {
+  currentReleaseId: string;
+  releases: SchemaReleasePreview[];
+}
+
 export interface SchemaReleaseFamily {
   name: string;
   releases: SchemaRelease[];
