@@ -1,0 +1,6 @@
+# Keep repository text files consistent across Windows, macOS, and Linux CI.
+* text=auto eol=lf
+
+# Windows command files require CRLF for cmd.exe compatibility.
+*.bat text eol=crlf
+*.cmd text eol=crlf

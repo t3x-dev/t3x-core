@@ -23,6 +23,7 @@
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
+    "lineEnding": "lf",
     "lineWidth": 100
   },
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
