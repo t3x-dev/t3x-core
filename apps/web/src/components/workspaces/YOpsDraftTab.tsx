@@ -45,11 +45,15 @@ export function YOpsDraftTab({
     'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed'
   >(candidate.lastCommitHash ? 'committed' : 'idle');
   const [generatedYOps, setGeneratedYOps] = useState<WorkspaceYOp[] | null>(null);
+  const [baselineTrees, setBaselineTrees] = useState<WorkspaceYOpsTreeNode[] | null>(null);
+  const [validatedPreviewTrees, setValidatedPreviewTrees] = useState<
+    WorkspaceYOpsTreeNode[] | null
+  >(null);
+  const [validationPassed, setValidationPassed] = useState(false);
   const [materializedTrees, setMaterializedTrees] = useState<WorkspaceYOpsTreeNode[] | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
   const [committedHash, setCommittedHash] = useState(candidate.lastCommitHash ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [forceCommit, setForceCommit] = useState(false);
   const [targetBranch, setTargetBranch] = useState(getInitialTargetBranch(candidate));
 
   const commitCandidate = useMemo(
@@ -74,22 +78,29 @@ export function YOpsDraftTab({
   const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
   const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
   const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
-  const canValidateProposal = draft.operations.length > 0 && !isBusy && !committedHash;
+  const validationPrerequisitesMet =
+    candidate.schemaReview.gaps.length === 0 &&
+    candidate.schemaReview.verdict === 'ready' &&
+    candidate.sourceBundle.length > 0;
+  const canValidateProposal =
+    draft.operations.length > 0 && !isBusy && !committedHash && validationPrerequisitesMet;
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
   const visibleErrorMessage = errorMessage ?? flowError ?? null;
-  const hasCommitWarnings = candidate.schemaReview.gaps.length > 0 || Boolean(visibleErrorMessage);
+  const validationBlocked = !validationPrerequisitesMet || Boolean(visibleErrorMessage);
   const canCommit =
     appliedCount > 0 &&
     Boolean(materializedTrees) &&
+    validationPassed &&
     !isBusy &&
     !committedHash &&
-    (!hasCommitWarnings || forceCommit);
+    !validationBlocked;
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
     isBusy,
     operationCount: draft.operations.length,
+    validationBlocked,
   });
   const applyYOpsTitle = getApplyYOpsTitle({
     committedHash,
@@ -99,10 +110,9 @@ export function YOpsDraftTab({
   const commitTitle = getCommitTitle({
     appliedCount,
     committedHash,
-    forceCommit,
-    hasWarnings: hasCommitWarnings,
     isBusy,
     targetBranch,
+    validationReady: validationPassed && !validationBlocked,
   });
 
   useEffect(() => {
@@ -121,6 +131,9 @@ export function YOpsDraftTab({
     try {
       const result = await validate();
       setGeneratedYOps(result.yops);
+      setBaselineTrees(result.baselineTrees);
+      setValidatedPreviewTrees(result.previewTrees ?? null);
+      setValidationPassed(result.ok);
       setAppliedCount(0);
       setMaterializedTrees(null);
       if (!result.ok) {
@@ -132,6 +145,7 @@ export function YOpsDraftTab({
       }
       setStatus('generated');
     } catch (error) {
+      setValidationPassed(false);
       setStatus('idle');
       setErrorMessage(error instanceof Error ? error.message : 'YOps generation failed');
     }
@@ -143,6 +157,9 @@ export function YOpsDraftTab({
     try {
       const result = await validate();
       setGeneratedYOps(result.yops);
+      setBaselineTrees(result.baselineTrees);
+      setValidatedPreviewTrees(result.previewTrees ?? null);
+      setValidationPassed(result.ok);
       if (!result.ok || !result.previewTrees) {
         setStatus('generated');
         setErrorMessage(
@@ -154,6 +171,7 @@ export function YOpsDraftTab({
       setAppliedCount(result.applied);
       setStatus('applied');
     } catch (error) {
+      setValidationPassed(false);
       setStatus(generatedYOps ? 'generated' : 'idle');
       setErrorMessage(error instanceof Error ? error.message : 'YOps apply failed');
     }
@@ -245,12 +263,15 @@ export function YOpsDraftTab({
       {view === 'preview' ? (
         <PreviewReviewView
           appliedCount={appliedCount}
+          baselineTrees={baselineTrees}
           candidate={candidate}
           committedHash={committedHash}
           generatedYOpsCount={generatedYOps?.length ?? draft.operations.length}
           yopsExtracted={Boolean(generatedYOps)}
           materializedTrees={materializedTrees}
           treeLines={treeLines}
+          validatedPreviewTrees={validatedPreviewTrees}
+          validationPassed={validationPassed}
           visibleErrorMessage={visibleErrorMessage}
         />
       ) : null}
@@ -263,15 +284,12 @@ export function YOpsDraftTab({
           canCommit={canCommit}
           commitTitle={commitTitle}
           committedHash={committedHash}
-          forceCommit={forceCommit}
-          hasCommitWarnings={hasCommitWarnings}
           isBusy={isBusy}
           onCommit={handleCommit}
-          onForceCommitChange={setForceCommit}
           onTargetBranchChange={setTargetBranch}
           status={status}
           targetBranch={targetBranch}
-          visibleErrorMessage={visibleErrorMessage}
+          validationReady={validationPassed && !validationBlocked}
         />
       ) : null}
     </div>
@@ -515,31 +533,67 @@ function ValidationReviewView({
 
 function PreviewReviewView({
   appliedCount,
+  baselineTrees,
   candidate,
   committedHash,
   generatedYOpsCount,
   materializedTrees,
   treeLines,
+  validatedPreviewTrees,
+  validationPassed,
   visibleErrorMessage,
   yopsExtracted,
 }: {
   appliedCount: number;
+  baselineTrees: WorkspaceYOpsTreeNode[] | null;
   candidate: WorkspaceCandidate;
   committedHash: string | null;
   generatedYOpsCount: number;
   materializedTrees: WorkspaceYOpsTreeNode[] | null;
   treeLines: YamlTreeLine[];
+  validatedPreviewTrees: WorkspaceYOpsTreeNode[] | null;
+  validationPassed: boolean;
   visibleErrorMessage: string | null;
   yopsExtracted: boolean;
 }) {
+  const previewAvailable =
+    validationPassed &&
+    candidate.schemaReview.verdict === 'ready' &&
+    candidate.schemaReview.gaps.length === 0 &&
+    candidate.sourceBundle.length > 0 &&
+    !visibleErrorMessage;
+
+  if (!previewAvailable) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-3">
+        <section
+          aria-label="Preview unavailable"
+          className="max-w-lg rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 text-center"
+        >
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            Complete Validation before reviewing the preview
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+            Resolve validation items, then validate the YOps proposal to open the pre-commit diff.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
       <ChangeReviewDock
         candidate={candidate}
         flowState={{
+          appliedCount,
+          baselineTrees,
           commitHash: committedHash ?? undefined,
           error: visibleErrorMessage ?? undefined,
           previewReady: Boolean(materializedTrees),
+          previewTrees: validatedPreviewTrees,
+          validationPassed,
+          yopsDraftId: candidate.yopsDraft.id,
         }}
       />
       <section
@@ -574,15 +628,12 @@ function CommitReviewView({
   canCommit,
   commitTitle,
   committedHash,
-  forceCommit,
-  hasCommitWarnings,
   isBusy,
   onCommit,
-  onForceCommitChange,
   onTargetBranchChange,
   status,
   targetBranch,
-  visibleErrorMessage,
+  validationReady,
 }: {
   appliedCount: number;
   branchOptions: string[];
@@ -590,15 +641,12 @@ function CommitReviewView({
   canCommit: boolean;
   commitTitle: string;
   committedHash: string | null;
-  forceCommit: boolean;
-  hasCommitWarnings: boolean;
   isBusy: boolean;
   onCommit: () => void;
-  onForceCommitChange: (force: boolean) => void;
   onTargetBranchChange: (branch: string) => void;
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
   targetBranch: string;
-  visibleErrorMessage: string | null;
+  validationReady: boolean;
 }) {
   return (
     <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -613,14 +661,14 @@ function CommitReviewView({
             value={`${appliedCount}`}
           />
           <ValidationMetric
-            label="Issues"
-            tone={hasCommitWarnings ? 'warning' : 'success'}
-            value={`${candidate.schemaReview.gaps.length + (visibleErrorMessage ? 1 : 0)}`}
+            label="Validation"
+            tone={validationReady ? 'success' : 'warning'}
+            value={validationReady ? 'Passed' : 'Required'}
           />
           <ValidationMetric
             label="Commit"
             tone={committedHash ? 'success' : canCommit ? 'success' : 'warning'}
-            value={committedHash ? 'Done' : canCommit ? 'Ready' : 'Blocked'}
+            value={committedHash ? 'Done' : canCommit ? 'Ready' : 'Return'}
           />
         </div>
         <dl className="mt-3 grid gap-2 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3 text-xs">
@@ -637,11 +685,10 @@ function CommitReviewView({
             </dd>
           </div>
         </dl>
-        {hasCommitWarnings ? (
-          <div className="mt-3 rounded-md border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--status-warning)]">
-            Commit has unresolved validation warnings. Resolve them for a normal commit or force
-            commit with warning.
-          </div>
+        {!validationReady && !committedHash ? (
+          <p className="mt-3 text-sm text-[var(--text-secondary)]">
+            Complete Validation before returning here to commit.
+          </p>
         ) : null}
       </section>
 
@@ -669,17 +716,6 @@ function CommitReviewView({
             ))}
           </select>
         </label>
-        {hasCommitWarnings && !committedHash ? (
-          <label className="flex items-start gap-2 rounded-md border border-[var(--stroke-divider)] p-3 text-xs text-[var(--text-secondary)]">
-            <input
-              checked={forceCommit}
-              className="mt-0.5"
-              onChange={(event) => onForceCommitChange(event.target.checked)}
-              type="checkbox"
-            />
-            <span>Force commit with unresolved warnings</span>
-          </label>
-        ) : null}
         <Button
           disabled={!canCommit}
           onClick={onCommit}
@@ -741,14 +777,17 @@ function getExtractYOpsTitle({
   committedHash,
   isBusy,
   operationCount,
+  validationBlocked,
 }: {
   committedHash: string | null;
   isBusy: boolean;
   operationCount: number;
+  validationBlocked: boolean;
 }): string {
   if (committedHash) return 'This workspace is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (operationCount === 0) return 'No proposed YOps operations are available yet.';
+  if (validationBlocked) return 'Resolve the Validation items before validating this proposal.';
   return 'Validate the proposed YOps before applying it.';
 }
 
@@ -770,24 +809,20 @@ function getApplyYOpsTitle({
 function getCommitTitle({
   appliedCount,
   committedHash,
-  forceCommit,
-  hasWarnings,
   isBusy,
   targetBranch,
+  validationReady,
 }: {
   appliedCount: number;
   committedHash: string | null;
-  forceCommit: boolean;
-  hasWarnings: boolean;
   isBusy: boolean;
   targetBranch: string;
+  validationReady: boolean;
 }): string {
   if (committedHash) return 'Workspace result is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
-  if (hasWarnings && !forceCommit) {
-    return 'Resolve validation warnings or enable force commit before committing.';
-  }
+  if (!validationReady) return 'Complete Validation before committing.';
   return `Commit the materialized YAML result to ${targetBranch}.`;
 }
 

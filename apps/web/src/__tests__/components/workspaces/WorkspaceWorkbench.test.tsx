@@ -249,7 +249,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
   });
 
-  it('shows the change track dock only inside Preview', () => {
+  it('keeps the pre-commit review dock behind Validation', () => {
     render(
       <WorkspaceWorkbench
         candidates={workspaceCandidates}
@@ -262,78 +262,9 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('region', { name: 'Change Review Dock' })).not.toBeInTheDocument();
 
     activateTab(/Preview/);
-    const dock = within(detail).getByRole('region', { name: 'Change Review Dock' });
-
-    expect(within(dock).getByRole('heading', { name: 'Change Track Dock' })).toBeInTheDocument();
-    expect(within(dock).getByRole('tablist', { name: 'Change track views' })).toBeInTheDocument();
-    expect(within(dock).getByRole('tab', { name: 'Overview' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(within(dock).getByRole('tab', { name: 'Issues 1' })).toBeInTheDocument();
-    expect(within(dock).getByRole('tab', { name: 'Diff' })).toBeInTheDocument();
-    expect(within(dock).queryByRole('tab', { name: /YOps stack/ })).not.toBeInTheDocument();
-    expect(within(dock).queryByRole('tab', { name: /Evidence/ })).not.toBeInTheDocument();
-    expect(within(dock).queryByRole('tab', { name: /Replay/ })).not.toBeInTheDocument();
-    expect(within(dock).getByText('Commit readiness')).toBeInTheDocument();
-    expect(within(dock).getAllByText('Review schema').length).toBeGreaterThan(0);
-    expect(within(dock).getByRole('region', { name: 'Overview summary' })).toBeInTheDocument();
-    expect(within(dock).getByRole('region', { name: 'YAML overview map' })).toBeInTheDocument();
-    expect(
-      within(dock).getByRole('complementary', { name: 'Review side panels' })
-    ).toBeInTheDocument();
-    expect(within(dock).getByRole('region', { name: 'State change timeline' })).toBeInTheDocument();
-    const yamlMap = within(dock).getByRole('tree', { name: 'YAML change map' });
-    expect(within(yamlMap).getByText('release_note')).toBeInTheDocument();
-    expect(within(yamlMap).getByText('sections')).toBeInTheDocument();
-    expect(within(yamlMap).getByText('-')).toBeInTheDocument();
-    expect(within(yamlMap).getByText('metadata')).toBeInTheDocument();
-    expect(within(yamlMap).queryByText('version')).not.toBeInTheDocument();
-    expect(within(yamlMap).getByText('add')).toBeInTheDocument();
-
-    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Collapse release_note' }));
-    expect(within(yamlMap).queryByText('sections')).not.toBeInTheDocument();
-    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Expand release_note' }));
-    expect(within(yamlMap).getByText('sections')).toBeInTheDocument();
-    fireEvent.click(within(yamlMap).getByRole('button', { name: 'Expand release_note/metadata' }));
-    expect(within(yamlMap).getByText('version')).toBeInTheDocument();
-
-    fireEvent.click(
-      within(yamlMap).getByRole('button', { name: 'Review diff for release_note/sections/-' })
-    );
-    expect(within(dock).getByRole('tab', { name: 'Diff' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-
-    fireEvent.click(within(dock).getByRole('tab', { name: 'Issues 1' }));
-
-    expect(within(dock).getByRole('tab', { name: 'Issues 1' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(within(dock).getByRole('button', { name: /Review diff for add/ })).toBeInTheDocument();
-    expect(within(dock).getByText('release_note/sections/-')).toBeInTheDocument();
-    expect(within(dock).getByText('Confirm release-note required fields.')).toBeInTheDocument();
-
-    fireEvent.click(within(dock).getByRole('button', { name: /Review diff for add/ }));
-
-    expect(within(dock).getByRole('tab', { name: 'Diff' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    expect(within(dock).getByRole('region', { name: 'Node diff detail' })).toBeInTheDocument();
-    expect(within(dock).getByText('release_note/sections/-')).toBeInTheDocument();
-    expect(within(dock).getByText('add')).toBeInTheDocument();
-    expect(within(dock).getByText('Before')).toBeInTheDocument();
-    expect(within(dock).getByText('After')).toBeInTheDocument();
-    expect(within(dock).getByText('No section placeholder')).toBeInTheDocument();
-    expect(within(dock).getByText('One draft release-note section')).toBeInTheDocument();
-    expect(
-      within(dock).getByText(
-        'The release outline suggests a section, but the required shape needs review.'
-      )
-    ).toBeInTheDocument();
+    expect(within(detail).getByRole('region', { name: 'Preview unavailable' })).toBeInTheDocument();
+    expect(within(detail).getByText('Complete Validation before reviewing the preview')).toBeInTheDocument();
+    expect(within(detail).queryByRole('region', { name: 'Change Review Dock' })).not.toBeInTheDocument();
   });
 
   it('uses Source, Ops, Validation, Preview, and Commit as the workspace workflow tabs', () => {
@@ -484,12 +415,9 @@ describe('WorkspaceWorkbench', () => {
     );
 
     activateTab(/Preview/);
-    const yopsTree = screen.getByRole('region', { name: 'YOps YAML tree' });
-    expect(yopsTree).toHaveTextContent('No materialized YAML yet');
-    expect(yopsTree).toHaveTextContent('Validate the YOps proposal first');
-    expect(yopsTree).not.toHaveTextContent('audience: Product and engineering reviewers');
-    expect(screen.getByText('Human')).toBeInTheDocument();
-    expect(screen.getByText('Changed')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Preview unavailable' })).toBeInTheDocument();
+    expect(screen.getByText('Complete Validation before reviewing the preview')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
 
     activateTab(/Commit/);
     expect(screen.getByRole('region', { name: 'Commit readiness' })).toBeInTheDocument();
@@ -579,8 +507,21 @@ describe('WorkspaceWorkbench', () => {
       'Materialized preview'
     );
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
-      'Preview ready'
+      'Ready to commit'
     );
+    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
+      'YOps valid'
+    );
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole('tab', {
+        name: 'Diff',
+      })
+    );
+    const diffDetail = within(
+      screen.getByRole('region', { name: 'Change Review Dock' })
+    ).getByRole('region', { name: 'Node diff detail' });
+    expect(diffDetail).toHaveTextContent('Internal reviewers');
+    expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
