@@ -311,6 +311,7 @@
   --surface-elevated: oklch(1 0 0);
   --surface-radial: oklch(0.97 0.002 250);
   --surface-canvas: var(--surface-app);
+  --surface-code: #111827;
   --sidebar-panel: oklch(0.948 0.002 250);
   --chat-panel: oklch(0.97 0.0015 250);
   --workspace-panel: oklch(0.99 0.001 250);
@@ -366,6 +367,7 @@
   --text-primary: oklch(0.15 0.01 260);
   --text-secondary: oklch(0.4 0.01 260);
   --text-tertiary: oklch(0.55 0.01 260);
+  --text-code: #dbeafe;
 
   /* ===== Scrollbar ===== */
   --scrollbar-width: 4px;
@@ -460,6 +462,7 @@
   --surface-elevated: #1b2432;
   --surface-radial: #121923;
   --surface-canvas: #121923;
+  --surface-code: #0d131d;
   --sidebar-panel: var(--panel);
   --chat-panel: var(--panel);
   --workspace-panel: var(--panel-alt);
@@ -543,6 +546,7 @@
   --text-primary: #f0f4fa;
   --text-secondary: #b5becd;
   --text-tertiary: #8490a3;
+  --text-code: #dbeafe;
   /* Aliases */
   --text-1: var(--text-primary);
   --text-2: var(--text-secondary);

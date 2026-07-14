@@ -1,93 +1,199 @@
-import { Boxes } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { SchemaFamilyList } from '@/components/schemas/SchemaFamilyList';
-import { SchemaReleaseDetail } from '@/components/schemas/SchemaReleaseDetail';
+import { type ReactNode, useState } from 'react';
+import {
+  type SchemaDetailView,
+  SchemaReleaseDetail,
+} from '@/components/schemas/SchemaReleaseDetail';
 import { SchemaReleaseList } from '@/components/schemas/SchemaReleaseList';
-import { groupSchemaReleasesByFamily } from '@/domain/schemas/selectors';
-import type { WorkspaceSchemaBindingScope } from '@/domain/workspaces/schemaBindings';
-import type { SchemaRelease } from '@/types/schemas';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import type { SchemaReleasePreview } from '@/types/schemas';
 
 interface SchemaRegistryProps {
-  bindingTargetLabel?: string;
-  currentWorkspaceBindingLabel?: string;
-  onBindRelease?: (release: SchemaRelease, scope: WorkspaceSchemaBindingScope) => void;
-  projectDefaultBindingLabel?: string;
-  releases: SchemaRelease[];
+  currentReleaseId: string;
+  releases: SchemaReleasePreview[];
 }
 
-export function SchemaRegistry({
-  bindingTargetLabel,
-  currentWorkspaceBindingLabel,
-  onBindRelease,
-  projectDefaultBindingLabel,
-  releases,
-}: SchemaRegistryProps) {
-  const families = useMemo(() => groupSchemaReleasesByFamily(releases), [releases]);
-  const [selectedFamilyName, setSelectedFamilyName] = useState(families[0]?.name ?? '');
-  const selectedFamily =
-    families.find((family) => family.name === selectedFamilyName) ?? families[0] ?? null;
-  const [selectedReleaseId, setSelectedReleaseId] = useState(
-    selectedFamily?.releases.find((release) => release.status === 'active')?.id ??
-      selectedFamily?.releases[0]?.id ??
-      ''
-  );
-
+export function SchemaRegistry({ currentReleaseId, releases }: SchemaRegistryProps) {
+  const currentRelease =
+    releases.find((release) => release.id === currentReleaseId && release.status === 'active') ??
+    null;
+  const [selectedReleaseId, setSelectedReleaseId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<SchemaDetailView>('structure');
   const selectedRelease =
-    selectedFamily?.releases.find((release) => release.id === selectedReleaseId) ??
-    selectedFamily?.releases.find((release) => release.status === 'active') ??
-    selectedFamily?.releases[0] ??
+    (selectedReleaseId
+      ? releases.find((release) => release.id === selectedReleaseId)
+      : undefined) ??
+    currentRelease ??
+    releases[0] ??
     null;
 
-  function handleSelectFamily(familyName: string) {
-    const nextFamily = families.find((family) => family.name === familyName);
-    setSelectedFamilyName(familyName);
-    setSelectedReleaseId(
-      nextFamily?.releases.find((release) => release.status === 'active')?.id ??
-        nextFamily?.releases[0]?.id ??
-        ''
+  function handleSelectRelease(releaseId: string) {
+    setSelectedReleaseId(releaseId);
+    setActiveView('structure');
+  }
+
+  function handleOpenCanonicalYaml() {
+    if (!currentRelease) return;
+    setSelectedReleaseId(currentRelease.id);
+    setActiveView('yaml');
+  }
+
+  if (!selectedRelease) {
+    return (
+      <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
+        <div className="mx-auto w-full max-w-[1480px]">
+          <section
+            aria-labelledby="schemas-page-title"
+            className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm"
+          >
+            <SchemaRegistryHeader
+              currentRelease={null}
+              onOpenCanonicalYaml={handleOpenCanonicalYaml}
+            />
+            <div className="border-t border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
+              No schema versions are available for this project.
+            </div>
+          </section>
+        </div>
+      </section>
     );
   }
 
-  return (
-    <section className="h-full overflow-auto p-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <Boxes aria-hidden="true" className="h-4 w-4 text-[var(--accent-commit)]" />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Schema templates</h2>
-          </div>
-          <p className="text-sm leading-5 text-[var(--text-secondary)]">
-            Choose a structured-state template, pick a version, then bind it as the project default
-            or pin it to a workspace.
-          </p>
-        </div>
+  const summaryRelease = currentRelease ?? selectedRelease;
 
-        {selectedFamily && selectedRelease ? (
-          <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(220px,0.85fr)_minmax(220px,0.85fr)_minmax(320px,1.25fr)]">
-            <SchemaFamilyList
-              families={families}
-              onSelectFamily={handleSelectFamily}
-              selectedFamilyName={selectedFamily.name}
-            />
-            <SchemaReleaseList
-              onSelectRelease={setSelectedReleaseId}
-              releases={selectedFamily.releases}
-              selectedReleaseId={selectedRelease.id}
-            />
-            <SchemaReleaseDetail
-              bindingTargetLabel={bindingTargetLabel}
-              currentWorkspaceBindingLabel={currentWorkspaceBindingLabel}
-              onBindRelease={onBindRelease}
-              projectDefaultBindingLabel={projectDefaultBindingLabel}
-              release={selectedRelease}
-            />
-          </div>
-        ) : (
-          <div className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 text-sm text-[var(--text-secondary)]">
-            No schema releases are available for this project.
-          </div>
-        )}
+  return (
+    <section className="h-full overflow-auto bg-[var(--surface-app)] p-2.5 min-[481px]:p-4">
+      <div className="mx-auto w-full max-w-[1480px]">
+        <section
+          aria-labelledby="schemas-page-title"
+          className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm"
+        >
+          <SchemaRegistryHeader
+            currentRelease={currentRelease}
+            onOpenCanonicalYaml={handleOpenCanonicalYaml}
+          />
+
+          <dl className="grid gap-px border-t border-[var(--stroke-divider)] bg-[var(--stroke-divider)] min-[481px]:grid-cols-2 min-[721px]:grid-cols-4">
+            <SchemaFact label="Schema">
+              <span>{summaryRelease.name}</span>
+              <Badge className="text-[11px]" variant="commit">
+                single family
+              </Badge>
+            </SchemaFact>
+            <SchemaFact label="Current version">
+              {currentRelease ? (
+                <>
+                  <span className="font-mono">{currentRelease.version}</span>
+                  <Badge className="text-[11px]" variant="success">
+                    current
+                  </Badge>
+                </>
+              ) : (
+                <>
+                  <span>Not set</span>
+                  <Badge className="text-[11px]" variant="pending">
+                    no current
+                  </Badge>
+                </>
+              )}
+            </SchemaFact>
+            <SchemaFact label="Root">
+              <span className="font-mono">{summaryRelease.rootKey}</span>
+              <Badge className="text-[11px]" variant="outline">
+                strict paths
+              </Badge>
+            </SchemaFact>
+            <SchemaFact label="Usage">
+              <span>
+                {summaryRelease.usedByCommitCount}{' '}
+                {summaryRelease.usedByCommitCount === 1 ? 'commit' : 'commits'}
+              </span>
+              <span>
+                {summaryRelease.usedByWorkspaceCount}{' '}
+                {summaryRelease.usedByWorkspaceCount === 1 ? 'workspace' : 'workspaces'}
+              </span>
+            </SchemaFact>
+          </dl>
+        </section>
+
+        <section
+          aria-label="Schema version browser"
+          className="mt-4 grid min-h-[650px] gap-4 min-[961px]:grid-cols-[280px_minmax(0,1fr)]"
+        >
+          <SchemaReleaseList
+            currentRelease={currentRelease}
+            onSelectRelease={handleSelectRelease}
+            releases={releases}
+            selectedReleaseId={selectedRelease.id}
+          />
+          <SchemaReleaseDetail
+            activeView={activeView}
+            currentRelease={currentRelease}
+            onCompareWithCurrent={() => setActiveView('changes')}
+            onViewChange={setActiveView}
+            release={selectedRelease}
+          />
+        </section>
+
+        <p className="mx-0.5 mt-[14px] text-[11px] text-[var(--text-tertiary)]">
+          Preview data — one project, one Schema family, versioned YAML contracts.
+        </p>
       </div>
     </section>
+  );
+}
+
+function SchemaRegistryHeader({
+  currentRelease,
+  onOpenCanonicalYaml,
+}: {
+  currentRelease: SchemaReleasePreview | null;
+  onOpenCanonicalYaml: () => void;
+}) {
+  return (
+    <header className="flex flex-col items-start justify-between gap-6 p-4 min-[721px]:flex-row">
+      <div>
+        <p className="mb-[3px] text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+          Repository contract
+        </p>
+        <h2
+          className="text-lg font-bold leading-[1.3] text-[var(--text-primary)]"
+          id="schemas-page-title"
+        >
+          Schemas
+        </h2>
+        <p className="mt-0.5 max-w-[700px] text-[13px] leading-5 text-[var(--text-secondary)]">
+          One versioned contract defines the shape of this repository&apos;s structured state. New
+          workspaces use the current version; existing commits keep their original version.
+        </p>
+      </div>
+      <Button
+        aria-label={
+          currentRelease
+            ? `Open current ${currentRelease.version} canonical YAML`
+            : 'Open current canonical YAML'
+        }
+        className="h-[34px] flex-none rounded-[var(--radius-md)] px-3 text-[13px] [font-weight:650] text-[var(--text-primary)]"
+        disabled={!currentRelease}
+        onClick={onOpenCanonicalYaml}
+        type="button"
+        variant="canvas-outline"
+      >
+        Open canonical YAML
+      </Button>
+    </header>
+  );
+}
+
+function SchemaFact({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <div className="min-w-0 bg-[var(--surface-panel)] px-4 pt-[13px] pb-[14px]">
+      <dt className="mb-[5px] block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--text-tertiary)]">
+        {label}
+      </dt>
+      <dd className="m-0 flex min-w-0 flex-wrap items-center gap-[7px] text-[13px] [font-weight:650] text-[var(--text-primary)]">
+        {children}
+      </dd>
+    </div>
   );
 }

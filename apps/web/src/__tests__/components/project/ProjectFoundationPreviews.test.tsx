@@ -25,8 +25,8 @@ describe('project foundation previews', () => {
   it('renders the Schemas preview for any project id during A0', () => {
     render(<ProjectSchemasTab projectId="proj_other" />);
 
-    expect(screen.getByText('Schema templates')).toBeInTheDocument();
-    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
   it('reflects schema bindings from the schema tab in the workspace preview', () => {

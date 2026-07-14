@@ -396,9 +396,10 @@ describe('ProjectDetailPage — project-first shell states', () => {
     renderProjectContent();
 
     expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', { name: 'Schema templates' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Templates' })).toBeInTheDocument();
-    expect(screen.getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Schema versions' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Selected schema version' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /v2 Current/i })).toBeChecked();
   });
 
   it('does NOT redirect while canvas is still loading', () => {

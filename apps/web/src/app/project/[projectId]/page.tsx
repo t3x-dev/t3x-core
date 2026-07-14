@@ -16,10 +16,6 @@ import { ProjectWorkspacesTab } from '@/components/project/ProjectWorkspacesTab'
 import { type ProjectTabId, parseProjectTab } from '@/components/project/projectTabModel';
 import { getProjectRepoPath } from '@/domain/project/repoPath';
 import { toYSchemaValidationSummary } from '@/domain/project/yschemaValidation';
-import {
-  EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS,
-  type WorkspaceSchemaBindingScope,
-} from '@/domain/workspaces/schemaBindings';
 import { useCanvasDeletionWiring } from '@/hooks/canvas/useCanvasDeletionWiring';
 import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import {
@@ -33,8 +29,6 @@ import { fetchProject } from '@/queries/project';
 import { fetchLatestYSchemaValidation, runYSchemaValidation } from '@/queries/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
 import { apiProjectToSummary, type ProjectSummary, useProjectStore } from '@/store/projectStore';
-import { useProjectWorkspaceSchemaBindingsStore } from '@/store/projectWorkspaceSchemaBindingsStore';
-import type { WorkspaceSchemaBinding } from '@/types/workspaces';
 import { isIntroDemoQueryEnabled } from '@/utils/introDemo';
 import { recordRecentProjectOpen } from '@/utils/recentProjects';
 
@@ -184,10 +178,6 @@ export function ProjectDetailPageContent({
   );
   const [yschemaValidationRunning, setYschemaValidationRunning] = useState(false);
   const [yschemaValidationError, setYschemaValidationError] = useState<string | null>(null);
-  const projectSchemaBindings = useProjectWorkspaceSchemaBindingsStore(
-    (state) => state.bindingsByProjectId[projectId] ?? EMPTY_PROJECT_WORKSPACE_SCHEMA_BINDINGS
-  );
-  const bindWorkspaceSchema = useProjectWorkspaceSchemaBindingsStore((state) => state.bindSchema);
   const projectBase = projectFromStore ?? fetchedProject;
   const project = useMemo(
     () => (projectBase ? { ...projectBase, yschemaValidation } : null),
@@ -258,21 +248,6 @@ export function ProjectDetailPageContent({
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
   }, []);
-
-  const handleWorkspaceSchemaBindingChange = useCallback(
-    ({
-      binding,
-      scope,
-      workspaceId,
-    }: {
-      binding: WorkspaceSchemaBinding;
-      scope: WorkspaceSchemaBindingScope;
-      workspaceId?: string;
-    }) => {
-      bindWorkspaceSchema({ binding, projectId, scope, workspaceId });
-    },
-    [bindWorkspaceSchema, projectId]
-  );
 
   // Fetch projects list if not initialized (handles direct URL access)
   useEffect(() => {
@@ -546,18 +521,9 @@ export function ProjectDetailPageContent({
   const activeContent = (() => {
     switch (activeTab) {
       case 'schemas':
-        return (
-          <ProjectSchemasTab
-            onWorkspaceSchemaBindingChange={handleWorkspaceSchemaBindingChange}
-            projectId={projectId}
-            schemaBindings={projectSchemaBindings}
-            selectedWorkspaceId={searchParams.get('workspace')}
-          />
-        );
+        return <ProjectSchemasTab projectId={projectId} />;
       case 'workspaces':
-        return (
-          <ProjectWorkspacesTab projectId={projectId} schemaBindings={projectSchemaBindings} />
-        );
+        return <ProjectWorkspacesTab projectId={projectId} />;
       case 'reviews':
         return <ProjectReviewsTab />;
       case 'outputs':
