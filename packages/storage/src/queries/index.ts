@@ -69,6 +69,7 @@ export {
 // Commits (tree-based)
 export {
   BranchLinearityError,
+  CommitParentIntegrityError,
   type CreateCommitInput,
   collectYOpsForCommitRange,
   createCommit,

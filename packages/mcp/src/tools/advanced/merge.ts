@@ -16,6 +16,7 @@ import {
   createCommit,
   createMergeDraft,
   getCommit,
+  getLatestCommit,
   getMergeDraft,
   updateMergeDraft,
 } from '@t3x-dev/storage';
@@ -149,6 +150,19 @@ async function handlePrepare(args: Record<string, unknown>) {
 
   if (!sourceCommit) return fail(`Source commit not found: ${sourceHash}`);
   if (!targetCommit) return fail(`Target commit not found: ${targetHash}`);
+  if (sourceCommit.project_id !== projectId) {
+    return fail(`Source commit ${sourceHash} does not belong to project ${projectId}.`);
+  }
+  if (targetCommit.project_id !== projectId) {
+    return fail(`Target commit ${targetHash} does not belong to project ${projectId}.`);
+  }
+
+  const sourceBranch = sourceCommit.branch || 'main';
+  const targetBranch = targetCommit.branch || 'main';
+  const targetHead = await getLatestCommit(db, projectId, targetBranch);
+  if (targetHead?.hash !== targetHash) {
+    return fail(`Target commit ${targetHash} is not the current head of branch ${targetBranch}.`);
+  }
 
   const sourceContent = sourceCommit.content as SemanticContent;
   const targetContent = targetCommit.content as SemanticContent;
@@ -160,6 +174,8 @@ async function handlePrepare(args: Record<string, unknown>) {
     projectId,
     sourceHash,
     targetHash,
+    sourceBranch,
+    targetBranch,
     prepared,
   });
 
@@ -323,6 +339,17 @@ async function handleExecute(args: Record<string, unknown>) {
 
   if (!sourceCommit) return fail(`Source commit no longer found: ${draft.sourceHash}`);
   if (!targetCommit) return fail(`Target commit no longer found: ${draft.targetHash}`);
+  if (sourceCommit.project_id !== draft.projectId || targetCommit.project_id !== draft.projectId) {
+    return fail('Merge draft commits no longer belong to the draft project.');
+  }
+
+  const targetBranch = draft.targetBranch ?? targetCommit.branch ?? 'main';
+  const targetHead = await getLatestCommit(db, draft.projectId, targetBranch);
+  if (targetHead?.hash !== draft.targetHash) {
+    return fail(
+      `Target commit ${draft.targetHash} is no longer the current head of branch ${targetBranch}.`
+    );
+  }
 
   const sourceContent = sourceCommit.content as SemanticContent;
   const targetContent = targetCommit.content as SemanticContent;
@@ -350,23 +377,22 @@ async function handleExecute(args: Record<string, unknown>) {
   );
 
   const commit = await createCommit(db, {
-    parents: [draft.sourceHash, draft.targetHash],
+    parents: [draft.targetHash, draft.sourceHash],
     author: { type: 'human' as const, name: 'mcp' },
     content: mergedContent,
     project_id: draft.projectId,
     message,
-    branch: draft.targetBranch ?? 'main',
+    branch: targetBranch,
     provenance: { method: 'human_curation' },
     enforceBranchLinearity: true,
   });
 
-  // Mark draft as committed
   await updateMergeDraft(db, draftId, { status: 'committed' });
 
   return ok({
     commit_hash: commit.hash,
     branch: commit.branch ?? 'main',
-    parents: [draft.sourceHash, draft.targetHash],
+    parents: [draft.targetHash, draft.sourceHash],
     committed_at: commit.committed_at,
     message,
   });

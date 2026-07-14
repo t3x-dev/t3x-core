@@ -2,7 +2,8 @@
 
 import type { PipelineEvent } from '@t3x-dev/core';
 import { collectResult, runOperation } from '@t3x-dev/core';
-import { describe, expect, it, vi } from 'vitest';
+import { createCommit } from '@t3x-dev/storage';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiPipelineContext } from '../../ops/context';
 import type { MergeExecuteInput, MergePrepareInput } from '../../ops/merge';
 import { MergeError, mergeExecuteOp, mergePrepareOp } from '../../ops/merge';
@@ -37,10 +38,16 @@ const mockTargetCommit = {
   message: 'target',
 };
 
+const mockForeignTargetCommit = {
+  ...mockTargetCommit,
+  hash: 'sha256:foreign-target',
+  project_id: 'proj_other',
+};
+
 const mockMergedCommit = {
   ...mockSourceCommit,
   hash: 'sha256:merged',
-  parents: ['sha256:source', 'sha256:target'],
+  parents: ['sha256:target', 'sha256:source'],
   message: 'merged',
 };
 
@@ -63,11 +70,13 @@ vi.mock('@t3x-dev/storage', () => ({
   getCommitUnified: vi.fn((_, hash: string) => {
     if (hash === 'sha256:source') return Promise.resolve(mockSourceCommit);
     if (hash === 'sha256:target') return Promise.resolve(mockTargetCommit);
+    if (hash === 'sha256:foreign-target') return Promise.resolve(mockForeignTargetCommit);
     if (hash === 'sha256:missing') return Promise.resolve(null);
     return Promise.resolve(null);
   }),
+  findBranchByName: vi.fn(() => Promise.resolve({ name: 'main', headCommitHash: 'sha256:target' })),
   createCommit: vi.fn(() => Promise.resolve(mockMergedCommit)),
-  updateBranchHead: vi.fn(() => Promise.resolve()),
+  updateBranchHead: vi.fn(() => Promise.resolve({ name: 'main' })),
 }));
 
 vi.mock('@t3x-dev/core', async (importOriginal) => {
@@ -81,8 +90,11 @@ vi.mock('@t3x-dev/core', async (importOriginal) => {
 });
 
 function buildMockContext(overrides: Partial<ApiPipelineContext> = {}): ApiPipelineContext {
+  const db = {
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+  };
   return {
-    db: {} as any,
+    db: db as any,
     projectId: 'proj_123',
     userId: 'user_1',
     providerRegistry: {} as any,
@@ -165,6 +177,10 @@ describe('mergePrepareOp', () => {
 // ---------------------------------------------------------------------------
 
 describe('mergeExecuteOp', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('has the correct name', () => {
     expect(mergeExecuteOp.name).toBe('merge.execute');
   });
@@ -201,6 +217,13 @@ describe('mergeExecuteOp', () => {
 
     // output shape
     expect(result.commit).toEqual(mockMergedCommit);
+    expect(createCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        parents: ['sha256:target', 'sha256:source'],
+        branch: 'main',
+      })
+    );
     expect(result.merge_summary).toEqual({
       kept_identical: 1,
       resolved_conflicts: 1,
@@ -249,6 +272,31 @@ describe('mergeExecuteOp', () => {
     await expect(collectResult(runOperation(mergeExecuteOp, input, ctx))).rejects.toThrow(
       MergeError
     );
+  });
+
+  it('throws MergeError when target commit is missing or belongs to another project', async () => {
+    const ctx = buildMockContext();
+    const input = {
+      source_hash: 'sha256:source',
+      target_hash: 'sha256:missing',
+      prepared: { ...mockPrepared, conflicts: [] },
+      decisions: {
+        conflictResolutions: {},
+        keepFromSource: [],
+        keepFromTarget: [],
+      },
+      message: 'merge',
+      author: { type: 'human' as const, name: 'alice' },
+    } as MergeExecuteInput;
+
+    await expect(collectResult(runOperation(mergeExecuteOp, input, ctx))).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      collectResult(
+        runOperation(mergeExecuteOp, { ...input, target_hash: 'sha256:foreign-target' }, ctx)
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
   });
 
   it('collectResult returns the output directly', async () => {

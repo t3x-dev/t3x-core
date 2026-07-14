@@ -244,7 +244,7 @@ export function MergeWorkspace({
         },
         branch: targetBranch || 'main',
         message: message || 'Tree merge',
-        parents: [sourceHash, targetHash],
+        parents: [targetHash, sourceHash],
         author: { type: 'human', name: 'User' },
         provenance: { method: 'merge' },
       });

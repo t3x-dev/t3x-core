@@ -8,7 +8,15 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: route integration tests use broad casts for compact mock assertions */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertProject } from '@t3x-dev/storage';
+import {
+  createCommit,
+  createMergeDraft,
+  findBranchByName,
+  getCommitUnified,
+  getMergeDraft,
+  insertBranch,
+  insertProject,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from '../setup';
@@ -80,6 +88,58 @@ describe('Merge Routes', () => {
     });
     return commit;
   };
+
+  const createProjectCommit = async (
+    projectId: string,
+    branch: string,
+    frameId: string,
+    parents: string[] = []
+  ) => {
+    commitCounter++;
+    return createCommit(mockDB, {
+      parents,
+      author: { type: 'human', name: `Test User ${commitCounter}` },
+      content: {
+        trees: [{ key: frameId, slots: { value: frameId }, children: [] }],
+        relations: [],
+      },
+      project_id: projectId,
+      message: `Test commit ${commitCounter}`,
+      branch,
+    });
+  };
+
+  const createDraftFixture = async () => {
+    await insertBranch(mockDB, { projectId: testProjectId, name: 'main' });
+    const targetCommit = await createProjectCommit(testProjectId, 'main', 'target_frame');
+
+    await insertBranch(mockDB, {
+      projectId: testProjectId,
+      name: 'feature',
+      parentBranch: 'main',
+    });
+    const sourceCommit = await createProjectCommit(testProjectId, 'feature', 'source_frame', [
+      targetCommit.hash,
+    ]);
+
+    return { sourceCommit, targetCommit };
+  };
+
+  const postMergeDraft = (
+    sourceHash: string,
+    targetHash: string,
+    branches: { source_branch?: string; target_branch?: string } = {}
+  ) =>
+    app.request('/v1/merge/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: testProjectId,
+        source_hash: sourceHash,
+        target_hash: targetHash,
+        ...branches,
+      }),
+    });
 
   // ============================================================================
   // POST /v1/merge/prepare Tests
@@ -207,6 +267,29 @@ describe('Merge Routes', () => {
       expect(json.success).toBe(false);
       expect(json.error.code).toBe('NOT_FOUND');
     });
+
+    it('does not expose merge data from a target commit in another project', async () => {
+      const sourceCommit = await createTestCommit([
+        { id: 'source', type: 'test', slots: { text: 'Source' } },
+      ]);
+      const foreignProject = await insertProject(mockDB, testData.project());
+      const foreignTarget = await createProjectCommit(
+        foreignProject.projectId,
+        'main',
+        'foreign_secret'
+      );
+
+      const res = await app.request('/v1/merge/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_hash: sourceCommit.hash, target_hash: foreignTarget.hash }),
+      });
+
+      expect(res.status).toBe(400);
+      const json: ApiResponse = await res.json();
+      expect(json).toMatchObject({ success: false, error: { code: 'INVALID_REQUEST' } });
+      expect(json).not.toHaveProperty('data');
+    });
   });
 
   // ============================================================================
@@ -215,12 +298,9 @@ describe('Merge Routes', () => {
 
   describe('POST /v1/merge/execute', () => {
     it('creates merge commit with 2 parents', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 'f_001', type: 'info', slots: { text: 'Source info' } },
-      ]);
-
-      const targetCommit = await createTestCommit([
-        { id: 'f_002', type: 'info', slots: { text: 'Target info' } },
+      const targetCommit = await createProjectCommit(testProjectId, 'main', 'target_info');
+      const sourceCommit = await createProjectCommit(testProjectId, 'feature', 'source_info', [
+        targetCommit.hash,
       ]);
 
       // Prepare first
@@ -267,9 +347,7 @@ describe('Merge Routes', () => {
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.hash).toBeDefined();
-      expect(json.data.parents).toHaveLength(2);
-      expect(json.data.parents[0]).toBe(sourceCommit.hash);
-      expect(json.data.parents[1]).toBe(targetCommit.hash);
+      expect(json.data.parents).toEqual([targetCommit.hash, sourceCommit.hash]);
     });
 
     it('returns 400 for unresolved conflicts', async () => {
@@ -322,12 +400,10 @@ describe('Merge Routes', () => {
     });
 
     it('updates branch pointer when branch specified', async () => {
-      const sourceCommit = await createTestCommit([
-        { id: 'f_001', type: 'info', slots: { text: 'Test' } },
-      ]);
-
-      const targetCommit = await createTestCommit([
-        { id: 'f_001', type: 'info', slots: { text: 'Test' } },
+      await insertBranch(mockDB, { projectId: testProjectId, name: 'main' });
+      const targetCommit = await createProjectCommit(testProjectId, 'main', 'shared');
+      const sourceCommit = await createProjectCommit(testProjectId, 'feature', 'shared', [
+        targetCommit.hash,
       ]);
 
       // Prepare
@@ -368,6 +444,133 @@ describe('Merge Routes', () => {
       const json: ApiResponse = await res.json();
       expect(json.success).toBe(true);
       expect(json.data.branch).toBe('main');
+      const mainBranch = await findBranchByName(mockDB, testProjectId, 'main');
+      expect(mainBranch?.headCommitHash).toBe(json.data.hash);
+    });
+  });
+
+  // ============================================================================
+  // POST /v1/merge/drafts Tests
+  // ============================================================================
+
+  describe('POST /v1/merge/drafts', () => {
+    it('reuses pending drafts only within the same branch context', async () => {
+      const { sourceCommit, targetCommit } = await createDraftFixture();
+      const existing = await createMergeDraft(mockDB, {
+        projectId: testProjectId,
+        sourceHash: sourceCommit.hash,
+        targetHash: targetCommit.hash,
+        sourceBranch: 'feature',
+        targetBranch: 'release',
+        prepared: {},
+      });
+
+      const res = await postMergeDraft(sourceCommit.hash, targetCommit.hash, {
+        source_branch: 'feature',
+        target_branch: 'main',
+      });
+      const json: ApiResponse = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.data.targetBranch).toBe('main');
+      expect(json.data.draftId).not.toBe(existing.draftId);
+
+      const repeated = await postMergeDraft(sourceCommit.hash, targetCommit.hash, {
+        source_branch: 'feature',
+        target_branch: 'main',
+      });
+      const repeatedJson: ApiResponse = await repeated.json();
+
+      expect(repeated.status).toBe(200);
+      expect(repeatedJson.data.draftId).toBe(json.data.draftId);
+    });
+
+    it('rejects commits that do not belong to the requested project', async () => {
+      const sourceCommit = await createProjectCommit(testProjectId, 'feature', 'source_frame');
+      const otherProject = await insertProject(
+        mockDB,
+        testData.project({ name: 'Other merge project' })
+      );
+      const targetCommit = await createProjectCommit(
+        otherProject.projectId,
+        'main',
+        'foreign_target'
+      );
+
+      const res = await postMergeDraft(sourceCommit.hash, targetCommit.hash);
+      const json: ApiResponse = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe('INVALID_REQUEST');
+    });
+  });
+
+  // ============================================================================
+  // POST /v1/merge/drafts/:id/commit Tests
+  // ============================================================================
+
+  describe('POST /v1/merge/drafts/:id/commit', () => {
+    it('persists target-first merge parents', async () => {
+      const { sourceCommit, targetCommit } = await createDraftFixture();
+      const draftRes = await postMergeDraft(sourceCommit.hash, targetCommit.hash, {
+        source_branch: 'feature',
+        target_branch: 'main',
+      });
+      expect(draftRes.status).toBe(201);
+      const draftJson: ApiResponse = await draftRes.json();
+
+      const res = await app.request(`/v1/merge/drafts/${draftJson.data.draftId}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Merge feature into main' }),
+      });
+
+      expect(res.status).toBe(201);
+      const json: ApiResponse = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.parents).toEqual([targetCommit.hash, sourceCommit.hash]);
+      expect(json.data.branch).toBe('main');
+
+      const persisted = await getCommitUnified(mockDB, json.data.hash);
+      expect(persisted?.parents).toEqual([targetCommit.hash, sourceCommit.hash]);
+      expect(persisted?.branch).toBe('main');
+    });
+
+    it('rejects a commit branch that differs from the draft target branch', async () => {
+      const { sourceCommit, targetCommit } = await createDraftFixture();
+      const draftRes = await postMergeDraft(sourceCommit.hash, targetCommit.hash, {
+        source_branch: 'feature',
+        target_branch: 'main',
+      });
+      const draftJson: ApiResponse = await draftRes.json();
+
+      const res = await app.request(`/v1/merge/drafts/${draftJson.data.draftId}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Wrong target', branch: 'feature' }),
+      });
+
+      expect(res.status).toBe(400);
+      const json: ApiResponse = await res.json();
+      expect(json).toMatchObject({ success: false, error: { code: 'INVALID_REQUEST' } });
+    });
+
+    it('keeps the draft pending when its target is no longer the branch head', async () => {
+      const { sourceCommit, targetCommit } = await createDraftFixture();
+      const draftRes = await postMergeDraft(sourceCommit.hash, targetCommit.hash);
+      const draftJson: ApiResponse = await draftRes.json();
+      await createProjectCommit(testProjectId, 'main', 'new_target', [targetCommit.hash]);
+
+      const res = await app.request(`/v1/merge/drafts/${draftJson.data.draftId}/commit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Must not merge stale target' }),
+      });
+
+      expect(res.status).toBe(409);
+      const json: ApiResponse = await res.json();
+      expect(json).toMatchObject({ success: false, error: { code: 'BRANCH_NOT_HEAD' } });
+      expect((await getMergeDraft(mockDB, draftJson.data.draftId))?.status).toBe('pending');
     });
   });
 });
