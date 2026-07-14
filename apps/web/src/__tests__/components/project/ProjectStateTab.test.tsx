@@ -18,6 +18,18 @@ const hookMocks = vi.hoisted(() => ({
   refreshWorkspaces: vi.fn(),
 }));
 
+const navigationMocks = vi.hoisted(() => ({
+  pathname: '/t3x-dev/test-project',
+  router: { replace: vi.fn() },
+  search: '',
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => navigationMocks.pathname,
+  useRouter: () => navigationMocks.router,
+  useSearchParams: () => new URLSearchParams(navigationMocks.search),
+}));
+
 vi.mock('@/hooks/shared/useBranches', () => ({
   useBranches: () => ({
     branches: ['main', 'feature/prd-audience'],
@@ -169,6 +181,13 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
 describe('ProjectStateTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    navigationMocks.pathname = '/t3x-dev/test-project';
+    navigationMocks.search = '';
+    navigationMocks.router.replace.mockImplementation((href: string) => {
+      const url = new URL(href, 'https://t3x.local');
+      navigationMocks.pathname = url.pathname;
+      navigationMocks.search = url.search;
+    });
     setupHookMocks();
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({ edges: [], nodes: [] } as never);
@@ -189,6 +208,10 @@ describe('ProjectStateTab', () => {
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadLeaves).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+    );
   });
 
   it('switches to the schema-selected Render view', async () => {
@@ -328,13 +351,16 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(screen.getByLabelText('Branch focus')).toHaveValue('feature/prd-audience');
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      { scroll: false }
+    );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
   });
 
   it('switches its local read-only branch focus', async () => {
-    renderStateTab();
+    const view = renderStateTab();
 
     await screen.findByText('Path / Key');
     hookMocks.loadCommits.mockResolvedValueOnce([
@@ -344,6 +370,14 @@ describe('ProjectStateTab', () => {
       target: { value: 'feature/prd-audience' },
     });
 
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      { scroll: false }
+    );
+    view.rerender(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+    );
+
     await waitFor(() => {
       expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
         'proj_test',
@@ -351,5 +385,9 @@ describe('ProjectStateTab', () => {
         100
       );
     });
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+    );
   });
 });

@@ -1,7 +1,9 @@
 'use client';
 
 import { Code2, FileText, History, RotateCw, Search, TableProperties } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { commitHashLabel, shortHash } from '@/domain/format/formatters';
@@ -27,6 +29,7 @@ import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
 import type { ApiCommit, Leaf } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
 export type ProjectStateView = 'points' | 'render' | 'code';
 type BranchFocus = string;
@@ -71,8 +74,12 @@ export function ProjectStateTab({
   validationError,
   validationRunning = false,
 }: ProjectStateTabProps) {
+  const pathname = usePathname();
+  const { replace: replaceRoute } = useRouter();
+  const searchParams = useSearchParams();
+  const routeQuery = searchParams.toString();
   const [activeView, setActiveView] = useState<ProjectStateView>(initialView);
-  const [branchFocus, setBranchFocus] = useState<BranchFocus>('main');
+  const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
   const { branches, loading: branchesLoading, refresh } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
@@ -100,6 +107,17 @@ export function ProjectStateTab({
     [branchFocus, branches, snapshot.commits]
   );
 
+  const updateBranchFocus = useCallback(
+    (focus: BranchFocus) => {
+      const params = new URLSearchParams(routeQuery);
+      if (focus === 'main') params.delete('branch');
+      else params.set('branch', focus);
+      const query = params.toString();
+      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    },
+    [pathname, replaceRoute, routeQuery]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -112,8 +130,8 @@ export function ProjectStateTab({
           const latestBranch = latestCommits[0]?.branch;
           if (latestBranch) {
             commits = latestCommits.filter((commit) => commit.branch === latestBranch);
-            if (latestBranch !== requestedBranch) {
-              setBranchFocus(latestBranch);
+            if (!cancelled && latestBranch !== requestedBranch) {
+              updateBranchFocus(latestBranch);
             }
           }
         }
@@ -169,7 +187,7 @@ export function ProjectStateTab({
     return () => {
       cancelled = true;
     };
-  }, [branchFocus, loadCommits, loadLeaves, loadOperations, projectId]);
+  }, [branchFocus, loadCommits, loadLeaves, loadOperations, projectId, updateBranchFocus]);
 
   const headCommit = snapshot.headCommit;
   const committedWorkspace = useMemo(
@@ -216,10 +234,11 @@ export function ProjectStateTab({
   const commitSummary = commitSummaryFor(headCommit, yopsCount);
   const branchCount = branchOptions.length;
   const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
-
-  const handleBranchFocusChange = (focus: BranchFocus) => {
-    setBranchFocus(focus);
-  };
+  const currentReturnTo = buildReturnTo(pathname, routeQuery);
+  const historyHref = withReturnTo(
+    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus || 'main')}`,
+    currentReturnTo
+  );
 
   return (
     <section
@@ -247,7 +266,7 @@ export function ProjectStateTab({
             branchOptions={branchOptions}
             commitCount={commitCount}
             loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
-            onBranchChange={handleBranchFocusChange}
+            onBranchChange={updateBranchFocus}
             onCompare={() => setActiveView('points')}
             onRefresh={() => {
               void refresh();
@@ -266,6 +285,7 @@ export function ProjectStateTab({
           <StateObjectLine
             activeView={activeView}
             headCommit={headCommit}
+            historyHref={historyHref}
             rootKey={rootKey}
             validationGapCount={validationGapCount}
           />
@@ -541,11 +561,13 @@ function StateCommitRow({
 function StateObjectLine({
   activeView,
   headCommit,
+  historyHref,
   rootKey,
   validationGapCount,
 }: {
   activeView: ProjectStateView;
   headCommit: ApiCommit | null;
+  historyHref: string;
   rootKey: string;
   validationGapCount: number;
 }) {
@@ -564,9 +586,11 @@ function StateObjectLine({
           {validationGapCount > 0 ? String(validationGapCount) + ' validation gap' : 'validated'}
         </Badge>
         <Badge variant="outline">{activeView}</Badge>
-        <Button size="sm" type="button" variant="canvas-outline">
-          <History className="size-4" />
-          History
+        <Button asChild size="sm" variant="canvas-outline">
+          <Link href={historyHref}>
+            <History className="size-4" />
+            History
+          </Link>
         </Button>
         <Button size="sm" type="button" variant="canvas-outline">
           Copy path
