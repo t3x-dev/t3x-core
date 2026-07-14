@@ -5,7 +5,6 @@ import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { ChangeReviewDock } from './ChangeReviewDock';
 import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
@@ -210,10 +209,6 @@ export function WorkspaceWorkbench({
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
         )}
-
-        {selectedWorkspaceWithFlow ? (
-          <ChangeReviewDock candidate={selectedWorkspaceWithFlow} flowState={selectedFlow} />
-        ) : null}
       </div>
     </section>
   );

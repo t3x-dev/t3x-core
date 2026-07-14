@@ -15,6 +15,7 @@ interface ChangeReviewFlowState {
   yopsDraftId?: string;
   commitHash?: string;
   error?: string;
+  previewReady?: boolean;
 }
 
 interface ChangeReviewDockProps {
@@ -181,6 +182,7 @@ function ChangeOverviewPanel({
   summary: ChangeReviewSummary;
 }) {
   const yamlTree = useMemo(() => buildYamlChangeTree(candidate), [candidate]);
+  const currentState = getCurrentStateLabel(candidate, flowState);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
     () => new Set(getDefaultExpandedYamlPaths(yamlTree))
   );
@@ -198,7 +200,7 @@ function ChangeOverviewPanel({
     })),
     {
       label: 'Current state',
-      value: flowState?.commitHash ?? candidate.lastCommitHash ?? 'Pending',
+      value: currentState,
       tone: 'ready' as const,
     },
   ];
@@ -232,7 +234,7 @@ function ChangeOverviewPanel({
             <ChangeMeta term="Base" value={candidate.baseCommitHash ?? 'No base commit'} />
             <ChangeMeta
               term="Current"
-              value={flowState?.commitHash ?? candidate.lastCommitHash ?? 'Pending'}
+              value={currentState}
             />
             <ChangeMeta term="Change since base" value={`${summary.yopsCount} changes`} />
             <ChangeMeta term="Touched paths" value={`${countYamlLeafChanges(yamlTree)}`} />
@@ -901,6 +903,16 @@ function getChangeReviewSummary(
     };
   }
 
+  if (flowState?.previewReady) {
+    return {
+      evidenceCount,
+      issueCount,
+      readinessLabel: 'Preview ready',
+      readinessVariant: 'success',
+      yopsCount,
+    };
+  }
+
   return {
     evidenceCount,
     issueCount,
@@ -908,4 +920,15 @@ function getChangeReviewSummary(
     readinessVariant: 'success',
     yopsCount,
   };
+}
+
+function getCurrentStateLabel(
+  candidate: WorkspaceCandidate,
+  flowState?: ChangeReviewFlowState
+): string {
+  return (
+    flowState?.commitHash ??
+    candidate.lastCommitHash ??
+    (flowState?.previewReady ? 'Materialized preview' : 'Pending')
+  );
 }

@@ -249,7 +249,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
   });
 
-  it('shows a bottom change track dock with overview, issues, and node diff tabs', () => {
+  it('shows the change track dock only inside Preview', () => {
     render(
       <WorkspaceWorkbench
         candidates={workspaceCandidates}
@@ -259,8 +259,10 @@ describe('WorkspaceWorkbench', () => {
     );
 
     const detail = screen.getByRole('region', { name: 'Workspace detail' });
-    const dock = screen.getByRole('region', { name: 'Change Review Dock' });
-    expect(detail.compareDocumentPosition(dock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Change Review Dock' })).not.toBeInTheDocument();
+
+    activateTab(/Preview/);
+    const dock = within(detail).getByRole('region', { name: 'Change Review Dock' });
 
     expect(within(dock).getByRole('heading', { name: 'Change Track Dock' })).toBeInTheDocument();
     expect(within(dock).getByRole('tablist', { name: 'Change track views' })).toBeInTheDocument();
@@ -573,6 +575,12 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
     activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
+      'Materialized preview'
+    );
+    expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
+      'Preview ready'
+    );
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
