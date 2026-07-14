@@ -11,9 +11,9 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatUserFacingError } from '@/domain/format/errors';
+import { buildOutputTargetLeafInput } from '@/domain/workspaces/outputTargetLeaf';
 import { dispatchLeafChanged } from '@/hooks/leaves/leafEvents';
 import { useCreateLeaf } from '@/hooks/leaves/useCreateLeaf';
-import type { LeafType } from '@/types/api';
 import type { WorkspaceCandidate, WorkspaceOutputTarget } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
 
@@ -40,25 +40,7 @@ export function OutputTargetsTab({ candidate }: { candidate: WorkspaceCandidate 
     setCreatingTargetId(selectedTarget.id);
     setLeafError(null);
     try {
-      const leaf = await createLeaf({
-        commit_hash: committedHash,
-        config: {
-          format: selectedTarget.format,
-          instruction: selectedTarget.instruction,
-          source_scope: selectedTarget.sourceScope,
-          workspace_id: candidate.id,
-        },
-        constraints: (selectedTarget.constraints ?? []).map((constraint, index) => ({
-          id: `constraint_${selectedTarget.id}_${index + 1}`,
-          match_mode: 'semantic' as const,
-          type: 'require' as const,
-          value: constraint,
-        })),
-        project_id: candidate.projectId,
-        source: { type: 'user' },
-        title: selectedTarget.title,
-        type: outputTargetToLeafType(selectedTarget),
-      });
+      const leaf = await createLeaf(buildOutputTargetLeafInput(candidate, selectedTarget.id));
       setCreatedLeafByTargetId((current) => ({ ...current, [selectedTarget.id]: leaf.id }));
       dispatchLeafChanged({
         commitHash: committedHash,
@@ -249,11 +231,6 @@ function getCreateLeafTitle({
   if (creating) return 'Creating a Leaf from the committed workspace state.';
   if (!committedHash) return 'Commit this workspace before creating a Leaf.';
   return 'Create a Leaf from the committed workspace state.';
-}
-
-function outputTargetToLeafType(target: WorkspaceOutputTarget): LeafType {
-  if (target.leafType === 'api') return 'deploy_agent';
-  return 'article';
 }
 
 function ConfigRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
