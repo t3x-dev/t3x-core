@@ -126,7 +126,7 @@ test.describe('Pin & Context Management', () => {
   // Note: /chat page has no Pin button; pin UI lives on the Canvas page
   test('PC-06: Pinned conversation visible on canvas', async ({ page }) => {
     // Navigate to project canvas to verify pinned conversation is reflected
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
 
     // Wait for canvas to render
     const canvas = page.locator('.react-flow');

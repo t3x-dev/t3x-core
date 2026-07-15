@@ -6,8 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectStateTab } from '@/components/project/ProjectStateTab';
 import type { YSchemaValidationSummary } from '@/domain/project/yschemaValidation';
 import { useCanvasStore } from '@/store/canvasStore';
-import { useChatStore } from '@/store/chatStore';
-import { useCommitStore } from '@/store/commitStore';
 import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 
@@ -51,7 +49,7 @@ vi.mock('@/hooks/commits/useCommitOperations', () => ({
 
 const PRD_COMMIT: ApiCommit = {
   author: { type: 'agent', name: 'T3X' },
-  branch: 'feature/prd-audience',
+  branch: 'main',
   committed_at: '2026-07-09T08:00:00.000Z',
   content: {
     trees: [
@@ -164,9 +162,7 @@ function setupHookMocks() {
 
 function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION) {
   return render(
-    <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={validation}>
-      <div data-testid="legacy-canvas-child" />
-    </ProjectStateTab>
+    <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={validation} />
   );
 }
 
@@ -175,8 +171,6 @@ describe('ProjectStateTab', () => {
     vi.clearAllMocks();
     setupHookMocks();
     hookMocks.projectWorkspaces = [];
-    useChatStore.setState({ activeBranch: 'feature/prd-audience' });
-    useCommitStore.setState({ commitBranch: 'feature/prd-audience' });
     useCanvasStore.setState({ edges: [], nodes: [] } as never);
   });
 
@@ -192,9 +186,7 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('01 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.getByText('YAML-shaped node browser')).toBeInTheDocument();
-    expect(screen.queryByTestId('legacy-canvas-child')).not.toBeInTheDocument();
-
-    expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'feature/prd-audience', 100);
+    expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadLeaves).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
   });
@@ -293,31 +285,71 @@ describe('ProjectStateTab', () => {
     expect(screen.getByText('problem')).toBeInTheDocument();
   });
 
+  it('ignores stale Canvas data from another project', async () => {
+    hookMocks.loadCommits.mockResolvedValue([]);
+    useCanvasStore.setState({
+      edges: [{ id: 'stale-edge', source: 'stale-parent', target: 'stale-commit' }],
+      nodes: [
+        {
+          data: {
+            branchName: 'stale-canvas-branch',
+            branchType: 'branch',
+            commitHash: 'sha256:stale-canvas-commit',
+            commitStatus: 'committed',
+            kind: 'unit',
+            timestamp: '2026-07-01T00:00:00.000Z',
+          },
+          id: 'stale-commit',
+          position: { x: 0, y: 0 },
+          type: 'unit',
+        },
+      ],
+      projectId: 'another-project',
+    } as never);
+
+    renderStateTab();
+
+    expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
+    expect(screen.getAllByText('0 commits').length).toBeGreaterThan(0);
+    expect(screen.queryByText('stale-canvas-branch')).not.toBeInTheDocument();
+    expect(screen.queryByText(/stale-canvas-commit/)).not.toBeInTheDocument();
+
+    const metadata = screen.getByRole('heading', { name: 'State metadata' }).closest('section');
+    expect(metadata).not.toBeNull();
+    const edgesLabel = within(metadata as HTMLElement).getByText('Edges');
+    expect(edgesLabel.nextElementSibling).toHaveTextContent('0');
+  });
+
   it('falls back from an empty main branch to the latest committed branch', async () => {
-    useChatStore.setState({ activeBranch: 'main' });
-    useCommitStore.setState({ commitBranch: 'main' });
+    const featureCommit = { ...PRD_COMMIT, branch: 'feature/prd-audience' };
     hookMocks.loadCommits.mockReset();
-    hookMocks.loadCommits.mockResolvedValueOnce([]).mockResolvedValue([PRD_COMMIT]);
+    hookMocks.loadCommits.mockResolvedValueOnce([]).mockResolvedValue([featureCommit]);
 
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
     expect(screen.getByLabelText('Branch focus')).toHaveValue('feature/prd-audience');
-    expect(useChatStore.getState().activeBranch).toBe('feature/prd-audience');
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
   });
 
-  it('switches branch focus through the repo toolbar', async () => {
+  it('switches its local read-only branch focus', async () => {
     renderStateTab();
 
     await screen.findByText('Path / Key');
-    fireEvent.change(screen.getByLabelText('Branch focus'), { target: { value: 'main' } });
+    hookMocks.loadCommits.mockResolvedValueOnce([
+      { ...PRD_COMMIT, branch: 'feature/prd-audience' },
+    ]);
+    fireEvent.change(screen.getByLabelText('Branch focus'), {
+      target: { value: 'feature/prd-audience' },
+    });
 
     await waitFor(() => {
-      expect(useChatStore.getState().activeBranch).toBe('main');
+      expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
+        'proj_test',
+        'feature/prd-audience',
+        100
+      );
     });
-    expect(useCommitStore.getState().commitBranch).toBe('main');
-    expect(hookMocks.loadCommits).toHaveBeenLastCalledWith('proj_test', 'main', 100);
   });
 });

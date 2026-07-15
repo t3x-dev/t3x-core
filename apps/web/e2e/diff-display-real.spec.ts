@@ -49,7 +49,7 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
   test('Canvas page loads and shows commits', async ({ page }) => {
     // Navigate directly to project canvas view
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Take screenshot
@@ -66,7 +66,7 @@ test.describe('DiffDisplayView Real UI Test', () => {
 
   test('Can open commit modal and see Compare section', async ({ page }) => {
     // Navigate directly to project canvas view
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
     // Wait for nodes to render inside the canvas
@@ -136,7 +136,7 @@ test.describe('DiffDisplayView Real UI Test', () => {
       await expect(diffIndicator).toBeVisible();
     } else {
       // Fallback: navigate via canvas and try to use the Compare button
-      await page.goto(`/project/${projectId}?view=canvas`);
+      await page.goto(`/chat/project/${projectId}/canvas`);
       await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 30000 });
 
       const nodes = page.locator('.react-flow__node');

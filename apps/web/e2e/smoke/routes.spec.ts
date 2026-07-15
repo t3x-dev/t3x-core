@@ -66,7 +66,9 @@ test('project canvas route renders without console errors', async ({ page }) => 
     errors.push(`console.error: ${text}`);
   });
 
-  const resp = await page.goto(`/project/${projectId}`, { waitUntil: 'domcontentloaded' });
+  const resp = await page.goto(`/chat/project/${projectId}/canvas`, {
+    waitUntil: 'domcontentloaded',
+  });
   expect(resp?.status() ?? 200).toBeLessThan(400);
   await page.waitForTimeout(3000);
   await expect(page.locator('body')).toBeVisible();

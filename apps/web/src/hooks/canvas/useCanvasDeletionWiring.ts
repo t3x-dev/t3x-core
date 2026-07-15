@@ -13,10 +13,12 @@ import { useCanvasNodeActions } from '@/hooks/canvas/useCanvasNodeActions';
 import { dispatchConversationDeleted } from '@/hooks/shared/deleteEvents';
 import { useCanvasStore } from '@/store/canvasStore';
 
-export function useCanvasDeletionWiring(): void {
+export function useCanvasDeletionWiring(enabled = true): void {
   const { load } = useCanvasNodeActions();
 
   useEffect(() => {
+    if (!enabled) return;
+
     const handler = (conversationId: string) => {
       const projectId = useCanvasStore.getState().projectId;
       deleteConversation(conversationId)
@@ -40,5 +42,5 @@ export function useCanvasDeletionWiring(): void {
     return () => {
       useCanvasStore.getState().setDeleteConversationCallback(null);
     };
-  }, [load]);
+  }, [enabled, load]);
 }

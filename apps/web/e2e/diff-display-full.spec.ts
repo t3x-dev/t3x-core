@@ -177,7 +177,7 @@ test.describe('DiffDisplayView Full E2E', () => {
 
   test('Canvas loads with commits', async ({ page }) => {
     // Navigate directly to project canvas view
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear (nodes loaded)
@@ -214,7 +214,7 @@ test.describe('DiffDisplayView Full E2E', () => {
 
   test('Can open commit modal with View full', async ({ page }) => {
     // Navigate directly to project canvas view
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear
@@ -265,7 +265,7 @@ test.describe('DiffDisplayView Full E2E', () => {
     });
 
     // Navigate directly to project canvas view
-    await page.goto(`/project/${projectId}?view=canvas`);
+    await page.goto(`/chat/project/${projectId}/canvas`);
     await page.locator('.react-flow').waitFor({ state: 'visible', timeout: 15000 });
 
     // Wait for "Loading..." to disappear
