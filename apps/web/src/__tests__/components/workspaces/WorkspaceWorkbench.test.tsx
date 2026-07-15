@@ -565,9 +565,16 @@ describe('WorkspaceWorkbench', () => {
 
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
     expect(findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1)[0]).toBe(yopsValidateUrl);
-    expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
+    await waitFor(
+      () =>
+        expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute(
+          'aria-selected',
+          'true'
+        ),
+      { timeout: 5000 }
+    );
+    expect(screen.getByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
-    activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
       'Materialized preview'
     );
