@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { usePinsStore } from '@/store/pinsStore';
@@ -561,18 +561,13 @@ describe('WorkspaceWorkbench', () => {
     );
     activateTab(/Validation/);
 
-    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+    });
 
-    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
+    expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2);
     expect(findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1)[0]).toBe(yopsValidateUrl);
-    await waitFor(
-      () =>
-        expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute(
-          'aria-selected',
-          'true'
-        ),
-      { timeout: 5000 }
-    );
+    expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
