@@ -6,7 +6,7 @@
 
 import { DEMO_WORKSPACE_FIXTURE } from '@t3x-dev/core';
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertProject } from '@t3x-dev/storage';
+import { createCommit, createLeaf, insertProject } from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -341,20 +341,15 @@ describe('POST /v1/leaves/:id/generate', () => {
   it('returns 404 when source commit missing', async () => {
     mockIsGenerationConfigured.mockReturnValue(true);
 
-    // Create a leaf with a non-existent commit hash
-    const createRes = await app.request('/v1/leaves', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        commit_hash: 'sha256:nonexistent_commit_hash',
-        type: 'tweet',
-        project_id: testProjectId,
-      }),
+    // Keep the generation guard covered for legacy orphan records. The create
+    // endpoint now rejects this state before persistence.
+    const orphanLeaf = await createLeaf(mockDB, {
+      commit_hash: 'sha256:nonexistent_commit_hash',
+      type: 'tweet',
+      project_id: testProjectId,
     });
-    const createData: ApiResponse = await createRes.json();
-    const orphanLeafId = createData.data.id;
 
-    const res = await app.request(`/v1/leaves/${orphanLeafId}/generate`, {
+    const res = await app.request(`/v1/leaves/${orphanLeaf.id}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),

@@ -442,6 +442,7 @@ describe('WorkspaceWorkbench', () => {
   });
 
   it('extracts yops before applying the backend preview', async () => {
+    const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const createValidateResponse = () =>
       new Response(
         JSON.stringify({
@@ -480,9 +481,9 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://localhost:8000/api/v1/yops/validate');
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(1));
+    const [url, init] = findFetchCall(fetchMock.mock.calls, yopsValidateUrl);
+    expect(url).toBe(yopsValidateUrl);
     expect(JSON.parse(String(init?.body))).toMatchObject({
       yops: [
         {
@@ -504,8 +505,8 @@ describe('WorkspaceWorkbench', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe('http://localhost:8000/api/v1/yops/validate');
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
+    expect(findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1)[0]).toBe(yopsValidateUrl);
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
     activateTab(/Preview/);

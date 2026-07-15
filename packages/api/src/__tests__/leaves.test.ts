@@ -46,9 +46,15 @@ describe('Leaves Routes', () => {
     const project = await insertProject(mockDB, testData.project({ name: 'Leaves Test Project' }));
     testProjectId = project.projectId;
 
-    // Create a test commit (using commits-v3 for now, or mock commit hash)
-    // Note: In real test, you may need to create a commit first
-    testCommitHash = 'sha256:test_commit_hash_for_leaves';
+    const commit = await createCommit(mockDB, {
+      project_id: testProjectId,
+      author: { type: 'human', name: 'Leaves Test User' },
+      content: {
+        trees: [{ key: 'leaf-source', slots: { text: 'Leaf source state' }, children: [] }],
+        relations: [],
+      },
+    });
+    testCommitHash = commit.hash;
   });
 
   afterAll(async () => {
@@ -176,6 +182,54 @@ describe('Leaves Routes', () => {
       expect(data.success).toBe(false);
     });
 
+    it('returns 404 when the source commit does not exist', async () => {
+      const res = await app.request('/v1/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: 'sha256:missing_leaf_source',
+          type: 'tweet',
+          title: 'Must not bypass commit validation',
+          project_id: testProjectId,
+        }),
+      });
+
+      expect(res.status).toBe(404);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('COMMIT_NOT_FOUND');
+    });
+
+    it('returns 400 when the source commit belongs to another project', async () => {
+      const otherProject = await insertProject(
+        mockDB,
+        testData.project({ name: 'Cross-project Leaf Source' })
+      );
+      const otherCommit = await createCommit(mockDB, {
+        project_id: otherProject.projectId,
+        author: { type: 'human', name: 'Other Project User' },
+        content: {
+          trees: [{ key: 'other-source', slots: { text: 'Other project state' }, children: [] }],
+          relations: [],
+        },
+      });
+
+      const res = await app.request('/v1/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commit_hash: otherCommit.hash,
+          type: 'tweet',
+          project_id: testProjectId,
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const data: ApiResponse = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error.code).toBe('INVALID_REQUEST');
+    });
+
     it('returns 404 after the project is soft-deleted', async () => {
       const project = await insertProject(
         mockDB,
@@ -239,11 +293,21 @@ describe('Leaves Routes', () => {
 
     it('returns 404 after the leaf project is soft-deleted', async () => {
       const project = await insertProject(mockDB, testData.project({ name: 'Deleted Leaf Read' }));
+      const commit = await createCommit(mockDB, {
+        project_id: project.projectId,
+        author: { type: 'human', name: 'Deleted Project User' },
+        content: {
+          trees: [
+            { key: 'deleted-source', slots: { text: 'Deleted project state' }, children: [] },
+          ],
+          relations: [],
+        },
+      });
       const createRes = await app.request('/v1/leaves', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commit_hash: testCommitHash,
+          commit_hash: commit.hash,
           type: 'article',
           project_id: project.projectId,
         }),
