@@ -10,6 +10,7 @@
 import { ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { isTreeResolutionComplete } from '@/types/merge';
 import { cn } from '@/utils/cn';
 import { glass } from '@/utils/theme';
 
@@ -27,7 +28,9 @@ export function MergePreview({ expanded, onToggle }: MergePreviewProps) {
 
   const previewPaths = getPreviewPaths();
   const autoKeptCount = treeMergeResult.autoKept.length;
-  const resolvedCount = treeMergeResult.conflicts.filter((c) => treeResolutions.has(c.path)).length;
+  const resolvedCount = treeMergeResult.conflicts.filter((conflict) =>
+    isTreeResolutionComplete(treeResolutions.get(conflict.path), conflict.slotConflicts)
+  ).length;
   const keptSourceCount = treeMergeResult.onlyInSource.filter((path) =>
     keepSourceNodes.has(path)
   ).length;

@@ -24,6 +24,7 @@ import { useReducedMotion } from '@/hooks/shared/useReducedMotion';
 import { useSaveStatusAutoIdle } from '@/hooks/shared/useSaveStatusAutoIdle';
 import { useTerminology } from '@/hooks/shared/useTerminology';
 import { useMergeWorkspaceStore } from '@/store/mergeWorkspaceStore';
+import { isTreeResolutionComplete } from '@/types/merge';
 import { fullScreenEnter, reducedMotion } from '@/utils/motion';
 import { ConflictCard } from './ConflictCard';
 import { MergeActionBar } from './MergeActionBar';
@@ -320,7 +321,8 @@ export function MergeWorkspace({
   // Tree merge workspace
   if (treeMergeResult) {
     const frameUnresolvedCount = treeMergeResult.conflicts.filter(
-      (c) => !treeResolutions.has(c.path)
+      (conflict) =>
+        !isTreeResolutionComplete(treeResolutions.get(conflict.path), conflict.slotConflicts)
     ).length;
 
     const containerVariants = prefersReducedMotion
