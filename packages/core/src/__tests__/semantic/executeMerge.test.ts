@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { executeMerge, prepareMerge } from '../../semantic/merge';
 import { flattenTrees } from '../../semantic/tree';
 import type { SemanticContent, TreeNode } from '../../semantic/types';
+import { validateIntegrity } from '../../semantic/validate';
 
 const t = (key: string, slots: Record<string, unknown>, children: TreeNode[] = []): TreeNode => ({
   key,
@@ -107,6 +108,154 @@ describe('executeMerge', () => {
     expect(nodes).toHaveLength(1);
     expect(nodes[0].slots.a).toBe(15);
     expect(nodes[0].slots.note).toBe('merged');
+  });
+
+  it('keeps a custom edit at its nested conflict path', () => {
+    const relation = { from: 'root', to: 'root/section/child', type: 'depends' };
+    const base = sc([t('root', {}, [t('section', {}, [t('child', { value: 1 })])])], [relation]);
+    const source = sc([t('root', {}, [t('section', {}, [t('child', { value: 10 })])])], [relation]);
+    const target = sc([t('root', {}, [t('section', {}, [t('child', { value: 20 })])])], [relation]);
+    const prepared = prepareMerge(base, source, target);
+
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {
+        'root/section/child': { edit: t('child', { value: 15 }) },
+      },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+
+    expect(result.trees).toHaveLength(1);
+    expect(result.trees[0]).toMatchObject({
+      key: 'root',
+      children: [{ key: 'section', children: [{ key: 'child', slots: { value: 15 } }] }],
+    });
+    expect(flattenTrees(result.trees).map((frame) => frame.id)).toEqual([
+      'root',
+      'root/section',
+      'root/section/child',
+    ]);
+    expect(result.relations).toEqual([relation]);
+    expect(validateIntegrity(result).valid).toBe(true);
+  });
+
+  it('does not duplicate an auto-kept descendant included in a custom edit', () => {
+    const stableChild = t('child', { stable: true });
+    const editedChild = t('child', { edited: true, stable: true });
+    const base = sc([t('root', { value: 1 }, [stableChild])]);
+    const source = sc([t('root', { value: 10 }, [stableChild])]);
+    const target = sc([t('root', { value: 20 }, [stableChild])]);
+    const prepared = prepareMerge(base, source, target);
+
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {
+        root: { edit: t('root', { value: 15 }, [editedChild]) },
+      },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+
+    expect(flattenTrees(result.trees).map((frame) => frame.id)).toEqual(['root', 'root/child']);
+    expect(result.trees[0].children).toEqual([editedChild]);
+  });
+
+  it.each([
+    ['source', 10],
+    ['target', 20],
+  ] as const)('lets a nested %s decision replace the same path from a parent edit regardless of prepared order', (resolution, expectedValue) => {
+    const base = sc([t('root', { value: 1 }, [t('child', { value: 1 })])]);
+    const source = sc([t('root', { value: 10 }, [t('child', { value: 10 })])]);
+    const target = sc([t('root', { value: 20 }, [t('child', { value: 20 })])]);
+    const prepared = prepareMerge(base, source, target);
+    prepared.conflicts.reverse();
+
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {
+        root: { edit: t('root', { value: 15 }, [t('child', { value: 15 })]) },
+        'root/child': resolution,
+      },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+
+    expect(flattenTrees(result.trees).map((frame) => frame.id)).toEqual(['root', 'root/child']);
+    expect(result.trees[0].slots.value).toBe(15);
+    expect(result.trees[0].children[0].slots.value).toBe(expectedValue);
+  });
+
+  it('preserves both later conflict choices after removing the overlapping edit frame', () => {
+    const base = sc([t('root', { value: 1 }, [t('child', { value: 1 })])]);
+    const source = sc([t('root', { value: 10 }, [t('child', { value: 10 })])]);
+    const target = sc([t('root', { value: 20 }, [t('child', { value: 20 })])]);
+    const prepared = prepareMerge(base, source, target);
+
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {
+        root: { edit: t('root', { value: 15 }, [t('child', { value: 15 })]) },
+        'root/child': 'both',
+      },
+      keepFromSource: [],
+      keepFromTarget: [],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+
+    expect(result.trees[0].children.map((child) => child.slots.value)).toEqual([10, 20]);
+  });
+
+  it('does not duplicate edited descendants selected later from either side', () => {
+    const base = sc([t('root', { value: 1 })]);
+    const source = sc([t('root', { value: 10 }, [t('source_child', { value: 10 })])]);
+    const target = sc([t('root', { value: 20 }, [t('target_child', { value: 20 })])]);
+    const prepared = prepareMerge(base, source, target);
+
+    const result = executeMerge(base, source, target, prepared, {
+      conflictResolutions: {
+        root: {
+          edit: t('root', { value: 15 }, [
+            t('source_child', { value: 15 }),
+            t('target_child', { value: 25 }),
+          ]),
+        },
+      },
+      keepFromSource: ['root/source_child'],
+      keepFromTarget: ['root/target_child'],
+      keepRelationsFromSource: false,
+      keepRelationsFromTarget: false,
+    });
+
+    expect(flattenTrees(result.trees).map((frame) => frame.id)).toEqual([
+      'root',
+      'root/source_child',
+      'root/target_child',
+    ]);
+    expect(result.trees[0].children.map((child) => child.slots.value)).toEqual([10, 20]);
+  });
+
+  it('rejects a custom edit whose key disagrees with the conflict path', () => {
+    const sibling = t('renamed_child', { stable: true });
+    const base = sc([t('root', {}, [t('child', { value: 1 }), sibling])]);
+    const source = sc([t('root', {}, [t('child', { value: 10 }), sibling])]);
+    const target = sc([t('root', {}, [t('child', { value: 20 }), sibling])]);
+    const prepared = prepareMerge(base, source, target);
+
+    expect(() =>
+      executeMerge(base, source, target, prepared, {
+        conflictResolutions: {
+          'root/child': { edit: t('renamed_child', { value: 15 }) },
+        },
+        keepFromSource: [],
+        keepFromTarget: [],
+        keepRelationsFromSource: false,
+        keepRelationsFromTarget: false,
+      })
+    ).toThrow('Edited node key "renamed_child" does not match conflict path "root/child"');
   });
 
   it('defaults to source when no resolution provided for conflict', () => {
