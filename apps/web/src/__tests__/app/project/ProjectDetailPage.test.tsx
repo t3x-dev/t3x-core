@@ -218,8 +218,27 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     expect(screen.getByRole('heading', { name: 'Test Project' })).toBeInTheDocument();
     expect(screen.getByText('/t3x-dev/test-project')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('follows project route changes without preserving a stale active view', () => {
+    const view = render(
+      <ProjectDetailPageContent initialTabOverride="schemas" projectIdOverride="proj_test" />
+    );
+
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
+
+    view.rerender(
+      <ProjectDetailPageContent initialTabOverride="workspaces" projectIdOverride="proj_test" />
+    );
+
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
@@ -277,7 +296,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     await waitFor(() => {
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     const stateOverview = await screen.findByRole('region', { name: 'State overview' });
     expect(within(stateOverview).getByText('YSchema verified')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Committed PRD state' })).toBeInTheDocument();
@@ -343,7 +362,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     render(<ProjectDetailPageContent projectIdOverride="proj_test" />);
 
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     await waitFor(() => {
       expect(screen.getAllByText('YSchema failed · 2 gaps').length).toBeGreaterThan(0);
     });
@@ -361,7 +380,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('output-ready')).toBeInTheDocument();
   });
 
-  it('shows an empty committed State and can switch to Workspaces', async () => {
+  it('shows an empty committed State with route links to other project views', async () => {
     // Reset chat store to simulate a cold direct-load: no in-memory project.
     useChatStore.setState({ activeProjectId: null, activeConversationId: null });
 
@@ -374,19 +393,16 @@ describe('ProjectDetailPage — project-first shell states', () => {
     expect(screen.getByText('repo')).toBeInTheDocument();
     expect(screen.getByText('draft')).toBeInTheDocument();
     expect(screen.getAllByText('YSchema pending').length).toBeGreaterThan(0);
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByText('No commit on this branch')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Points/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByTestId('canvas-workspace')).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Workspaces' }));
-
     expect(replaceMock).not.toHaveBeenCalled();
-    expect(pushMock).toHaveBeenCalledWith('/t3x-dev/test-project/workspaces', { scroll: false });
-    expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-selected',
-      'true'
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/workspaces'
     );
   });
 
@@ -411,9 +427,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('tab', { name: 'Workspaces' })).toHaveAttribute(
-      'aria-selected',
-      'true'
+    expect(screen.getByRole('link', { name: 'Workspaces' })).toHaveAttribute(
+      'aria-current',
+      'page'
     );
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
@@ -431,7 +447,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
 
     renderProjectContent();
 
-    expect(screen.getByRole('tab', { name: 'Schemas' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('link', { name: 'Schemas' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { name: 'Schemas' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Schema versions' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Selected schema version' })).toBeInTheDocument();

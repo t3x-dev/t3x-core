@@ -1,29 +1,25 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
 import { PROJECT_TABS } from '@/components/project/projectTabModel';
 
 describe('ProjectTabs', () => {
-  it('renders the project-first tab model and calls back with the next tab id', () => {
-    const onTabChange = vi.fn();
-
+  it('renders stable route links and marks the active project view', () => {
     expect(typeof ProjectTabs).toBe('function');
 
-    render(<ProjectTabs activeTab="state" onTabChange={onTabChange} />);
+    render(<ProjectTabs activeTab="state" repoPath="/t3x-dev/test-project" />);
 
     for (const tab of PROJECT_TABS) {
-      expect(screen.getByRole('tab', { name: tab.label })).toBeInTheDocument();
+      const href = tab.id === 'state' ? '/t3x-dev/test-project' : `/t3x-dev/test-project/${tab.id}`;
+      expect(screen.getByRole('link', { name: tab.label })).toHaveAttribute('href', href);
     }
 
-    expect(screen.getByRole('tab', { name: 'State' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('tab', { name: 'YSchema' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Workspaces' }));
-
-    expect(onTabChange).toHaveBeenCalledWith('workspaces');
+    expect(screen.getByRole('link', { name: 'State' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Workspaces' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('link', { name: 'YSchema' })).not.toBeInTheDocument();
   });
 
   it('keeps tab labels stable for shared A0/W1/S1 ownership', () => {
