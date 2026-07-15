@@ -155,9 +155,7 @@ export function ProjectDetailPageContent({
 
   const searchParams = useSearchParams();
   const isCanvasSurface = surface === 'canvas';
-  const [activeTab, setActiveTab] = useState<ProjectTabId>(
-    () => initialTabOverride ?? parseProjectTab(searchParams.get('tab'))
-  );
+  const activeTab = initialTabOverride ?? parseProjectTab(searchParams.get('tab'));
   const showIntroDemo = isIntroDemoQueryEnabled(searchParams);
   const introDemoStage = searchParams.get('introDemoStage');
   const projectTourStage = introDemoStage === 'leaf' ? 'leaf' : 'details';
@@ -239,14 +237,6 @@ export function ProjectDetailPageContent({
         : withCurrentQuery(pathname, searchParams);
     router.replace(nextPath, { scroll: false });
   }, [isCanvasSurface, pathname, project, router, searchParams]);
-
-  const handleProjectTabChange = useCallback(
-    (nextTab: ProjectTabId) => {
-      setActiveTab(nextTab);
-      if (project) router.push(getProjectTabPath(project, nextTab), { scroll: false });
-    },
-    [project, router]
-  );
 
   const handleViewportChange = useCallback((_viewport: { x: number; y: number; zoom: number }) => {
     // Viewport state is intentionally local to keep owner/repo URLs clean.
@@ -563,7 +553,7 @@ export function ProjectDetailPageContent({
   })();
 
   return (
-    <ProjectShell activeTab={activeTab} onTabChange={handleProjectTabChange} project={project}>
+    <ProjectShell activeTab={activeTab} project={project}>
       {activeContent}
     </ProjectShell>
   );

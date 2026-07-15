@@ -24,11 +24,10 @@ export interface ProjectShellProject {
 export interface ProjectShellProps {
   activeTab: ProjectTabId;
   children: ReactNode;
-  onTabChange: (tab: ProjectTabId) => void;
   project: ProjectShellProject;
 }
 
-export function ProjectShell({ activeTab, children, onTabChange, project }: ProjectShellProps) {
+export function ProjectShell({ activeTab, children, project }: ProjectShellProps) {
   const status = project.status ?? 'draft';
   const statusVariant =
     status === 'active' ? 'success' : status === 'paused' ? 'warning' : 'pending';
@@ -76,7 +75,7 @@ export function ProjectShell({ activeTab, children, onTabChange, project }: Proj
           </div>
         </div>
       </header>
-      <ProjectTabs activeTab={activeTab} onTabChange={onTabChange} />
+      <ProjectTabs activeTab={activeTab} repoPath={repoPath} />
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );
