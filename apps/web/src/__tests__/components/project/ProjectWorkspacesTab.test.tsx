@@ -92,6 +92,43 @@ describe('ProjectWorkspacesTab', () => {
     expect(screen.getByText('Loaded from persisted workspace state.')).toBeInTheDocument();
   });
 
+  it('keeps uploaded material sources when restoring a persisted workspace draft', async () => {
+    const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
+    fetchMaterialsByProjectMock.mockResolvedValueOnce([
+      {
+        id: 'mat_uploaded_doc',
+        project_id: 'proj_other',
+        source_type: 'document',
+        title: 'uploaded-brief.docx',
+        filename: 'uploaded-brief.docx',
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        content_hash: 'abc123',
+        content_excerpt: 'Uploaded material should remain visible.',
+        token_estimate: 8,
+        metadata: {},
+        created_at: '2026-07-15T00:00:00.000Z',
+        archived_at: null,
+        created_by: null,
+      },
+    ]);
+    fetchProjectWorkspacesMock.mockResolvedValueOnce([
+      {
+        ...baseWorkspace,
+        sourceBundle: [],
+        title: 'Restored backend draft',
+      },
+    ]);
+
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('uploaded-brief.docx').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1 doc').length).toBeGreaterThan(0);
+  });
+
   it('keeps fixture bindings when a legacy workspace draft is missing array fields', async () => {
     const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
     const legacyDraft = {

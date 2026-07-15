@@ -10,7 +10,7 @@ import {
 } from '@/domain/workspaces/schemaBindings';
 import { useProjectMaterials } from '@/hooks/materials/useProjectMaterials';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
-import type { WorkspaceCandidate } from '@/types/workspaces';
+import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 
 interface ProjectWorkspacesTabProps {
   projectId: string;
@@ -101,5 +101,27 @@ function mergeWorkspaceCandidate(
       persistedSchemaBindings.length > 0
         ? persistedSchemaBindings
         : previewCandidate.schemaBindings,
+    sourceBundle: mergeSourceBundles(
+      previewCandidate.sourceBundle,
+      persistedCandidate.sourceBundle
+    ),
   };
+}
+
+function mergeSourceBundles(
+  previewSources: SourceBundleItem[],
+  persistedSources: SourceBundleItem[]
+): SourceBundleItem[] {
+  const mergedById = new Map<string, SourceBundleItem>();
+
+  for (const source of persistedSources) {
+    mergedById.set(source.id, source);
+  }
+  for (const source of previewSources) {
+    if (!mergedById.has(source.id)) {
+      mergedById.set(source.id, source);
+    }
+  }
+
+  return Array.from(mergedById.values());
 }
