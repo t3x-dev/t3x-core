@@ -552,7 +552,7 @@ export function ProjectDetailPageContent({
       case 'reviews':
         return <ProjectReviewsTab />;
       case 'outputs':
-        return <ProjectOutputsTab />;
+        return <ProjectOutputsTab key={projectId} projectId={projectId} />;
       case 'community':
         return <ProjectCommunityTab />;
       case 'settings':
