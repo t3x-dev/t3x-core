@@ -482,6 +482,7 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
 
   const visited = new Set<string>();
   const queue = [decodedHash];
+  const queued = new Set(queue);
   const commits = [];
 
   while (queue.length > 0 && commits.length < limit) {
@@ -494,7 +495,10 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     commits.push(commit);
 
     for (const parentHash of commit.parents) {
-      if (!visited.has(parentHash)) queue.push(parentHash);
+      if (!visited.has(parentHash) && !queued.has(parentHash)) {
+        queued.add(parentHash);
+        queue.push(parentHash);
+      }
     }
   }
 
@@ -502,10 +506,7 @@ commitRoutes.openapi(getHistoryRoute, async (c) => {
     return errorResponse(c, 'COMMIT_NOT_FOUND', `Commit ${decodedHash} not found`);
   }
 
-  return c.json(
-    { success: true as const, data: { commits, truncated: commits.length >= limit } },
-    200
-  );
+  return c.json({ success: true as const, data: { commits, truncated: queue.length > 0 } }, 200);
 });
 
 // ============================================================
