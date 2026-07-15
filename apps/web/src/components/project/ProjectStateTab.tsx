@@ -1,10 +1,21 @@
 'use client';
 
-import { Code2, FileText, History, RotateCw, Search, TableProperties } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Code2,
+  FileText,
+  GitCompare,
+  History,
+  RotateCw,
+  Search,
+  TableProperties,
+} from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { commitHashLabel, shortHash } from '@/domain/format/formatters';
+import { getProjectRepoPath } from '@/domain/project/repoPath';
 import {
   buildCanonicalStateYaml,
   buildStatePointRows,
@@ -21,19 +32,19 @@ import {
 } from '@/domain/project/yschemaValidation';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
-import { useLeavesByCommit } from '@/hooks/commits/useLeavesByCommit';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { useProjectWorkspaces } from '@/hooks/workspaces/useProjectWorkspaces';
-import type { ApiCommit, Leaf } from '@/types/api';
+import type { ApiCommit } from '@/types/api';
 import type { WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
+import { buildReturnTo, withReturnTo } from '@/utils/navigationReturn';
 
 export type ProjectStateView = 'points' | 'render' | 'code';
 type BranchFocus = string;
 
 interface ProjectStateTabProps {
   initialView?: ProjectStateView;
-  onRunValidation?: () => Promise<void> | void;
+  onRunValidation?: (commitHash: string) => Promise<void> | void;
   projectId: string;
   projectName: string;
   validation?: YSchemaValidationSummary | null;
@@ -45,7 +56,6 @@ interface StateSnapshot {
   auxiliaryError: string | null;
   commits: ApiCommit[];
   headCommit: ApiCommit | null;
-  leaves: Leaf[];
   loading: boolean;
   operations: StateOperationEntry[];
   primaryError: string | null;
@@ -71,19 +81,22 @@ export function ProjectStateTab({
   validationError,
   validationRunning = false,
 }: ProjectStateTabProps) {
+  const pathname = usePathname();
+  const { replace: replaceRoute } = useRouter();
+  const searchParams = useSearchParams();
+  const routeQuery = searchParams.toString();
   const [activeView, setActiveView] = useState<ProjectStateView>(initialView);
-  const [branchFocus, setBranchFocus] = useState<BranchFocus>('main');
+  const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
+  const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
   const { branches, loading: branchesLoading, refresh } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
   const { loadCommits } = useCommitsList();
-  const { loadLeaves } = useLeavesByCommit();
   const { loadOperations } = useCommitOperations();
   const [snapshot, setSnapshot] = useState<StateSnapshot>({
     auxiliaryError: null,
     commits: [],
     headCommit: null,
-    leaves: [],
     loading: true,
     operations: [],
     primaryError: null,
@@ -100,41 +113,58 @@ export function ProjectStateTab({
     [branchFocus, branches, snapshot.commits]
   );
 
+  const updateBranchFocus = useCallback(
+    (focus: BranchFocus) => {
+      const params = new URLSearchParams(routeQuery);
+      if (focus === 'main') params.delete('branch');
+      else params.set('branch', focus);
+      const query = params.toString();
+      replaceRoute(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    },
+    [pathname, replaceRoute, routeQuery]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setSnapshot((current) => ({ ...current, loading: true, primaryError: null }));
+      setSnapshot({
+        auxiliaryError: null,
+        commits: [],
+        headCommit: null,
+        loading: true,
+        operations: [],
+        primaryError: null,
+      });
       try {
         const requestedBranch = branchFocus || 'main';
+        let resolvedBranch = requestedBranch;
         let commits = await loadCommits(projectId, requestedBranch, 100);
         if (commits.length === 0 && requestedBranch === 'main') {
           const latestCommits = await loadCommits(projectId, undefined, 100);
           const latestBranch = latestCommits[0]?.branch;
           if (latestBranch) {
+            resolvedBranch = latestBranch;
             commits = latestCommits.filter((commit) => commit.branch === latestBranch);
-            if (latestBranch !== requestedBranch) {
-              setBranchFocus(latestBranch);
+            if (!cancelled && latestBranch !== requestedBranch) {
+              updateBranchFocus(latestBranch);
             }
           }
         }
-        const headCommit = commits[0] ?? null;
-        let leaves: Leaf[] = [];
+        if (
+          commits.some(
+            (commit) => commit.project_id !== projectId || commit.branch !== resolvedBranch
+          )
+        ) {
+          throw new Error('Commit response does not match the selected project and branch.');
+        }
+        const headCommit = selectVisibleBranchHead(commits);
         let operations: StateOperationEntry[] = [];
         const auxiliaryErrors: string[] = [];
 
         if (headCommit) {
-          const [leafResult, operationsResult] = await Promise.allSettled([
-            loadLeaves(headCommit.hash),
-            loadOperations(headCommit.hash),
-          ]);
-          if (leafResult.status === 'fulfilled') {
-            leaves = leafResult.value;
-          } else {
-            auxiliaryErrors.push('Leaf outputs unavailable.');
-          }
-          if (operationsResult.status === 'fulfilled') {
-            operations = operationsResult.value.operations;
-          } else {
+          try {
+            operations = (await loadOperations(headCommit.hash)).operations;
+          } catch {
             auxiliaryErrors.push('YOps log unavailable.');
           }
         }
@@ -144,7 +174,6 @@ export function ProjectStateTab({
             auxiliaryError: auxiliaryErrors.join(' ') || null,
             commits,
             headCommit,
-            leaves,
             loading: false,
             operations,
             primaryError: null,
@@ -156,7 +185,6 @@ export function ProjectStateTab({
             auxiliaryError: null,
             commits: [],
             headCommit: null,
-            leaves: [],
             loading: false,
             operations: [],
             primaryError: formatError(error, 'Committed state is unavailable.'),
@@ -169,7 +197,14 @@ export function ProjectStateTab({
     return () => {
       cancelled = true;
     };
-  }, [branchFocus, loadCommits, loadLeaves, loadOperations, projectId]);
+  }, [
+    branchFocus,
+    loadCommits,
+    loadOperations,
+    projectId,
+    snapshotRefreshVersion,
+    updateBranchFocus,
+  ]);
 
   const headCommit = snapshot.headCommit;
   const committedWorkspace = useMemo(
@@ -186,7 +221,9 @@ export function ProjectStateTab({
     () => workspaceValidationGaps(committedWorkspace),
     [committedWorkspace]
   );
-  const validationGaps = validation?.gaps?.length ? validation.gaps : workspaceGaps;
+  const currentValidation =
+    validation && validation.commitHash === headCommit?.hash ? validation : null;
+  const validationGaps = currentValidation ? currentValidation.gaps : workspaceGaps;
   const pointRows = useMemo(
     () =>
       headCommit
@@ -206,9 +243,9 @@ export function ProjectStateTab({
     () => (headCommit ? selectPrdRenderModel(headCommit.content, { gaps: validationGaps }) : null),
     [headCommit, validationGaps]
   );
-  const schemaName = validation?.schemaName ?? inferSchemaName(headCommit);
-  const validationReady = validation?.status === 'verified';
-  const validationGapCount = validation?.gapCount ?? validationGaps.length;
+  const schemaName = currentValidation?.schemaName ?? inferSchemaName(headCommit);
+  const validationReady = currentValidation?.status === 'verified';
+  const validationGapCount = currentValidation?.gapCount ?? validationGaps.length;
   const rootKey = headCommit?.content.trees?.[0]?.key ?? 'state';
   const commitTitle = commitTitleFor(headCommit);
   const commitCount = snapshot.commits.length;
@@ -216,10 +253,24 @@ export function ProjectStateTab({
   const commitSummary = commitSummaryFor(headCommit, yopsCount);
   const branchCount = branchOptions.length;
   const stateWarning = joinWarnings(snapshot.auxiliaryError, projectWorkspaces.error);
-
-  const handleBranchFocusChange = (focus: BranchFocus) => {
-    setBranchFocus(focus);
-  };
+  const currentReturnTo = buildReturnTo(pathname, routeQuery);
+  const historyHref = withReturnTo(
+    `/project/${encodeURIComponent(projectId)}/history?branch=${encodeURIComponent(branchFocus || 'main')}`,
+    currentReturnTo
+  );
+  const commitHref = headCommit
+    ? withReturnTo(
+        `/project/${encodeURIComponent(projectId)}/commit/${encodeURIComponent(headCommit.hash)}`,
+        currentReturnTo
+      )
+    : null;
+  const parentDiffHref = headCommit?.parents[0]
+    ? withReturnTo(
+        `/project/${encodeURIComponent(projectId)}/diff?base=${encodeURIComponent(headCommit.parents[0])}&target=${encodeURIComponent(headCommit.hash)}`,
+        currentReturnTo
+      )
+    : null;
+  const workspaceHref = `${getProjectRepoPath({ id: projectId, name: projectName })}/workspaces`;
 
   return (
     <section
@@ -229,14 +280,16 @@ export function ProjectStateTab({
       <StateOverviewHeader
         branch={branchFocus || 'main'}
         headCommit={headCommit}
-        onOpenWorkspace={() => undefined}
-        onRunValidation={onRunValidation}
+        onRunValidation={
+          headCommit && onRunValidation ? () => onRunValidation(headCommit.hash) : undefined
+        }
         schemaLabel={schemaLabel(schemaName)}
-        validation={validation}
+        validation={currentValidation}
         validationError={validationError}
         validationGapCount={validationGapCount}
         validationReady={validationReady}
         validationRunning={validationRunning}
+        workspaceHref={workspaceHref}
       />
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
@@ -245,11 +298,11 @@ export function ProjectStateTab({
             branch={branchFocus || 'main'}
             branchCount={branchCount}
             branchOptions={branchOptions}
-            commitCount={commitCount}
+            historyHref={historyHref}
             loading={branchesLoading || projectWorkspaces.loading || snapshot.loading}
-            onBranchChange={handleBranchFocusChange}
-            onCompare={() => setActiveView('points')}
+            onBranchChange={updateBranchFocus}
             onRefresh={() => {
+              setSnapshotRefreshVersion((version) => version + 1);
               void refresh();
               void projectWorkspaces.refresh();
             }}
@@ -265,9 +318,12 @@ export function ProjectStateTab({
           />
           <StateObjectLine
             activeView={activeView}
+            commitHref={commitHref}
             headCommit={headCommit}
+            parentDiffHref={parentDiffHref}
             rootKey={rootKey}
             validationGapCount={validationGapCount}
+            validationKnown={Boolean(currentValidation)}
           />
           <StateViewTabs activeView={activeView} onViewChange={setActiveView} />
 
@@ -282,7 +338,7 @@ export function ProjectStateTab({
           ) : null}
           {!snapshot.primaryError && snapshot.loading ? (
             <StateEmpty
-              message="Loading commit, YOps, leaves, and validation context."
+              message="Loading commit, YOps, and validation context."
               title="Loading state"
             />
           ) : null}
@@ -304,15 +360,13 @@ export function ProjectStateTab({
         </main>
 
         <StateContextRail
-          branch={branchFocus || 'main'}
           commitCount={commitCount}
           edgeCount={headCommit?.content.relations.length ?? 0}
           headCommit={headCommit}
-          leaves={snapshot.leaves}
           operations={effectiveOperations}
           projectName={projectName}
           schemaName={schemaName}
-          validation={validation}
+          validation={currentValidation}
           validationGapCount={validationGapCount}
           validationReady={validationReady}
           warning={stateWarning}
@@ -325,7 +379,6 @@ export function ProjectStateTab({
 function StateOverviewHeader({
   branch,
   headCommit,
-  onOpenWorkspace,
   onRunValidation,
   schemaLabel,
   validation,
@@ -333,10 +386,10 @@ function StateOverviewHeader({
   validationGapCount,
   validationReady,
   validationRunning,
+  workspaceHref,
 }: {
   branch: string;
   headCommit: ApiCommit | null;
-  onOpenWorkspace: () => void;
   onRunValidation?: () => Promise<void> | void;
   schemaLabel: string;
   validation?: YSchemaValidationSummary | null;
@@ -344,6 +397,7 @@ function StateOverviewHeader({
   validationGapCount: number;
   validationReady: boolean;
   validationRunning: boolean;
+  workspaceHref: string;
 }) {
   return (
     <section
@@ -358,11 +412,8 @@ function StateOverviewHeader({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={onOpenWorkspace} size="sm" type="button" variant="canvas-outline">
-            Open workspace
-          </Button>
-          <Button size="sm" type="button">
-            Change review dock
+          <Button asChild size="sm" variant="canvas-outline">
+            <Link href={workspaceHref}>Open workspace</Link>
           </Button>
         </div>
       </div>
@@ -382,7 +433,11 @@ function StateOverviewHeader({
             >
               {validationLabel(validation, validationGapCount)}
             </Badge>
-            <Badge variant="success">Up to date</Badge>
+            {validation ? (
+              <Badge variant="success">Up to date</Badge>
+            ) : headCommit ? (
+              <Badge variant="outline">Not validated at HEAD</Badge>
+            ) : null}
           </dd>
         </div>
       </dl>
@@ -427,20 +482,18 @@ function StateRepositoryToolbar({
   branch,
   branchCount,
   branchOptions,
-  commitCount,
+  historyHref,
   loading,
   onBranchChange,
-  onCompare,
   onRefresh,
   schemaName,
 }: {
   branch: string;
   branchCount: number;
   branchOptions: string[];
-  commitCount: number;
+  historyHref: string;
   loading: boolean;
   onBranchChange: (branch: string) => void;
-  onCompare: () => void;
   onRefresh: () => void;
   schemaName: string;
 }) {
@@ -466,25 +519,11 @@ function StateRepositoryToolbar({
         <Badge variant="outline">{schemaName}</Badge>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <label className="relative h-9 min-w-[220px] flex-1 md:flex-none">
-          <Search
-            aria-hidden="true"
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]"
-          />
-          <input
-            className="h-full w-full rounded-md border border-[var(--stroke-default)] bg-[var(--surface-card)] pl-9 pr-3 text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-            placeholder="Find path"
-            readOnly
-          />
-        </label>
-        <Button size="sm" type="button" variant="canvas-outline">
-          Open workspace
-        </Button>
-        <Button size="sm" type="button" variant="canvas-outline">
-          Graph
-        </Button>
-        <Button onClick={onCompare} size="sm" type="button">
-          Compare
+        <Button asChild size="sm" variant="canvas-outline">
+          <Link href={historyHref}>
+            <History className="size-4" />
+            History
+          </Link>
         </Button>
         <Button
           disabled={loading}
@@ -493,7 +532,8 @@ function StateRepositoryToolbar({
           type="button"
           variant="canvas-outline"
         >
-          {loading ? 'Loading' : String(commitCount) + ' commits'}
+          <RotateCw className={cn('size-4', loading && 'animate-spin')} />
+          {loading ? 'Refreshing' : 'Refresh'}
         </Button>
       </div>
     </div>
@@ -540,14 +580,20 @@ function StateCommitRow({
 
 function StateObjectLine({
   activeView,
+  commitHref,
   headCommit,
+  parentDiffHref,
   rootKey,
   validationGapCount,
+  validationKnown,
 }: {
   activeView: ProjectStateView;
+  commitHref: string | null;
   headCommit: ApiCommit | null;
+  parentDiffHref: string | null;
   rootKey: string;
   validationGapCount: number;
+  validationKnown: boolean;
 }) {
   return (
     <div className="flex min-h-13 flex-wrap items-center justify-between gap-2 border-b border-[var(--stroke-divider)] px-4 py-2.5">
@@ -560,17 +606,29 @@ function StateObjectLine({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="pending-subtle">adapter prd.document</Badge>
-        <Badge variant={validationGapCount > 0 ? 'warning' : 'success'}>
-          {validationGapCount > 0 ? String(validationGapCount) + ' validation gap' : 'validated'}
+        <Badge
+          variant={validationGapCount > 0 ? 'warning' : validationKnown ? 'success' : 'outline'}
+        >
+          {validationGapCount > 0
+            ? String(validationGapCount) + ' validation gap'
+            : validationKnown
+              ? 'validated'
+              : 'not validated'}
         </Badge>
         <Badge variant="outline">{activeView}</Badge>
-        <Button size="sm" type="button" variant="canvas-outline">
-          <History className="size-4" />
-          History
-        </Button>
-        <Button size="sm" type="button" variant="canvas-outline">
-          Copy path
-        </Button>
+        {commitHref ? (
+          <Button asChild size="sm" variant="canvas-outline">
+            <Link href={commitHref}>Open commit</Link>
+          </Button>
+        ) : null}
+        {parentDiffHref ? (
+          <Button asChild size="sm" variant="canvas-outline">
+            <Link href={parentDiffHref}>
+              <GitCompare className="size-4" />
+              Parent diff
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -650,17 +708,6 @@ function StatePointsView({
             value={pathQuery}
           />
         </label>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" type="button" variant="canvas-outline">
-            All statuses
-          </Button>
-          <Button size="sm" type="button" variant="canvas-outline">
-            Schema issues
-          </Button>
-          <Button size="sm" type="button" variant="canvas-outline">
-            Source mapped
-          </Button>
-        </div>
       </div>
       <div className="overflow-auto">
         <table className="w-full table-fixed border-collapse text-left text-sm">
@@ -840,17 +887,6 @@ function StateCodeView({ yamlText }: { yamlText: string }) {
       aria-label="YAML code view"
       className="min-h-[560px] bg-[var(--surface-card)] px-6 py-5"
     >
-      <div className="mb-3 flex items-center justify-end gap-2">
-        <Button size="sm" type="button" variant="canvas-outline">
-          YAML
-        </Button>
-        <Button size="sm" type="button" variant="canvas-outline">
-          Copy
-        </Button>
-        <Button size="sm" type="button" variant="canvas-outline">
-          Download
-        </Button>
-      </div>
       <pre className="overflow-auto rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-4 font-mono text-sm leading-6 text-[var(--text-primary)]">
         {lines.map((line, index) => (
           <div className="grid grid-cols-[44px_minmax(0,1fr)]" key={String(index)}>
@@ -877,11 +913,9 @@ function StateEmpty({ message, title }: { message: string; title: string }) {
 }
 
 function StateContextRail({
-  branch,
   commitCount,
   edgeCount,
   headCommit,
-  leaves,
   operations,
   projectName,
   schemaName,
@@ -890,11 +924,9 @@ function StateContextRail({
   validationReady,
   warning,
 }: {
-  branch: string;
   commitCount: number;
   edgeCount: number;
   headCommit: ApiCommit | null;
-  leaves: Leaf[];
   operations: StateOperationEntry[];
   projectName: string;
   schemaName: string;
@@ -930,30 +962,6 @@ function StateContextRail({
           authoring surface.
         </p>
       </RailCard>
-      <RailCard title="Commit graph">
-        <div className="grid gap-2 text-sm font-bold text-[var(--text-primary)]">
-          <GraphLine label="main" meta="base" tone="commit" />
-          <GraphLine
-            label={branch}
-            meta={headCommit?.hash ? commitHashLabel(headCommit.hash) : 'empty'}
-            tone="commit"
-          />
-          <GraphLine
-            label="output leaf"
-            meta={
-              leaves.length > 0
-                ? String(leaves.length) + ' leaves'
-                : validationReady
-                  ? 'ready'
-                  : 'blocked'
-            }
-            tone="leaf"
-          />
-        </div>
-        <Button className="mt-3 w-full" size="sm" type="button" variant="canvas-outline">
-          Open graph
-        </Button>
-      </RailCard>
       <RailCard title="State metadata">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-sm">
           <RailRow label="Project" value={projectName} />
@@ -968,14 +976,6 @@ function StateContextRail({
         {warning ? (
           <p className="mt-3 text-xs font-semibold text-[var(--status-warning)]">{warning}</p>
         ) : null}
-        <div className="mt-3 flex gap-2">
-          <Button size="sm" type="button">
-            Open commit
-          </Button>
-          <Button size="sm" type="button" variant="canvas-outline">
-            Parent diff
-          </Button>
-        </div>
       </RailCard>
     </aside>
   );
@@ -1006,27 +1006,14 @@ function RailRow({ label, mono, value }: { label: string; mono?: boolean; value:
   );
 }
 
-function GraphLine({
-  label,
-  meta,
-  tone,
-}: {
-  label: string;
-  meta: string;
-  tone: 'commit' | 'leaf';
-}) {
-  return (
-    <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2">
-      <span
-        className={cn(
-          'size-3 rounded-full border-2',
-          tone === 'leaf' ? 'border-[var(--accent-leaf)]' : 'border-[var(--accent-commit)]'
-        )}
-      />
-      <span className="truncate">{label}</span>
-      <span className="font-mono text-xs font-medium text-[var(--text-tertiary)]">{meta}</span>
-    </div>
-  );
+function selectVisibleBranchHead(commits: ApiCommit[]): ApiCommit | null {
+  if (commits.length === 0) return null;
+  const firstParentHashes = new Set(commits.map((commit) => commit.parents[0]).filter(Boolean));
+  const tips = commits.filter((commit) => !firstParentHashes.has(commit.hash));
+  return [...(tips.length > 0 ? tips : commits)].sort(
+    (a, b) =>
+      Date.parse(b.committed_at) - Date.parse(a.committed_at) || b.hash.localeCompare(a.hash)
+  )[0]!;
 }
 
 function mergeBranchNames(names: string[]): string[] {

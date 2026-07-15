@@ -11,11 +11,22 @@ import type { WorkspaceCandidate } from '@/types/workspaces';
 
 const hookMocks = vi.hoisted(() => ({
   loadCommits: vi.fn(),
-  loadLeaves: vi.fn(),
   loadOperations: vi.fn(),
   projectWorkspaces: [] as WorkspaceCandidate[],
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
+}));
+
+const navigationMocks = vi.hoisted(() => ({
+  pathname: '/t3x-dev/test-project',
+  router: { replace: vi.fn() },
+  search: '',
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => navigationMocks.pathname,
+  useRouter: () => navigationMocks.router,
+  useSearchParams: () => new URLSearchParams(navigationMocks.search),
 }));
 
 vi.mock('@/hooks/shared/useBranches', () => ({
@@ -37,10 +48,6 @@ vi.mock('@/hooks/workspaces/useProjectWorkspaces', () => ({
 
 vi.mock('@/hooks/commits/useCommitsList', () => ({
   useCommitsList: () => ({ loadCommits: hookMocks.loadCommits }),
-}));
-
-vi.mock('@/hooks/commits/useLeavesByCommit', () => ({
-  useLeavesByCommit: () => ({ loadLeaves: hookMocks.loadLeaves }),
 }));
 
 vi.mock('@/hooks/commits/useCommitOperations', () => ({
@@ -124,14 +131,6 @@ const VALIDATION: YSchemaValidationSummary = {
 
 function setupHookMocks() {
   hookMocks.loadCommits.mockResolvedValue([PRD_COMMIT]);
-  hookMocks.loadLeaves.mockResolvedValue([
-    {
-      id: 'leaf_1',
-      commit_hash: PRD_COMMIT.hash,
-      title: 'PRD review brief',
-      type: 'deploy_agent',
-    },
-  ]);
   hookMocks.loadOperations.mockResolvedValue({
     commit_hash: PRD_COMMIT.hash,
     operations: [
@@ -169,6 +168,13 @@ function renderStateTab(validation: YSchemaValidationSummary | null = VALIDATION
 describe('ProjectStateTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    navigationMocks.pathname = '/t3x-dev/test-project';
+    navigationMocks.search = '';
+    navigationMocks.router.replace.mockImplementation((href: string) => {
+      const url = new URL(href, 'https://t3x.local');
+      navigationMocks.pathname = url.pathname;
+      navigationMocks.search = url.search;
+    });
     setupHookMocks();
     hookMocks.projectWorkspaces = [];
     useCanvasStore.setState({ edges: [], nodes: [] } as never);
@@ -187,8 +193,40 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
     expect(screen.getByText('YAML-shaped node browser')).toBeInTheDocument();
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
-    expect(hookMocks.loadLeaves).toHaveBeenCalledWith(PRD_COMMIT.hash);
     expect(hookMocks.loadOperations).toHaveBeenCalledWith(PRD_COMMIT.hash);
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=main&returnTo=%2Ft3x-dev%2Ftest-project'
+    );
+    expect(screen.getByRole('link', { name: 'Open workspace' })).toHaveAttribute(
+      'href',
+      '/t3x-dev/test-project/workspaces'
+    );
+    expect(screen.getByRole('link', { name: 'Open commit' })).toHaveAttribute(
+      'href',
+      `/project/proj_test/commit/${encodeURIComponent(PRD_COMMIT.hash)}?returnTo=%2Ft3x-dev%2Ftest-project`
+    );
+    expect(screen.getByRole('link', { name: 'Parent diff' })).toHaveAttribute(
+      'href',
+      `/project/proj_test/diff?base=${encodeURIComponent(PRD_COMMIT.parents[0]!)}&target=${encodeURIComponent(PRD_COMMIT.hash)}&returnTo=%2Ft3x-dev%2Ftest-project`
+    );
+    expect(screen.queryByRole('button', { name: 'Change review dock' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Graph' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy path' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open graph' })).not.toBeInTheDocument();
+  });
+
+  it('reloads the State snapshot and supporting repository data on refresh', async () => {
+    renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    await waitFor(() => expect(hookMocks.loadCommits).toHaveBeenCalledTimes(2));
+    expect(hookMocks.loadOperations).toHaveBeenCalledTimes(2);
+    expect(hookMocks.refreshBranches).toHaveBeenCalledTimes(1);
+    expect(hookMocks.refreshWorkspaces).toHaveBeenCalledTimes(1);
   });
 
   it('switches to the schema-selected Render view', async () => {
@@ -215,6 +253,8 @@ describe('ProjectStateTab', () => {
     expect(codeView).toHaveTextContent('problem: "You: i need food and drink"');
     expect(codeView).not.toHaveTextContent('trees:');
     expect(codeView).not.toHaveTextContent('slots:');
+    expect(within(codeView).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+    expect(within(codeView).queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
   });
 
   it('uses committed workspace draft operations when the commit has no stored YOps log', async () => {
@@ -272,7 +312,52 @@ describe('ProjectStateTab', () => {
     expect(screen.getAllByText('02 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('03 SET')[0]).toBeInTheDocument();
     expect(screen.getAllByText('missing')[0]).toBeInTheDocument();
+    expect(screen.getByText('Not validated at HEAD')).toBeInTheDocument();
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
     expect(screen.queryByText('INITIAL CREATE')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
+  });
+
+  it('runs validation against the visible HEAD and ignores a stale validation result', async () => {
+    const onRunValidation = vi.fn();
+    render(
+      <ProjectStateTab
+        onRunValidation={onRunValidation}
+        projectId="proj_test"
+        projectName="Test Project"
+        validation={{ ...VALIDATION, commitHash: 'sha256:stale-commit' }}
+      />
+    );
+
+    await screen.findByText('PRD audience handoff committed');
+    expect(screen.getByText('Not validated at HEAD')).toBeInTheDocument();
+    expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
+    expect(onRunValidation).toHaveBeenCalledWith(PRD_COMMIT.hash);
+  });
+
+  it('does not reuse stale workspace gaps after the visible HEAD validates cleanly', async () => {
+    hookMocks.projectWorkspaces = [
+      {
+        lastCommitHash: PRD_COMMIT.hash,
+        schemaReview: { gaps: ['prd.summary.audience'] },
+        status: 'committed',
+        yopsDraft: { operations: [] },
+      } as WorkspaceCandidate,
+    ];
+
+    renderStateTab({
+      ...VALIDATION,
+      gapCount: 0,
+      gaps: [],
+      ready: true,
+      status: 'verified',
+    });
+
+    await screen.findByText('PRD audience handoff committed');
+    expect(screen.getByText('Up to date')).toBeInTheDocument();
+    expect(screen.queryByText('missing')).not.toBeInTheDocument();
   });
 
   it('keeps rendering committed state when operations are unavailable', async () => {
@@ -283,6 +368,41 @@ describe('ProjectStateTab', () => {
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
     expect(screen.getByText('YOps log unavailable.')).toBeInTheDocument();
     expect(screen.getByText('problem')).toBeInTheDocument();
+  });
+
+  it('selects the visible DAG tip instead of trusting commit timestamp order', async () => {
+    const parent = {
+      ...PRD_COMMIT,
+      committed_at: '2099-01-01T00:00:00.000Z',
+      hash: 'sha256:parent',
+      message: 'Timestamp-newer parent',
+      parents: [],
+    };
+    const tip = {
+      ...PRD_COMMIT,
+      committed_at: '2026-01-01T00:00:00.000Z',
+      hash: 'sha256:tip',
+      message: 'Actual branch tip',
+      parents: [parent.hash],
+    };
+    hookMocks.loadCommits.mockResolvedValue([parent, tip]);
+
+    renderStateTab(null);
+
+    expect(await screen.findByText('Actual branch tip')).toBeInTheDocument();
+    expect(screen.queryByText('Timestamp-newer parent')).not.toBeInTheDocument();
+    expect(hookMocks.loadOperations).toHaveBeenCalledWith(tip.hash);
+  });
+
+  it('rejects commit rows that do not belong to the selected project', async () => {
+    hookMocks.loadCommits.mockResolvedValue([{ ...PRD_COMMIT, project_id: 'proj_other' }]);
+
+    renderStateTab();
+
+    expect(
+      await screen.findByText('Commit response does not match the selected project and branch.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('PRD audience handoff committed')).not.toBeInTheDocument();
   });
 
   it('ignores stale Canvas data from another project', async () => {
@@ -328,13 +448,16 @@ describe('ProjectStateTab', () => {
     renderStateTab();
 
     expect(await screen.findByText('PRD audience handoff committed')).toBeInTheDocument();
-    expect(screen.getByLabelText('Branch focus')).toHaveValue('feature/prd-audience');
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      { scroll: false }
+    );
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', 'main', 100);
     expect(hookMocks.loadCommits).toHaveBeenCalledWith('proj_test', undefined, 100);
   });
 
   it('switches its local read-only branch focus', async () => {
-    renderStateTab();
+    const view = renderStateTab();
 
     await screen.findByText('Path / Key');
     hookMocks.loadCommits.mockResolvedValueOnce([
@@ -344,6 +467,14 @@ describe('ProjectStateTab', () => {
       target: { value: 'feature/prd-audience' },
     });
 
+    expect(navigationMocks.router.replace).toHaveBeenCalledWith(
+      '/t3x-dev/test-project?branch=feature%2Fprd-audience',
+      { scroll: false }
+    );
+    view.rerender(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+    );
+
     await waitFor(() => {
       expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
         'proj_test',
@@ -351,5 +482,37 @@ describe('ProjectStateTab', () => {
         100
       );
     });
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+    );
+  });
+
+  it('clears old commit actions while a newly selected branch is loading', async () => {
+    const view = renderStateTab();
+
+    await screen.findByText('PRD audience handoff committed');
+    hookMocks.loadCommits.mockReturnValueOnce(new Promise<ApiCommit[]>(() => {}));
+    fireEvent.change(screen.getByLabelText('Branch focus'), {
+      target: { value: 'feature/prd-audience' },
+    });
+    view.rerender(
+      <ProjectStateTab projectId="proj_test" projectName="Test Project" validation={VALIDATION} />
+    );
+
+    await waitFor(() => {
+      expect(hookMocks.loadCommits).toHaveBeenLastCalledWith(
+        'proj_test',
+        'feature/prd-audience',
+        100
+      );
+    });
+    expect(screen.getByText('Loading state')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open commit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Parent diff' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute(
+      'href',
+      '/project/proj_test/history?branch=feature%2Fprd-audience&returnTo=%2Ft3x-dev%2Ftest-project%3Fbranch%3Dfeature%252Fprd-audience'
+    );
   });
 });

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const stateHookMocks = vi.hoisted(() => ({
   loadCommits: vi.fn(),
-  loadLeaves: vi.fn(),
   loadOperations: vi.fn(),
   refreshBranches: vi.fn(),
   refreshWorkspaces: vi.fn(),
@@ -77,10 +76,6 @@ vi.mock('@/hooks/commits/useCommitsList', () => ({
   useCommitsList: () => ({ loadCommits: stateHookMocks.loadCommits }),
 }));
 
-vi.mock('@/hooks/commits/useLeavesByCommit', () => ({
-  useLeavesByCommit: () => ({ loadLeaves: stateHookMocks.loadLeaves }),
-}));
-
 vi.mock('@/hooks/commits/useCommitOperations', () => ({
   useCommitOperations: () => ({ loadOperations: stateHookMocks.loadOperations }),
 }));
@@ -142,7 +137,6 @@ beforeEach(() => {
   canvasSurfaceMocks.fetchPins.mockResolvedValue(undefined);
   canvasSurfaceMocks.loadCanvas.mockResolvedValue(undefined);
   stateHookMocks.loadCommits.mockResolvedValue([]);
-  stateHookMocks.loadLeaves.mockResolvedValue([]);
   stateHookMocks.loadOperations.mockResolvedValue({
     commit_hash: STATE_COMMIT.hash,
     operations: [],
@@ -374,7 +368,9 @@ describe('ProjectDetailPage — project-first shell states', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run validation' }));
 
     await waitFor(() => {
-      expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test');
+      expect(runYSchemaValidation).toHaveBeenCalledWith('proj_test', {
+        commit_hash: STATE_COMMIT.hash,
+      });
       expect(screen.getAllByText('YSchema verified').length).toBeGreaterThan(0);
     });
     expect(screen.getByText('output-ready')).toBeInTheDocument();
