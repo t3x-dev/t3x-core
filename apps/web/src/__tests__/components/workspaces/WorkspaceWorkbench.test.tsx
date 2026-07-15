@@ -284,6 +284,21 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
+  it('lets the workflow status rail navigate between workspace steps', () => {
+    render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Commit' }));
+    expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Commit readiness' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Validation' }));
+    expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
+  });
+
   it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
@@ -535,6 +550,71 @@ describe('WorkspaceWorkbench', () => {
     );
   });
 
+  it('allows YOps validation and preview when schema review still has blocking gaps', async () => {
+    const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse({
+        success: true,
+        data: {
+          ok: true,
+          applied: 1,
+          preview: {
+            trees: [
+              {
+                key: 'release_note',
+                slots: { title: 'Release cleanup' },
+                children: [
+                  {
+                    key: 'sections',
+                    slots: { sections: ['One draft release-note section'] },
+                    children: [],
+                  },
+                ],
+              },
+            ],
+            relations: [],
+          },
+        },
+      })
+    );
+
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        projectId="proj_1"
+        selectedWorkspaceId="workspace_draft"
+      />
+    );
+    activateTab(/Validation/);
+
+    expect(screen.getByText('Confirm release-note required fields.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
+
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(1));
+    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
+
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
+    expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
+      'One draft release-note section'
+    );
+
+    activateTab(/Commit/);
+    expect(screen.getByRole('button', { name: /Commit · release\/notes/ })).toBeDisabled();
+    expect(screen.getByText('Resolve these blockers before committing.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Schema review gap: Confirm release-note required fields.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Commit · release\/notes/ })).toHaveAttribute(
+      'title',
+      'Schema review gap: Confirm release-note required fields.'
+    );
+  });
+
   it('sends included source chat turns to candidate extraction', async () => {
     const chatOnlyCandidate: WorkspaceCandidate = {
       ...workspaceCandidates[0],
@@ -723,6 +803,54 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getAllByText(/No YOps operations were generated/).length).toBeGreaterThan(0);
     activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeDisabled();
+  });
+
+  it('reopens committed workspace state after regenerating a YOps proposal', async () => {
+    const committedCandidate: WorkspaceCandidate = {
+      ...workspaceCandidates[0],
+      status: 'committed',
+      lastCommitHash: 'sha256:old-workspace-commit',
+    };
+    const { lastCommitHash: _lastCommitHash, ...reopenedCandidateBase } = committedCandidate;
+    const reopenedCandidate: WorkspaceCandidate = {
+      ...reopenedCandidateBase,
+      baseCommitHash: 'sha256:old-workspace-commit',
+      status: 'schema_review',
+      yopsDraft: {
+        ...committedCandidate.yopsDraft,
+        id: 'draft:reopened',
+      },
+    };
+    const yopsDraftUrl =
+      'http://localhost:8000/api/v1/projects/proj_1/workspaces/workspace_ready/yops-draft';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse({
+        success: true,
+        data: {
+          candidate_id: 'candidate_reopened',
+          yops_draft_id: 'draft:reopened',
+          workspace: reopenedCandidate,
+        },
+      })
+    );
+
+    render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
+    activateTab(/Ops/);
+
+    expect(screen.getByText('Committed to state')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
+    await waitFor(() =>
+      expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+    expect(screen.queryByText('Committed to state')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
   });
 
   it('connects extract candidate, send to ops, validate, preview, and commit gates', async () => {
@@ -1089,15 +1217,11 @@ describe('WorkspaceWorkbench', () => {
     );
     findFetchCall(fetchMock.mock.calls, yopsDraftUrl);
     expect(await screen.findByText('Proposal ready')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'value: "YOps receives reviewed candidate fields from backend source evidence."'
-      )
-    ).toBeInTheDocument();
-
-    activateTab(/Validation/);
+    expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));

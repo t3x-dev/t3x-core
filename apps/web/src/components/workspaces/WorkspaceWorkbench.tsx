@@ -113,6 +113,7 @@ export function WorkspaceWorkbench({
       }));
       updateSelectedFlow({
         candidateId: result.candidate_id,
+        commitHash: undefined,
         error: undefined,
         extracting: false,
       });
@@ -138,6 +139,7 @@ export function WorkspaceWorkbench({
       }));
       updateSelectedFlow({
         candidateId: result.candidate_id,
+        commitHash: undefined,
         error: hasOperations
           ? undefined
           : 'No YOps operations were generated. Add source evidence, regenerate the candidate proposal, then send it to YOps.',
@@ -146,7 +148,7 @@ export function WorkspaceWorkbench({
           ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
           : undefined,
       });
-      setActiveWorkflowTab('ops');
+      setActiveWorkflowTab(hasOperations ? 'validation' : 'ops');
     } catch (err) {
       updateSelectedFlow({
         error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
@@ -158,6 +160,10 @@ export function WorkspaceWorkbench({
   const handleCommitted = (commitHash: string) => {
     updateSelectedFlow({ commitHash });
     setActiveWorkflowTab('commit');
+  };
+
+  const handleYOpsApplied = () => {
+    setActiveWorkflowTab('preview');
   };
 
   if (viewState === 'loading') {
@@ -205,6 +211,7 @@ export function WorkspaceWorkbench({
             onExtractCandidate={handleExtractCandidate}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onSendToYOps={handleSendToYOps}
+            onYOpsApplied={handleYOpsApplied}
             onYOpsCommitted={handleCommitted}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
@@ -244,26 +251,43 @@ function WorkspaceToolbar({
         onTabChange={onWorkflowTabChange}
       />
       {selectedWorkspace ? (
-        <WorkspaceFlowRail candidate={selectedWorkspace} flowState={flowState} />
+        <WorkspaceFlowRail
+          activeTab={activeWorkflowTab}
+          candidate={selectedWorkspace}
+          flowState={flowState}
+          onTabChange={onWorkflowTabChange}
+        />
       ) : null}
     </div>
   );
 }
 
 function WorkspaceFlowRail({
+  activeTab,
   candidate,
   flowState,
+  onTabChange,
 }: {
+  activeTab: WorkspaceTabId;
   candidate: WorkspaceCandidate;
   flowState?: WorkspaceFlowState;
+  onTabChange: (tab: WorkspaceTabId) => void;
 }) {
   const hasReadyYOpsDraft = hasYOpsOperations(candidate);
   const steps = [
-    { label: 'Source', done: candidate.sourceBundle.length > 0 },
-    { label: 'Ops', done: hasReadyYOpsDraft },
-    { label: 'Validation', done: candidate.schemaReview.verdict === 'ready' },
-    { label: 'Preview', done: false },
-    { label: 'Commit', done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash) },
+    { label: 'Source', tab: 'chat' as const, done: candidate.sourceBundle.length > 0 },
+    { label: 'Ops', tab: 'ops' as const, done: hasReadyYOpsDraft },
+    {
+      label: 'Validation',
+      tab: 'validation' as const,
+      done: candidate.schemaReview.verdict === 'ready',
+    },
+    { label: 'Preview', tab: 'preview' as const, done: false },
+    {
+      label: 'Commit',
+      tab: 'commit' as const,
+      done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash),
+    },
   ];
 
   return (
@@ -271,16 +295,22 @@ function WorkspaceFlowRail({
       <legend className="sr-only">Workspace flow status</legend>
       {steps.map((step, index) => (
         <span className="inline-flex items-center gap-1.5" key={step.label}>
-          <span
+          <button
+            aria-label={`Go to ${step.label}`}
             className={cn(
-              'inline-flex h-6 items-center rounded-full border px-2 font-medium',
-              step.done
-                ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]'
-                : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]'
+              'inline-flex h-6 items-center rounded-full border px-2 font-medium transition-colors',
+              activeTab === step.tab
+                ? 'border-[var(--source)]/50 bg-[var(--source)]/10 text-[var(--source)]'
+                : step.done
+                  ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]'
+                  : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]',
+              'hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)]'
             )}
+            onClick={() => onTabChange(step.tab)}
+            type="button"
           >
             {step.label}
-          </span>
+          </button>
           {index < steps.length - 1 ? (
             <span className="text-[var(--text-quaternary)]" aria-hidden="true">
               /
@@ -300,6 +330,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange,
   onSendToYOps,
   onSourceMaterialUploaded,
+  onYOpsApplied,
   onYOpsCommitted,
 }: {
   activeTab: WorkspaceTabId;
@@ -309,6 +340,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsApplied: () => void;
   onYOpsCommitted: (commitHash: string) => void;
 }) {
   if (!candidate) return null;
@@ -330,6 +362,7 @@ function WorkspaceDetail({
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onExtractCandidate={onExtractCandidate}
           onSendToYOps={onSendToYOps}
+          onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
           yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
@@ -349,13 +382,19 @@ function mergeWorkspaceOverride(
 ): WorkspaceCandidate {
   if (!override) return candidate;
 
-  return {
+  const merged = {
     ...candidate,
     ...override,
     outputTargets: candidate.outputTargets,
     schemaBindings: candidate.schemaBindings,
     sourceBundle: override.sourceBundle ?? candidate.sourceBundle,
   };
+
+  if (override.status !== 'committed' && !override.lastCommitHash) {
+    delete merged.lastCommitHash;
+  }
+
+  return merged;
 }
 
 function upsertWorkspaceSourceBundle(
