@@ -129,6 +129,36 @@ describe('ProjectWorkspacesTab', () => {
     expect(screen.getAllByText('1 doc').length).toBeGreaterThan(0);
   });
 
+  it('shows pasted text materials as manageable text sources', async () => {
+    fetchMaterialsByProjectMock.mockResolvedValueOnce([
+      {
+        id: 'mat_pasted_text',
+        project_id: 'proj_other',
+        source_type: 'document',
+        title: 'audience-note.txt',
+        filename: 'audience-note.txt',
+        mime_type: 'text/plain',
+        content_hash: 'hash_pasted_text',
+        content_excerpt: 'Audience: Product reviewers and engineering owners.',
+        token_estimate: 8,
+        metadata: {},
+        created_at: '2026-07-15T00:00:00.000Z',
+        archived_at: null,
+        created_by: null,
+      },
+    ]);
+
+    render(<ProjectWorkspacesTab projectId="proj_other" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('audience-note.txt').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getAllByText('1 text').length).toBeGreaterThan(0);
+    expect(screen.getByText('text')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete audience-note.txt' })).toBeInTheDocument();
+  });
+
   it('keeps fixture bindings when a legacy workspace draft is missing array fields', async () => {
     const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
     const legacyDraft = {
