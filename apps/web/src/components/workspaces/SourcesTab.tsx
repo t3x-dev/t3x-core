@@ -18,6 +18,14 @@ import {
 } from '@/components/import/documentAcceptTypes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   formatSourceCount,
@@ -84,6 +92,9 @@ export function SourcesTab({
   const sources = candidate.sourceBundle;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(sources[0]?.id ?? null);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [pasteText, setPasteText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { archiveMaterial, archiving: materialArchiving } = useMaterialArchive();
   const { upload: uploadMaterial, uploading: materialUploading } = useMaterialUpload();
@@ -149,6 +160,35 @@ export function SourcesTab({
     },
     [handleUploadFile]
   );
+
+  const handlePasteTextSource = useCallback(async () => {
+    const text = pasteText.trim();
+    if (!text) {
+      setSourceError('Paste text before importing a source note.');
+      return;
+    }
+
+    const title = pasteTitle.trim() || 'Pasted source note';
+    const slug =
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 48) || 'pasted-source-note';
+    const file = new File([text], `${slug}.txt`, { type: 'text/plain' });
+
+    setSourceError(null);
+    try {
+      const material = await uploadMaterial(candidate.projectId, file);
+      await onMaterialUploaded?.();
+      setSelectedSourceId(`material:${material.id}`);
+      setPasteDialogOpen(false);
+      setPasteTitle('');
+      setPasteText('');
+    } catch (err) {
+      setSourceError(err instanceof Error ? err.message : 'Text source import failed.');
+    }
+  }, [candidate.projectId, onMaterialUploaded, pasteText, pasteTitle, uploadMaterial]);
 
   const handleToggleIncludePreview = useCallback(async () => {
     if (!selectedMaterialId) return;
@@ -291,6 +331,7 @@ export function SourcesTab({
               materialArchiving={materialArchiving}
               materialUploading={materialUploading}
               onDeleteSource={(source) => void handleDeleteSourceMaterial(source)}
+              onPasteTextClick={() => setPasteDialogOpen(true)}
               onSelectSource={setSelectedSourceId}
               onUploadClick={() => fileInputRef.current?.click()}
               selectedSource={selectedSource}
@@ -333,6 +374,54 @@ export function SourcesTab({
           </section>
         </TabsContent>
       </Tabs>
+      <Dialog open={pasteDialogOpen} onOpenChange={setPasteDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Paste source text</DialogTitle>
+            <DialogDescription>
+              Add source evidence for required PRD fields, then regenerate the candidate proposal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">
+              Title
+              <input
+                className="h-9 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-2 text-sm font-medium text-[var(--text-primary)] outline-none focus:border-[var(--source)]"
+                onChange={(event) => setPasteTitle(event.target.value)}
+                placeholder="Audience note"
+                value={pasteTitle}
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-[var(--text-secondary)]">
+              Source text
+              <textarea
+                className="min-h-40 resize-y rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2 text-sm leading-6 text-[var(--text-primary)] outline-none focus:border-[var(--source)]"
+                onChange={(event) => setPasteText(event.target.value)}
+                placeholder="Audience: Product managers, engineering reviewers, and implementation owners."
+                value={pasteText}
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={materialUploading}
+              onClick={() => setPasteDialogOpen(false)}
+              type="button"
+              variant="canvas-outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={materialUploading || pasteText.trim().length === 0}
+              onClick={() => void handlePasteTextSource()}
+              type="button"
+              variant="commit"
+            >
+              {materialUploading ? 'Importing...' : 'Import text'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -344,6 +433,7 @@ function SourceBundlePanel({
   materialArchiving,
   materialUploading,
   onDeleteSource,
+  onPasteTextClick,
   onSelectSource,
   onUploadClick,
   selectedSource,
@@ -355,6 +445,7 @@ function SourceBundlePanel({
   materialArchiving: boolean;
   materialUploading: boolean;
   onDeleteSource: (source: SourceBundleItem) => void;
+  onPasteTextClick: () => void;
   onSelectSource: (sourceId: string) => void;
   onUploadClick: () => void;
   selectedSource: SourceBundleItem | null;
@@ -403,16 +494,19 @@ function SourceBundlePanel({
           const Icon = action.icon;
           const uploadsMaterial =
             action.label === 'Import doc' || action.label === 'Upload PDF/doc';
+          const pastesText = action.label === 'Paste text';
+          const enabled = uploadsMaterial || pastesText;
 
           return (
             <Button
               className="h-9 justify-start gap-2 px-2 text-xs"
-              disabled={!uploadsMaterial || materialUploading}
+              disabled={!enabled || materialUploading}
               key={action.label}
               onClick={() => {
                 if (uploadsMaterial) onUploadClick();
+                if (pastesText) onPasteTextClick();
               }}
-              title={getImportActionTitle(action.label, uploadsMaterial, materialUploading)}
+              title={getImportActionTitle(action.label, enabled, materialUploading)}
               type="button"
               variant="canvas-outline"
             >
@@ -973,12 +1067,12 @@ function isPersistedTurnId(id: string): boolean {
 
 function getImportActionTitle(
   label: string,
-  uploadsMaterial: boolean,
+  enabled: boolean,
   materialUploading: boolean
 ): string | undefined {
-  if (materialUploading && uploadsMaterial) return 'Upload is already in progress.';
+  if (materialUploading && enabled) return 'Source import is already in progress.';
   if (label === 'Paste text') {
-    return 'Paste text sources need a persisted workspace source endpoint before enabling.';
+    return 'Paste text as a source material.';
   }
   if (label === 'Add URL') {
     return 'URL sources need a persisted workspace source endpoint before enabling.';

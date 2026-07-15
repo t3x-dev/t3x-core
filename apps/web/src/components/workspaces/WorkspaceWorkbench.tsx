@@ -146,7 +146,7 @@ export function WorkspaceWorkbench({
           ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
           : undefined,
       });
-      setActiveWorkflowTab('ops');
+      setActiveWorkflowTab(hasOperations ? 'validation' : 'ops');
     } catch (err) {
       updateSelectedFlow({
         error: err instanceof Error ? err.message : 'YOps proposal generation failed.',
@@ -205,6 +205,7 @@ export function WorkspaceWorkbench({
             onExtractCandidate={handleExtractCandidate}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onSendToYOps={handleSendToYOps}
+            onYOpsApplied={() => setActiveWorkflowTab('preview')}
             onYOpsCommitted={handleCommitted}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
           />
@@ -300,6 +301,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange,
   onSendToYOps,
   onSourceMaterialUploaded,
+  onYOpsApplied,
   onYOpsCommitted,
 }: {
   activeTab: WorkspaceTabId;
@@ -309,6 +311,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsApplied: () => void;
   onYOpsCommitted: (commitHash: string) => void;
 }) {
   if (!candidate) return null;
@@ -330,6 +333,7 @@ function WorkspaceDetail({
           onChatSourceEvidenceChange={onChatSourceEvidenceChange}
           onExtractCandidate={onExtractCandidate}
           onSendToYOps={onSendToYOps}
+          onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
           yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
