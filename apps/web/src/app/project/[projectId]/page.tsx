@@ -303,21 +303,24 @@ export function ProjectDetailPageContent({
     };
   }, [isCanvasSurface, projectBase?.id]);
 
-  const handleRunYSchemaValidation = useCallback(async () => {
-    if (!projectBase?.id) return;
-    setYschemaValidationRunning(true);
-    setYschemaValidationError(null);
+  const handleRunYSchemaValidation = useCallback(
+    async (commitHash: string) => {
+      if (!projectBase?.id) return;
+      setYschemaValidationRunning(true);
+      setYschemaValidationError(null);
 
-    try {
-      const run = await runYSchemaValidation(projectBase.id);
-      setYschemaValidation(toYSchemaValidationSummary(run));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Validation run failed';
-      setYschemaValidationError(message);
-    } finally {
-      setYschemaValidationRunning(false);
-    }
-  }, [projectBase?.id]);
+      try {
+        const run = await runYSchemaValidation(projectBase.id, { commit_hash: commitHash });
+        setYschemaValidation(toYSchemaValidationSummary(run));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Validation run failed';
+        setYschemaValidationError(message);
+      } finally {
+        setYschemaValidationRunning(false);
+      }
+    },
+    [projectBase?.id]
+  );
 
   // Load fresh project data whenever this page is entered. The canvas store
   // persists across routes, so returning from Chat after a commit must not
