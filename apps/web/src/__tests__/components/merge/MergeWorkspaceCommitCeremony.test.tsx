@@ -74,6 +74,12 @@ describe('MergeWorkspace commit ceremony', () => {
     fireEvent.click(screen.getByTestId('merge-review-confirm'));
 
     await waitFor(() => expect(createMergeCommitMock).toHaveBeenCalledTimes(1));
+    expect(createMergeCommitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: 'main',
+        parents: ['sha256:target', 'sha256:source'],
+      })
+    );
     expect(await screen.findByRole('status', { name: 'Commit sealed' })).toBeVisible();
     expect(onMergeCommitted).not.toHaveBeenCalled();
   });

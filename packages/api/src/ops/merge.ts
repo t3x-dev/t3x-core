@@ -27,7 +27,13 @@ import {
   type MergeResult,
   prepareMerge,
 } from '@t3x-dev/core';
-import { createCommit, getCommitUnified, updateBranchHead } from '@t3x-dev/storage';
+import {
+  type AnyDB,
+  createCommit,
+  findBranchByName,
+  getCommitUnified,
+  updateBranchHead,
+} from '@t3x-dev/storage';
 import type { ApiPipelineContext } from './context';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +64,12 @@ export const mergePrepareOp: Operation<MergePrepareInput, MergePrepareOutput> = 
     const targetCommit = await getCommitUnified(db, input.target_hash);
     if (!targetCommit) {
       throw new MergeError('NOT_FOUND', `Target commit not found: ${input.target_hash}`);
+    }
+    if (targetCommit.project_id !== sourceCommit.project_id) {
+      throw new MergeError(
+        'INVALID_REQUEST',
+        'Source and target commits must belong to the same project'
+      );
     }
     yield { type: 'step_done', step: 'load' };
 
@@ -123,6 +135,16 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
     const projectId = sourceCommit.project_id;
 
     const targetCommit = await getCommitUnified(db, input.target_hash);
+    if (!targetCommit) {
+      throw new MergeError('NOT_FOUND', `Target commit not found: ${input.target_hash}`);
+    }
+    if (targetCommit.project_id !== projectId) {
+      throw new MergeError(
+        'INVALID_REQUEST',
+        `Target commit ${input.target_hash} does not belong to project ${projectId}`
+      );
+    }
+    const targetBranch = input.branch ?? targetCommit.branch;
     const emptyContent: SemanticContent = { trees: [], relations: [] };
     yield { type: 'step_done', step: 'load' };
 
@@ -131,7 +153,7 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
     const mergedContent = executeMerge(
       emptyContent,
       sourceCommit.content,
-      targetCommit?.content ?? emptyContent,
+      targetCommit.content,
       input.prepared as unknown as MergeResult,
       input.decisions as unknown as MergeDecision
     );
@@ -152,25 +174,46 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
 
     // persist: create merged commit and update branch head
     yield { type: 'step_start', step: 'persist' };
-    const savedCommit = await createCommit(db, {
-      parents: [input.source_hash, input.target_hash],
-      author: {
-        type: input.author.type as 'human' | 'agent' | 'system',
-        name: input.author.name,
-        id: input.author.id,
-      },
-      content: mergedContent,
-      project_id: projectId,
-      message: input.message,
-      branch: input.branch || undefined,
-      provenance: { method: 'merge' },
-      yops_log_ids: [],
-      enforceBranchLinearity: true,
-    });
+    const persist = async (txOrDb: AnyDB): Promise<Commit> => {
+      if (input.branch) {
+        const branchRecord = await findBranchByName(txOrDb, projectId, targetBranch);
+        if (!branchRecord) {
+          throw new MergeError('NOT_FOUND', `Target branch not found: ${targetBranch}`);
+        }
+      }
 
-    if (input.branch && projectId) {
-      await updateBranchHead(db, projectId, input.branch, savedCommit.hash);
-    }
+      const saved = await createCommit(txOrDb, {
+        parents: [input.target_hash, input.source_hash],
+        author: {
+          type: input.author.type as 'human' | 'agent' | 'system',
+          name: input.author.name,
+          id: input.author.id,
+        },
+        content: mergedContent,
+        project_id: projectId,
+        message: input.message,
+        branch: targetBranch,
+        provenance: { method: 'merge' },
+        yops_log_ids: [],
+        enforceBranchLinearity: true,
+      });
+
+      if (input.branch) {
+        const updated = await updateBranchHead(txOrDb, projectId, targetBranch, saved.hash);
+        if (!updated) {
+          throw new MergeError('NOT_FOUND', `Target branch not found: ${targetBranch}`);
+        }
+      }
+      return saved;
+    };
+
+    const savedCommit = input.branch
+      ? await (
+          db as unknown as {
+            transaction: (callback: (tx: unknown) => Promise<Commit>) => Promise<Commit>;
+          }
+        ).transaction((tx) => persist(tx as AnyDB))
+      : await persist(db);
     yield { type: 'step_done', step: 'persist' };
 
     return { commit: savedCommit, merge_summary: mergeSummary };

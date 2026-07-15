@@ -1,7 +1,14 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AnyDB } from '../adapters';
-import { type BranchLinearityError, createCommit } from '../queries/commits';
+import {
+  type BranchLinearityError,
+  type CommitParentIntegrityError,
+  createCommit,
+  getLatestCommit,
+} from '../queries/commits';
 import { insertProject } from '../queries/projects';
+import { commits } from '../schema-commits';
 import { createTestDB, testData } from './setup';
 
 const content = {
@@ -204,5 +211,127 @@ describe('branch linearity', () => {
       name: 'BranchLinearityError',
       code: 'BRANCH_NOT_HEAD',
     } satisfies Partial<BranchLinearityError>);
+  });
+
+  it('rejects missing and cross-project parents', async () => {
+    const source = await insertProject(db, testData.project({ name: 'Parent source' }));
+    const target = await insertProject(db, testData.project({ name: 'Parent target' }));
+    const sourceRoot = await createCommit(db, {
+      author,
+      content,
+      project_id: source.projectId,
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+
+    for (const [parent, code] of [
+      ['sha256:missing', 'PARENT_NOT_FOUND'],
+      [sourceRoot.hash, 'PARENT_PROJECT_MISMATCH'],
+    ] as const) {
+      await expect(
+        createCommit(db, {
+          author,
+          content,
+          project_id: target.projectId,
+          parents: [parent],
+          branch: 'main',
+          enforceBranchLinearity: true,
+        })
+      ).rejects.toMatchObject({
+        name: 'CommitParentIntegrityError',
+        code,
+      } satisfies Partial<CommitParentIntegrityError>);
+    }
+  });
+
+  it('uses the target branch head as first parent and reports the DAG tip', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Merge first parent' }));
+    const mainHead = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+    const featureHead = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [mainHead.hash],
+      branch: 'feature',
+      enforceBranchLinearity: true,
+    });
+
+    await expect(
+      createCommit(db, {
+        author,
+        content,
+        project_id: project.projectId,
+        parents: [featureHead.hash, mainHead.hash],
+        branch: 'main',
+        enforceBranchLinearity: true,
+      })
+    ).rejects.toMatchObject({ code: 'BRANCH_NOT_HEAD' });
+
+    const merged = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      parents: [mainHead.hash, featureHead.hash],
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+
+    // A stale timestamp must not turn an ancestor into the reported head.
+    await db
+      .update(commits)
+      .set({ committedAt: new Date('2099-01-01T00:00:00.000Z') })
+      .where(eq(commits.hash, mainHead.hash));
+    expect((await getLatestCommit(db, project.projectId, 'main'))?.hash).toBe(merged.hash);
+  });
+
+  it('serializes concurrent commits that extend the same branch head', async () => {
+    const project = await insertProject(db, testData.project({ name: 'Concurrent branch head' }));
+    const root = await createCommit(db, {
+      author,
+      content,
+      project_id: project.projectId,
+      branch: 'main',
+      enforceBranchLinearity: true,
+    });
+
+    const attempts = await Promise.allSettled([
+      createCommit(db, {
+        author: { ...author, name: 'first writer' },
+        content: { ...content, trees: [{ ...content.trees[0], key: 'first' }] },
+        project_id: project.projectId,
+        parents: [root.hash],
+        branch: 'main',
+        enforceBranchLinearity: true,
+      }),
+      createCommit(db, {
+        author: { ...author, name: 'second writer' },
+        content: { ...content, trees: [{ ...content.trees[0], key: 'second' }] },
+        project_id: project.projectId,
+        parents: [root.hash],
+        branch: 'main',
+        enforceBranchLinearity: true,
+      }),
+    ]);
+
+    const fulfilled = attempts.filter(
+      (attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof createCommit>>> =>
+        attempt.status === 'fulfilled'
+    );
+    const rejected = attempts.filter(
+      (attempt): attempt is PromiseRejectedResult => attempt.status === 'rejected'
+    );
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toMatchObject({ code: 'BRANCH_NOT_HEAD' });
+    expect((await getLatestCommit(db, project.projectId, 'main'))?.hash).toBe(
+      fulfilled[0]?.value.hash
+    );
   });
 });

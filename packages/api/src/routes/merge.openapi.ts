@@ -30,6 +30,7 @@ import {
   createCommit,
   createMergeDraft,
   deleteMergeDraft,
+  findBranchByName,
   findPendingMergeDraft,
   getCommitUnified,
   getMergeDraft,
@@ -39,6 +40,7 @@ import {
 import { getAuthorFromContext } from '../lib/auth';
 import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
+import { errorResponse } from '../lib/errors';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess } from '../lib/project-access';
 import { getLLMProvider } from '../lib/provider-registry';
@@ -96,6 +98,10 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
         },
       },
     },
+    400: {
+      description: 'Source and target commits must belong to the same project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
       description: 'Source or target commit not found',
       content: {
@@ -103,6 +109,10 @@ The client must resolve all conflicts and decide which onlyInSource/onlyInTarget
           schema: ErrorResponseSchema,
         },
       },
+    },
+    403: {
+      description: 'Project access denied',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -141,6 +151,12 @@ mergeRoutes.openapi(prepareMergeRoute, async (c) => {
         404
       );
     }
+    if (error instanceof MergeError && error.code === 'INVALID_REQUEST') {
+      return c.json(
+        { success: false as const, error: { code: error.code, message: error.message } },
+        400
+      );
+    }
     return c.json(
       {
         success: false as const,
@@ -172,7 +188,7 @@ Executes a frame merge after the user has made all resolution decisions.
 - \`decisions\`: MergeDecision with conflict resolutions and keep lists
 
 **Result:**
-- Creates a new merge commit with 2 parents: [source_hash, target_hash]
+- Creates a new merge commit with 2 parents: [target_hash, source_hash]
 - Merged content is SemanticContent (frames + relations)
 - Optionally updates the branch pointer if \`branch\` is specified
 
@@ -205,6 +221,14 @@ Executes a frame merge after the user has made all resolution decisions.
           schema: ErrorResponseSchema,
         },
       },
+    },
+    404: {
+      description: 'Source or target commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Merge commit does not extend the target branch head',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     500: {
       description: 'Server error',
@@ -251,7 +275,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
         project_id: projectId,
         source_hash,
         target_hash,
-        branch: branch || null,
+        branch: savedCommit.branch,
       },
       projectId
     );
@@ -260,7 +284,7 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
     pushNotification({
       type: 'merge.completed',
       title: 'Merge Completed',
-      message: `Merge completed on ${branch || 'main'}`,
+      message: `Merge completed on ${savedCommit.branch}`,
       project_id: projectId,
       ref_id: savedCommit.hash,
     });
@@ -270,18 +294,20 @@ mergeRoutes.openapi(executeMergeRoute, async (c) => {
         success: true as const,
         data: {
           hash: savedCommit.hash,
-          parents: [source_hash, target_hash],
+          parents: [target_hash, source_hash],
           author,
           committed_at: savedCommit.committed_at,
           content: savedCommit.content,
           message,
-          branch: branch || undefined,
+          branch: savedCommit.branch,
           merge_summary: mergeSummary,
         },
       },
       201
     );
   } catch (error) {
+    const linearity = mapBranchLinearityError(c, error);
+    if (linearity) return linearity;
     if (error instanceof MergeError) {
       if (error.code === 'UNRESOLVED_CONFLICTS') {
         return c.json(
@@ -324,8 +350,8 @@ const CreateDraftRequestSchema = z.object({
   project_id: z.string().min(1),
   source_hash: z.string().min(1),
   target_hash: z.string().min(1),
-  source_branch: z.string().optional(),
-  target_branch: z.string().optional(),
+  source_branch: z.string().trim().min(1).optional(),
+  target_branch: z.string().trim().min(1).optional(),
 });
 
 const UpdateDraftRequestSchema = z.object({
@@ -335,7 +361,7 @@ const UpdateDraftRequestSchema = z.object({
 
 const CommitDraftRequestSchema = z.object({
   message: z.string().min(1),
-  branch: z.string().optional(),
+  branch: z.string().trim().min(1).optional(),
   decisions: z
     .object({
       conflictResolutions: z.record(z.string(), z.any()).default({}),
@@ -377,8 +403,12 @@ const createDraftRoute = createRoute({
       description: 'New draft created',
       content: { 'application/json': { schema: z.any() } },
     },
+    400: {
+      description: 'Source and target commits must belong to the requested project',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     404: {
-      description: 'Source or target commit not found',
+      description: 'Source commit, target commit, or project not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -389,8 +419,34 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     c.req.valid('json');
   const db = await getDB();
 
-  // Check if pending draft already exists
-  const existingDraft = await findPendingMergeDraft(db, project_id, source_hash, target_hash);
+  // Load commits (unified, auto-upgrades V4)
+  const sourceCommit = await getCommitUnified(db, source_hash);
+  if (!sourceCommit) {
+    return errorResponse(c, 'NOT_FOUND', `Source commit not found: ${source_hash}`);
+  }
+
+  const targetCommit = await getCommitUnified(db, target_hash);
+  if (!targetCommit) {
+    return errorResponse(c, 'NOT_FOUND', `Target commit not found: ${target_hash}`);
+  }
+  if (sourceCommit.project_id !== project_id || targetCommit.project_id !== project_id) {
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      'Source and target commits must belong to the requested project'
+    );
+  }
+
+  const effectiveSourceBranch = source_branch ?? sourceCommit.branch;
+  const effectiveTargetBranch = target_branch ?? targetCommit.branch;
+  const existingDraft = await findPendingMergeDraft(
+    db,
+    project_id,
+    source_hash,
+    target_hash,
+    effectiveSourceBranch,
+    effectiveTargetBranch
+  );
   if (existingDraft) {
     return c.json(
       {
@@ -405,29 +461,6 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     );
   }
 
-  // Load commits (unified, auto-upgrades V4)
-  const sourceCommit = await getCommitUnified(db, source_hash);
-  if (!sourceCommit) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Source commit not found: ${source_hash}` },
-      },
-      404
-    );
-  }
-
-  const targetCommit = await getCommitUnified(db, target_hash);
-  if (!targetCommit) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'NOT_FOUND', message: `Target commit not found: ${target_hash}` },
-      },
-      404
-    );
-  }
-
   // Prepare frame-level merge (empty base = two-way mode)
   const baseContent: SemanticContent = { trees: [], relations: [] };
   const prepared = prepareMerge(baseContent, sourceCommit.content, targetCommit.content);
@@ -437,8 +470,8 @@ mergeRoutes.openapi(createDraftRoute, async (c) => {
     projectId: project_id,
     sourceHash: source_hash,
     targetHash: target_hash,
-    sourceBranch: source_branch,
-    targetBranch: target_branch,
+    sourceBranch: effectiveSourceBranch,
+    targetBranch: effectiveTargetBranch,
     prepared,
   });
 
@@ -618,7 +651,11 @@ const commitDraftRoute = createRoute({
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     404: {
-      description: 'Draft not found',
+      description: 'Draft, source commit, target commit, or target branch not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    409: {
+      description: 'Target commit is no longer the target branch head',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
@@ -652,6 +689,30 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
       },
       400
     );
+  }
+
+  const [sourceCommitForDraft, targetCommitForDraft] = await Promise.all([
+    getCommitUnified(db, draft.sourceHash),
+    getCommitUnified(db, draft.targetHash),
+  ]);
+  if (!sourceCommitForDraft) {
+    return errorResponse(c, 'NOT_FOUND', `Source commit not found: ${draft.sourceHash}`);
+  }
+  if (!targetCommitForDraft) {
+    return errorResponse(c, 'NOT_FOUND', `Target commit not found: ${draft.targetHash}`);
+  }
+
+  const targetBranch = draft.targetBranch ?? targetCommitForDraft.branch;
+  if (branch !== undefined && branch !== targetBranch) {
+    return errorResponse(
+      c,
+      'INVALID_REQUEST',
+      `Commit branch ${branch} does not match merge target branch ${targetBranch}`
+    );
+  }
+
+  if (!(await findBranchByName(db, draft.projectId, targetBranch))) {
+    return errorResponse(c, 'NOT_FOUND', `Target branch not found: ${targetBranch}`);
   }
 
   const prepared = JSON.parse(draft.preparedJson) as MergeResult;
@@ -689,18 +750,14 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
 
   try {
     // Execute merge - returns SemanticContent directly
-    const sourceCommitForDraft = await getCommitUnified(db, draft.sourceHash);
-    const targetCommitForDraft = await getCommitUnified(db, draft.targetHash);
     const emptyContent: SemanticContent = { trees: [], relations: [] };
     const mergedContent = executeMerge(
       emptyContent,
-      sourceCommitForDraft?.content ?? emptyContent,
-      targetCommitForDraft?.content ?? emptyContent,
+      sourceCommitForDraft.content,
+      targetCommitForDraft.content,
       prepared,
       mergeDecisions
     );
-
-    const targetBranch = branch || draft.targetBranch || 'main';
 
     // Compute merge summary
     const keptFromSource = mergeDecisions.keepFromSource?.length ?? 0;
@@ -720,7 +777,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
     let savedDraftCommitHash = '';
     await (db as any).transaction(async (tx: typeof db) => {
       const saved = await createCommit(tx, {
-        parents: [draft.sourceHash, draft.targetHash],
+        parents: [draft.targetHash, draft.sourceHash],
         author: {
           type: author.type as 'human' | 'agent' | 'system',
           name: author.name,
@@ -735,7 +792,10 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         enforceBranchLinearity: true,
       });
       savedDraftCommitHash = saved.hash;
-      await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
+      const updatedBranch = await updateBranchHead(tx, draft.projectId, targetBranch, saved.hash);
+      if (!updatedBranch) {
+        throw new MergeError('NOT_FOUND', `Target branch not found: ${targetBranch}`);
+      }
       await commitMergeDraft(tx, id);
     });
 
@@ -765,7 +825,7 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
         success: true as const,
         data: {
           hash: savedDraftCommitHash,
-          parents: [draft.sourceHash, draft.targetHash],
+          parents: [draft.targetHash, draft.sourceHash],
           author,
           committed_at: new Date().toISOString(),
           content: mergedContent,
@@ -779,6 +839,9 @@ mergeRoutes.openapi(commitDraftRoute, async (c) => {
   } catch (error) {
     const linearity = mapBranchLinearityError(c, error);
     if (linearity) return linearity;
+    if (error instanceof MergeError && error.code === 'NOT_FOUND') {
+      return errorResponse(c, 'NOT_FOUND', error.message);
+    }
     return c.json(
       {
         success: false as const,

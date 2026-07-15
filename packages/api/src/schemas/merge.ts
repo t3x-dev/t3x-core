@@ -173,7 +173,7 @@ export const ExecuteMergeRequestSchema = z.object({
     description: 'Merge commit message',
     example: 'Merge feature-branch into main',
   }),
-  branch: z.string().optional().openapi({
+  branch: z.string().trim().min(1).optional().openapi({
     description: 'Target branch name (optional)',
     example: 'main',
   }),
@@ -210,8 +210,8 @@ export const MergeCommitSchema = z.object({
     example: 'sha256:merge789...',
   }),
   parents: z.array(z.string()).openapi({
-    description: 'Parent commit hashes [source, target]',
-    example: ['sha256:abc123...', 'sha256:def456...'],
+    description: 'Parent commit hashes [target, source]',
+    example: ['sha256:def456...', 'sha256:abc123...'],
   }),
   author: z.any().openapi({
     description: 'Commit author',
