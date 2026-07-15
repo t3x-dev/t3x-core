@@ -528,10 +528,14 @@ describe('WorkspaceWorkbench', () => {
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
+    let resolveApplyResponse: (response: Response) => void = () => undefined;
+    const applyResponse = new Promise<Response>((resolve) => {
+      resolveApplyResponse = resolve;
+    });
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(createValidateResponse())
-      .mockResolvedValueOnce(createValidateResponse());
+      .mockImplementationOnce(() => applyResponse);
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/Validation/);
@@ -561,11 +565,13 @@ describe('WorkspaceWorkbench', () => {
     );
     activateTab(/Validation/);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
 
-    expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2);
+    await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
+    await act(async () => {
+      resolveApplyResponse(createValidateResponse());
+      await applyResponse;
+    });
     expect(findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1)[0]).toBe(yopsValidateUrl);
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Materialized 1')).toBeInTheDocument();
