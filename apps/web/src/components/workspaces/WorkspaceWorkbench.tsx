@@ -146,7 +146,7 @@ export function WorkspaceWorkbench({
           ? (result.yops_draft_id ?? result.workspace.yopsDraft.id)
           : undefined,
       });
-      setActiveWorkflowTab('ops');
+      setActiveWorkflowTab(hasOperations ? 'validation' : 'ops');
     } catch (err) {
       updateSelectedFlow({
         error: err instanceof Error ? err.message : 'YOps proposal generation failed.',

@@ -1147,7 +1147,13 @@ describe('WorkspaceWorkbench', () => {
     );
     findFetchCall(fetchMock.mock.calls, yopsDraftUrl);
     expect(await screen.findByText('Proposal ready')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
+
+    activateTab(/Ops/);
     expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
     expect(
       screen.getByText(
