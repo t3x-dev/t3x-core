@@ -66,7 +66,21 @@ afterEach(() => {
 
 describe('useMergeWorkspaceActions.load', () => {
   it('seeds draft state via setDraftLoaded on success', async () => {
-    vi.mocked(getMergeDraft).mockResolvedValueOnce(draftResp() as never);
+    useMergeWorkspaceStore.setState({
+      treeResolutions: new Map([['stale/path', { type: 'source' }]]),
+      extendedResolutions: { 0: { type: 'both' } },
+      keepSourceNodes: new Set(['stale/source']),
+      keepTargetNodes: new Set(['stale/target']),
+    });
+    vi.mocked(getMergeDraft).mockResolvedValueOnce(
+      draftResp({
+        prepared: {
+          ...EMPTY_PREPARED,
+          onlyInSource: ['source-only'],
+          onlyInTarget: ['target-only'],
+        },
+      }) as never
+    );
 
     const { result } = renderHook(() => useMergeWorkspaceActions());
     await result.current.load('merge_1');
@@ -75,6 +89,10 @@ describe('useMergeWorkspaceActions.load', () => {
     const state = useMergeWorkspaceStore.getState();
     expect(state.draftId).toBe('merge_1');
     expect(state.sourceHash).toBe('sha256:src');
+    expect([...state.keepSourceNodes]).toEqual(['source-only']);
+    expect([...state.keepTargetNodes]).toEqual(['target-only']);
+    expect(state.treeResolutions.size).toBe(0);
+    expect(state.extendedResolutions).toEqual({});
     expect(state.loading).toBe(false);
   });
 

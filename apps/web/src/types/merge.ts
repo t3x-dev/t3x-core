@@ -74,6 +74,21 @@ export interface MergeConflictEntry {
   slotConflicts: SlotConflict[];
 }
 
+export type TreeResolution =
+  | { type: 'source' }
+  | { type: 'target' }
+  | { type: 'both' }
+  | { type: 'per-slot'; slotChoices: Record<string, 'source' | 'target'> };
+
+export function isTreeResolutionComplete(
+  resolution: TreeResolution | null | undefined,
+  slotConflicts: SlotConflict[]
+): boolean {
+  if (!resolution) return false;
+  if (resolution.type !== 'per-slot') return true;
+  return slotConflicts.every((conflict) => resolution.slotChoices[conflict.key] !== undefined);
+}
+
 /**
  * Current merge operation state in canvas store (tree-primary)
  */

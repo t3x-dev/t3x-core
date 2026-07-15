@@ -99,6 +99,15 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       expect(state.treeResolutions.get('topic/budget')).toEqual({ type: 'source' });
       expect(state.extendedResolutions['0']).toBeUndefined();
     });
+
+    it('clears extended resolutions when replacing the tree merge result', () => {
+      setupStore();
+      useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
+
+      useMergeWorkspaceStore.getState().setTreeMergeResult(createMockTreeMergeResult());
+
+      expect(useMergeWorkspaceStore.getState().extendedResolutions).toEqual({});
+    });
   });
 
   describe('getUnresolvedCount', () => {
@@ -123,6 +132,50 @@ describe('MergeWorkspaceStore - Extended Resolutions', () => {
       useMergeWorkspaceStore.getState().resolveConflict(1, 'target');
 
       expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(0);
+    });
+
+    it('keeps a per-slot conflict unresolved until every conflicting slot has a choice', () => {
+      const treeMergeResult: MergeResult = {
+        ...createMockTreeMergeResult(),
+        conflicts: [
+          {
+            path: 'topic/budget',
+            slotConflicts: [
+              { key: 'amount', sourceValue: 10, targetValue: 20 },
+              { key: 'currency', sourceValue: 'USD', targetValue: 'EUR' },
+            ],
+          },
+        ],
+      };
+      useMergeWorkspaceStore.getState().setTreeMergeResult(treeMergeResult);
+      useMergeWorkspaceStore.setState({
+        status: 'pending',
+        message: 'Merge commit',
+      });
+      useMergeWorkspaceStore.getState().resolveConflict(0, 'both');
+
+      useMergeWorkspaceStore.getState().resolveTreeConflict('topic/budget', {
+        type: 'per-slot',
+        slotChoices: { amount: 'source' },
+      });
+
+      expect(useMergeWorkspaceStore.getState().extendedResolutions['0']).toBeUndefined();
+      expect(useMergeWorkspaceStore.getState().allTreeConflictsResolved()).toBe(false);
+      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(1);
+      expect(useMergeWorkspaceStore.getState().getTreeUnresolvedCount()).toBe(1);
+      expect(useMergeWorkspaceStore.getState().getPreviewPaths()).not.toContain('topic/budget');
+      expect(useMergeWorkspaceStore.getState().canCommit()).toBe(false);
+
+      useMergeWorkspaceStore.getState().resolveTreeConflict('topic/budget', {
+        type: 'per-slot',
+        slotChoices: { amount: 'source', currency: 'target' },
+      });
+
+      expect(useMergeWorkspaceStore.getState().allTreeConflictsResolved()).toBe(true);
+      expect(useMergeWorkspaceStore.getState().getUnresolvedCount()).toBe(0);
+      expect(useMergeWorkspaceStore.getState().getTreeUnresolvedCount()).toBe(0);
+      expect(useMergeWorkspaceStore.getState().getPreviewPaths()).toContain('topic/budget');
+      expect(useMergeWorkspaceStore.getState().canCommit()).toBe(true);
     });
   });
 

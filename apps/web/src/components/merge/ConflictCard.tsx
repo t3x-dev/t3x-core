@@ -5,7 +5,7 @@
  *
  * Two modes:
  * - Per-tree (default): Side-by-side source/target YAML preview with
- *   "Accept Source" / "Accept Target" / "Accept Both" quick-resolution buttons.
+ *   source and target quick-resolution buttons.
  * - Per-slot (expanded): Each conflicting slot shown as a row with individual
  *   source/target radio buttons. Non-conflicting slots shown as auto-resolved.
  *
@@ -16,17 +16,14 @@ import type { SlotConflict, SlotValue, TreeNode } from '@t3x-dev/core';
 import { Check } from 'lucide-react';
 import { useState } from 'react';
 import { buildMergeDecisionLabels, type MergeDecisionLabels } from '@/domain/merge/voices';
+import { isTreeResolutionComplete, type TreeResolution } from '@/types/merge';
 import { cn } from '@/utils/cn';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type TreeResolution =
-  | { type: 'source' }
-  | { type: 'target' }
-  | { type: 'both' }
-  | { type: 'per-slot'; slotChoices: Record<string, 'source' | 'target'> };
+export type { TreeResolution } from '@/types/merge';
 
 export interface ConflictCardProps {
   conflict: {
@@ -275,7 +272,7 @@ export function ConflictCard({
   const [mode, setMode] = useState<'per-tree' | 'per-slot'>('per-tree');
   const { treeId, sourceNode, targetNode, slotConflicts } = conflict;
 
-  const isResolved = resolution !== null;
+  const isResolved = isTreeResolutionComplete(resolution, slotConflicts);
   const conflictKeys = new Set(slotConflicts.map((sc) => sc.key));
 
   // Current per-slot choices (from resolution if in per-slot mode, else empty)
@@ -304,10 +301,6 @@ export function ConflictCard({
   function handleAcceptTarget() {
     onResolve({ type: 'target' });
   }
-  function handleAcceptBoth() {
-    onResolve({ type: 'both' });
-  }
-
   // Handler for per-slot choice change
   function handleSlotChoose(key: string, choice: 'source' | 'target') {
     const nextChoices = { ...slotChoices, [key]: choice };
@@ -421,19 +414,6 @@ export function ConflictCard({
               >
                 {decisionLabels.target}
               </button>
-              <button
-                type="button"
-                onClick={handleAcceptBoth}
-                className={cn(
-                  'rounded px-3 py-1.5 text-xs font-medium border transition-colors',
-                  resolution?.type === 'both'
-                    ? 'bg-[var(--merge-conflict-accent)]/20 border-[var(--merge-conflict-accent)]/60 text-[var(--merge-conflict-accent)] ring-1 ring-[var(--merge-conflict-accent)]/40'
-                    : 'border-[var(--stroke-divider)] text-[var(--text-secondary)] hover:border-[var(--merge-conflict-accent)]/60 hover:text-[var(--merge-conflict-accent)]'
-                )}
-              >
-                {decisionLabels.both}
-              </button>
-
               {/* Mode toggle */}
               <button
                 type="button"
