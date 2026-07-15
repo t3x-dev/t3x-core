@@ -609,6 +609,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(within(detail).getByRole('button', { name: 'Include turn' }));
 
     await screen.findByText('1 selected source turns');
+    await screen.findByText('1 source');
     fireEvent.click(screen.getByRole('button', { name: 'Generate candidate proposal' }));
 
     await waitFor(() =>
