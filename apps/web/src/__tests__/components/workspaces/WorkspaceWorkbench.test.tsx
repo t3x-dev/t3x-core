@@ -588,6 +588,12 @@ describe('WorkspaceWorkbench', () => {
     );
     expect(diffDetail).toHaveTextContent('Internal reviewers');
     expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
+    expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole('tab', {
+        name: 'Overview',
+      })
+    );
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );

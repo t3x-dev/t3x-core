@@ -598,29 +598,55 @@ function PreviewReviewView({
           validationPassed,
           yopsDraftId: candidate.yopsDraft.id,
         }}
+        renderedPreview={
+          <RenderedYOpsTree
+            appliedCount={appliedCount}
+            generatedYOpsCount={generatedYOpsCount}
+            materializedTrees={materializedTrees}
+            treeLines={treeLines}
+            yopsExtracted={yopsExtracted}
+          />
+        }
       />
-      <section
-        aria-label="YOps YAML tree"
-        className="flex min-h-[360px] shrink-0 flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
-      >
-        <PaneHeader
-          icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
-          label="Rendered PRD YAML"
-          meta={materializedTrees ? `${appliedCount} applied` : 'Waiting for validation'}
-        />
-        {materializedTrees ? (
-          <TreePane lines={treeLines} />
-        ) : (
-          <YOpsTreePendingState operationCount={generatedYOpsCount} yopsExtracted={yopsExtracted} />
-        )}
-        <footer className="flex min-h-10 items-center gap-3 border-t border-[var(--stroke-divider)] px-3">
-          <TreeLegend />
-          <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
-            {appliedCount} applied
-          </span>
-        </footer>
-      </section>
     </div>
+  );
+}
+
+function RenderedYOpsTree({
+  appliedCount,
+  generatedYOpsCount,
+  materializedTrees,
+  treeLines,
+  yopsExtracted,
+}: {
+  appliedCount: number;
+  generatedYOpsCount: number;
+  materializedTrees: WorkspaceYOpsTreeNode[] | null;
+  treeLines: YamlTreeLine[];
+  yopsExtracted: boolean;
+}) {
+  return (
+    <section
+      aria-label="YOps YAML tree"
+      className="flex min-h-[360px] flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)]"
+    >
+      <PaneHeader
+        icon={<Braces aria-hidden="true" className="size-4 text-[var(--accent-commit)]" />}
+        label="Rendered PRD YAML"
+        meta={materializedTrees ? `${appliedCount} applied` : 'Waiting for validation'}
+      />
+      {materializedTrees ? (
+        <TreePane lines={treeLines} />
+      ) : (
+        <YOpsTreePendingState operationCount={generatedYOpsCount} yopsExtracted={yopsExtracted} />
+      )}
+      <footer className="flex min-h-10 items-center gap-3 border-t border-[var(--stroke-divider)] px-3">
+        <TreeLegend />
+        <span className="ml-auto font-mono text-[10px] text-[var(--text-tertiary)]">
+          {appliedCount} applied
+        </span>
+      </footer>
+    </section>
   );
 }
 
