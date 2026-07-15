@@ -1209,7 +1209,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
     await screen.findByText('Materialized 5');
 
-    activateTab(/Preview/);
+    expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'Backend product reviewers'
     );

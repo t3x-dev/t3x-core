@@ -95,6 +95,7 @@ export function WorkspaceTabs({
   onExtractCandidate,
   onSourceMaterialUploaded,
   onSendToYOps,
+  onYOpsApplied,
   onYOpsCommitted,
   sendingToYOps,
   yopsDraftSent,
@@ -108,6 +109,7 @@ export function WorkspaceTabs({
   onExtractCandidate?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
+  onYOpsApplied?: () => void;
   onYOpsCommitted?: (commitHash: string) => void;
   sendingToYOps?: boolean;
   yopsDraftSent?: boolean;
@@ -122,6 +124,7 @@ export function WorkspaceTabs({
         onExtractCandidate,
         onSendToYOps,
         onSourceMaterialUploaded,
+        onYOpsApplied,
         onYOpsCommitted,
         sendingToYOps,
         yopsDraftSent,
@@ -138,6 +141,7 @@ interface RenderWorkspaceTabOptions {
   onExtractCandidate?: () => Promise<void> | void;
   onSendToYOps?: () => Promise<void> | void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onYOpsApplied?: () => void;
   onYOpsCommitted?: (commitHash: string) => void;
   sendingToYOps?: boolean;
   yopsDraftSent?: boolean;
@@ -153,6 +157,7 @@ function renderWorkspaceTab(
       <YOpsDraftTab
         candidate={candidate}
         flowError={options.flowError}
+        onApplied={options.onYOpsApplied}
         onSendToYOps={options.onSendToYOps}
         onCommitted={options.onYOpsCommitted}
         sendingToYOps={options.sendingToYOps}

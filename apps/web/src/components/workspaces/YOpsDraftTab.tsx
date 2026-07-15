@@ -26,6 +26,7 @@ export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 export function YOpsDraftTab({
   candidate,
   flowError,
+  onApplied,
   onCommitted,
   onSendToYOps,
   sendingToYOps,
@@ -34,6 +35,7 @@ export function YOpsDraftTab({
 }: {
   candidate: WorkspaceCandidate;
   flowError?: string;
+  onApplied?: () => void;
   onCommitted?: (commitHash: string) => void;
   onSendToYOps?: () => Promise<void> | void;
   sendingToYOps?: boolean;
@@ -170,6 +172,7 @@ export function YOpsDraftTab({
       setMaterializedTrees(result.previewTrees);
       setAppliedCount(result.applied);
       setStatus('applied');
+      onApplied?.();
     } catch (error) {
       setValidationPassed(false);
       setStatus(generatedYOps ? 'generated' : 'idle');
