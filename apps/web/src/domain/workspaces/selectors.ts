@@ -25,11 +25,12 @@ const WORKSPACE_STATUS_TONES: Record<WorkspaceStatus, WorkspaceStatusBadgeTone> 
   committed: 'commit',
 };
 
-const SOURCE_ORDER: SourceBundleType[] = ['chat', 'document', 'prompt_run', 'import'];
+const SOURCE_ORDER: SourceBundleType[] = ['chat', 'document', 'text', 'prompt_run', 'import'];
 
 const SOURCE_LABELS: Record<SourceBundleType, { singular: string; plural: string }> = {
   chat: { singular: 'chat', plural: 'chats' },
   document: { singular: 'doc', plural: 'docs' },
+  text: { singular: 'text', plural: 'texts' },
   prompt_run: { singular: 'prompt run', plural: 'prompt runs' },
   import: { singular: 'import', plural: 'imports' },
 };

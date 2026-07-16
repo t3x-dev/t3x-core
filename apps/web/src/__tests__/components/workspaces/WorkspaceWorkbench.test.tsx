@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceWorkbench } from '@/components/workspaces/WorkspaceWorkbench';
 import { usePinsStore } from '@/store/pinsStore';
@@ -339,10 +339,10 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByRole('button', { name: 'Import doc' })).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Upload PDF/doc' })).toBeInTheDocument();
     expect(within(detail).getByRole('button', { name: 'Add manual note source' })).toBeDisabled();
-    expect(within(detail).getByRole('button', { name: 'Paste text' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Paste text' })).toBeEnabled();
     expect(within(detail).getByRole('button', { name: 'Paste text' })).toHaveAttribute(
       'title',
-      'Paste text sources need a persisted workspace source endpoint before enabling.'
+      'Paste text as a source material.'
     );
     expect(within(detail).getByRole('button', { name: 'Add URL' })).toBeDisabled();
     expect(within(detail).getByRole('button', { name: 'Add URL' })).toHaveAttribute(
@@ -456,6 +456,64 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
+  it('imports pasted text as a source material', async () => {
+    usePinsStore.setState({ pins: [], initialized: true, currentProjectId: 'proj_1' });
+    const onSourceMaterialUploaded = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        success: true,
+        data: {
+          id: 'mat_pasted_audience',
+          project_id: 'proj_1',
+          source_type: 'document',
+          title: 'audience-note.txt',
+          filename: 'audience-note.txt',
+          mime_type: 'text/plain',
+          content_hash: 'hash_pasted_audience',
+          content_excerpt: 'Audience: Product reviewers and engineering owners.',
+          token_estimate: 8,
+          metadata: {},
+          created_at: '2026-07-15T00:00:00.000Z',
+          archived_at: null,
+          created_by: null,
+        },
+      })
+    );
+
+    render(
+      <WorkspaceWorkbench
+        candidates={workspaceCandidates}
+        projectId="proj_1"
+        onSourceMaterialUploaded={onSourceMaterialUploaded}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Paste text' }));
+    fireEvent.change(screen.getByPlaceholderText('Audience note'), {
+      target: { value: 'Audience note' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        'Audience: Product managers, engineering reviewers, and implementation owners.'
+      ),
+      {
+        target: { value: 'Audience: Product reviewers and engineering owners.' },
+      }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Import text' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/projects/proj_1/materials/document',
+        expect.objectContaining({
+          body: expect.any(FormData),
+          method: 'POST',
+        })
+      );
+    });
+    await waitFor(() => expect(onSourceMaterialUploaded).toHaveBeenCalled());
+  });
+
   it('extracts yops before applying the backend preview', async () => {
     const yopsValidateUrl = 'http://localhost:8000/api/v1/yops/validate';
     const createValidateResponse = () =>
@@ -485,10 +543,14 @@ describe('WorkspaceWorkbench', () => {
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
+    let resolveApplyResponse: (response: Response) => void = () => undefined;
+    const applyResponse = new Promise<Response>((resolve) => {
+      resolveApplyResponse = resolve;
+    });
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(createValidateResponse())
-      .mockResolvedValueOnce(createValidateResponse());
+      .mockImplementationOnce(() => applyResponse);
 
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
     activateTab(/Validation/);
@@ -521,10 +583,14 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
 
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
+    await act(async () => {
+      resolveApplyResponse(createValidateResponse());
+      await applyResponse;
+    });
     expect(findFetchCall(fetchMock.mock.calls, yopsValidateUrl, 1)[0]).toBe(yopsValidateUrl);
-    expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
-    activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
       'Materialized preview'
     );
@@ -545,6 +611,12 @@ describe('WorkspaceWorkbench', () => {
     );
     expect(diffDetail).toHaveTextContent('Internal reviewers');
     expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
+    expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole('tab', {
+        name: 'Overview',
+      })
+    );
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
@@ -1222,6 +1294,15 @@ describe('WorkspaceWorkbench', () => {
       'true'
     );
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
+    activateTab(/Ops/);
+    expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'value: "YOps receives reviewed candidate fields from backend source evidence."'
+      )
+    ).toBeInTheDocument();
+
+    activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Validate proposal/ }));
@@ -1269,7 +1350,7 @@ describe('WorkspaceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply YOps/ }));
     await screen.findByText('Materialized 5');
 
-    activateTab(/Preview/);
+    expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'Backend product reviewers'
     );

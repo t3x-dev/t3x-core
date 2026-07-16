@@ -6,7 +6,7 @@ import {
   GitCompareArrows,
   Rows3,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import type { WorkspaceCandidate, WorkspaceYOpsDraftOperation } from '@/types/workspaces';
 import type { WorkspaceYOpsTreeNode, WorkspaceYOpsValue } from '@/types/workspaceYops';
@@ -29,6 +29,7 @@ interface ChangeReviewFlowState {
 interface ChangeReviewDockProps {
   candidate: WorkspaceCandidate;
   flowState?: ChangeReviewFlowState;
+  renderedPreview?: ReactNode;
 }
 
 const CHANGE_REVIEW_TABS: {
@@ -55,7 +56,7 @@ interface YamlChangeNode {
   path: string;
 }
 
-export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps) {
+export function ChangeReviewDock({ candidate, flowState, renderedPreview }: ChangeReviewDockProps) {
   const [activeView, setActiveView] = useState<ChangeReviewView>('overview');
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(
     candidate.yopsDraft.operations[0]?.id ?? null
@@ -129,6 +130,7 @@ export function ChangeReviewDock({ candidate, flowState }: ChangeReviewDockProps
         candidate={candidate}
         flowState={flowState}
         onReviewDiff={handleReviewDiff}
+        renderedPreview={renderedPreview}
         selectedOperation={selectedOperation}
         summary={summary}
       />
@@ -141,6 +143,7 @@ function ChangeReviewPanel({
   candidate,
   flowState,
   onReviewDiff,
+  renderedPreview,
   selectedOperation,
   summary,
 }: {
@@ -148,6 +151,7 @@ function ChangeReviewPanel({
   candidate: WorkspaceCandidate;
   flowState?: ChangeReviewFlowState;
   onReviewDiff: (operation: WorkspaceYOpsDraftOperation) => void;
+  renderedPreview?: ReactNode;
   selectedOperation: WorkspaceYOpsDraftOperation | null;
   summary: ChangeReviewSummary;
 }) {
@@ -167,6 +171,7 @@ function ChangeReviewPanel({
       candidate={candidate}
       flowState={flowState}
       onReviewDiff={onReviewDiff}
+      renderedPreview={renderedPreview}
       summary={summary}
     />
   );
@@ -176,11 +181,13 @@ function ChangeOverviewPanel({
   candidate,
   flowState,
   onReviewDiff,
+  renderedPreview,
   summary,
 }: {
   candidate: WorkspaceCandidate;
   flowState?: ChangeReviewFlowState;
   onReviewDiff: (operation: WorkspaceYOpsDraftOperation) => void;
+  renderedPreview?: ReactNode;
   summary: ChangeReviewSummary;
 }) {
   const yamlTree = useMemo(() => buildYamlChangeTree(candidate), [candidate]);
@@ -226,6 +233,8 @@ function ChangeOverviewPanel({
       id="change-track-overview"
       role="tabpanel"
     >
+      {renderedPreview}
+
       <section aria-label="Review status" className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <ReviewStatusCard
           detail={candidate.baseCommitHash ?? 'No persisted commit'}

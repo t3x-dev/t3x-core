@@ -250,17 +250,29 @@ export function getWorkspacePreviewCandidates(
 function materialToSourceBundleItem(material: Material) {
   return {
     id: materialSourceId(material.id),
-    type: material.source_type === 'document' ? ('document' as const) : ('import' as const),
+    type: materialSourceBundleType(material),
     title: material.title,
     description: material.content_excerpt,
     materialId: material.id,
     contentHash: material.content_hash,
     tokenEstimate: material.token_estimate,
     fileName: material.filename ?? undefined,
+    ...(isTextMaterial(material) ? { format: 'text' as const } : {}),
     previewText: material.content_excerpt,
   };
 }
 
 export function materialSourceId(materialId: string): string {
   return `material:${materialId}`;
+}
+
+function materialSourceBundleType(material: Material) {
+  if (isTextMaterial(material)) return 'text' as const;
+  return material.source_type === 'document' ? ('document' as const) : ('import' as const);
+}
+
+function isTextMaterial(material: Material): boolean {
+  const mimeType = material.mime_type?.toLowerCase() ?? '';
+  const filename = material.filename?.toLowerCase() ?? '';
+  return mimeType === 'text/plain' || filename.endsWith('.txt');
 }
