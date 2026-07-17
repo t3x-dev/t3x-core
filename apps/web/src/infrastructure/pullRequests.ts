@@ -1,0 +1,75 @@
+import { API_V1, fetchWithTimeout, handleResponse } from './core';
+
+export type ProjectPullRequestStatus = 'draft' | 'open' | 'ready' | 'blocked' | 'merged' | 'closed';
+
+export interface ApiProjectPullRequest {
+  id: string;
+  number: number;
+  project_id: string;
+  title: string;
+  description: string;
+  source_branch: string;
+  target_branch: string;
+  source_commit_id: string;
+  target_base_commit_id: string;
+  status: ProjectPullRequestStatus;
+  author_id: string;
+  steward_id: string | null;
+  review_owner_id: string | null;
+  workspace_id: string | null;
+  release_lane_id: string | null;
+  linked_work: string | null;
+  created_at: string;
+  updated_at: string;
+  merged_at: string | null;
+  closed_at: string | null;
+}
+
+export interface ProjectPullRequestListData {
+  pull_requests: ApiProjectPullRequest[];
+  counts: {
+    active: number;
+    merged: number;
+  };
+}
+
+export interface CreateProjectPullRequestInput {
+  title: string;
+  description: string;
+  source_branch: string;
+  target_branch: string;
+  draft?: boolean;
+  review_owner_id?: string;
+  steward_id?: string;
+  workspace_id?: string;
+  release_lane_id?: string;
+}
+
+export async function listProjectPullRequests(
+  projectId: string,
+  options: { query?: string; status?: 'active' | 'merged' | 'all' } = {}
+): Promise<ProjectPullRequestListData> {
+  const params = new URLSearchParams();
+  if (options.status) params.set('status', options.status);
+  if (options.query) params.set('query', options.query);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests${suffix}`
+  );
+  return handleResponse<ProjectPullRequestListData>(res);
+}
+
+export async function createProjectPullRequest(
+  projectId: string,
+  input: CreateProjectPullRequestInput
+): Promise<ApiProjectPullRequest> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }
+  );
+  return handleResponse<ApiProjectPullRequest>(res);
+}

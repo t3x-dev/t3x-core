@@ -16,7 +16,7 @@ export const PROJECT_TABS: ProjectTabDefinition[] = [
   { id: 'state', label: 'State' },
   { id: 'schemas', label: 'Schemas' },
   { id: 'workspaces', label: 'Workspaces' },
-  { id: 'reviews', label: 'Reviews' },
+  { id: 'reviews', label: 'Pull requests' },
   { id: 'outputs', label: 'Outputs' },
   { id: 'community', label: 'Community' },
   { id: 'settings', label: 'Settings' },

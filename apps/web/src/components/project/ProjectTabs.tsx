@@ -1,8 +1,8 @@
 import {
   Boxes,
-  FileCheck2,
   FileCode2,
   GitCommitHorizontal,
+  GitPullRequestArrow,
   MessageCircle,
   PanelTop,
   Settings,
@@ -16,7 +16,7 @@ const tabIcons: Record<ProjectTabId, ComponentType<{ className?: string }>> = {
   state: GitCommitHorizontal,
   schemas: FileCode2,
   workspaces: Boxes,
-  reviews: FileCheck2,
+  reviews: GitPullRequestArrow,
   outputs: PanelTop,
   community: MessageCircle,
   settings: Settings,

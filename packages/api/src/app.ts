@@ -63,6 +63,7 @@ import {
   notificationsRoutes,
   pinsRoutes,
   projectRoutes,
+  pullRequestRoutes,
   providersRoutes,
   recipesRoutes,
   relationsRoutes,
@@ -160,6 +161,7 @@ export function createApp(options?: CreateAppOptions): CreateAppResult {
   // Mount routes
   api.route('/', statusRoutes);
   api.route('/', projectRoutes);
+  api.route('/', pullRequestRoutes);
   api.route('/', conversationRoutes);
   api.route('/', turnRoutes);
   api.route('/', commitRoutes);

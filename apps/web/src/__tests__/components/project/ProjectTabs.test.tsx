@@ -32,5 +32,6 @@ describe('ProjectTabs', () => {
       'community',
       'settings',
     ]);
+    expect(PROJECT_TABS.find((tab) => tab.id === 'reviews')?.label).toBe('Pull requests');
   });
 });
