@@ -1,6 +1,7 @@
 import {
   type CreateProjectPullRequestInput,
   createProjectPullRequest,
+  listProjectPullRequestComparisons,
   listProjectPullRequests,
 } from '@/infrastructure/pullRequests';
 
@@ -13,4 +14,11 @@ export function fetchProjectPullRequests(
 
 export function openProjectPullRequest(projectId: string, input: CreateProjectPullRequestInput) {
   return createProjectPullRequest(projectId, input);
+}
+
+export function fetchProjectPullRequestComparisons(
+  projectId: string,
+  options: { base?: string } = {}
+) {
+  return listProjectPullRequestComparisons(projectId, options);
 }

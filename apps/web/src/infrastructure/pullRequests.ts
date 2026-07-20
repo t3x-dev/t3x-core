@@ -33,6 +33,32 @@ export interface ProjectPullRequestListData {
   };
 }
 
+export interface ApiProjectPullRequestCompareCandidate {
+  id: string;
+  branch: string;
+  base_branch: string;
+  title: string;
+  description: string;
+  head_commit_id: string;
+  base_commit_id: string;
+  updated_at: string;
+  ahead_by: number;
+  behind_by: number;
+  yops_changes: number;
+  changed_nodes: number;
+  output_impacts: number;
+  source_refs: number;
+  schema: string;
+  status: 'ready' | 'already_open' | 'no_changes';
+  status_label: string;
+  open_pull_request_number: number | null;
+}
+
+export interface ProjectPullRequestCompareData {
+  base_branches: string[];
+  compare_branches: ApiProjectPullRequestCompareCandidate[];
+}
+
 export interface CreateProjectPullRequestInput {
   title: string;
   description: string;
@@ -57,6 +83,19 @@ export async function listProjectPullRequests(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests${suffix}`
   );
   return handleResponse<ProjectPullRequestListData>(res);
+}
+
+export async function listProjectPullRequestComparisons(
+  projectId: string,
+  options: { base?: string } = {}
+): Promise<ProjectPullRequestCompareData> {
+  const params = new URLSearchParams();
+  if (options.base) params.set('base', options.base);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/compare${suffix}`
+  );
+  return handleResponse<ProjectPullRequestCompareData>(res);
 }
 
 export async function createProjectPullRequest(

@@ -1,5 +1,9 @@
 import { useCallback } from 'react';
-import { fetchProjectPullRequests, openProjectPullRequest } from '@/queries/projectPullRequests';
+import {
+  fetchProjectPullRequestComparisons,
+  fetchProjectPullRequests,
+  openProjectPullRequest,
+} from '@/queries/projectPullRequests';
 
 export function useProjectPullRequestsApi() {
   const fetchPullRequests = useCallback((projectId: string) => {
@@ -21,5 +25,9 @@ export function useProjectPullRequestsApi() {
     []
   );
 
-  return { createPullRequest, fetchPullRequests };
+  const fetchCompareCandidates = useCallback((projectId: string, base = 'main') => {
+    return fetchProjectPullRequestComparisons(projectId, { base });
+  }, []);
+
+  return { createPullRequest, fetchCompareCandidates, fetchPullRequests };
 }

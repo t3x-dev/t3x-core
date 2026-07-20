@@ -41,6 +41,27 @@ describe('Pull request routes', () => {
     ).toBe(true);
   });
 
+  it('lists branches that can open a new pull request', async () => {
+    const res = await app.request('/v1/projects/proj_pr_compare/pull-requests/compare?base=main');
+    expect(res.status).toBe(200);
+
+    const data: ApiResponse = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.data.base_branches).toContain('main');
+    expect(
+      data.data.compare_branches.some(
+        (candidate: { branch: string; status: string }) =>
+          candidate.branch === 'outputs/bundle-refresh' && candidate.status === 'ready'
+      )
+    ).toBe(true);
+    expect(
+      data.data.compare_branches.some(
+        (candidate: { branch: string; status: string }) =>
+          candidate.branch === 'workspace/audience-handoff' && candidate.status === 'already_open'
+      )
+    ).toBe(true);
+  });
+
   it('blocks merge until the pull request is ready', async () => {
     const res = await app.request('/v1/projects/proj_pr_test/pull-requests/18/merge', {
       body: JSON.stringify({ strategy: 'deterministic_merge' }),

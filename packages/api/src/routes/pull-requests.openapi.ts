@@ -79,6 +79,27 @@ const PullRequestDetailSchema = PullRequestSchema.extend({
   activity: z.array(PullRequestActivitySchema),
 });
 
+const PullRequestCompareCandidateSchema = z.object({
+  id: z.string(),
+  branch: z.string(),
+  base_branch: z.string(),
+  title: z.string(),
+  description: z.string(),
+  head_commit_id: z.string(),
+  base_commit_id: z.string(),
+  updated_at: z.string(),
+  ahead_by: z.number().int().nonnegative(),
+  behind_by: z.number().int().nonnegative(),
+  yops_changes: z.number().int().nonnegative(),
+  changed_nodes: z.number().int().nonnegative(),
+  output_impacts: z.number().int().nonnegative(),
+  source_refs: z.number().int().nonnegative(),
+  schema: z.string(),
+  status: z.enum(['ready', 'already_open', 'no_changes']),
+  status_label: z.string(),
+  open_pull_request_number: z.number().int().positive().nullable(),
+});
+
 const PullRequestListResponseSchema = z.object({
   pull_requests: z.array(PullRequestSchema),
   counts: z.object({
@@ -87,10 +108,16 @@ const PullRequestListResponseSchema = z.object({
   }),
 });
 
+const PullRequestCompareResponseSchema = z.object({
+  base_branches: z.array(z.string()),
+  compare_branches: z.array(PullRequestCompareCandidateSchema),
+});
+
 type PullRequestStatus = z.infer<typeof PullRequestStatusSchema>;
 type PullRequest = z.infer<typeof PullRequestSchema>;
 type PullRequestCheck = z.infer<typeof PullRequestCheckSchema>;
 type PullRequestActivity = z.infer<typeof PullRequestActivitySchema>;
+type PullRequestCompareCandidate = z.infer<typeof PullRequestCompareCandidateSchema>;
 
 const projectPullRequests = new Map<string, PullRequest[]>();
 const projectChecks = new Map<string, PullRequestCheck[]>();
@@ -260,6 +287,112 @@ function findPullRequest(projectId: string, number: number) {
   return getProjectList(projectId).find((pullRequest) => pullRequest.number === number);
 }
 
+function buildCompareCandidates(
+  projectId: string,
+  baseBranch: string
+): PullRequestCompareCandidate[] {
+  const activePullRequests = getProjectList(projectId).filter((pullRequest) =>
+    ['draft', 'open', 'ready', 'blocked'].includes(pullRequest.status)
+  );
+  const openByBranch = new Map(
+    activePullRequests.map((pullRequest) => [
+      `${pullRequest.target_branch}:${pullRequest.source_branch}`,
+      pullRequest.number,
+    ])
+  );
+  const candidates: Omit<
+    PullRequestCompareCandidate,
+    'open_pull_request_number' | 'status' | 'status_label'
+  >[] = [
+    {
+      id: `${projectId}:compare:outputs-bundle-refresh`,
+      branch: 'outputs/bundle-refresh',
+      base_branch: baseBranch,
+      title: 'Output bundle refresh',
+      description:
+        'Refresh generated output bundle state after the latest release-note source changes.',
+      head_commit_id: 'sha:31af8d2',
+      base_commit_id: 'sha:6de18a0',
+      updated_at: '2026-07-17T04:52:00.000Z',
+      ahead_by: 3,
+      behind_by: 0,
+      yops_changes: 18,
+      changed_nodes: 11,
+      output_impacts: 4,
+      source_refs: 5,
+      schema: 'Output Bundle Schema v1',
+    },
+    {
+      id: `${projectId}:compare:yschema-contract-source`,
+      branch: 'yschema-p0/1145-contract-source',
+      base_branch: baseBranch,
+      title: 'YSchema contract source alignment',
+      description: 'Align contract source state before promoting the validation contract branch.',
+      head_commit_id: 'sha:44d2c0b',
+      base_commit_id: 'sha:6de18a0',
+      updated_at: '2026-07-16T02:15:00.000Z',
+      ahead_by: 2,
+      behind_by: 1,
+      yops_changes: 9,
+      changed_nodes: 6,
+      output_impacts: 1,
+      source_refs: 3,
+      schema: 'YSchema Contract v1',
+    },
+    {
+      id: `${projectId}:compare:dev`,
+      branch: 'dev',
+      base_branch: baseBranch,
+      title: 'Development branch sync',
+      description: 'Review development branch state before deciding whether it should merge.',
+      head_commit_id: 'sha:92bd3aa',
+      base_commit_id: 'sha:6de18a0',
+      updated_at: '2026-07-10T08:30:00.000Z',
+      ahead_by: 5,
+      behind_by: 2,
+      yops_changes: 24,
+      changed_nodes: 16,
+      output_impacts: 3,
+      source_refs: 8,
+      schema: 'Product Foundation Schema v2',
+    },
+    {
+      id: `${projectId}:compare:workspace-audience-handoff`,
+      branch: 'workspace/audience-handoff',
+      base_branch: baseBranch,
+      title: 'Audience handoff updates',
+      description: 'Existing draft PR already tracks this workspace branch.',
+      head_commit_id: 'sha:8ab61ef',
+      base_commit_id: 'sha:6de18a0',
+      updated_at: '2026-07-17T03:42:00.000Z',
+      ahead_by: 2,
+      behind_by: 0,
+      yops_changes: 12,
+      changed_nodes: 8,
+      output_impacts: 2,
+      source_refs: 4,
+      schema: 'PRD Schema v2',
+    },
+  ];
+
+  return candidates.map((candidate) => {
+    const openPullRequestNumber = openByBranch.get(`${baseBranch}:${candidate.branch}`) ?? null;
+    const hasChanges = candidate.ahead_by > 0 || candidate.yops_changes > 0;
+    const status = openPullRequestNumber ? 'already_open' : hasChanges ? 'ready' : 'no_changes';
+    return {
+      ...candidate,
+      open_pull_request_number: openPullRequestNumber,
+      status,
+      status_label:
+        status === 'already_open'
+          ? `PR #${openPullRequestNumber} already open`
+          : status === 'ready'
+            ? 'Ready to create'
+            : 'No changes',
+    };
+  });
+}
+
 const listPullRequestsRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/pull-requests',
@@ -314,6 +447,43 @@ pullRequestRoutes.openapi(listPullRequestsRoute, (c) => {
       data: {
         pull_requests: pullRequests,
         counts: { active: active.length, merged: merged.length },
+      },
+    },
+    200
+  );
+});
+
+const comparePullRequestsRoute = createRoute({
+  method: 'get',
+  path: '/v1/projects/{projectId}/pull-requests/compare',
+  tags: ['Pull requests'],
+  summary: 'List branch comparisons available for pull request creation',
+  request: {
+    params: z.object({ projectId: z.string().min(1) }),
+    query: z.object({
+      base: z.string().default('main'),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Comparable project branches',
+      content: {
+        'application/json': { schema: SuccessResponseSchema(PullRequestCompareResponseSchema) },
+      },
+    },
+  },
+});
+
+pullRequestRoutes.openapi(comparePullRequestsRoute, (c) => {
+  const { projectId } = c.req.valid('param');
+  const { base } = c.req.valid('query');
+
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        base_branches: ['main', 'release/2026-07'],
+        compare_branches: buildCompareCandidates(projectId, base),
       },
     },
     200
