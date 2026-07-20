@@ -216,7 +216,7 @@ describe('WorkspaceWorkbench', () => {
   it('renders current workspace detail without an internal workspace selector', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All 2' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Draft 1' })).not.toBeInTheDocument();
     expect(screen.queryByRole('searchbox', { name: 'Search workspaces' })).not.toBeInTheDocument();
@@ -271,11 +271,11 @@ describe('WorkspaceWorkbench', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('uses Source, Ops, Validation, Preview, and Commit as the workspace workflow tabs', () => {
+  it('uses Source, Proposal, Validation, Preview, and Commit as the workspace workflow tabs', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /Ops/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Commit/ })).toBeInTheDocument();
@@ -284,14 +284,14 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.queryByRole('tab', { name: /Leaf config/ })).not.toBeInTheDocument();
   });
 
-  it('lets the workflow status rail navigate between workspace steps', () => {
+  it('lets the single workflow tab rail navigate between workspace steps', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Go to Commit' }));
+    activateTab(/Commit/);
     expect(screen.getByRole('tab', { name: /Commit/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('region', { name: 'Commit readiness' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Go to Validation' }));
+    activateTab(/Validation/);
     expect(screen.getByRole('tab', { name: /Validation/ })).toHaveAttribute(
       'aria-selected',
       'true'
@@ -299,12 +299,12 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
   });
 
-  it('shows candidate metadata and workspace tabs without treating chat as the parent surface', () => {
+  it('shows the selected candidate context inside the workflow without a duplicate context card', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
     let detail = screen.getByRole('region', { name: 'Workspace detail' });
     expect(screen.getByRole('tab', { name: 'Source' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /Ops/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Validation/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Commit/ })).toBeInTheDocument();
@@ -314,14 +314,8 @@ describe('WorkspaceWorkbench', () => {
     activateTab(/Validation/);
     detail = screen.getByRole('region', { name: 'Workspace detail' });
 
-    expect(within(detail).getByText('Base')).toBeInTheDocument();
-    expect(within(detail).getByText('sha256:base-prd')).toBeInTheDocument();
-    expect(within(detail).getByText('Branch')).toBeInTheDocument();
-    expect(within(detail).getByText('feature/prd-audience')).toBeInTheDocument();
-    expect(within(detail).getByText('Schema')).toBeInTheDocument();
+    expect(within(detail).getByText('PRD audience handoff')).toBeInTheDocument();
     expect(within(detail).getAllByText('PRD Schema v2').length).toBeGreaterThan(0);
-    expect(within(detail).getByText('Sources')).toBeInTheDocument();
-    expect(within(detail).getByText('1 chat, 1 doc')).toBeInTheDocument();
 
     activateTab('Source');
     detail = screen.getByRole('region', { name: 'Workspace detail' });
@@ -404,24 +398,28 @@ describe('WorkspaceWorkbench', () => {
     expect(within(detail).getByRole('button', { name: 'Include turn' })).toBeEnabled();
   });
 
-  it('renders Ops, Validation, Preview, and Commit workflow panels', () => {
+  it('renders Proposal, Validation, Preview, and Commit workflow panels', () => {
     render(<WorkspaceWorkbench candidates={workspaceCandidates} projectId="proj_1" />);
 
-    activateTab(/Ops/);
-    expect(screen.getByRole('heading', { name: 'Ops' })).toBeInTheDocument();
-    expect(screen.getAllByText('YOps proposal').length).toBeGreaterThan(0);
-    expect(screen.getByRole('complementary', { name: 'Ops cards' })).toBeInTheDocument();
-    expect(screen.getByText('Set primary audience from source evidence.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument();
+    activateTab(/Proposal/);
+    expect(screen.getByRole('heading', { name: 'Proposal' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Recommendations' })).toBeInTheDocument();
+    expect(screen.getAllByText('Set primary audience from source evidence.').length).toBeGreaterThan(
+      0
+    );
+    expect(screen.getByRole('region', { name: 'T3X Diff' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Generate YOps proposal' })).toHaveLength(1);
-    expect(screen.getByText('yops:')).toBeInTheDocument();
-    expect(screen.getByText('- set:')).toBeInTheDocument();
-    expect(screen.getByText('path: prd/summary/audience')).toBeInTheDocument();
-    expect(screen.getByText('value: "Product and engineering reviewers"')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
+    const yopsScript = screen.getByRole('region', { name: 'YOps script' });
+    expect(yopsScript).toHaveTextContent('yops:');
+    expect(yopsScript).toHaveTextContent('- set:');
+    expect(yopsScript).toHaveTextContent('path: prd/summary/audience');
+    expect(yopsScript).toHaveTextContent('value: "Product and engineering reviewers"');
 
     activateTab(/Validation/);
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
-    expect(screen.getByText('Schema gate')).toBeInTheDocument();
+    expect(screen.getByText('YSchema rule')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(
       'title',
@@ -819,9 +817,9 @@ describe('WorkspaceWorkbench', () => {
     };
 
     render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
-    activateTab(/Ops/);
+    activateTab(/Proposal/);
 
-    expect(screen.getByText('0 ops')).toBeInTheDocument();
+    expect(screen.getByText('0 recommendations')).toBeInTheDocument();
     expect(screen.getAllByText('No proposed YOps operations yet.').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Add source evidence and generate a YOps proposal/).length).toBe(1);
     expect(screen.queryByText('path: node/slot')).not.toBeInTheDocument();
@@ -863,14 +861,17 @@ describe('WorkspaceWorkbench', () => {
     );
 
     render(<WorkspaceWorkbench candidates={[emptyYOpsCandidate]} projectId="proj_1" />);
-    activateTab(/Ops/);
+    activateTab(/Proposal/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
     await waitFor(() =>
       expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
     );
 
-    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
     expect(screen.getAllByText(/No YOps operations were generated/).length).toBeGreaterThan(0);
     activateTab(/Validation/);
@@ -907,7 +908,7 @@ describe('WorkspaceWorkbench', () => {
     );
 
     render(<WorkspaceWorkbench candidates={[committedCandidate]} projectId="proj_1" />);
-    activateTab(/Ops/);
+    activateTab(/Proposal/);
 
     expect(screen.getByText('Committed to state')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
@@ -925,7 +926,7 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeEnabled();
   });
 
-  it('connects extract candidate, send to ops, validate, preview, and commit gates', async () => {
+  it('connects extract candidate, proposal, validation, preview, and commit gates', async () => {
     const extractedWorkspace: WorkspaceCandidate = {
       ...workspaceCandidates[0],
       schemaCandidate: {
@@ -1280,7 +1281,10 @@ describe('WorkspaceWorkbench', () => {
         sourceBundle: [{ id: 'src_doc', materialId: 'mat_prd' }],
       },
     });
-    expect(screen.getByRole('tab', { name: /Ops/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
@@ -1294,13 +1298,13 @@ describe('WorkspaceWorkbench', () => {
       'true'
     );
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
-    activateTab(/Ops/);
-    expect(screen.getByText('value: "Backend product reviewers"')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'value: "YOps receives reviewed candidate fields from backend source evidence."'
-      )
-    ).toBeInTheDocument();
+    activateTab(/Proposal/);
+    fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
+    const yopsScript = screen.getByRole('region', { name: 'YOps script' });
+    expect(yopsScript).toHaveTextContent('value: "Backend product reviewers"');
+    expect(yopsScript).toHaveTextContent(
+      'value: "YOps receives reviewed candidate fields from backend source evidence."'
+    );
 
     activateTab(/Validation/);
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeDisabled();

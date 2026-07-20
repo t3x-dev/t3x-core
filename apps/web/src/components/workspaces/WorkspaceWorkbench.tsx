@@ -1,11 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { selectWorkspaceCandidate } from '@/domain/workspaces/selectors';
 import { useWorkspaceFlow } from '@/hooks/workspaces/useWorkspaceFlow';
 import { usePinsStore } from '@/store/pinsStore';
 import type { SourceBundleItem, WorkspaceCandidate } from '@/types/workspaces';
 import { cn } from '@/utils/cn';
-import { WorkspaceHeader as WorkspaceCandidateHeader } from './WorkspaceHeader';
 import { type WorkspaceTabId, WorkspaceTabs, WorkspaceWorkflowTabs } from './WorkspaceTabs';
 
 type WorkspaceWorkbenchViewState = 'ready' | 'loading' | 'error';
@@ -190,13 +188,12 @@ export function WorkspaceWorkbench({
   }
 
   return (
-    <section className="h-full overflow-auto p-4" data-project-id={projectId}>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <WorkspacesHeader count={candidates.length} />
+    <section className="h-full overflow-auto p-3 sm:p-4" data-project-id={projectId}>
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3">
+        <WorkspacesHeader />
 
         <WorkspaceToolbar
           activeWorkflowTab={activeWorkflowTab}
-          flowState={selectedFlow}
           selectedWorkspace={selectedWorkspaceWithFlow}
           onWorkflowTabChange={setActiveWorkflowTab}
         />
@@ -211,6 +208,7 @@ export function WorkspaceWorkbench({
             onExtractCandidate={handleExtractCandidate}
             onChatSourceEvidenceChange={handleChatSourceEvidenceChange}
             onSendToYOps={handleSendToYOps}
+            onWorkflowTabChange={setActiveWorkflowTab}
             onYOpsApplied={handleYOpsApplied}
             onYOpsCommitted={handleCommitted}
             onSourceMaterialUploaded={onSourceMaterialUploaded}
@@ -221,104 +219,33 @@ export function WorkspaceWorkbench({
   );
 }
 
-function WorkspacesHeader({ count }: { count: number }) {
+function WorkspacesHeader() {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Workspaces</h2>
-        <Badge variant="branch">{count} total</Badge>
-      </div>
+    <div className="flex min-h-10 items-center">
+      <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
+        T3X Workspace
+      </h2>
     </div>
   );
 }
 
 function WorkspaceToolbar({
   activeWorkflowTab,
-  flowState,
   onWorkflowTabChange,
   selectedWorkspace,
 }: {
   activeWorkflowTab: WorkspaceTabId;
-  flowState?: WorkspaceFlowState;
   onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   selectedWorkspace: WorkspaceCandidate | null;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-y border-[var(--stroke-divider)] py-3">
+    <div className="border-y border-[var(--stroke-divider)]">
       <WorkspaceWorkflowTabs
         activeTab={activeWorkflowTab}
         candidate={selectedWorkspace}
         onTabChange={onWorkflowTabChange}
       />
-      {selectedWorkspace ? (
-        <WorkspaceFlowRail
-          activeTab={activeWorkflowTab}
-          candidate={selectedWorkspace}
-          flowState={flowState}
-          onTabChange={onWorkflowTabChange}
-        />
-      ) : null}
     </div>
-  );
-}
-
-function WorkspaceFlowRail({
-  activeTab,
-  candidate,
-  flowState,
-  onTabChange,
-}: {
-  activeTab: WorkspaceTabId;
-  candidate: WorkspaceCandidate;
-  flowState?: WorkspaceFlowState;
-  onTabChange: (tab: WorkspaceTabId) => void;
-}) {
-  const hasReadyYOpsDraft = hasYOpsOperations(candidate);
-  const steps = [
-    { label: 'Source', tab: 'chat' as const, done: candidate.sourceBundle.length > 0 },
-    { label: 'Ops', tab: 'ops' as const, done: hasReadyYOpsDraft },
-    {
-      label: 'Validation',
-      tab: 'validation' as const,
-      done: candidate.schemaReview.verdict === 'ready',
-    },
-    { label: 'Preview', tab: 'preview' as const, done: false },
-    {
-      label: 'Commit',
-      tab: 'commit' as const,
-      done: Boolean(flowState?.commitHash ?? candidate.lastCommitHash),
-    },
-  ];
-
-  return (
-    <fieldset className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-      <legend className="sr-only">Workspace flow status</legend>
-      {steps.map((step, index) => (
-        <span className="inline-flex items-center gap-1.5" key={step.label}>
-          <button
-            aria-label={`Go to ${step.label}`}
-            className={cn(
-              'inline-flex h-6 items-center rounded-full border px-2 font-medium transition-colors',
-              activeTab === step.tab
-                ? 'border-[var(--source)]/50 bg-[var(--source)]/10 text-[var(--source)]'
-                : step.done
-                  ? 'border-[var(--accent-commit)]/30 bg-[var(--accent-commit)]/10 text-[var(--accent-commit)]'
-                  : 'border-[var(--stroke-divider)] bg-[var(--surface-card)] text-[var(--text-tertiary)]',
-              'hover:border-[var(--stroke-strong)] hover:text-[var(--text-primary)]'
-            )}
-            onClick={() => onTabChange(step.tab)}
-            type="button"
-          >
-            {step.label}
-          </button>
-          {index < steps.length - 1 ? (
-            <span className="text-[var(--text-quaternary)]" aria-hidden="true">
-              /
-            </span>
-          ) : null}
-        </span>
-      ))}
-    </fieldset>
   );
 }
 
@@ -330,6 +257,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange,
   onSendToYOps,
   onSourceMaterialUploaded,
+  onWorkflowTabChange,
   onYOpsApplied,
   onYOpsCommitted,
 }: {
@@ -340,6 +268,7 @@ function WorkspaceDetail({
   onChatSourceEvidenceChange?: (sourceId: string, source: SourceBundleItem | null) => void;
   onSendToYOps: () => void;
   onSourceMaterialUploaded?: () => Promise<void> | void;
+  onWorkflowTabChange: (tab: WorkspaceTabId) => void;
   onYOpsApplied: () => void;
   onYOpsCommitted: (commitHash: string) => void;
 }) {
@@ -348,10 +277,14 @@ function WorkspaceDetail({
   return (
     <section
       aria-label="Workspace detail"
-      className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
+      className={cn(
+        'overflow-hidden rounded-md',
+        activeTab === 'chat'
+          ? 'border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4'
+          : 'bg-transparent'
+      )}
     >
-      <div className="flex flex-col gap-3">
-        {activeTab !== 'chat' ? <WorkspaceCandidateHeader candidate={candidate} /> : null}
+      <div className={cn('flex flex-col', activeTab === 'chat' ? 'gap-3' : '')}>
         <WorkspaceTabs
           activeTab={activeTab}
           candidate={candidate}
@@ -364,6 +297,7 @@ function WorkspaceDetail({
           onSendToYOps={onSendToYOps}
           onYOpsApplied={onYOpsApplied}
           onYOpsCommitted={onYOpsCommitted}
+          onWorkflowTabChange={onWorkflowTabChange}
           sendingToYOps={Boolean(flowState?.sendingToYOps)}
           yopsDraftSent={Boolean(flowState?.yopsDraftId) && hasYOpsOperations(candidate)}
         />
