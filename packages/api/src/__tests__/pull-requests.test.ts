@@ -1,166 +1,208 @@
-import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
-import { pullRequestRoutes } from '../routes/pull-requests.openapi';
+/** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
-// biome-ignore lint/suspicious/noExplicitAny: route contract smoke helper
+import type { AnyDB } from '@t3x-dev/storage';
+import { createCommit, insertBranch, insertProject, updateBranchHead } from '@t3x-dev/storage';
+import { Hono } from 'hono';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { setupTestDB, testData } from './setup';
+
 type ApiResponse = any;
+
+let mockDB: AnyDB;
+
+vi.mock('../lib/db', () => ({
+  getDB: vi.fn(() => Promise.resolve(mockDB)),
+  closeDB: vi.fn(() => Promise.resolve()),
+}));
+
+import { pullRequestRoutes } from '../routes/pull-requests.openapi';
 
 describe('Pull request routes', () => {
   const app = new Hono();
   app.route('/', pullRequestRoutes);
+  let cleanup: () => Promise<void>;
 
-  it('lists active project pull requests with readiness counts', async () => {
-    const res = await app.request('/v1/projects/proj_pr_test/pull-requests');
-    expect(res.status).toBe(200);
-
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.data.counts.active).toBe(3);
-    expect(data.data.counts.merged).toBe(1);
-    expect(data.data.pull_requests[0].source_branch).toBe('release-notes/cleanup');
+  beforeAll(async () => {
+    const setup = await setupTestDB();
+    mockDB = setup.db;
+    cleanup = setup.cleanup;
   });
 
-  it('moves a newly created pull request through readiness and merge', async () => {
-    const projectId = 'proj_pr_create_flow';
-    const res = await app.request(`/v1/projects/${projectId}/pull-requests`, {
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  async function createBranchFixture() {
+    const project = await insertProject(mockDB, testData.project({ name: 'PR route test' }));
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+    const target = await createCommit(mockDB, {
+      parents: [],
+      author: { type: 'human', name: 'Test User' },
+      content: {
+        trees: [{ key: 'product', slots: { version: 1 }, children: [] }],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'main baseline',
+      branch: 'main',
+    });
+    await updateBranchHead(mockDB, project.projectId, 'main', target.hash);
+
+    await insertBranch(mockDB, {
+      projectId: project.projectId,
+      name: 'feature/pr-flow',
+      parentBranch: 'main',
+      description: 'Feature PR flow',
+    });
+    const source = await createCommit(mockDB, {
+      parents: [target.hash],
+      author: { type: 'human', name: 'Test User' },
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 2 }, children: [] },
+          { key: 'release', slots: { ready: true }, children: [] },
+        ],
+        relations: [],
+      },
+      project_id: project.projectId,
+      message: 'feature update',
+      branch: 'feature/pr-flow',
+      sources: [{ type: 'import', id: 'spec_1' }],
+    });
+    await updateBranchHead(mockDB, project.projectId, 'feature/pr-flow', source.hash);
+    return { projectId: project.projectId, source, target };
+  }
+
+  async function openPullRequest(projectId: string) {
+    const response = await app.request(`/v1/projects/${projectId}/pull-requests`, {
       body: JSON.stringify({
-        description: 'Refresh output bundle',
-        source_branch: 'outputs/bundle-refresh',
+        description: 'Review the feature branch',
+        source_branch: 'feature/pr-flow',
         target_branch: 'main',
-        title: 'Output bundle refresh',
+        title: 'Feature PR flow',
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     });
+    return { response, data: (await response.json()) as ApiResponse };
+  }
 
-    expect(res.status).toBe(201);
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.data.status).toBe('open');
-    expect(data.data.source_commit_id).toBe('sha:31af8d2');
-    expect(data.data.target_base_commit_id).toBe('sha:6de18a0');
-    expect(
-      data.data.checks.some((check: { kind: string }) => check.kind === 'merge_simulation')
-    ).toBe(true);
+  it('rejects pull request access for a project that does not exist', async () => {
+    const response = await app.request('/v1/projects/proj_missing/pull-requests');
+    expect(response.status).toBe(404);
+    expect(((await response.json()) as ApiResponse).error.code).toBe('NOT_FOUND');
+  });
 
-    const duplicate = await app.request(`/v1/projects/${projectId}/pull-requests`, {
-      body: JSON.stringify({
-        description: 'Duplicate output bundle PR',
-        source_branch: 'outputs/bundle-refresh',
-        target_branch: 'main',
-        title: 'Duplicate output bundle refresh',
+  it('lists real project branches and commit comparisons', async () => {
+    const fixture = await createBranchFixture();
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/compare?base=main`
+    );
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as ApiResponse;
+    expect(data.data.base_branches).toEqual(expect.arrayContaining(['main', 'feature/pr-flow']));
+    expect(data.data.compare_branches).toEqual([
+      expect.objectContaining({
+        branch: 'feature/pr-flow',
+        base_branch: 'main',
+        head_commit_id: fixture.source.hash,
+        base_commit_id: fixture.target.hash,
+        ahead_by: 1,
+        behind_by: 0,
+        changed_nodes: 2,
+        status: 'ready',
       }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
+    ]);
+  });
+
+  it('creates and reloads a persistent pull request from branch heads', async () => {
+    const fixture = await createBranchFixture();
+    const { response, data } = await openPullRequest(fixture.projectId);
+    expect(response.status).toBe(201);
+    expect(data.data).toMatchObject({
+      number: 1,
+      source_commit_id: fixture.source.hash,
+      target_base_commit_id: fixture.target.hash,
+      status: 'open',
     });
-    expect(duplicate.status).toBe(409);
-    expect(((await duplicate.json()) as ApiResponse).error.code).toBe(
-      'PULL_REQUEST_ALREADY_EXISTS'
+    expect(data.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'source_commit', status: 'passed' }),
+        expect.objectContaining({ kind: 'merge_simulation', status: 'pending' }),
+      ])
     );
 
+    const detail = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${data.data.number}`
+    );
+    const detailData = (await detail.json()) as ApiResponse;
+    expect(detail.status).toBe(200);
+    expect(detailData.data.id).toBe(data.data.id);
+    expect(detailData.data.activity).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'created' })])
+    );
+
+    const list = await app.request(`/v1/projects/${fixture.projectId}/pull-requests`);
+    const listData = (await list.json()) as ApiResponse;
+    expect(listData.data.counts).toEqual({ active: 1, merged: 0 });
+    expect(listData.data.pull_requests[0].id).toBe(data.data.id);
+  });
+
+  it('rejects duplicate active pull requests for the same branch pair', async () => {
+    const fixture = await createBranchFixture();
+    expect((await openPullRequest(fixture.projectId)).response.status).toBe(201);
+    const duplicate = await openPullRequest(fixture.projectId);
+    expect(duplicate.response.status).toBe(409);
+    expect(duplicate.data.error.code).toBe('PULL_REQUEST_ALREADY_EXISTS');
+  });
+
+  it('persists readiness state and close activity', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+
     const rerun = await app.request(
-      `/v1/projects/${projectId}/pull-requests/${data.data.number}/checks/rerun`,
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
       { method: 'POST' }
     );
     expect(rerun.status).toBe(200);
-    const rerunData: ApiResponse = await rerun.json();
-    expect(rerunData.data.status).toBe('ready');
-    expect(
-      rerunData.data.checks.find((check: { kind: string }) => check.kind === 'merge_simulation')
-        .status
-    ).toBe('passed');
+    expect(((await rerun.json()) as ApiResponse).data.status).toBe('ready');
 
-    const merge = await app.request(
-      `/v1/projects/${projectId}/pull-requests/${data.data.number}/merge`,
+    const closed = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/close`,
+      { method: 'POST' }
+    );
+    expect(closed.status).toBe(200);
+    expect(((await closed.json()) as ApiResponse).data.status).toBe('closed');
+
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    const detailData = (await detail.json()) as ApiResponse;
+    expect(detailData.data.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'checks_reran' }),
+        expect.objectContaining({ type: 'closed' }),
+      ])
+    );
+  });
+
+  it('does not claim a merge before real deterministic preparation is connected', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/merge`,
       {
-        body: JSON.stringify({ strategy: 'deterministic_merge' }),
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       }
     );
-    expect(merge.status).toBe(200);
-    expect(((await merge.json()) as ApiResponse).data.status).toBe('merged');
-  });
-
-  it('lists branches that can open a new pull request', async () => {
-    const res = await app.request('/v1/projects/proj_pr_compare/pull-requests/compare?base=main');
-    expect(res.status).toBe(200);
-
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.data.base_branches).toContain('main');
-    expect(
-      data.data.compare_branches.some(
-        (candidate: { branch: string; status: string }) =>
-          candidate.branch === 'outputs/bundle-refresh' && candidate.status === 'ready'
-      )
-    ).toBe(true);
-    expect(
-      data.data.compare_branches.some(
-        (candidate: { branch: string; status: string }) =>
-          candidate.branch === 'workspace/audience-handoff' && candidate.status === 'already_open'
-      )
-    ).toBe(true);
-  });
-
-  it('returns checks, activity, and structured diff data for PR details', async () => {
-    const res = await app.request('/v1/projects/proj_pr_detail/pull-requests/17');
-    expect(res.status).toBe(200);
-
-    const data: ApiResponse = await res.json();
-    expect(data.data.diff_summary).toEqual({
-      changed_nodes: 5,
-      output_impacts: 2,
-      source_refs: 3,
-      yops_operations: 7,
-    });
-    expect(data.data.checks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
-      ])
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as ApiResponse).error.code).toBe(
+      'PULL_REQUEST_MERGE_NOT_PREPARED'
     );
-    expect(data.data.activity).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: 'created' })])
-    );
-  });
-
-  it('blocks merge until the pull request is ready', async () => {
-    const res = await app.request('/v1/projects/proj_pr_test/pull-requests/18/merge', {
-      body: JSON.stringify({ strategy: 'deterministic_merge' }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
-
-    expect(res.status).toBe(409);
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(false);
-    expect(data.error.code).toBe('PULL_REQUEST_NOT_READY');
-  });
-
-  it('marks a ready pull request as merged', async () => {
-    const res = await app.request('/v1/projects/proj_pr_ready_merge/pull-requests/17/merge', {
-      body: JSON.stringify({ strategy: 'deterministic_merge' }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    });
-
-    expect(res.status).toBe(200);
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.data.status).toBe('merged');
-    expect(data.data.merged_at).toBeTruthy();
-  });
-
-  it('closes an active pull request without merging it', async () => {
-    const res = await app.request('/v1/projects/proj_pr_close/pull-requests/18/close', {
-      method: 'POST',
-    });
-
-    expect(res.status).toBe(200);
-    const data: ApiResponse = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.data.status).toBe('closed');
-    expect(data.data.closed_at).toBeTruthy();
-    expect(data.data.merged_at).toBeNull();
   });
 });

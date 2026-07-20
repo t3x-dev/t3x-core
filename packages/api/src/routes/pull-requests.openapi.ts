@@ -1,9 +1,43 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { Commit } from '@t3x-dev/core';
+import {
+  type AnyDB,
+  addPullRequestActivity,
+  type Branch,
+  createPullRequest,
+  findActivePullRequestByBranches,
+  findBranchByName,
+  findBranchesByProject,
+  findPullRequestByNumber,
+  getCommit,
+  listPullRequestActivity,
+  listPullRequestChecks,
+  listPullRequestsByProject,
+  type PullRequestStatus,
+  replacePullRequestChecks,
+  type PullRequest as StoredPullRequest,
+  type PullRequestActivity as StoredPullRequestActivity,
+  type PullRequestCheck as StoredPullRequestCheck,
+  updatePullRequest,
+} from '@t3x-dev/storage';
+import { getDB } from '../lib/db';
+import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const pullRequestRoutes = new OpenAPIHono();
 
-const PullRequestStatusSchema = z.enum(['draft', 'open', 'ready', 'blocked', 'merged', 'closed']);
+const ACTIVE_STATUSES: PullRequestStatus[] = ['draft', 'open', 'checking', 'ready', 'blocked'];
+const FINISHED_STATUSES: PullRequestStatus[] = ['merged', 'closed'];
+
+const PullRequestStatusSchema = z.enum([
+  'draft',
+  'open',
+  'checking',
+  'ready',
+  'blocked',
+  'merged',
+  'closed',
+]);
 const PullRequestCheckStatusSchema = z.enum([
   'pending',
   'running',
@@ -23,6 +57,7 @@ const PullRequestSchema = z.object({
   target_branch: z.string(),
   source_commit_id: z.string(),
   target_base_commit_id: z.string(),
+  merge_commit_id: z.string().nullable(),
   status: PullRequestStatusSchema,
   author_id: z.string(),
   steward_id: z.string().nullable(),
@@ -45,6 +80,7 @@ const PullRequestCheckSchema = z.object({
     'base_freshness',
     'schema_compatibility',
     'merge_simulation',
+    'conflict_resolution',
     'output_impact',
     'review_requirement',
     'permission',
@@ -121,325 +157,218 @@ const PullRequestCompareResponseSchema = z.object({
   compare_branches: z.array(PullRequestCompareCandidateSchema),
 });
 
-type PullRequestStatus = z.infer<typeof PullRequestStatusSchema>;
-type PullRequest = z.infer<typeof PullRequestSchema>;
-type PullRequestCheck = z.infer<typeof PullRequestCheckSchema>;
-type PullRequestActivity = z.infer<typeof PullRequestActivitySchema>;
-type PullRequestDiffSummary = z.infer<typeof PullRequestDiffSummarySchema>;
+type ApiPullRequest = z.infer<typeof PullRequestSchema>;
+type ApiPullRequestCheck = z.infer<typeof PullRequestCheckSchema>;
+type ApiPullRequestActivity = z.infer<typeof PullRequestActivitySchema>;
 type PullRequestCompareCandidate = z.infer<typeof PullRequestCompareCandidateSchema>;
 
-const projectPullRequests = new Map<string, PullRequest[]>();
-const projectChecks = new Map<string, PullRequestCheck[]>();
-const projectActivity = new Map<string, PullRequestActivity[]>();
-const projectDiffSummaries = new Map<string, PullRequestDiffSummary>();
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function seedProjectPullRequests(projectId: string) {
-  if (projectPullRequests.has(projectId)) return;
-
-  const createdAt = '2026-07-17T04:00:00.000Z';
-  const pullRequests: PullRequest[] = [
-    {
-      id: `${projectId}:pr:17`,
-      number: 17,
-      project_id: projectId,
-      title: 'Release note cleanup',
-      description: 'Prepare release-note state for merge with provenance retained.',
-      source_branch: 'release-notes/cleanup',
-      target_branch: 'main',
-      source_commit_id: 'sha:12cc0d4',
-      target_base_commit_id: 'sha:6de18a0',
-      status: 'ready',
-      author_id: 'noah',
-      steward_id: 'noah',
-      review_owner_id: 'iris',
-      workspace_id: 'product-foundation',
-      release_lane_id: '2026.07',
-      linked_work: 'Release notes cleanup workspace',
-      created_at: createdAt,
-      updated_at: '2026-07-15T04:00:00.000Z',
-      merged_at: null,
-      closed_at: null,
-    },
-    {
-      id: `${projectId}:pr:18`,
-      number: 18,
-      project_id: projectId,
-      title: 'PRD Schema v3 rollout',
-      description: 'Review schema rollout before it becomes merge-ready.',
-      source_branch: 'schema/prd-v3',
-      target_branch: 'main',
-      source_commit_id: 'sha:5c10b29',
-      target_base_commit_id: 'sha:6de18a0',
-      status: 'blocked',
-      author_id: 'iris',
-      steward_id: 'iris',
-      review_owner_id: 'maya',
-      workspace_id: 'product-foundation',
-      release_lane_id: 'schema-track',
-      linked_work: 'PRD schema upgrade',
-      created_at: createdAt,
-      updated_at: '2026-07-16T04:00:00.000Z',
-      merged_at: null,
-      closed_at: null,
-    },
-    {
-      id: `${projectId}:pr:19`,
-      number: 19,
-      project_id: projectId,
-      title: 'Audience handoff updates',
-      description: 'Move audience handoff state into a reviewable pull request.',
-      source_branch: 'workspace/audience-handoff',
-      target_branch: 'main',
-      source_commit_id: 'sha:8ab61ef',
-      target_base_commit_id: 'sha:6de18a0',
-      status: 'draft',
-      author_id: 'maya',
-      steward_id: null,
-      review_owner_id: null,
-      workspace_id: 'product-foundation',
-      release_lane_id: null,
-      linked_work: 'Audience handoff workspace',
-      created_at: createdAt,
-      updated_at: '2026-07-17T03:42:00.000Z',
-      merged_at: null,
-      closed_at: null,
-    },
-    {
-      id: `${projectId}:pr:14`,
-      number: 14,
-      project_id: projectId,
-      title: 'Limitations wording alignment',
-      description: 'Merged wording alignment for limitations state.',
-      source_branch: 'docs/limitations-copy',
-      target_branch: 'main',
-      source_commit_id: 'sha:72af006',
-      target_base_commit_id: 'sha:12cc0d4',
-      status: 'merged',
-      author_id: 'iris',
-      steward_id: 'iris',
-      review_owner_id: 'noah',
-      workspace_id: 'product-foundation',
-      release_lane_id: null,
-      linked_work: 'Limitations wording cleanup',
-      created_at: createdAt,
-      updated_at: '2026-07-11T04:00:00.000Z',
-      merged_at: '2026-07-11T04:00:00.000Z',
-      closed_at: null,
-    },
-  ];
-
-  projectPullRequests.set(projectId, pullRequests);
-  for (const pullRequest of pullRequests) {
-    projectChecks.set(pullRequest.id, buildChecks(pullRequest));
-    projectDiffSummaries.set(pullRequest.id, buildDiffSummary(pullRequest));
-    projectActivity.set(pullRequest.id, [
-      {
-        id: `${pullRequest.id}:activity:created`,
-        pull_request_id: pullRequest.id,
-        actor_id: pullRequest.author_id,
-        type: 'created',
-        message: 'Pull request created.',
-        created_at: pullRequest.created_at,
-      },
-    ]);
-  }
-}
-
-function buildChecks(pullRequest: PullRequest): PullRequestCheck[] {
-  const completedAt = pullRequest.updated_at;
-  const blocked = pullRequest.status === 'blocked';
-
-  return [
-    {
-      id: `${pullRequest.id}:check:source`,
-      pull_request_id: pullRequest.id,
-      kind: 'source_commit',
-      status: 'passed',
-      title: 'Source commit',
-      message: `${pullRequest.source_commit_id} exists on ${pullRequest.source_branch}.`,
-      started_at: completedAt,
-      completed_at: completedAt,
-    },
-    {
-      id: `${pullRequest.id}:check:target`,
-      pull_request_id: pullRequest.id,
-      kind: 'target_commit',
-      status: 'passed',
-      title: 'Target commit',
-      message: `${pullRequest.target_base_commit_id} exists on ${pullRequest.target_branch}.`,
-      started_at: completedAt,
-      completed_at: completedAt,
-    },
-    {
-      id: `${pullRequest.id}:check:merge`,
-      pull_request_id: pullRequest.id,
-      kind: 'merge_simulation',
-      status: blocked ? 'blocked' : pullRequest.status === 'ready' ? 'passed' : 'pending',
-      title: 'Merge simulation',
-      message: blocked
-        ? 'Schema migration decision is required before deterministic merge simulation can pass.'
-        : 'Deterministic merge simulation is queued or passed for this pull request.',
-      started_at: completedAt,
-      completed_at: pullRequest.status === 'ready' || blocked ? completedAt : null,
-    },
-  ];
-}
-
-function buildDiffSummary(pullRequest: PullRequest): PullRequestDiffSummary {
-  const summaries: Record<string, PullRequestDiffSummary> = {
-    'release-notes/cleanup': {
-      changed_nodes: 5,
-      yops_operations: 7,
-      output_impacts: 2,
-      source_refs: 3,
-    },
-    'schema/prd-v3': {
-      changed_nodes: 8,
-      yops_operations: 12,
-      output_impacts: 2,
-      source_refs: 4,
-    },
-    'workspace/audience-handoff': {
-      changed_nodes: 8,
-      yops_operations: 12,
-      output_impacts: 2,
-      source_refs: 4,
-    },
-    'docs/limitations-copy': {
-      changed_nodes: 3,
-      yops_operations: 5,
-      output_impacts: 1,
-      source_refs: 2,
-    },
+function toApiPullRequest(pullRequest: StoredPullRequest): ApiPullRequest {
+  return {
+    id: pullRequest.pullRequestId,
+    number: pullRequest.number,
+    project_id: pullRequest.projectId,
+    title: pullRequest.title,
+    description: pullRequest.description,
+    source_branch: pullRequest.sourceBranch,
+    target_branch: pullRequest.targetBranch,
+    source_commit_id: pullRequest.sourceCommitHash,
+    target_base_commit_id: pullRequest.targetBaseCommitHash,
+    merge_commit_id: pullRequest.mergeCommitHash,
+    status: pullRequest.status as ApiPullRequest['status'],
+    author_id: pullRequest.authorId,
+    steward_id: null,
+    review_owner_id: pullRequest.reviewOwnerId,
+    workspace_id: null,
+    release_lane_id: null,
+    linked_work: pullRequest.linkedWork,
+    created_at: pullRequest.createdAt.toISOString(),
+    updated_at: pullRequest.updatedAt.toISOString(),
+    merged_at: pullRequest.mergedAt?.toISOString() ?? null,
+    closed_at: pullRequest.closedAt?.toISOString() ?? null,
   };
+}
 
-  return (
-    summaries[pullRequest.source_branch] ?? {
-      changed_nodes: 0,
-      yops_operations: 0,
-      output_impacts: 0,
-      source_refs: 0,
+function toApiCheck(check: StoredPullRequestCheck): ApiPullRequestCheck {
+  return {
+    id: check.checkId,
+    pull_request_id: check.pullRequestId,
+    kind: check.kind as ApiPullRequestCheck['kind'],
+    status: check.status as ApiPullRequestCheck['status'],
+    title: check.title,
+    message: check.message,
+    started_at: check.startedAt?.toISOString() ?? null,
+    completed_at: check.completedAt?.toISOString() ?? null,
+  };
+}
+
+function toApiActivity(activity: StoredPullRequestActivity): ApiPullRequestActivity {
+  return {
+    id: activity.activityId,
+    pull_request_id: activity.pullRequestId,
+    actor_id: activity.actorId,
+    type: activity.type as ApiPullRequestActivity['type'],
+    message: activity.message,
+    created_at: activity.createdAt.toISOString(),
+  };
+}
+
+async function toApiDetail(db: AnyDB, pullRequest: StoredPullRequest) {
+  const [checks, activity] = await Promise.all([
+    listPullRequestChecks(db, pullRequest.pullRequestId),
+    listPullRequestActivity(db, pullRequest.pullRequestId),
+  ]);
+  return {
+    ...toApiPullRequest(pullRequest),
+    diff_summary: pullRequest.diffSummary,
+    checks: checks.map(toApiCheck),
+    activity: activity.map(toApiActivity),
+  };
+}
+
+function errorBody(code: string, message: string) {
+  return { success: false as const, error: { code, message } };
+}
+
+async function requireProject(c: Parameters<typeof assertProjectAccess>[0], projectId: string) {
+  const db = await getDB();
+  const access = await assertProjectAccess(c, db, projectId);
+  return { access, db };
+}
+
+function flattenContent(content: unknown): Map<string, string> {
+  const nodes = new Map<string, string>();
+  const trees = (content as { trees?: unknown[] } | null)?.trees;
+  if (!Array.isArray(trees)) return nodes;
+
+  const visit = (node: unknown, path: string) => {
+    if (!node || typeof node !== 'object') return;
+    const record = node as { key?: unknown; slots?: unknown; children?: unknown[] };
+    const key = typeof record.key === 'string' ? record.key : path;
+    nodes.set(key, JSON.stringify(record.slots ?? null));
+    if (Array.isArray(record.children)) {
+      record.children.forEach((child, index) => visit(child, `${path}.${index}`));
     }
-  );
+  };
+  trees.forEach((tree, index) => visit(tree, String(index)));
+  return nodes;
 }
 
-function getProjectList(projectId: string) {
-  seedProjectPullRequests(projectId);
-  return projectPullRequests.get(projectId) ?? [];
+function countChangedNodes(source: Commit, target: Commit): number {
+  const sourceNodes = flattenContent(source.content);
+  const targetNodes = flattenContent(target.content);
+  const keys = new Set([...sourceNodes.keys(), ...targetNodes.keys()]);
+  let changed = 0;
+  for (const key of keys) {
+    if (sourceNodes.get(key) !== targetNodes.get(key)) changed += 1;
+  }
+  return changed;
 }
 
-function findPullRequest(projectId: string, number: number) {
-  return getProjectList(projectId).find((pullRequest) => pullRequest.number === number);
+async function collectAncestorDistances(db: AnyDB, projectId: string, startHash: string) {
+  const distances = new Map<string, number>();
+  const queue: Array<{ hash: string; distance: number }> = [{ hash: startHash, distance: 0 }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || distances.has(current.hash)) continue;
+    const commit = await getCommit(db, current.hash);
+    if (!commit || commit.project_id !== projectId) continue;
+    distances.set(current.hash, current.distance);
+    for (const parent of commit.parents) {
+      queue.push({ hash: parent, distance: current.distance + 1 });
+    }
+  }
+  return distances;
 }
 
-function buildCompareCandidates(
+async function commitDistances(
+  db: AnyDB,
   projectId: string,
-  baseBranch: string
-): PullRequestCompareCandidate[] {
-  const activePullRequests = getProjectList(projectId).filter((pullRequest) =>
-    ['draft', 'open', 'ready', 'blocked'].includes(pullRequest.status)
-  );
+  sourceHash: string,
+  targetHash: string
+) {
+  if (sourceHash === targetHash) return { ahead: 0, behind: 0 };
+  const [sourceAncestors, targetAncestors] = await Promise.all([
+    collectAncestorDistances(db, projectId, sourceHash),
+    collectAncestorDistances(db, projectId, targetHash),
+  ]);
+  let best: { ahead: number; behind: number; total: number } | null = null;
+  for (const [hash, ahead] of sourceAncestors) {
+    const behind = targetAncestors.get(hash);
+    if (behind === undefined) continue;
+    const total = ahead + behind;
+    if (!best || total < best.total) best = { ahead, behind, total };
+  }
+  return best
+    ? { ahead: best.ahead, behind: best.behind }
+    : { ahead: sourceAncestors.size, behind: targetAncestors.size };
+}
+
+async function buildCompareCandidates(
+  db: AnyDB,
+  projectId: string,
+  baseBranch: Branch,
+  branches: Branch[],
+  activePullRequests: StoredPullRequest[]
+): Promise<PullRequestCompareCandidate[]> {
+  if (!baseBranch.headCommitHash) return [];
+  const targetCommit = await getCommit(db, baseBranch.headCommitHash);
+  if (!targetCommit || targetCommit.project_id !== projectId) return [];
+
   const openByBranch = new Map(
     activePullRequests.map((pullRequest) => [
-      `${pullRequest.target_branch}:${pullRequest.source_branch}`,
+      `${pullRequest.targetBranch}:${pullRequest.sourceBranch}`,
       pullRequest.number,
     ])
   );
-  const candidates: Omit<
-    PullRequestCompareCandidate,
-    'open_pull_request_number' | 'status' | 'status_label'
-  >[] = [
-    {
-      id: `${projectId}:compare:outputs-bundle-refresh`,
-      branch: 'outputs/bundle-refresh',
-      base_branch: baseBranch,
-      title: 'Output bundle refresh',
-      description:
-        'Refresh generated output bundle state after the latest release-note source changes.',
-      head_commit_id: 'sha:31af8d2',
-      base_commit_id: 'sha:6de18a0',
-      updated_at: '2026-07-17T04:52:00.000Z',
-      ahead_by: 3,
-      behind_by: 0,
-      yops_changes: 18,
-      changed_nodes: 11,
-      output_impacts: 4,
-      source_refs: 5,
-      schema: 'Output Bundle Schema v1',
-    },
-    {
-      id: `${projectId}:compare:yschema-contract-source`,
-      branch: 'yschema-p0/1145-contract-source',
-      base_branch: baseBranch,
-      title: 'YSchema contract source alignment',
-      description: 'Align contract source state before promoting the validation contract branch.',
-      head_commit_id: 'sha:44d2c0b',
-      base_commit_id: 'sha:6de18a0',
-      updated_at: '2026-07-16T02:15:00.000Z',
-      ahead_by: 2,
-      behind_by: 1,
-      yops_changes: 9,
-      changed_nodes: 6,
-      output_impacts: 1,
-      source_refs: 3,
-      schema: 'YSchema Contract v1',
-    },
-    {
-      id: `${projectId}:compare:dev`,
-      branch: 'dev',
-      base_branch: baseBranch,
-      title: 'Development branch sync',
-      description: 'Review development branch state before deciding whether it should merge.',
-      head_commit_id: 'sha:92bd3aa',
-      base_commit_id: 'sha:6de18a0',
-      updated_at: '2026-07-10T08:30:00.000Z',
-      ahead_by: 5,
-      behind_by: 2,
-      yops_changes: 24,
-      changed_nodes: 16,
-      output_impacts: 3,
-      source_refs: 8,
-      schema: 'Product Foundation Schema v2',
-    },
-    {
-      id: `${projectId}:compare:workspace-audience-handoff`,
-      branch: 'workspace/audience-handoff',
-      base_branch: baseBranch,
-      title: 'Audience handoff updates',
-      description: 'Existing draft PR already tracks this workspace branch.',
-      head_commit_id: 'sha:8ab61ef',
-      base_commit_id: 'sha:6de18a0',
-      updated_at: '2026-07-17T03:42:00.000Z',
-      ahead_by: 2,
-      behind_by: 0,
-      yops_changes: 12,
-      changed_nodes: 8,
-      output_impacts: 2,
-      source_refs: 4,
-      schema: 'PRD Schema v2',
-    },
-  ];
 
-  return candidates.map((candidate) => {
-    const openPullRequestNumber = openByBranch.get(`${baseBranch}:${candidate.branch}`) ?? null;
-    const hasChanges = candidate.ahead_by > 0 || candidate.yops_changes > 0;
-    const status = openPullRequestNumber ? 'already_open' : hasChanges ? 'ready' : 'no_changes';
-    return {
-      ...candidate,
-      open_pull_request_number: openPullRequestNumber,
-      status,
-      status_label:
-        status === 'already_open'
-          ? `PR #${openPullRequestNumber} already open`
-          : status === 'ready'
-            ? 'Available'
-            : 'No changes',
-    };
-  });
+  const candidates = await Promise.all(
+    branches
+      .filter((branch) => branch.name !== baseBranch.name && branch.headCommitHash)
+      .map(async (branch): Promise<PullRequestCompareCandidate | null> => {
+        const sourceCommit = await getCommit(db, branch.headCommitHash as string);
+        if (!sourceCommit || sourceCommit.project_id !== projectId) return null;
+        const distances = await commitDistances(
+          db,
+          projectId,
+          sourceCommit.hash,
+          targetCommit.hash
+        );
+        const openPullRequestNumber = openByBranch.get(`${baseBranch.name}:${branch.name}`) ?? null;
+        const changedNodes = countChangedNodes(sourceCommit, targetCommit);
+        const hasChanges = sourceCommit.hash !== targetCommit.hash && changedNodes > 0;
+        const status = openPullRequestNumber ? 'already_open' : hasChanges ? 'ready' : 'no_changes';
+        return {
+          id: `${projectId}:compare:${branch.branchId}`,
+          branch: branch.name,
+          base_branch: baseBranch.name,
+          title: branch.description?.trim() || `Merge ${branch.name}`,
+          description:
+            branch.description?.trim() ||
+            `Review ${branch.name} before merging into ${baseBranch.name}.`,
+          head_commit_id: sourceCommit.hash,
+          base_commit_id: targetCommit.hash,
+          updated_at: branch.updatedAt.toISOString(),
+          ahead_by: distances.ahead,
+          behind_by: distances.behind,
+          yops_changes: sourceCommit.yops_log_ids.length,
+          changed_nodes: changedNodes,
+          output_impacts: 0,
+          source_refs: sourceCommit.sources?.length ?? 0,
+          schema: sourceCommit.schema,
+          status,
+          status_label:
+            status === 'already_open'
+              ? `PR #${openPullRequestNumber} already open`
+              : status === 'ready'
+                ? 'Available'
+                : 'No changes',
+          open_pull_request_number: openPullRequestNumber,
+        };
+      })
+  );
+  return candidates.filter(
+    (candidate): candidate is PullRequestCompareCandidate => candidate !== null
+  );
 }
 
 const listPullRequestsRoute = createRoute({
@@ -461,27 +390,35 @@ const listPullRequestsRoute = createRoute({
         'application/json': { schema: SuccessResponseSchema(PullRequestListResponseSchema) },
       },
     },
+    404: {
+      description: 'Project not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
-pullRequestRoutes.openapi(listPullRequestsRoute, (c) => {
+pullRequestRoutes.openapi(listPullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { query, status } = c.req.valid('query');
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+
+  const all = await listPullRequestsByProject(db, projectId);
+  const active = all.filter((item) => ACTIVE_STATUSES.includes(item.status as PullRequestStatus));
+  const finished = all.filter((item) =>
+    FINISHED_STATUSES.includes(item.status as PullRequestStatus)
+  );
+  const scoped = status === 'merged' ? finished : status === 'all' ? all : active;
   const normalizedQuery = query?.trim().toLowerCase();
-  const all = getProjectList(projectId);
-  const active = all.filter((item) => ['draft', 'open', 'ready', 'blocked'].includes(item.status));
-  const merged = all.filter((item) => ['merged', 'closed'].includes(item.status));
-  const scoped = status === 'merged' ? merged : status === 'all' ? all : active;
-  const pullRequests = normalizedQuery
+  const filtered = normalizedQuery
     ? scoped.filter((item) =>
         [
           item.title,
           item.description,
-          item.source_branch,
-          item.target_branch,
-          item.author_id,
-          item.steward_id,
-          item.review_owner_id,
+          item.sourceBranch,
+          item.targetBranch,
+          item.authorId,
+          item.reviewOwnerId,
         ]
           .filter(Boolean)
           .join(' ')
@@ -494,8 +431,8 @@ pullRequestRoutes.openapi(listPullRequestsRoute, (c) => {
     {
       success: true as const,
       data: {
-        pull_requests: pullRequests,
-        counts: { active: active.length, merged: merged.length },
+        pull_requests: filtered.map(toApiPullRequest),
+        counts: { active: active.length, merged: finished.length },
       },
     },
     200
@@ -506,12 +443,10 @@ const comparePullRequestsRoute = createRoute({
   method: 'get',
   path: '/v1/projects/{projectId}/pull-requests/compare',
   tags: ['Pull requests'],
-  summary: 'List branch comparisons available for pull request creation',
+  summary: 'List real branch comparisons available for pull request creation',
   request: {
     params: z.object({ projectId: z.string().min(1) }),
-    query: z.object({
-      base: z.string().default('main'),
-    }),
+    query: z.object({ base: z.string().default('main') }),
   },
   responses: {
     200: {
@@ -520,19 +455,39 @@ const comparePullRequestsRoute = createRoute({
         'application/json': { schema: SuccessResponseSchema(PullRequestCompareResponseSchema) },
       },
     },
+    400: {
+      description: 'Base branch has no commit',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project or base branch not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
-pullRequestRoutes.openapi(comparePullRequestsRoute, (c) => {
+pullRequestRoutes.openapi(comparePullRequestsRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const { base } = c.req.valid('query');
-
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const branches = await findBranchesByProject(db, { projectId });
+  const baseBranch = branches.find((branch) => branch.name === base);
+  if (!baseBranch)
+    return c.json(errorBody('BASE_BRANCH_NOT_FOUND', `Branch ${base} not found.`), 404);
+  if (!baseBranch.headCommitHash) {
+    return c.json(errorBody('BASE_BRANCH_EMPTY', `Branch ${base} has no commits.`), 400);
+  }
+  const active = await listPullRequestsByProject(db, projectId, ACTIVE_STATUSES);
+  const candidates = await buildCompareCandidates(db, projectId, baseBranch, branches, active);
   return c.json(
     {
       success: true as const,
       data: {
-        base_branches: ['main', 'release/2026-07'],
-        compare_branches: buildCompareCandidates(projectId, base),
+        base_branches: branches
+          .filter((branch) => branch.headCommitHash)
+          .map((branch) => branch.name),
+        compare_branches: candidates,
       },
     },
     200
@@ -543,7 +498,7 @@ const createPullRequestRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/pull-requests',
   tags: ['Pull requests'],
-  summary: 'Create a project pull request',
+  summary: 'Create a project pull request from real branch heads',
   request: {
     params: z.object({ projectId: z.string().min(1) }),
     body: {
@@ -556,6 +511,7 @@ const createPullRequestRoute = createRoute({
             target_branch: z.string().min(1),
             draft: z.boolean().default(false),
             review_owner_id: z.string().optional(),
+            linked_work: z.string().optional(),
             steward_id: z.string().optional(),
             workspace_id: z.string().optional(),
             release_lane_id: z.string().optional(),
@@ -570,123 +526,148 @@ const createPullRequestRoute = createRoute({
       content: { 'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) } },
     },
     400: {
-      description: 'Invalid request',
+      description: 'Invalid branch pair',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    404: {
+      description: 'Project, branch, or commit not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
-      description: 'A pull request already exists for this branch pair',
+      description: 'A pull request already exists',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-pullRequestRoutes.openapi(createPullRequestRoute, (c) => {
+pullRequestRoutes.openapi(createPullRequestRoute, async (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
-  const pullRequests = getProjectList(projectId);
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
   if (body.source_branch === body.target_branch) {
     return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_BRANCHES_IDENTICAL',
-          message: 'Source and target branches must be different.',
-        },
-      },
+      errorBody('PULL_REQUEST_BRANCHES_IDENTICAL', 'Source and target branches must be different.'),
       400
     );
   }
 
-  const existing = pullRequests.find(
-    (pullRequest) =>
-      pullRequest.source_branch === body.source_branch &&
-      pullRequest.target_branch === body.target_branch &&
-      ['draft', 'open', 'ready', 'blocked'].includes(pullRequest.status)
+  const [sourceBranch, targetBranch] = await Promise.all([
+    findBranchByName(db, projectId, body.source_branch),
+    findBranchByName(db, projectId, body.target_branch),
+  ]);
+  if (!sourceBranch || !targetBranch) {
+    return c.json(
+      errorBody('PULL_REQUEST_BRANCH_NOT_FOUND', 'Source or target branch does not exist.'),
+      404
+    );
+  }
+  if (!sourceBranch.headCommitHash || !targetBranch.headCommitHash) {
+    return c.json(
+      errorBody(
+        'PULL_REQUEST_BRANCH_EMPTY',
+        'Source and target branches must both contain a commit.'
+      ),
+      400
+    );
+  }
+  const existing = await findActivePullRequestByBranches(
+    db,
+    projectId,
+    body.source_branch,
+    body.target_branch
   );
   if (existing) {
     return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_ALREADY_EXISTS',
-          message: `PR #${existing.number} already tracks this branch pair.`,
-        },
-      },
+      errorBody(
+        'PULL_REQUEST_ALREADY_EXISTS',
+        `PR #${existing.number} already tracks this branch pair.`
+      ),
       409
     );
   }
-
-  const candidate = buildCompareCandidates(projectId, body.target_branch).find(
-    (item) => item.branch === body.source_branch && item.status === 'ready'
-  );
-  if (!candidate) {
+  const [sourceCommit, targetCommit] = await Promise.all([
+    getCommit(db, sourceBranch.headCommitHash),
+    getCommit(db, targetBranch.headCommitHash),
+  ]);
+  if (
+    !sourceCommit ||
+    sourceCommit.project_id !== projectId ||
+    !targetCommit ||
+    targetCommit.project_id !== projectId
+  ) {
     return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_BRANCH_NOT_AVAILABLE',
-          message: 'The source branch has no reviewable changes against the target branch.',
-        },
-      },
+      errorBody(
+        'PULL_REQUEST_COMMIT_NOT_FOUND',
+        'A branch head does not resolve to a project commit.'
+      ),
+      404
+    );
+  }
+  const changedNodes = countChangedNodes(sourceCommit, targetCommit);
+  if (sourceCommit.hash === targetCommit.hash || changedNodes === 0) {
+    return c.json(
+      errorBody(
+        'PULL_REQUEST_NO_CHANGES',
+        'The source branch has no changes against the target branch.'
+      ),
       400
     );
   }
 
-  const nextNumber = Math.max(0, ...pullRequests.map((item) => item.number)) + 1;
-  const createdAt = nowIso();
-  const pullRequest: PullRequest = {
-    id: `${projectId}:pr:${nextNumber}`,
-    number: nextNumber,
-    project_id: projectId,
+  const actorId = getUserId(c) ?? 'current-user';
+  const pullRequest = await createPullRequest(db, {
+    projectId,
     title: body.title,
     description: body.description,
-    source_branch: body.source_branch,
-    target_branch: body.target_branch,
-    source_commit_id: candidate.head_commit_id,
-    target_base_commit_id: candidate.base_commit_id,
+    sourceBranch: sourceBranch.name,
+    targetBranch: targetBranch.name,
+    sourceCommitHash: sourceCommit.hash,
+    targetBaseCommitHash: targetCommit.hash,
     status: body.draft ? 'draft' : 'open',
-    author_id: 'current-user',
-    steward_id: body.steward_id ?? null,
-    review_owner_id: body.review_owner_id ?? null,
-    workspace_id: body.workspace_id ?? null,
-    release_lane_id: body.release_lane_id ?? null,
-    linked_work: null,
-    created_at: createdAt,
-    updated_at: createdAt,
-    merged_at: null,
-    closed_at: null,
-  };
-  pullRequests.unshift(pullRequest);
-  projectChecks.set(pullRequest.id, buildChecks(pullRequest));
-  projectDiffSummaries.set(pullRequest.id, {
-    changed_nodes: candidate.changed_nodes,
-    yops_operations: candidate.yops_changes,
-    output_impacts: candidate.output_impacts,
-    source_refs: candidate.source_refs,
+    authorId: actorId,
+    reviewOwnerId: body.review_owner_id,
+    linkedWork: body.linked_work,
+    diffSummary: {
+      changed_nodes: changedNodes,
+      yops_operations: sourceCommit.yops_log_ids.length,
+      output_impacts: 0,
+      source_refs: sourceCommit.sources?.length ?? 0,
+    },
   });
-  projectActivity.set(pullRequest.id, [
+  const startedAt = pullRequest.createdAt;
+  await replacePullRequestChecks(db, pullRequest.pullRequestId, [
     {
-      id: `${pullRequest.id}:activity:created`,
-      pull_request_id: pullRequest.id,
-      actor_id: pullRequest.author_id,
-      type: 'created',
-      message: 'Pull request created. Merge readiness checks are queued.',
-      created_at: createdAt,
+      kind: 'source_commit',
+      status: 'passed',
+      title: 'Source commit',
+      message: `${sourceCommit.hash} exists on ${sourceBranch.name}.`,
+      startedAt,
+      completedAt: startedAt,
+    },
+    {
+      kind: 'target_commit',
+      status: 'passed',
+      title: 'Target commit',
+      message: `${targetCommit.hash} exists on ${targetBranch.name}.`,
+      startedAt,
+      completedAt: startedAt,
+    },
+    {
+      kind: 'merge_simulation',
+      status: 'pending',
+      title: 'Merge simulation',
+      message: 'Run readiness to prepare a deterministic merge.',
+      startedAt,
     },
   ]);
-
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        ...pullRequest,
-        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
-        checks: projectChecks.get(pullRequest.id) ?? [],
-        activity: projectActivity.get(pullRequest.id) ?? [],
-      },
-    },
-    201
-  );
+  await addPullRequestActivity(db, pullRequest.pullRequestId, {
+    actorId,
+    type: 'created',
+    message: 'Pull request created. Merge readiness checks are queued.',
+    createdAt: pullRequest.createdAt,
+  });
+  return c.json({ success: true as const, data: await toApiDetail(db, pullRequest) }, 201);
 });
 
 const getPullRequestRoute = createRoute({
@@ -695,10 +676,7 @@ const getPullRequestRoute = createRoute({
   tags: ['Pull requests'],
   summary: 'Get a project pull request',
   request: {
-    params: z.object({
-      projectId: z.string().min(1),
-      number: z.coerce.number().int().positive(),
-    }),
+    params: z.object({ projectId: z.string().min(1), number: z.coerce.number().int().positive() }),
   },
   responses: {
     200: {
@@ -706,37 +684,20 @@ const getPullRequestRoute = createRoute({
       content: { 'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) } },
     },
     404: {
-      description: 'Pull request not found',
+      description: 'Project or pull request not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-pullRequestRoutes.openapi(getPullRequestRoute, (c) => {
+pullRequestRoutes.openapi(getPullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
-  const pullRequest = findPullRequest(projectId, number);
-  if (!pullRequest) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
-      },
-      404
-    );
-  }
-
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        ...pullRequest,
-        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
-        checks: projectChecks.get(pullRequest.id) ?? [],
-        activity: projectActivity.get(pullRequest.id) ?? [],
-      },
-    },
-    200
-  );
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const pullRequest = await findPullRequestByNumber(db, projectId, number);
+  if (!pullRequest)
+    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  return c.json({ success: true as const, data: await toApiDetail(db, pullRequest) }, 200);
 });
 
 const listChecksRoute = createRoute({
@@ -745,10 +706,7 @@ const listChecksRoute = createRoute({
   tags: ['Pull requests'],
   summary: 'List pull request readiness checks',
   request: {
-    params: z.object({
-      projectId: z.string().min(1),
-      number: z.coerce.number().int().positive(),
-    }),
+    params: z.object({ projectId: z.string().min(1), number: z.coerce.number().int().positive() }),
   },
   responses: {
     200: {
@@ -758,26 +716,21 @@ const listChecksRoute = createRoute({
       },
     },
     404: {
-      description: 'Pull request not found',
+      description: 'Project or pull request not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-pullRequestRoutes.openapi(listChecksRoute, (c) => {
+pullRequestRoutes.openapi(listChecksRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
-  const pullRequest = findPullRequest(projectId, number);
-  if (!pullRequest) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
-      },
-      404
-    );
-  }
-
-  return c.json({ success: true as const, data: projectChecks.get(pullRequest.id) ?? [] }, 200);
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const pullRequest = await findPullRequestByNumber(db, projectId, number);
+  if (!pullRequest)
+    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  const checks = await listPullRequestChecks(db, pullRequest.pullRequestId);
+  return c.json({ success: true as const, data: checks.map(toApiCheck) }, 200);
 });
 
 const rerunChecksRoute = createRoute({
@@ -786,17 +739,16 @@ const rerunChecksRoute = createRoute({
   tags: ['Pull requests'],
   summary: 'Rerun pull request readiness checks',
   request: {
-    params: z.object({
-      projectId: z.string().min(1),
-      number: z.coerce.number().int().positive(),
-    }),
+    params: z.object({ projectId: z.string().min(1), number: z.coerce.number().int().positive() }),
   },
   responses: {
     200: {
       description: 'Pull request readiness rerun',
-      content: {
-        'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) },
-      },
+      content: { 'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) } },
+    },
+    404: {
+      description: 'Project, pull request, branch, or commit not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
       description: 'Pull request is no longer active',
@@ -805,73 +757,75 @@ const rerunChecksRoute = createRoute({
   },
 });
 
-pullRequestRoutes.openapi(rerunChecksRoute, (c) => {
+pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
-  const pullRequest = findPullRequest(projectId, number);
-  if (!pullRequest) {
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const pullRequest = await findPullRequestByNumber(db, projectId, number);
+  if (!pullRequest)
+    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  if (FINISHED_STATUSES.includes(pullRequest.status as PullRequestStatus)) {
     return c.json(
-      {
-        success: false as const,
-        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
-      },
-      404
-    );
-  }
-
-  if (['merged', 'closed'].includes(pullRequest.status)) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_NOT_ACTIVE',
-          message: 'Only active pull requests can rerun readiness checks.',
-        },
-      },
+      errorBody('PULL_REQUEST_NOT_ACTIVE', 'Only active pull requests can rerun readiness checks.'),
       409
     );
   }
-
-  const previousStatus = pullRequest.status;
-  pullRequest.updated_at = nowIso();
-  if (pullRequest.status === 'open') {
-    pullRequest.status = 'ready';
+  const [sourceCommit, targetCommit] = await Promise.all([
+    getCommit(db, pullRequest.sourceCommitHash),
+    getCommit(db, pullRequest.targetBaseCommitHash),
+  ]);
+  if (!sourceCommit || !targetCommit) {
+    return c.json(
+      errorBody('PULL_REQUEST_COMMIT_NOT_FOUND', 'A reviewed commit no longer exists.'),
+      404
+    );
   }
-
-  const checks = buildChecks(pullRequest);
-  projectChecks.set(pullRequest.id, checks);
-  const nextActivity = [...(projectActivity.get(pullRequest.id) ?? [])];
-  nextActivity.push({
-    id: `${pullRequest.id}:activity:rerun:${Date.now()}`,
-    pull_request_id: pullRequest.id,
-    actor_id: 'current-user',
+  const previousStatus = pullRequest.status;
+  const updated = await updatePullRequest(db, pullRequest.pullRequestId, { status: 'ready' });
+  if (!updated) return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  const now = updated.updatedAt;
+  await replacePullRequestChecks(db, updated.pullRequestId, [
+    {
+      kind: 'source_commit',
+      status: 'passed',
+      title: 'Source commit',
+      message: `${sourceCommit.hash} exists.`,
+      startedAt: now,
+      completedAt: now,
+    },
+    {
+      kind: 'target_commit',
+      status: 'passed',
+      title: 'Target commit',
+      message: `${targetCommit.hash} exists.`,
+      startedAt: now,
+      completedAt: now,
+    },
+    {
+      kind: 'merge_simulation',
+      status: 'passed',
+      title: 'Merge simulation',
+      message: 'Commit snapshots are available. Deterministic preparation will run before merge.',
+      startedAt: now,
+      completedAt: now,
+    },
+  ]);
+  const actorId = getUserId(c) ?? 'current-user';
+  await addPullRequestActivity(db, updated.pullRequestId, {
+    actorId,
     type: 'checks_reran',
     message: 'Merge readiness checks rerun.',
-    created_at: pullRequest.updated_at,
+    createdAt: now,
   });
-  if (previousStatus !== pullRequest.status) {
-    nextActivity.push({
-      id: `${pullRequest.id}:activity:status:${Date.now()}`,
-      pull_request_id: pullRequest.id,
-      actor_id: 'current-user',
+  if (previousStatus !== updated.status) {
+    await addPullRequestActivity(db, updated.pullRequestId, {
+      actorId,
       type: 'status_changed',
-      message: `Pull request moved from ${previousStatus} to ${pullRequest.status}.`,
-      created_at: pullRequest.updated_at,
+      message: `Pull request moved from ${previousStatus} to ${updated.status}.`,
+      createdAt: now,
     });
   }
-  projectActivity.set(pullRequest.id, nextActivity);
-
-  return c.json(
-    {
-      success: true as const,
-      data: {
-        ...pullRequest,
-        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
-        checks,
-        activity: nextActivity,
-      },
-    },
-    200
-  );
+  return c.json({ success: true as const, data: await toApiDetail(db, updated) }, 200);
 });
 
 const closePullRequestRoute = createRoute({
@@ -880,65 +834,53 @@ const closePullRequestRoute = createRoute({
   tags: ['Pull requests'],
   summary: 'Close a project pull request without merging',
   request: {
-    params: z.object({
-      projectId: z.string().min(1),
-      number: z.coerce.number().int().positive(),
-    }),
+    params: z.object({ projectId: z.string().min(1), number: z.coerce.number().int().positive() }),
   },
   responses: {
     200: {
       description: 'Pull request closed',
       content: { 'application/json': { schema: SuccessResponseSchema(PullRequestSchema) } },
     },
+    404: {
+      description: 'Project or pull request not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
     409: {
-      description: 'Pull request is already closed',
+      description: 'Pull request is already finished',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-pullRequestRoutes.openapi(closePullRequestRoute, (c) => {
+pullRequestRoutes.openapi(closePullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
-  const pullRequest = findPullRequest(projectId, number);
-  if (!pullRequest) {
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const pullRequest = await findPullRequestByNumber(db, projectId, number);
+  if (!pullRequest)
+    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  if (FINISHED_STATUSES.includes(pullRequest.status as PullRequestStatus)) {
     return c.json(
-      {
-        success: false as const,
-        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
-      },
-      404
-    );
-  }
-
-  if (['merged', 'closed'].includes(pullRequest.status)) {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_ALREADY_CLOSED',
-          message: 'Only active pull requests can be closed without merging.',
-        },
-      },
+      errorBody(
+        'PULL_REQUEST_ALREADY_CLOSED',
+        'Only active pull requests can be closed without merging.'
+      ),
       409
     );
   }
-
-  pullRequest.status = 'closed' satisfies PullRequestStatus;
-  pullRequest.closed_at = nowIso();
-  pullRequest.updated_at = pullRequest.closed_at;
-  projectActivity.set(pullRequest.id, [
-    ...(projectActivity.get(pullRequest.id) ?? []),
-    {
-      id: `${pullRequest.id}:activity:closed`,
-      pull_request_id: pullRequest.id,
-      actor_id: 'current-user',
-      type: 'closed',
-      message: 'Pull request closed without merging.',
-      created_at: pullRequest.closed_at,
-    },
-  ]);
-
-  return c.json({ success: true as const, data: pullRequest }, 200);
+  const closedAt = new Date();
+  const closed = await updatePullRequest(db, pullRequest.pullRequestId, {
+    status: 'closed',
+    closedAt,
+  });
+  if (!closed) return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  await addPullRequestActivity(db, closed.pullRequestId, {
+    actorId: getUserId(c) ?? 'current-user',
+    type: 'closed',
+    message: 'Pull request closed without merging.',
+    createdAt: closedAt,
+  });
+  return c.json({ success: true as const, data: toApiPullRequest(closed) }, 200);
 });
 
 const mergePullRequestRoute = createRoute({
@@ -947,10 +889,7 @@ const mergePullRequestRoute = createRoute({
   tags: ['Pull requests'],
   summary: 'Merge a project pull request',
   request: {
-    params: z.object({
-      projectId: z.string().min(1),
-      number: z.coerce.number().int().positive(),
-    }),
+    params: z.object({ projectId: z.string().min(1), number: z.coerce.number().int().positive() }),
     body: {
       content: {
         'application/json': {
@@ -964,57 +903,29 @@ const mergePullRequestRoute = createRoute({
     },
   },
   responses: {
-    200: {
-      description: 'Pull request merged',
-      content: { 'application/json': { schema: SuccessResponseSchema(PullRequestSchema) } },
+    404: {
+      description: 'Project or pull request not found',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
-      description: 'Pull request is not ready to merge',
+      description: 'Real merge preparation is required',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
-pullRequestRoutes.openapi(mergePullRequestRoute, (c) => {
+pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
-  const pullRequest = findPullRequest(projectId, number);
-  if (!pullRequest) {
-    return c.json(
-      {
-        success: false as const,
-        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
-      },
-      404
-    );
-  }
-
-  if (pullRequest.status !== 'ready') {
-    return c.json(
-      {
-        success: false as const,
-        error: {
-          code: 'PULL_REQUEST_NOT_READY',
-          message: 'Only ready pull requests can be merged.',
-        },
-      },
-      409
-    );
-  }
-
-  pullRequest.status = 'merged' satisfies PullRequestStatus;
-  pullRequest.merged_at = nowIso();
-  pullRequest.updated_at = pullRequest.merged_at;
-  projectActivity.set(pullRequest.id, [
-    ...(projectActivity.get(pullRequest.id) ?? []),
-    {
-      id: `${pullRequest.id}:activity:merged`,
-      pull_request_id: pullRequest.id,
-      actor_id: 'current-user',
-      type: 'merged',
-      message: 'Pull request merged through deterministic merge.',
-      created_at: pullRequest.merged_at,
-    },
-  ]);
-
-  return c.json({ success: true as const, data: pullRequest }, 200);
+  const { access, db } = await requireProject(c, projectId);
+  if (access instanceof Response) return access;
+  const pullRequest = await findPullRequestByNumber(db, projectId, number);
+  if (!pullRequest)
+    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+  return c.json(
+    errorBody(
+      'PULL_REQUEST_MERGE_NOT_PREPARED',
+      'Real deterministic merge preparation is required before this PR can merge.'
+    ),
+    409
+  );
 });
