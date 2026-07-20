@@ -20,13 +20,14 @@ describe('Pull request routes', () => {
     expect(data.data.pull_requests[0].source_branch).toBe('release-notes/cleanup');
   });
 
-  it('creates a pull request and queues merge readiness', async () => {
-    const res = await app.request('/v1/projects/proj_pr_test/pull-requests', {
+  it('moves a newly created pull request through readiness and merge', async () => {
+    const projectId = 'proj_pr_create_flow';
+    const res = await app.request(`/v1/projects/${projectId}/pull-requests`, {
       body: JSON.stringify({
-        description: 'Open handoff proposal',
-        source_branch: 'workspace/audience-handoff',
+        description: 'Refresh output bundle',
+        source_branch: 'outputs/bundle-refresh',
         target_branch: 'main',
-        title: 'Audience handoff updates',
+        title: 'Output bundle refresh',
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
@@ -36,9 +37,49 @@ describe('Pull request routes', () => {
     const data: ApiResponse = await res.json();
     expect(data.success).toBe(true);
     expect(data.data.status).toBe('open');
+    expect(data.data.source_commit_id).toBe('sha:31af8d2');
+    expect(data.data.target_base_commit_id).toBe('sha:6de18a0');
     expect(
       data.data.checks.some((check: { kind: string }) => check.kind === 'merge_simulation')
     ).toBe(true);
+
+    const duplicate = await app.request(`/v1/projects/${projectId}/pull-requests`, {
+      body: JSON.stringify({
+        description: 'Duplicate output bundle PR',
+        source_branch: 'outputs/bundle-refresh',
+        target_branch: 'main',
+        title: 'Duplicate output bundle refresh',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    expect(duplicate.status).toBe(409);
+    expect(((await duplicate.json()) as ApiResponse).error.code).toBe(
+      'PULL_REQUEST_ALREADY_EXISTS'
+    );
+
+    const rerun = await app.request(
+      `/v1/projects/${projectId}/pull-requests/${data.data.number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    expect(rerun.status).toBe(200);
+    const rerunData: ApiResponse = await rerun.json();
+    expect(rerunData.data.status).toBe('ready');
+    expect(
+      rerunData.data.checks.find((check: { kind: string }) => check.kind === 'merge_simulation')
+        .status
+    ).toBe('passed');
+
+    const merge = await app.request(
+      `/v1/projects/${projectId}/pull-requests/${data.data.number}/merge`,
+      {
+        body: JSON.stringify({ strategy: 'deterministic_merge' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+    expect(merge.status).toBe(200);
+    expect(((await merge.json()) as ApiResponse).data.status).toBe('merged');
   });
 
   it('lists branches that can open a new pull request', async () => {
@@ -60,6 +101,27 @@ describe('Pull request routes', () => {
           candidate.branch === 'workspace/audience-handoff' && candidate.status === 'already_open'
       )
     ).toBe(true);
+  });
+
+  it('returns checks, activity, and structured diff data for PR details', async () => {
+    const res = await app.request('/v1/projects/proj_pr_detail/pull-requests/17');
+    expect(res.status).toBe(200);
+
+    const data: ApiResponse = await res.json();
+    expect(data.data.diff_summary).toEqual({
+      changed_nodes: 5,
+      output_impacts: 2,
+      source_refs: 3,
+      yops_operations: 7,
+    });
+    expect(data.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
+      ])
+    );
+    expect(data.data.activity).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'created' })])
+    );
   });
 
   it('blocks merge until the pull request is ready', async () => {

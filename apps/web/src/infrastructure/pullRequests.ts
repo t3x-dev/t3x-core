@@ -25,6 +25,53 @@ export interface ApiProjectPullRequest {
   closed_at: string | null;
 }
 
+export interface ApiProjectPullRequestCheck {
+  id: string;
+  pull_request_id: string;
+  kind:
+    | 'source_commit'
+    | 'target_commit'
+    | 'base_freshness'
+    | 'schema_compatibility'
+    | 'merge_simulation'
+    | 'output_impact'
+    | 'review_requirement'
+    | 'permission';
+  status: 'pending' | 'running' | 'passed' | 'warning' | 'blocked' | 'failed';
+  title: string;
+  message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface ApiProjectPullRequestActivity {
+  id: string;
+  pull_request_id: string;
+  actor_id: string;
+  type:
+    | 'created'
+    | 'description_updated'
+    | 'status_changed'
+    | 'checks_reran'
+    | 'commented'
+    | 'base_updated'
+    | 'merged'
+    | 'closed';
+  message: string;
+  created_at: string;
+}
+
+export interface ApiProjectPullRequestDetail extends ApiProjectPullRequest {
+  diff_summary: {
+    changed_nodes: number;
+    yops_operations: number;
+    output_impacts: number;
+    source_refs: number;
+  };
+  checks: ApiProjectPullRequestCheck[];
+  activity: ApiProjectPullRequestActivity[];
+}
+
 export interface ProjectPullRequestListData {
   pull_requests: ApiProjectPullRequest[];
   counts: {
@@ -107,7 +154,7 @@ export async function listProjectPullRequestComparisons(
 export async function createProjectPullRequest(
   projectId: string,
   input: CreateProjectPullRequestInput
-): Promise<ApiProjectPullRequest> {
+): Promise<ApiProjectPullRequestDetail> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests`,
     {
@@ -116,7 +163,17 @@ export async function createProjectPullRequest(
       method: 'POST',
     }
   );
-  return handleResponse<ApiProjectPullRequest>(res);
+  return handleResponse<ApiProjectPullRequestDetail>(res);
+}
+
+export async function getProjectPullRequest(
+  projectId: string,
+  number: number
+): Promise<ApiProjectPullRequestDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}`
+  );
+  return handleResponse<ApiProjectPullRequestDetail>(res);
 }
 
 export async function mergeProjectPullRequest(
@@ -146,4 +203,17 @@ export async function closeProjectPullRequest(
     }
   );
   return handleResponse<ApiProjectPullRequest>(res);
+}
+
+export async function rerunProjectPullRequestReadiness(
+  projectId: string,
+  number: number
+): Promise<ApiProjectPullRequestDetail> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}/checks/rerun`,
+    {
+      method: 'POST',
+    }
+  );
+  return handleResponse<ApiProjectPullRequestDetail>(res);
 }

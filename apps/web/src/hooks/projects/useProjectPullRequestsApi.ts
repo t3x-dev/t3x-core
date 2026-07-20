@@ -2,14 +2,27 @@ import { useCallback } from 'react';
 import {
   completeProjectPullRequest,
   dismissProjectPullRequest,
+  fetchProjectPullRequest,
   fetchProjectPullRequestComparisons,
   fetchProjectPullRequests,
   openProjectPullRequest,
+  rerunPullRequestReadiness,
+} from '@/queries/projectPullRequests';
+
+export type {
+  ApiProjectPullRequest,
+  ApiProjectPullRequestActivity,
+  ApiProjectPullRequestCheck,
+  ApiProjectPullRequestDetail,
 } from '@/queries/projectPullRequests';
 
 export function useProjectPullRequestsApi() {
   const fetchPullRequests = useCallback((projectId: string) => {
     return fetchProjectPullRequests(projectId, { status: 'all' });
+  }, []);
+
+  const fetchPullRequest = useCallback((projectId: string, number: number) => {
+    return fetchProjectPullRequest(projectId, number);
   }, []);
 
   const createPullRequest = useCallback(
@@ -52,11 +65,17 @@ export function useProjectPullRequestsApi() {
     return dismissProjectPullRequest(projectId, input.number);
   }, []);
 
+  const rerunReadiness = useCallback((projectId: string, input: { number: number }) => {
+    return rerunPullRequestReadiness(projectId, input.number);
+  }, []);
+
   return {
     closePullRequest,
     createPullRequest,
     fetchCompareCandidates,
+    fetchPullRequest,
     fetchPullRequests,
     mergePullRequest,
+    rerunReadiness,
   };
 }

@@ -74,7 +74,15 @@ const PullRequestActivitySchema = z.object({
   created_at: z.string(),
 });
 
+const PullRequestDiffSummarySchema = z.object({
+  changed_nodes: z.number().int().nonnegative(),
+  yops_operations: z.number().int().nonnegative(),
+  output_impacts: z.number().int().nonnegative(),
+  source_refs: z.number().int().nonnegative(),
+});
+
 const PullRequestDetailSchema = PullRequestSchema.extend({
+  diff_summary: PullRequestDiffSummarySchema,
   checks: z.array(PullRequestCheckSchema),
   activity: z.array(PullRequestActivitySchema),
 });
@@ -117,11 +125,13 @@ type PullRequestStatus = z.infer<typeof PullRequestStatusSchema>;
 type PullRequest = z.infer<typeof PullRequestSchema>;
 type PullRequestCheck = z.infer<typeof PullRequestCheckSchema>;
 type PullRequestActivity = z.infer<typeof PullRequestActivitySchema>;
+type PullRequestDiffSummary = z.infer<typeof PullRequestDiffSummarySchema>;
 type PullRequestCompareCandidate = z.infer<typeof PullRequestCompareCandidateSchema>;
 
 const projectPullRequests = new Map<string, PullRequest[]>();
 const projectChecks = new Map<string, PullRequestCheck[]>();
 const projectActivity = new Map<string, PullRequestActivity[]>();
+const projectDiffSummaries = new Map<string, PullRequestDiffSummary>();
 
 function nowIso() {
   return new Date().toISOString();
@@ -181,7 +191,7 @@ function seedProjectPullRequests(projectId: string) {
       number: 19,
       project_id: projectId,
       title: 'Audience handoff updates',
-      description: 'Move audience handoff state into a reviewable merge proposal.',
+      description: 'Move audience handoff state into a reviewable pull request.',
       source_branch: 'workspace/audience-handoff',
       target_branch: 'main',
       source_commit_id: 'sha:8ab61ef',
@@ -225,13 +235,14 @@ function seedProjectPullRequests(projectId: string) {
   projectPullRequests.set(projectId, pullRequests);
   for (const pullRequest of pullRequests) {
     projectChecks.set(pullRequest.id, buildChecks(pullRequest));
+    projectDiffSummaries.set(pullRequest.id, buildDiffSummary(pullRequest));
     projectActivity.set(pullRequest.id, [
       {
         id: `${pullRequest.id}:activity:created`,
         pull_request_id: pullRequest.id,
         actor_id: pullRequest.author_id,
         type: 'created',
-        message: 'Merge proposal created.',
+        message: 'Pull request created.',
         created_at: pullRequest.created_at,
       },
     ]);
@@ -271,11 +282,49 @@ function buildChecks(pullRequest: PullRequest): PullRequestCheck[] {
       title: 'Merge simulation',
       message: blocked
         ? 'Schema migration decision is required before deterministic merge simulation can pass.'
-        : 'Deterministic merge simulation is queued or passed for this proposal.',
+        : 'Deterministic merge simulation is queued or passed for this pull request.',
       started_at: completedAt,
       completed_at: pullRequest.status === 'ready' || blocked ? completedAt : null,
     },
   ];
+}
+
+function buildDiffSummary(pullRequest: PullRequest): PullRequestDiffSummary {
+  const summaries: Record<string, PullRequestDiffSummary> = {
+    'release-notes/cleanup': {
+      changed_nodes: 5,
+      yops_operations: 7,
+      output_impacts: 2,
+      source_refs: 3,
+    },
+    'schema/prd-v3': {
+      changed_nodes: 8,
+      yops_operations: 12,
+      output_impacts: 2,
+      source_refs: 4,
+    },
+    'workspace/audience-handoff': {
+      changed_nodes: 8,
+      yops_operations: 12,
+      output_impacts: 2,
+      source_refs: 4,
+    },
+    'docs/limitations-copy': {
+      changed_nodes: 3,
+      yops_operations: 5,
+      output_impacts: 1,
+      source_refs: 2,
+    },
+  };
+
+  return (
+    summaries[pullRequest.source_branch] ?? {
+      changed_nodes: 0,
+      yops_operations: 0,
+      output_impacts: 0,
+      source_refs: 0,
+    }
+  );
 }
 
 function getProjectList(projectId: string) {
@@ -387,7 +436,7 @@ function buildCompareCandidates(
         status === 'already_open'
           ? `PR #${openPullRequestNumber} already open`
           : status === 'ready'
-            ? 'Ready to create'
+            ? 'Available'
             : 'No changes',
     };
   });
@@ -524,6 +573,10 @@ const createPullRequestRoute = createRoute({
       description: 'Invalid request',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
+    409: {
+      description: 'A pull request already exists for this branch pair',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
   },
 });
 
@@ -531,6 +584,54 @@ pullRequestRoutes.openapi(createPullRequestRoute, (c) => {
   const { projectId } = c.req.valid('param');
   const body = c.req.valid('json');
   const pullRequests = getProjectList(projectId);
+  if (body.source_branch === body.target_branch) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PULL_REQUEST_BRANCHES_IDENTICAL',
+          message: 'Source and target branches must be different.',
+        },
+      },
+      400
+    );
+  }
+
+  const existing = pullRequests.find(
+    (pullRequest) =>
+      pullRequest.source_branch === body.source_branch &&
+      pullRequest.target_branch === body.target_branch &&
+      ['draft', 'open', 'ready', 'blocked'].includes(pullRequest.status)
+  );
+  if (existing) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PULL_REQUEST_ALREADY_EXISTS',
+          message: `PR #${existing.number} already tracks this branch pair.`,
+        },
+      },
+      409
+    );
+  }
+
+  const candidate = buildCompareCandidates(projectId, body.target_branch).find(
+    (item) => item.branch === body.source_branch && item.status === 'ready'
+  );
+  if (!candidate) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PULL_REQUEST_BRANCH_NOT_AVAILABLE',
+          message: 'The source branch has no reviewable changes against the target branch.',
+        },
+      },
+      400
+    );
+  }
+
   const nextNumber = Math.max(0, ...pullRequests.map((item) => item.number)) + 1;
   const createdAt = nowIso();
   const pullRequest: PullRequest = {
@@ -541,8 +642,8 @@ pullRequestRoutes.openapi(createPullRequestRoute, (c) => {
     description: body.description,
     source_branch: body.source_branch,
     target_branch: body.target_branch,
-    source_commit_id: 'sha:pending',
-    target_base_commit_id: 'sha:pending-base',
+    source_commit_id: candidate.head_commit_id,
+    target_base_commit_id: candidate.base_commit_id,
     status: body.draft ? 'draft' : 'open',
     author_id: 'current-user',
     steward_id: body.steward_id ?? null,
@@ -557,13 +658,19 @@ pullRequestRoutes.openapi(createPullRequestRoute, (c) => {
   };
   pullRequests.unshift(pullRequest);
   projectChecks.set(pullRequest.id, buildChecks(pullRequest));
+  projectDiffSummaries.set(pullRequest.id, {
+    changed_nodes: candidate.changed_nodes,
+    yops_operations: candidate.yops_changes,
+    output_impacts: candidate.output_impacts,
+    source_refs: candidate.source_refs,
+  });
   projectActivity.set(pullRequest.id, [
     {
       id: `${pullRequest.id}:activity:created`,
       pull_request_id: pullRequest.id,
       actor_id: pullRequest.author_id,
       type: 'created',
-      message: 'Merge proposal created. Merge readiness checks are queued.',
+      message: 'Pull request created. Merge readiness checks are queued.',
       created_at: createdAt,
     },
   ]);
@@ -573,6 +680,7 @@ pullRequestRoutes.openapi(createPullRequestRoute, (c) => {
       success: true as const,
       data: {
         ...pullRequest,
+        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
         checks: projectChecks.get(pullRequest.id) ?? [],
         activity: projectActivity.get(pullRequest.id) ?? [],
       },
@@ -622,6 +730,7 @@ pullRequestRoutes.openapi(getPullRequestRoute, (c) => {
       success: true as const,
       data: {
         ...pullRequest,
+        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
         checks: projectChecks.get(pullRequest.id) ?? [],
         activity: projectActivity.get(pullRequest.id) ?? [],
       },
@@ -684,10 +793,14 @@ const rerunChecksRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Readiness checks rerun',
+      description: 'Pull request readiness rerun',
       content: {
-        'application/json': { schema: SuccessResponseSchema(z.array(PullRequestCheckSchema)) },
+        'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) },
       },
+    },
+    409: {
+      description: 'Pull request is no longer active',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
@@ -705,21 +818,60 @@ pullRequestRoutes.openapi(rerunChecksRoute, (c) => {
     );
   }
 
-  const checks = buildChecks({ ...pullRequest, updated_at: nowIso() });
+  if (['merged', 'closed'].includes(pullRequest.status)) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PULL_REQUEST_NOT_ACTIVE',
+          message: 'Only active pull requests can rerun readiness checks.',
+        },
+      },
+      409
+    );
+  }
+
+  const previousStatus = pullRequest.status;
+  pullRequest.updated_at = nowIso();
+  if (pullRequest.status === 'open') {
+    pullRequest.status = 'ready';
+  }
+
+  const checks = buildChecks(pullRequest);
   projectChecks.set(pullRequest.id, checks);
-  projectActivity.set(pullRequest.id, [
-    ...(projectActivity.get(pullRequest.id) ?? []),
-    {
-      id: `${pullRequest.id}:activity:rerun:${Date.now()}`,
+  const nextActivity = [...(projectActivity.get(pullRequest.id) ?? [])];
+  nextActivity.push({
+    id: `${pullRequest.id}:activity:rerun:${Date.now()}`,
+    pull_request_id: pullRequest.id,
+    actor_id: 'current-user',
+    type: 'checks_reran',
+    message: 'Merge readiness checks rerun.',
+    created_at: pullRequest.updated_at,
+  });
+  if (previousStatus !== pullRequest.status) {
+    nextActivity.push({
+      id: `${pullRequest.id}:activity:status:${Date.now()}`,
       pull_request_id: pullRequest.id,
       actor_id: 'current-user',
-      type: 'checks_reran',
-      message: 'Merge readiness checks rerun.',
-      created_at: nowIso(),
-    },
-  ]);
+      type: 'status_changed',
+      message: `Pull request moved from ${previousStatus} to ${pullRequest.status}.`,
+      created_at: pullRequest.updated_at,
+    });
+  }
+  projectActivity.set(pullRequest.id, nextActivity);
 
-  return c.json({ success: true as const, data: checks }, 200);
+  return c.json(
+    {
+      success: true as const,
+      data: {
+        ...pullRequest,
+        diff_summary: projectDiffSummaries.get(pullRequest.id) ?? buildDiffSummary(pullRequest),
+        checks,
+        activity: nextActivity,
+      },
+    },
+    200
+  );
 });
 
 const closePullRequestRoute = createRoute({

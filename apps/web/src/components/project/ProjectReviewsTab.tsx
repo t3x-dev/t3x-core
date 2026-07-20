@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   GitBranch,
   GitPullRequestArrow,
-  ListFilter,
   PlayCircle,
   RefreshCw,
   Search,
@@ -16,6 +15,12 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type {
+  ApiProjectPullRequest,
+  ApiProjectPullRequestActivity,
+  ApiProjectPullRequestCheck,
+  ApiProjectPullRequestDetail,
+} from '@/hooks/projects/useProjectPullRequestsApi';
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { cn } from '@/utils/cn';
 
@@ -44,36 +49,30 @@ interface ProjectPullRequest {
   readinessLabel: string;
   readinessTone: 'success' | 'pending' | 'warning' | 'muted';
   updatedAt: string;
+  checks?: PullRequestCheck[];
+  activity?: PullRequestActivity[];
+  diffSummary?: PullRequestDiffSummary;
 }
 
 interface PullRequestCheck {
   id: string;
   label: string;
-  status: 'passed' | 'pending' | 'blocked';
+  status: ApiProjectPullRequestCheck['status'];
   detail: string;
 }
 
-interface ApiProjectPullRequestResponse {
-  author_id: string;
-  closed_at: string | null;
-  created_at: string;
-  description: string;
+interface PullRequestActivity {
   id: string;
-  linked_work: string | null;
-  merged_at: string | null;
-  number: number;
-  project_id: string;
-  release_lane_id: string | null;
-  review_owner_id: string | null;
-  source_branch: string;
-  source_commit_id: string;
-  status: PullRequestStatus;
-  steward_id: string | null;
-  target_base_commit_id: string;
-  target_branch: string;
-  title: string;
-  updated_at: string;
-  workspace_id: string | null;
+  label: string;
+  detail: string;
+  createdAt: string;
+}
+
+interface PullRequestDiffSummary {
+  changedNodes: number;
+  yopsOperations: number;
+  outputImpacts: number;
+  sourceRefs: number;
 }
 
 interface PullRequestCompareCandidate {
@@ -144,8 +143,7 @@ const INITIAL_PULL_REQUESTS: ProjectPullRequest[] = [
     id: 'pr_prd_schema_v3',
     number: 18,
     title: 'PRD Schema v3 rollout',
-    description:
-      'Open the schema rollout proposal so review can decide migration coverage before merge.',
+    description: 'Open the schema rollout PR so review can decide migration coverage before merge.',
     sourceBranch: 'schema/prd-v3',
     targetBranch: 'main',
     sourceCommitId: 'sha:5c10b29',
@@ -165,8 +163,7 @@ const INITIAL_PULL_REQUESTS: ProjectPullRequest[] = [
     id: 'pr_audience_handoff',
     number: 19,
     title: 'Audience handoff updates',
-    description:
-      'Move audience handoff state into a reviewable merge proposal before main branch merge.',
+    description: 'Move audience handoff state into a reviewable PR before main branch merge.',
     sourceBranch: 'workspace/audience-handoff',
     targetBranch: 'main',
     sourceCommitId: 'sha:8ab61ef',
@@ -228,7 +225,7 @@ const INITIAL_COMPARE_CANDIDATES: PullRequestCompareCandidate[] = [
     sourceRefs: 5,
     schema: 'Output Bundle Schema v1',
     status: 'ready',
-    statusLabel: 'Ready to create',
+    statusLabel: 'Available',
     openPullRequestNumber: null,
   },
   {
@@ -248,7 +245,7 @@ const INITIAL_COMPARE_CANDIDATES: PullRequestCompareCandidate[] = [
     sourceRefs: 3,
     schema: 'YSchema Contract v1',
     status: 'ready',
-    statusLabel: 'Ready to create',
+    statusLabel: 'Available',
     openPullRequestNumber: null,
   },
   {
@@ -268,12 +265,12 @@ const INITIAL_COMPARE_CANDIDATES: PullRequestCompareCandidate[] = [
     sourceRefs: 8,
     schema: 'Product Foundation Schema v2',
     status: 'ready',
-    statusLabel: 'Ready to create',
+    statusLabel: 'Available',
     openPullRequestNumber: null,
   },
 ];
 
-function toProjectPullRequest(api: ApiProjectPullRequestResponse): ProjectPullRequest {
+function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
   const readiness =
     api.status === 'ready'
       ? ({ label: 'ready to merge', tone: 'success' } as const)
@@ -309,6 +306,114 @@ function toProjectPullRequest(api: ApiProjectPullRequestResponse): ProjectPullRe
   };
 }
 
+const ACTIVITY_LABELS: Record<ApiProjectPullRequestActivity['type'], string> = {
+  created: 'Created',
+  description_updated: 'Description updated',
+  status_changed: 'Status changed',
+  checks_reran: 'Readiness rerun',
+  commented: 'Commented',
+  base_updated: 'Base updated',
+  merged: 'Merged',
+  closed: 'Closed',
+};
+
+function toProjectPullRequestDetail(api: ApiProjectPullRequestDetail): ProjectPullRequest {
+  return {
+    ...toProjectPullRequest(api),
+    activity: api.activity.map((item) => ({
+      createdAt: new Date(item.created_at).toLocaleString(),
+      detail: item.message,
+      id: item.id,
+      label: ACTIVITY_LABELS[item.type],
+    })),
+    checks: api.checks.map((check) => ({
+      detail: check.message ?? 'No additional details.',
+      id: check.id,
+      label: check.title,
+      status: check.status,
+    })),
+    diffSummary: {
+      changedNodes: api.diff_summary.changed_nodes,
+      outputImpacts: api.diff_summary.output_impacts,
+      sourceRefs: api.diff_summary.source_refs,
+      yopsOperations: api.diff_summary.yops_operations,
+    },
+  };
+}
+
+function withLocalPullRequestDetail(
+  pullRequest: ProjectPullRequest,
+  candidate?: PullRequestCompareCandidate
+): ProjectPullRequest {
+  const mergeStatus =
+    pullRequest.status === 'ready' || pullRequest.status === 'merged'
+      ? 'passed'
+      : pullRequest.status === 'blocked'
+        ? 'blocked'
+        : pullRequest.status === 'closed'
+          ? 'warning'
+          : 'pending';
+  const activity: PullRequestActivity[] = [
+    {
+      createdAt: pullRequest.updatedAt,
+      detail: `${pullRequest.author} opened this pull request.`,
+      id: `${pullRequest.id}:activity:created`,
+      label: 'Created',
+    },
+  ];
+  if (pullRequest.status === 'merged') {
+    activity.push({
+      createdAt: pullRequest.updatedAt,
+      detail: 'Pull request merged through deterministic merge.',
+      id: `${pullRequest.id}:activity:merged`,
+      label: 'Merged',
+    });
+  } else if (pullRequest.status === 'closed') {
+    activity.push({
+      createdAt: pullRequest.updatedAt,
+      detail: 'Pull request closed without merging.',
+      id: `${pullRequest.id}:activity:closed`,
+      label: 'Closed',
+    });
+  }
+
+  return {
+    ...pullRequest,
+    activity,
+    checks: [
+      {
+        detail: `${pullRequest.sourceCommitId} exists on ${pullRequest.sourceBranch}.`,
+        id: `${pullRequest.id}:check:source`,
+        label: 'Source commit',
+        status: 'passed',
+      },
+      {
+        detail: `${pullRequest.targetBaseCommitId} exists on ${pullRequest.targetBranch}.`,
+        id: `${pullRequest.id}:check:target`,
+        label: 'Target commit',
+        status: 'passed',
+      },
+      {
+        detail:
+          mergeStatus === 'blocked'
+            ? 'A merge-level decision is still required.'
+            : mergeStatus === 'warning'
+              ? 'Pull request closed before merge simulation completed.'
+              : 'Deterministic merge simulation reflects the current PR status.',
+        id: `${pullRequest.id}:check:merge`,
+        label: 'Merge simulation',
+        status: mergeStatus,
+      },
+    ],
+    diffSummary: {
+      changedNodes: candidate?.changedNodes ?? 0,
+      outputImpacts: candidate?.outputImpacts ?? 0,
+      sourceRefs: candidate?.sourceRefs ?? 0,
+      yopsOperations: candidate?.yopsChanges ?? 0,
+    },
+  };
+}
+
 function toCompareCandidate(
   api: ApiProjectPullRequestCompareCandidate
 ): PullRequestCompareCandidate {
@@ -339,8 +444,10 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
+    fetchPullRequest: fetchProjectPullRequest,
     fetchPullRequests,
     mergePullRequest: mergeProjectPullRequest,
+    rerunReadiness: rerunProjectPullRequestReadiness,
   } = useProjectPullRequestsApi();
   const [pullRequests, setPullRequests] = useState(INITIAL_PULL_REQUESTS);
   const [baseBranches, setBaseBranches] = useState(BASE_BRANCHES);
@@ -350,12 +457,17 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const [selectedId, setSelectedId] = useState(INITIAL_PULL_REQUESTS[0]?.id ?? '');
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
-  const [query, setQuery] = useState('is:open type:pr');
+  const [query, setQuery] = useState('');
   const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     title: 'Output bundle refresh',
     description:
@@ -420,12 +532,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
 
   const visiblePullRequests = useMemo(() => {
     const source = mode === 'open' ? openPullRequests : closedPullRequests;
-    const normalized = query
-      .toLowerCase()
-      .replace(/status:(active|open|merged|closed)/g, '')
-      .replace(/is:(open|closed)/g, '')
-      .replace(/type:pr/g, '')
-      .trim();
+    const normalized = query.toLowerCase().trim();
     if (!normalized) return source;
 
     return source.filter((item) =>
@@ -487,8 +594,52 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setCloseConfirmId(null);
     setCloseError(null);
     setMergeError(null);
+    setReadinessError(null);
+    setDetailError(null);
     setDetailTab('overview');
     setView('detail');
+
+    if (!projectId) {
+      const candidate = compareCandidates.find(
+        (item) =>
+          item.branch === pullRequest.sourceBranch && item.baseBranch === pullRequest.targetBranch
+      );
+      const detailed = withLocalPullRequestDetail(pullRequest, candidate);
+      setPullRequests((items) => items.map((item) => (item.id === detailed.id ? detailed : item)));
+      return;
+    }
+
+    setDetailLoadingId(pullRequest.id);
+    fetchProjectPullRequest(projectId, pullRequest.number)
+      .then((detail) => {
+        const mapped = toProjectPullRequestDetail(detail);
+        setPullRequests((items) => items.map((item) => (item.id === mapped.id ? mapped : item)));
+      })
+      .catch((err) => {
+        setDetailError(err instanceof Error ? err.message : 'Could not load pull request details.');
+      })
+      .finally(() => {
+        setDetailLoadingId(null);
+      });
+  };
+
+  const markCompareCandidateOpened = (
+    sourceBranch: string,
+    targetBranch: string,
+    number: number
+  ) => {
+    setCompareCandidates((items) =>
+      items.map((candidate) =>
+        candidate.branch === sourceBranch && candidate.baseBranch === targetBranch
+          ? {
+              ...candidate,
+              openPullRequestNumber: number,
+              status: 'already_open',
+              statusLabel: `PR #${number} already open`,
+            }
+          : candidate
+      )
+    );
   };
 
   const createLocalPullRequest = () => {
@@ -497,7 +648,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     const next: ProjectPullRequest = {
       id: `pr_${nextNumber}`,
       number: nextNumber,
-      title: createForm.title.trim() || 'Untitled merge proposal',
+      title: createForm.title.trim() || 'Untitled pull request',
       description: createForm.description,
       sourceBranch: createForm.sourceBranch,
       targetBranch: createForm.targetBranch,
@@ -505,49 +656,53 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       targetBaseCommitId: 'sha:6de18a0',
       status: 'open',
       author: 'You',
-      workspace: 'Product foundation',
-      linkedWork: 'Created from PR workbench',
       readinessLabel: 'checks queued',
       readinessTone: 'pending',
       updatedAt: nowLabel,
     };
 
     setPullRequests((items) => [next, ...items]);
+    markCompareCandidateOpened(next.sourceBranch, next.targetBranch, next.number);
     setSelectedId(next.id);
     setHighlightedId(next.id);
     setMode('open');
-    setQuery('is:open type:pr');
+    setQuery('');
     setView('list');
     return next;
   };
 
   const createPullRequest = () => {
-    if (!canCreatePullRequest) return;
+    if (!canCreatePullRequest || creating) return;
 
     if (!projectId) {
       createLocalPullRequest();
       return;
     }
 
+    setCreating(true);
+    setApiError(null);
     createProjectPullRequest(projectId, {
       description: createForm.description,
       source_branch: createForm.sourceBranch,
       target_branch: createForm.targetBranch,
-      title: createForm.title.trim() || 'Untitled merge proposal',
+      title: createForm.title.trim() || 'Untitled pull request',
     })
       .then((created) => {
-        const mapped = toProjectPullRequest(created);
+        const mapped = toProjectPullRequestDetail(created);
         setPullRequests((items) => [mapped, ...items]);
+        markCompareCandidateOpened(mapped.sourceBranch, mapped.targetBranch, mapped.number);
         setSelectedId(mapped.id);
         setHighlightedId(mapped.id);
         setMode('open');
-        setQuery('is:open type:pr');
+        setQuery('');
         setView('list');
         setApiError(null);
       })
       .catch((err) => {
         setApiError(err instanceof Error ? err.message : 'Could not create pull request');
-        createLocalPullRequest();
+      })
+      .finally(() => {
+        setCreating(false);
       });
   };
 
@@ -560,10 +715,11 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setSelectedId(finished.id);
     setHighlightedId(finished.id);
     setMode('closed');
-    setQuery('is:closed type:pr');
+    setQuery('');
     setCloseConfirmId(null);
     setCloseError(null);
     setMergeError(null);
+    setReadinessError(null);
     setView('list');
   };
 
@@ -643,12 +799,62 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       });
   };
 
+  const rerunReadiness = (pullRequest: ProjectPullRequest) => {
+    if (!['open', 'ready', 'blocked'].includes(pullRequest.status) || rerunningId) return;
+
+    setRerunningId(pullRequest.id);
+    setReadinessError(null);
+
+    if (!projectId) {
+      const nextStatus = pullRequest.status === 'open' ? 'ready' : pullRequest.status;
+      const next: ProjectPullRequest = {
+        ...pullRequest,
+        readinessLabel: nextStatus === 'ready' ? 'ready to merge' : pullRequest.readinessLabel,
+        readinessTone: nextStatus === 'ready' ? 'success' : pullRequest.readinessTone,
+        status: nextStatus,
+        updatedAt: 'readiness checked just now',
+      };
+      const candidate = compareCandidates.find(
+        (item) => item.branch === next.sourceBranch && item.baseBranch === next.targetBranch
+      );
+      const detailed = withLocalPullRequestDetail(next, candidate);
+      detailed.activity = [
+        ...(pullRequest.activity ?? detailed.activity ?? []),
+        {
+          createdAt: 'just now',
+          detail: 'Merge readiness checks rerun.',
+          id: `${pullRequest.id}:activity:rerun`,
+          label: 'Readiness rerun',
+        },
+      ];
+      setPullRequests((items) => items.map((item) => (item.id === detailed.id ? detailed : item)));
+      setRerunningId(null);
+      return;
+    }
+
+    rerunProjectPullRequestReadiness(projectId, { number: pullRequest.number })
+      .then((updated) => {
+        const mapped = toProjectPullRequestDetail(updated);
+        setPullRequests((items) => items.map((item) => (item.id === mapped.id ? mapped : item)));
+      })
+      .catch((err) => {
+        setReadinessError(
+          err instanceof Error ? err.message : 'Could not rerun pull request readiness.'
+        );
+      })
+      .finally(() => {
+        setRerunningId(null);
+      });
+  };
+
   if (view === 'create') {
     return (
       <PullRequestCreateView
         baseBranches={baseBranches}
         canCreate={canCreatePullRequest}
         candidates={availableCompareCandidates}
+        creating={creating}
+        error={apiError}
         form={createForm}
         onBack={() => setView('list')}
         onChange={setCreateForm}
@@ -664,6 +870,8 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         closeConfirmationActive={closeConfirmId === selectedPullRequest.id}
         closeError={closeError}
         closing={closingId === selectedPullRequest.id}
+        detailError={detailError}
+        detailLoading={detailLoadingId === selectedPullRequest.id}
         detailTab={detailTab}
         mergeError={mergeError}
         merging={mergingId === selectedPullRequest.id}
@@ -671,7 +879,10 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         onClose={() => closePullRequest(selectedPullRequest)}
         onChangeTab={setDetailTab}
         onMerge={() => mergePullRequest(selectedPullRequest)}
+        onRerun={() => rerunReadiness(selectedPullRequest)}
         pullRequest={selectedPullRequest}
+        readinessError={readinessError}
+        rerunning={rerunningId === selectedPullRequest.id}
       />
     );
   }
@@ -679,59 +890,33 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   return (
     <section className="h-full overflow-auto bg-[var(--surface-canvas)] p-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        <section className="rounded-3xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--text-primary)] text-sm font-bold text-[var(--surface-panel)]">
-                PR
-              </div>
-              <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
-                Merge proposals for structured state
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-5 text-[var(--text-secondary)]">
-                Create a PR from any branch, inspect structured diff in the detail view, run merge
-                readiness, then merge when the project is ready.
-              </p>
-            </div>
-            <Button type="button" variant="ghost">
-              Dismiss
-            </Button>
+        <header className="flex items-end justify-between gap-4 px-1 pt-1">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+              Pull requests
+            </h2>
+            <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
+              Review branch changes and merge structured state.
+            </p>
           </div>
-        </section>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
-          <div className="flex min-w-0 overflow-hidden rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
-            <Button
-              className="h-11 rounded-none border-0 border-r border-[var(--stroke-divider)]"
-              type="button"
-              variant="ghost"
-            >
-              <ListFilter aria-hidden="true" className="h-4 w-4" />
-              Scope
-            </Button>
-            <label className="relative min-w-0 flex-1">
-              <Search
-                aria-hidden="true"
-                className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-[var(--text-tertiary)]"
-              />
-              <input
-                aria-label="Search pull requests"
-                className="h-11 w-full bg-transparent pr-3 pl-9 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-                onChange={(event) => setQuery(event.target.value)}
-                value={query}
-              />
-            </label>
-          </div>
-          <Button type="button" variant="canvas-outline">
-            Owners <Badge variant="secondary">12</Badge>
-          </Button>
-          <Button type="button" variant="canvas-outline">
-            Release lane <Badge variant="secondary">1</Badge>
-          </Button>
           <Button onClick={() => setView('create')} type="button" variant="commit">
             Create PR
           </Button>
-        </div>
+        </header>
+
+        <label className="relative block overflow-hidden rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] shadow-sm">
+          <Search
+            aria-hidden="true"
+            className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-[var(--text-tertiary)]"
+          />
+          <input
+            aria-label="Search pull requests"
+            className="h-11 w-full bg-transparent pr-3 pl-9 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:ring-2 focus:ring-inset focus:ring-[var(--status-info)]/30"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by title, branch, or author"
+            value={query}
+          />
+        </label>
 
         {apiError ? (
           <div className="rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
@@ -748,7 +933,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
                 label="Open"
                 onClick={() => {
                   setMode('open');
-                  setQuery('is:open type:pr');
+                  setQuery('');
                 }}
               />
               <ModeButton
@@ -757,38 +942,34 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
                 label="Closed"
                 onClick={() => {
                   setMode('closed');
-                  setQuery('is:closed type:pr');
+                  setQuery('');
                 }}
               />
-            </div>
-            <div className="flex flex-wrap gap-1 text-xs text-[var(--text-secondary)]">
-              {['Owner', 'Source', 'Target', 'Checks', 'Review', 'Updated'].map((label) => (
-                <Button key={label} size="sm" type="button" variant="ghost">
-                  {label}
-                </Button>
-              ))}
             </div>
           </div>
         </section>
 
         <div className="grid gap-3">
-          {visiblePullRequests.map((pullRequest) => (
-            <PullRequestRow
-              highlighted={pullRequest.id === highlightedId}
-              key={pullRequest.id}
-              onOpen={() => openPullRequest(pullRequest)}
-              pullRequest={pullRequest}
-            />
-          ))}
+          {visiblePullRequests.length > 0 ? (
+            visiblePullRequests.map((pullRequest) => (
+              <PullRequestRow
+                highlighted={pullRequest.id === highlightedId}
+                key={pullRequest.id}
+                onOpen={() => openPullRequest(pullRequest)}
+                pullRequest={pullRequest}
+              />
+            ))
+          ) : (
+            <section className="rounded-2xl border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-6 py-10 text-center">
+              <h3 className="font-semibold text-[var(--text-primary)]">No pull requests found</h3>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                {query
+                  ? 'Try a different title, branch, or author.'
+                  : `There are no ${mode} pull requests in this project.`}
+              </p>
+            </section>
+          )}
         </div>
-
-        <p className="px-2 text-sm text-[var(--text-secondary)]">
-          <span aria-hidden="true">💡</span>{' '}
-          <span className="font-semibold text-[var(--text-primary)]">Tip:</span> Try{' '}
-          <span className="text-[var(--status-info)]">owner:</span>,{' '}
-          <span className="text-[var(--status-info)]">source:</span>, or{' '}
-          <span className="text-[var(--status-info)]">target:</span> to narrow proposals.
-        </p>
       </div>
     </section>
   );
@@ -807,6 +988,7 @@ function ModeButton({
 }) {
   return (
     <button
+      aria-pressed={active}
       className={cn(
         'inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors',
         active
@@ -863,14 +1045,14 @@ function PullRequestRow({
           <ReadinessBadge pullRequest={pullRequest} />
         </div>
         <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">
-          Proposal #{pullRequest.number} · {pullRequest.author} ·{' '}
+          PR #{pullRequest.number} · {pullRequest.author} ·{' '}
           <BranchPill>{pullRequest.sourceBranch}</BranchPill> →{' '}
           <BranchPill>{pullRequest.targetBranch}</BranchPill> · {pullRequest.updatedAt}
         </p>
       </div>
       <div className="flex items-center">
         <Button onClick={onOpen} type="button" variant="canvas-outline">
-          Open
+          View PR
         </Button>
       </div>
     </article>
@@ -881,6 +1063,8 @@ function PullRequestCreateView({
   baseBranches,
   canCreate,
   candidates,
+  creating,
+  error,
   form,
   onBack,
   onChange,
@@ -890,6 +1074,8 @@ function PullRequestCreateView({
   baseBranches: string[];
   canCreate: boolean;
   candidates: PullRequestCompareCandidate[];
+  creating: boolean;
+  error: string | null;
   form: {
     description: string;
     sourceBranch: string;
@@ -928,7 +1114,7 @@ function PullRequestCreateView({
       <div className="mx-auto grid w-full max-w-6xl gap-4">
         <Button className="w-fit" onClick={onBack} type="button" variant="ghost">
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          PR workbench
+          Pull requests
         </Button>
 
         <section className="rounded-3xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 shadow-sm">
@@ -943,7 +1129,7 @@ function PullRequestCreateView({
               </p>
             </div>
             <Badge variant={canCreate ? 'branch' : 'secondary'}>
-              {canCreate ? 'Ready to create' : 'Choose branch'}
+              {canCreate ? 'Available' : 'Choose branch'}
             </Badge>
           </div>
 
@@ -1066,17 +1252,30 @@ function PullRequestCreateView({
                   value={form.description}
                 />
               </label>
+              {error ? (
+                <div className="rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
+                  {error}
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--stroke-divider)] p-5">
               <p className="text-xs text-[var(--text-secondary)]">
-                Create PR opens the review page; checks, structured diff, and merge stay there.
+                After creation, the PR appears in Open pull requests.
               </p>
               <div className="flex gap-2">
                 <Button onClick={onBack} type="button" variant="canvas-outline">
                   Cancel
                 </Button>
-                <Button disabled={!canCreate} onClick={onCreate} type="button" variant="commit">
-                  Create PR
+                <Button
+                  disabled={!canCreate || creating}
+                  onClick={onCreate}
+                  type="button"
+                  variant="commit"
+                >
+                  {creating ? (
+                    <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  {creating ? 'Creating...' : 'Create PR'}
                 </Button>
               </div>
             </div>
@@ -1140,6 +1339,8 @@ function PullRequestDetailView({
   closeConfirmationActive,
   closeError,
   closing,
+  detailError,
+  detailLoading,
   detailTab,
   mergeError,
   merging,
@@ -1147,11 +1348,16 @@ function PullRequestDetailView({
   onClose,
   onChangeTab,
   onMerge,
+  onRerun,
   pullRequest,
+  readinessError,
+  rerunning,
 }: {
   closeConfirmationActive: boolean;
   closeError: string | null;
   closing: boolean;
+  detailError: string | null;
+  detailLoading: boolean;
   detailTab: PullRequestDetailTab;
   mergeError: string | null;
   merging: boolean;
@@ -1159,44 +1365,25 @@ function PullRequestDetailView({
   onClose: () => void;
   onChangeTab: (tab: PullRequestDetailTab) => void;
   onMerge: () => void;
+  onRerun: () => void;
   pullRequest: ProjectPullRequest;
+  readinessError: string | null;
+  rerunning: boolean;
 }) {
   const closeable = !['merged', 'closed'].includes(pullRequest.status);
+  const rerunnable = ['open', 'ready', 'blocked'].includes(pullRequest.status);
   const closeButtonLabel = closing
     ? 'Closing...'
     : closeConfirmationActive
       ? 'Confirm close'
       : 'Close PR';
-  const checks: PullRequestCheck[] = [
-    {
-      id: 'source_commit',
-      label: 'Source commit',
-      status: 'passed',
-      detail: `${pullRequest.sourceCommitId} exists on ${pullRequest.sourceBranch}.`,
-    },
-    {
-      id: 'target_commit',
-      label: 'Base commit',
-      status: 'passed',
-      detail: `${pullRequest.targetBaseCommitId} exists on ${pullRequest.targetBranch}.`,
-    },
-    {
-      id: 'merge_simulation',
-      label: 'Merge simulation',
-      status: pullRequest.status === 'blocked' ? 'blocked' : 'pending',
-      detail:
-        pullRequest.status === 'blocked'
-          ? 'Schema migration decision is required before deterministic merge can run.'
-          : 'Runs before final merge; no workspace validation is shown here.',
-    },
-  ];
 
   return (
     <section className="h-full overflow-auto bg-[var(--surface-canvas)] p-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <Button className="w-fit" onClick={onBack} type="button" variant="ghost">
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          PR workbench
+          Pull requests
         </Button>
 
         <section className="rounded-3xl border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 shadow-sm">
@@ -1209,9 +1396,24 @@ function PullRequestDetailView({
                 <ReadinessBadge pullRequest={pullRequest} />
               </div>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Proposal #{pullRequest.number} · {pullRequest.author} wants to merge{' '}
-                <BranchPill>{pullRequest.sourceBranch}</BranchPill> into{' '}
-                <BranchPill>{pullRequest.targetBranch}</BranchPill>
+                PR #{pullRequest.number} ·{' '}
+                {pullRequest.status === 'merged' ? (
+                  <>
+                    <BranchPill>{pullRequest.sourceBranch}</BranchPill> was merged into{' '}
+                    <BranchPill>{pullRequest.targetBranch}</BranchPill>
+                  </>
+                ) : pullRequest.status === 'closed' ? (
+                  <>
+                    <BranchPill>{pullRequest.sourceBranch}</BranchPill> was closed without merging
+                    into <BranchPill>{pullRequest.targetBranch}</BranchPill>
+                  </>
+                ) : (
+                  <>
+                    {pullRequest.author} wants to merge{' '}
+                    <BranchPill>{pullRequest.sourceBranch}</BranchPill> into{' '}
+                    <BranchPill>{pullRequest.targetBranch}</BranchPill>
+                  </>
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1234,16 +1436,36 @@ function PullRequestDetailView({
                   {closeButtonLabel}
                 </Button>
               ) : null}
-              <Button type="button" variant="canvas-outline">
-                <RefreshCw aria-hidden="true" className="h-4 w-4" />
-                Rerun readiness
-              </Button>
+              {rerunnable ? (
+                <Button
+                  disabled={detailLoading || rerunning}
+                  onClick={onRerun}
+                  type="button"
+                  variant="canvas-outline"
+                >
+                  <RefreshCw
+                    aria-hidden="true"
+                    className={cn('h-4 w-4', rerunning && 'animate-spin')}
+                  />
+                  {rerunning ? 'Rerunning...' : 'Rerun readiness'}
+                </Button>
+              ) : null}
             </div>
           </div>
           {closeConfirmationActive || closeError ? (
             <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
               {closeError ??
                 'Close without merging? This moves the PR to Closed and leaves the target branch unchanged.'}
+            </div>
+          ) : null}
+          {readinessError ? (
+            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+              {readinessError}
+            </div>
+          ) : null}
+          {detailError ? (
+            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+              {detailError}
             </div>
           ) : null}
 
@@ -1267,9 +1489,18 @@ function PullRequestDetailView({
 
           <div className="pt-5">
             {detailTab === 'overview' && <OverviewPanel pullRequest={pullRequest} />}
-            {detailTab === 'structured-diff' && <StructuredDiffPanel />}
-            {detailTab === 'checks' && <ChecksPanel checks={checks} />}
-            {detailTab === 'activity' && <ActivityPanel pullRequest={pullRequest} />}
+            {detailLoading && ['structured-diff', 'checks', 'activity'].includes(detailTab) ? (
+              <DetailLoadingState />
+            ) : null}
+            {!detailLoading && detailTab === 'structured-diff' ? (
+              <StructuredDiffPanel summary={pullRequest.diffSummary} />
+            ) : null}
+            {!detailLoading && detailTab === 'checks' ? (
+              <ChecksPanel checks={pullRequest.checks ?? []} />
+            ) : null}
+            {!detailLoading && detailTab === 'activity' ? (
+              <ActivityPanel activity={pullRequest.activity ?? []} />
+            ) : null}
             {detailTab === 'merge' && (
               <MergePanel
                 error={mergeError}
@@ -1286,35 +1517,66 @@ function PullRequestDetailView({
 }
 
 function OverviewPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
+  const metadataItems: Array<[string, string]> = [];
+  if (pullRequest.reviewOwner) {
+    metadataItems.push(['Reviewer', pullRequest.reviewOwner]);
+  }
+  if (pullRequest.linkedWork) {
+    metadataItems.push(['Linked work', pullRequest.linkedWork]);
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div
+      className={cn('grid gap-6', metadataItems.length > 0 && 'lg:grid-cols-[minmax(0,1fr)_300px]')}
+    >
       <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
-        <h3 className="font-semibold text-[var(--text-primary)]">Proposal note</h3>
+        <h3 className="font-semibold text-[var(--text-primary)]">Description</h3>
         <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--text-secondary)]">
           {pullRequest.description}
         </p>
       </div>
-      <MetadataRail
-        items={[
-          ['Review owner', pullRequest.reviewOwner ?? 'Not requested'],
-          ['Steward', pullRequest.steward ?? 'No one assigned'],
-          ['Workspace', pullRequest.workspace ?? 'Not linked'],
-          ['Release lane', pullRequest.releaseLane ?? 'No lane selected'],
-          ['Linked work', pullRequest.linkedWork ?? 'No linked work'],
-        ]}
-      />
+      {metadataItems.length > 0 ? <MetadataRail items={metadataItems} /> : null}
     </div>
   );
 }
 
-function StructuredDiffPanel() {
+function DetailLoadingState() {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5 text-sm text-[var(--text-secondary)]">
+      <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+      Loading pull request details...
+    </div>
+  );
+}
+
+function StructuredDiffPanel({ summary }: { summary?: PullRequestDiffSummary }) {
+  if (!summary) {
+    return <DetailEmptyState message="Structured diff summary is unavailable for this PR." />;
+  }
+
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {[
-        ['Changed nodes', '8', 'Schema-aware field updates across proposal state.'],
-        ['YOps operations', '12', 'Deterministic operations retained for review.'],
-        ['Output impacts', '2', 'Downstream outputs may need regeneration after merge.'],
-        ['Source refs', '4', 'Conversation and document provenance attached.'],
+        [
+          'Changed nodes',
+          String(summary.changedNodes),
+          'Schema-aware field updates across PR state.',
+        ],
+        [
+          'YOps operations',
+          String(summary.yopsOperations),
+          'Deterministic operations retained for review.',
+        ],
+        [
+          'Output impacts',
+          String(summary.outputImpacts),
+          'Downstream outputs that may need regeneration after merge.',
+        ],
+        [
+          'Source refs',
+          String(summary.sourceRefs),
+          'Conversation and document provenance attached.',
+        ],
       ].map(([label, value, detail]) => (
         <article
           className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-4"
@@ -1332,6 +1594,10 @@ function StructuredDiffPanel() {
 }
 
 function ChecksPanel({ checks }: { checks: PullRequestCheck[] }) {
+  if (checks.length === 0) {
+    return <DetailEmptyState message="No readiness checks have been recorded for this PR." />;
+  }
+
   return (
     <div className="grid gap-3">
       {checks.map((check) => (
@@ -1350,19 +1616,30 @@ function ChecksPanel({ checks }: { checks: PullRequestCheck[] }) {
   );
 }
 
-function ActivityPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
+function ActivityPanel({ activity }: { activity: PullRequestActivity[] }) {
+  if (activity.length === 0) {
+    return <DetailEmptyState message="No activity has been recorded for this PR." />;
+  }
+
   return (
     <div className="grid gap-3">
-      {[
-        ['Created', `${pullRequest.author} opened this merge proposal.`],
-        ['Readiness queued', 'Merge readiness will run against source and target commits.'],
-        ['Review pending', 'Reviewer decision is tracked separately from workspace validation.'],
-      ].map(([label, detail]) => (
-        <article className="rounded-2xl bg-[var(--surface-card)] p-4" key={label}>
-          <h3 className="font-semibold text-[var(--text-primary)]">{label}</h3>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">{detail}</p>
+      {activity.map((item) => (
+        <article className="rounded-2xl bg-[var(--surface-card)] p-4" key={item.id}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="font-semibold text-[var(--text-primary)]">{item.label}</h3>
+            <time className="text-xs text-[var(--text-tertiary)]">{item.createdAt}</time>
+          </div>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">{item.detail}</p>
         </article>
       ))}
+    </div>
+  );
+}
+
+function DetailEmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-card)] px-5 py-8 text-center text-sm text-[var(--text-secondary)]">
+      {message}
     </div>
   );
 }
@@ -1380,38 +1657,50 @@ function MergePanel({
 }) {
   const ready = pullRequest.status === 'ready';
   const merged = pullRequest.status === 'merged';
-  const title = merged ? 'Already merged' : ready ? 'Ready to merge' : 'Merge readiness required';
-  const buttonLabel = merged ? 'Merged' : merging ? 'Merging...' : 'Merge PR';
+  const closed = pullRequest.status === 'closed';
+  const finished = merged || closed;
+  const title = merged
+    ? 'Merged'
+    : closed
+      ? 'Closed without merging'
+      : ready
+        ? 'Ready to merge'
+        : 'Merge readiness required';
+  const message = merged
+    ? `This PR was merged into ${pullRequest.targetBranch} through a deterministic merge.`
+    : closed
+      ? `This PR was closed without changing ${pullRequest.targetBranch}.`
+      : ready
+        ? `Readiness checks passed. Merge will update ${pullRequest.targetBranch}.`
+        : 'Merge is available after deterministic merge simulation and review requirements pass. Workspace validation failures are not surfaced here; PR blockers are merge-level only.';
 
   return (
     <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h3 className="font-semibold text-[var(--text-primary)]">{title}</h3>
-          <p className="mt-2 max-w-2xl text-sm leading-5 text-[var(--text-secondary)]">
-            {merged
-              ? 'This PR has already moved to Closed after a successful deterministic merge.'
-              : 'Merge is only available after deterministic merge simulation and review requirements pass. Workspace validation failures are not surfaced here; PR blockers are merge-level only.'}
-          </p>
-          {error ? (
+          <p className="mt-2 max-w-2xl text-sm leading-5 text-[var(--text-secondary)]">{message}</p>
+          {!finished && error ? (
             <p className="mt-3 rounded-xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-3 py-2 text-sm text-[var(--text-secondary)]">
               {error}
             </p>
           ) : null}
         </div>
-        <Button
-          disabled={!ready || merging}
-          onClick={onMerge}
-          type="button"
-          variant={ready ? 'commit' : 'canvas-outline'}
-        >
-          {merging ? (
-            <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
-          ) : (
-            <PlayCircle aria-hidden="true" className="h-4 w-4" />
-          )}
-          {buttonLabel}
-        </Button>
+        {!finished ? (
+          <Button
+            disabled={!ready || merging}
+            onClick={onMerge}
+            type="button"
+            variant={ready ? 'commit' : 'canvas-outline'}
+          >
+            {merging ? (
+              <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+            ) : (
+              <PlayCircle aria-hidden="true" className="h-4 w-4" />
+            )}
+            {merging ? 'Merging...' : 'Merge PR'}
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -1503,8 +1792,24 @@ function CheckIcon({ status }: { status: PullRequestCheck['status'] }) {
   }
 
   if (status === 'blocked') {
+    return <XCircle aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--status-warning)]" />;
+  }
+
+  if (status === 'failed') {
+    return <XCircle aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--status-error)]" />;
+  }
+
+  if (status === 'warning') {
     return <RefreshCw aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--status-warning)]" />;
   }
 
-  return <RefreshCw aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--status-info)]" />;
+  return (
+    <RefreshCw
+      aria-hidden="true"
+      className={cn(
+        'mt-0.5 h-5 w-5 text-[var(--status-info)]',
+        status === 'running' && 'animate-spin'
+      )}
+    />
+  );
 }
