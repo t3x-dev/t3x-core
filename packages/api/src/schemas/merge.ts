@@ -101,7 +101,9 @@ const MergeResolutionSchema = z.union([
   z.literal('source'),
   z.literal('target'),
   z.literal('both'),
-  z.object({ edit: FrameSchema }),
+  // Tree-primary merges edit a TreeNode; keep the transport flexible while
+  // core validates the deterministic merge decision.
+  z.object({ edit: z.any() }),
 ]);
 
 /**

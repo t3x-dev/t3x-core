@@ -21,6 +21,11 @@ export default function MergeWorkspacePage() {
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;
   const mergeId = params.mergeId as string;
+  const pullRequestNumberValue = Number(searchParams.get('pullRequest'));
+  const pullRequestNumber =
+    Number.isInteger(pullRequestNumberValue) && pullRequestNumberValue > 0
+      ? pullRequestNumberValue
+      : undefined;
 
   const mc = useMicrocopy();
   const { loading, error, reset } = useMergeWorkspaceStore();
@@ -61,6 +66,10 @@ export default function MergeWorkspacePage() {
 
   const handleMergeCommitted = (commitHash: string) => {
     reset();
+    if (pullRequestNumber !== undefined) {
+      router.push(returnHref);
+      return;
+    }
     router.push(`/project/${projectId}/commit/${encodeURIComponent(commitHash)}`);
   };
 
@@ -100,6 +109,7 @@ export default function MergeWorkspacePage() {
       onBack={handleBack}
       onClose={handleClose}
       onMergeCommitted={handleMergeCommitted}
+      pullRequestNumber={pullRequestNumber}
     />
   );
 }

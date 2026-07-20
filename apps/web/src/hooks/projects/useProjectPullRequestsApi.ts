@@ -1,3 +1,4 @@
+import type { MergeDecision } from '@t3x-dev/core';
 import { useCallback } from 'react';
 import {
   completeProjectPullRequest,
@@ -48,14 +49,18 @@ export function useProjectPullRequestsApi() {
     (
       projectId: string,
       input: {
-        expected_source_commit_id?: string;
-        expected_target_commit_id?: string;
+        expected_source_commit_id: string;
+        expected_target_commit_id: string;
         number: number;
+        decisions?: MergeDecision;
+        message?: string;
       }
     ) => {
       return completeProjectPullRequest(projectId, input.number, {
         expected_source_commit_id: input.expected_source_commit_id,
         expected_target_commit_id: input.expected_target_commit_id,
+        decisions: input.decisions,
+        message: input.message,
       });
     },
     []

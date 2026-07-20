@@ -1,4 +1,4 @@
-import type { MergeResult, SemanticContent, TreeNode } from '@t3x-dev/core';
+import type { MergeDecision, MergeResult, SemanticContent, TreeNode } from '@t3x-dev/core';
 import type { TreeResolution } from './ConflictCard';
 
 /**
@@ -127,4 +127,55 @@ export function buildMergedContent(
   ];
 
   return { trees, relations };
+}
+
+/** Convert the tree workspace selections into the deterministic core contract. */
+export function buildMergeDecision(
+  mergeResult: MergeResult,
+  resolutions: Map<string, TreeResolution>,
+  keepSource: Set<string>,
+  keepTarget: Set<string>,
+  sourceContent?: SemanticContent,
+  targetContent?: SemanticContent
+): MergeDecision {
+  const conflictResolutions: MergeDecision['conflictResolutions'] = {};
+
+  for (const conflict of mergeResult.conflicts) {
+    const resolution = resolutions.get(conflict.path);
+    if (!resolution) continue;
+    if (resolution.type !== 'per-slot') {
+      conflictResolutions[conflict.path] = resolution.type;
+      continue;
+    }
+
+    const sourceNode = sourceContent ? findNodeByPath(sourceContent.trees, conflict.path) : null;
+    const targetNode = targetContent ? findNodeByPath(targetContent.trees, conflict.path) : null;
+    const sourceSlots = sourceNode?.slots ?? {};
+    const targetSlots = targetNode?.slots ?? {};
+    const slots: TreeNode['slots'] = {};
+    const conflictKeys = new Set(conflict.slotConflicts.map((item) => item.key));
+
+    for (const key of new Set([...Object.keys(sourceSlots), ...Object.keys(targetSlots)])) {
+      if (conflictKeys.has(key)) {
+        slots[key] = resolution.slotChoices[key] === 'source' ? sourceSlots[key] : targetSlots[key];
+      } else {
+        slots[key] = sourceSlots[key] ?? targetSlots[key];
+      }
+    }
+    conflictResolutions[conflict.path] = {
+      edit: {
+        key: sourceNode?.key ?? targetNode?.key ?? conflict.path.split('/').at(-1) ?? conflict.path,
+        slots,
+        children: sourceNode?.children ?? targetNode?.children ?? [],
+      },
+    };
+  }
+
+  return {
+    conflictResolutions,
+    keepFromSource: [...keepSource],
+    keepFromTarget: [...keepTarget],
+    keepRelationsFromSource: true,
+    keepRelationsFromTarget: true,
+  };
 }

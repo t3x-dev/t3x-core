@@ -1,6 +1,14 @@
+import type { MergeDecision } from '@t3x-dev/core';
 import { API_V1, fetchWithTimeout, handleResponse } from './core';
 
-export type ProjectPullRequestStatus = 'draft' | 'open' | 'ready' | 'blocked' | 'merged' | 'closed';
+export type ProjectPullRequestStatus =
+  | 'draft'
+  | 'open'
+  | 'checking'
+  | 'ready'
+  | 'blocked'
+  | 'merged'
+  | 'closed';
 
 export interface ApiProjectPullRequest {
   id: string;
@@ -12,6 +20,8 @@ export interface ApiProjectPullRequest {
   target_branch: string;
   source_commit_id: string;
   target_base_commit_id: string;
+  merge_draft_id: string | null;
+  merge_commit_id: string | null;
   status: ProjectPullRequestStatus;
   author_id: string;
   steward_id: string | null;
@@ -34,6 +44,7 @@ export interface ApiProjectPullRequestCheck {
     | 'base_freshness'
     | 'schema_compatibility'
     | 'merge_simulation'
+    | 'conflict_resolution'
     | 'output_impact'
     | 'review_requirement'
     | 'permission';
@@ -119,9 +130,11 @@ export interface CreateProjectPullRequestInput {
 }
 
 export interface MergeProjectPullRequestInput {
-  expected_source_commit_id?: string;
-  expected_target_commit_id?: string;
+  expected_source_commit_id: string;
+  expected_target_commit_id: string;
   strategy?: 'deterministic_merge';
+  message?: string;
+  decisions?: MergeDecision;
 }
 
 export async function listProjectPullRequests(
@@ -179,8 +192,8 @@ export async function getProjectPullRequest(
 export async function mergeProjectPullRequest(
   projectId: string,
   number: number,
-  input: MergeProjectPullRequestInput = {}
-): Promise<ApiProjectPullRequest> {
+  input: MergeProjectPullRequestInput
+): Promise<ApiProjectPullRequestDetail> {
   const res = await fetchWithTimeout(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}/merge`,
     {
@@ -189,7 +202,7 @@ export async function mergeProjectPullRequest(
       method: 'POST',
     }
   );
-  return handleResponse<ApiProjectPullRequest>(res);
+  return handleResponse<ApiProjectPullRequestDetail>(res);
 }
 
 export async function closeProjectPullRequest(

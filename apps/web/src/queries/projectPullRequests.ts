@@ -35,7 +35,7 @@ export function fetchProjectPullRequest(projectId: string, number: number) {
 export function completeProjectPullRequest(
   projectId: string,
   number: number,
-  input: MergeProjectPullRequestInput = {}
+  input: MergeProjectPullRequestInput
 ) {
   return mergeProjectPullRequest(projectId, number, input);
 }

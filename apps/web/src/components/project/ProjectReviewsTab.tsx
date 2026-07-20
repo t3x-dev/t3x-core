@@ -24,7 +24,7 @@ import type {
 import { useProjectPullRequestsApi } from '@/hooks/projects/useProjectPullRequestsApi';
 import { cn } from '@/utils/cn';
 
-type PullRequestStatus = 'draft' | 'open' | 'ready' | 'blocked' | 'merged' | 'closed';
+type PullRequestStatus = 'draft' | 'open' | 'checking' | 'ready' | 'blocked' | 'merged' | 'closed';
 type PullRequestListMode = 'open' | 'closed';
 type PullRequestView = 'list' | 'create' | 'detail';
 type PullRequestDetailTab = 'overview' | 'structured-diff' | 'checks' | 'activity' | 'merge';
@@ -39,6 +39,8 @@ interface ProjectPullRequest {
   targetBranch: string;
   sourceCommitId: string;
   targetBaseCommitId: string;
+  mergeDraftId?: string;
+  mergeCommitId?: string;
   status: PullRequestStatus;
   author: string;
   steward?: string;
@@ -276,19 +278,23 @@ function toProjectPullRequest(api: ApiProjectPullRequest): ProjectPullRequest {
       ? ({ label: 'ready to merge', tone: 'success' } as const)
       : api.status === 'blocked'
         ? ({ label: 'needs decision', tone: 'warning' } as const)
-        : api.status === 'draft'
-          ? ({ label: 'draft', tone: 'muted' } as const)
-          : api.status === 'merged'
-            ? ({ label: 'merged', tone: 'success' } as const)
-            : api.status === 'closed'
-              ? ({ label: 'closed', tone: 'muted' } as const)
-              : ({ label: 'checks queued', tone: 'pending' } as const);
+        : api.status === 'checking'
+          ? ({ label: 'checking', tone: 'pending' } as const)
+          : api.status === 'draft'
+            ? ({ label: 'draft', tone: 'muted' } as const)
+            : api.status === 'merged'
+              ? ({ label: 'merged', tone: 'success' } as const)
+              : api.status === 'closed'
+                ? ({ label: 'closed', tone: 'muted' } as const)
+                : ({ label: 'checks queued', tone: 'pending' } as const);
 
   return {
     author: api.author_id,
     description: api.description,
     id: api.id,
     linkedWork: api.linked_work ?? undefined,
+    mergeCommitId: api.merge_commit_id ?? undefined,
+    mergeDraftId: api.merge_draft_id ?? undefined,
     number: api.number,
     readinessLabel: readiness.label,
     readinessTone: readiness.tone,
@@ -449,9 +455,11 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     mergePullRequest: mergeProjectPullRequest,
     rerunReadiness: rerunProjectPullRequestReadiness,
   } = useProjectPullRequestsApi();
-  const [pullRequests, setPullRequests] = useState(INITIAL_PULL_REQUESTS);
-  const [baseBranches, setBaseBranches] = useState(BASE_BRANCHES);
-  const [compareCandidates, setCompareCandidates] = useState(INITIAL_COMPARE_CANDIDATES);
+  const [pullRequests, setPullRequests] = useState(() => (projectId ? [] : INITIAL_PULL_REQUESTS));
+  const [baseBranches, setBaseBranches] = useState(() => (projectId ? [] : BASE_BRANCHES));
+  const [compareCandidates, setCompareCandidates] = useState(() =>
+    projectId ? [] : INITIAL_COMPARE_CANDIDATES
+  );
   const [mode, setMode] = useState<PullRequestListMode>('open');
   const [view, setView] = useState<PullRequestView>('list');
   const [selectedId, setSelectedId] = useState(INITIAL_PULL_REQUESTS[0]?.id ?? '');
@@ -498,17 +506,15 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   }, [fetchPullRequests, projectId]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || view !== 'create') return;
 
     let cancelled = false;
     fetchCompareCandidates(projectId, createForm.targetBranch)
       .then((data) => {
         if (cancelled) return;
         const mappedCandidates = data.compare_branches.map(toCompareCandidate);
-        setBaseBranches(data.base_branches.length > 0 ? data.base_branches : BASE_BRANCHES);
-        setCompareCandidates(
-          mappedCandidates.length > 0 ? mappedCandidates : INITIAL_COMPARE_CANDIDATES
-        );
+        setBaseBranches(data.base_branches);
+        setCompareCandidates(mappedCandidates);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -519,10 +525,10 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [createForm.targetBranch, fetchCompareCandidates, projectId]);
+  }, [createForm.targetBranch, fetchCompareCandidates, projectId, view]);
 
   const openPullRequests = pullRequests.filter((item) =>
-    ['draft', 'open', 'ready', 'blocked'].includes(item.status)
+    ['draft', 'open', 'checking', 'ready', 'blocked'].includes(item.status)
   );
   const closedPullRequests = pullRequests.filter((item) =>
     ['merged', 'closed'].includes(item.status)
@@ -747,7 +753,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       number: pullRequest.number,
     })
       .then((merged) => {
-        showFinishedPullRequest(toProjectPullRequest(merged));
+        showFinishedPullRequest(toProjectPullRequestDetail(merged));
       })
       .catch((err) => {
         setMergeError(
@@ -882,6 +888,11 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
         onRerun={() => rerunReadiness(selectedPullRequest)}
         pullRequest={selectedPullRequest}
         readinessError={readinessError}
+        resolveConflictsHref={
+          projectId && selectedPullRequest.mergeDraftId
+            ? `/project/${encodeURIComponent(projectId)}/merge/${encodeURIComponent(selectedPullRequest.mergeDraftId)}?pullRequest=${selectedPullRequest.number}&returnTo=${encodeURIComponent(`/project/${projectId}?tab=reviews`)}`
+            : undefined
+        }
         rerunning={rerunningId === selectedPullRequest.id}
       />
     );
@@ -899,7 +910,14 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
               Review branch changes and merge structured state.
             </p>
           </div>
-          <Button onClick={() => setView('create')} type="button" variant="commit">
+          <Button
+            onClick={() => {
+              setApiError(null);
+              setView('create');
+            }}
+            type="button"
+            variant="commit"
+          >
             Create PR
           </Button>
         </header>
@@ -920,7 +938,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
 
         {apiError ? (
           <div className="rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] p-3 text-sm text-[var(--text-secondary)]">
-            Showing local PR preview data because the API request failed: {apiError}
+            Could not load pull requests: {apiError}
           </div>
         ) : null}
 
@@ -1351,6 +1369,7 @@ function PullRequestDetailView({
   onRerun,
   pullRequest,
   readinessError,
+  resolveConflictsHref,
   rerunning,
 }: {
   closeConfirmationActive: boolean;
@@ -1368,6 +1387,7 @@ function PullRequestDetailView({
   onRerun: () => void;
   pullRequest: ProjectPullRequest;
   readinessError: string | null;
+  resolveConflictsHref?: string;
   rerunning: boolean;
 }) {
   const closeable = !['merged', 'closed'].includes(pullRequest.status);
@@ -1507,6 +1527,7 @@ function PullRequestDetailView({
                 merging={merging}
                 onMerge={onMerge}
                 pullRequest={pullRequest}
+                resolveConflictsHref={resolveConflictsHref}
               />
             )}
           </div>
@@ -1523,6 +1544,9 @@ function OverviewPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
   }
   if (pullRequest.linkedWork) {
     metadataItems.push(['Linked work', pullRequest.linkedWork]);
+  }
+  if (pullRequest.mergeCommitId) {
+    metadataItems.push(['Merge commit', pullRequest.mergeCommitId]);
   }
 
   return (
@@ -1649,15 +1673,19 @@ function MergePanel({
   merging,
   onMerge,
   pullRequest,
+  resolveConflictsHref,
 }: {
   error: string | null;
   merging: boolean;
   onMerge: () => void;
   pullRequest: ProjectPullRequest;
+  resolveConflictsHref?: string;
 }) {
   const ready = pullRequest.status === 'ready';
   const merged = pullRequest.status === 'merged';
   const closed = pullRequest.status === 'closed';
+  const checking = pullRequest.status === 'checking';
+  const resolvable = pullRequest.status === 'blocked' && Boolean(pullRequest.mergeDraftId);
   const finished = merged || closed;
   const title = merged
     ? 'Merged'
@@ -1665,14 +1693,22 @@ function MergePanel({
       ? 'Closed without merging'
       : ready
         ? 'Ready to merge'
-        : 'Merge readiness required';
+        : checking
+          ? 'Checking merge readiness'
+          : resolvable
+            ? 'Resolve merge conflicts'
+            : 'Merge readiness required';
   const message = merged
     ? `This PR was merged into ${pullRequest.targetBranch} through a deterministic merge.`
     : closed
       ? `This PR was closed without changing ${pullRequest.targetBranch}.`
       : ready
         ? `Readiness checks passed. Merge will update ${pullRequest.targetBranch}.`
-        : 'Merge is available after deterministic merge simulation and review requirements pass. Workspace validation failures are not surfaced here; PR blockers are merge-level only.';
+        : checking
+          ? 'The server is preparing a deterministic merge against the reviewed branch heads.'
+          : resolvable
+            ? 'The deterministic merge is prepared, but conflicting structured state needs your decision.'
+            : 'Merge is available after deterministic merge simulation and review requirements pass.';
 
   return (
     <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
@@ -1686,7 +1722,12 @@ function MergePanel({
             </p>
           ) : null}
         </div>
-        {!finished ? (
+        {!finished && resolvable && resolveConflictsHref ? (
+          <Button asChild variant="commit">
+            <a href={resolveConflictsHref}>Resolve conflicts</a>
+          </Button>
+        ) : null}
+        {!finished && (!resolvable || !resolveConflictsHref) ? (
           <Button
             disabled={!ready || merging}
             onClick={onMerge}

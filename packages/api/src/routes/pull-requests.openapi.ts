@@ -496,7 +496,18 @@ pullRequestRoutes.openapi(comparePullRequestsRoute, async (c) => {
   if (!baseBranch)
     return c.json(errorBody('BASE_BRANCH_NOT_FOUND', `Branch ${base} not found.`), 404);
   if (!baseBranch.headCommitHash) {
-    return c.json(errorBody('BASE_BRANCH_EMPTY', `Branch ${base} has no commits.`), 400);
+    return c.json(
+      {
+        success: true as const,
+        data: {
+          base_branches: branches
+            .filter((branch) => branch.headCommitHash)
+            .map((branch) => branch.name),
+          compare_branches: [],
+        },
+      },
+      200
+    );
   }
   const active = await listPullRequestsByProject(db, projectId, ACTIVE_STATUSES);
   const candidates = await buildCompareCandidates(db, projectId, baseBranch, branches, active);
@@ -1122,7 +1133,18 @@ pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
       await acquirePullRequestLock(tx, projectId, number);
       const pullRequest = await findPullRequestByNumber(tx, projectId, number);
       if (!pullRequest) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
-      if (pullRequest.status !== 'ready') {
+      const recordedChecks = await listPullRequestChecks(tx, pullRequest.pullRequestId);
+      const conflictDecisionCanUnblock =
+        pullRequest.status === 'blocked' &&
+        body.decisions !== undefined &&
+        recordedChecks.length > 0 &&
+        recordedChecks.every(
+          (check) =>
+            check.kind === 'conflict_resolution' ||
+            check.status === 'passed' ||
+            check.status === 'warning'
+        );
+      if (pullRequest.status !== 'ready' && !conflictDecisionCanUnblock) {
         throw new MergeError(
           'PULL_REQUEST_NOT_READY',
           `Pull request must be ready before merging; current status is ${pullRequest.status}.`

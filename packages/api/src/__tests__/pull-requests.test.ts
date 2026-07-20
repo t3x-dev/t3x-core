@@ -126,6 +126,20 @@ describe('Pull request routes', () => {
     ]);
   });
 
+  it('returns an empty comparison set when the base branch has no commits yet', async () => {
+    const project = await insertProject(mockDB, testData.project({ name: 'Empty PR project' }));
+    await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
+
+    const response = await app.request(
+      `/v1/projects/${project.projectId}/pull-requests/compare?base=main`
+    );
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as ApiResponse).data).toEqual({
+      base_branches: [],
+      compare_branches: [],
+    });
+  });
+
   it('creates and reloads a persistent pull request from branch heads', async () => {
     const fixture = await createBranchFixture();
     const { response, data } = await openPullRequest(fixture.projectId);
@@ -219,6 +233,52 @@ describe('Pull request routes', () => {
       expect.arrayContaining([
         expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
         expect.objectContaining({ kind: 'conflict_resolution', status: 'blocked' }),
+      ])
+    );
+  });
+
+  it('merges a blocked pull request after every structural conflict is resolved', async () => {
+    const fixture = await createBranchFixture({ conflict: true });
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const rerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    const readiness = (await rerun.json()) as ApiResponse;
+    expect(rerun.status).toBe(200);
+    expect(readiness.data.status).toBe('blocked');
+
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
+      {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+          decisions: {
+            conflictResolutions: { product: 'source' },
+            keepFromSource: ['release'],
+            keepFromTarget: [],
+            keepRelationsFromSource: true,
+            keepRelationsFromTarget: true,
+          },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const merged = (await response.json()) as ApiResponse;
+    expect(merged.data.status).toBe('merged');
+    expect(merged.data.merge_commit_id).toMatch(/^sha256:/);
+    const mergeCommit = await getCommit(mockDB, merged.data.merge_commit_id);
+    expect(mergeCommit?.parents).toEqual([fixture.target.hash, fixture.source.hash]);
+    expect(mergeCommit?.content.trees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'product', slots: { version: 2 } }),
+        expect.objectContaining({ key: 'release', slots: { ready: true } }),
       ])
     );
   });
