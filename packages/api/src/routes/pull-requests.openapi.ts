@@ -1,15 +1,24 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { Commit } from '@t3x-dev/core';
+import {
+  type Commit,
+  collectResult,
+  type MergeDecision,
+  type MergeResult,
+  runOperation,
+} from '@t3x-dev/core';
 import {
   type AnyDB,
   addPullRequestActivity,
   type Branch,
+  createMergeDraft,
   createPullRequest,
   findActivePullRequestByBranches,
   findBranchByName,
   findBranchesByProject,
+  findPendingMergeDraft,
   findPullRequestByNumber,
   getCommit,
+  getMergeDraft,
   listPullRequestActivity,
   listPullRequestChecks,
   listPullRequestsByProject,
@@ -18,10 +27,14 @@ import {
   type PullRequest as StoredPullRequest,
   type PullRequestActivity as StoredPullRequestActivity,
   type PullRequestCheck as StoredPullRequestCheck,
+  updateMergeDraft,
   updatePullRequest,
 } from '@t3x-dev/storage';
 import { getDB } from '../lib/db';
+import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
+import { buildPipelineContext } from '../ops/context';
+import { mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
 
 export const pullRequestRoutes = new OpenAPIHono();
@@ -57,6 +70,7 @@ const PullRequestSchema = z.object({
   target_branch: z.string(),
   source_commit_id: z.string(),
   target_base_commit_id: z.string(),
+  merge_draft_id: z.string().nullable(),
   merge_commit_id: z.string().nullable(),
   status: PullRequestStatusSchema,
   author_id: z.string(),
@@ -173,6 +187,7 @@ function toApiPullRequest(pullRequest: StoredPullRequest): ApiPullRequest {
     target_branch: pullRequest.targetBranch,
     source_commit_id: pullRequest.sourceCommitHash,
     target_base_commit_id: pullRequest.targetBaseCommitHash,
+    merge_draft_id: pullRequest.mergeDraftId,
     merge_commit_id: pullRequest.mergeCommitHash,
     status: pullRequest.status as ApiPullRequest['status'],
     author_id: pullRequest.authorId,
@@ -770,18 +785,163 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
       409
     );
   }
-  const [sourceCommit, targetCommit] = await Promise.all([
+  const [sourceBranch, targetBranch, sourceCommit, targetCommit] = await Promise.all([
+    findBranchByName(db, projectId, pullRequest.sourceBranch),
+    findBranchByName(db, projectId, pullRequest.targetBranch),
     getCommit(db, pullRequest.sourceCommitHash),
     getCommit(db, pullRequest.targetBaseCommitHash),
   ]);
-  if (!sourceCommit || !targetCommit) {
+  if (!sourceBranch || !targetBranch || !sourceCommit || !targetCommit) {
     return c.json(
-      errorBody('PULL_REQUEST_COMMIT_NOT_FOUND', 'A reviewed commit no longer exists.'),
+      errorBody(
+        'PULL_REQUEST_REVIEW_INPUT_NOT_FOUND',
+        'A reviewed branch or commit no longer exists.'
+      ),
       404
     );
   }
+
   const previousStatus = pullRequest.status;
-  const updated = await updatePullRequest(db, pullRequest.pullRequestId, { status: 'ready' });
+  const actorId = getUserId(c) ?? 'current-user';
+  const sourceFresh = sourceBranch.headCommitHash === pullRequest.sourceCommitHash;
+  const targetFresh = targetBranch.headCommitHash === pullRequest.targetBaseCommitHash;
+
+  if (!sourceFresh || !targetFresh) {
+    const blocked = await updatePullRequest(db, pullRequest.pullRequestId, { status: 'blocked' });
+    if (!blocked)
+      return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+    const now = blocked.updatedAt;
+    await replacePullRequestChecks(db, blocked.pullRequestId, [
+      {
+        kind: 'source_commit',
+        status: sourceFresh ? 'passed' : 'blocked',
+        title: 'Source branch snapshot',
+        message: sourceFresh
+          ? `${pullRequest.sourceCommitHash} is still the source branch head.`
+          : `${pullRequest.sourceBranch} moved after this PR snapshot was created.`,
+        startedAt: now,
+        completedAt: now,
+      },
+      {
+        kind: 'base_freshness',
+        status: targetFresh ? 'passed' : 'blocked',
+        title: 'Target branch freshness',
+        message: targetFresh
+          ? `${pullRequest.targetBaseCommitHash} is still the target branch head.`
+          : `${pullRequest.targetBranch} moved after readiness was last prepared.`,
+        startedAt: now,
+        completedAt: now,
+      },
+      {
+        kind: 'merge_simulation',
+        status: 'blocked',
+        title: 'Merge preparation',
+        message: 'Refresh the PR commit snapshot before deterministic merge preparation.',
+        startedAt: now,
+        completedAt: now,
+      },
+    ]);
+    await addPullRequestActivity(db, blocked.pullRequestId, {
+      actorId,
+      type: 'checks_reran',
+      message: 'Readiness blocked because a reviewed branch head changed.',
+      createdAt: now,
+    });
+    if (previousStatus !== blocked.status) {
+      await addPullRequestActivity(db, blocked.pullRequestId, {
+        actorId,
+        type: 'status_changed',
+        message: `Pull request moved from ${previousStatus} to blocked.`,
+        createdAt: now,
+      });
+    }
+    return c.json({ success: true as const, data: await toApiDetail(db, blocked) }, 200);
+  }
+
+  const checking = await updatePullRequest(db, pullRequest.pullRequestId, {
+    status: 'checking',
+  });
+  if (!checking) return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
+
+  const context = await buildPipelineContext(c, projectId);
+  const { prepared: freshlyPrepared } = await collectResult(
+    runOperation(
+      mergePrepareOp,
+      {
+        source_hash: pullRequest.sourceCommitHash,
+        target_hash: pullRequest.targetBaseCommitHash,
+      },
+      context
+    )
+  );
+
+  let draft = pullRequest.mergeDraftId
+    ? await getMergeDraft(db, pullRequest.mergeDraftId)
+    : await findPendingMergeDraft(
+        db,
+        projectId,
+        pullRequest.sourceCommitHash,
+        pullRequest.targetBaseCommitHash,
+        pullRequest.sourceBranch,
+        pullRequest.targetBranch
+      );
+
+  if (
+    draft &&
+    (draft.status !== 'pending' ||
+      draft.sourceHash !== pullRequest.sourceCommitHash ||
+      draft.targetHash !== pullRequest.targetBaseCommitHash)
+  ) {
+    draft = null;
+  }
+
+  if (draft) {
+    const storedPrepared = JSON.parse(draft.preparedJson) as MergeResult & {
+      decisions?: MergeDecision;
+    };
+    const preparedWithDecisions = {
+      ...freshlyPrepared,
+      ...(storedPrepared.decisions ? { decisions: storedPrepared.decisions } : {}),
+    };
+    draft = await updateMergeDraft(db, draft.draftId, { prepared: preparedWithDecisions });
+  } else {
+    draft = await createMergeDraft(db, {
+      projectId,
+      sourceHash: pullRequest.sourceCommitHash,
+      targetHash: pullRequest.targetBaseCommitHash,
+      sourceBranch: pullRequest.sourceBranch,
+      targetBranch: pullRequest.targetBranch,
+      prepared: freshlyPrepared,
+      message: `Merge PR #${pullRequest.number}: ${pullRequest.title}`,
+    });
+  }
+
+  if (!draft) throw new Error('Could not create or update the pull request merge draft.');
+
+  const prepared = JSON.parse(draft.preparedJson) as MergeResult & {
+    decisions?: MergeDecision;
+  };
+  const unresolvedConflicts = prepared.conflicts.filter(
+    (conflict) => !prepared.decisions?.conflictResolutions[conflict.path]
+  );
+  const serverChecks = await computeMergeChecks(db, draft);
+  const serverChecksPassed = serverChecks.every((check) => check.passed);
+  const nextStatus: PullRequestStatus =
+    unresolvedConflicts.length === 0 && serverChecksPassed ? 'ready' : 'blocked';
+  const updated = await updatePullRequest(db, pullRequest.pullRequestId, {
+    status: nextStatus,
+    mergeDraftId: draft.draftId,
+    diffSummary: {
+      changed_nodes:
+        prepared.autoKept.length +
+        prepared.conflicts.length +
+        prepared.onlyInSource.length +
+        prepared.onlyInTarget.length,
+      yops_operations: sourceCommit.yops_log_ids.length,
+      output_impacts: pullRequest.diffSummary.output_impacts,
+      source_refs: sourceCommit.sources?.length ?? 0,
+    },
+  });
   if (!updated) return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
   const now = updated.updatedAt;
   await replacePullRequestChecks(db, updated.pullRequestId, [
@@ -789,32 +949,50 @@ pullRequestRoutes.openapi(rerunChecksRoute, async (c) => {
       kind: 'source_commit',
       status: 'passed',
       title: 'Source commit',
-      message: `${sourceCommit.hash} exists.`,
+      message: `${sourceCommit.hash} is the current head of ${sourceBranch.name}.`,
       startedAt: now,
       completedAt: now,
     },
     {
-      kind: 'target_commit',
+      kind: 'base_freshness',
       status: 'passed',
-      title: 'Target commit',
-      message: `${targetCommit.hash} exists.`,
+      title: 'Target branch freshness',
+      message: `${targetCommit.hash} is the current head of ${targetBranch.name}.`,
       startedAt: now,
       completedAt: now,
     },
     {
       kind: 'merge_simulation',
       status: 'passed',
-      title: 'Merge simulation',
-      message: 'Commit snapshots are available. Deterministic preparation will run before merge.',
+      title: 'Deterministic merge preparation',
+      message: `Prepared draft ${draft.draftId} from the reviewed commit snapshots.`,
       startedAt: now,
       completedAt: now,
     },
+    {
+      kind: 'conflict_resolution',
+      status: unresolvedConflicts.length === 0 ? 'passed' : 'blocked',
+      title: 'Conflict resolution',
+      message:
+        unresolvedConflicts.length === 0
+          ? 'No unresolved structural conflicts remain.'
+          : `${unresolvedConflicts.length} structural conflict(s) require a decision.`,
+      startedAt: now,
+      completedAt: now,
+    },
+    ...serverChecks.map((check) => ({
+      kind: 'review_requirement' as const,
+      status: check.passed ? ('passed' as const) : ('blocked' as const),
+      title: check.label,
+      message: check.detail ?? null,
+      startedAt: now,
+      completedAt: now,
+    })),
   ]);
-  const actorId = getUserId(c) ?? 'current-user';
   await addPullRequestActivity(db, updated.pullRequestId, {
     actorId,
     type: 'checks_reran',
-    message: 'Merge readiness checks rerun.',
+    message: `Deterministic merge readiness prepared in draft ${draft.draftId}.`,
     createdAt: now,
   });
   if (previousStatus !== updated.status) {

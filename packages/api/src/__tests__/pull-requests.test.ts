@@ -32,7 +32,7 @@ describe('Pull request routes', () => {
     await cleanup();
   });
 
-  async function createBranchFixture() {
+  async function createBranchFixture(options: { conflict?: boolean } = {}) {
     const project = await insertProject(mockDB, testData.project({ name: 'PR route test' }));
     await insertBranch(mockDB, { projectId: project.projectId, name: 'main' });
     const target = await createCommit(mockDB, {
@@ -59,7 +59,11 @@ describe('Pull request routes', () => {
       author: { type: 'human', name: 'Test User' },
       content: {
         trees: [
-          { key: 'product', slots: { version: 2 }, children: [] },
+          {
+            key: 'product',
+            slots: { version: options.conflict ? 2 : 1 },
+            children: [],
+          },
           { key: 'release', slots: { ready: true }, children: [] },
         ],
         relations: [],
@@ -109,7 +113,7 @@ describe('Pull request routes', () => {
         base_commit_id: fixture.target.hash,
         ahead_by: 1,
         behind_by: 0,
-        changed_nodes: 2,
+        changed_nodes: 1,
         status: 'ready',
       }),
     ]);
@@ -156,7 +160,7 @@ describe('Pull request routes', () => {
     expect(duplicate.data.error.code).toBe('PULL_REQUEST_ALREADY_EXISTS');
   });
 
-  it('persists readiness state and close activity', async () => {
+  it('persists deterministic readiness, merge draft, and close activity', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
     const number = opened.data.data.number;
@@ -166,7 +170,15 @@ describe('Pull request routes', () => {
       { method: 'POST' }
     );
     expect(rerun.status).toBe(200);
-    expect(((await rerun.json()) as ApiResponse).data.status).toBe('ready');
+    const readiness = (await rerun.json()) as ApiResponse;
+    expect(readiness.data.status).toBe('ready');
+    expect(readiness.data.merge_draft_id).toMatch(/^mdraft_/);
+    expect(readiness.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
+        expect.objectContaining({ kind: 'conflict_resolution', status: 'passed' }),
+      ])
+    );
 
     const closed = await app.request(
       `/v1/projects/${fixture.projectId}/pull-requests/${number}/close`,
@@ -181,6 +193,56 @@ describe('Pull request routes', () => {
       expect.arrayContaining([
         expect.objectContaining({ type: 'checks_reran' }),
         expect.objectContaining({ type: 'closed' }),
+      ])
+    );
+  });
+
+  it('blocks readiness when deterministic preparation finds unresolved conflicts', async () => {
+    const fixture = await createBranchFixture({ conflict: true });
+    const opened = await openPullRequest(fixture.projectId);
+    const rerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    expect(rerun.status).toBe(200);
+    const readiness = (await rerun.json()) as ApiResponse;
+    expect(readiness.data.status).toBe('blocked');
+    expect(readiness.data.merge_draft_id).toMatch(/^mdraft_/);
+    expect(readiness.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'merge_simulation', status: 'passed' }),
+        expect.objectContaining({ kind: 'conflict_resolution', status: 'blocked' }),
+      ])
+    );
+  });
+
+  it('blocks readiness when the target branch moved after PR creation', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const movedTarget = await createCommit(mockDB, {
+      parents: [fixture.target.hash],
+      author: { type: 'human', name: 'Concurrent User' },
+      content: {
+        trees: [{ key: 'product', slots: { version: 1, patch: true }, children: [] }],
+        relations: [],
+      },
+      project_id: fixture.projectId,
+      message: 'target moved',
+      branch: 'main',
+    });
+    await updateBranchHead(mockDB, fixture.projectId, 'main', movedTarget.hash);
+
+    const rerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    expect(rerun.status).toBe(200);
+    const readiness = (await rerun.json()) as ApiResponse;
+    expect(readiness.data.status).toBe('blocked');
+    expect(readiness.data.merge_draft_id).toBeNull();
+    expect(readiness.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'base_freshness', status: 'blocked' }),
       ])
     );
   });
