@@ -5,7 +5,6 @@ import {
   GitCommitHorizontal,
   Loader2,
   Play,
-  ScrollText,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +19,8 @@ import type {
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
+import { PrdPreviewView } from './PrdPreviewView';
+import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -29,6 +30,7 @@ export function YOpsDraftTab({
   onApplied,
   onCommitted,
   onSendToYOps,
+  onViewChange,
   sendingToYOps,
   view = 'ops',
   yopsDraftSent,
@@ -38,6 +40,7 @@ export function YOpsDraftTab({
   onApplied?: () => void;
   onCommitted?: (commitHash: string) => void;
   onSendToYOps?: () => Promise<void> | void;
+  onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   sendingToYOps?: boolean;
   view?: WorkspaceYOpsFlowView;
   yopsDraftSent?: boolean;
@@ -65,6 +68,21 @@ export function YOpsDraftTab({
   const { commit } = useWorkspaceCommit(commitCandidate);
   const { rootKey, validate } = useWorkspaceYOps(candidate);
   const branchOptions = useMemo(() => getCommitBranchOptions(candidate), [candidate]);
+  const draftFingerprint = useMemo(
+    () =>
+      draft.operations
+        .map((operation) =>
+          [
+            operation.id,
+            operation.op,
+            operation.path,
+            operation.beforeValue ?? '',
+            operation.afterValue ?? '',
+          ].join('\u001f')
+        )
+        .join('\u001e'),
+    [draft.operations]
+  );
   const yopsLines = generatedYOps
     ? buildYOpsCommandLines(generatedYOps)
     : buildYOpsScriptLines(draft.operations, rootKey);
@@ -80,29 +98,33 @@ export function YOpsDraftTab({
   const treeLines = materializedTrees ? buildTreeNodeLines(materializedTrees, changedPaths) : [];
   const pendingCount = Math.max(draft.operations.length - appliedCount, 0);
   const isBusy = status === 'generating' || status === 'applying' || status === 'committing';
-  const validationPrerequisitesMet =
+  const commitPrerequisitesMet =
     candidate.schemaReview.gaps.length === 0 &&
     candidate.schemaReview.verdict === 'ready' &&
     candidate.sourceBundle.length > 0;
+  const visibleErrorMessage = errorMessage ?? flowError ?? null;
+  const yopsValidationBlocked = Boolean(visibleErrorMessage);
   const canValidateProposal =
-    draft.operations.length > 0 && !isBusy && !committedHash && validationPrerequisitesMet;
+    draft.operations.length > 0 && !isBusy && !committedHash && !yopsValidationBlocked;
   const canApplyYOps = Boolean(generatedYOps) && status !== 'idle' && !isBusy && !committedHash;
   const statusText = getYOpsStatusText(status);
-  const visibleErrorMessage = errorMessage ?? flowError ?? null;
-  const validationBlocked = !validationPrerequisitesMet || Boolean(visibleErrorMessage);
-  const canCommit =
-    appliedCount > 0 &&
-    Boolean(materializedTrees) &&
-    validationPassed &&
-    !isBusy &&
-    !committedHash &&
-    !validationBlocked;
+  const validationBlocked = !commitPrerequisitesMet || yopsValidationBlocked;
+  const commitBlockers = getCommitBlockers({
+    appliedCount,
+    hasMaterializedTrees: Boolean(materializedTrees),
+    schemaGaps: candidate.schemaReview.gaps,
+    schemaVerdict: candidate.schemaReview.verdict,
+    sourceBundleCount: candidate.sourceBundle.length,
+    validationPassed,
+    visibleErrorMessage,
+  });
+  const canCommit = commitBlockers.length === 0 && !isBusy && !committedHash;
   const proposalMode = formatProposalMode(draft.proposalMode ?? 'fixture');
   const extractYOpsTitle = getExtractYOpsTitle({
     committedHash,
+    flowBlocked: yopsValidationBlocked,
     isBusy,
     operationCount: draft.operations.length,
-    validationBlocked,
   });
   const applyYOpsTitle = getApplyYOpsTitle({
     committedHash,
@@ -111,17 +133,23 @@ export function YOpsDraftTab({
   });
   const commitTitle = getCommitTitle({
     appliedCount,
+    blockers: commitBlockers,
     committedHash,
     isBusy,
     targetBranch,
-    validationReady: validationPassed && !validationBlocked,
   });
 
   useEffect(() => {
-    if (!candidate.lastCommitHash) return;
-    setCommittedHash(candidate.lastCommitHash);
-    setStatus('committed');
-  }, [candidate.lastCommitHash]);
+    setGeneratedYOps(null);
+    setBaselineTrees(null);
+    setValidatedPreviewTrees(null);
+    setValidationPassed(false);
+    setMaterializedTrees(null);
+    setAppliedCount(0);
+    setCommittedHash(candidate.lastCommitHash ?? null);
+    setStatus(candidate.lastCommitHash ? 'committed' : 'idle');
+    setErrorMessage(null);
+  }, [candidate.id, candidate.lastCommitHash, draft.id, draftFingerprint]);
 
   useEffect(() => {
     setTargetBranch(getInitialTargetBranch(candidate));
@@ -198,33 +226,28 @@ export function YOpsDraftTab({
 
   return (
     <div className="flex min-h-[620px] flex-col overflow-hidden rounded-md border border-[var(--stroke-divider)] bg-[var(--workspace-panel)]">
-      <header className="flex min-h-10 items-center gap-3 border-b border-[var(--stroke-divider)] px-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-            {getYOpsViewTitle(view)}
-          </h3>
-          <p className="truncate text-xs text-[var(--text-tertiary)]">
-            {getYOpsViewDescription(view)}
-          </p>
-        </div>
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-          <Badge
-            className="border-[var(--accent-extract)]/30 bg-[var(--accent-extract)]/10 text-[var(--accent-extract)]"
-            variant="outline"
-          >
-            {proposalMode}
-          </Badge>
-          <Badge variant="commit-subtle">Materialized {appliedCount}</Badge>
-          <Badge variant="pending-subtle">Pending {pendingCount}</Badge>
-          {yopsDraftSent ? <Badge variant="pending-subtle">Proposal ready</Badge> : null}
-          {committedHash ? <Badge variant="commit">{shortHash(committedHash)}</Badge> : null}
-          <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
-            {statusText}
-          </span>
-        </div>
-      </header>
+      {view === 'preview' || view === 'commit' ? (
+        <header className="flex min-h-[54px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-card)] px-4 py-2.5">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">
+              {getYOpsViewTitle(view)}
+            </h3>
+            <p className="truncate text-xs text-[var(--text-tertiary)]">
+              {getYOpsViewDescription(view)}
+            </p>
+          </div>
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <Badge variant="commit-subtle">Materialized {appliedCount}</Badge>
+            <Badge variant="pending-subtle">Pending {pendingCount}</Badge>
+            {committedHash ? <Badge variant="commit">{shortHash(committedHash)}</Badge> : null}
+            <span className="max-w-[180px] truncate text-[10px] font-medium text-[var(--text-tertiary)]">
+              {statusText}
+            </span>
+          </div>
+        </header>
+      ) : null}
 
-      {visibleErrorMessage ? (
+      {visibleErrorMessage && (view === 'preview' || view === 'commit') ? (
         <div
           className="flex items-start gap-2 border-b border-[var(--stroke-divider)] bg-[var(--diff-modified-bg)] px-3 py-2 text-xs text-[var(--text-secondary)]"
           role="alert"
@@ -238,11 +261,14 @@ export function YOpsDraftTab({
       ) : null}
 
       {view === 'ops' ? (
-        <OpsReviewView
-          draftOperations={draft.operations}
+        <ProposalReviewView
+          candidate={candidate}
+          flowError={visibleErrorMessage}
+          onContinueToValidation={() => onViewChange?.('validation')}
           onSendToYOps={onSendToYOps}
           proposalMode={proposalMode}
           sendingToYOps={Boolean(sendingToYOps)}
+          statusText={statusText}
           yopsDraftSent={Boolean(yopsDraftSent)}
           yopsLines={yopsLines}
         />
@@ -258,8 +284,10 @@ export function YOpsDraftTab({
           generatedYOpsCount={generatedYOps?.length ?? 0}
           onApply={handleApply}
           onValidate={handleGenerate}
+          onViewChange={onViewChange}
           status={status}
           visibleErrorMessage={visibleErrorMessage}
+          yopsDraftSent={Boolean(yopsDraftSent)}
         />
       ) : null}
 
@@ -285,6 +313,7 @@ export function YOpsDraftTab({
           branchOptions={branchOptions}
           candidate={candidate}
           canCommit={canCommit}
+          commitBlockers={commitBlockers}
           commitTitle={commitTitle}
           committedHash={committedHash}
           isBusy={isBusy}
@@ -299,91 +328,6 @@ export function YOpsDraftTab({
   );
 }
 
-function OpsReviewView({
-  draftOperations,
-  onSendToYOps,
-  proposalMode,
-  sendingToYOps,
-  yopsDraftSent,
-  yopsLines,
-}: {
-  draftOperations: WorkspaceYOpsDraftOperation[];
-  onSendToYOps?: () => Promise<void> | void;
-  proposalMode: string;
-  sendingToYOps: boolean;
-  yopsDraftSent: boolean;
-  yopsLines: string[];
-}) {
-  return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section
-        aria-label="YOps proposal"
-        className="flex min-h-[360px] min-w-0 flex-col border-b border-[var(--stroke-divider)] lg:border-r lg:border-b-0"
-      >
-        <PaneHeader
-          icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
-          label="YOps proposal"
-          meta={`${draftOperations.length} ops`}
-        />
-        <CodePane lines={yopsLines} />
-      </section>
-
-      <aside aria-label="Ops cards" className="flex min-h-[360px] min-w-0 flex-col">
-        <PaneHeader
-          icon={<ScrollText aria-hidden="true" className="size-4 text-[var(--accent-extract)]" />}
-          label="Ops cards"
-          meta={proposalMode}
-        />
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-3">
-          {draftOperations.length > 0 ? (
-            draftOperations.map((operation) => (
-              <article
-                className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
-                key={operation.id}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{operation.op}</Badge>
-                  <span className="font-mono text-xs font-semibold text-[var(--text-primary)]">
-                    {operation.path}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-                  {operation.summary}
-                </p>
-                {operation.reason ? (
-                  <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">
-                    {operation.reason}
-                  </p>
-                ) : null}
-              </article>
-            ))
-          ) : (
-            <div className="rounded-md border border-dashed border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-6 text-center text-sm text-[var(--text-secondary)]">
-              No proposed YOps operations yet.
-            </div>
-          )}
-        </div>
-        {onSendToYOps ? (
-          <footer className="border-t border-[var(--stroke-divider)] p-3">
-            <Button
-              className="w-full bg-[var(--accent-extract)] text-[var(--on-accent)] hover:bg-[var(--accent-extract)]/90"
-              disabled={sendingToYOps}
-              onClick={onSendToYOps}
-              type="button"
-            >
-              {sendingToYOps
-                ? 'Generating proposal...'
-                : yopsDraftSent
-                  ? 'Regenerate YOps proposal'
-                  : 'Generate YOps proposal'}
-            </Button>
-          </footer>
-        ) : null}
-      </aside>
-    </div>
-  );
-}
-
 function ValidationReviewView({
   applyYOpsTitle,
   canApplyYOps,
@@ -393,8 +337,10 @@ function ValidationReviewView({
   generatedYOpsCount,
   onApply,
   onValidate,
+  onViewChange,
   status,
   visibleErrorMessage,
+  yopsDraftSent,
 }: {
   applyYOpsTitle: string;
   canApplyYOps: boolean;
@@ -404,134 +350,288 @@ function ValidationReviewView({
   generatedYOpsCount: number;
   onApply: () => void;
   onValidate: () => void;
+  onViewChange?: (view: WorkspaceYOpsFlowView) => void;
   status: 'idle' | 'generating' | 'generated' | 'applying' | 'applied' | 'committing' | 'committed';
   visibleErrorMessage: string | null;
+  yopsDraftSent: boolean;
 }) {
-  const blockingIssues = [
-    ...candidate.schemaReview.gaps.map((gap) => ({ label: 'Schema review gap', message: gap })),
-    ...(visibleErrorMessage ? [{ label: 'Flow error', message: visibleErrorMessage }] : []),
-  ];
-  const passedCount =
-    (candidate.sourceBundle.length > 0 ? 1 : 0) +
-    (candidate.schemaReview.verdict === 'ready' ? 1 : 0) +
-    (candidate.yopsDraft.operations.length > 0 ? 1 : 0) +
-    (generatedYOpsCount > 0 || status === 'applied' || status === 'committed' ? 1 : 0);
+  const operations = candidate.yopsDraft.operations;
+  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(
+    operations[0]?.id ?? null
+  );
+  const [diffOpen, setDiffOpen] = useState(false);
+  const selectedOperation =
+    operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
+  const validationRan = generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
+  const hasBlockingIssues = candidate.schemaReview.gaps.length > 0 || Boolean(visibleErrorMessage);
+  const passedCount = validationRan && !hasBlockingIssues ? operations.length : 0;
+  const statusLabel = hasBlockingIssues
+    ? 'Review required'
+    : validationRan
+      ? 'Ready for Preview'
+      : 'Ready to validate';
+
+  useEffect(() => {
+    setSelectedOperationId(operations[0]?.id ?? null);
+  }, [candidate.id, candidate.yopsDraft.id, operations]);
 
   return (
-    <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <section
-        aria-label="Validation gates"
-        className="rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-panel)] p-3"
-      >
-        <div className="grid gap-2 sm:grid-cols-4">
-          <ValidationMetric
-            label="Blocking"
-            tone={blockingIssues.length > 0 ? 'warning' : 'success'}
-            value={`${blockingIssues.length}`}
-          />
-          <ValidationMetric label="Passed" tone="success" value={`${passedCount}`} />
-          <ValidationMetric
-            label="Review"
-            tone={candidate.schemaReview.verdict === 'ready' ? 'success' : 'warning'}
-            value={candidate.schemaReview.verdict === 'ready' ? '0' : '1'}
-          />
-          <ValidationMetric
-            label="Info"
-            tone="neutral"
-            value={`${candidate.sourceBundle.length}`}
-          />
-        </div>
-
-        <div className="mt-3 grid gap-2">
-          <GateRow
-            label="Schema gate"
-            passed={
-              candidate.schemaReview.verdict === 'ready' && candidate.schemaReview.gaps.length === 0
-            }
-          />
-          <GateRow label="Evidence gate" passed={candidate.sourceBundle.length > 0} />
-          <GateRow label="Replay gate" passed={candidate.yopsDraft.operations.length > 0} />
-          <GateRow
-            label="YOps validation"
-            passed={generatedYOpsCount > 0 || status === 'applied' || status === 'committed'}
-          />
-        </div>
-
-        <div className="mt-4 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3">
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Schema review</h4>
-          <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
-            {candidate.schemaCandidate.summary}
-          </p>
-          <p className="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
-            {candidate.schemaReview.summary}
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--surface-card)]">
+      <header className="flex min-h-[72px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-3">
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold tracking-[-0.015em] text-[var(--text-primary)]">
+            Validation
+          </h3>
+          <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+            Check the projected Proposal against YSchema before Preview.
           </p>
         </div>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <span className="hidden max-w-48 truncate text-[10px] font-medium text-[var(--text-tertiary)] lg:inline">
+            {candidate.title}
+          </span>
+          <span className="hidden font-mono text-[10px] text-[var(--text-tertiary)] sm:inline">
+            {candidate.schemaBindings[0]
+              ? `${candidate.schemaBindings[0].schemaName} ${candidate.schemaBindings[0].version}`
+              : 'No schema'}
+          </span>
+          <Badge variant={validationRan ? 'success' : 'pending-subtle'}>
+            {getYOpsStatusText(status)}
+          </Badge>
+          {yopsDraftSent ? <Badge variant="pending-subtle">Proposal ready</Badge> : null}
+          <Button
+            onClick={() => onViewChange?.('ops')}
+            size="sm"
+            type="button"
+            variant="canvas-outline"
+          >
+            Edit Proposal
+          </Button>
+          {!validationRan ? (
+            <Button
+              disabled={!canValidateProposal}
+              onClick={onValidate}
+              size="sm"
+              title={extractYOpsTitle}
+              type="button"
+              variant="canvas-outline"
+            >
+              {status === 'generating' ? (
+                <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              ) : (
+                <Play aria-hidden="true" className="size-4" />
+              )}
+              Validate proposal
+            </Button>
+          ) : null}
+          <Button
+            aria-label="Apply YOps to Preview"
+            disabled={!canApplyYOps}
+            onClick={onApply}
+            size="sm"
+            title={applyYOpsTitle}
+            type="button"
+            variant="commit"
+          >
+            {status === 'applying' ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <CheckCircle2 aria-hidden="true" className="size-4" />
+            )}
+            Apply to Preview
+          </Button>
+        </div>
+      </header>
 
-        <div className="mt-4">
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">Blocking issues</h4>
-          {blockingIssues.length > 0 ? (
-            <div className="mt-2 divide-y divide-[var(--stroke-divider)] rounded-md border border-[var(--stroke-divider)]">
-              {blockingIssues.map((issue) => (
-                <article className="grid gap-1 px-3 py-2" key={`${issue.label}-${issue.message}`}>
-                  <div className="text-xs font-semibold text-[var(--status-warning)]">
-                    {issue.label}
+      <section aria-label="Validation gates" className="min-h-0 flex-1 overflow-auto">
+        <div className="flex min-h-[54px] flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-4 py-2.5">
+          <div>
+            <h4 className="text-sm font-semibold text-[var(--text-primary)]">{statusLabel}</h4>
+            <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+              The projected PRD meets the active YSchema when every change passes.
+            </p>
+          </div>
+          <span
+            className={cn(
+              'text-xs font-semibold',
+              hasBlockingIssues ? 'text-[var(--status-warning)]' : 'text-[var(--status-success)]'
+            )}
+          >
+            {passedCount} changes passed · {candidate.schemaReview.gaps.length} issues
+          </span>
+        </div>
+
+        {visibleErrorMessage ? (
+          <div
+            className="border-b border-[var(--status-warning)]/20 bg-[var(--status-warning-muted)] px-4 py-2 text-xs text-[var(--text-secondary)]"
+            role="alert"
+          >
+            {visibleErrorMessage}
+          </div>
+        ) : null}
+
+        {candidate.schemaReview.gaps.length > 0 ? (
+          <div className="border-b border-[var(--status-warning)]/20 bg-[var(--status-warning-muted)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+            {candidate.schemaReview.gaps.join(' ')}
+          </div>
+        ) : null}
+
+        <div className="min-w-[820px]">
+          <div className="grid grid-cols-[52px_minmax(260px,1fr)_minmax(280px,1fr)_92px] border-b border-[var(--stroke-divider)] bg-[var(--surface-panel)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+            <span>#</span>
+            <span>Change</span>
+            <span>YSchema rule</span>
+            <span className="text-right">Result</span>
+          </div>
+
+          {operations.map((operation, index) => {
+            const selected = selectedOperation?.id === operation.id;
+            const passed = validationRan && !hasBlockingIssues;
+            const field = findSchemaFieldForOperation(candidate, operation);
+            return (
+              <div className="border-b border-[var(--stroke-divider)]" key={operation.id}>
+                <button
+                  aria-expanded={selected}
+                  className={cn(
+                    'grid min-h-[54px] w-full grid-cols-[52px_minmax(260px,1fr)_minmax(280px,1fr)_92px] items-center px-3 text-left transition-colors',
+                    selected
+                      ? 'border-l-2 border-l-[var(--accent-branch)] bg-[var(--diff-modified-bg)]'
+                      : 'border-l-2 border-l-transparent hover:bg-[var(--hover-bg)]'
+                  )}
+                  onClick={() => setSelectedOperationId(selected ? null : operation.id)}
+                  type="button"
+                >
+                  <span className="font-mono text-xs font-semibold text-[var(--text-tertiary)]">
+                    P{String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-2 pr-3">
+                    <Badge variant="outline">{operation.op.toUpperCase()}</Badge>
+                    <strong className="truncate text-sm text-[var(--text-primary)]">
+                      {operation.summary}
+                    </strong>
+                  </span>
+                  <span className="font-mono text-[11px] leading-4 text-[var(--text-secondary)]">
+                    {formatSchemaRule(field)}
+                  </span>
+                  <span className="justify-self-end">
+                    <Badge
+                      variant={
+                        passed ? 'success' : hasBlockingIssues ? 'warning' : 'pending-subtle'
+                      }
+                    >
+                      {passed ? 'PASS' : hasBlockingIssues ? 'REVIEW' : 'CHECK'}
+                    </Badge>
+                  </span>
+                </button>
+
+                {selected ? (
+                  <div className="grid grid-cols-3 border-t border-[var(--stroke-divider)] bg-[var(--surface-card)]">
+                    <ValidationDetailCell label="1 · Projected value">
+                      <p className="break-words font-mono text-xs leading-5 text-[var(--text-primary)]">
+                        {operation.afterValue || 'Empty'}
+                      </p>
+                    </ValidationDetailCell>
+                    <ValidationDetailCell label="2 · YSchema rule">
+                      <p className="font-mono text-xs leading-5 text-[var(--text-primary)]">
+                        {formatSchemaRule(field)}
+                      </p>
+                    </ValidationDetailCell>
+                    <ValidationDetailCell label="3 · Observed">
+                      <p className="text-xs leading-5 text-[var(--text-primary)]">
+                        {getObservedEvidence(candidate, operation, field)}
+                      </p>
+                    </ValidationDetailCell>
+                    <div className="col-span-3 flex items-center gap-3 border-t border-[var(--stroke-divider)] px-4 py-2 text-[10px] text-[var(--text-tertiary)]">
+                      <span className="min-w-0 flex-1 truncate font-mono">{operation.path}</span>
+                      <button
+                        className="font-semibold text-[var(--accent-commit)] hover:underline"
+                        onClick={() => onViewChange?.('ops')}
+                        type="button"
+                      >
+                        Open Proposal {String(index + 1).padStart(2, '0')}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-[var(--text-primary)]">{issue.message}</p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-2 rounded-md border border-dashed border-[var(--stroke-divider)] p-4 text-sm text-[var(--text-secondary)]">
-              No blocking issues detected.
-            </div>
-          )}
+                ) : null}
+              </div>
+            );
+          })}
         </div>
+
+        {operations.length === 0 ? (
+          <div className="p-6 text-center text-sm text-[var(--text-secondary)]">
+            No proposal changes are available to validate.
+          </div>
+        ) : null}
       </section>
 
-      <aside
-        aria-label="Validation actions"
-        className="flex flex-col gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-3"
-      >
-        <div>
-          <h4 className="text-sm font-semibold text-[var(--text-primary)]">What to do next?</h4>
-          <ul className="mt-2 grid gap-1 text-xs leading-5 text-[var(--text-secondary)]">
-            <li>Resolve blocking issues before a normal commit.</li>
-            <li>Validate the Ops proposal, then apply it for Preview.</li>
-          </ul>
-        </div>
-        <Button
-          disabled={!canValidateProposal}
-          onClick={onValidate}
-          size="sm"
-          title={extractYOpsTitle}
-          type="button"
-          variant="canvas-outline"
-        >
-          {status === 'generating' ? (
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
-            <Play aria-hidden="true" className="size-4" />
-          )}
-          Validate proposal
-        </Button>
-        <Button
-          disabled={!canApplyYOps}
-          onClick={onApply}
-          size="sm"
-          title={applyYOpsTitle}
-          type="button"
-          variant="commit"
-        >
-          {status === 'applying' ? (
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
-            <CheckCircle2 aria-hidden="true" className="size-4" />
-          )}
-          Apply YOps
-        </Button>
-      </aside>
+      {selectedOperation ? (
+        <WorkspaceDiff
+          candidate={candidate}
+          onOpenChange={() => setDiffOpen((current) => !current)}
+          onSelectOperation={setSelectedOperationId}
+          open={diffOpen}
+          phase="validation"
+          schemaPassed={validationRan && !hasBlockingIssues}
+          selectedOperation={selectedOperation}
+        />
+      ) : null}
     </div>
   );
+}
+
+function ValidationDetailCell({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <section className="min-h-28 border-r border-[var(--stroke-divider)] p-4 last:border-r-0">
+      <h5 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+        {label}
+      </h5>
+      {children}
+    </section>
+  );
+}
+
+function findSchemaFieldForOperation(
+  candidate: WorkspaceCandidate,
+  operation: WorkspaceYOpsDraftOperation
+) {
+  const fields = flattenWorkspaceSchemaFields(candidate.schemaCandidate.fields);
+  const normalizedOperationPath = operation.path.replace(/^\/+/, '').replaceAll('/', '.');
+  return fields.find((field) => {
+    const normalizedFieldPath = field.path.replace(/^\/+/, '').replaceAll('/', '.');
+    return (
+      normalizedOperationPath.endsWith(normalizedFieldPath) ||
+      normalizedOperationPath.endsWith(`.${normalizedFieldPath.split('.').at(-1)}`)
+    );
+  });
+}
+
+function flattenWorkspaceSchemaFields(
+  fields: WorkspaceCandidate['schemaCandidate']['fields']
+): WorkspaceCandidate['schemaCandidate']['fields'] {
+  return fields.flatMap((field) => [field, ...flattenWorkspaceSchemaFields(field.children ?? [])]);
+}
+
+function formatSchemaRule(
+  field: WorkspaceCandidate['schemaCandidate']['fields'][number] | undefined
+): string {
+  if (!field) return 'required · structured value · evidence';
+  return [field.required ? 'required' : 'optional', field.type, 'evidence'].join(' · ');
+}
+
+function getObservedEvidence(
+  candidate: WorkspaceCandidate,
+  operation: WorkspaceYOpsDraftOperation,
+  field: WorkspaceCandidate['schemaCandidate']['fields'][number] | undefined
+): string {
+  if (field?.evidence) return field.evidence;
+  const matchedSources = candidate.sourceBundle.filter((source) =>
+    operation.sourceRefs?.includes(source.id)
+  );
+  if (matchedSources.length > 0) {
+    return `${matchedSources.length} source ${matchedSources.length === 1 ? 'reference' : 'references'} accepted.`;
+  }
+  return 'No evidence reference observed.';
 }
 
 function PreviewReviewView({
@@ -559,12 +659,7 @@ function PreviewReviewView({
   visibleErrorMessage: string | null;
   yopsExtracted: boolean;
 }) {
-  const previewAvailable =
-    validationPassed &&
-    candidate.schemaReview.verdict === 'ready' &&
-    candidate.schemaReview.gaps.length === 0 &&
-    candidate.sourceBundle.length > 0 &&
-    !visibleErrorMessage;
+  const previewAvailable = validationPassed && !visibleErrorMessage;
 
   if (!previewAvailable) {
     return (
@@ -577,7 +672,7 @@ function PreviewReviewView({
             Complete Validation before reviewing the preview
           </h3>
           <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-            Resolve validation items, then validate the YOps proposal to open the pre-commit diff.
+            Validate the YOps proposal to open the pre-commit diff.
           </p>
         </section>
       </div>
@@ -586,19 +681,29 @@ function PreviewReviewView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
-      <ChangeReviewDock
+      <PrdPreviewView
+        appliedCount={appliedCount}
         candidate={candidate}
-        flowState={{
-          appliedCount,
-          baselineTrees,
-          commitHash: committedHash ?? undefined,
-          error: visibleErrorMessage ?? undefined,
-          previewReady: Boolean(materializedTrees),
-          previewTrees: validatedPreviewTrees,
-          validationPassed,
-          yopsDraftId: candidate.yopsDraft.id,
-        }}
-        renderedPreview={
+        changesView={
+          <ChangeReviewDock
+            candidate={candidate}
+            flowState={{
+              appliedCount,
+              baselineTrees,
+              commitHash: committedHash ?? undefined,
+              error: visibleErrorMessage ?? undefined,
+              previewReady: Boolean(materializedTrees),
+              previewTrees: validatedPreviewTrees,
+              validationPassed,
+              yopsDraftId: candidate.yopsDraft.id,
+            }}
+          />
+        }
+        operationCount={generatedYOpsCount}
+        previewReady={Boolean(materializedTrees)}
+        previewTrees={materializedTrees ?? validatedPreviewTrees}
+        validationPassed={validationPassed}
+        yamlView={
           <RenderedYOpsTree
             appliedCount={appliedCount}
             generatedYOpsCount={generatedYOpsCount}
@@ -655,6 +760,7 @@ function CommitReviewView({
   branchOptions,
   candidate,
   canCommit,
+  commitBlockers,
   commitTitle,
   committedHash,
   isBusy,
@@ -668,6 +774,7 @@ function CommitReviewView({
   branchOptions: string[];
   candidate: WorkspaceCandidate;
   canCommit: boolean;
+  commitBlockers: string[];
   commitTitle: string;
   committedHash: string | null;
   isBusy: boolean;
@@ -714,10 +821,17 @@ function CommitReviewView({
             </dd>
           </div>
         </dl>
-        {!validationReady && !committedHash ? (
-          <p className="mt-3 text-sm text-[var(--text-secondary)]">
-            Complete Validation before returning here to commit.
-          </p>
+        {commitBlockers.length > 0 && !committedHash ? (
+          <div className="mt-3 grid gap-2 text-sm text-[var(--text-secondary)]">
+            <p>Resolve these blockers before committing.</p>
+            <ul className="grid gap-1">
+              {commitBlockers.map((blocker) => (
+                <li className="rounded-md bg-[var(--surface-card)] px-2 py-1" key={blocker}>
+                  {blocker}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </section>
 
@@ -793,30 +907,21 @@ function ValidationMetric({
   );
 }
 
-function GateRow({ label, passed }: { label: string; passed: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--stroke-divider)] bg-[var(--surface-card)] px-3 py-2 text-sm">
-      <span className="font-medium text-[var(--text-primary)]">{label}</span>
-      <Badge variant={passed ? 'success' : 'warning'}>{passed ? 'PASS' : 'REVIEW'}</Badge>
-    </div>
-  );
-}
-
 function getExtractYOpsTitle({
   committedHash,
+  flowBlocked,
   isBusy,
   operationCount,
-  validationBlocked,
 }: {
   committedHash: string | null;
+  flowBlocked: boolean;
   isBusy: boolean;
   operationCount: number;
-  validationBlocked: boolean;
 }): string {
   if (committedHash) return 'This workspace is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (operationCount === 0) return 'No proposed YOps operations are available yet.';
-  if (validationBlocked) return 'Resolve the Validation items before validating this proposal.';
+  if (flowBlocked) return 'Resolve the flow error before validating this proposal.';
   return 'Validate the proposed YOps before applying it.';
 }
 
@@ -837,36 +942,76 @@ function getApplyYOpsTitle({
 
 function getCommitTitle({
   appliedCount,
+  blockers,
   committedHash,
   isBusy,
   targetBranch,
-  validationReady,
 }: {
   appliedCount: number;
+  blockers: string[];
   committedHash: string | null;
   isBusy: boolean;
   targetBranch: string;
-  validationReady: boolean;
 }): string {
   if (committedHash) return 'Workspace result is already committed.';
   if (isBusy) return 'A workspace operation is already in progress.';
   if (appliedCount === 0) return 'Apply YOps before committing the workspace result.';
-  if (!validationReady) return 'Complete Validation before committing.';
+  if (blockers.length > 0) return blockers[0] ?? 'Resolve commit blockers before committing.';
   return `Commit the materialized YAML result to ${targetBranch}.`;
+}
+
+function getCommitBlockers({
+  appliedCount,
+  hasMaterializedTrees,
+  schemaGaps,
+  schemaVerdict,
+  sourceBundleCount,
+  validationPassed,
+  visibleErrorMessage,
+}: {
+  appliedCount: number;
+  hasMaterializedTrees: boolean;
+  schemaGaps: string[];
+  schemaVerdict: WorkspaceCandidate['schemaReview']['verdict'];
+  sourceBundleCount: number;
+  validationPassed: boolean;
+  visibleErrorMessage: string | null;
+}): string[] {
+  const blockers: string[] = [];
+
+  if (appliedCount === 0 || !hasMaterializedTrees) {
+    blockers.push('Apply YOps before committing the workspace result.');
+  }
+  if (!validationPassed) {
+    blockers.push('Validate the YOps proposal before committing.');
+  }
+  if (sourceBundleCount === 0) {
+    blockers.push('Add source evidence before committing.');
+  }
+  if (schemaGaps.length > 0) {
+    blockers.push(...schemaGaps.map((gap) => `Schema review gap: ${gap}`));
+  } else if (schemaVerdict !== 'ready') {
+    blockers.push('Resolve schema review before committing.');
+  }
+  if (visibleErrorMessage) {
+    blockers.push(`Resolve flow error: ${visibleErrorMessage}`);
+  }
+
+  return blockers;
 }
 
 function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
   if (view === 'validation') return 'Validation';
   if (view === 'preview') return 'Preview';
   if (view === 'commit') return 'Commit';
-  return 'Ops';
+  return 'Proposal';
 }
 
 function getYOpsViewDescription(view: WorkspaceYOpsFlowView): string {
-  if (view === 'validation') return 'Check Ops against schema, evidence, replay, and readiness.';
-  if (view === 'preview') return 'Review the materialized YAML before commit.';
+  if (view === 'validation') return 'Check the Proposal against schema, evidence, and replay.';
+  if (view === 'preview') return 'Read the rendered PRD and inspect its evidence before commit.';
   if (view === 'commit') return 'Commit the validated workspace result.';
-  return 'Review proposed YOps operations and node-level changes.';
+  return 'Review what T3X recommends and why.';
 }
 
 function getInitialTargetBranch(candidate: WorkspaceCandidate): string {
@@ -895,23 +1040,6 @@ function PaneHeader({ icon, label, meta }: { icon: ReactNode; label: string; met
       <span className="ml-auto truncate font-mono text-[10px] text-[var(--text-tertiary)]">
         {meta}
       </span>
-    </div>
-  );
-}
-
-function CodePane({ lines }: { lines: string[] }) {
-  return (
-    <div className="min-h-0 flex-1 overflow-auto bg-[var(--editor-bg)]">
-      <div className="grid min-w-[520px] grid-cols-[36px_minmax(0,1fr)] font-mono text-[12px] leading-[19px]">
-        {lines.map((line, index) => (
-          <div className="contents" key={`${index}-${line}`}>
-            <div className="select-none border-r border-[var(--stroke-divider)] bg-[var(--workspace-panel)] pr-2 text-right text-[var(--text-tertiary)]">
-              {index + 1}
-            </div>
-            <pre className="whitespace-pre-wrap px-3 text-[var(--text-primary)]">{line || ' '}</pre>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

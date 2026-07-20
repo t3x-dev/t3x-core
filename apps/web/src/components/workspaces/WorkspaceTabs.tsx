@@ -15,7 +15,7 @@ export const WORKSPACE_TABS: {
   {
     id: 'ops',
     keyLabel: '',
-    label: 'Ops',
+    label: 'Proposal',
     count: (candidate) => candidate.yopsDraft.operations.length,
   },
   {
@@ -48,7 +48,7 @@ export function WorkspaceWorkflowTabs({
   return (
     <div
       aria-label="Workspace workflow tabs"
-      className="flex min-h-11 items-center gap-4 overflow-x-auto"
+      className="flex min-h-[52px] items-stretch overflow-x-auto"
       role="tablist"
     >
       {WORKSPACE_TABS.map((tab) => {
@@ -59,10 +59,10 @@ export function WorkspaceWorkflowTabs({
           <button
             aria-selected={selected}
             className={cn(
-              'relative inline-flex h-11 shrink-0 items-center gap-1.5 border-b-2 px-1 text-sm font-semibold transition-colors',
+              'relative inline-flex min-w-[124px] shrink-0 items-center justify-center gap-1.5 border-b-2 px-4 text-sm font-semibold transition-colors',
               selected
-                ? 'border-[var(--source)] text-[var(--text-primary)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                ? 'border-[var(--source)] bg-[var(--surface-card)] text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--text-tertiary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
@@ -97,6 +97,7 @@ export function WorkspaceTabs({
   onSendToYOps,
   onYOpsApplied,
   onYOpsCommitted,
+  onWorkflowTabChange,
   sendingToYOps,
   yopsDraftSent,
 }: {
@@ -111,6 +112,7 @@ export function WorkspaceTabs({
   onSendToYOps?: () => Promise<void> | void;
   onYOpsApplied?: () => void;
   onYOpsCommitted?: (commitHash: string) => void;
+  onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
   yopsDraftSent?: boolean;
 }) {
@@ -126,6 +128,7 @@ export function WorkspaceTabs({
         onSourceMaterialUploaded,
         onYOpsApplied,
         onYOpsCommitted,
+        onWorkflowTabChange,
         sendingToYOps,
         yopsDraftSent,
       })}
@@ -143,6 +146,7 @@ interface RenderWorkspaceTabOptions {
   onSourceMaterialUploaded?: () => Promise<void> | void;
   onYOpsApplied?: () => void;
   onYOpsCommitted?: (commitHash: string) => void;
+  onWorkflowTabChange?: (tab: WorkspaceTabId) => void;
   sendingToYOps?: boolean;
   yopsDraftSent?: boolean;
 }
@@ -157,10 +161,11 @@ function renderWorkspaceTab(
       <YOpsDraftTab
         candidate={candidate}
         flowError={options.flowError}
-        onApplied={options.onYOpsApplied}
         onSendToYOps={options.onSendToYOps}
+        onApplied={options.onYOpsApplied}
         onCommitted={options.onYOpsCommitted}
         sendingToYOps={options.sendingToYOps}
+        onViewChange={options.onWorkflowTabChange}
         view={activeTab}
         yopsDraftSent={options.yopsDraftSent}
       />

@@ -464,6 +464,107 @@ describe('Workspace routes', () => {
     expect(body.data.workspace.lastCommitHash).toBeUndefined();
   });
 
+  it('reopens a committed workspace when regenerating a YOps draft', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/yops-draft',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            title: 'Committed PRD workspace',
+            status: 'committed',
+            lastCommitHash: 'sha256:committed-workspace',
+            baseCommitHash: 'sha256:old-base',
+            targetBranch: 'feature/reviewed-prd',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [{ id: 'src_1', type: 'document', title: 'Reviewed source' }],
+            schemaCandidate: {
+              fields: [
+                {
+                  id: 'field_summary',
+                  path: 'summary',
+                  status: 'covered',
+                  children: [
+                    {
+                      id: 'field_summary_problem',
+                      path: 'summary.problem',
+                      status: 'covered',
+                      type: 'string',
+                      value: 'Committed problem',
+                    },
+                  ],
+                },
+              ],
+            },
+            yopsDraft: { id: 'draft:committed', operations: [] },
+          },
+        }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.workspace.status).toBe('schema_review');
+    expect(body.data.workspace.lastCommitHash).toBeUndefined();
+    expect(body.data.workspace.baseCommitHash).toBe('sha256:committed-workspace');
+    expect(body.data.workspace.yopsDraft.operations).toEqual([
+      expect.objectContaining({
+        op: 'set',
+        path: 'prd_schema_v2/summary/problem',
+        afterValue: 'Committed problem',
+      }),
+    ]);
+  });
+
+  it('reopens a committed workspace when extracting a fresh candidate', async () => {
+    const res = await app.request(
+      '/v1/projects/proj_sources/workspaces/workspace_prd_handoff/extract-candidate',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspace: {
+            id: 'workspace_prd_handoff',
+            projectId: 'proj_sources',
+            title: 'Committed PRD workspace',
+            status: 'committed',
+            lastCommitHash: 'sha256:committed-workspace',
+            baseCommitHash: 'sha256:old-base',
+            targetBranch: 'feature/reviewed-prd',
+            schemaBindings: [{ schemaName: 'PRD Schema v2' }],
+            sourceBundle: [],
+            yopsDraft: { id: 'draft:committed', operations: [] },
+          },
+          sources: [
+            {
+              id: 'src_new',
+              type: 'document',
+              title: 'New source',
+              previewText: [
+                'Problem: New problem',
+                'Audience: New reviewers',
+                'Outcome: New outcome',
+                'Requirement: New requirement',
+                'Priority: should',
+                'Acceptance: New acceptance',
+              ].join('\n'),
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body: ApiResponse = await res.json();
+    expect(body.data.workspace.status).toBe('schema_review');
+    expect(body.data.workspace.lastCommitHash).toBeUndefined();
+    expect(body.data.workspace.baseCommitHash).toBe('sha256:committed-workspace');
+    expect(body.data.workspace.schemaCandidate.fields.length).toBeGreaterThan(0);
+  });
+
   it('normalizes invalid review save statuses before persisting', async () => {
     const res = await app.request('/v1/projects/proj_sources/workspaces/workspace_prd_handoff', {
       method: 'PATCH',
