@@ -86,9 +86,7 @@ describe('ProjectWorkspacesTab', () => {
       expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByRole('heading', { name: 'PRD audience handoff' })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'PRD audience handoff' })).not.toBeInTheDocument();
   });
 
   it('keeps uploaded material sources when restoring a persisted workspace draft', async () => {
