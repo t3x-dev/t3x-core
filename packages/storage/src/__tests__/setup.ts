@@ -259,6 +259,64 @@ CREATE TABLE IF NOT EXISTS merge_drafts (
 CREATE INDEX IF NOT EXISTS idx_merge_drafts_project ON merge_drafts(project_id);
 CREATE INDEX IF NOT EXISTS idx_merge_drafts_status ON merge_drafts(status);
 
+-- Pull Requests
+CREATE TABLE IF NOT EXISTS pull_requests (
+  pull_request_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+  number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  source_branch TEXT NOT NULL,
+  target_branch TEXT NOT NULL,
+  source_commit_hash TEXT NOT NULL,
+  target_base_commit_hash TEXT NOT NULL,
+  merge_draft_id TEXT REFERENCES merge_drafts(draft_id) ON DELETE SET NULL,
+  merge_commit_hash TEXT,
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('draft', 'open', 'checking', 'ready', 'blocked', 'merged', 'closed')),
+  author_id TEXT NOT NULL,
+  review_owner_id TEXT,
+  linked_work TEXT,
+  diff_summary JSONB NOT NULL DEFAULT '{"changed_nodes":0,"yops_operations":0,"output_impacts":0,"source_refs":0}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  merged_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ,
+  UNIQUE(project_id, number),
+  CONSTRAINT pull_requests_merged_commit_required
+    CHECK (status <> 'merged' OR merge_commit_hash IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_pull_requests_project_status
+  ON pull_requests(project_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pull_requests_active_pair
+  ON pull_requests(project_id, source_branch, target_branch)
+  WHERE status IN ('draft', 'open', 'checking', 'ready', 'blocked');
+
+CREATE TABLE IF NOT EXISTS pull_request_checks (
+  check_id TEXT PRIMARY KEY,
+  pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL
+    CHECK (status IN ('pending', 'running', 'passed', 'warning', 'blocked', 'failed')),
+  title TEXT NOT NULL,
+  message TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_pull_request_checks_pr
+  ON pull_request_checks(pull_request_id);
+
+CREATE TABLE IF NOT EXISTS pull_request_activity (
+  activity_id TEXT PRIMARY KEY,
+  pull_request_id TEXT NOT NULL REFERENCES pull_requests(pull_request_id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pull_request_activity_pr
+  ON pull_request_activity(pull_request_id, created_at);
+
 -- Deploy Agents
 CREATE TABLE IF NOT EXISTS deploy_agents (
   deploy_agent_id TEXT PRIMARY KEY,
