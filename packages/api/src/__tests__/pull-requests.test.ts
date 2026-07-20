@@ -5,8 +5,10 @@ import {
   createCommit,
   findBranchByName,
   getCommit,
+  getMergeDraft,
   insertBranch,
   insertProject,
+  listCommits,
   updateBranchHead,
 } from '@t3x-dev/storage';
 import { Hono } from 'hono';
@@ -16,6 +18,7 @@ import { setupTestDB, testData } from './setup';
 type ApiResponse = any;
 
 let mockDB: AnyDB;
+let mockSql: Awaited<ReturnType<typeof setupTestDB>>['sql'];
 
 vi.mock('../lib/db', () => ({
   getDB: vi.fn(() => Promise.resolve(mockDB)),
@@ -32,6 +35,7 @@ describe('Pull request routes', () => {
   beforeAll(async () => {
     const setup = await setupTestDB();
     mockDB = setup.db;
+    mockSql = setup.sql;
     cleanup = setup.cleanup;
   });
 
@@ -218,6 +222,26 @@ describe('Pull request routes', () => {
     );
   });
 
+  it('serializes readiness and close so a closed PR cannot remain checking', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+
+    const [rerun, close] = await Promise.all([
+      app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`, {
+        method: 'POST',
+      }),
+      app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/close`, {
+        method: 'POST',
+      }),
+    ]);
+
+    expect(close.status).toBe(200);
+    expect([200, 409]).toContain(rerun.status);
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    expect(((await detail.json()) as ApiResponse).data.status).toBe('closed');
+  });
+
   it('blocks readiness when deterministic preparation finds unresolved conflicts', async () => {
     const fixture = await createBranchFixture({ conflict: true });
     const opened = await openPullRequest(fixture.projectId);
@@ -279,6 +303,68 @@ describe('Pull request routes', () => {
       expect.arrayContaining([
         expect.objectContaining({ key: 'product', slots: { version: 2 } }),
         expect.objectContaining({ key: 'release', slots: { ready: true } }),
+      ])
+    );
+  });
+
+  it('rejects unresolved conflicts without changing the target branch or merge draft', async () => {
+    const fixture = await createBranchFixture({ conflict: true });
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const rerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    const readiness = (await rerun.json()) as ApiResponse;
+    const draftId = readiness.data.merge_draft_id;
+
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
+      {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_NOT_READY');
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      fixture.target.hash
+    );
+    expect((await getMergeDraft(mockDB, draftId))?.status).toBe('pending');
+    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(2);
+  });
+
+  it('records preparation failures as blocked instead of leaving a PR checking', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const firstRerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    const prepared = (await firstRerun.json()) as ApiResponse;
+    await mockSql.unsafe('UPDATE merge_drafts SET prepared_json = $1 WHERE draft_id = $2', [
+      '{invalid-json',
+      prepared.data.merge_draft_id,
+    ]);
+
+    const failedRerun = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    const failed = (await failedRerun.json()) as ApiResponse;
+
+    expect(failedRerun.status).toBe(200);
+    expect(failed.data).toMatchObject({ status: 'blocked', merge_draft_id: null });
+    expect(failed.data.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'merge_simulation', status: 'failed' }),
       ])
     );
   });
@@ -356,6 +442,85 @@ describe('Pull request routes', () => {
     ).toBe(fixture.source.hash);
   });
 
+  it('serializes concurrent merge requests so exactly one merge commit is created', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`, {
+      method: 'POST',
+    });
+    const request = () =>
+      app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`, {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      });
+
+    const responses = await Promise.all([request(), request()]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(await listCommits(mockDB, { projectId: fixture.projectId })).toHaveLength(3);
+
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    const data = (await detail.json()) as ApiResponse;
+    expect(data.data.status).toBe('merged');
+    expect(data.data.activity.filter((item: ApiResponse) => item.type === 'merged')).toHaveLength(
+      1
+    );
+  });
+
+  it('blocks merge when the source branch moved after readiness', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`, {
+      method: 'POST',
+    });
+    const movedSource = await createCommit(mockDB, {
+      parents: [fixture.source.hash],
+      author: { type: 'human', name: 'Concurrent User' },
+      content: {
+        trees: [
+          { key: 'product', slots: { version: 1 }, children: [] },
+          { key: 'release', slots: { ready: true, amended: true }, children: [] },
+        ],
+        relations: [],
+      },
+      project_id: fixture.projectId,
+      message: 'source moved',
+      branch: 'feature/pr-flow',
+    });
+    await updateBranchHead(mockDB, fixture.projectId, 'feature/pr-flow', movedSource.hash);
+
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
+      {
+        body: JSON.stringify({
+          expected_source_commit_id: fixture.source.hash,
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_HEAD_CHANGED');
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      fixture.target.hash
+    );
+
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    expect(((await detail.json()) as ApiResponse).data).toMatchObject({
+      status: 'blocked',
+      merge_draft_id: null,
+      merge_commit_id: null,
+    });
+  });
+
   it('rejects stale expected heads without creating a merge commit', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
@@ -377,7 +542,9 @@ describe('Pull request routes', () => {
       }
     );
     expect(response.status).toBe(409);
-    expect(((await response.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_HEAD_CHANGED');
+    expect(((await response.json()) as ApiResponse).error.code).toBe(
+      'PULL_REQUEST_EXPECTATION_MISMATCH'
+    );
     expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
       fixture.target.hash
     );
