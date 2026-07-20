@@ -37,7 +37,7 @@ describe('ProjectWorkspacesTab', () => {
 
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'Release note cleanup' })).toBeInTheDocument();
+    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.queryByText('Audience chat')).not.toBeInTheDocument();
     expect(screen.queryByText('PRD import')).not.toBeInTheDocument();
     expect(screen.queryByText('Release note outline')).not.toBeInTheDocument();
@@ -60,13 +60,13 @@ describe('ProjectWorkspacesTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
 
-    expect(screen.getByRole('heading', { name: 'Release note cleanup' })).toBeInTheDocument();
+    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Release note cleanup/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /PRD audience handoff/ })).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('restores a persisted workspace draft over the fixture candidate', async () => {
+  it('restores a persisted workspace draft title over the fixture candidate', async () => {
     const [baseWorkspace] = getWorkspacePreviewCandidates('proj_other');
     fetchProjectWorkspacesMock.mockResolvedValueOnce([
       {
@@ -86,10 +86,7 @@ describe('ProjectWorkspacesTab', () => {
       expect(screen.getByRole('heading', { name: 'Restored backend draft' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: /Validation/ }));
-
-    expect(screen.getAllByText('Schema review').length).toBeGreaterThan(0);
-    expect(screen.getByText('Loaded from persisted workspace state.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'PRD audience handoff' })).not.toBeInTheDocument();
   });
 
   it('keeps uploaded material sources when restoring a persisted workspace draft', async () => {

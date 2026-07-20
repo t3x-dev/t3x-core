@@ -466,6 +466,22 @@ function resolveStoredBackendCandidateId(
   return undefined;
 }
 
+function reopenCommittedWorkspaceForReview(
+  workspace: Record<string, unknown>
+): Record<string, unknown> {
+  const committedHash = nullableStringFromWorkspace(workspace, 'lastCommitHash');
+  if (workspace.status !== 'committed' && !committedHash) return workspace;
+
+  const { lastCommitHash: _lastCommitHash, status: _status, ...reviewWorkspace } = workspace;
+
+  return {
+    ...reviewWorkspace,
+    ...(committedHash ? { baseCommitHash: committedHash } : {}),
+    status: 'schema_review',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function workspaceCommitContent(
   content: z.infer<typeof CommitWorkspaceRequestSchema>['content']
 ): SemanticContent {
@@ -508,7 +524,9 @@ workspaceRoutes.openapi(extractCandidateRoute, async (c) => {
   const db = await getDB();
   const materials = await safeFindMaterialsByProject(db, projectId);
   const sourceTexts = mergeSourceTexts(sources, materials);
-  const nextWorkspace = buildExtractedWorkspace(workspace, projectId, sourceTexts);
+  const nextWorkspace = reopenCommittedWorkspaceForReview(
+    buildExtractedWorkspace(workspace, projectId, sourceTexts)
+  );
   const candidateId = candidateIdFor(workspaceId, sourceTexts);
   const persistedWorkspace = {
     ...nextWorkspace,
@@ -537,13 +555,14 @@ workspaceRoutes.openapi(sendYOpsDraftRoute, async (c) => {
   const db = await getDB();
   const storedDraft = await findWorkspaceDraft(db, projectId, workspaceId);
   const sourceWorkspace = storedDraft?.workspace_state ?? workspace;
+  const reviewWorkspace = reopenCommittedWorkspaceForReview(sourceWorkspace);
   const candidateId = candidateIdFromWorkspace(sourceWorkspace, workspaceId);
   const nextWorkspace = {
-    ...sourceWorkspace,
-    id: stringFromWorkspace(sourceWorkspace, 'id', workspaceId),
+    ...reviewWorkspace,
+    id: stringFromWorkspace(reviewWorkspace, 'id', workspaceId),
     projectId,
     backendCandidateId: candidateId,
-    yopsDraft: buildYOpsDraft(sourceWorkspace, candidateId),
+    yopsDraft: buildYOpsDraft(reviewWorkspace, candidateId),
   };
   const draft = await upsertWorkspaceDraft(db, {
     project_id: projectId,

@@ -115,13 +115,24 @@ function seedOperationBaseline(
   for (const segment of parentSegments) node = ensureChildNode(node, segment);
 
   if (operation.op === 'add' || operation.op === 'append') {
-    node.slots[slotKey] = Array.isArray(node.slots[slotKey]) ? node.slots[slotKey] : [];
+    node.slots[slotKey] = operationBaselineArrayValue(operation);
     return;
   }
 
   if (operation.beforeValue !== undefined) {
     node.slots[slotKey] = operation.beforeValue;
   }
+}
+
+function operationBaselineArrayValue(operation: WorkspaceYOpsDraftOperation): WorkspaceYOpsValue[] {
+  const beforeValue = operation.beforeValue?.trim();
+  if (!beforeValue || isEmptyBaselineLabel(beforeValue)) return [];
+  if (operation.afterValue !== undefined && beforeValue === operation.afterValue.trim()) return [];
+  return [operation.beforeValue ?? beforeValue];
+}
+
+function isEmptyBaselineLabel(value: string): boolean {
+  return /^no\b/i.test(value);
 }
 
 function operationToYOp(operation: WorkspaceYOpsDraftOperation, rootKey: string): WorkspaceYOp {

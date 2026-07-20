@@ -232,7 +232,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
   });
 
   it('renders Canvas only on the independent Canvas surface', async () => {
@@ -427,7 +427,7 @@ describe('ProjectDetailPage — project-first shell states', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();
