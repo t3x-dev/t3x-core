@@ -88,4 +88,17 @@ describe('Pull request routes', () => {
     expect(data.data.status).toBe('merged');
     expect(data.data.merged_at).toBeTruthy();
   });
+
+  it('closes an active pull request without merging it', async () => {
+    const res = await app.request('/v1/projects/proj_pr_close/pull-requests/18/close', {
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(200);
+    const data: ApiResponse = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.data.status).toBe('closed');
+    expect(data.data.closed_at).toBeTruthy();
+    expect(data.data.merged_at).toBeNull();
+  });
 });

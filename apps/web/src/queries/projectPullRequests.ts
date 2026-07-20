@@ -1,5 +1,6 @@
 import {
   type CreateProjectPullRequestInput,
+  closeProjectPullRequest,
   createProjectPullRequest,
   listProjectPullRequestComparisons,
   listProjectPullRequests,
@@ -24,6 +25,10 @@ export function completeProjectPullRequest(
   input: MergeProjectPullRequestInput = {}
 ) {
   return mergeProjectPullRequest(projectId, number, input);
+}
+
+export function dismissProjectPullRequest(projectId: string, number: number) {
+  return closeProjectPullRequest(projectId, number);
 }
 
 export function fetchProjectPullRequestComparisons(

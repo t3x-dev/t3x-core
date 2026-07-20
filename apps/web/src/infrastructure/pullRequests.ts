@@ -134,3 +134,16 @@ export async function mergeProjectPullRequest(
   );
   return handleResponse<ApiProjectPullRequest>(res);
 }
+
+export async function closeProjectPullRequest(
+  projectId: string,
+  number: number
+): Promise<ApiProjectPullRequest> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}/close`,
+    {
+      method: 'POST',
+    }
+  );
+  return handleResponse<ApiProjectPullRequest>(res);
+}

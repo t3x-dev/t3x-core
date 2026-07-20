@@ -722,6 +722,73 @@ pullRequestRoutes.openapi(rerunChecksRoute, (c) => {
   return c.json({ success: true as const, data: checks }, 200);
 });
 
+const closePullRequestRoute = createRoute({
+  method: 'post',
+  path: '/v1/projects/{projectId}/pull-requests/{number}/close',
+  tags: ['Pull requests'],
+  summary: 'Close a project pull request without merging',
+  request: {
+    params: z.object({
+      projectId: z.string().min(1),
+      number: z.coerce.number().int().positive(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Pull request closed',
+      content: { 'application/json': { schema: SuccessResponseSchema(PullRequestSchema) } },
+    },
+    409: {
+      description: 'Pull request is already closed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+pullRequestRoutes.openapi(closePullRequestRoute, (c) => {
+  const { number, projectId } = c.req.valid('param');
+  const pullRequest = findPullRequest(projectId, number);
+  if (!pullRequest) {
+    return c.json(
+      {
+        success: false as const,
+        error: { code: 'PULL_REQUEST_NOT_FOUND', message: 'Pull request not found' },
+      },
+      404
+    );
+  }
+
+  if (['merged', 'closed'].includes(pullRequest.status)) {
+    return c.json(
+      {
+        success: false as const,
+        error: {
+          code: 'PULL_REQUEST_ALREADY_CLOSED',
+          message: 'Only active pull requests can be closed without merging.',
+        },
+      },
+      409
+    );
+  }
+
+  pullRequest.status = 'closed' satisfies PullRequestStatus;
+  pullRequest.closed_at = nowIso();
+  pullRequest.updated_at = pullRequest.closed_at;
+  projectActivity.set(pullRequest.id, [
+    ...(projectActivity.get(pullRequest.id) ?? []),
+    {
+      id: `${pullRequest.id}:activity:closed`,
+      pull_request_id: pullRequest.id,
+      actor_id: 'current-user',
+      type: 'closed',
+      message: 'Pull request closed without merging.',
+      created_at: pullRequest.closed_at,
+    },
+  ]);
+
+  return c.json({ success: true as const, data: pullRequest }, 200);
+});
+
 const mergePullRequestRoute = createRoute({
   method: 'post',
   path: '/v1/projects/{projectId}/pull-requests/{number}/merge',

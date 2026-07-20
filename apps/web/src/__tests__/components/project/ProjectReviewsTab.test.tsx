@@ -79,4 +79,22 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Just merged')).toBeInTheDocument();
     expect(screen.getAllByText('merged').length).toBeGreaterThan(0);
   });
+
+  it('closes an open PR without merging and moves it into the closed list', () => {
+    render(<ProjectReviewsTab />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Close PR' }));
+
+    expect(screen.getByText(/Close without merging/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm close' }));
+
+    expect(screen.getByText('Merge proposals for structured state')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2\s*Open/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2\s*Closed/i })).toBeInTheDocument();
+    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
+    expect(screen.getByText('Just closed')).toBeInTheDocument();
+    expect(screen.getAllByText('closed').length).toBeGreaterThan(0);
+  });
 });

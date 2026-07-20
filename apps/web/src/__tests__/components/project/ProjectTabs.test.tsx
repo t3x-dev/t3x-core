@@ -4,7 +4,12 @@ import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ProjectTabs } from '@/components/project/ProjectTabs';
-import { PROJECT_TABS } from '@/components/project/projectTabModel';
+import {
+  getProjectTabSegment,
+  isProjectTabSegment,
+  PROJECT_TABS,
+  parseProjectTab,
+} from '@/components/project/projectTabModel';
 
 describe('ProjectTabs', () => {
   it('renders stable route links and marks the active project view', () => {
@@ -13,7 +18,10 @@ describe('ProjectTabs', () => {
     render(<ProjectTabs activeTab="state" repoPath="/t3x-dev/test-project" />);
 
     for (const tab of PROJECT_TABS) {
-      const href = tab.id === 'state' ? '/t3x-dev/test-project' : `/t3x-dev/test-project/${tab.id}`;
+      const href =
+        tab.id === 'state'
+          ? '/t3x-dev/test-project'
+          : `/t3x-dev/test-project/${getProjectTabSegment(tab.id)}`;
       expect(screen.getByRole('link', { name: tab.label })).toHaveAttribute('href', href);
     }
 
@@ -33,5 +41,10 @@ describe('ProjectTabs', () => {
       'settings',
     ]);
     expect(PROJECT_TABS.find((tab) => tab.id === 'reviews')?.label).toBe('Pull requests');
+    expect(getProjectTabSegment('reviews')).toBe('pull-requests');
+    expect(isProjectTabSegment('pull-requests')).toBe(true);
+    expect(isProjectTabSegment('reviews')).toBe(false);
+    expect(parseProjectTab('pull-requests')).toBe('reviews');
+    expect(parseProjectTab('reviews')).toBe('state');
   });
 });

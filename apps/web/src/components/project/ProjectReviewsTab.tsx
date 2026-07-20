@@ -11,6 +11,7 @@ import {
   Search,
   ShieldCheck,
   UserRound,
+  XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -282,7 +283,9 @@ function toProjectPullRequest(api: ApiProjectPullRequestResponse): ProjectPullRe
           ? ({ label: 'draft', tone: 'muted' } as const)
           : api.status === 'merged'
             ? ({ label: 'merged', tone: 'success' } as const)
-            : ({ label: 'checks queued', tone: 'pending' } as const);
+            : api.status === 'closed'
+              ? ({ label: 'closed', tone: 'muted' } as const)
+              : ({ label: 'checks queued', tone: 'pending' } as const);
 
   return {
     author: api.author_id,
@@ -333,6 +336,7 @@ function toCompareCandidate(
 
 export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const {
+    closePullRequest: closeProjectPullRequest,
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
     fetchPullRequests,
@@ -347,6 +351,9 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
   const [query, setQuery] = useState('is:open type:pr');
+  const [closeConfirmId, setCloseConfirmId] = useState<string | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
@@ -477,6 +484,8 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const openPullRequest = (pullRequest: ProjectPullRequest) => {
     setSelectedId(pullRequest.id);
     setHighlightedId(null);
+    setCloseConfirmId(null);
+    setCloseError(null);
     setMergeError(null);
     setDetailTab('overview');
     setView('detail');
@@ -542,14 +551,18 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       });
   };
 
-  const showMergedPullRequest = (merged: ProjectPullRequest) => {
+  const showFinishedPullRequest = (finished: ProjectPullRequest) => {
     setPullRequests((items) =>
-      items.map((item) => (item.id === merged.id || item.number === merged.number ? merged : item))
+      items.map((item) =>
+        item.id === finished.id || item.number === finished.number ? finished : item
+      )
     );
-    setSelectedId(merged.id);
-    setHighlightedId(merged.id);
+    setSelectedId(finished.id);
+    setHighlightedId(finished.id);
     setMode('closed');
     setQuery('is:closed type:pr');
+    setCloseConfirmId(null);
+    setCloseError(null);
     setMergeError(null);
     setView('list');
   };
@@ -561,7 +574,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     setMergeError(null);
 
     if (!projectId) {
-      showMergedPullRequest({
+      showFinishedPullRequest({
         ...pullRequest,
         readinessLabel: 'merged',
         readinessTone: 'success',
@@ -578,7 +591,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       number: pullRequest.number,
     })
       .then((merged) => {
-        showMergedPullRequest(toProjectPullRequest(merged));
+        showFinishedPullRequest(toProjectPullRequest(merged));
       })
       .catch((err) => {
         setMergeError(
@@ -589,6 +602,44 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       })
       .finally(() => {
         setMergingId(null);
+      });
+  };
+
+  const closePullRequest = (pullRequest: ProjectPullRequest) => {
+    if (['merged', 'closed'].includes(pullRequest.status) || closingId) return;
+
+    if (closeConfirmId !== pullRequest.id) {
+      setCloseConfirmId(pullRequest.id);
+      setCloseError(null);
+      return;
+    }
+
+    setClosingId(pullRequest.id);
+    setCloseError(null);
+
+    if (!projectId) {
+      showFinishedPullRequest({
+        ...pullRequest,
+        readinessLabel: 'closed',
+        readinessTone: 'muted',
+        status: 'closed',
+        updatedAt: 'closed just now',
+      });
+      setClosingId(null);
+      return;
+    }
+
+    closeProjectPullRequest(projectId, { number: pullRequest.number })
+      .then((closed) => {
+        showFinishedPullRequest(toProjectPullRequest(closed));
+      })
+      .catch((err) => {
+        setCloseError(
+          err instanceof Error ? err.message : 'Could not close this pull request without merging.'
+        );
+      })
+      .finally(() => {
+        setClosingId(null);
       });
   };
 
@@ -610,10 +661,14 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   if (view === 'detail' && selectedPullRequest) {
     return (
       <PullRequestDetailView
+        closeConfirmationActive={closeConfirmId === selectedPullRequest.id}
+        closeError={closeError}
+        closing={closingId === selectedPullRequest.id}
         detailTab={detailTab}
         mergeError={mergeError}
         merging={mergingId === selectedPullRequest.id}
         onBack={() => setView('list')}
+        onClose={() => closePullRequest(selectedPullRequest)}
         onChangeTab={setDetailTab}
         onMerge={() => mergePullRequest(selectedPullRequest)}
         pullRequest={selectedPullRequest}
@@ -798,7 +853,11 @@ function PullRequestRow({
           </h3>
           {highlighted ? (
             <Badge variant="branch">
-              {pullRequest.status === 'merged' ? 'Just merged' : 'New'}
+              {pullRequest.status === 'merged'
+                ? 'Just merged'
+                : pullRequest.status === 'closed'
+                  ? 'Just closed'
+                  : 'New'}
             </Badge>
           ) : null}
           <ReadinessBadge pullRequest={pullRequest} />
@@ -1078,22 +1137,36 @@ function CompareMetric({ label, value }: { label: string; value: string }) {
 }
 
 function PullRequestDetailView({
+  closeConfirmationActive,
+  closeError,
+  closing,
   detailTab,
   mergeError,
   merging,
   onBack,
+  onClose,
   onChangeTab,
   onMerge,
   pullRequest,
 }: {
+  closeConfirmationActive: boolean;
+  closeError: string | null;
+  closing: boolean;
   detailTab: PullRequestDetailTab;
   mergeError: string | null;
   merging: boolean;
   onBack: () => void;
+  onClose: () => void;
   onChangeTab: (tab: PullRequestDetailTab) => void;
   onMerge: () => void;
   pullRequest: ProjectPullRequest;
 }) {
+  const closeable = !['merged', 'closed'].includes(pullRequest.status);
+  const closeButtonLabel = closing
+    ? 'Closing...'
+    : closeConfirmationActive
+      ? 'Confirm close'
+      : 'Close PR';
   const checks: PullRequestCheck[] = [
     {
       id: 'source_commit',
@@ -1141,11 +1214,38 @@ function PullRequestDetailView({
                 <BranchPill>{pullRequest.targetBranch}</BranchPill>
               </p>
             </div>
-            <Button type="button" variant="canvas-outline">
-              <RefreshCw aria-hidden="true" className="h-4 w-4" />
-              Rerun readiness
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {closeable ? (
+                <Button
+                  className={cn(
+                    closeConfirmationActive &&
+                      'border-[var(--status-warning)]/50 bg-[var(--status-warning)]/10 text-[var(--text-primary)]'
+                  )}
+                  disabled={closing}
+                  onClick={onClose}
+                  type="button"
+                  variant="canvas-outline"
+                >
+                  {closing ? (
+                    <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <XCircle aria-hidden="true" className="h-4 w-4" />
+                  )}
+                  {closeButtonLabel}
+                </Button>
+              ) : null}
+              <Button type="button" variant="canvas-outline">
+                <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                Rerun readiness
+              </Button>
+            </div>
           </div>
+          {closeConfirmationActive || closeError ? (
+            <div className="mt-4 rounded-2xl border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-4 py-3 text-sm leading-5 text-[var(--text-secondary)]">
+              {closeError ??
+                'Close without merging? This moves the PR to Closed and leaves the target branch unchanged.'}
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap gap-2 border-b border-[var(--stroke-divider)]">
             {DETAIL_TABS.map((tab) => (

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import {
   completeProjectPullRequest,
+  dismissProjectPullRequest,
   fetchProjectPullRequestComparisons,
   fetchProjectPullRequests,
   openProjectPullRequest,
@@ -47,5 +48,15 @@ export function useProjectPullRequestsApi() {
     []
   );
 
-  return { createPullRequest, fetchCompareCandidates, fetchPullRequests, mergePullRequest };
+  const closePullRequest = useCallback((projectId: string, input: { number: number }) => {
+    return dismissProjectPullRequest(projectId, input.number);
+  }, []);
+
+  return {
+    closePullRequest,
+    createPullRequest,
+    fetchCompareCandidates,
+    fetchPullRequests,
+    mergePullRequest,
+  };
 }

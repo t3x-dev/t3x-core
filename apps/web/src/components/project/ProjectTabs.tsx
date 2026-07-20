@@ -9,7 +9,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
-import { PROJECT_TABS, type ProjectTabId } from '@/components/project/projectTabModel';
+import {
+  getProjectTabSegment,
+  PROJECT_TABS,
+  type ProjectTabId,
+} from '@/components/project/projectTabModel';
 import { cn } from '@/utils/cn';
 
 const tabIcons: Record<ProjectTabId, ComponentType<{ className?: string }>> = {
@@ -48,7 +52,7 @@ export function ProjectTabs({ activeTab, repoPath }: ProjectTabsProps) {
                 ? 'bg-[var(--surface-card)] text-[var(--text-primary)] shadow-sm'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]'
             )}
-            href={tab.id === 'state' ? repoPath : `${repoPath}/${tab.id}`}
+            href={tab.id === 'state' ? repoPath : `${repoPath}/${getProjectTabSegment(tab.id)}`}
             key={tab.id}
             scroll={false}
           >
