@@ -98,6 +98,8 @@ export interface MergeExecuteInput {
   message?: string;
   branch?: string;
   author: Author;
+  /** Skip the operation's transaction when the caller already owns one. */
+  manage_transaction?: boolean;
 }
 
 export interface MergeExecuteOutput {
@@ -207,13 +209,14 @@ export const mergeExecuteOp: Operation<MergeExecuteInput, MergeExecuteOutput> = 
       return saved;
     };
 
-    const savedCommit = input.branch
-      ? await (
-          db as unknown as {
-            transaction: (callback: (tx: unknown) => Promise<Commit>) => Promise<Commit>;
-          }
-        ).transaction((tx) => persist(tx as AnyDB))
-      : await persist(db);
+    const savedCommit =
+      input.branch && input.manage_transaction !== false
+        ? await (
+            db as unknown as {
+              transaction: (callback: (tx: unknown) => Promise<Commit>) => Promise<Commit>;
+            }
+          ).transaction((tx) => persist(tx as AnyDB))
+        : await persist(db);
     yield { type: 'step_done', step: 'persist' };
 
     return { commit: savedCommit, merge_summary: mergeSummary };

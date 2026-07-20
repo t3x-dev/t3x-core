@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, max, sql } from 'drizzle-orm';
 import type { AnyDB } from '../adapters';
 import {
   type NewPullRequest,
@@ -108,6 +108,22 @@ export interface AddPullRequestActivityInput {
   type: PullRequestActivityType;
   message: string;
   createdAt?: Date;
+}
+
+const PULL_REQUEST_LOCK_NAMESPACE = 0x5052;
+
+/**
+ * Serialize state transitions for one pull request for the lifetime of the
+ * caller's transaction. The caller must pass a transaction-scoped DB handle.
+ */
+export async function acquirePullRequestLock(
+  db: AnyDB,
+  projectId: string,
+  number: number
+): Promise<void> {
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(${PULL_REQUEST_LOCK_NAMESPACE}::int, hashtext(${`${projectId}:${number}`})::int)`
+  );
 }
 
 export async function createPullRequest(

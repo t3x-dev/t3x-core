@@ -1,7 +1,14 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: compact API contract assertions */
 
 import type { AnyDB } from '@t3x-dev/storage';
-import { createCommit, insertBranch, insertProject, updateBranchHead } from '@t3x-dev/storage';
+import {
+  createCommit,
+  findBranchByName,
+  getCommit,
+  insertBranch,
+  insertProject,
+  updateBranchHead,
+} from '@t3x-dev/storage';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setupTestDB, testData } from './setup';
@@ -247,11 +254,19 @@ describe('Pull request routes', () => {
     );
   });
 
-  it('does not claim a merge before real deterministic preparation is connected', async () => {
+  it('atomically creates a double-parent commit and completes a ready pull request', async () => {
     const fixture = await createBranchFixture();
     const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    const readiness = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`,
+      { method: 'POST' }
+    );
+    expect(readiness.status).toBe(200);
+    expect(((await readiness.json()) as ApiResponse).data.status).toBe('ready');
+
     const response = await app.request(
-      `/v1/projects/${fixture.projectId}/pull-requests/${opened.data.data.number}/merge`,
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
       {
         body: JSON.stringify({
           expected_source_commit_id: fixture.source.hash,
@@ -262,9 +277,55 @@ describe('Pull request routes', () => {
         method: 'POST',
       }
     );
-    expect(response.status).toBe(409);
-    expect(((await response.json()) as ApiResponse).error.code).toBe(
-      'PULL_REQUEST_MERGE_NOT_PREPARED'
+    expect(response.status).toBe(200);
+    const merged = (await response.json()) as ApiResponse;
+    expect(merged.data.status).toBe('merged');
+    expect(merged.data.merge_commit_id).toMatch(/^sha256:/);
+    expect(merged.data.activity).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'merged' })])
     );
+
+    const mergeCommit = await getCommit(mockDB, merged.data.merge_commit_id);
+    expect(mergeCommit?.parents).toEqual([fixture.target.hash, fixture.source.hash]);
+    expect(mergeCommit?.branch).toBe('main');
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      mergeCommit?.hash
+    );
+    expect(
+      (await findBranchByName(mockDB, fixture.projectId, 'feature/pr-flow'))?.headCommitHash
+    ).toBe(fixture.source.hash);
+  });
+
+  it('rejects stale expected heads without creating a merge commit', async () => {
+    const fixture = await createBranchFixture();
+    const opened = await openPullRequest(fixture.projectId);
+    const number = opened.data.data.number;
+    await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}/checks/rerun`, {
+      method: 'POST',
+    });
+
+    const response = await app.request(
+      `/v1/projects/${fixture.projectId}/pull-requests/${number}/merge`,
+      {
+        body: JSON.stringify({
+          expected_source_commit_id: 'sha256:stale',
+          expected_target_commit_id: fixture.target.hash,
+          strategy: 'deterministic_merge',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }
+    );
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as ApiResponse).error.code).toBe('PULL_REQUEST_HEAD_CHANGED');
+    expect((await findBranchByName(mockDB, fixture.projectId, 'main'))?.headCommitHash).toBe(
+      fixture.target.hash
+    );
+
+    const detail = await app.request(`/v1/projects/${fixture.projectId}/pull-requests/${number}`);
+    expect(((await detail.json()) as ApiResponse).data).toMatchObject({
+      status: 'ready',
+      merge_commit_id: null,
+    });
   });
 });

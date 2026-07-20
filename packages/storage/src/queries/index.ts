@@ -326,6 +326,7 @@ export {
 // Pull Requests
 export {
   type AddPullRequestActivityInput,
+  acquirePullRequestLock,
   addPullRequestActivity,
   type CreatePullRequestInput,
   createPullRequest,

@@ -8,8 +8,10 @@ import {
 } from '@t3x-dev/core';
 import {
   type AnyDB,
+  acquirePullRequestLock,
   addPullRequestActivity,
   type Branch,
+  commitMergeDraft,
   createMergeDraft,
   createPullRequest,
   findActivePullRequestByBranches,
@@ -30,12 +32,15 @@ import {
   updateMergeDraft,
   updatePullRequest,
 } from '@t3x-dev/storage';
+import { getAuthorFromContext } from '../lib/auth';
+import { mapBranchLinearityError } from '../lib/commit-linearity';
 import { getDB } from '../lib/db';
 import { computeMergeChecks } from '../lib/merge-checks';
 import { assertProjectAccess, getUserId } from '../lib/project-access';
 import { buildPipelineContext } from '../ops/context';
-import { mergePrepareOp } from '../ops/merge';
+import { MergeError, mergeExecuteOp, mergePrepareOp } from '../ops/merge';
 import { ErrorResponseSchema, SuccessResponseSchema } from '../schemas/common';
+import { FrameMergeDecisionSchema } from '../schemas/merge';
 
 export const pullRequestRoutes = new OpenAPIHono();
 
@@ -1072,38 +1077,173 @@ const mergePullRequestRoute = createRoute({
       content: {
         'application/json': {
           schema: z.object({
-            expected_source_commit_id: z.string().optional(),
-            expected_target_commit_id: z.string().optional(),
+            expected_source_commit_id: z.string().min(1),
+            expected_target_commit_id: z.string().min(1),
             strategy: z.literal('deterministic_merge').default('deterministic_merge'),
+            message: z.string().trim().min(1).optional(),
+            decisions: FrameMergeDecisionSchema.optional(),
           }),
         },
       },
     },
   },
   responses: {
+    200: {
+      description: 'Pull request merged',
+      content: { 'application/json': { schema: SuccessResponseSchema(PullRequestDetailSchema) } },
+    },
     404: {
       description: 'Project or pull request not found',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
     409: {
-      description: 'Real merge preparation is required',
+      description: 'Pull request is not ready or its reviewed branch heads changed',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+    500: {
+      description: 'Merge failed and was rolled back',
       content: { 'application/json': { schema: ErrorResponseSchema } },
     },
   },
 });
 
+// @ts-expect-error OpenAPI cannot narrow the transaction error response union.
 pullRequestRoutes.openapi(mergePullRequestRoute, async (c) => {
   const { number, projectId } = c.req.valid('param');
+  const body = c.req.valid('json');
   const { access, db } = await requireProject(c, projectId);
   if (access instanceof Response) return access;
-  const pullRequest = await findPullRequestByNumber(db, projectId, number);
-  if (!pullRequest)
-    return c.json(errorBody('PULL_REQUEST_NOT_FOUND', 'Pull request not found.'), 404);
-  return c.json(
-    errorBody(
-      'PULL_REQUEST_MERGE_NOT_PREPARED',
-      'Real deterministic merge preparation is required before this PR can merge.'
-    ),
-    409
-  );
+  const author = await getAuthorFromContext(c);
+  const actorId = getUserId(c) ?? author.id ?? 'current-user';
+  const pipelineContext = await buildPipelineContext(c, projectId);
+
+  try {
+    const merged = await db.transaction(async (tx) => {
+      await acquirePullRequestLock(tx, projectId, number);
+      const pullRequest = await findPullRequestByNumber(tx, projectId, number);
+      if (!pullRequest) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
+      if (pullRequest.status !== 'ready') {
+        throw new MergeError(
+          'PULL_REQUEST_NOT_READY',
+          `Pull request must be ready before merging; current status is ${pullRequest.status}.`
+        );
+      }
+      if (!pullRequest.mergeDraftId) {
+        throw new MergeError(
+          'PULL_REQUEST_MERGE_NOT_PREPARED',
+          'Run readiness before merging this pull request.'
+        );
+      }
+
+      const [sourceBranch, targetBranch, draft] = await Promise.all([
+        findBranchByName(tx, projectId, pullRequest.sourceBranch),
+        findBranchByName(tx, projectId, pullRequest.targetBranch),
+        getMergeDraft(tx, pullRequest.mergeDraftId),
+      ]);
+      if (!sourceBranch || !targetBranch || !draft) {
+        throw new MergeError(
+          'PULL_REQUEST_MERGE_NOT_PREPARED',
+          'A reviewed branch or merge draft no longer exists. Rerun readiness.'
+        );
+      }
+
+      const sourceFresh =
+        sourceBranch.headCommitHash === pullRequest.sourceCommitHash &&
+        body.expected_source_commit_id === pullRequest.sourceCommitHash;
+      const targetFresh =
+        targetBranch.headCommitHash === pullRequest.targetBaseCommitHash &&
+        body.expected_target_commit_id === pullRequest.targetBaseCommitHash;
+      if (!sourceFresh || !targetFresh) {
+        throw new MergeError(
+          'PULL_REQUEST_HEAD_CHANGED',
+          'A reviewed branch head changed. Rerun readiness before merging.'
+        );
+      }
+      if (
+        draft.status !== 'pending' ||
+        draft.projectId !== projectId ||
+        draft.sourceHash !== pullRequest.sourceCommitHash ||
+        draft.targetHash !== pullRequest.targetBaseCommitHash ||
+        draft.sourceBranch !== pullRequest.sourceBranch ||
+        draft.targetBranch !== pullRequest.targetBranch
+      ) {
+        throw new MergeError(
+          'PULL_REQUEST_MERGE_NOT_PREPARED',
+          'The merge draft does not match this pull request. Rerun readiness.'
+        );
+      }
+
+      const preparedWithDecisions = JSON.parse(draft.preparedJson) as MergeResult & {
+        decisions?: MergeDecision;
+      };
+      const decisions: MergeDecision = (body.decisions as MergeDecision | undefined) ??
+        preparedWithDecisions.decisions ?? {
+          conflictResolutions: {},
+          keepFromSource: preparedWithDecisions.onlyInSource,
+          keepFromTarget: preparedWithDecisions.onlyInTarget,
+          keepRelationsFromSource: true,
+          keepRelationsFromTarget: true,
+        };
+      const context = { ...pipelineContext, db: tx as AnyDB };
+      const result = await collectResult(
+        runOperation(
+          mergeExecuteOp,
+          {
+            source_hash: pullRequest.sourceCommitHash,
+            target_hash: pullRequest.targetBaseCommitHash,
+            prepared: preparedWithDecisions,
+            decisions,
+            message:
+              body.message ?? `Merge pull request #${pullRequest.number}: ${pullRequest.title}`,
+            branch: pullRequest.targetBranch,
+            author,
+            manage_transaction: false,
+          },
+          context
+        )
+      );
+
+      await commitMergeDraft(tx, draft.draftId);
+      const mergedAt = new Date();
+      const updated = await updatePullRequest(tx, pullRequest.pullRequestId, {
+        status: 'merged',
+        mergeCommitHash: result.commit.hash,
+        mergedAt,
+        closedAt: mergedAt,
+      });
+      if (!updated) throw new MergeError('PULL_REQUEST_NOT_FOUND', 'Pull request not found.');
+      await addPullRequestActivity(tx, updated.pullRequestId, {
+        actorId,
+        type: 'merged',
+        message: `Merged ${updated.sourceBranch} into ${updated.targetBranch} as ${result.commit.hash}.`,
+        createdAt: mergedAt,
+      });
+      return updated;
+    });
+
+    return c.json({ success: true as const, data: await toApiDetail(db, merged) }, 200);
+  } catch (error) {
+    const linearity = mapBranchLinearityError(c, error);
+    if (linearity) return linearity;
+    if (error instanceof MergeError) {
+      if (error.code === 'PULL_REQUEST_NOT_FOUND') {
+        return c.json(errorBody(error.code, error.message), 404);
+      }
+      if (
+        error.code === 'PULL_REQUEST_NOT_READY' ||
+        error.code === 'PULL_REQUEST_HEAD_CHANGED' ||
+        error.code === 'PULL_REQUEST_MERGE_NOT_PREPARED' ||
+        error.code === 'UNRESOLVED_CONFLICTS'
+      ) {
+        return c.json(errorBody(error.code, error.message), 409);
+      }
+    }
+    return c.json(
+      errorBody(
+        'PULL_REQUEST_MERGE_FAILED',
+        error instanceof Error ? error.message : 'Pull request merge failed.'
+      ),
+      500
+    );
+  }
 });
