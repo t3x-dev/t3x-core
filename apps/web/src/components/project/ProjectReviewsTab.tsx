@@ -336,6 +336,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     createPullRequest: createProjectPullRequest,
     fetchCompareCandidates,
     fetchPullRequests,
+    mergePullRequest: mergeProjectPullRequest,
   } = useProjectPullRequestsApi();
   const [pullRequests, setPullRequests] = useState(INITIAL_PULL_REQUESTS);
   const [baseBranches, setBaseBranches] = useState(BASE_BRANCHES);
@@ -346,6 +347,8 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<PullRequestDetailTab>('overview');
   const [query, setQuery] = useState('is:open type:pr');
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergingId, setMergingId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     title: 'Output bundle refresh',
     description:
@@ -474,6 +477,7 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
   const openPullRequest = (pullRequest: ProjectPullRequest) => {
     setSelectedId(pullRequest.id);
     setHighlightedId(null);
+    setMergeError(null);
     setDetailTab('overview');
     setView('detail');
   };
@@ -538,6 +542,56 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
       });
   };
 
+  const showMergedPullRequest = (merged: ProjectPullRequest) => {
+    setPullRequests((items) =>
+      items.map((item) => (item.id === merged.id || item.number === merged.number ? merged : item))
+    );
+    setSelectedId(merged.id);
+    setHighlightedId(merged.id);
+    setMode('closed');
+    setQuery('is:closed type:pr');
+    setMergeError(null);
+    setView('list');
+  };
+
+  const mergePullRequest = (pullRequest: ProjectPullRequest) => {
+    if (pullRequest.status !== 'ready' || mergingId) return;
+
+    setMergingId(pullRequest.id);
+    setMergeError(null);
+
+    if (!projectId) {
+      showMergedPullRequest({
+        ...pullRequest,
+        readinessLabel: 'merged',
+        readinessTone: 'success',
+        status: 'merged',
+        updatedAt: 'merged just now',
+      });
+      setMergingId(null);
+      return;
+    }
+
+    mergeProjectPullRequest(projectId, {
+      expected_source_commit_id: pullRequest.sourceCommitId,
+      expected_target_commit_id: pullRequest.targetBaseCommitId,
+      number: pullRequest.number,
+    })
+      .then((merged) => {
+        showMergedPullRequest(toProjectPullRequest(merged));
+      })
+      .catch((err) => {
+        setMergeError(
+          err instanceof Error
+            ? err.message
+            : 'Merge readiness changed. Rerun readiness before merging.'
+        );
+      })
+      .finally(() => {
+        setMergingId(null);
+      });
+  };
+
   if (view === 'create') {
     return (
       <PullRequestCreateView
@@ -557,8 +611,11 @@ export function ProjectReviewsTab({ projectId }: { projectId?: string } = {}) {
     return (
       <PullRequestDetailView
         detailTab={detailTab}
+        mergeError={mergeError}
+        merging={mergingId === selectedPullRequest.id}
         onBack={() => setView('list')}
         onChangeTab={setDetailTab}
+        onMerge={() => mergePullRequest(selectedPullRequest)}
         pullRequest={selectedPullRequest}
       />
     );
@@ -739,7 +796,11 @@ function PullRequestRow({
           <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">
             {pullRequest.title}
           </h3>
-          {highlighted ? <Badge variant="branch">New</Badge> : null}
+          {highlighted ? (
+            <Badge variant="branch">
+              {pullRequest.status === 'merged' ? 'Just merged' : 'New'}
+            </Badge>
+          ) : null}
           <ReadinessBadge pullRequest={pullRequest} />
         </div>
         <p className="mt-2 text-sm leading-5 text-[var(--text-secondary)]">
@@ -1018,13 +1079,19 @@ function CompareMetric({ label, value }: { label: string; value: string }) {
 
 function PullRequestDetailView({
   detailTab,
+  mergeError,
+  merging,
   onBack,
   onChangeTab,
+  onMerge,
   pullRequest,
 }: {
   detailTab: PullRequestDetailTab;
+  mergeError: string | null;
+  merging: boolean;
   onBack: () => void;
   onChangeTab: (tab: PullRequestDetailTab) => void;
+  onMerge: () => void;
   pullRequest: ProjectPullRequest;
 }) {
   const checks: PullRequestCheck[] = [
@@ -1103,7 +1170,14 @@ function PullRequestDetailView({
             {detailTab === 'structured-diff' && <StructuredDiffPanel />}
             {detailTab === 'checks' && <ChecksPanel checks={checks} />}
             {detailTab === 'activity' && <ActivityPanel pullRequest={pullRequest} />}
-            {detailTab === 'merge' && <MergePanel pullRequest={pullRequest} />}
+            {detailTab === 'merge' && (
+              <MergePanel
+                error={mergeError}
+                merging={merging}
+                onMerge={onMerge}
+                pullRequest={pullRequest}
+              />
+            )}
           </div>
         </section>
       </div>
@@ -1193,25 +1267,50 @@ function ActivityPanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
   );
 }
 
-function MergePanel({ pullRequest }: { pullRequest: ProjectPullRequest }) {
+function MergePanel({
+  error,
+  merging,
+  onMerge,
+  pullRequest,
+}: {
+  error: string | null;
+  merging: boolean;
+  onMerge: () => void;
+  pullRequest: ProjectPullRequest;
+}) {
   const ready = pullRequest.status === 'ready';
+  const merged = pullRequest.status === 'merged';
+  const title = merged ? 'Already merged' : ready ? 'Ready to merge' : 'Merge readiness required';
+  const buttonLabel = merged ? 'Merged' : merging ? 'Merging...' : 'Merge PR';
 
   return (
     <div className="rounded-2xl border border-[var(--stroke-divider)] bg-[var(--surface-card)] p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="font-semibold text-[var(--text-primary)]">
-            {ready ? 'Ready to merge' : 'Merge readiness required'}
-          </h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{title}</h3>
           <p className="mt-2 max-w-2xl text-sm leading-5 text-[var(--text-secondary)]">
-            Merge is only available after deterministic merge simulation and review requirements
-            pass. Workspace validation failures are not surfaced here; PR blockers are merge-level
-            only.
+            {merged
+              ? 'This PR has already moved to Closed after a successful deterministic merge.'
+              : 'Merge is only available after deterministic merge simulation and review requirements pass. Workspace validation failures are not surfaced here; PR blockers are merge-level only.'}
           </p>
+          {error ? (
+            <p className="mt-3 rounded-xl border border-[var(--status-warning)]/30 bg-[var(--status-warning-muted)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+              {error}
+            </p>
+          ) : null}
         </div>
-        <Button disabled={!ready} type="button" variant={ready ? 'commit' : 'canvas-outline'}>
-          <PlayCircle aria-hidden="true" className="h-4 w-4" />
-          Merge PR
+        <Button
+          disabled={!ready || merging}
+          onClick={onMerge}
+          type="button"
+          variant={ready ? 'commit' : 'canvas-outline'}
+        >
+          {merging ? (
+            <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+          ) : (
+            <PlayCircle aria-hidden="true" className="h-4 w-4" />
+          )}
+          {buttonLabel}
         </Button>
       </div>
     </div>

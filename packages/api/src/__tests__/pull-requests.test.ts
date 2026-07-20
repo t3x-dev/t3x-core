@@ -74,4 +74,18 @@ describe('Pull request routes', () => {
     expect(data.success).toBe(false);
     expect(data.error.code).toBe('PULL_REQUEST_NOT_READY');
   });
+
+  it('marks a ready pull request as merged', async () => {
+    const res = await app.request('/v1/projects/proj_pr_ready_merge/pull-requests/17/merge', {
+      body: JSON.stringify({ strategy: 'deterministic_merge' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(200);
+    const data: ApiResponse = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.data.status).toBe('merged');
+    expect(data.data.merged_at).toBeTruthy();
+  });
 });

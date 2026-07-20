@@ -64,4 +64,19 @@ describe('ProjectReviewsTab', () => {
     expect(screen.getByText('Changed nodes')).toBeInTheDocument();
     expect(screen.getByText('YOps operations')).toBeInTheDocument();
   });
+
+  it('moves a merged PR into the closed list after merge succeeds', () => {
+    render(<ProjectReviewsTab />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
+    fireEvent.click(screen.getByText('Merge'));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge PR' }));
+
+    expect(screen.getByText('Merge proposals for structured state')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2\s*Open/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2\s*Closed/i })).toBeInTheDocument();
+    expect(screen.getByText('Release note cleanup')).toBeInTheDocument();
+    expect(screen.getByText('Just merged')).toBeInTheDocument();
+    expect(screen.getAllByText('merged').length).toBeGreaterThan(0);
+  });
 });

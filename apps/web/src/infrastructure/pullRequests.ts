@@ -71,6 +71,12 @@ export interface CreateProjectPullRequestInput {
   release_lane_id?: string;
 }
 
+export interface MergeProjectPullRequestInput {
+  expected_source_commit_id?: string;
+  expected_target_commit_id?: string;
+  strategy?: 'deterministic_merge';
+}
+
 export async function listProjectPullRequests(
   projectId: string,
   options: { query?: string; status?: 'active' | 'merged' | 'all' } = {}
@@ -106,6 +112,22 @@ export async function createProjectPullRequest(
     `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests`,
     {
       body: JSON.stringify(input),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    }
+  );
+  return handleResponse<ApiProjectPullRequest>(res);
+}
+
+export async function mergeProjectPullRequest(
+  projectId: string,
+  number: number,
+  input: MergeProjectPullRequestInput = {}
+): Promise<ApiProjectPullRequest> {
+  const res = await fetchWithTimeout(
+    `${API_V1}/projects/${encodeURIComponent(projectId)}/pull-requests/${number}/merge`,
+    {
+      body: JSON.stringify({ strategy: 'deterministic_merge', ...input }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }

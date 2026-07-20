@@ -3,6 +3,8 @@ import {
   createProjectPullRequest,
   listProjectPullRequestComparisons,
   listProjectPullRequests,
+  type MergeProjectPullRequestInput,
+  mergeProjectPullRequest,
 } from '@/infrastructure/pullRequests';
 
 export function fetchProjectPullRequests(
@@ -14,6 +16,14 @@ export function fetchProjectPullRequests(
 
 export function openProjectPullRequest(projectId: string, input: CreateProjectPullRequestInput) {
   return createProjectPullRequest(projectId, input);
+}
+
+export function completeProjectPullRequest(
+  projectId: string,
+  number: number,
+  input: MergeProjectPullRequestInput = {}
+) {
+  return mergeProjectPullRequest(projectId, number, input);
 }
 
 export function fetchProjectPullRequestComparisons(
