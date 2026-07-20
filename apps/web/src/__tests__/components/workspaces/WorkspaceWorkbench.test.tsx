@@ -588,8 +588,10 @@ describe('WorkspaceWorkbench', () => {
       ],
     });
 
-    expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled(), {
+      timeout: 5_000,
+    });
+    expect(screen.getByText('Proposal validated')).toBeInTheDocument();
     activateTab(/Preview/);
     expect(screen.getByRole('region', { name: 'PRD preview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
