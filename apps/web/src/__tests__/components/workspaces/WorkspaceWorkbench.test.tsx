@@ -408,7 +408,18 @@ describe('WorkspaceWorkbench', () => {
     expect(
       screen.getAllByText('Set primary audience from source evidence.').length
     ).toBeGreaterThan(0);
-    expect(screen.getByRole('region', { name: 'T3X Diff' })).toBeInTheDocument();
+    const proposalDiff = screen.getByRole('region', { name: 'T3X Diff' });
+    expect(within(proposalDiff).getByRole('button', { name: 'Show Diff' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(within(proposalDiff).queryByRole('tree')).not.toBeInTheDocument();
+    fireEvent.click(within(proposalDiff).getByRole('button', { name: 'Show Diff' }));
+    expect(within(proposalDiff).getByRole('button', { name: 'Hide Diff' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(within(proposalDiff).getByRole('tree')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Generate YOps proposal' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
     const yopsScript = screen.getByRole('region', { name: 'YOps script' });
@@ -419,6 +430,13 @@ describe('WorkspaceWorkbench', () => {
 
     activateTab(/Validation/);
     expect(screen.getByRole('region', { name: 'Validation gates' })).toBeInTheDocument();
+    const validationDiff = screen.getByRole('region', { name: 'T3X Diff' });
+    expect(validationDiff).toHaveTextContent('Validated projection · Baseline → Projected');
+    expect(within(validationDiff).getByRole('button', { name: 'Show Diff' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(within(validationDiff).queryByRole('tree')).not.toBeInTheDocument();
     expect(screen.getByText('YSchema rule')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validate proposal/ })).toHaveAttribute(

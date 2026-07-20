@@ -1,9 +1,4 @@
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Code2,
-} from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,7 +41,7 @@ export function ProposalReviewView({
 }: ProposalReviewViewProps) {
   const operations = candidate.yopsDraft.operations;
   const [selectedOperationId, setSelectedOperationId] = useState(operations.at(-1)?.id ?? null);
-  const [diffOpen, setDiffOpen] = useState(true);
+  const [diffOpen, setDiffOpen] = useState(false);
   const [yopsOpen, setYOpsOpen] = useState(false);
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
@@ -72,7 +67,8 @@ export function ProposalReviewView({
         </div>
         <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Badge variant="branch-subtle">
-            {candidate.sourceBundle.length} {candidate.sourceBundle.length === 1 ? 'source' : 'sources'}
+            {candidate.sourceBundle.length}{' '}
+            {candidate.sourceBundle.length === 1 ? 'source' : 'sources'}
           </Badge>
           <Badge variant="secondary">
             {operations.length} {operations.length === 1 ? 'recommendation' : 'recommendations'}
@@ -165,7 +161,9 @@ export function ProposalReviewView({
                           <span className="font-semibold text-[var(--status-success)]">
                             {operation.sourceRefs?.length ? 'Source matched' : 'Source required'}
                           </span>
-                          <span className="text-[var(--text-tertiary)]">1 YOp · affects 1 field</span>
+                          <span className="text-[var(--text-tertiary)]">
+                            1 YOp · affects 1 field
+                          </span>
                         </span>
                       </span>
                     </button>
@@ -199,11 +197,12 @@ export function ProposalReviewView({
             />
           </div>
 
-          <ProposalDiff
+          <WorkspaceDiff
             candidate={candidate}
             onOpenChange={() => setDiffOpen((current) => !current)}
             onSelectOperation={setSelectedOperationId}
             open={diffOpen}
+            phase="proposal"
             selectedOperation={selectedOperation}
           />
         </>
@@ -309,17 +308,21 @@ function ProposalDetail({
   );
 }
 
-function ProposalDiff({
+export function WorkspaceDiff({
   candidate,
   onOpenChange,
   onSelectOperation,
   open,
+  phase,
+  schemaPassed = false,
   selectedOperation,
 }: {
   candidate: WorkspaceCandidate;
   onOpenChange: () => void;
   onSelectOperation: (operationId: string) => void;
   open: boolean;
+  phase: 'proposal' | 'validation';
+  schemaPassed?: boolean;
   selectedOperation: WorkspaceYOpsDraftOperation;
 }) {
   const operations = candidate.yopsDraft.operations;
@@ -329,17 +332,28 @@ function ProposalDiff({
   const source = getPrimaryOperationSource(candidate, selectedOperation);
 
   return (
-    <section aria-label="T3X Diff" className="border-t border-[var(--stroke-divider)] bg-[var(--surface-card)]">
+    <section
+      aria-label="T3X Diff"
+      className="border-t border-[var(--stroke-divider)] bg-[var(--surface-card)]"
+    >
       <header className="flex min-h-[54px] flex-wrap items-center gap-3 border-b border-[var(--stroke-divider)] px-4 py-2.5">
         <div>
           <h4 className="text-sm font-semibold text-[var(--text-primary)]">T3X Diff</h4>
           <p className="mt-0.5 font-mono text-[10px] text-[var(--text-tertiary)]">
-            Proposal · Baseline → Projected
+            {phase === 'validation'
+              ? 'Validated projection · Baseline → Projected'
+              : 'Proposal · Baseline → Projected'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="branch-subtle">{operations.length} field changes</Badge>
-          <Badge variant="success">{evidenceCount} evidence matched</Badge>
+          {phase === 'validation' ? (
+            <Badge variant={schemaPassed ? 'success' : 'pending-subtle'}>
+              YSchema {schemaPassed ? 'pass' : 'pending'}
+            </Badge>
+          ) : (
+            <Badge variant="success">{evidenceCount} evidence matched</Badge>
+          )}
           <Badge variant="success">{removedCount} removed</Badge>
         </div>
         <button
@@ -596,9 +610,7 @@ function getOperationChangeLabel(operation: WorkspaceYOpsDraftOperation): string
   return 'modified';
 }
 
-function buildProposalPathTree(
-  operations: WorkspaceYOpsDraftOperation[]
-): ProposalPathNode[] {
+function buildProposalPathTree(operations: WorkspaceYOpsDraftOperation[]): ProposalPathNode[] {
   const roots: ProposalPathNode[] = [];
 
   for (const operation of operations) {

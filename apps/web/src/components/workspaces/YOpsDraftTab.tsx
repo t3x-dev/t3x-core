@@ -20,7 +20,7 @@ import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops'
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
 import { PrdPreviewView } from './PrdPreviewView';
-import { ProposalReviewView } from './ProposalReviewView';
+import { ProposalReviewView, WorkspaceDiff } from './ProposalReviewView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
 
@@ -359,6 +359,7 @@ function ValidationReviewView({
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(
     operations[0]?.id ?? null
   );
+  const [diffOpen, setDiffOpen] = useState(false);
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
   const validationRan = generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
@@ -563,6 +564,18 @@ function ValidationReviewView({
           </div>
         ) : null}
       </section>
+
+      {selectedOperation ? (
+        <WorkspaceDiff
+          candidate={candidate}
+          onOpenChange={() => setDiffOpen((current) => !current)}
+          onSelectOperation={setSelectedOperationId}
+          open={diffOpen}
+          phase="validation"
+          schemaPassed={validationRan && !hasBlockingIssues}
+          selectedOperation={selectedOperation}
+        />
+      ) : null}
     </div>
   );
 }
