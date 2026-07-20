@@ -405,9 +405,9 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('heading', { name: 'Proposal' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Recommendations' })).toBeInTheDocument();
-    expect(screen.getAllByText('Set primary audience from source evidence.').length).toBeGreaterThan(
-      0
-    );
+    expect(
+      screen.getAllByText('Set primary audience from source evidence.').length
+    ).toBeGreaterThan(0);
     expect(screen.getByRole('region', { name: 'T3X Diff' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Generate YOps proposal' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Open YOps' }));
@@ -573,6 +573,9 @@ describe('WorkspaceWorkbench', () => {
     expect(await screen.findByText('Proposal validated')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply YOps/ })).toBeEnabled();
     activateTab(/Preview/);
+    expect(screen.getByRole('region', { name: 'PRD preview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       '1 YOps ready'
     );
@@ -589,6 +592,10 @@ describe('WorkspaceWorkbench', () => {
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByText('Preview materialized')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'PRD preview' })).toHaveTextContent(
+      'Product and engineering reviewers'
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }));
     expect(screen.getByRole('region', { name: 'Change Review Dock' })).toHaveTextContent(
       'Materialized preview'
     );
@@ -610,11 +617,7 @@ describe('WorkspaceWorkbench', () => {
     expect(diffDetail).toHaveTextContent('Internal reviewers');
     expect(diffDetail).toHaveTextContent('Product and engineering reviewers');
     expect(screen.queryByRole('region', { name: 'YOps YAML tree' })).not.toBeInTheDocument();
-    fireEvent.click(
-      within(screen.getByRole('region', { name: 'Change Review Dock' })).getByRole('tab', {
-        name: 'Overview',
-      })
-    );
+    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'audience: Product and engineering reviewers'
     );
@@ -669,6 +672,7 @@ describe('WorkspaceWorkbench', () => {
     await waitFor(() => expect(countFetchCalls(fetchMock.mock.calls, yopsValidateUrl)).toBe(2));
     expect(await screen.findByText('Materialized 1')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'YAML' }));
     expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
       'One draft release-note section'
     );
@@ -868,10 +872,7 @@ describe('WorkspaceWorkbench', () => {
       expect(countFetchCalls(fetchMock.mock.calls, yopsDraftUrl)).toBeGreaterThanOrEqual(1)
     );
 
-    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('Proposal ready')).not.toBeInTheDocument();
     expect(screen.getAllByText(/No YOps operations were generated/).length).toBeGreaterThan(0);
     activateTab(/Validation/);
@@ -1281,10 +1282,7 @@ describe('WorkspaceWorkbench', () => {
         sourceBundle: [{ id: 'src_doc', materialId: 'mat_prd' }],
       },
     });
-    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    expect(screen.getByRole('tab', { name: /Proposal/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('region', { name: 'YOps proposal' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate YOps proposal' }));
@@ -1355,9 +1353,20 @@ describe('WorkspaceWorkbench', () => {
     await screen.findByText('Materialized 5');
 
     expect(screen.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('region', { name: 'YOps YAML tree' })).toHaveTextContent(
-      'Backend product reviewers'
+    const prdPreview = screen.getByRole('region', { name: 'PRD preview' });
+    expect(prdPreview).toHaveTextContent('Backend product reviewers');
+    expect(prdPreview).toHaveTextContent(
+      'YOps receives reviewed candidate fields from backend source evidence.'
     );
+    expect(
+      within(prdPreview).getByRole('complementary', {
+        name: 'PRD source and validation summary',
+      })
+    ).toHaveTextContent('Why this PRD can be trusted');
+    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Evidence' }));
+    expect(screen.getByRole('heading', { name: 'Evidence coverage' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'PRD' }));
 
     activateTab(/Commit/);
     expect(screen.getByRole('button', { name: /Commit · feature\/prd-audience/ })).toBeEnabled();

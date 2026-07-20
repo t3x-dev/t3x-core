@@ -15,7 +15,7 @@ describe('project foundation previews', () => {
   it('renders the fixture-backed Workspaces workbench for any project id during W1', () => {
     render(<ProjectWorkspacesTab projectId="proj_other" />);
 
-    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'T3X Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'PRD audience handoff' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Workspace candidates' })).not.toBeInTheDocument();
     expect(screen.getByText('No source material yet.')).toBeInTheDocument();

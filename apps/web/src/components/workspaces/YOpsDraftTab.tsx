@@ -19,6 +19,7 @@ import type {
 import type { WorkspaceYOp, WorkspaceYOpsTreeNode } from '@/types/workspaceYops';
 import { cn } from '@/utils/cn';
 import { ChangeReviewDock } from './ChangeReviewDock';
+import { PrdPreviewView } from './PrdPreviewView';
 import { ProposalReviewView } from './ProposalReviewView';
 
 export type WorkspaceYOpsFlowView = 'ops' | 'validation' | 'preview' | 'commit';
@@ -360,8 +361,7 @@ function ValidationReviewView({
   );
   const selectedOperation =
     operations.find((operation) => operation.id === selectedOperationId) ?? operations[0] ?? null;
-  const validationRan =
-    generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
+  const validationRan = generatedYOpsCount > 0 || status === 'applied' || status === 'committed';
   const hasBlockingIssues = candidate.schemaReview.gaps.length > 0 || Boolean(visibleErrorMessage);
   const passedCount = validationRan && !hasBlockingIssues ? operations.length : 0;
   const statusLabel = hasBlockingIssues
@@ -596,10 +596,7 @@ function findSchemaFieldForOperation(
 function flattenWorkspaceSchemaFields(
   fields: WorkspaceCandidate['schemaCandidate']['fields']
 ): WorkspaceCandidate['schemaCandidate']['fields'] {
-  return fields.flatMap((field) => [
-    field,
-    ...flattenWorkspaceSchemaFields(field.children ?? []),
-  ]);
+  return fields.flatMap((field) => [field, ...flattenWorkspaceSchemaFields(field.children ?? [])]);
 }
 
 function formatSchemaRule(
@@ -671,19 +668,29 @@ function PreviewReviewView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">
-      <ChangeReviewDock
+      <PrdPreviewView
+        appliedCount={appliedCount}
         candidate={candidate}
-        flowState={{
-          appliedCount,
-          baselineTrees,
-          commitHash: committedHash ?? undefined,
-          error: visibleErrorMessage ?? undefined,
-          previewReady: Boolean(materializedTrees),
-          previewTrees: validatedPreviewTrees,
-          validationPassed,
-          yopsDraftId: candidate.yopsDraft.id,
-        }}
-        renderedPreview={
+        changesView={
+          <ChangeReviewDock
+            candidate={candidate}
+            flowState={{
+              appliedCount,
+              baselineTrees,
+              commitHash: committedHash ?? undefined,
+              error: visibleErrorMessage ?? undefined,
+              previewReady: Boolean(materializedTrees),
+              previewTrees: validatedPreviewTrees,
+              validationPassed,
+              yopsDraftId: candidate.yopsDraft.id,
+            }}
+          />
+        }
+        operationCount={generatedYOpsCount}
+        previewReady={Boolean(materializedTrees)}
+        previewTrees={materializedTrees ?? validatedPreviewTrees}
+        validationPassed={validationPassed}
+        yamlView={
           <RenderedYOpsTree
             appliedCount={appliedCount}
             generatedYOpsCount={generatedYOpsCount}
@@ -989,7 +996,7 @@ function getYOpsViewTitle(view: WorkspaceYOpsFlowView): string {
 
 function getYOpsViewDescription(view: WorkspaceYOpsFlowView): string {
   if (view === 'validation') return 'Check the Proposal against schema, evidence, and replay.';
-  if (view === 'preview') return 'Review the materialized YAML before commit.';
+  if (view === 'preview') return 'Read the rendered PRD and inspect its evidence before commit.';
   if (view === 'commit') return 'Commit the validated workspace result.';
   return 'Review what T3X recommends and why.';
 }
