@@ -11,18 +11,10 @@ export async function listBranches(projectId: string): Promise<BranchListData> {
   return handleResponse<BranchListData>(res);
 }
 
-export async function getCurrentBranch(projectId: string): Promise<{
-  project_id: string;
-  current_branch: string;
-  head_commit_hash?: string;
-}> {
+export async function getCurrentBranch(projectId: string): Promise<Branch> {
   const query = buildQueryString({ project_id: projectId });
   const res = await fetchWithTimeout(`${API_V1}/branches/current?${query}`);
-  return handleResponse<{
-    project_id: string;
-    current_branch: string;
-    head_commit_hash?: string;
-  }>(res);
+  return handleResponse<Branch>(res);
 }
 
 export async function createBranch(
@@ -57,9 +49,9 @@ export async function switchBranch(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       project_id: projectId,
-      name,
-      create,
-      from_branch: fromBranch,
+      branch_name: name,
+      create_if_missing: create,
+      parent_branch: fromBranch,
     }),
   });
   return handleResponse<Branch>(res);

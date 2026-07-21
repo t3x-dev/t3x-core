@@ -30,6 +30,7 @@ import {
   getYSchemaValidationPrimaryLabel,
   type YSchemaValidationSummary,
 } from '@/domain/project/yschemaValidation';
+import { useCommitByHash } from '@/hooks/commits/useCommitByHash';
 import { useCommitOperations } from '@/hooks/commits/useCommitOperations';
 import { useCommitsList } from '@/hooks/commits/useCommitsList';
 import { useBranches } from '@/hooks/shared/useBranches';
@@ -72,6 +73,8 @@ const STATE_VIEWS: Array<{
   { id: 'code', label: 'Code', subtitle: 'canonical code', icon: Code2 },
 ];
 
+const EMPTY_BRANCH_HEADS: Readonly<Record<string, string | null>> = {};
+
 export function ProjectStateTab({
   initialView = 'points',
   onRunValidation,
@@ -89,8 +92,14 @@ export function ProjectStateTab({
   const branchFocus: BranchFocus = searchParams.get('branch')?.trim() || 'main';
   const [pathQuery, setPathQuery] = useState('');
   const [snapshotRefreshVersion, setSnapshotRefreshVersion] = useState(0);
-  const { branches, loading: branchesLoading, refresh } = useBranches(projectId, true);
+  const {
+    branchHeads = EMPTY_BRANCH_HEADS,
+    branches,
+    loading: branchesLoading,
+    refresh,
+  } = useBranches(projectId, true);
   const projectWorkspaces = useProjectWorkspaces(projectId, true);
+  const { loadCommit } = useCommitByHash();
   const { loadCommits } = useCommitsList();
   const { loadOperations } = useCommitOperations();
   const [snapshot, setSnapshot] = useState<StateSnapshot>({
@@ -137,27 +146,26 @@ export function ProjectStateTab({
       });
       try {
         const requestedBranch = branchFocus || 'main';
-        let resolvedBranch = requestedBranch;
+        const branchHeadHash = branchHeads[requestedBranch];
         let commits = await loadCommits(projectId, requestedBranch, 100);
-        if (commits.length === 0 && requestedBranch === 'main') {
-          const latestCommits = await loadCommits(projectId, undefined, 100);
-          const latestBranch = latestCommits[0]?.branch;
-          if (latestBranch) {
-            resolvedBranch = latestBranch;
-            commits = latestCommits.filter((commit) => commit.branch === latestBranch);
-            if (!cancelled && latestBranch !== requestedBranch) {
-              updateBranchFocus(latestBranch);
-            }
+        let headCommit = selectVisibleBranchHead(commits);
+        if (branchHeadHash) {
+          headCommit = await loadCommit(branchHeadHash);
+          if (headCommit.hash !== branchHeadHash) {
+            throw new Error('Branch HEAD response does not match the registered branch pointer.');
           }
+          commits = [headCommit, ...commits.filter((commit) => commit.hash !== headCommit?.hash)];
+        }
+        if (commits.some((commit) => commit.project_id !== projectId)) {
+          throw new Error('Commit response does not match the selected project.');
         }
         if (
           commits.some(
-            (commit) => commit.project_id !== projectId || commit.branch !== resolvedBranch
+            (commit) => commit.hash !== branchHeadHash && commit.branch !== requestedBranch
           )
         ) {
           throw new Error('Commit response does not match the selected project and branch.');
         }
-        const headCommit = selectVisibleBranchHead(commits);
         let operations: StateOperationEntry[] = [];
         const auxiliaryErrors: string[] = [];
 
@@ -199,11 +207,12 @@ export function ProjectStateTab({
     };
   }, [
     branchFocus,
+    branchHeads,
+    loadCommit,
     loadCommits,
     loadOperations,
     projectId,
     snapshotRefreshVersion,
-    updateBranchFocus,
   ]);
 
   const headCommit = snapshot.headCommit;

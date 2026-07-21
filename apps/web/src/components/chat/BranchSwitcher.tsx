@@ -3,6 +3,8 @@
 import { Check, GitBranch, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
+import { formatUserFacingError } from '@/domain/format/errors';
 import { useBranches } from '@/hooks/shared/useBranches';
 import { cn } from '@/utils/cn';
 import { getFixedPopoverStyle } from '@/utils/popoverPosition';
@@ -91,8 +93,12 @@ export function BranchSwitcher({
     if (disabled) return;
     const name = newName.trim().replace(/\s+/g, '-');
     if (!name || !projectId || !/^[\w\-/.]+$/.test(name)) return;
-    await create(name, activeBranch);
-    handleSelect(name);
+    try {
+      await create(name, activeBranch);
+      handleSelect(name);
+    } catch (error) {
+      toast.error(formatUserFacingError(error, 'Failed to create branch.'));
+    }
   }, [disabled, newName, projectId, activeBranch, handleSelect, create]);
 
   return (
